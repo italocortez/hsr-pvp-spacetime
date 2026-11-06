@@ -25,7 +25,7 @@ describe.skipIf(!hasServerToken())('Tournament Management', () => {
     const { DbConnection } = await import('@/src/module_bindings');
     const serverToken = process.env.SPACETIMEDB_SERVER_TOKEN || '';
     const uri = process.env.SPACETIMEDB_URI || 'wss://maincloud.spacetimedb.com';
-    const db = process.env.SPACETIMEDB_DB || 'hsrpvp-spacetimedb-nextjs-test1';
+    const db = process.env.SPACETIMEDB_DB || 'hsr-spacetimedb-test1';
 
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('Server promote timeout')), 10000);

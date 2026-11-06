@@ -3,7 +3,7 @@ import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser, isRoleAtLeast } from '../helpers/ensurePermissions';
 import { insertWithAudit } from '../helpers/auditHelpers';
 import { ensureNotInLobby, generateJoinCode } from '../helpers/lobbyHelpers';
-import type { Lobby } from '../module_bindings/types';
+import type { Lobby } from '@bindings/types';
 
 // ─── create_tournament_lobby ─────────────────────────────────────────────────
 // Creates a lobby linked to a bracket match.

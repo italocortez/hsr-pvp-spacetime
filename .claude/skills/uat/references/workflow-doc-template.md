@@ -79,7 +79,7 @@ These docs capture the **"what should happen" narrative** — the specification 
 
 | Decision | Source | Date |
 |----------|--------|------|
-| {What was decided} | {Phase X CONTEXT.md / RESEARCH.md} | {Date} |
+| {What was decided} | {DECISIONS.md Axx, step Sx / Phase <step> execution} | {Date} |
 
 ---
 
@@ -121,13 +121,13 @@ The workflow doc should always reflect the **current expected behavior**, not hi
 - Acceptance scenarios should be concrete enough to become test cases
 - Edge cases table should grow as bugs are found and fixed
 
-### Referencing planning artifacts
+### Referencing decisions
 
-Use relative paths to link back to planning decisions:
+Cite the decision id and the step that implemented it:
 
 ```markdown
-| Tournament stages are forward-only | .planning/phases/03-tournament-system/03-CONTEXT.md | 2026-03-17 |
-| BracketSide enum has 5 variants | .planning/phases/04-bracket-generation-and-advancement/04-CONTEXT.md | 2026-03-17 |
+| Series length capped to {1, 3} | DECISIONS.md A28, step S6 | 2026-11-06 |
+| Group ranking: points, head-to-head, game differential, seed | DECISIONS.md A30, step S8 | 2026-11-06 |
 ```
 
 This creates the traceability chain: **decision → specification → test**.

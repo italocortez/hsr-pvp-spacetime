@@ -16,7 +16,7 @@
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { pathToFileURL } from 'node:url';
-import { DbConnection } from '../src/module_bindings';
+import { DbConnection } from '../web/src/module_bindings';
 import {
     normalizeCharacters,
     normalizeLightcones,
@@ -28,7 +28,7 @@ import {
     type RawCharacter,
     type RawLightcone,
     type RawPairing,
-} from '../lib/seed-normalizers';
+} from './stdb/seed-normalizers';
 
 // ─── Env loading (same as register-server.ts) ─────────────────────────────────
 

@@ -1,19 +1,26 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "esModuleInterop": true,
-    "strict": true,
-    "skipLibCheck": true,
-    "noEmit": true,
-    "isolatedModules": true,
-    "resolveJsonModule": true,
-    "paths": {
-      "@/*": ["../*"]
-    }
-  },
-  "include": [
-    "**/*.ts"
-  ]
+    "extends": "../tsconfig.base.json",
+    "compilerOptions": {
+        "noEmit": true,
+        "paths": {
+            "@shared/*": [
+                "../shared/*"
+            ],
+            "@bindings/*": [
+                "../web/src/module_bindings/*"
+            ],
+            "@/src/module_bindings": [
+                "../web/src/module_bindings"
+            ],
+            "@/src/module_bindings/*": [
+                "../web/src/module_bindings/*"
+            ],
+            "@/*": [
+                "../*"
+            ]
+        }
+    },
+    "include": [
+        "**/*.ts"
+    ]
 }

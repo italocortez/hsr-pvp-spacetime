@@ -1,0 +1,56 @@
+[
+  {
+    "name": "MMR Elite",
+    "description": "Reach a global composite MMR rating of 1500 or higher.",
+    "rarity": {
+      "tag": "Epic"
+    },
+    "isManualOnly": false,
+    "maxAwards": null,
+    "criteria": [
+      {
+        "statTable": "MmrRating",
+        "statField": "globalCompositeRating",
+        "operator": {
+          "tag": "GreaterOrEqual"
+        },
+        "thresholdValue": 1500,
+        "filterGameMode": null,
+        "filterCharacterName": null,
+        "filterMatchType": null
+      }
+    ]
+  },
+  {
+    "name": "Veteran",
+    "description": "Win 10 or more matches across all game modes.",
+    "rarity": {
+      "tag": "Rare"
+    },
+    "isManualOnly": false,
+    "maxAwards": null,
+    "criteria": [
+      {
+        "statTable": "PlayerStat",
+        "statField": "wins",
+        "operator": {
+          "tag": "GreaterOrEqual"
+        },
+        "thresholdValue": 10,
+        "filterGameMode": null,
+        "filterCharacterName": null,
+        "filterMatchType": null
+      }
+    ]
+  },
+  {
+    "name": "Solar First Tournament Winner",
+    "description": "Champion of the inaugural Solar First tournament. Manually awarded by tournament organizers.",
+    "rarity": {
+      "tag": "Legendary"
+    },
+    "isManualOnly": true,
+    "maxAwards": 1,
+    "criteria": []
+  }
+]

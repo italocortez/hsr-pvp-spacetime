@@ -17,7 +17,7 @@
 
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
-import { DbConnection } from '../src/module_bindings';
+import { DbConnection } from '../web/src/module_bindings';
 import { seedAll } from './seed-data';
 
 // ─── Env loading ───────────────────────────────────────────────────────────────

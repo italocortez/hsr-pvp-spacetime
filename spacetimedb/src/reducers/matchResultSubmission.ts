@@ -4,7 +4,7 @@ import { getAuthenticatedUser, isRoleAtLeast } from '../helpers/ensurePermission
 import { updateWithAudit } from '../helpers/auditHelpers';
 import { runFinalization } from '../helpers/finalizationHelpers';
 import { ensureMatchAlive } from '../helpers/disconnectHelpers';
-import type { MatchResultRecord } from '../module_bindings/types';
+import type { MatchResultRecord } from '@bindings/types';
 
 // ─── confirm_match_scores ─────────────────────────────────────────────────────
 // Confirms scores for a team side. Two paths:

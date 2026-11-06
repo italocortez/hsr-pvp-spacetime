@@ -1,0 +1,26 @@
+{
+    "name": "hsr-pvp-spacetime",
+    "private": true,
+    "type": "module",
+    "engines": {
+        "node": "26.x"
+    },
+    "workspaces": [
+        "web",
+        "spacetimedb"
+    ],
+    "scripts": {
+        "typecheck": "tsc -p spacetimedb --noEmit && tsc -p test",
+        "lint": "biome check .",
+        "test": "vitest run --config test/vitest.config.ts",
+        "test:watch": "vitest --config test/vitest.config.ts",
+        "test:integration": "vitest run --config test/vitest.integration.config.ts",
+        "energy": "node tools/energy-model.js"
+    },
+    "devDependencies": {
+        "@biomejs/biome": "2.6.5",
+        "@types/node": "26.6.6",
+        "typescript": "7.1.0-beta",
+        "vitest": "5.1.0"
+    }
+}

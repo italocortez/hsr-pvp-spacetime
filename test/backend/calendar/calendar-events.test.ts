@@ -17,10 +17,10 @@ import {
     expectReducerError,
     type TestHarness,
 } from '../../shared/connection';
-import { DbConnection } from '../../../src/module_bindings';
+import { DbConnection } from '@/src/module_bindings';
 import { promoteUser } from '../../shared/helpers/promoteUser';
 
-const DB = process.env.SPACETIMEDB_DB ?? 'hsrpvp-spacetimedb-nextjs-test1';
+const DB = process.env.SPACETIMEDB_DB ?? 'hsr-spacetimedb-test1';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 

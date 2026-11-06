@@ -4,7 +4,7 @@
 
 import { SenderError } from 'spacetimedb/server';
 import { updateWithAudit } from './auditHelpers';
-import type { GroupPhaseRecord } from '../module_bindings/types';
+import type { GroupPhaseRecord } from '@bindings/types';
 
 // ─── Group standings points ────────────────────────────────────────────────────
 const WIN_POINTS = 2;

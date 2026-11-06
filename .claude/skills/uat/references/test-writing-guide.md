@@ -146,7 +146,7 @@ Integration tests connect to a live SpacetimeDB instance. Configuration:
 | Env var | Default | Purpose |
 |---------|---------|---------|
 | `SPACETIMEDB_URI` | `wss://maincloud.spacetimedb.com` | WebSocket endpoint |
-| `SPACETIMEDB_DB` | `hsrpvp-spacetimedb-nextjs-test1` | Database name |
+| `SPACETIMEDB_DB` | `hsr-spacetimedb-test1` | Database name |
 | `SPACETIMEDB_SERVER_TOKEN` | -- | Required for verified user tests |
 
 Set these in `.env.local` (written by `post-publish.ts`). The integration test runner (`vitest.integration.config.ts`) loads `.env.local` only -- do NOT use `.env.test`.

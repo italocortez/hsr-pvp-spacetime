@@ -27,7 +27,7 @@ import { defaultLobbyArgs as sharedDefaultLobbyArgs } from '../../shared/helpers
 import { execFileSync } from 'child_process';
 import { myLobbies, lobbyMembers } from '../../shared/helpers/queries';
 
-const DB = process.env.SPACETIMEDB_DB ?? 'hsrpvp-spacetimedb-nextjs-test1';
+const DB = process.env.SPACETIMEDB_DB ?? 'hsr-spacetimedb-test1';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 

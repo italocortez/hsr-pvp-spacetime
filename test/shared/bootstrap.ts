@@ -3,7 +3,7 @@
  * and calls register_server to create the SYSTEM user and server identity.
  * Run after --clear-database: npx tsx test/shared/bootstrap.ts
  */
-import { DbConnection } from '../../src/module_bindings';
+import { DbConnection } from '@/src/module_bindings';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -11,7 +11,7 @@ const envPath = path.resolve(import.meta.dirname || '.', '../../.env.local');
 const envContent = fs.readFileSync(envPath, 'utf8');
 const token = envContent.match(/SPACETIMEDB_SERVER_TOKEN=(.+)/)?.[1]?.trim() || '';
 const uri = envContent.match(/SPACETIMEDB_URI=(.+)/)?.[1]?.trim() || 'wss://maincloud.spacetimedb.com';
-const db = envContent.match(/SPACETIMEDB_DB=(.+)/)?.[1]?.trim() || 'hsrpvp-spacetimedb-nextjs-test1';
+const db = envContent.match(/SPACETIMEDB_DB=(.+)/)?.[1]?.trim() || 'hsr-spacetimedb-test1';
 
 if (!token) {
   console.error('ERROR: SPACETIMEDB_SERVER_TOKEN not found in .env.local');

@@ -443,7 +443,7 @@ Plan 07's diagnostic (2026-05-03) proved this assumption wrong via SDK source-le
 - `ReducerCtxImpl.senderAuth` (the only path that populates the field) calls `AuthCtxImpl.fromSystemTables(...)`, which always sets `isInternal: false`.
 - Therefore `ctx.senderAuth.isInternal` is always `false` in v2.2.0 — the guard rejects 100% of invocations including legitimate engine-dispatched scheduler calls.
 
-The guards were removed in Plan 07 hotfix; see `.planning/phases/16.4-spacetimedb-v2-2-0-refactor-pass/16.4-AUDIT-NOTES.md` (the "v0.6 Update — Plan 07 Diagnostic Reversal" section) for the full diagnostic and reversal record.
+The guards were removed in a hotfix right after that diagnostic: with them in place every scheduled invocation, engine-dispatched ones included, was rejected, so user deletion, lobby GC and identity GC silently stopped running.
 
 #### What IS the external-invocation defense
 
@@ -466,7 +466,7 @@ The SpacetimeDB v2.2.0 engine itself rejects external WebSocket calls to schedul
 
 Use `requireServer` / `getAuthenticatedUser` / `ensureXxx` for ALL application-level gating. Do not use `ctx.senderAuth.isInternal` until/unless a future SDK release fixes the unreachable-factory bug; the engine's "no such reducer" rejection is the operational defense for scheduled reducers in the meantime.
 
-Reference: Phase 16.4 Plan 02 + Plan 07 hotfix — `.planning/phases/16.4-spacetimedb-v2-2-0-refactor-pass/16.4-AUDIT-NOTES.md` (audit + v0.6 reversal record); regression sensor at `test/backend/scheduled-reducer-isInternal-rejection.test.ts`.
+Reference: the guards were added during the old repo's v2.2.0 refactor pass and reverted by the 2026-05-03 diagnostic described above, because `isInternal` was never `true` on that SDK; regression sensor at `test/backend/scheduled-reducer-isInternal-rejection.test.ts`.
 
 ### BigInt — all u64/i64 fields
 Use `0n`, `1n`, `100n` — never plain numbers for ID/u64 fields. JavaScript `number` loses precision above 2^53, so SpacetimeDB maps 64-bit integers to BigInt. Mixing `number` and `BigInt` (e.g. `row.id === 5`) silently returns `false` — no error, just wrong behavior.
@@ -604,7 +604,7 @@ The database name and server are configured in `spacetime.json` at the project r
 
 ```bash
 # Read the database name from spacetime.json before running any CLI command:
-#   "database": "hsrpvp-spacetimedb-nextjs-test1"
+#   "database": "hsr-spacetimedb-test1"
 #   "server": "maincloud"
 ```
 

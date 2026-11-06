@@ -18,7 +18,7 @@ function getUri(): string {
 }
 
 function getDb(): string {
-    return process.env.SPACETIMEDB_DB || process.env.SPACETIMEDB_DB_NAME || 'hsrpvp-spacetimedb-nextjs-test1';
+    return process.env.SPACETIMEDB_DB || process.env.SPACETIMEDB_DB_NAME || 'hsr-spacetimedb-test1';
 }
 
 function getServerToken(): string {

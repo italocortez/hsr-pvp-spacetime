@@ -140,7 +140,7 @@ Full root-cause investigation and per-table leak counts: `.planning/phases/14-te
 
 Normally unnecessary — `globalSetup` handles clear+reseed automatically. Only run manually if globalSetup itself is failing or you need a bare-metal reset outside of vitest:
 
-1. `spacetime publish --module-path spacetimedb --server maincloud --delete-data=always --yes hsrpvp-spacetimedb-nextjs-test1`
+1. `spacetime publish --module-path spacetimedb --server maincloud --delete-data=always --yes hsr-spacetimedb-test1`
 2. `spacetime generate --lang typescript --out-dir src/module_bindings --module-path spacetimedb`
 3. `npx tsx scripts/post-publish.ts` (bootstrap + seed in one step, also rotates server token)
 4. `npm run test:all`

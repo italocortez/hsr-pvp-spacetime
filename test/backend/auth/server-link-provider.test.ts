@@ -19,7 +19,7 @@ import { DbConnection } from '@/src/module_bindings';
  */
 
 function getUri() { return process.env.SPACETIMEDB_URI || 'wss://maincloud.spacetimedb.com'; }
-function getDb() { return process.env.SPACETIMEDB_DB || process.env.SPACETIMEDB_DB_NAME || 'hsrpvp-spacetimedb-nextjs-test1'; }
+function getDb() { return process.env.SPACETIMEDB_DB || process.env.SPACETIMEDB_DB_NAME || 'hsr-spacetimedb-test1'; }
 
 /** Create an inline server-token connection for calling server-only reducers. */
 function createServerConnection(): Promise<any> {

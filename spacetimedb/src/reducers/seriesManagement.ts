@@ -7,7 +7,7 @@ import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser, isRoleAtLeast } from '../helpers/ensurePermissions';
 import { ensureLobbyMember, slotTeam, slotIsCoach, slotIsSpectator } from '../helpers/lobbyHelpers';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
-import type { TimerState } from '../module_bindings/types';
+import type { TimerState } from '@bindings/types';
 
 // ─── D-07 authority check ─────────────────────────────────────────────────────
 // Returns true if caller has authority to control series state.

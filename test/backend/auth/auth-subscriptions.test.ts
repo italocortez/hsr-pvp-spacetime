@@ -35,7 +35,7 @@ describe('Auth Subscription Gate (Phase 15.5 S-05)', () => {
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('Timeout waiting for onApplied (20s)')), 20000);
       const uri = process.env.SPACETIMEDB_URI || 'wss://maincloud.spacetimedb.com';
-      const db = process.env.SPACETIMEDB_DB || process.env.SPACETIMEDB_DB_NAME || process.env.PUBLIC_SPACETIMEDB_DB_NAME || 'hsrpvp-spacetimedb-nextjs-test1';
+      const db = process.env.SPACETIMEDB_DB || process.env.SPACETIMEDB_DB_NAME || process.env.PUBLIC_SPACETIMEDB_DB_NAME || 'hsr-spacetimedb-test1';
 
       DbConnection.builder()
         .withUri(uri)

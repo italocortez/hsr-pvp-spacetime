@@ -25,6 +25,7 @@ export default defineConfig({
   test: {
     include: ['test/backend/**/*.test.ts', '!test/backend/**/*.unit.test.ts'],
     alias: {
+      '@/src/module_bindings': path.resolve(__dirname, '../web/src/module_bindings'),
       '@/': path.resolve(__dirname, '../') + '/',
     },
 
@@ -50,6 +51,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      '@/src/module_bindings': path.resolve(__dirname, '../web/src/module_bindings'),
       '@/': path.resolve(__dirname, '../') + '/',
     },
   },

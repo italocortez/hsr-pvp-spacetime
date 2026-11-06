@@ -1,0 +1,4892 @@
+[
+  {
+    "name": "acheron",
+    "display_name": "Acheron",
+    "aliases": [
+      "acheron"
+    ],
+    "rarity": 5,
+    "path": "nihility",
+    "element": "lightning",
+    "role": "dps",
+    "archetype": [
+      "Debuff",
+      "Ultimate DMG"
+    ],
+    "version_released": 2.1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmy0SD4Bx0IkdESXzc2H3gZ1spCA9DTWBmMito",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 7,
+          "E1": 8,
+          "E2": 11,
+          "E3": 11.5,
+          "E4": 12.5,
+          "E5": 13,
+          "E6": 15
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 7,
+          "E1": 8,
+          "E2": 11,
+          "E3": 11.5,
+          "E4": 12.5,
+          "E5": 13,
+          "E6": 15
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 7,
+          "E1": 8,
+          "E2": 11,
+          "E3": 11.5,
+          "E4": 12.5,
+          "E5": 13,
+          "E6": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "aglaea",
+    "display_name": "Aglaea",
+    "aliases": [
+      "aglaea"
+    ],
+    "rarity": 5,
+    "path": "remembrance",
+    "element": "lightning",
+    "role": "dps",
+    "archetype": [
+      "Summon",
+      "Energy",
+      "Basic ATK DMG"
+    ],
+    "version_released": 3,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm5lExNpedYHdGFs9jtel6ZUbgXJT7Ck2aMP8I",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 6,
+          "E1": 10,
+          "E2": 12,
+          "E3": 12.5,
+          "E4": 13.5,
+          "E5": 14,
+          "E6": 17
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 6,
+          "E1": 10,
+          "E2": 12,
+          "E3": 12.5,
+          "E4": 13.5,
+          "E5": 14,
+          "E6": 17
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 6,
+          "E1": 10,
+          "E2": 12,
+          "E3": 12.5,
+          "E4": 13.5,
+          "E5": 14,
+          "E6": 17
+        }
+      }
+    }
+  },
+  {
+    "name": "anaxa",
+    "display_name": "Anaxa",
+    "aliases": [
+      "anaxa"
+    ],
+    "rarity": 5,
+    "path": "erudition",
+    "element": "wind",
+    "role": "dps",
+    "archetype": [
+      "Skill DMG"
+    ],
+    "version_released": 3.2,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm8p2cCEMZGWgIvhCcYsLe2EKx01HAynVB7TRz",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 9.5,
+          "E1": 10,
+          "E2": 12,
+          "E3": 12.5,
+          "E4": 13,
+          "E5": 14,
+          "E6": 18.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 9.5,
+          "E1": 10,
+          "E2": 12,
+          "E3": 12.5,
+          "E4": 13,
+          "E5": 14,
+          "E6": 18.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 9.5,
+          "E1": 10,
+          "E2": 12,
+          "E3": 12.5,
+          "E4": 13,
+          "E5": 14,
+          "E6": 18.5
+        }
+      }
+    }
+  },
+  {
+    "name": "archer",
+    "display_name": "Archer",
+    "aliases": [
+      "archer",
+      "fate"
+    ],
+    "rarity": 5,
+    "path": "hunt",
+    "element": "quantum",
+    "role": "dps",
+    "archetype": [
+      "Skill Points",
+      "Skill DMG"
+    ],
+    "version_released": 3.4,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmIyf9fNQmYPnrNbvzRxWKTSisoFtAw8f62adE",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 9,
+          "E1": 10.5,
+          "E2": 12,
+          "E3": 12.5,
+          "E4": 13.5,
+          "E5": 14,
+          "E6": 19
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 9,
+          "E1": 10.5,
+          "E2": 12,
+          "E3": 12.5,
+          "E4": 13.5,
+          "E5": 14,
+          "E6": 19
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 9,
+          "E1": 10.5,
+          "E2": 12,
+          "E3": 12.5,
+          "E4": 13.5,
+          "E5": 14,
+          "E6": 19
+        }
+      }
+    }
+  },
+  {
+    "name": "argenti",
+    "display_name": "Argenti",
+    "aliases": [
+      "argenti"
+    ],
+    "rarity": 5,
+    "path": "erudition",
+    "element": "physical",
+    "role": "dps",
+    "archetype": [
+      "Energy",
+      "Ultimate DMG"
+    ],
+    "version_released": 1.5,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm9xTIQ56ADHJsBgSXdMw6eqfthPkUVLNWiIQ1",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 6,
+          "E1": 7,
+          "E2": 7.5,
+          "E3": 7.5,
+          "E4": 8,
+          "E5": 8,
+          "E6": 10
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 6,
+          "E1": 7,
+          "E2": 7.5,
+          "E3": 7.5,
+          "E4": 8,
+          "E5": 8,
+          "E6": 10
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 6,
+          "E1": 7,
+          "E2": 7.5,
+          "E3": 7.5,
+          "E4": 8,
+          "E5": 8,
+          "E6": 10
+        }
+      }
+    }
+  },
+  {
+    "name": "arlan",
+    "display_name": "Arlan",
+    "aliases": [
+      "arlan"
+    ],
+    "rarity": 4,
+    "path": "destruction",
+    "element": "lightning",
+    "role": "dps",
+    "archetype": [],
+    "version_released": 1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmzFNFDQy2qswvoUEVZajknbdXDJQl8TS1KhLg",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 2,
+          "E1": 2,
+          "E2": 2,
+          "E3": 2,
+          "E4": 2,
+          "E5": 2,
+          "E6": 2
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 2,
+          "E1": 2,
+          "E2": 2,
+          "E3": 2,
+          "E4": 2,
+          "E5": 2,
+          "E6": 2
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 2,
+          "E1": 2,
+          "E2": 2,
+          "E3": 2,
+          "E4": 2,
+          "E5": 2,
+          "E6": 2
+        }
+      }
+    }
+  },
+  {
+    "name": "asta",
+    "display_name": "Asta",
+    "aliases": [
+      "asta"
+    ],
+    "rarity": 4,
+    "path": "harmony",
+    "element": "fire",
+    "role": "support",
+    "archetype": [],
+    "version_released": 1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmZSbr74FIRJrdIn25bFCj06vyTEpV7QAMhzBx",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 6,
+          "E1": 6,
+          "E2": 6,
+          "E3": 6,
+          "E4": 6,
+          "E5": 6,
+          "E6": 6
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 7,
+          "E1": 7,
+          "E2": 7,
+          "E3": 7,
+          "E4": 7,
+          "E5": 7,
+          "E6": 7
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 7,
+          "E1": 7,
+          "E2": 7,
+          "E3": 7,
+          "E4": 7,
+          "E5": 7,
+          "E6": 7
+        }
+      }
+    }
+  },
+  {
+    "name": "aventurine",
+    "display_name": "Aventurine",
+    "aliases": [
+      "aventurine"
+    ],
+    "rarity": 5,
+    "path": "preservation",
+    "element": "imaginary",
+    "role": "sustain",
+    "archetype": [
+      "Debuff",
+      "FuA"
+    ],
+    "version_released": 2.1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmgTiz2I7cFbBJ0WiDyRr2wsaI1mzeQ5j8KgfH",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 8,
+          "E1": 9,
+          "E2": 10,
+          "E3": 10.5,
+          "E4": 11.5,
+          "E5": 12,
+          "E6": 16
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 8,
+          "E1": 9,
+          "E2": 10,
+          "E3": 10.5,
+          "E4": 11.5,
+          "E5": 12,
+          "E6": 16
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 8,
+          "E1": 9,
+          "E2": 10,
+          "E3": 10.5,
+          "E4": 11.5,
+          "E5": 12,
+          "E6": 16
+        }
+      }
+    }
+  },
+  {
+    "name": "bailu",
+    "display_name": "Bailu",
+    "aliases": [
+      "bailu"
+    ],
+    "rarity": 5,
+    "path": "abundance",
+    "element": "lightning",
+    "role": "sustain",
+    "archetype": [],
+    "version_released": 1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmm9UPJFLmqFhbaVfE8RYjNWSB3X0P5wZrD7IC",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 5,
+          "E1": 5.5,
+          "E2": 6.5,
+          "E3": 7,
+          "E4": 7.5,
+          "E5": 8,
+          "E6": 8
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 5,
+          "E1": 5.5,
+          "E2": 6.5,
+          "E3": 7,
+          "E4": 7.5,
+          "E5": 8,
+          "E6": 8
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 5,
+          "E1": 5.5,
+          "E2": 6.5,
+          "E3": 7,
+          "E4": 7.5,
+          "E5": 8,
+          "E6": 8
+        }
+      }
+    }
+  },
+  {
+    "name": "blackswan",
+    "display_name": "Black Swan",
+    "aliases": [
+      "blackswan",
+      "bs"
+    ],
+    "rarity": 5,
+    "path": "nihility",
+    "element": "wind",
+    "role": "dps",
+    "archetype": [
+      "DoT",
+      "Debuff"
+    ],
+    "version_released": 2,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmr1GasBu92JrCTMBUAevKHop4Qu37iXIRdfys",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 8,
+          "E1": 10,
+          "E2": 11.5,
+          "E3": 12,
+          "E4": 13,
+          "E5": 13.5,
+          "E6": 16
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 8,
+          "E1": 10,
+          "E2": 11.5,
+          "E3": 12,
+          "E4": 13,
+          "E5": 13.5,
+          "E6": 16
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 8,
+          "E1": 10,
+          "E2": 11.5,
+          "E3": 12,
+          "E4": 13,
+          "E5": 13.5,
+          "E6": 16
+        }
+      }
+    }
+  },
+  {
+    "name": "blade",
+    "display_name": "Blade",
+    "aliases": [
+      "blade"
+    ],
+    "rarity": 5,
+    "path": "destruction",
+    "element": "wind",
+    "role": "dps",
+    "archetype": [
+      "Basic ATK DMG",
+      "HP Scaling"
+    ],
+    "version_released": 1.2,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmCAADeLcVO8hluHDc5Lz6QsJwevgdrpf3AoRm",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 6,
+          "E1": 8,
+          "E2": 9,
+          "E3": 9,
+          "E4": 9.5,
+          "E5": 9.5,
+          "E6": 12.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 6,
+          "E1": 8,
+          "E2": 9,
+          "E3": 9,
+          "E4": 9.5,
+          "E5": 9.5,
+          "E6": 12.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 6,
+          "E1": 8,
+          "E2": 9,
+          "E3": 9,
+          "E4": 9.5,
+          "E5": 9.5,
+          "E6": 12.5
+        }
+      }
+    }
+  },
+  {
+    "name": "boothill",
+    "display_name": "Boothill",
+    "aliases": [
+      "boothill",
+      "bh"
+    ],
+    "rarity": 5,
+    "path": "hunt",
+    "element": "physical",
+    "role": "dps",
+    "archetype": [
+      "Break"
+    ],
+    "version_released": 2.2,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmPbO1a1l93FDl2yLjfJ7ZrwmReV8uWqh0UpEX",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 7,
+          "E1": 9,
+          "E2": 10,
+          "E3": 10.5,
+          "E4": 12,
+          "E5": 12.5,
+          "E6": 15
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 8.5,
+          "E1": 10.5,
+          "E2": 11.5,
+          "E3": 12,
+          "E4": 13.5,
+          "E5": 14,
+          "E6": 16.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 8.5,
+          "E1": 10.5,
+          "E2": 11.5,
+          "E3": 12,
+          "E4": 13.5,
+          "E5": 14,
+          "E6": 16.5
+        }
+      }
+    }
+  },
+  {
+    "name": "bronya",
+    "display_name": "Bronya",
+    "aliases": [
+      "bronya"
+    ],
+    "rarity": 5,
+    "path": "harmony",
+    "element": "wind",
+    "role": "support",
+    "archetype": [],
+    "version_released": 1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm8LiO86MZGWgIvhCcYsLe2EKx01HAynVB7TRz",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 7,
+          "E1": 8.5,
+          "E2": 9,
+          "E3": 9.5,
+          "E4": 10,
+          "E5": 10.5,
+          "E6": 12
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 7,
+          "E1": 8.5,
+          "E2": 9,
+          "E3": 9.5,
+          "E4": 10,
+          "E5": 10.5,
+          "E6": 12
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 7,
+          "E1": 8.5,
+          "E2": 9,
+          "E3": 9.5,
+          "E4": 10,
+          "E5": 10.5,
+          "E6": 12
+        }
+      }
+    }
+  },
+  {
+    "name": "castorice",
+    "display_name": "Castorice",
+    "aliases": [
+      "castorice"
+    ],
+    "rarity": 5,
+    "path": "remembrance",
+    "element": "quantum",
+    "role": "dps",
+    "archetype": [
+      "Summon",
+      "HP Scaling"
+    ],
+    "version_released": 3.2,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmP914pddl93FDl2yLjfJ7ZrwmReV8uWqh0UpE",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 9,
+          "E1": 11,
+          "E2": 14,
+          "E3": 14.5,
+          "E4": 15,
+          "E5": 15.5,
+          "E6": 18.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 9,
+          "E1": 11,
+          "E2": 14,
+          "E3": 14.5,
+          "E4": 15,
+          "E5": 15.5,
+          "E6": 18.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 9,
+          "E1": 11,
+          "E2": 14,
+          "E3": 14.5,
+          "E4": 15,
+          "E5": 15.5,
+          "E6": 18.5
+        }
+      }
+    }
+  },
+  {
+    "name": "cerydra",
+    "display_name": "Cerydra",
+    "aliases": [
+      "cerydra",
+      "queen",
+      "myqueen"
+    ],
+    "rarity": 5,
+    "path": "harmony",
+    "element": "wind",
+    "role": "support",
+    "archetype": [
+      "Energy",
+      "Skill DMG"
+    ],
+    "version_released": 3.5,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmykVzCox0IkdESXzc2H3gZ1spCA9DTWBmMito",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 7.5,
+          "E1": 9,
+          "E2": 10.5,
+          "E3": 11.5,
+          "E4": 12,
+          "E5": 12.5,
+          "E6": 16
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 7,
+          "E1": 8.5,
+          "E2": 10,
+          "E3": 11,
+          "E4": 11.5,
+          "E5": 12,
+          "E6": 15.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 7,
+          "E1": 8.5,
+          "E2": 10,
+          "E3": 11,
+          "E4": 11.5,
+          "E5": 12,
+          "E6": 15.5
+        }
+      }
+    }
+  },
+  {
+    "name": "cipher",
+    "display_name": "Cipher",
+    "aliases": [
+      "cipher",
+      "cat"
+    ],
+    "rarity": 5,
+    "path": "nihility",
+    "element": "quantum",
+    "role": "support",
+    "archetype": [
+      "Debuff",
+      "FuA"
+    ],
+    "version_released": 3.3,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmmJf7rtPLmqFhbaVfE8RYjNWSB3X0P5wZrD7I",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 10,
+          "E1": 11,
+          "E2": 12,
+          "E3": 12.5,
+          "E4": 13.5,
+          "E5": 14,
+          "E6": 17.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 10,
+          "E1": 11,
+          "E2": 12,
+          "E3": 12.5,
+          "E4": 13.5,
+          "E5": 14,
+          "E6": 17.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 10,
+          "E1": 11,
+          "E2": 12,
+          "E3": 12.5,
+          "E4": 13.5,
+          "E5": 14,
+          "E6": 17.5
+        }
+      }
+    }
+  },
+  {
+    "name": "clara",
+    "display_name": "Clara",
+    "aliases": [
+      "clara",
+      "feet"
+    ],
+    "rarity": 5,
+    "path": "destruction",
+    "element": "physical",
+    "role": "dps",
+    "archetype": [
+      "FuA"
+    ],
+    "version_released": 1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmnuRKJweXEi1leGFw5x96qCufVa0DSyzPdo8A",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 5.5,
+          "E1": 6,
+          "E2": 6,
+          "E3": 6,
+          "E4": 6.5,
+          "E5": 6.5,
+          "E6": 7
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 5.5,
+          "E1": 6,
+          "E2": 6,
+          "E3": 6,
+          "E4": 6.5,
+          "E5": 6.5,
+          "E6": 7
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 5.5,
+          "E1": 6,
+          "E2": 6,
+          "E3": 6,
+          "E4": 6.5,
+          "E5": 6.5,
+          "E6": 7
+        }
+      }
+    }
+  },
+  {
+    "name": "cyrene",
+    "display_name": "Cyrene",
+    "aliases": [
+      "Cyrene",
+      "goddess"
+    ],
+    "rarity": 5,
+    "path": "remembrance",
+    "element": "ice",
+    "role": "support",
+    "archetype": [
+      "Summon",
+      "Energy",
+      "HP Scaling"
+    ],
+    "version_released": 3.7,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmRpMZS289fzvV5gYcBk2JTMxS4bU8w6P0tlHK",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 10.5,
+          "E1": 12,
+          "E2": 16,
+          "E3": 16.5,
+          "E4": 17,
+          "E5": 17.5,
+          "E6": 22
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 10.5,
+          "E1": 12,
+          "E2": 16,
+          "E3": 16.5,
+          "E4": 17,
+          "E5": 17.5,
+          "E6": 22
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 10.5,
+          "E1": 12,
+          "E2": 16,
+          "E3": 16.5,
+          "E4": 17,
+          "E5": 17.5,
+          "E6": 22
+        }
+      }
+    }
+  },
+  {
+    "name": "danheng",
+    "display_name": "Dan heng",
+    "aliases": [
+      "danheng",
+      "daniel"
+    ],
+    "rarity": 4,
+    "path": "hunt",
+    "element": "wind",
+    "role": "dps",
+    "archetype": [],
+    "version_released": 1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmdialKcP8WPciLyjJ4tB092vRZUukbDSnrGao",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 4,
+          "E1": 4,
+          "E2": 4,
+          "E3": 4,
+          "E4": 4,
+          "E5": 4,
+          "E6": 4
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 2,
+          "E1": 2,
+          "E2": 2,
+          "E3": 2,
+          "E4": 2,
+          "E5": 2,
+          "E6": 2
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 2,
+          "E1": 2,
+          "E2": 2,
+          "E3": 2,
+          "E4": 2,
+          "E5": 2,
+          "E6": 2
+        }
+      }
+    }
+  },
+  {
+    "name": "danhengimbibitorlunae",
+    "display_name": "Imbibitor Lunae",
+    "aliases": [
+      "danhengimbibitorlunae",
+      "imbibitor",
+      "dhil"
+    ],
+    "rarity": 5,
+    "path": "destruction",
+    "element": "imaginary",
+    "role": "dps",
+    "archetype": [
+      "Skill Points",
+      "Basic ATK DMG"
+    ],
+    "version_released": 1.3,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmHrxATZgQ5YkANqasmRydMiXcIfJBtDK2b9F1",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 5,
+          "E1": 5.5,
+          "E2": 6.5,
+          "E3": 7,
+          "E4": 7,
+          "E5": 7.5,
+          "E6": 10
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 5,
+          "E1": 5.5,
+          "E2": 6.5,
+          "E3": 7,
+          "E4": 7,
+          "E5": 7.5,
+          "E6": 10
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 5,
+          "E1": 5.5,
+          "E2": 6.5,
+          "E3": 7,
+          "E4": 7,
+          "E5": 7.5,
+          "E6": 10
+        }
+      }
+    }
+  },
+  {
+    "name": "danhengpermansorterrae",
+    "display_name": "Permansor Terrae",
+    "aliases": [
+      "danhengpermansorterrae",
+      "permansorterrae",
+      "dante",
+      "dhpt"
+    ],
+    "rarity": 5,
+    "path": "preservation",
+    "element": "physical",
+    "role": "sustain",
+    "archetype": [
+      "Summon",
+      "FuA"
+    ],
+    "version_released": 3.6,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmJBQkSAs5B86oJnSiHfbzWIedp4YKuag1Q7mZ",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 9,
+          "E1": 11,
+          "E2": 12.5,
+          "E3": 13,
+          "E4": 13.5,
+          "E5": 14,
+          "E6": 16.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 9,
+          "E1": 11,
+          "E2": 12.5,
+          "E3": 13,
+          "E4": 13.5,
+          "E5": 14,
+          "E6": 16.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 9,
+          "E1": 11,
+          "E2": 12.5,
+          "E3": 13,
+          "E4": 13.5,
+          "E5": 14,
+          "E6": 16.5
+        }
+      }
+    }
+  },
+  {
+    "name": "drratio",
+    "display_name": "Dr. Ratio",
+    "aliases": [
+      "drratio",
+      "ratio"
+    ],
+    "rarity": 5,
+    "path": "hunt",
+    "element": "imaginary",
+    "role": "dps",
+    "archetype": [
+      "Debuff",
+      "FuA"
+    ],
+    "version_released": 1.6,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmZGt76CIRJrdIn25bFCj06vyTEpV7QAMhzBxt",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 6,
+          "E1": 7.5,
+          "E2": 8.5,
+          "E3": 8.5,
+          "E4": 9,
+          "E5": 9,
+          "E6": 11
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 6,
+          "E1": 7.5,
+          "E2": 8.5,
+          "E3": 8.5,
+          "E4": 9,
+          "E5": 9,
+          "E6": 11
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 6,
+          "E1": 7.5,
+          "E2": 8.5,
+          "E3": 8.5,
+          "E4": 9,
+          "E5": 9,
+          "E6": 11
+        }
+      }
+    }
+  },
+  {
+    "name": "feixiao",
+    "display_name": "Feixiao",
+    "aliases": [
+      "feixiao",
+      "fox",
+      "fx"
+    ],
+    "rarity": 5,
+    "path": "hunt",
+    "element": "wind",
+    "role": "dps",
+    "archetype": [
+      "FuA"
+    ],
+    "version_released": 2.5,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmW8CJ0hmPm04Se8z6h7VGFOXC9DltEUruj3KT",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 9,
+          "E1": 9.5,
+          "E2": 13,
+          "E3": 13.5,
+          "E4": 14.5,
+          "E5": 15,
+          "E6": 18.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 10,
+          "E1": 10.5,
+          "E2": 12.5,
+          "E3": 12.5,
+          "E4": 14.5,
+          "E5": 15,
+          "E6": 18.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 10,
+          "E1": 10.5,
+          "E2": 12.5,
+          "E3": 12.5,
+          "E4": 14.5,
+          "E5": 15,
+          "E6": 18.5
+        }
+      }
+    }
+  },
+  {
+    "name": "firefly",
+    "display_name": "Firefly",
+    "aliases": [
+      "firefly",
+      "ff",
+      "waifu"
+    ],
+    "rarity": 5,
+    "path": "destruction",
+    "element": "fire",
+    "role": "dps",
+    "archetype": [
+      "Break"
+    ],
+    "version_released": 2.3,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmLPv2pibhVXAsiymWvPEd6Tx8znquDR9rMlHp",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 8,
+          "E1": 8.5,
+          "E2": 10,
+          "E3": 10.5,
+          "E4": 10.5,
+          "E5": 11,
+          "E6": 15
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 8,
+          "E1": 8.5,
+          "E2": 10,
+          "E3": 10.5,
+          "E4": 10.5,
+          "E5": 11,
+          "E6": 15
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 8,
+          "E1": 8.5,
+          "E2": 10,
+          "E3": 10.5,
+          "E4": 10.5,
+          "E5": 11,
+          "E6": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "fuxuan",
+    "display_name": "Fu Xuan",
+    "aliases": [
+      "fuxuan"
+    ],
+    "rarity": 5,
+    "path": "preservation",
+    "element": "quantum",
+    "role": "sustain",
+    "archetype": [],
+    "version_released": 1.3,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmu81qxIEG3LaSKHlTI6DFy2fXxVOZwvgm9bYP",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 7.5,
+          "E1": 8,
+          "E2": 8.5,
+          "E3": 9,
+          "E4": 9.5,
+          "E5": 10,
+          "E6": 12
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 7.5,
+          "E1": 8,
+          "E2": 8.5,
+          "E3": 9,
+          "E4": 9.5,
+          "E5": 10,
+          "E6": 12
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 7.5,
+          "E1": 8,
+          "E2": 8.5,
+          "E3": 9,
+          "E4": 9.5,
+          "E5": 10,
+          "E6": 12
+        }
+      }
+    }
+  },
+  {
+    "name": "gallagher",
+    "display_name": "Gallagher",
+    "aliases": [
+      "gallagher"
+    ],
+    "rarity": 4,
+    "path": "abundance",
+    "element": "fire",
+    "role": "sustain",
+    "archetype": [
+      "Break",
+      "Debuff"
+    ],
+    "version_released": 2.1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmTydnKMCdeqVuD9kaG18iCSmnZPB7cKIQ3vL5",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 7,
+          "E1": 7,
+          "E2": 7,
+          "E3": 7,
+          "E4": 7,
+          "E5": 7,
+          "E6": 7
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 6.5,
+          "E1": 6.5,
+          "E2": 6.5,
+          "E3": 6.5,
+          "E4": 6.5,
+          "E5": 6.5,
+          "E6": 6.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 6.5,
+          "E1": 6.5,
+          "E2": 6.5,
+          "E3": 6.5,
+          "E4": 6.5,
+          "E5": 6.5,
+          "E6": 6.5
+        }
+      }
+    }
+  },
+  {
+    "name": "gepard",
+    "display_name": "Gepard",
+    "aliases": [
+      "gepard"
+    ],
+    "rarity": 5,
+    "path": "preservation",
+    "element": "ice",
+    "role": "sustain",
+    "archetype": [],
+    "version_released": 1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm7Gzdm8EuwONpsIr6fJvY8chTBCFXo2AimLqS",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 4,
+          "E1": 4,
+          "E2": 4,
+          "E3": 4.5,
+          "E4": 4.5,
+          "E5": 4.5,
+          "E6": 5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 4,
+          "E1": 4,
+          "E2": 4,
+          "E3": 4.5,
+          "E4": 4.5,
+          "E5": 4.5,
+          "E6": 5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 4,
+          "E1": 4,
+          "E2": 4,
+          "E3": 4.5,
+          "E4": 4.5,
+          "E5": 4.5,
+          "E6": 5
+        }
+      }
+    }
+  },
+  {
+    "name": "guinaifen",
+    "display_name": "Guinaifen",
+    "aliases": [
+      "guinaifen"
+    ],
+    "rarity": 4,
+    "path": "nihility",
+    "element": "fire",
+    "role": "support",
+    "archetype": [
+      "DoT",
+      "Debuff"
+    ],
+    "version_released": 1.4,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmZ1cYu4IRJrdIn25bFCj06vyTEpV7QAMhzBxt",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 5.5,
+          "E1": 5.5,
+          "E2": 5.5,
+          "E3": 5.5,
+          "E4": 5.5,
+          "E5": 5.5,
+          "E6": 5.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 4,
+          "E1": 4,
+          "E2": 4,
+          "E3": 4,
+          "E4": 4,
+          "E5": 4,
+          "E6": 4
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 4,
+          "E1": 4,
+          "E2": 4,
+          "E3": 4,
+          "E4": 4,
+          "E5": 4,
+          "E6": 4
+        }
+      }
+    }
+  },
+  {
+    "name": "hanya",
+    "display_name": "Hanya",
+    "aliases": [
+      "hanya"
+    ],
+    "rarity": 4,
+    "path": "harmony",
+    "element": "physical",
+    "role": "support",
+    "archetype": [
+      "Skill Points"
+    ],
+    "version_released": 1.5,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmJS38vYs5B86oJnSiHfbzWIedp4YKuag1Q7mZ",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 6.5,
+          "E1": 6.5,
+          "E2": 6.5,
+          "E3": 6.5,
+          "E4": 6.5,
+          "E5": 6.5,
+          "E6": 6.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 3,
+          "E1": 3,
+          "E2": 3,
+          "E3": 3,
+          "E4": 3,
+          "E5": 3,
+          "E6": 3
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 3,
+          "E1": 3,
+          "E2": 3,
+          "E3": 3,
+          "E4": 3,
+          "E5": 3,
+          "E6": 3
+        }
+      }
+    }
+  },
+  {
+    "name": "herta",
+    "display_name": "Herta",
+    "aliases": [
+      "herta",
+      "puppet"
+    ],
+    "rarity": 4,
+    "path": "erudition",
+    "element": "ice",
+    "role": "dps",
+    "archetype": [
+      "FuA"
+    ],
+    "version_released": 1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmClP2vkcVO8hluHDc5Lz6QsJwevgdrpf3AoRm",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 6,
+          "E1": 6,
+          "E2": 6,
+          "E3": 6,
+          "E4": 6,
+          "E5": 6,
+          "E6": 6
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 6,
+          "E1": 6,
+          "E2": 6,
+          "E3": 6,
+          "E4": 6,
+          "E5": 6,
+          "E6": 6
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 6,
+          "E1": 6,
+          "E2": 6,
+          "E3": 6,
+          "E4": 6,
+          "E5": 6,
+          "E6": 6
+        }
+      }
+    }
+  },
+  {
+    "name": "himeko",
+    "display_name": "Himeko",
+    "aliases": [
+      "himeko"
+    ],
+    "rarity": 5,
+    "path": "erudition",
+    "element": "fire",
+    "role": "dps",
+    "archetype": [
+      "Break"
+    ],
+    "version_released": 1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmpbjfT0gmGiY8n47VLsJ3Ikch9HvfCTtberRa",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 5,
+          "E1": 5.5,
+          "E2": 6,
+          "E3": 6,
+          "E4": 7,
+          "E5": 7,
+          "E6": 8
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 5,
+          "E1": 5.5,
+          "E2": 6,
+          "E3": 6,
+          "E4": 7,
+          "E5": 7,
+          "E6": 8
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 5,
+          "E1": 5.5,
+          "E2": 6,
+          "E3": 6,
+          "E4": 7,
+          "E5": 7,
+          "E6": 8
+        }
+      }
+    }
+  },
+  {
+    "name": "hook",
+    "display_name": "Hook",
+    "aliases": [
+      "hook"
+    ],
+    "rarity": 4,
+    "path": "destruction",
+    "element": "fire",
+    "role": "dps",
+    "archetype": [
+      "Skill DMG"
+    ],
+    "version_released": 1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmGx28fnhzwZjTnJQ7ARLzNtPp5qVxs4dkU8ha",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 3,
+          "E1": 3,
+          "E2": 3,
+          "E3": 3,
+          "E4": 3,
+          "E5": 3,
+          "E6": 3
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 2,
+          "E1": 2,
+          "E2": 2,
+          "E3": 2,
+          "E4": 2,
+          "E5": 2,
+          "E6": 2
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 2,
+          "E1": 2,
+          "E2": 2,
+          "E3": 2,
+          "E4": 2,
+          "E5": 2,
+          "E6": 2
+        }
+      }
+    }
+  },
+  {
+    "name": "huohuo",
+    "display_name": "Huohuo",
+    "aliases": [
+      "huohuo"
+    ],
+    "rarity": 5,
+    "path": "abundance",
+    "element": "wind",
+    "role": "sustain",
+    "archetype": [
+      "Energy"
+    ],
+    "version_released": 1.5,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmzFCAVWy2qswvoUEVZajknbdXDJQl8TS1KhLg",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 8,
+          "E1": 9,
+          "E2": 9.5,
+          "E3": 10,
+          "E4": 10.5,
+          "E5": 11,
+          "E6": 13.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 7,
+          "E1": 7.5,
+          "E2": 8,
+          "E3": 8.5,
+          "E4": 9,
+          "E5": 9.5,
+          "E6": 13
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 7,
+          "E1": 7.5,
+          "E2": 8,
+          "E3": 8.5,
+          "E4": 9,
+          "E5": 9.5,
+          "E6": 13
+        }
+      }
+    }
+  },
+  {
+    "name": "hyacine",
+    "display_name": "Hyacine",
+    "aliases": [
+      "hyacine"
+    ],
+    "rarity": 5,
+    "path": "remembrance",
+    "element": "wind",
+    "role": "sustain",
+    "archetype": [
+      "Summon",
+      "HP Scaling"
+    ],
+    "version_released": 3.3,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm87O6AaMZGWgIvhCcYsLe2EKx01HAynVB7TRz",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 10,
+          "E1": 12,
+          "E2": 13.5,
+          "E3": 14,
+          "E4": 15,
+          "E5": 15.5,
+          "E6": 20
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 9.5,
+          "E1": 11.5,
+          "E2": 13,
+          "E3": 13.5,
+          "E4": 14.5,
+          "E5": 15,
+          "E6": 20
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 9.5,
+          "E1": 11.5,
+          "E2": 13,
+          "E3": 13.5,
+          "E4": 14.5,
+          "E5": 15,
+          "E6": 20
+        }
+      }
+    }
+  },
+  {
+    "name": "hysilens",
+    "display_name": "Hysilens",
+    "aliases": [
+      "hysilens",
+      "whale",
+      "fish",
+      "rule34"
+    ],
+    "rarity": 5,
+    "path": "nihility",
+    "element": "physical",
+    "role": "dps",
+    "archetype": [
+      "DoT",
+      "Debuff"
+    ],
+    "version_released": 3.5,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmHW1H1yZgQ5YkANqasmRydMiXcIfJBtDK2b9F",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 10,
+          "E1": 11.5,
+          "E2": 13,
+          "E3": 13.5,
+          "E4": 15,
+          "E5": 15.5,
+          "E6": 20
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 8,
+          "E1": 9.5,
+          "E2": 11,
+          "E3": 11.5,
+          "E4": 13,
+          "E5": 13.5,
+          "E6": 18
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 8,
+          "E1": 9.5,
+          "E2": 11,
+          "E3": 11.5,
+          "E4": 13,
+          "E5": 13.5,
+          "E6": 18
+        }
+      }
+    }
+  },
+  {
+    "name": "jade",
+    "display_name": "Jade",
+    "aliases": [
+      "jade"
+    ],
+    "rarity": 5,
+    "path": "erudition",
+    "element": "quantum",
+    "role": "dps",
+    "archetype": [
+      "FuA"
+    ],
+    "version_released": 2.3,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmfz9GPfh6z2I1lmoXH5cuF8stRxTG9EYZpVLh",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 6,
+          "E1": 7,
+          "E2": 8,
+          "E3": 8.5,
+          "E4": 10,
+          "E5": 10.5,
+          "E6": 12
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 6.5,
+          "E1": 7.5,
+          "E2": 8.5,
+          "E3": 9,
+          "E4": 10.5,
+          "E5": 11,
+          "E6": 12.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 6.5,
+          "E1": 7.5,
+          "E2": 8.5,
+          "E3": 9,
+          "E4": 10.5,
+          "E5": 11,
+          "E6": 12.5
+        }
+      }
+    }
+  },
+  {
+    "name": "jiaoqiu",
+    "display_name": "Jiaoqiu",
+    "aliases": [
+      "jiaoqiu",
+      "jq"
+    ],
+    "rarity": 5,
+    "path": "nihility",
+    "element": "fire",
+    "role": "support",
+    "archetype": [
+      "DoT",
+      "Debuff"
+    ],
+    "version_released": 2.4,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmbrHDfxJ0RkK3cdoehTU4l5xut1rbBEgmvWN6",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 6,
+          "E1": 8,
+          "E2": 8.5,
+          "E3": 9,
+          "E4": 9.5,
+          "E5": 10,
+          "E6": 12
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 6,
+          "E1": 8,
+          "E2": 8.5,
+          "E3": 9,
+          "E4": 9.5,
+          "E5": 10,
+          "E6": 12
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 6,
+          "E1": 8,
+          "E2": 8.5,
+          "E3": 9,
+          "E4": 9.5,
+          "E5": 10,
+          "E6": 12
+        }
+      }
+    }
+  },
+  {
+    "name": "jingyuan",
+    "display_name": "Jing Yuan",
+    "aliases": [
+      "jingyuan",
+      "jy"
+    ],
+    "rarity": 5,
+    "path": "erudition",
+    "element": "lightning",
+    "role": "dps",
+    "archetype": [
+      "Summon",
+      "FuA"
+    ],
+    "version_released": 1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmbh0xfMJ0RkK3cdoehTU4l5xut1rbBEgmvWN6",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 6,
+          "E1": 7,
+          "E2": 8,
+          "E3": 8.5,
+          "E4": 9.5,
+          "E5": 10,
+          "E6": 12
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 6,
+          "E1": 7,
+          "E2": 8,
+          "E3": 8.5,
+          "E4": 9.5,
+          "E5": 10,
+          "E6": 12
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 6,
+          "E1": 7,
+          "E2": 8,
+          "E3": 8.5,
+          "E4": 9.5,
+          "E5": 10,
+          "E6": 12
+        }
+      }
+    }
+  },
+  {
+    "name": "jingliu",
+    "display_name": "Jingliu",
+    "aliases": [
+      "jingliu",
+      "jl"
+    ],
+    "rarity": 5,
+    "path": "destruction",
+    "element": "ice",
+    "role": "dps",
+    "archetype": [
+      "Skill DMG",
+      "HP Scaling"
+    ],
+    "version_released": 1.4,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmFM84c25Rzihtd25WJujlb7DBL9g6f4xAYaOn",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 6,
+          "E1": 7.5,
+          "E2": 9,
+          "E3": 9,
+          "E4": 9,
+          "E5": 9,
+          "E6": 12
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 6,
+          "E1": 7.5,
+          "E2": 9,
+          "E3": 9,
+          "E4": 9,
+          "E5": 9,
+          "E6": 12
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 6,
+          "E1": 7.5,
+          "E2": 9,
+          "E3": 9,
+          "E4": 9,
+          "E5": 9,
+          "E6": 12
+        }
+      }
+    }
+  },
+  {
+    "name": "kafka",
+    "display_name": "Kafka",
+    "aliases": [
+      "kafka"
+    ],
+    "rarity": 5,
+    "path": "nihility",
+    "element": "lightning",
+    "role": "support",
+    "archetype": [
+      "DoT"
+    ],
+    "version_released": 1.2,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmLu7iZWbhVXAsiymWvPEd6Tx8znquDR9rMlHp",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 9,
+          "E1": 10,
+          "E2": 12,
+          "E3": 12.5,
+          "E4": 14,
+          "E5": 14.5,
+          "E6": 15.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 8,
+          "E1": 9,
+          "E2": 11,
+          "E3": 11.5,
+          "E4": 13,
+          "E5": 13.5,
+          "E6": 14.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 8,
+          "E1": 9,
+          "E2": 11,
+          "E3": 11.5,
+          "E4": 13,
+          "E5": 13.5,
+          "E6": 14.5
+        }
+      }
+    }
+  },
+  {
+    "name": "lingsha",
+    "display_name": "Lingsha",
+    "aliases": [
+      "lingsha",
+      "fuyuan"
+    ],
+    "rarity": 5,
+    "path": "abundance",
+    "element": "fire",
+    "role": "sustain",
+    "archetype": [
+      "Break",
+      "Summon",
+      "FuA"
+    ],
+    "version_released": 2.5,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmpWvZougmGiY8n47VLsJ3Ikch9HvfCTtberRa",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 9,
+          "E1": 10.5,
+          "E2": 11.5,
+          "E3": 12,
+          "E4": 12.5,
+          "E5": 13,
+          "E6": 15
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 9,
+          "E1": 10.5,
+          "E2": 11.5,
+          "E3": 12,
+          "E4": 12.5,
+          "E5": 13,
+          "E6": 15
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 9,
+          "E1": 10.5,
+          "E2": 11.5,
+          "E3": 12,
+          "E4": 12.5,
+          "E5": 13,
+          "E6": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "luka",
+    "display_name": "Luka",
+    "aliases": [
+      "luka"
+    ],
+    "rarity": 4,
+    "path": "nihility",
+    "element": "physical",
+    "role": "dps",
+    "archetype": [
+      "DoT"
+    ],
+    "version_released": 1.2,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm2osGaX3SAZqfk4pUnvT0wBMrui1Ch6D7dxHR",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 4.5,
+          "E1": 4.5,
+          "E2": 4.5,
+          "E3": 4.5,
+          "E4": 4.5,
+          "E5": 4.5,
+          "E6": 4.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 4.5,
+          "E1": 4.5,
+          "E2": 4.5,
+          "E3": 4.5,
+          "E4": 4.5,
+          "E5": 4.5,
+          "E6": 4.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 4.5,
+          "E1": 4.5,
+          "E2": 4.5,
+          "E3": 4.5,
+          "E4": 4.5,
+          "E5": 4.5,
+          "E6": 4.5
+        }
+      }
+    }
+  },
+  {
+    "name": "luocha",
+    "display_name": "Luocha",
+    "aliases": [
+      "luocha"
+    ],
+    "rarity": 5,
+    "path": "abundance",
+    "element": "imaginary",
+    "role": "sustain",
+    "archetype": [],
+    "version_released": 1.1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmd6popxP8WPciLyjJ4tB092vRZUukbDSnrGao",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 7,
+          "E1": 7.5,
+          "E2": 7.5,
+          "E3": 8,
+          "E4": 8,
+          "E5": 8.5,
+          "E6": 10.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 7,
+          "E1": 7.5,
+          "E2": 7.5,
+          "E3": 8,
+          "E4": 8,
+          "E5": 8.5,
+          "E6": 10.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 7,
+          "E1": 7.5,
+          "E2": 7.5,
+          "E3": 8,
+          "E4": 8,
+          "E5": 8.5,
+          "E6": 10.5
+        }
+      }
+    }
+  },
+  {
+    "name": "lynx",
+    "display_name": "Lynx",
+    "aliases": [
+      "lynx"
+    ],
+    "rarity": 4,
+    "path": "abundance",
+    "element": "quantum",
+    "role": "sustain",
+    "archetype": [],
+    "version_released": 1.3,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmbDiQEQoJ0RkK3cdoehTU4l5xut1rbBEgmvWN",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 5,
+          "E1": 5,
+          "E2": 5,
+          "E3": 5,
+          "E4": 5,
+          "E5": 5,
+          "E6": 5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 2,
+          "E1": 2,
+          "E2": 2,
+          "E3": 2,
+          "E4": 2,
+          "E5": 2,
+          "E6": 2
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 2,
+          "E1": 2,
+          "E2": 2,
+          "E3": 2,
+          "E4": 2,
+          "E5": 2,
+          "E6": 2
+        }
+      }
+    }
+  },
+  {
+    "name": "march7th",
+    "display_name": "March 7th",
+    "aliases": [
+      "march7th",
+      "7",
+      "march7"
+    ],
+    "rarity": 4,
+    "path": "preservation",
+    "element": "ice",
+    "role": "sustain",
+    "archetype": [],
+    "version_released": 1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmgnpUKr7cFbBJ0WiDyRr2wsaI1mzeQ5j8KgfH",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 2,
+          "E1": 2,
+          "E2": 2,
+          "E3": 2,
+          "E4": 2,
+          "E5": 2,
+          "E6": 2
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 2,
+          "E1": 2,
+          "E2": 2,
+          "E3": 2,
+          "E4": 2,
+          "E5": 2,
+          "E6": 2
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 2,
+          "E1": 2,
+          "E2": 2,
+          "E3": 2,
+          "E4": 2,
+          "E5": 2,
+          "E6": 2
+        }
+      }
+    }
+  },
+  {
+    "name": "march7ththehunt",
+    "display_name": "March 7th The Hunt",
+    "aliases": [
+      "march7ththehunt",
+      "7",
+      "march7"
+    ],
+    "rarity": 4,
+    "path": "hunt",
+    "element": "imaginary",
+    "role": "dps",
+    "archetype": [
+      "Break",
+      "FuA"
+    ],
+    "version_released": 2.4,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmZFsluFIRJrdIn25bFCj06vyTEpV7QAMhzBxt",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 5,
+          "E1": 5.5,
+          "E2": 5.5,
+          "E3": 6,
+          "E4": 6,
+          "E5": 6,
+          "E6": 7
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 4.5,
+          "E1": 5,
+          "E2": 5,
+          "E3": 5.5,
+          "E4": 5.5,
+          "E5": 5.5,
+          "E6": 6.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 4.5,
+          "E1": 5,
+          "E2": 5,
+          "E3": 5.5,
+          "E4": 5.5,
+          "E5": 5.5,
+          "E6": 6.5
+        }
+      }
+    }
+  },
+  {
+    "name": "march7thevernight",
+    "display_name": "Evernight",
+    "aliases": [
+      "march7thevernight",
+      "evernight",
+      "7",
+      "march7"
+    ],
+    "rarity": 5,
+    "path": "remembrance",
+    "element": "ice",
+    "role": "dps",
+    "archetype": [
+      "Summon",
+      "HP Scaling"
+    ],
+    "version_released": 3.6,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmSszVAaWwLJmk0yB1IEfzFu2hoGbYjisKa74p",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 10,
+          "E1": 12.5,
+          "E2": 15,
+          "E3": 15.5,
+          "E4": 16.5,
+          "E5": 17,
+          "E6": 20.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 10,
+          "E1": 12.5,
+          "E2": 15,
+          "E3": 15.5,
+          "E4": 16.5,
+          "E5": 17,
+          "E6": 20.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 10,
+          "E1": 12.5,
+          "E2": 15,
+          "E3": 15.5,
+          "E4": 16.5,
+          "E5": 17,
+          "E6": 20.5
+        }
+      }
+    }
+  },
+  {
+    "name": "misha",
+    "display_name": "Misha",
+    "aliases": [
+      "misha"
+    ],
+    "rarity": 4,
+    "path": "destruction",
+    "element": "ice",
+    "role": "dps",
+    "archetype": [
+      "Ultimate DMG"
+    ],
+    "version_released": 2,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmZSmgwk3IRJrdIn25bFCj06vyTEpV7QAMhzBx",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 5,
+          "E1": 5,
+          "E2": 5,
+          "E3": 5,
+          "E4": 5,
+          "E5": 5,
+          "E6": 5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 7,
+          "E1": 7,
+          "E2": 7,
+          "E3": 7,
+          "E4": 7,
+          "E5": 7,
+          "E6": 7
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 7,
+          "E1": 7,
+          "E2": 7,
+          "E3": 7,
+          "E4": 7,
+          "E5": 7,
+          "E6": 7
+        }
+      }
+    }
+  },
+  {
+    "name": "moze",
+    "display_name": "Moze",
+    "aliases": [
+      "moze"
+    ],
+    "rarity": 4,
+    "path": "hunt",
+    "element": "lightning",
+    "role": "dps",
+    "archetype": [
+      "Debuff",
+      "FuA"
+    ],
+    "version_released": 2.5,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmYIIE8lqHstkMRmd3pPDZGEcwzHaQlBxL1bng",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 7,
+          "E1": 7,
+          "E2": 7,
+          "E3": 7,
+          "E4": 7,
+          "E5": 7,
+          "E6": 7
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 4,
+          "E1": 4,
+          "E2": 4,
+          "E3": 4,
+          "E4": 4,
+          "E5": 4,
+          "E6": 4
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 4,
+          "E1": 4,
+          "E2": 4,
+          "E3": 4,
+          "E4": 4,
+          "E5": 4,
+          "E6": 4
+        }
+      }
+    }
+  },
+  {
+    "name": "mydei",
+    "display_name": "Mydei",
+    "aliases": [
+      "mydei"
+    ],
+    "rarity": 5,
+    "path": "destruction",
+    "element": "imaginary",
+    "role": "dps",
+    "archetype": [
+      "Skill DMG",
+      "HP Scaling"
+    ],
+    "version_released": 3.1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmuCZ9WZEG3LaSKHlTI6DFy2fXxVOZwvgm9bYP",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 8,
+          "E1": 9,
+          "E2": 12,
+          "E3": 12.5,
+          "E4": 13.5,
+          "E5": 14,
+          "E6": 17
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 8,
+          "E1": 9,
+          "E2": 12,
+          "E3": 12.5,
+          "E4": 13.5,
+          "E5": 14,
+          "E6": 17
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 8,
+          "E1": 9,
+          "E2": 12,
+          "E3": 12.5,
+          "E4": 13.5,
+          "E5": 14,
+          "E6": 17
+        }
+      }
+    }
+  },
+  {
+    "name": "natasha",
+    "display_name": "Natasha",
+    "aliases": [
+      "natasha"
+    ],
+    "rarity": 4,
+    "path": "abundance",
+    "element": "physical",
+    "role": "sustain",
+    "archetype": [],
+    "version_released": 1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmnkkrq4SeXEi1leGFw5x96qCufVa0DSyzPdo8",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 3,
+          "E1": 3,
+          "E2": 3,
+          "E3": 3,
+          "E4": 3,
+          "E5": 3,
+          "E6": 3
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 2,
+          "E1": 2,
+          "E2": 2,
+          "E3": 2,
+          "E4": 2,
+          "E5": 2,
+          "E6": 2
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 2,
+          "E1": 2,
+          "E2": 2,
+          "E3": 2,
+          "E4": 2,
+          "E5": 2,
+          "E6": 2
+        }
+      }
+    }
+  },
+  {
+    "name": "pela",
+    "display_name": "Pela",
+    "aliases": [
+      "pela"
+    ],
+    "rarity": 4,
+    "path": "nihility",
+    "element": "ice",
+    "role": "support",
+    "archetype": [
+      "Debuff"
+    ],
+    "version_released": 1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm75BY77uwONpsIr6fJvY8chTBCFXo2AimLqSe",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 6,
+          "E1": 6,
+          "E2": 6,
+          "E3": 6,
+          "E4": 6,
+          "E5": 6,
+          "E6": 6
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 6,
+          "E1": 6,
+          "E2": 6,
+          "E3": 6,
+          "E4": 6,
+          "E5": 6,
+          "E6": 6
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 6,
+          "E1": 6,
+          "E2": 6,
+          "E3": 6,
+          "E4": 6,
+          "E5": 6,
+          "E6": 6
+        }
+      }
+    }
+  },
+  {
+    "name": "phainon",
+    "display_name": "Phainon",
+    "aliases": [
+      "phainon"
+    ],
+    "rarity": 5,
+    "path": "destruction",
+    "element": "physical",
+    "role": "dps",
+    "archetype": [
+      "Skill DMG"
+    ],
+    "version_released": 3.4,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmysrB4ix0IkdESXzc2H3gZ1spCA9DTWBmMito",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 10,
+          "E1": 12,
+          "E2": 15,
+          "E3": 14.5,
+          "E4": 15,
+          "E5": 16,
+          "E6": 20.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 9.5,
+          "E1": 11.5,
+          "E2": 15,
+          "E3": 14.5,
+          "E4": 15,
+          "E5": 16,
+          "E6": 20.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 9.5,
+          "E1": 11.5,
+          "E2": 15,
+          "E3": 14.5,
+          "E4": 15,
+          "E5": 16,
+          "E6": 20.5
+        }
+      }
+    }
+  },
+  {
+    "name": "qingque",
+    "display_name": "Qingque",
+    "aliases": [
+      "qingque"
+    ],
+    "rarity": 4,
+    "path": "erudition",
+    "element": "quantum",
+    "role": "dps",
+    "archetype": [
+      "Skill Points",
+      "Basic ATK DMG"
+    ],
+    "version_released": 1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmcy4ZyfUkvBRwZFY8NJKCelUa9pDoh1rSTQMz",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 5,
+          "E1": 5,
+          "E2": 5,
+          "E3": 5,
+          "E4": 5,
+          "E5": 5,
+          "E6": 5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 2,
+          "E1": 2,
+          "E2": 2,
+          "E3": 2,
+          "E4": 2,
+          "E5": 2,
+          "E6": 2
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 2,
+          "E1": 2,
+          "E2": 2,
+          "E3": 2,
+          "E4": 2,
+          "E5": 2,
+          "E6": 2
+        }
+      }
+    }
+  },
+  {
+    "name": "rappa",
+    "display_name": "Rappa",
+    "aliases": [
+      "rappa"
+    ],
+    "rarity": 5,
+    "path": "erudition",
+    "element": "imaginary",
+    "role": "dps",
+    "archetype": [
+      "Break"
+    ],
+    "version_released": 2.6,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmSLvDtwWwLJmk0yB1IEfzFu2hoGbYjisKa74p",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 8,
+          "E1": 9,
+          "E2": 10,
+          "E3": 10.5,
+          "E4": 11.5,
+          "E5": 12,
+          "E6": 14.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 8.5,
+          "E1": 9.5,
+          "E2": 10.5,
+          "E3": 11,
+          "E4": 12,
+          "E5": 12.5,
+          "E6": 15
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 8.5,
+          "E1": 9.5,
+          "E2": 10.5,
+          "E3": 11,
+          "E4": 12,
+          "E5": 12.5,
+          "E6": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "robin",
+    "display_name": "Robin",
+    "aliases": [
+      "robin"
+    ],
+    "rarity": 5,
+    "path": "harmony",
+    "element": "physical",
+    "role": "support",
+    "archetype": [
+      "FuA"
+    ],
+    "version_released": 2.2,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmGtopKmzwZjTnJQ7ARLzNtPp5qVxs4dkU8haC",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 8,
+          "E1": 10,
+          "E2": 11.5,
+          "E3": 12.5,
+          "E4": 12.5,
+          "E5": 13,
+          "E6": 16
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 8,
+          "E1": 10,
+          "E2": 11.5,
+          "E3": 12.5,
+          "E4": 12.5,
+          "E5": 13,
+          "E6": 16
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 8,
+          "E1": 10,
+          "E2": 11.5,
+          "E3": 12.5,
+          "E4": 12.5,
+          "E5": 13,
+          "E6": 16
+        }
+      }
+    }
+  },
+  {
+    "name": "ruanmei",
+    "display_name": "Ruan Mei",
+    "aliases": [
+      "ruanmei",
+      "rm"
+    ],
+    "rarity": 5,
+    "path": "harmony",
+    "element": "ice",
+    "role": "support",
+    "archetype": [
+      "Break"
+    ],
+    "version_released": 1.6,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmYkfrGnHstkMRmd3pPDZGEcwzHaQlBxL1bngC",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 7,
+          "E1": 8.5,
+          "E2": 9,
+          "E3": 9.5,
+          "E4": 9.5,
+          "E5": 10,
+          "E6": 14.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 7,
+          "E1": 8.5,
+          "E2": 9.5,
+          "E3": 10,
+          "E4": 10,
+          "E5": 10.5,
+          "E6": 15.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 7,
+          "E1": 8.5,
+          "E2": 9.5,
+          "E3": 10,
+          "E4": 10,
+          "E5": 10.5,
+          "E6": 15.5
+        }
+      }
+    }
+  },
+  {
+    "name": "saber",
+    "display_name": "Saber",
+    "aliases": [
+      "saber",
+      "fate"
+    ],
+    "rarity": 5,
+    "path": "destruction",
+    "element": "wind",
+    "role": "dps",
+    "archetype": [
+      "Energy",
+      "Ultimate DMG"
+    ],
+    "version_released": 3.4,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmEy3uqAiG3yT8GH5eXAIkjJtxnwFLQRfz7aov",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 7,
+          "E1": 8.5,
+          "E2": 10,
+          "E3": 10.5,
+          "E4": 12,
+          "E5": 12.5,
+          "E6": 17
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 7,
+          "E1": 8.5,
+          "E2": 10,
+          "E3": 10.5,
+          "E4": 12,
+          "E5": 12.5,
+          "E6": 17
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 7,
+          "E1": 8.5,
+          "E2": 10,
+          "E3": 10.5,
+          "E4": 12,
+          "E5": 12.5,
+          "E6": 17
+        }
+      }
+    }
+  },
+  {
+    "name": "sampo",
+    "display_name": "Sampo",
+    "aliases": [
+      "sampo"
+    ],
+    "rarity": 4,
+    "path": "nihility",
+    "element": "wind",
+    "role": "dps",
+    "archetype": [
+      "DoT",
+      "Debuff"
+    ],
+    "version_released": 1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmShmX7uWwLJmk0yB1IEfzFu2hoGbYjisKa74p",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 6,
+          "E1": 6,
+          "E2": 6,
+          "E3": 6,
+          "E4": 6,
+          "E5": 6,
+          "E6": 6
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 3.5,
+          "E1": 3.5,
+          "E2": 3.5,
+          "E3": 3.5,
+          "E4": 3.5,
+          "E5": 3.5,
+          "E6": 3.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 3.5,
+          "E1": 3.5,
+          "E2": 3.5,
+          "E3": 3.5,
+          "E4": 3.5,
+          "E5": 3.5,
+          "E6": 3.5
+        }
+      }
+    }
+  },
+  {
+    "name": "seele",
+    "display_name": "Seele",
+    "aliases": [
+      "seele"
+    ],
+    "rarity": 5,
+    "path": "hunt",
+    "element": "quantum",
+    "role": "dps",
+    "archetype": [
+      "Skill DMG"
+    ],
+    "version_released": 1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmuuID47EG3LaSKHlTI6DFy2fXxVOZwvgm9bYP",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 6,
+          "E1": 6.5,
+          "E2": 8,
+          "E3": 8,
+          "E4": 9,
+          "E5": 9,
+          "E6": 10
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 4.5,
+          "E1": 5,
+          "E2": 6.5,
+          "E3": 6.5,
+          "E4": 7.5,
+          "E5": 7.5,
+          "E6": 8.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 4.5,
+          "E1": 5,
+          "E2": 6.5,
+          "E3": 6.5,
+          "E4": 7.5,
+          "E5": 7.5,
+          "E6": 8.5
+        }
+      }
+    }
+  },
+  {
+    "name": "serval",
+    "display_name": "Serval",
+    "aliases": [
+      "serval"
+    ],
+    "rarity": 4,
+    "path": "erudition",
+    "element": "lightning",
+    "role": "dps",
+    "archetype": [],
+    "version_released": 1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmTpV3QNCdeqVuD9kaG18iCSmnZPB7cKIQ3vL5",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 6.5,
+          "E1": 6.5,
+          "E2": 6.5,
+          "E3": 6.5,
+          "E4": 6.5,
+          "E5": 6.5,
+          "E6": 6.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 4.5,
+          "E1": 4.5,
+          "E2": 4.5,
+          "E3": 4.5,
+          "E4": 4.5,
+          "E5": 4.5,
+          "E6": 4.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 4.5,
+          "E1": 4.5,
+          "E2": 4.5,
+          "E3": 4.5,
+          "E4": 4.5,
+          "E5": 4.5,
+          "E6": 4.5
+        }
+      }
+    }
+  },
+  {
+    "name": "silverwolf",
+    "display_name": "Silver Wolf",
+    "aliases": [
+      "silverwolf",
+      "wolf",
+      "sw"
+    ],
+    "rarity": 5,
+    "path": "nihility",
+    "element": "quantum",
+    "role": "support",
+    "archetype": [
+      "Debuff"
+    ],
+    "version_released": 1.1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm7sKo64uwONpsIr6fJvY8chTBCFXo2AimLqSe",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 8,
+          "E1": 10,
+          "E2": 12,
+          "E3": 12.5,
+          "E4": 13.5,
+          "E5": 14,
+          "E6": 15.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 8,
+          "E1": 10,
+          "E2": 12,
+          "E3": 12.5,
+          "E4": 13.5,
+          "E5": 14,
+          "E6": 15.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 8,
+          "E1": 10,
+          "E2": 12,
+          "E3": 12.5,
+          "E4": 13.5,
+          "E5": 14,
+          "E6": 15.5
+        }
+      }
+    }
+  },
+  {
+    "name": "sparkle",
+    "display_name": "Sparkle",
+    "aliases": [
+      "sparkle",
+      "hanabi"
+    ],
+    "rarity": 5,
+    "path": "harmony",
+    "element": "quantum",
+    "role": "support",
+    "archetype": [
+      "Skill Points"
+    ],
+    "version_released": 2,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmm2rW6rLmqFhbaVfE8RYjNWSB3X0P5wZrD7IC",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 7,
+          "E1": 8.5,
+          "E2": 10,
+          "E3": 10.5,
+          "E4": 11,
+          "E5": 11.5,
+          "E6": 14.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 7,
+          "E1": 8.5,
+          "E2": 10,
+          "E3": 10.5,
+          "E4": 11,
+          "E5": 11.5,
+          "E6": 14.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 7,
+          "E1": 8.5,
+          "E2": 10,
+          "E3": 10.5,
+          "E4": 11,
+          "E5": 11.5,
+          "E6": 14.5
+        }
+      }
+    }
+  },
+  {
+    "name": "sunday",
+    "display_name": "Sunday",
+    "aliases": [
+      "sunday"
+    ],
+    "rarity": 5,
+    "path": "harmony",
+    "element": "imaginary",
+    "role": "support",
+    "archetype": [
+      "Summon",
+      "Energy"
+    ],
+    "version_released": 2.7,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmfgVf9yh6z2I1lmoXH5cuF8stRxTG9EYZpVLh",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 8.5,
+          "E1": 10,
+          "E2": 11,
+          "E3": 11.5,
+          "E4": 13,
+          "E5": 13.5,
+          "E6": 15
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 8,
+          "E1": 9.5,
+          "E2": 10.5,
+          "E3": 11,
+          "E4": 12.5,
+          "E5": 13,
+          "E6": 14.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 8,
+          "E1": 9.5,
+          "E2": 10.5,
+          "E3": 11,
+          "E4": 12.5,
+          "E5": 13,
+          "E6": 14.5
+        }
+      }
+    }
+  },
+  {
+    "name": "sushang",
+    "display_name": "Sushang",
+    "aliases": [
+      "sushang"
+    ],
+    "rarity": 4,
+    "path": "hunt",
+    "element": "physical",
+    "role": "dps",
+    "archetype": [],
+    "version_released": 1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmm1XNeILmqFhbaVfE8RYjNWSB3X0P5wZrD7IC",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 4,
+          "E1": 4,
+          "E2": 4,
+          "E3": 4,
+          "E4": 4,
+          "E5": 4,
+          "E6": 4
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 5,
+          "E1": 5,
+          "E2": 5,
+          "E3": 5,
+          "E4": 5,
+          "E5": 5,
+          "E6": 5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 5,
+          "E1": 5,
+          "E2": 5,
+          "E3": 5,
+          "E4": 5,
+          "E5": 5,
+          "E6": 5
+        }
+      }
+    }
+  },
+  {
+    "name": "thedahlia",
+    "display_name": "The Dahlia",
+    "aliases": [
+      "thedahlia",
+      "constance"
+    ],
+    "rarity": 5,
+    "path": "nihility",
+    "element": "fire",
+    "role": "support",
+    "archetype": [
+      "Break",
+      "Debuff"
+    ],
+    "version_released": 3.8,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmYIqf8CBHstkMRmd3pPDZGEcwzHaQlBxL1bng",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 12,
+          "E1": 14.5,
+          "E2": 15.5,
+          "E3": 16,
+          "E4": 16.5,
+          "E5": 17,
+          "E6": 20.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 12,
+          "E1": 14.5,
+          "E2": 15.5,
+          "E3": 16,
+          "E4": 16.5,
+          "E5": 17,
+          "E6": 20.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 12,
+          "E1": 14.5,
+          "E2": 15.5,
+          "E3": 16,
+          "E4": 16.5,
+          "E5": 17,
+          "E6": 20.5
+        }
+      }
+    }
+  },
+  {
+    "name": "theherta",
+    "display_name": "The Herta",
+    "aliases": [
+      "theherta",
+      "herta",
+      "therta"
+    ],
+    "rarity": 5,
+    "path": "erudition",
+    "element": "ice",
+    "role": "dps",
+    "archetype": [
+      "Skill DMG"
+    ],
+    "version_released": 3,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmVPC21M5yCHwopEcB1WsdtURTqMz9fe2SxOJL",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 9,
+          "E1": 10.5,
+          "E2": 12,
+          "E3": 13,
+          "E4": 14,
+          "E5": 14,
+          "E6": 17
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 10,
+          "E1": 11.5,
+          "E2": 13,
+          "E3": 14,
+          "E4": 15,
+          "E5": 15,
+          "E6": 18
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 10,
+          "E1": 11.5,
+          "E2": 13,
+          "E3": 14,
+          "E4": 15,
+          "E5": 15,
+          "E6": 18
+        }
+      }
+    }
+  },
+  {
+    "name": "tingyun",
+    "display_name": "Tingyun",
+    "aliases": [
+      "tingyun"
+    ],
+    "rarity": 4,
+    "path": "harmony",
+    "element": "lightning",
+    "role": "support",
+    "archetype": [
+      "Energy"
+    ],
+    "version_released": 1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmwHq631BgaNp72y9WeLQsIitx1o4XFhvGj0KY",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 6.5,
+          "E1": 6.5,
+          "E2": 6.5,
+          "E3": 6.5,
+          "E4": 6.5,
+          "E5": 6.5,
+          "E6": 6.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 6.5,
+          "E1": 6.5,
+          "E2": 6.5,
+          "E3": 6.5,
+          "E4": 6.5,
+          "E5": 6.5,
+          "E6": 6.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 6.5,
+          "E1": 6.5,
+          "E2": 6.5,
+          "E3": 6.5,
+          "E4": 6.5,
+          "E5": 6.5,
+          "E6": 6.5
+        }
+      }
+    }
+  },
+  {
+    "name": "tingyunfugue",
+    "display_name": "Fugue",
+    "aliases": [
+      "tingyunfugue",
+      "fugue",
+      "tingyun"
+    ],
+    "rarity": 5,
+    "path": "nihility",
+    "element": "fire",
+    "role": "support",
+    "archetype": [
+      "Break",
+      "Debuff"
+    ],
+    "version_released": 2.7,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm9Qfhm56ADHJsBgSXdMw6eqfthPkUVLNWiIQ1",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 9,
+          "E1": 10,
+          "E2": 12,
+          "E3": 12.5,
+          "E4": 14,
+          "E5": 14.5,
+          "E6": 17.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 9,
+          "E1": 10,
+          "E2": 12,
+          "E3": 12.5,
+          "E4": 14,
+          "E5": 14.5,
+          "E6": 17.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 9,
+          "E1": 10,
+          "E2": 12,
+          "E3": 12.5,
+          "E4": 14,
+          "E5": 14.5,
+          "E6": 17.5
+        }
+      }
+    }
+  },
+  {
+    "name": "topaz",
+    "display_name": "Topaz",
+    "aliases": [
+      "topaz"
+    ],
+    "rarity": 5,
+    "path": "hunt",
+    "element": "fire",
+    "role": "dps",
+    "archetype": [
+      "Summon",
+      "FuA"
+    ],
+    "version_released": 1.4,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmGxBJG6vzwZjTnJQ7ARLzNtPp5qVxs4dkU8ha",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 6,
+          "E1": 7.5,
+          "E2": 8.5,
+          "E3": 9,
+          "E4": 10,
+          "E5": 10.5,
+          "E6": 12
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 6,
+          "E1": 7.5,
+          "E2": 8.5,
+          "E3": 9,
+          "E4": 10,
+          "E5": 10.5,
+          "E6": 12
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 6,
+          "E1": 7.5,
+          "E2": 8.5,
+          "E3": 9,
+          "E4": 10,
+          "E5": 10.5,
+          "E6": 12
+        }
+      }
+    }
+  },
+  {
+    "name": "trailblazerdestruction",
+    "display_name": "MC Destruction",
+    "aliases": [
+      "trailblazerdestruction",
+      "mc",
+      "dmc",
+      "tb",
+      "stelle",
+      "caelus"
+    ],
+    "rarity": 5,
+    "path": "destruction",
+    "element": "physical",
+    "role": "dps",
+    "archetype": [],
+    "version_released": 1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmsJyexID7nQIR6O1NifyBTe3WwXUS2GzHxroh",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 1,
+          "E1": 1.5,
+          "E2": 2,
+          "E3": 2,
+          "E4": 2,
+          "E5": 2.5,
+          "E6": 3
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 1,
+          "E1": 1.5,
+          "E2": 2,
+          "E3": 2,
+          "E4": 2,
+          "E5": 2.5,
+          "E6": 3
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 1,
+          "E1": 1.5,
+          "E2": 2,
+          "E3": 2,
+          "E4": 2,
+          "E5": 2.5,
+          "E6": 3
+        }
+      }
+    }
+  },
+  {
+    "name": "trailblazerharmony",
+    "display_name": "MC Harmony",
+    "aliases": [
+      "trailblazerharmony",
+      "mc",
+      "hmc",
+      "tb",
+      "stelle",
+      "caelus"
+    ],
+    "rarity": 5,
+    "path": "harmony",
+    "element": "imaginary",
+    "role": "support",
+    "archetype": [
+      "Break"
+    ],
+    "version_released": 2.2,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmZSSczZMIRJrdIn25bFCj06vyTEpV7QAMhzBx",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 4,
+          "E1": 4,
+          "E2": 5,
+          "E3": 6,
+          "E4": 7,
+          "E5": 7.5,
+          "E6": 9
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 4,
+          "E1": 4,
+          "E2": 5,
+          "E3": 6,
+          "E4": 7,
+          "E5": 7.5,
+          "E6": 8
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 4,
+          "E1": 4,
+          "E2": 5,
+          "E3": 6,
+          "E4": 7,
+          "E5": 7.5,
+          "E6": 8
+        }
+      }
+    }
+  },
+  {
+    "name": "trailblazerpreservation",
+    "display_name": "MC Preservation",
+    "aliases": [
+      "trailblazerpreservation",
+      "mc",
+      "pmc",
+      "tb",
+      "stelle",
+      "caelus"
+    ],
+    "rarity": 5,
+    "path": "preservation",
+    "element": "fire",
+    "role": "sustain",
+    "archetype": [],
+    "version_released": 1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmWTtj5XmPm04Se8z6h7VGFOXC9DltEUruj3KT",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 1,
+          "E1": 1.5,
+          "E2": 2,
+          "E3": 2,
+          "E4": 2,
+          "E5": 2.5,
+          "E6": 3
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 1,
+          "E1": 1.5,
+          "E2": 2,
+          "E3": 2,
+          "E4": 2,
+          "E5": 2.5,
+          "E6": 3
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 1,
+          "E1": 1.5,
+          "E2": 2,
+          "E3": 2,
+          "E4": 2,
+          "E5": 2.5,
+          "E6": 3
+        }
+      }
+    }
+  },
+  {
+    "name": "trailblazerremembrance",
+    "display_name": "MC Remembrance",
+    "aliases": [
+      "trailblazerremembrance",
+      "mc",
+      "rmc",
+      "tb",
+      "stelle",
+      "caelus"
+    ],
+    "rarity": 5,
+    "path": "remembrance",
+    "element": "ice",
+    "role": "support",
+    "archetype": [
+      "Summon",
+      "Energy"
+    ],
+    "version_released": 3,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmSsRhXuWwLJmk0yB1IEfzFu2hoGbYjisKa74p",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 5,
+          "E1": 6,
+          "E2": 7,
+          "E3": 8,
+          "E4": 9,
+          "E5": 9.5,
+          "E6": 10
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 5,
+          "E1": 6,
+          "E2": 7,
+          "E3": 8,
+          "E4": 9,
+          "E5": 9.5,
+          "E6": 10
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 5,
+          "E1": 6,
+          "E2": 7,
+          "E3": 8,
+          "E4": 9,
+          "E5": 9.5,
+          "E6": 10
+        }
+      }
+    }
+  },
+  {
+    "name": "tribbie",
+    "display_name": "Tribbie",
+    "aliases": [
+      "tribbie",
+      "3b"
+    ],
+    "rarity": 5,
+    "path": "harmony",
+    "element": "quantum",
+    "role": "support",
+    "archetype": [
+      "Debuff",
+      "FuA",
+      "HP Scaling"
+    ],
+    "version_released": 3.1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmoKDV26XdCvbWHORl9jceqB3Zs7tJVMA04nTI",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 8,
+          "E1": 11.5,
+          "E2": 13,
+          "E3": 13,
+          "E4": 14.5,
+          "E5": 15,
+          "E6": 19.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 8.5,
+          "E1": 12,
+          "E2": 13.5,
+          "E3": 13.5,
+          "E4": 15,
+          "E5": 15.5,
+          "E6": 20
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 8.5,
+          "E1": 12,
+          "E2": 13.5,
+          "E3": 13.5,
+          "E4": 15,
+          "E5": 15.5,
+          "E6": 20
+        }
+      }
+    }
+  },
+  {
+    "name": "welt",
+    "display_name": "Welt",
+    "aliases": [
+      "welt"
+    ],
+    "rarity": 5,
+    "path": "nihility",
+    "element": "imaginary",
+    "role": "dps",
+    "archetype": [
+      "Debuff",
+      "Skill DMG"
+    ],
+    "version_released": 1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmr1yjhem92JrCTMBUAevKHop4Qu37iXIRdfys",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 3.5,
+          "E1": 4,
+          "E2": 4,
+          "E3": 4,
+          "E4": 4,
+          "E5": 4,
+          "E6": 4.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 3.5,
+          "E1": 4,
+          "E2": 4,
+          "E3": 4,
+          "E4": 4,
+          "E5": 4,
+          "E6": 4.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 3.5,
+          "E1": 4,
+          "E2": 4,
+          "E3": 4,
+          "E4": 4,
+          "E5": 4,
+          "E6": 4.5
+        }
+      }
+    }
+  },
+  {
+    "name": "xueyi",
+    "display_name": "Xueyi",
+    "aliases": [
+      "xueyi"
+    ],
+    "rarity": 4,
+    "path": "destruction",
+    "element": "quantum",
+    "role": "dps",
+    "archetype": [
+      "Break"
+    ],
+    "version_released": 1.6,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm63dj731eyqICBx5cEGwdWNPFgjJkh1las6ob",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 5,
+          "E1": 5,
+          "E2": 5,
+          "E3": 5,
+          "E4": 5,
+          "E5": 5,
+          "E6": 5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 4,
+          "E1": 4,
+          "E2": 4,
+          "E3": 4,
+          "E4": 4,
+          "E5": 4,
+          "E6": 4
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 4,
+          "E1": 4,
+          "E2": 4,
+          "E3": 4,
+          "E4": 4,
+          "E5": 4,
+          "E6": 4
+        }
+      }
+    }
+  },
+  {
+    "name": "yanqing",
+    "display_name": "Yanqing",
+    "aliases": [
+      "yanqing"
+    ],
+    "rarity": 5,
+    "path": "hunt",
+    "element": "ice",
+    "role": "dps",
+    "archetype": [],
+    "version_released": 1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmjEWnINVl45upOxGfUCiBPQFcKsdr3YDSZE20",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 3.5,
+          "E1": 4,
+          "E2": 4,
+          "E3": 4,
+          "E4": 4,
+          "E5": 4,
+          "E6": 4.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 3.5,
+          "E1": 4,
+          "E2": 4,
+          "E3": 4,
+          "E4": 4,
+          "E5": 4,
+          "E6": 4.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 3.5,
+          "E1": 4,
+          "E2": 4,
+          "E3": 4,
+          "E4": 4,
+          "E5": 4,
+          "E6": 4.5
+        }
+      }
+    }
+  },
+  {
+    "name": "yukong",
+    "display_name": "Yukong",
+    "aliases": [
+      "yukong"
+    ],
+    "rarity": 4,
+    "path": "harmony",
+    "element": "imaginary",
+    "role": "support",
+    "archetype": [],
+    "version_released": 1.1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm7G2NyrduwONpsIr6fJvY8chTBCFXo2AimLqS",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 4,
+          "E1": 4,
+          "E2": 4,
+          "E3": 4,
+          "E4": 4,
+          "E5": 4,
+          "E6": 4
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 3.5,
+          "E1": 3.5,
+          "E2": 3.5,
+          "E3": 3.5,
+          "E4": 3.5,
+          "E5": 3.5,
+          "E6": 3.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 3.5,
+          "E1": 3.5,
+          "E2": 3.5,
+          "E3": 3.5,
+          "E4": 3.5,
+          "E5": 3.5,
+          "E6": 3.5
+        }
+      }
+    }
+  },
+  {
+    "name": "yunli",
+    "display_name": "Yunli",
+    "aliases": [
+      "yunli"
+    ],
+    "rarity": 5,
+    "path": "destruction",
+    "element": "physical",
+    "role": "dps",
+    "archetype": [
+      "Ultimate DMG",
+      "FuA"
+    ],
+    "version_released": 2.4,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmGv49fuzwZjTnJQ7ARLzNtPp5qVxs4dkU8haC",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 7,
+          "E1": 9,
+          "E2": 10,
+          "E3": 10.5,
+          "E4": 10.5,
+          "E5": 11,
+          "E6": 14
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 7,
+          "E1": 9,
+          "E2": 10,
+          "E3": 10.5,
+          "E4": 10.5,
+          "E5": 11,
+          "E6": 14
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 7,
+          "E1": 9,
+          "E2": 10,
+          "E3": 10.5,
+          "E4": 10.5,
+          "E5": 11,
+          "E6": 14
+        }
+      }
+    }
+  },
+  {
+    "name": "sparxie",
+    "display_name": "Sparxie",
+    "aliases": [
+      "sparxie",
+      "kiyo"
+    ],
+    "rarity": 5,
+    "path": "elation",
+    "element": "fire",
+    "role": "dps",
+    "archetype": [
+      "Skill Points",
+      "Elation",
+      "Basic ATK DMG"
+    ],
+    "version_released": 4,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmXPD5CGFnicmFZD8OgdI2f364b1zThpGWBRkY",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 1,
+          "E1": 1,
+          "E2": 1,
+          "E3": 1,
+          "E4": 1,
+          "E5": 1,
+          "E6": 1
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 1,
+          "E1": 1,
+          "E2": 1,
+          "E3": 1,
+          "E4": 1,
+          "E5": 1,
+          "E6": 1
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 1,
+          "E1": 1,
+          "E2": 1,
+          "E3": 1,
+          "E4": 1,
+          "E5": 1,
+          "E6": 1
+        }
+      }
+    }
+  },
+  {
+    "name": "ashveil",
+    "display_name": "Ashveil",
+    "aliases": [
+      "ashveil"
+    ],
+    "rarity": 5,
+    "path": "hunt",
+    "element": "lightning",
+    "role": "dps",
+    "archetype": [
+      "Debuff",
+      "FuA"
+    ],
+    "version_released": 4.1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmZntdsRIRJrdIn25bFCj06vyTEpV7QAMhzBxt",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 1,
+          "E1": 1,
+          "E2": 1,
+          "E3": 1,
+          "E4": 1,
+          "E5": 1,
+          "E6": 1
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 1,
+          "E1": 1,
+          "E2": 1,
+          "E3": 1,
+          "E4": 1,
+          "E5": 1,
+          "E6": 1
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 1,
+          "E1": 1,
+          "E2": 1,
+          "E3": 1,
+          "E4": 1,
+          "E5": 1,
+          "E6": 1
+        }
+      }
+    }
+  },
+  {
+    "name": "yaoguang",
+    "display_name": "Yao Guang",
+    "aliases": [
+      "yaoguang"
+    ],
+    "rarity": 5,
+    "path": "elation",
+    "element": "physical",
+    "role": "support",
+    "archetype": [
+      "Elation"
+    ],
+    "version_released": 4,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmX2zukTFnicmFZD8OgdI2f364b1zThpGWBRkY",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "E0": 8,
+          "E1": 9,
+          "E2": 9.5,
+          "E3": 10,
+          "E4": 10.5,
+          "E5": 11.5,
+          "E6": 17
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "E0": 8,
+          "E1": 9,
+          "E2": 9.5,
+          "E3": 10,
+          "E4": 10.5,
+          "E5": 11.5,
+          "E6": 17
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "E0": 8,
+          "E1": 9,
+          "E2": 9.5,
+          "E3": 10,
+          "E4": 10.5,
+          "E5": 11.5,
+          "E6": 17
+        }
+      }
+    }
+  }
+]

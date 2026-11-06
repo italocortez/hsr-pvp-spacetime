@@ -22,7 +22,7 @@ import {
 } from 'fs';
 import { resolve, dirname } from 'path';
 import WebSocket from 'ws';
-import { DbConnection } from '../src/module_bindings';
+import { DbConnection } from '../web/src/module_bindings';
 
 function loadEnvFile(filename: string) {
     try {

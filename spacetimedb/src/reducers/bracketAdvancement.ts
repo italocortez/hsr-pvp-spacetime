@@ -6,7 +6,7 @@ import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { placeParticipantInNextMatch, updateGroupPhaseRecords, sortGroupPhaseRecords } from '../helpers/bracketHelpers';
 import { deleteCalendarEventForBracketMatch } from '../helpers/calendarCascade';
 import { foldSeeding } from '../helpers/bracketGeneration';
-import type { BracketMatch, GroupPhaseRecord } from '../module_bindings/types';
+import type { BracketMatch, GroupPhaseRecord } from '@bindings/types';
 
 // ─── Group standings points ────────────────────────────────────────────────────
 // Win=2, Draw=1, Loss=0 (per CONTEXT.md)

@@ -1,0 +1,7124 @@
+[
+  {
+    "name": "adreamscentedinwheat",
+    "display_name": "A Dream Scented in Wheat",
+    "aliases": [
+      "adreamscentedinwheat"
+    ],
+    "rarity": 4,
+    "path": "erudition",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmSLDJ0I3WwLJmk0yB1IEfzFu2hoGbYjisKa74",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 1.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 1.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 1.5
+        }
+      }
+    }
+  },
+  {
+    "name": "agroundedascent",
+    "display_name": "A Grounded Ascent",
+    "aliases": [
+      "agroundedascent",
+      "sunday"
+    ],
+    "rarity": 5,
+    "path": "harmony",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmw7CtAXBgaNp72y9WeLQsIitx1o4XFhvGj0KY",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      }
+    }
+  },
+  {
+    "name": "asecretvow",
+    "display_name": "A Secret Vow",
+    "aliases": [
+      "asecretvow"
+    ],
+    "rarity": 4,
+    "path": "destruction",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmh73ElboX9K0WJdhgTsoDAerzp2YtRL1OnQ5i",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "athanklesscoronation",
+    "display_name": "A Thankless Coronation",
+    "aliases": [
+      "athanklesscoronation",
+      "saber"
+    ],
+    "rarity": 5,
+    "path": "destruction",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmzTH4sZ6y2qswvoUEVZajknbdXDJQl8TS1KhL",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 2.5,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4,
+          "S5": 4.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 2.5,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4,
+          "S5": 4.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 2.5,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4,
+          "S5": 4.5
+        }
+      }
+    }
+  },
+  {
+    "name": "atrailofbygoneblood",
+    "display_name": "A Trail of Bygone Blood",
+    "aliases": [
+      "atrailofbygoneblood"
+    ],
+    "rarity": 4,
+    "path": "destruction",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmbDXEzPOJ0RkK3cdoehTU4l5xut1rbBEgmvWN",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "adversarial",
+    "display_name": "Adversarial",
+    "aliases": [
+      "adversarial"
+    ],
+    "rarity": 3,
+    "path": "hunt",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmDMGAqK4f0YloA8dVXqr7cBIjuPTbzOh1giL2",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "afterthecharmonyfall",
+    "display_name": "After the Charmony Fall",
+    "aliases": [
+      "afterthecharmonyfall"
+    ],
+    "rarity": 4,
+    "path": "erudition",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmVcd6Sg5yCHwopEcB1WsdtURTqMz9fe2SxOJL",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "alongthepassingshore",
+    "display_name": "Along the Passing Shore",
+    "aliases": [
+      "alongthepassingshore",
+      "acheron"
+    ],
+    "rarity": 5,
+    "path": "nihility",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm2uUpq23SAZqfk4pUnvT0wBMrui1Ch6D7dxHR",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      }
+    }
+  },
+  {
+    "name": "amber",
+    "display_name": "Amber",
+    "aliases": [
+      "amber"
+    ],
+    "rarity": 3,
+    "path": "preservation",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmX2HutMFnicmFZD8OgdI2f364b1zThpGWBRkY",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "aninstantbeforeagaze",
+    "display_name": "An Instant Before A Gaze",
+    "aliases": [
+      "aninstantbeforeagaze",
+      "argenti"
+    ],
+    "rarity": 5,
+    "path": "erudition",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmIp537NQmYPnrNbvzRxWKTSisoFtAw8f62adE",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 2
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 2
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 2
+        }
+      }
+    }
+  },
+  {
+    "name": "arrows",
+    "display_name": "Arrows",
+    "aliases": [
+      "arrows"
+    ],
+    "rarity": 3,
+    "path": "hunt",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm21B6Wa3SAZqfk4pUnvT0wBMrui1Ch6D7dxHR",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "baptismofpurethought",
+    "display_name": "Baptism of Pure Thought",
+    "aliases": [
+      "baptismofpurethought",
+      "drratio",
+      "ratio"
+    ],
+    "rarity": 5,
+    "path": "hunt",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmrzvgsH92JrCTMBUAevKHop4Qu37iXIRdfysE",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 3,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4,
+          "S5": 4.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 3,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4,
+          "S5": 4.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 3,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4,
+          "S5": 4.5
+        }
+      }
+    }
+  },
+  {
+    "name": "beforedawn",
+    "display_name": "Before Dawn",
+    "aliases": [
+      "beforedawn",
+      "jingyuan",
+      "jy"
+    ],
+    "rarity": 5,
+    "path": "erudition",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmWbtljd4mPm04Se8z6h7VGFOXC9DltEUruj3K",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 2
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 2
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 2
+        }
+      }
+    }
+  },
+  {
+    "name": "beforethetutorialmissionstarts",
+    "display_name": "Before the Tutorial Mission Starts",
+    "aliases": [
+      "beforethetutorialmissionstarts",
+      "event"
+    ],
+    "rarity": 4,
+    "path": "nihility",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmthhZOTkqaE6GTg9rc2w8sVJ0ROlYMmuDfC5d",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 1.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 1.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 1.5
+        }
+      }
+    }
+  },
+  {
+    "name": "boundlesschoreo",
+    "display_name": "Boundless Choreo",
+    "aliases": [
+      "boundlesschoreo"
+    ],
+    "rarity": 4,
+    "path": "nihility",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmJFXLJZs5B86oJnSiHfbzWIedp4YKuag1Q7mZ",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "brighterthanthesun",
+    "display_name": "Brighter Than the Sun",
+    "aliases": [
+      "brighterthanthesun",
+      "danhengimbibitorlunae",
+      "imbibitor",
+      "dhil"
+    ],
+    "rarity": 5,
+    "path": "destruction",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmRA9yVc789fzvV5gYcBk2JTMxS4bU8w6P0tlH",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1.5
+        }
+      }
+    }
+  },
+  {
+    "name": "butthebattleisntover",
+    "display_name": "But the Battle Isn't Over",
+    "aliases": [
+      "butthebattleisntover",
+      "bronya"
+    ],
+    "rarity": 5,
+    "path": "harmony",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm5OFcVydYHdGFs9jtel6ZUbgXJT7Ck2aMP8IL",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 2
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 2
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 2
+        }
+      }
+    }
+  },
+  {
+    "name": "carvethemoonweavetheclouds",
+    "display_name": "Carve the Moon, Weave the Clouds",
+    "aliases": [
+      "carvethemoonweavetheclouds"
+    ],
+    "rarity": 4,
+    "path": "harmony",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmm30AAQLmqFhbaVfE8RYjNWSB3X0P5wZrD7IC",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "chorus",
+    "display_name": "Chorus",
+    "aliases": [
+      "chorus"
+    ],
+    "rarity": 3,
+    "path": "harmony",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmweNy6dGBgaNp72y9WeLQsIitx1o4XFhvGj0K",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "collapsingsky",
+    "display_name": "Collapsing Sky",
+    "aliases": [
+      "collapsingsky"
+    ],
+    "rarity": 3,
+    "path": "destruction",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmweLshT9BgaNp72y9WeLQsIitx1o4XFhvGj0K",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "concertfortwo",
+    "display_name": "Concert for Two",
+    "aliases": [
+      "concertfortwo"
+    ],
+    "rarity": 4,
+    "path": "preservation",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmtD5QwnqaE6GTg9rc2w8sVJ0ROlYMmuDfC5dU",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "cornucopia",
+    "display_name": "Cornucopia",
+    "aliases": [
+      "cornucopia"
+    ],
+    "rarity": 3,
+    "path": "abundance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm35yHdaNQW63HAplfyN4uUbtrcVsPakBowx1G",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "cruisinginthestellarsea",
+    "display_name": "Cruising in the Stellar Sea",
+    "aliases": [
+      "cruisinginthestellarsea",
+      "shop"
+    ],
+    "rarity": 5,
+    "path": "hunt",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmf6nFnih6z2I1lmoXH5cuF8stRxTG9EYZpVLh",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1
+        }
+      }
+    }
+  },
+  {
+    "name": "danceatsunset",
+    "display_name": "Dance at Sunset",
+    "aliases": [
+      "danceatsunset",
+      "yunli"
+    ],
+    "rarity": 5,
+    "path": "destruction",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmIB23ecQmYPnrNbvzRxWKTSisoFtAw8f62adE",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      }
+    }
+  },
+  {
+    "name": "dancedancedance",
+    "display_name": "Dance! Dance! Dance!",
+    "aliases": [
+      "dancedancedance",
+      "ddd"
+    ],
+    "rarity": 4,
+    "path": "harmony",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmpLN81sgmGiY8n47VLsJ3Ikch9HvfCTtberRa",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 2,
+          "S2": 2,
+          "S3": 2,
+          "S4": 2.5,
+          "S5": 2.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 2,
+          "S2": 2,
+          "S3": 2,
+          "S4": 2.5,
+          "S5": 2.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 2,
+          "S2": 2,
+          "S3": 2,
+          "S4": 2.5,
+          "S5": 2.5
+        }
+      }
+    }
+  },
+  {
+    "name": "dartingarrow",
+    "display_name": "Darting Arrow",
+    "aliases": [
+      "dartingarrow"
+    ],
+    "rarity": 3,
+    "path": "hunt",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmJ8DZJNs5B86oJnSiHfbzWIedp4YKuag1Q7mZ",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "databank",
+    "display_name": "Data Bank",
+    "aliases": [
+      "databank"
+    ],
+    "rarity": 3,
+    "path": "hunt",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmJgJVmJs5B86oJnSiHfbzWIedp4YKuag1Q7mZ",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "dayoneofmynewlife",
+    "display_name": "Day One of My New Life",
+    "aliases": [
+      "dayoneofmynewlife"
+    ],
+    "rarity": 4,
+    "path": "preservation",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmLs8Bdl8bhVXAsiymWvPEd6Tx8znquDR9rMlH",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "defense",
+    "display_name": "Defense",
+    "aliases": [
+      "defense"
+    ],
+    "rarity": 3,
+    "path": "preservation",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmoRfU0MXdCvbWHORl9jceqB3Zs7tJVMA04nTI",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "destinysthreadsforewoven",
+    "display_name": "Destiny's Threads Forewoven",
+    "aliases": [
+      "destinysthreadsforewoven"
+    ],
+    "rarity": 4,
+    "path": "preservation",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmSR9EwtWwLJmk0yB1IEfzFu2hoGbYjisKa74p",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "dreamsmontage",
+    "display_name": "Dream's Montage",
+    "aliases": [
+      "dreamsmontage"
+    ],
+    "rarity": 4,
+    "path": "abundance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmSLDsPoqWwLJmk0yB1IEfzFu2hoGbYjisKa74",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "dreamvilleadventure",
+    "display_name": "Dreamville Adventure",
+    "aliases": [
+      "dreamvilleadventure"
+    ],
+    "rarity": 4,
+    "path": "harmony",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmY6wjUNHstkMRmd3pPDZGEcwzHaQlBxL1bngC",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "earthlyescapade",
+    "display_name": "Earthly Escapade",
+    "aliases": [
+      "earthlyescapade",
+      "sparkle",
+      "hanabi"
+    ],
+    "rarity": 5,
+    "path": "harmony",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmWaeKr0mPm04Se8z6h7VGFOXC9DltEUruj3KT",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1,
+          "S2": 1.5,
+          "S3": 2,
+          "S4": 2,
+          "S5": 2.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1,
+          "S2": 1.5,
+          "S3": 2,
+          "S4": 2,
+          "S5": 2.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1,
+          "S2": 1.5,
+          "S3": 2,
+          "S4": 2,
+          "S5": 2.5
+        }
+      }
+    }
+  },
+  {
+    "name": "echoesofthecoffin",
+    "display_name": "Echoes of the Coffin",
+    "aliases": [
+      "echoesofthecoffin",
+      "luocha"
+    ],
+    "rarity": 5,
+    "path": "abundance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmDOmFhe4f0YloA8dVXqr7cBIjuPTbzOh1giL2",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 1.5,
+          "S4": 2,
+          "S5": 2
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 1.5,
+          "S4": 2,
+          "S5": 2
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 1.5,
+          "S4": 2,
+          "S5": 2
+        }
+      }
+    }
+  },
+  {
+    "name": "epochetchedingoldenblood",
+    "display_name": "Epoch Etched in Golden Blood",
+    "aliases": [
+      "epochetchedingoldenblood",
+      "cerydra",
+      "queen",
+      "myqueen"
+    ],
+    "rarity": 5,
+    "path": "harmony",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm59sXaAdYHdGFs9jtel6ZUbgXJT7Ck2aMP8IL",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 2,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4.5,
+          "S5": 5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 2,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4.5,
+          "S5": 5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 2,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4.5,
+          "S5": 5
+        }
+      }
+    }
+  },
+  {
+    "name": "eternalcalculus",
+    "display_name": "Eternal Calculus",
+    "aliases": [
+      "eternalcalculus",
+      "shop"
+    ],
+    "rarity": 5,
+    "path": "erudition",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmDflIPH4f0YloA8dVXqr7cBIjuPTbzOh1giL2",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1
+        }
+      }
+    }
+  },
+  {
+    "name": "eyesoftheprey",
+    "display_name": "Eyes of the Prey",
+    "aliases": [
+      "eyesoftheprey"
+    ],
+    "rarity": 4,
+    "path": "nihility",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm4fovnAitaVE708MIA5rmbtHFZfRvhDdTGeC6",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "fermata",
+    "display_name": "Fermata",
+    "aliases": [
+      "fermata"
+    ],
+    "rarity": 4,
+    "path": "nihility",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmmrDMxjLmqFhbaVfE8RYjNWSB3X0P5wZrD7IC",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "finalvictor",
+    "display_name": "Final Victor",
+    "aliases": [
+      "finalvictor"
+    ],
+    "rarity": 4,
+    "path": "hunt",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmI7w5XTQmYPnrNbvzRxWKTSisoFtAw8f62adE",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "finefruit",
+    "display_name": "Fine Fruit",
+    "aliases": [
+      "finefruit"
+    ],
+    "rarity": 3,
+    "path": "abundance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmYsg0knHstkMRmd3pPDZGEcwzHaQlBxL1bngC",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "flameofbloodblazemypath",
+    "display_name": "Flame of Blood, Blaze My Path",
+    "aliases": [
+      "flameofbloodblazemypath",
+      "mydei"
+    ],
+    "rarity": 5,
+    "path": "destruction",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmrFGsxz92JrCTMBUAevKHop4Qu37iXIRdfysE",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 2.5,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4,
+          "S5": 4.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 2.5,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4,
+          "S5": 4.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 2.5,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4,
+          "S5": 4.5
+        }
+      }
+    }
+  },
+  {
+    "name": "flamesafar",
+    "display_name": "Flames Afar",
+    "aliases": [
+      "flamesafar"
+    ],
+    "rarity": 4,
+    "path": "destruction",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmggS05t7cFbBJ0WiDyRr2wsaI1mzeQ5j8KgfH",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "flowingnightglow",
+    "display_name": "Flowing Nightglow",
+    "aliases": [
+      "flowingnightglow",
+      "robin"
+    ],
+    "rarity": 5,
+    "path": "harmony",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm9ro2oP6ADHJsBgSXdMw6eqfthPkUVLNWiIQ1",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 2.5,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 2.5,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 2.5,
+          "S4": 3.5,
+          "S5": 4
+        }
+      }
+    }
+  },
+  {
+    "name": "flyintoapinktomorrow",
+    "display_name": "Fly Into a Pink Tomorrow",
+    "aliases": [
+      "flyintoapinktomorrow"
+    ],
+    "rarity": 4,
+    "path": "remembrance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmypRZahx0IkdESXzc2H3gZ1spCA9DTWBmMito",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 1.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 1.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 1.5
+        }
+      }
+    }
+  },
+  {
+    "name": "fortomorrowsjourney",
+    "display_name": "For Tomorrow's Journey",
+    "aliases": [
+      "fortomorrowsjourney",
+      "event"
+    ],
+    "rarity": 4,
+    "path": "harmony",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm8iKXB3AMZGWgIvhCcYsLe2EKx01HAynVB7TR",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "geniusesgreetings",
+    "display_name": "Geniuses Greetings",
+    "aliases": [
+      "geniusesgreetings"
+    ],
+    "rarity": 4,
+    "path": "remembrance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm7K6FFcuwONpsIr6fJvY8chTBCFXo2AimLqSe",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "geniusesrepose",
+    "display_name": "Geniuses' Repose",
+    "aliases": [
+      "geniusesrepose"
+    ],
+    "rarity": 4,
+    "path": "erudition",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmr1CDFdM92JrCTMBUAevKHop4Qu37iXIRdfys",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "goodnightandsleepwell",
+    "display_name": "Good Night and Sleep Well",
+    "aliases": [
+      "goodnightandsleepwell"
+    ],
+    "rarity": 4,
+    "path": "nihility",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmBNwyvPn4AkISVCsmgviYPQL9yeqOfKc26GMu",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "heyoverhere",
+    "display_name": "Hey, Over Here",
+    "aliases": [
+      "heyoverhere",
+      "event"
+    ],
+    "rarity": 4,
+    "path": "abundance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmBtbteln4AkISVCsmgviYPQL9yeqOfKc26GMu",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "hiddenshadow",
+    "display_name": "Hidden Shadow",
+    "aliases": [
+      "hiddenshadow"
+    ],
+    "rarity": 3,
+    "path": "nihility",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmygWdH1x0IkdESXzc2H3gZ1spCA9DTWBmMito",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "holidaythermaeescapade",
+    "display_name": "Holiday Thermae Escapade",
+    "aliases": [
+      "holidaythermaeescapade"
+    ],
+    "rarity": 4,
+    "path": "nihility",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmgFCgQS7cFbBJ0WiDyRr2wsaI1mzeQ5j8KgfH",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1
+        }
+      }
+    }
+  },
+  {
+    "name": "ishallbemyownsword",
+    "display_name": "I Shall Be My Own Sword",
+    "aliases": [
+      "ishallbemyownsword",
+      "jingliu",
+      "jl"
+    ],
+    "rarity": 5,
+    "path": "destruction",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmjs3nh6Vl45upOxGfUCiBPQFcKsdr3YDSZE20",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 1,
+          "S3": 1.5,
+          "S4": 2,
+          "S5": 2.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 1,
+          "S3": 1.5,
+          "S4": 2,
+          "S5": 2.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 1,
+          "S3": 1.5,
+          "S4": 2,
+          "S5": 2.5
+        }
+      }
+    }
+  },
+  {
+    "name": "iventureforthtohunt",
+    "display_name": "I Venture Forth to Hunt",
+    "aliases": [
+      "iventureforthtohunt",
+      "feixiao",
+      "fox",
+      "fx"
+    ],
+    "rarity": 5,
+    "path": "hunt",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmWNkhZdmPm04Se8z6h7VGFOXC9DltEUruj3KT",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 3,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4,
+          "S5": 4.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 3,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4,
+          "S5": 4.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 3,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4,
+          "S5": 4.5
+        }
+      }
+    }
+  },
+  {
+    "name": "iftimewereaflower",
+    "display_name": "If Time Were a Flower",
+    "aliases": [
+      "iftimewereaflower",
+      "tribbie",
+      "3b"
+    ],
+    "rarity": 5,
+    "path": "harmony",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm7qHpLkuwONpsIr6fJvY8chTBCFXo2AimLqSe",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      }
+    }
+  },
+  {
+    "name": "inpursuitofthewind",
+    "display_name": "In Pursuit of the Wind",
+    "aliases": [
+      "inpursuitofthewind"
+    ],
+    "rarity": 4,
+    "path": "harmony",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmX8Pez9NFnicmFZD8OgdI2f364b1zThpGWBRk",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 2,
+          "S2": 2,
+          "S3": 2,
+          "S4": 2,
+          "S5": 2
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 2,
+          "S2": 2,
+          "S3": 2,
+          "S4": 2,
+          "S5": 2
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 2,
+          "S2": 2,
+          "S3": 2,
+          "S4": 2,
+          "S5": 2
+        }
+      }
+    }
+  },
+  {
+    "name": "inthenameoftheworld",
+    "display_name": "In the Name of the World",
+    "aliases": [
+      "inthenameoftheworld",
+      "welt"
+    ],
+    "rarity": 5,
+    "path": "nihility",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmcEfl4XUkvBRwZFY8NJKCelUa9pDoh1rSTQMz",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1
+        }
+      }
+    }
+  },
+  {
+    "name": "inthenight",
+    "display_name": "In the Night",
+    "aliases": [
+      "inthenight",
+      "seele"
+    ],
+    "rarity": 5,
+    "path": "hunt",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmNoJ7icYW2da6p81jlC5KwfVODrFZI4LgM0oi",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 2
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 2
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 2
+        }
+      }
+    }
+  },
+  {
+    "name": "incessantrain",
+    "display_name": "Incessant Rain",
+    "aliases": [
+      "incessantrain",
+      "silverwolf",
+      "sw"
+    ],
+    "rarity": 5,
+    "path": "nihility",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmUn3fksJwDrIlbZEpQP7OuysSnMKtioLwGz0x",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 2,
+          "S4": 2,
+          "S5": 2.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 2,
+          "S4": 2,
+          "S5": 2.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 2,
+          "S4": 2,
+          "S5": 2.5
+        }
+      }
+    }
+  },
+  {
+    "name": "indeliblepromise",
+    "display_name": "Indelible Promise",
+    "aliases": [
+      "indeliblepromise"
+    ],
+    "rarity": 4,
+    "path": "destruction",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmjdlzzTgVl45upOxGfUCiBPQFcKsdr3YDSZE2",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "inherentlyunjustdestiny",
+    "display_name": "Inherently Unjust Destiny",
+    "aliases": [
+      "inherentlyunjustdestiny",
+      "aventurine"
+    ],
+    "rarity": 5,
+    "path": "preservation",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmWbLveiumPm04Se8z6h7VGFOXC9DltEUruj3K",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 2,
+          "S3": 2.5,
+          "S4": 3,
+          "S5": 3.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 2,
+          "S3": 2.5,
+          "S4": 3,
+          "S5": 3.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 2,
+          "S3": 2.5,
+          "S4": 3,
+          "S5": 3.5
+        }
+      }
+    }
+  },
+  {
+    "name": "intotheunreachableveil",
+    "display_name": "Into the Unreachable Veil",
+    "aliases": [
+      "intotheunreachableveil",
+      "theherta",
+      "herta",
+      "therta"
+    ],
+    "rarity": 5,
+    "path": "erudition",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmr1gebxp92JrCTMBUAevKHop4Qu37iXIRdfys",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 2.5,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4,
+          "S5": 4.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 2.5,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4,
+          "S5": 4.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 2.5,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4,
+          "S5": 4.5
+        }
+      }
+    }
+  },
+  {
+    "name": "itsshowtime",
+    "display_name": "It's Showtime",
+    "aliases": [
+      "itsshowtime"
+    ],
+    "rarity": 4,
+    "path": "nihility",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmm8pGEALmqFhbaVfE8RYjNWSB3X0P5wZrD7IC",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "journeyforeverpeaceful",
+    "display_name": "Journey, Forever Peaceful",
+    "aliases": [
+      "journeyforeverpeaceful"
+    ],
+    "rarity": 4,
+    "path": "preservation",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmZg1uDcIRJrdIn25bFCj06vyTEpV7QAMhzBxt",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 1,
+          "S5": 1
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 1,
+          "S5": 1
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 1,
+          "S5": 1
+        }
+      }
+    }
+  },
+  {
+    "name": "landauschoice",
+    "display_name": "Landau's Choice",
+    "aliases": [
+      "landauschoice"
+    ],
+    "rarity": 4,
+    "path": "preservation",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmcQ1SszUkvBRwZFY8NJKCelUa9pDoh1rSTQMz",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "liesdanceonthebreeze",
+    "display_name": "Lies Dance on the Breeze",
+    "aliases": [
+      "liesdanceonthebreeze",
+      "cipher",
+      "cat"
+    ],
+    "rarity": 5,
+    "path": "nihility",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmgQsYRg7cFbBJ0WiDyRr2wsaI1mzeQ5j8KgfH",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      }
+    }
+  },
+  {
+    "name": "lifeshouldbecasttoflames",
+    "display_name": "Life Should Be Cast to Flames",
+    "aliases": [
+      "lifeshouldbecasttoflames",
+      "anaxa"
+    ],
+    "rarity": 5,
+    "path": "erudition",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmgt8iHa7cFbBJ0WiDyRr2wsaI1mzeQ5j8KgfH",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      }
+    }
+  },
+  {
+    "name": "longmayrainbowsadornthesky",
+    "display_name": "Long May Rainbows Adorn the Sky",
+    "aliases": [
+      "longmayrainbowsadornthesky",
+      "hyacine"
+    ],
+    "rarity": 5,
+    "path": "remembrance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmLT6F2abhVXAsiymWvPEd6Tx8znquDR9rMlHp",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 2.5,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4,
+          "S5": 4.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 2.5,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4,
+          "S5": 4.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 2.5,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4,
+          "S5": 4.5
+        }
+      }
+    }
+  },
+  {
+    "name": "longroadleadshome",
+    "display_name": "Long Road Leads Home",
+    "aliases": [
+      "longroadleadshome",
+      "tingyunfugue",
+      "fugue",
+      "tingyun"
+    ],
+    "rarity": 5,
+    "path": "nihility",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm7VcKqTuwONpsIr6fJvY8chTBCFXo2AimLqSe",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 2,
+          "S4": 2,
+          "S5": 3
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 2,
+          "S4": 2,
+          "S5": 3
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 2,
+          "S4": 2,
+          "S5": 3
+        }
+      }
+    }
+  },
+  {
+    "name": "loop",
+    "display_name": "Loop",
+    "aliases": [
+      "loop"
+    ],
+    "rarity": 3,
+    "path": "nihility",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm2vxR0Q3SAZqfk4pUnvT0wBMrui1Ch6D7dxHR",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "makefarewellsmorebeautiful",
+    "display_name": "Make Farewells More Beautiful",
+    "aliases": [
+      "makefarewellsmorebeautiful",
+      "castorice"
+    ],
+    "rarity": 5,
+    "path": "remembrance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmQmm68ZGSupWMTIRbFLE75HZ41hA8xUryonCq",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 2.5,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4,
+          "S5": 4.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 2.5,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4,
+          "S5": 4.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 2.5,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4,
+          "S5": 4.5
+        }
+      }
+    }
+  },
+  {
+    "name": "maketheworldclamor",
+    "display_name": "Make the World Clamor",
+    "aliases": [
+      "maketheworldclamor"
+    ],
+    "rarity": 4,
+    "path": "erudition",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmfUEetCh6z2I1lmoXH5cuF8stRxTG9EYZpVLh",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "mediation",
+    "display_name": "Mediation",
+    "aliases": [
+      "mediation"
+    ],
+    "rarity": 3,
+    "path": "harmony",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm17eeAMdptLpYTrPwUnuXCN8qEbHIvGShyem6",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "memoriesofthepast",
+    "display_name": "Memories of the Past",
+    "aliases": [
+      "memoriesofthepast",
+      "motp"
+    ],
+    "rarity": 4,
+    "path": "harmony",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmEO5HvIG3yT8GH5eXAIkjJtxnwFLQRfz7aovY",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "memoryscurtainneverfalls",
+    "display_name": "Memory's Curtain Never Falls",
+    "aliases": [
+      "memoryscurtainneverfalls",
+      "shop"
+    ],
+    "rarity": 5,
+    "path": "remembrance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmxsCXNYTeQqWNcgSD31vrkmTYHFJjX25ZKlRV",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1
+        }
+      }
+    }
+  },
+  {
+    "name": "meshingcogs",
+    "display_name": "Meshing Cogs",
+    "aliases": [
+      "meshingcogs"
+    ],
+    "rarity": 3,
+    "path": "harmony",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmsKcSwzD7nQIR6O1NifyBTe3WwXUS2GzHxroh",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "momentofvictory",
+    "display_name": "Moment of Victory",
+    "aliases": [
+      "momentofvictory",
+      "gepard"
+    ],
+    "rarity": 5,
+    "path": "preservation",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm5TNT6DdYHdGFs9jtel6ZUbgXJT7Ck2aMP8IL",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 1
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 1
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 1
+        }
+      }
+    }
+  },
+  {
+    "name": "multiplication",
+    "display_name": "Multiplication",
+    "aliases": [
+      "multiplication"
+    ],
+    "rarity": 3,
+    "path": "abundance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmfvIwiyh6z2I1lmoXH5cuF8stRxTG9EYZpVLh",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "mutualdemise",
+    "display_name": "Mutual Demise",
+    "aliases": [
+      "mutualdemise"
+    ],
+    "rarity": 3,
+    "path": "destruction",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmQRnvCzSupWMTIRbFLE75HZ41hA8xUryonCq6",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "neverforgetherflame",
+    "display_name": "Never Forget Her Flame",
+    "aliases": [
+      "neverforgetherflame",
+      "thedahlia",
+      "constance"
+    ],
+    "rarity": 5,
+    "path": "nihility",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmhFPYsF1oX9K0WJdhgTsoDAerzp2YtRL1OnQ5",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 3,
+          "S2": 4,
+          "S3": 4.5,
+          "S4": 5,
+          "S5": 6
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 3,
+          "S2": 4,
+          "S3": 4.5,
+          "S4": 5,
+          "S5": 6
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 3,
+          "S2": 4,
+          "S3": 4.5,
+          "S4": 5,
+          "S5": 6
+        }
+      }
+    }
+  },
+  {
+    "name": "nightoffright",
+    "display_name": "Night of Fright",
+    "aliases": [
+      "nightoffright",
+      "huohuo"
+    ],
+    "rarity": 5,
+    "path": "abundance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmpmViWLgmGiY8n47VLsJ3Ikch9HvfCTtberRa",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 2,
+          "S4": 2,
+          "S5": 2.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 2,
+          "S4": 2,
+          "S5": 2.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 2,
+          "S4": 2,
+          "S5": 2.5
+        }
+      }
+    }
+  },
+  {
+    "name": "nightonthemilkyway",
+    "display_name": "Night on the Milky Way",
+    "aliases": [
+      "nightonthemilkyway",
+      "himeko"
+    ],
+    "rarity": 5,
+    "path": "erudition",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm7nEYHVuwONpsIr6fJvY8chTBCFXo2AimLqSe",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 1
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 1
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 1
+        }
+      }
+    }
+  },
+  {
+    "name": "ninjarecordsoundhunt",
+    "display_name": "Ninja Record: Sound Hunt",
+    "aliases": [
+      "ninjarecordsoundhunt",
+      "event"
+    ],
+    "rarity": 4,
+    "path": "erudition",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm4QcyLwtaVE708MIA5rmbtHFZfRvhDdTGeC62",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "ninjutsuinscriptiondazzlingevilbreaker",
+    "display_name": "Ninjutsu Inscription: Dazzling Evilbreaker",
+    "aliases": [
+      "ninjutsuinscriptiondazzlingevilbreaker",
+      "rappa"
+    ],
+    "rarity": 5,
+    "path": "erudition",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmPWLhtYl93FDl2yLjfJ7ZrwmReV8uWqh0UpEX",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      }
+    }
+  },
+  {
+    "name": "nowheretorun",
+    "display_name": "Nowhere to Run",
+    "aliases": [
+      "nowheretorun"
+    ],
+    "rarity": 4,
+    "path": "destruction",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmZKQta7IRJrdIn25bFCj06vyTEpV7QAMhzBxt",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "onthefallofanaeon",
+    "display_name": "On the Fall of an Aeon",
+    "aliases": [
+      "onthefallofanaeon",
+      "shop"
+    ],
+    "rarity": 5,
+    "path": "destruction",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmLsq9c0abhVXAsiymWvPEd6Tx8znquDR9rMlH",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1
+        }
+      }
+    }
+  },
+  {
+    "name": "onlysilenceremains",
+    "display_name": "Only Silence Remains",
+    "aliases": [
+      "onlysilenceremains"
+    ],
+    "rarity": 4,
+    "path": "hunt",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmmSqQ5zLmqFhbaVfE8RYjNWSB3X0P5wZrD7IC",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "passkey",
+    "display_name": "Passkey",
+    "aliases": [
+      "passkey"
+    ],
+    "rarity": 3,
+    "path": "erudition",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmnD2nzQeXEi1leGFw5x96qCufVa0DSyzPdo8A",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "pastandfuture",
+    "display_name": "Past and Future",
+    "aliases": [
+      "pastandfuture"
+    ],
+    "rarity": 4,
+    "path": "harmony",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmRD04Sy89fzvV5gYcBk2JTMxS4bU8w6P0tlHK",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "pastselfinmirror",
+    "display_name": "Past Self in Mirror",
+    "aliases": [
+      "pastselfinmirror",
+      "ruanmei",
+      "rm"
+    ],
+    "rarity": 5,
+    "path": "harmony",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm3BBZduNQW63HAplfyN4uUbtrcVsPakBowx1G",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 2,
+          "S3": 2.5,
+          "S4": 3,
+          "S5": 3.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 2,
+          "S3": 2.5,
+          "S4": 3,
+          "S5": 3.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 2,
+          "S3": 2.5,
+          "S4": 3,
+          "S5": 3.5
+        }
+      }
+    }
+  },
+  {
+    "name": "patienceisallyouneed",
+    "display_name": "Patience Is All You Need",
+    "aliases": [
+      "patienceisallyouneed",
+      "kafka"
+    ],
+    "rarity": 5,
+    "path": "nihility",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmjPhFmaVl45upOxGfUCiBPQFcKsdr3YDSZE20",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 2
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 2
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 2
+        }
+      }
+    }
+  },
+  {
+    "name": "perfecttiming",
+    "display_name": "Perfect Timing",
+    "aliases": [
+      "perfecttiming"
+    ],
+    "rarity": 4,
+    "path": "abundance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmDzT2vC4f0YloA8dVXqr7cBIjuPTbzOh1giL2",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "pioneering",
+    "display_name": "Pioneering",
+    "aliases": [
+      "pioneering"
+    ],
+    "rarity": 3,
+    "path": "preservation",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm7GxaW3GuwONpsIr6fJvY8chTBCFXo2AimLqS",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "planetaryrendezvous",
+    "display_name": "Planetary Rendezvous",
+    "aliases": [
+      "planetaryrendezvous"
+    ],
+    "rarity": 4,
+    "path": "harmony",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmrpVah292JrCTMBUAevKHop4Qu37iXIRdfysE",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "poisedtobloom",
+    "display_name": "Poised to Bloom",
+    "aliases": [
+      "poisedtobloom"
+    ],
+    "rarity": 4,
+    "path": "harmony",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmwJeZe6BgaNp72y9WeLQsIitx1o4XFhvGj0KY",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "postopconversation",
+    "display_name": "Post-Op Conversation",
+    "aliases": [
+      "postopconversation"
+    ],
+    "rarity": 4,
+    "path": "abundance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmmk52aHLmqFhbaVfE8RYjNWSB3X0P5wZrD7IC",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "quidproquo",
+    "display_name": "Quid Pro Quo",
+    "aliases": [
+      "quidproquo"
+    ],
+    "rarity": 4,
+    "path": "abundance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm1XfgsYptLpYTrPwUnuXCN8qEbHIvGShyem6F",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1
+        }
+      }
+    }
+  },
+  {
+    "name": "reforgedremembrance",
+    "display_name": "Reforged Remembrance",
+    "aliases": [
+      "reforgedremembrance",
+      "blackswan",
+      "bs"
+    ],
+    "rarity": 5,
+    "path": "nihility",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmxlFGJaTeQqWNcgSD31vrkmTYHFJjX25ZKlRV",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 2,
+          "S3": 2.5,
+          "S4": 2.5,
+          "S5": 3
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 2,
+          "S3": 2.5,
+          "S4": 2.5,
+          "S5": 3
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 2,
+          "S3": 2.5,
+          "S4": 2.5,
+          "S5": 3
+        }
+      }
+    }
+  },
+  {
+    "name": "reminiscence",
+    "display_name": "Reminiscence",
+    "aliases": [
+      "reminiscence"
+    ],
+    "rarity": 3,
+    "path": "remembrance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmywsATAx0IkdESXzc2H3gZ1spCA9DTWBmMito",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "resolutionshinesaspearlsofsweat",
+    "display_name": "Resolution Shines As Pearls of Sweat",
+    "aliases": [
+      "resolutionshinesaspearlsofsweat"
+    ],
+    "rarity": 4,
+    "path": "nihility",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmYaNdbQHstkMRmd3pPDZGEcwzHaQlBxL1bngC",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1
+        }
+      }
+    }
+  },
+  {
+    "name": "returntodarkness",
+    "display_name": "Return to Darkness",
+    "aliases": [
+      "returntodarkness"
+    ],
+    "rarity": 4,
+    "path": "hunt",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmSyNzQQWwLJmk0yB1IEfzFu2hoGbYjisKa74p",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "riverflowsinspring",
+    "display_name": "River Flows in Spring",
+    "aliases": [
+      "riverflowsinspring"
+    ],
+    "rarity": 4,
+    "path": "hunt",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmuuCwowEG3LaSKHlTI6DFy2fXxVOZwvgm9bYP",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "sagacity",
+    "display_name": "Sagacity",
+    "aliases": [
+      "sagacity"
+    ],
+    "rarity": 3,
+    "path": "erudition",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmNNzIbZYW2da6p81jlC5KwfVODrFZI4LgM0oi",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "sailingtowardsasecondlife",
+    "display_name": "Sailing Towards A Second Life",
+    "aliases": [
+      "sailingtowardsasecondlife",
+      "boothill",
+      "bh"
+    ],
+    "rarity": 5,
+    "path": "hunt",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmnRmNf5eXEi1leGFw5x96qCufVa0DSyzPdo8A",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      }
+    }
+  },
+  {
+    "name": "scentalonestaystrue",
+    "display_name": "Scent Alone Stays True",
+    "aliases": [
+      "scentalonestaystrue",
+      "lingsha",
+      "fuyuan"
+    ],
+    "rarity": 5,
+    "path": "abundance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmVtq3Il5yCHwopEcB1WsdtURTqMz9fe2SxOJL",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 2,
+          "S3": 2.5,
+          "S4": 3,
+          "S5": 3.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 2,
+          "S3": 2.5,
+          "S4": 3,
+          "S5": 3.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 2,
+          "S3": 2.5,
+          "S4": 3,
+          "S5": 3.5
+        }
+      }
+    }
+  },
+  {
+    "name": "seeyouattheend",
+    "display_name": "See You at the End",
+    "aliases": [
+      "seeyouattheend"
+    ],
+    "rarity": 4,
+    "path": "hunt",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm2uqHau3SAZqfk4pUnvT0wBMrui1Ch6D7dxHR",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "shadowburn",
+    "display_name": "Shadowburn",
+    "aliases": [
+      "shadowburn"
+    ],
+    "rarity": 3,
+    "path": "remembrance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmYIWqNVCHstkMRmd3pPDZGEcwzHaQlBxL1bng",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "shadowedbynight",
+    "display_name": "Shadowed By Night",
+    "aliases": [
+      "shadowedbynight"
+    ],
+    "rarity": 4,
+    "path": "hunt",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm7c0EstuwONpsIr6fJvY8chTBCFXo2AimLqSe",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "sharedfeeling",
+    "display_name": "Shared Feeling",
+    "aliases": [
+      "sharedfeeling"
+    ],
+    "rarity": 4,
+    "path": "abundance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmmYn5aKLmqFhbaVfE8RYjNWSB3X0P5wZrD7IC",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "shatteredhome",
+    "display_name": "Shattered Home",
+    "aliases": [
+      "shatteredhome"
+    ],
+    "rarity": 3,
+    "path": "destruction",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmxtzDcUTeQqWNcgSD31vrkmTYHFJjX25ZKlRV",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "shealreadyshuthereyes",
+    "display_name": "She Already Shut Her Eyes",
+    "aliases": [
+      "shealreadyshuthereyes",
+      "fuxuan"
+    ],
+    "rarity": 5,
+    "path": "preservation",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmg08tRx7cFbBJ0WiDyRr2wsaI1mzeQ5j8KgfH",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 2
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 2
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 2
+        }
+      }
+    }
+  },
+  {
+    "name": "sleeplikethedead",
+    "display_name": "Sleep Like the Dead",
+    "aliases": [
+      "sleeplikethedead",
+      "yanqing"
+    ],
+    "rarity": 5,
+    "path": "hunt",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmSLR8NPOWwLJmk0yB1IEfzFu2hoGbYjisKa74",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 1
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 1
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 1
+        }
+      }
+    }
+  },
+  {
+    "name": "solitaryhealing",
+    "display_name": "Solitary Healing",
+    "aliases": [
+      "solitaryhealing",
+      "shop"
+    ],
+    "rarity": 5,
+    "path": "nihility",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmf8AYkPh6z2I1lmoXH5cuF8stRxTG9EYZpVLh",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "somethingirreplaceable",
+    "display_name": "Something Irreplaceable",
+    "aliases": [
+      "somethingirreplaceable",
+      "clara",
+      "feet"
+    ],
+    "rarity": 5,
+    "path": "destruction",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmHkpFBTZgQ5YkANqasmRydMiXcIfJBtDK2b9F",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 1
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 1
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 1
+        }
+      }
+    }
+  },
+  {
+    "name": "subscribeformore",
+    "display_name": "Subscribe for More!",
+    "aliases": [
+      "subscribeformore"
+    ],
+    "rarity": 4,
+    "path": "hunt",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmHnEeW7ZgQ5YkANqasmRydMiXcIfJBtDK2b9F",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "sweatnowcryless",
+    "display_name": "Sweat Now, Cry Less",
+    "aliases": [
+      "sweatnowcryless"
+    ],
+    "rarity": 4,
+    "path": "remembrance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJml6cmslAriF9HKxpACmjWBXOJRVUnvcwLP20d",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 1.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 1.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 1.5
+        }
+      }
+    }
+  },
+  {
+    "name": "swordplay",
+    "display_name": "Swordplay",
+    "aliases": [
+      "swordplay"
+    ],
+    "rarity": 4,
+    "path": "hunt",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmt0kt4CqaE6GTg9rc2w8sVJ0ROlYMmuDfC5dU",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "textureofmemories",
+    "display_name": "Texture of Memories",
+    "aliases": [
+      "textureofmemories",
+      "shop"
+    ],
+    "rarity": 5,
+    "path": "preservation",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmXQqnd9FnicmFZD8OgdI2f364b1zThpGWBRkY",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "thebirthoftheself",
+    "display_name": "The Birth of the Self",
+    "aliases": [
+      "thebirthoftheself"
+    ],
+    "rarity": 4,
+    "path": "erudition",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmSLqBlZ2WwLJmk0yB1IEfzFu2hoGbYjisKa74",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "thedaythecosmosfell",
+    "display_name": "The Day The Cosmos Fell",
+    "aliases": [
+      "thedaythecosmosfell"
+    ],
+    "rarity": 4,
+    "path": "erudition",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmjdPugN0Vl45upOxGfUCiBPQFcKsdr3YDSZE2",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "theflowerremembers",
+    "display_name": "The Flower Remembers",
+    "aliases": [
+      "theflowerremembers"
+    ],
+    "rarity": 4,
+    "path": "remembrance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmqcGtCifzTvgpCXx0AWeMdyFLr3B7sjm98EnO",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 1.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 1.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 1.5
+        }
+      }
+    }
+  },
+  {
+    "name": "theforevervictual",
+    "display_name": "The Forever Victual",
+    "aliases": [
+      "theforevervictual",
+      "event"
+    ],
+    "rarity": 4,
+    "path": "harmony",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmWJybdImPm04Se8z6h7VGFOXC9DltEUruj3KT",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "thegreatcosmicenterprise",
+    "display_name": "The Great Cosmic Enterprise",
+    "aliases": [
+      "thegreatcosmicenterprise",
+      "event"
+    ],
+    "rarity": 4,
+    "path": "erudition",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmwrRjyQBgaNp72y9WeLQsIitx1o4XFhvGj0KY",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "thehellwhereidealsburn",
+    "display_name": "The Hell Where Ideals Burn",
+    "aliases": [
+      "thehellwhereidealsburn",
+      "archer"
+    ],
+    "rarity": 5,
+    "path": "hunt",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmqdZOhXfzTvgpCXx0AWeMdyFLr3B7sjm98EnO",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      }
+    }
+  },
+  {
+    "name": "themoleswelcomeyou",
+    "display_name": "The Moles Welcome You",
+    "aliases": [
+      "themoleswelcomeyou"
+    ],
+    "rarity": 4,
+    "path": "destruction",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm9fM7tb6ADHJsBgSXdMw6eqfthPkUVLNWiIQ1",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "theseriousnessofbreakfast",
+    "display_name": "The Seriousness of Breakfast",
+    "aliases": [
+      "theseriousnessofbreakfast"
+    ],
+    "rarity": 4,
+    "path": "erudition",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmwb6mVwBgaNp72y9WeLQsIitx1o4XFhvGj0KY",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "thestorysnextpage",
+    "display_name": "The Story's Next Page",
+    "aliases": [
+      "thestorysnextpage"
+    ],
+    "rarity": 4,
+    "path": "remembrance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmcasBrZUkvBRwZFY8NJKCelUa9pDoh1rSTQMz",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "theunreachableside",
+    "display_name": "The Unreachable Side",
+    "aliases": [
+      "theunreachableside",
+      "blade"
+    ],
+    "rarity": 5,
+    "path": "destruction",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmLYfpMcbhVXAsiymWvPEd6Tx8znquDR9rMlHp",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1,
+          "S4": 1.5,
+          "S5": 1.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1,
+          "S4": 1.5,
+          "S5": 1.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1,
+          "S2": 1,
+          "S3": 1,
+          "S4": 1.5,
+          "S5": 1.5
+        }
+      }
+    }
+  },
+  {
+    "name": "thisloveforever",
+    "display_name": "This Love, Forever",
+    "aliases": [
+      "thisloveforever",
+      "cyrene"
+    ],
+    "rarity": 5,
+    "path": "remembrance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmSMjnKbWwLJmk0yB1IEfzFu2hoGbYjisKa74p",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 2.5,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4,
+          "S5": 4.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 2.5,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4,
+          "S5": 4.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 2.5,
+          "S2": 3,
+          "S3": 3.5,
+          "S4": 4,
+          "S5": 4.5
+        }
+      }
+    }
+  },
+  {
+    "name": "thisisme",
+    "display_name": "This Is Me!",
+    "aliases": [
+      "thisisme"
+    ],
+    "rarity": 4,
+    "path": "preservation",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmPbOPaEl93FDl2yLjfJ7ZrwmReV8uWqh0UpEX",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "thosemanysprings",
+    "display_name": "Those Many Springs",
+    "aliases": [
+      "thosemanysprings",
+      "jiaoqiu",
+      "jq"
+    ],
+    "rarity": 5,
+    "path": "nihility",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmp20YmLgmGiY8n47VLsJ3Ikch9HvfCTtberRa",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 2,
+          "S4": 2.5,
+          "S5": 3
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 2,
+          "S4": 2.5,
+          "S5": 3
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 2,
+          "S4": 2.5,
+          "S5": 3
+        }
+      }
+    }
+  },
+  {
+    "name": "thoughworldsapart",
+    "display_name": "Though Worlds Apart",
+    "aliases": [
+      "thoughworldsapart",
+      "danhengpermansorterrae",
+      "permansorterrae",
+      "dante",
+      "dhpt"
+    ],
+    "rarity": 5,
+    "path": "preservation",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmLstn4nLbhVXAsiymWvPEd6Tx8znquDR9rMlH",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      }
+    }
+  },
+  {
+    "name": "thusburnsthedawn",
+    "display_name": "Thus Burns the Dawn",
+    "aliases": [
+      "thusburnsthedawn",
+      "phainon"
+    ],
+    "rarity": 5,
+    "path": "destruction",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmtTgkt3qaE6GTg9rc2w8sVJ0ROlYMmuDfC5dU",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 3,
+          "S2": 3.5,
+          "S3": 4,
+          "S4": 4.5,
+          "S5": 5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 3,
+          "S2": 3.5,
+          "S3": 4,
+          "S4": 4.5,
+          "S5": 5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 3,
+          "S2": 3.5,
+          "S3": 4,
+          "S4": 4.5,
+          "S5": 5
+        }
+      }
+    }
+  },
+  {
+    "name": "timewaitsfornoone",
+    "display_name": "Time Waits for No One",
+    "aliases": [
+      "timewaitsfornoone",
+      "bailu"
+    ],
+    "rarity": 5,
+    "path": "abundance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmCwHBk5ncVO8hluHDc5Lz6QsJwevgdrpf3AoR",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 1,
+          "S4": 1,
+          "S5": 1.5
+        }
+      }
+    }
+  },
+  {
+    "name": "timewovenintogold",
+    "display_name": "Time Woven Into Gold",
+    "aliases": [
+      "timewovenintogold",
+      "aglaea"
+    ],
+    "rarity": 5,
+    "path": "remembrance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmBQfvf3n4AkISVCsmgviYPQL9yeqOfKc26GMu",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      }
+    }
+  },
+  {
+    "name": "toevernightsstars",
+    "display_name": "To Evernight's Stars",
+    "aliases": [
+      "toevernightsstars",
+      "march7thevernight",
+      "evernight"
+    ],
+    "rarity": 5,
+    "path": "remembrance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmz9wiGWy2qswvoUEVZajknbdXDJQl8TS1KhLg",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 3,
+          "S2": 3.5,
+          "S3": 4,
+          "S4": 4.5,
+          "S5": 5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 3,
+          "S2": 3.5,
+          "S3": 4,
+          "S4": 4.5,
+          "S5": 5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 3,
+          "S2": 3.5,
+          "S3": 4,
+          "S4": 4.5,
+          "S5": 5
+        }
+      }
+    }
+  },
+  {
+    "name": "todayisanotherpeacefulday",
+    "display_name": "Today Is Another Peaceful Day",
+    "aliases": [
+      "todayisanotherpeacefulday"
+    ],
+    "rarity": 4,
+    "path": "erudition",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmmewplFLmqFhbaVfE8RYjNWSB3X0P5wZrD7IC",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 1.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 1.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 1.5,
+          "S4": 1.5,
+          "S5": 1.5
+        }
+      }
+    }
+  },
+  {
+    "name": "trendoftheuniversalmarket",
+    "display_name": "Trend of the Universal Market",
+    "aliases": [
+      "trendoftheuniversalmarket"
+    ],
+    "rarity": 4,
+    "path": "preservation",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmZfmHeQIRJrdIn25bFCj06vyTEpV7QAMhzBxt",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "underthebluesky",
+    "display_name": "Under the Blue Sky",
+    "aliases": [
+      "underthebluesky"
+    ],
+    "rarity": 4,
+    "path": "destruction",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm7c03EjuwONpsIr6fJvY8chTBCFXo2AimLqSe",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "untotomorrowsmorrow",
+    "display_name": "Unto Tomorrow's Morrow",
+    "aliases": [
+      "untotomorrowsmorrow"
+    ],
+    "rarity": 4,
+    "path": "abundance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmIWt6Em6QmYPnrNbvzRxWKTSisoFtAw8f62ad",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 1,
+          "S5": 1
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 1,
+          "S5": 1
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 1,
+          "S5": 1
+        }
+      }
+    }
+  },
+  {
+    "name": "victoryinablink",
+    "display_name": "Victory In a Blink",
+    "aliases": [
+      "victoryinablink"
+    ],
+    "rarity": 4,
+    "path": "remembrance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmjk4whLVl45upOxGfUCiBPQFcKsdr3YDSZE20",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "void",
+    "display_name": "Void",
+    "aliases": [
+      "void"
+    ],
+    "rarity": 3,
+    "path": "nihility",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmB27VtOn4AkISVCsmgviYPQL9yeqOfKc26GMu",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "warmthshortenscoldnights",
+    "display_name": "Warmth Shortens Cold Nights",
+    "aliases": [
+      "warmthshortenscoldnights"
+    ],
+    "rarity": 4,
+    "path": "abundance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmzkMPmry2qswvoUEVZajknbdXDJQl8TS1KhLg",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "wearewildfire",
+    "display_name": "We Are Wildfire",
+    "aliases": [
+      "wearewildfire"
+    ],
+    "rarity": 4,
+    "path": "preservation",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmuOxbb1EG3LaSKHlTI6DFy2fXxVOZwvgm9bYP",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "wewillmeetagain",
+    "display_name": "We Will Meet Again",
+    "aliases": [
+      "wewillmeetagain"
+    ],
+    "rarity": 4,
+    "path": "nihility",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmLuuy03bhVXAsiymWvPEd6Tx8znquDR9rMlHp",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "whatisreal",
+    "display_name": "What Is Real?",
+    "aliases": [
+      "whatisreal"
+    ],
+    "rarity": 4,
+    "path": "abundance",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmsNWmdmD7nQIR6O1NifyBTe3WwXUS2GzHxroh",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "whereaboutsshoulddreamsrest",
+    "display_name": "Whereabouts Should Dreams Rest",
+    "aliases": [
+      "whereaboutsshoulddreamsrest",
+      "firefly",
+      "ff",
+      "waifu"
+    ],
+    "rarity": 5,
+    "path": "destruction",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmSLRGiUoWwLJmk0yB1IEfzFu2hoGbYjisKa74",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 2,
+          "S3": 2.5,
+          "S4": 3,
+          "S5": 3
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 2,
+          "S3": 2.5,
+          "S4": 3,
+          "S5": 3
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 2,
+          "S3": 2.5,
+          "S4": 3,
+          "S5": 3
+        }
+      }
+    }
+  },
+  {
+    "name": "whydoestheoceansing",
+    "display_name": "Why Does the Ocean Sing",
+    "aliases": [
+      "whydoestheoceansing",
+      "hysilens",
+      "whale",
+      "fish",
+      "rule34"
+    ],
+    "rarity": 5,
+    "path": "nihility",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmnkmO8ZveXEi1leGFw5x96qCufVa0DSyzPdo8",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 2,
+          "S2": 2.5,
+          "S3": 3,
+          "S4": 3.5,
+          "S5": 4
+        }
+      }
+    }
+  },
+  {
+    "name": "woofwalktime",
+    "display_name": "Woof! Walk Time!",
+    "aliases": [
+      "woofwalktime"
+    ],
+    "rarity": 4,
+    "path": "destruction",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmL88L3FbhVXAsiymWvPEd6Tx8znquDR9rMlHp",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0.5,
+          "S2": 0.5,
+          "S3": 0.5,
+          "S4": 0.5,
+          "S5": 0.5
+        }
+      }
+    }
+  },
+  {
+    "name": "worrisomeblissful",
+    "display_name": "Worrisome, Blissful",
+    "aliases": [
+      "worrisomeblissful",
+      "topaz"
+    ],
+    "rarity": 5,
+    "path": "hunt",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmqoME8K8fzTvgpCXx0AWeMdyFLr3B7sjm98En",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1,
+          "S2": 1.5,
+          "S3": 2,
+          "S4": 2.5,
+          "S5": 3
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1,
+          "S2": 1.5,
+          "S3": 2,
+          "S4": 2.5,
+          "S5": 3
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1,
+          "S2": 1.5,
+          "S3": 2,
+          "S4": 2.5,
+          "S5": 3
+        }
+      }
+    }
+  },
+  {
+    "name": "yethopeispriceless",
+    "display_name": "Yet Hope Is Priceless",
+    "aliases": [
+      "yethopeispriceless",
+      "jade"
+    ],
+    "rarity": 5,
+    "path": "erudition",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmm6r09TLmqFhbaVfE8RYjNWSB3X0P5wZrD7IC",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 2,
+          "S3": 2.5,
+          "S4": 3,
+          "S5": 3.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 2,
+          "S3": 2.5,
+          "S4": 3,
+          "S5": 3.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 2,
+          "S3": 2.5,
+          "S4": 3,
+          "S5": 3.5
+        }
+      }
+    }
+  },
+  {
+    "name": "sneerin",
+    "display_name": "Sneerin",
+    "aliases": [
+      "sneerin"
+    ],
+    "rarity": 3,
+    "path": "elation",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmVhxYsm5yCHwopEcB1WsdtURTqMz9fe2SxOJL",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "lingeringtear",
+    "display_name": "Lingering Tear",
+    "aliases": [
+      "lingeringtear"
+    ],
+    "rarity": 3,
+    "path": "elation",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm5QZ1rSdYHdGFs9jtel6ZUbgXJT7Ck2aMP8IL",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 0,
+          "S2": 0,
+          "S3": 0,
+          "S4": 0,
+          "S5": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "todaysgoodluck",
+    "display_name": "Today's Good Luck",
+    "aliases": [
+      "todaysgoodluck"
+    ],
+    "rarity": 4,
+    "path": "elation",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmSPjY0uWwLJmk0yB1IEfzFu2hoGbYjisKa74p",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 2,
+          "S4": 2,
+          "S5": 2.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 2,
+          "S4": 2,
+          "S5": 2.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 2,
+          "S4": 2,
+          "S5": 2.5
+        }
+      }
+    }
+  },
+  {
+    "name": "mushyshroomysadventures",
+    "display_name": "Mushy Shroomy's Adventures",
+    "aliases": [
+      "mushyshroomysadventures"
+    ],
+    "rarity": 4,
+    "path": "elation",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmTVVOheCdeqVuD9kaG18iCSmnZPB7cKIQ3vL5",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 2,
+          "S4": 2,
+          "S5": 2.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 2,
+          "S4": 2,
+          "S5": 2.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 1.5,
+          "S3": 2,
+          "S4": 2,
+          "S5": 2.5
+        }
+      }
+    }
+  },
+  {
+    "name": "whenshedecidedtosee",
+    "display_name": "When She Decided to See",
+    "aliases": [
+      "whenshedecidedtosee",
+      "yaoguang"
+    ],
+    "rarity": 5,
+    "path": "elation",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmoEU848XdCvbWHORl9jceqB3Zs7tJVMA04nTI",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 2,
+          "S3": 2.5,
+          "S4": 3,
+          "S5": 3.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 2,
+          "S3": 2.5,
+          "S4": 3,
+          "S5": 3.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 2,
+          "S3": 2.5,
+          "S4": 3,
+          "S5": 3.5
+        }
+      }
+    }
+  },
+  {
+    "name": "dazzledbyafloweryworld",
+    "display_name": "Dazzled by a Flowery World",
+    "aliases": [
+      "dazzledbyafloweryworld",
+      "sparxie"
+    ],
+    "rarity": 5,
+    "path": "elation",
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmLuRa35bhVXAsiymWvPEd6Tx8znquDR9rMlHp",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 2,
+          "S3": 2.5,
+          "S4": 3,
+          "S5": 3.5
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 2,
+          "S3": 2.5,
+          "S4": 3,
+          "S5": 3.5
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "S1": 1.5,
+          "S2": 2,
+          "S3": 2.5,
+          "S4": 3,
+          "S5": 3.5
+        }
+      }
+    }
+  }
+]

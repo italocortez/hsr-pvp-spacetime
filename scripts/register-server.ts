@@ -16,7 +16,7 @@
 
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-import { DbConnection } from '../src/module_bindings';
+import { DbConnection } from '../web/src/module_bindings';
 
 // Manually load .env.local (tsx doesn't auto-load it)
 function loadEnvFile(filename: string) {

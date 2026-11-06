@@ -119,7 +119,7 @@ Not required, but stale after the bump. These are comment-only:
 
 ## 5. Server-side changes already live on maincloud
 
-Maincloud runs the latest server whatever our SDK version is. These have applied to `hsrpvp-spacetimedb-nextjs-test1` and `-production` since each release.
+Maincloud runs the latest server whatever our SDK version is. These have applied to the old test database and the old production database since each release.
 
 | Change | Release | Relevance / what to check | Status |
 |---|---|---|---|

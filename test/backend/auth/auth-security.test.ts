@@ -95,7 +95,7 @@ describe('Auth Security Hardening', () => {
       const serverConn = await new Promise<any>((resolve, reject) => {
         DbConnection.builder()
           .withUri(process.env.SPACETIMEDB_URI || 'wss://maincloud.spacetimedb.com')
-          .withDatabaseName(process.env.SPACETIMEDB_DB || 'hsrpvp-spacetimedb-nextjs-test1')
+          .withDatabaseName(process.env.SPACETIMEDB_DB || 'hsr-spacetimedb-test1')
           .withToken(process.env.SPACETIMEDB_SERVER_TOKEN!)
           .withConfirmedReads(false)
           .onConnect((conn: any) => resolve(conn))

@@ -81,7 +81,7 @@ For re-publishes that include schema deltas already reviewed in a prior diff, us
 **Purpose:** Create a connected guest user for permission guard tests
 
 **Flow:**
-1. `DbConnection.builder()` connects to test DB (defaults: `wss://maincloud.spacetimedb.com`, `hsrpvp-spacetimedb-nextjs-test1`)
+1. `DbConnection.builder()` connects to test DB (defaults: `wss://maincloud.spacetimedb.com`, `hsr-spacetimedb-test1`)
 2. Subscribes to all tables
 3. Calls `loginAsGuest` — creates User + UserIdentity
 4. Resolves `userId` from subscription cache by matching `Guest_{hex8}` username pattern

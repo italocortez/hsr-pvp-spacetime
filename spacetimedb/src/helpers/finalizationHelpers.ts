@@ -5,7 +5,7 @@
 import { SenderError } from 'spacetimedb/server';
 import { auditInsert, auditUpdate } from './auditColumns';
 import { insertWithAudit, updateWithAudit } from './auditHelpers';
-import type { MmrRating } from '../module_bindings/types';
+import type { MmrRating } from '@bindings/types';
 import { getKFactor, calculateExpectedScore, calculateRatingChange, calculateTeamEffective, calculateAccountModifier } from './eloCalculation';
 import type { EloConfigValues } from './eloCalculation';
 import { incrementPlayerStat, incrementPlayerRelationship } from './statsIncrement';

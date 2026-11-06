@@ -29,7 +29,7 @@ function getUri(): string {
     return process.env.SPACETIMEDB_URI || 'wss://maincloud.spacetimedb.com';
 }
 function getDb(): string {
-    return process.env.SPACETIMEDB_DB || process.env.SPACETIMEDB_DB_NAME || process.env.PUBLIC_SPACETIMEDB_DB_NAME || 'hsrpvp-spacetimedb-nextjs-test1';
+    return process.env.SPACETIMEDB_DB || process.env.SPACETIMEDB_DB_NAME || process.env.PUBLIC_SPACETIMEDB_DB_NAME || 'hsr-spacetimedb-test1';
 }
 function getServerToken(): string {
     return process.env.SPACETIMEDB_SERVER_TOKEN || '';

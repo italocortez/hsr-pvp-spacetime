@@ -1,6 +1,6 @@
 ---
 name: uat
-description: "Verification layer for the 3-layer development process (contract -> architecture -> verify). Governs behavior specs, test integrity, and failure diagnostics. Use whenever working with behavior specs, writing or running tests, bootstrapping after a database reset, or when an agent needs the intended behavior for a feature. Also trigger when the user mentions contract.md, architecture.md, docs/{feature}, vitest, test:integration, test:phase, verify-work, add-tests, post-publish bootstrap, or test failure diagnosis. Trigger keywords: uat, behavior spec, acceptance scenario, test, smoke test, integration test, test coverage, post-publish, npm test, npm run test:integration, vitest, Given/When/Then, contract.md, verify-work."
+description: "Verification layer for the 3-layer development process (contract -> architecture -> verify). Governs behavior specs, test integrity, and failure diagnostics. Use whenever working with behavior specs, writing or running tests, bootstrapping after a database reset, or when an agent needs the intended behavior for a feature. Also trigger when the user mentions contract.md, architecture.md, docs/{feature}, vitest, test:integration, test:phase, UAT session, writing tests, post-publish bootstrap, or test failure diagnosis. Trigger keywords: uat, behavior spec, acceptance scenario, test, smoke test, integration test, test coverage, post-publish, npm test, npm run test:integration, vitest, Given/When/Then, contract.md, UAT session."
 ---
 
 # UAT -- Verification Layer
@@ -22,7 +22,7 @@ Read the appropriate reference when doing specific tasks:
 | Task | Read this |
 |------|-----------|
 | Writing vitest tests or UAT harness scripts | `references/test-writing-guide.md` |
-| Running `/gsd-verify-work` sessions | `references/uat-verification-guide.md` |
+| Running a UAT session (manual, step by step) | `references/uat-verification-guide.md` |
 | Looking up feature specs, test files, or coverage | `references/test-index.md` |
 | Creating or updating a `contract.md` | `references/workflow-doc-template.md` |
 
@@ -40,7 +40,7 @@ The 3-layer process depends on tests being an independent verification of contra
 
 **What you CANNOT do without explicit user instruction:** Write, modify, delete, or rename any file under `test/`.
 
-**Generation exception:** Approved generation workflows like `/gsd-add-tests` are an explicit user task -- the user has approved test creation through the workflow's approval steps. During generation, fixing your own syntax mistakes before the test is accepted doesn't violate verification integrity. Once tests exist in the repo and you're running them to compare contract vs. architecture, these rules fully apply.
+**Generation exception:** A test-writing task the user explicitly asked for (a named T-task of a step) is an explicit user task -- the user has approved test creation by assigning it. During generation, fixing your own syntax mistakes before the test is accepted doesn't violate verification integrity. Once tests exist in the repo and you're running them to compare contract vs. architecture, these rules fully apply.
 
 ### Why Failures Are Diagnostic
 
@@ -100,12 +100,12 @@ Every backend feature has a behavior spec at `docs/{feature}/contract.md`. This 
 ### Lifecycle
 
 ```
-Phase Discussion (CONTEXT.md)
-  -> User approves behavior spec updates          [source: Phase X CONTEXT.md]
+Planning (decision recorded in DECISIONS.md)
+  -> User approves behavior spec updates          [source: DECISIONS.md Axx]
     -> Spec becomes the acceptance criteria
       -> Execution builds code (may add beyond spec)
-        -> Claude updates contract with additions  [source: Phase X execution]
-          -> verify-work: tests, runs them, reports results
+        -> Claude updates contract with additions  [source: Phase <step> execution]
+          -> UAT session: tests, runs them, reports results
             -> User reviews execution-sourced entries + test results
               -> User approves, modifies, or rejects additions
 ```
@@ -127,13 +127,13 @@ Every entry in a contract's Phase History table identifies where the decision ca
 
 | Source pattern | Meaning |
 |---------------|---------|
-| `Phase X CONTEXT.md` | User-approved during discussion |
-| `Phase X RESEARCH.md` | Established during research |
-| `Phase X execution` | Claude-added during implementation |
+| `DECISIONS.md Axx` | User-approved decision |
+| `step Sx` / `step Mx` (planning) | Established while planning the step |
+| `Phase <step> execution` | Claude-added during implementation |
 
-**Rule of thumb:** If the reducer or behavior was discussed in CONTEXT.md (even at a high level), tag it as `CONTEXT.md` -- specific error messages and edge cases inherit the parent reducer's provenance. Tag as `execution` only for supporting reducers the user never mentioned.
+**Rule of thumb:** If the reducer or behavior is covered by a decision (even at a high level), cite that decision id -- specific error messages and edge cases inherit the parent reducer's provenance. Tag as `execution` only for supporting reducers the user never mentioned.
 
-During `/gsd-verify-work`, the user reviews execution-sourced entries and approves, modifies, or rejects them.
+During a UAT session (or when reviewing the step's `docs/log/<date>-<step>.md` doc checklist), the user reviews execution-sourced entries and approves, modifies, or rejects them.
 
 ### Centralized Doc Pattern
 
@@ -142,24 +142,24 @@ Each backend feature has documentation under `docs/{feature}/`:
 | Location | Contains | Update when |
 |----------|----------|-------------|
 | `docs/{feature}/architecture.md` | Table diagrams, reducer reference, data patterns | Backend code changes |
-| `docs/{feature}/contract.md` | Acceptance scenarios, edge cases, phase history | Phase discussions conclude; after execution with provenance tags |
+| `docs/{feature}/contract.md` | Acceptance scenarios, edge cases, phase history | A decision is recorded; after execution with provenance tags |
 
 Architecture docs cross-reference behavior specs. No duplication between them.
 
 ---
 
-## GSD Integration
+## Workflow per step
 
-| GSD Workflow | Layer | What happens |
+| Stage | Layer | What happens |
 |---|---|---|
-| `/gsd-discuss-phase` | Contract | Produces decisions -> user approves spec updates |
-| `/gsd-execute-phase` | Architecture | Builds the code -- does not modify contract during execution |
-| Post-execution | Contract | Claude updates contract with additions, tagged `Phase X execution` in Phase History |
-| `/gsd-verify-work` | Verification (manual) | Manual harness UAT -- exercise reducers step-by-step, confirm with user |
-| `/gsd-add-tests` | Verification (automated) | Generate vitest files from confirmed-correct behavior |
+| Planning (`grill-me`, decision recorded in `DECISIONS.md`) | Contract | Produces decisions -> user approves spec updates |
+| Executing an agreed step | Architecture | Builds the code -- does not modify contract during execution |
+| Post-execution | Contract | Claude updates contract with additions, tagged `Phase <step> execution` in Phase History |
+| UAT session | Verification (manual) | Manual harness UAT -- exercise reducers step-by-step, confirm with user |
+| Explicit test-writing task | Verification (automated) | Write vitest files from confirmed-correct behavior |
 | `npm test` | Verification (regression) | Run existing tests -- failures are diagnostic |
 
-**Per-phase order:** Always `verify-work` first, then `add-tests`. Manual UAT finds bugs while context is fresh. Automated tests lock in the confirmed behavior afterward.
+**Per-step order:** Always the manual UAT session first, then the test-writing task. Manual UAT finds bugs while context is fresh. Automated tests lock in the confirmed behavior afterward.
 
 ---
 
@@ -182,9 +182,9 @@ After running any test command, always produce the failure report format from Pr
 
 This project publishes to SpacetimeDB maincloud (hosted). No local server to start/stop.
 
-1. **Publish** -- `spacetime publish hsrpvp-spacetimedb-nextjs-test1 -y`
-2. **Check logs** -- `spacetime logs hsrpvp-spacetimedb-nextjs-test1`
-3. **Basic query** -- `spacetime sql hsrpvp-spacetimedb-nextjs-test1 "SELECT * FROM user"`
+1. **Publish** -- `spacetime publish hsr-spacetimedb-test1 -y`
+2. **Check logs** -- `spacetime logs hsr-spacetimedb-test1`
+3. **Basic query** -- `spacetime sql hsr-spacetimedb-test1 "SELECT * FROM user"`
 
 Do NOT include `spacetime start` or "kill the server" -- maincloud is always running. Only use `--clear-database` when the plan explicitly requires it.
 

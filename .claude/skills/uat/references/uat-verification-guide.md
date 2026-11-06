@@ -1,6 +1,6 @@
 # UAT Verification Guide
 
-Reference for running `/gsd-verify-work` sessions. Covers DB snapshots, step presentation, emoji markers, and report cards.
+Reference for running a UAT session. Covers DB snapshots, step presentation, emoji markers, and report cards.
 
 ## Table of Contents
 
@@ -23,7 +23,7 @@ Every reducer call during UAT MUST be followed by a live database query showing 
 4. **Never reconstruct snapshots.** If you ran a batch test, the final DB state does NOT count as per-step snapshots. You must run actions individually with a query between each one.
 5. **Include snapshots in all outputs:**
    - Inline conversation when presenting checkpoint results
-   - Written UAT files (`.planning/phases/XX-name/{phase_num}-UAT.md`)
+   - The UAT section of the step's execution log (`docs/log/<date>-<step>.md`)
    - Report cards (`notes/reportcards/uat/backend-testing/`)
 
 ## Step Presentation Format

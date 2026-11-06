@@ -17,7 +17,7 @@ import { DbConnection } from '@/src/module_bindings';
 // Read lazily via getters so standalone scripts can parse .env.local
 // before first use (static imports evaluate before top-level side effects).
 function getUri() { return process.env.SPACETIMEDB_URI || 'wss://maincloud.spacetimedb.com'; }
-function getDb() { return process.env.SPACETIMEDB_DB || process.env.SPACETIMEDB_DB_NAME || process.env.PUBLIC_SPACETIMEDB_DB_NAME || 'hsrpvp-spacetimedb-nextjs-test1'; }
+function getDb() { return process.env.SPACETIMEDB_DB || process.env.SPACETIMEDB_DB_NAME || process.env.PUBLIC_SPACETIMEDB_DB_NAME || 'hsr-spacetimedb-test1'; }
 function getServerToken() { return process.env.SPACETIMEDB_SERVER_TOKEN || ''; }
 
 export interface TestHarness {

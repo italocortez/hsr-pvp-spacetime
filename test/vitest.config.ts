@@ -10,6 +10,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      '@/src/module_bindings': path.resolve(__dirname, '../web/src/module_bindings'),
       '@/': path.resolve(__dirname, '../') + '/',
       // Mock SpacetimeDB server module for unit tests
       'spacetimedb/server': path.resolve(__dirname, 'shared/mocks/spacetimedb-server.ts'),

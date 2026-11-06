@@ -4,7 +4,7 @@ import { getAuthenticatedUser } from '../helpers/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { ensureLobbyMember, ensureStageIs, slotTeam, slotIsCoach, slotToTeamSide } from '../helpers/lobbyHelpers';
 import { ensureMatchAlive } from '../helpers/disconnectHelpers';
-import type { NominatePayload } from '../module_bindings/types';
+import type { NominatePayload } from '@bindings/types';
 
 // ─── Helper: Get set of characters already won via AuctionSold ──────────────
 // Auction characters are ALWAYS exclusive (D-42).

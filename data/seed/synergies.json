@@ -1,0 +1,312 @@
+[
+  {
+    "source_name": "anaxa",
+    "target_name": "cerydra",
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "modifier": 3
+        },
+        "auction": {
+          "modifier": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "modifier": 3
+        },
+        "auction": {
+          "modifier": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "modifier": 3
+        },
+        "auction": {
+          "modifier": 0
+        }
+      }
+    }
+  },
+  {
+    "source_name": "argenti",
+    "target_name": "theherta",
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "modifier": 4
+        },
+        "auction": {
+          "modifier": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "modifier": 4
+        },
+        "auction": {
+          "modifier": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "modifier": 4
+        },
+        "auction": {
+          "modifier": 0
+        }
+      }
+    }
+  },
+  {
+    "source_name": "cerydra",
+    "target_name": "phainon",
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "modifier": 2
+        },
+        "auction": {
+          "modifier": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "modifier": 2
+        },
+        "auction": {
+          "modifier": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "modifier": 2
+        },
+        "auction": {
+          "modifier": 0
+        }
+      }
+    }
+  },
+  {
+    "source_name": "cyrene",
+    "target_name": "trailblaizerremembrance",
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "modifier": 1
+        },
+        "auction": {
+          "modifier": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "modifier": 1
+        },
+        "auction": {
+          "modifier": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "modifier": 1
+        },
+        "auction": {
+          "modifier": 0
+        }
+      }
+    }
+  },
+  {
+    "source_name": "feixiao",
+    "target_name": "march7ththehunt",
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "modifier": 2.5
+        },
+        "auction": {
+          "modifier": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "modifier": 2.5
+        },
+        "auction": {
+          "modifier": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "modifier": 2.5
+        },
+        "auction": {
+          "modifier": 0
+        }
+      }
+    }
+  },
+  {
+    "source_name": "feixiao",
+    "target_name": "moze",
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "modifier": 4
+        },
+        "auction": {
+          "modifier": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "modifier": 4
+        },
+        "auction": {
+          "modifier": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "modifier": 4
+        },
+        "auction": {
+          "modifier": 0
+        }
+      }
+    }
+  },
+  {
+    "source_name": "march7ththehunt",
+    "target_name": "thedahlia",
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "modifier": 5
+        },
+        "auction": {
+          "modifier": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "modifier": 5
+        },
+        "auction": {
+          "modifier": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "modifier": 5
+        },
+        "auction": {
+          "modifier": 0
+        }
+      }
+    }
+  },
+  {
+    "source_name": "serval",
+    "target_name": "theherta",
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "modifier": 5
+        },
+        "auction": {
+          "modifier": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "modifier": 5
+        },
+        "auction": {
+          "modifier": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "modifier": 5
+        },
+        "auction": {
+          "modifier": 0
+        }
+      }
+    }
+  },
+  {
+    "source_name": "thedahlia",
+    "target_name": "trailblaizerharmony",
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "modifier": 4
+        },
+        "auction": {
+          "modifier": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "modifier": 4
+        },
+        "auction": {
+          "modifier": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "modifier": 4
+        },
+        "auction": {
+          "modifier": 0
+        }
+      }
+    }
+  },
+  {
+    "source_name": "theherta",
+    "target_name": "tribbie",
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": {
+          "modifier": 4
+        },
+        "auction": {
+          "modifier": 0
+        }
+      },
+      "apocalyptic_shadow": {
+        "classic": {
+          "modifier": 4
+        },
+        "auction": {
+          "modifier": 0
+        }
+      },
+      "anomaly_arbitration": {
+        "classic": {
+          "modifier": 4
+        },
+        "auction": {
+          "modifier": 0
+        }
+      }
+    }
+  }
+]
