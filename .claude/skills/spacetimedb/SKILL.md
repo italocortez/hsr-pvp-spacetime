@@ -129,8 +129,8 @@ If you genuinely need immediate response data (rare once you adopt the pattern),
 ### High latency? Disable confirmed reads
 If reducer round-trips feel slow (200ms+ even locally), the likely cause is confirmed reads. As of v2.1.0, the TypeScript SDK defaults to confirmed reads enabled (previously opt-in on the client side). Add `.withConfirmedReads(false)` to the connection builder for games and real-time apps. This applies to both local dev and maincloud. See `references/how-to-guides.md` § Confirmed Reads for the full trade-off.
 
-### Reconnection workaround (temporary)
-SDK 2.6.1 has no built-in reconnect. For the current workaround (unmount/remount provider via key prop), see `references/how-to-guides.md` § Reconnection. **v2.12.0+ (project SDK is 2.6.1; don't use until the upgrade lands):** `DbConnection.builder().withAutomaticReconnect()` (+ `withTokenProvider()`) keeps the connection, cache, subscriptions, and callbacks alive across outages, and the React provider turns it on automatically. Remove the key-remount workaround when adopting it. Same section has the details.
+### Reconnection (built in since v2.12.0)
+On this repo's SDK (2.14.1) the React provider turns on `withAutomaticReconnect()` itself: it reuses the session token, keeps the same `DbConnection`, cache and callbacks across outages, and **replays every registered subscription** after a reconnect. Code that subscribes manually must keep the handle (`const handle = conn.subscriptionBuilder()...subscribe(...)`) and call `handle.unsubscribe()` on cleanup, or each remount adds a duplicate that is replayed forever. The 2.6.1 unmount/remount-the-provider (key prop) workaround is obsolete; don't add it. Outside React, `DbConnection.builder().withAutomaticReconnect()` (+ `withTokenProvider()`) does the same. Details: `references/how-to-guides.md` § Reconnection.
 
 ### Data access in React
 **v2.1.0 fix:** `useTable`'s `isReady` previously could revert to `false` after initial sync due to a stale closure in `useSyncExternalStore`. Fixed in v2.1.0 — no code changes needed on your side.
@@ -218,7 +218,7 @@ export const view_my_profile = spacetimedb.view({ name: 'view_my_profile', publi
 // Then in index.ts: export { view_my_profile } from './views/securityViews';
 ```
 
-Once exported, `spacetime generate` creates typed view bindings (e.g. `view_my_profile_table.ts`). Views appear in `tablesSchema` alongside tables, accessible via `conn.db.view_my_profile` with `.count()`, `.iter()`, and row callbacks. View accessors use snake_case (matching the view name), not PascalCase like tables. **v2.7.0+ (PR #5286; the project's codegen/SDK is 2.6.1):** generated client handles become camelCase (`conn.db.viewMyProfile`, `conn.db.user`). The current spellings stay available as deprecated aliases, so existing code keeps compiling. Prefer the camelCase form only after the upgrade.
+Once exported, `spacetime generate` creates typed view bindings (e.g. `view_my_profile_table.ts`). Views appear in `tablesSchema` alongside tables, accessible via `conn.db.view_my_profile` with `.count()`, `.iter()`, and row callbacks. View accessors use snake_case (matching the view name), not PascalCase like tables. **v2.7.0+ (PR #5286):** generated client handles become camelCase (`conn.db.viewMyProfile`, `conn.db.user`). The old spellings stay available as deprecated aliases, so existing code keeps compiling. Prefer the camelCase form in new code.
 
 **Lifecycle hooks follow the same rule (CRITICAL, verified on 2.6.1).** `spacetimedb.init(...)`, `clientConnected(...)`, and `clientDisconnected(...)` return a module export that registers only when exported. A bare call is silently dropped: no error, and no lifecycle reducer in the schema.
 ```typescript
@@ -368,7 +368,7 @@ Each column declaration type produces a different accessor with a different API.
 
 Single-column btree with `.filter([val])` (one-element array) auto-coerces to scalar and works, but prefer `.filter(scalar)` for clarity.
 
-**Version notes:** on 2.6.1 a bare scalar on a **multi-column** index (`by_tournament_and_user.filter(tid)`) throws `serializeTerm is not a function`. From v2.7.0 (PR #5428) it becomes a valid one-column prefix scan, and prefix+`Range` composite scans are fixed from v2.8.0 (PR #5479). Until the upgrade, keep using the full-tuple array or the single-column-index fallback. Also on 2.6.1, chaining `.primaryKey()` / `.index()` directly on an object-form `t.enum(...)` column throws a TypeError (fixed v2.7.0). Index enum columns through `indexes: [...]` in table options, as this repo already does.
+**Version notes:** since v2.7.0 (PR #5428) a bare scalar on a **multi-column** index (`by_tournament_and_user.filter(tid)`) is a valid one-column prefix scan, and prefix+`Range` composite scans work since v2.8.0 (PR #5479); both are usable on this repo's 2.14.1. (History: on 2.6.1 the bare scalar threw `serializeTerm is not a function`.) Also on 2.6.1, chaining `.primaryKey()` / `.index()` directly on an object-form `t.enum(...)` column throws a TypeError (fixed v2.7.0). Index enum columns through `indexes: [...]` in table options, as this repo already does.
 
 **Multi-column `primaryKey: [...]` declarations are a no-op (verified 2026-04-14, v2.1.0):**
 
@@ -454,7 +454,7 @@ The SpacetimeDB v2.2.0 engine itself rejects external WebSocket calls to schedul
 
 **Therefore: do NOT add application-level guards to scheduled reducers in v2.2.0.** The engine is the correct defense layer. If a future SDK version exposes scheduled-reducer names to external callers, revisit this rule and find a working internal-dispatch signal before re-adding any guard.
 
-**Still true on 2.6.1** (re-verified 2026-11-05: `AuthCtxImpl.fromSystemTables` is the only producer of `ctx.senderAuth`). **v2.14.0 changes this (PR #5892, breaking; project SDK is 2.6.1, so don't act on it until the upgrade lands):** `isInternal` becomes `ctx.sender === ctx.databaseIdentity` in every module language. In TypeScript it is then **true for scheduled reducers and procedures**, `init` is **no longer** internal (its sender is the database owner), and `senderAuth.jwt` is none whenever `isInternal` is true. A module keeps the old behavior until it is rebuilt against the new library. After the upgrade, an `isInternal` guard on scheduled reducers becomes a working defense-in-depth option, but re-verify with the regression sensor before adding one. The project gates in the table below still don't change.
+**On this repo's SDK (2.14.1, since M1) the above is history.** v2.14.0 (PR #5892, breaking) made `isInternal` mean `ctx.sender === ctx.databaseIdentity` in every module language (`AuthCtxImpl.forSender` in the SDK): it is **true for scheduled reducers and procedures**, `init` is **not** internal (its sender is the database owner), and `senderAuth.jwt` is null whenever `isInternal` is true. A deployed module keeps the old behavior until it is rebuilt and republished against the new library. An `isInternal` guard on scheduled reducers is now a working defense-in-depth option, but the guards are **not re-added yet** (deferred, upgrade report §10 Q8); re-verify with the regression sensor before adding one. The project gates in the table below don't change.
 
 #### `AuthCtx` is still NOT a substitute for project auth gates
 

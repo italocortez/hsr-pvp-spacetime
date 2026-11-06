@@ -9,7 +9,10 @@ import { SenderError } from 'spacetimedb/server';
 // "no such reducer" for external WS callers attempting to invoke scheduled reducers
 // (verified 2026-05-03 in 16.4-AUDIT-NOTES.md "v0.6 Update"). Application-level
 // `ctx.senderAuth.isInternal` guard was removed by Plan 07 hotfix because the SDK
-// v2.2.0 `senderAuth` factory always sets `isInternal: false`. `seed_lobby_gc_job` and
+// v2.2.0 `senderAuth` factory always set `isInternal: false`. Since SDK 2.14 (M1),
+// `isInternal` is `sender === databaseIdentity`: true for scheduled reducers, false for
+// `init`, and `jwt` is null when internal. The guard is not re-added yet (deferred,
+// upgrade report §10 Q8). `seed_lobby_gc_job` and
 // `admin_gc_lobbies` retain their existing project-level gates (`ServerIdentity` check
 // and `ensureModerator` respectively).
 

@@ -5,10 +5,17 @@ import { insertWithAudit, updateWithAudit } from './helpers/auditHelpers';
 import { transferCaptain, transferReferee, transferHost } from './helpers/flagTransferHelpers';
 import { checkProviderBan, DISCORD_BAN_TYPE } from './helpers/banHelper';
 import { slotToTeamSide } from './helpers/lobbyHelpers';
+import { SHARED_BUILD_SPIKE } from '@shared/build-spike';
 
 // Private auth tables — imported for schema registration
 import './tables/userPrivate';
 import './tables/banRecord';
+
+// M1 build spike (MIGRATION-PLAN §2.2): a value import from shared/ that the bundle must keep.
+// A plain `const x = SHARED_BUILD_SPIKE; void x;` is tree-shaken by the CLI's bundler, so the
+// value is written to a global instead. Removed in M2 with the spike.
+(globalThis as { __sharedBuildSpike?: string }).__sharedBuildSpike = SHARED_BUILD_SPIKE;
+
 // Phase 15 D-01/D-02: domain view barrel — each file holds views that match the `tables/` layout.
 // Every view must be named-re-exported here so [registerExport] fires during module init
 // (Phase 12.2 rule — CONVENTIONS.md:233-252). Splitting security/anonymousViews into 8 files

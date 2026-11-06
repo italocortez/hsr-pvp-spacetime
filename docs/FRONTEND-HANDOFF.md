@@ -8,7 +8,7 @@ Last updated: 2026-04-12
 
 ## Backend Summary
 
-- **SpacetimeDB SDK:** 2.6.1 (`spacetimedb/react` on the client, `spacetimedb/server` in the module) — upgraded from 2.1.0→2.2.0 (Phase 16.4) → 2.6.1 (Phase 16.5)
+- **SpacetimeDB SDK:** 2.14.1 (`spacetimedb/react` on the client, `spacetimedb/server` in the module) — upgraded from 2.1.0→2.2.0 (Phase 16.4) → 2.6.1 (Phase 16.5) → 2.14.1 (M1)
 - **Tables:** 67 production table definitions (`spacetimedb/src/tables/`)
 - **Reducers:** ~156 exports across 44 reducer source files (`spacetimedb/src/reducers/`)
 - **Views:** 32 server-side named views (`securityViews.ts`: 24, `anonymousViews.ts`: 8)

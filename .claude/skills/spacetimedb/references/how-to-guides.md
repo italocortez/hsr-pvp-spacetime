@@ -216,7 +216,7 @@ setTimeout(() => setConnectionKey(k => k + 1), 2000);
 
 This is a known rough edge on 2.6.1.
 
-**Post-upgrade (v2.12.0+, PR #5927 — project SDK is 2.6.1; don't use until the upgrade lands):** reconnection is built into `DbConnection`, and the key-remount workaround above should be removed when adopting it.
+**v2.12.0+ (PR #5927), this repo's baseline since M1:** reconnection is built into `DbConnection`, and the key-remount workaround above is obsolete.
 ```typescript
 const builder = DbConnection.builder()
   .withUri(SPACETIMEDB_URI)
@@ -308,7 +308,7 @@ Tools: `list_databases` (host-wide only; databases owned by your identity), `get
 
 ## Module Unit Testing (v2.12+)
 
-**v2.12.0+ (PRs #5558, #6139) — project SDK is 2.6.1; don't use until the upgrade lands.** Also: this repo's `test/` directory is the verification layer — don't create or change tests without an explicit task (CLAUDE.md).
+**v2.12.0+ (PRs #5558, #6139).** Also: this repo's `test/` directory is the verification layer — don't create or change tests without an explicit task (CLAUDE.md).
 
 Tests run module logic against an in-memory datastore, with no publish (unlike `npm run test:integration`, which republishes maincloud). Run from the module project (`spacetimedb/`) with Node 22+, `"type": "module"` in its `package.json`, and `vitest@^3.2.4`:
 

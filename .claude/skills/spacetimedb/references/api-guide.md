@@ -28,8 +28,6 @@
 | 11 | [Hard Requirements](#11-hard-requirements) | 13 TypeScript-specific rules |
 | 12 | [Post-2.6.1 features (version-gated)](#12-post-261-features-version-gated) | Env vars, views with args, submodules, async IDC, unit tests — **not usable until the SDK upgrade lands** |
 
-> **Version tags:** Anything marked `(v2.X+ — project SDK is 2.6.1; don't use until the upgrade lands)` is post-2.6.1 and will not compile or behave as described on this repo's current SDK. Untagged content is valid on 2.6.1.
-
 ---
 
 ## Core Concepts
@@ -397,7 +395,7 @@ indexes: [{ name: 'message_room_id_idx_btree', accessor: 'room_id', ... }]
 **Client-side table names:**
 - Check generated `module_bindings/index.ts` (`tablesSchema` keys) for exact handle names
 - **2.6.1 (current):** handles are the server accessor verbatim — tables PascalCase (`conn.db.User`, `tables.HsrCharacter`), views snake_case (`conn.db.view_my_profile`)
-- **v2.7.0+ (PR #5286 — project SDK is 2.6.1; don't use until the upgrade lands):** codegen camelCases handles (`conn.db.user`, `tables.hsrCharacter`, `conn.db.viewMyProfile`) and keeps the old spellings as **deprecated aliases**, so existing call sites keep compiling. Code that enumerates `conn.db` / `tables` (`Object.keys`, `for...in`) will see both names. Canonical SQL names (`'view_my_profile'`) are unchanged.
+- **v2.7.0+ (PR #5286):** codegen camelCases handles (`conn.db.user`, `tables.hsrCharacter`, `conn.db.viewMyProfile`) and keeps the old spellings as **deprecated aliases**, so existing call sites keep compiling. Code that enumerates `conn.db` / `tables` (`Object.keys`, `for...in`) will see both names. Canonical SQL names (`'view_my_profile'`) are unchanged.
 
 ### Filter vs Find
 ```typescript
@@ -433,7 +431,7 @@ ctx.db.TournamentParticipant.by_tournament_and_user.filter({ tournamentId: tid, 
 
 // ❌ Single value on multi-column index — PANIC on 2.6.1 ("serializeTerm is not a function")
 ctx.db.TournamentParticipant.by_tournament_and_user.filter(tid); // WRONG on 2.6.1
-// v2.7.0+ (PR #5428 — project SDK is 2.6.1; don't use until the upgrade lands): a bare leading value
+// v2.7.0+ (PR #5428): a bare leading value
 // is a valid one-column PREFIX scan — returns all rows for `tid`. Composite range scans
 // (prefix + trailing Range) were also broken until v2.8.0 (PR #5479).
 
@@ -544,7 +542,7 @@ spacetimedb.clientConnected((ctx) => { /* ... */ });
 | `ctx.newUuidV4()` / `ctx.newUuidV7()` | Deterministic UUIDs |
 | `ctx.senderAuth` | `AuthCtx` — see SKILL.md "AuthCtx applicability" (`isInternal` is always `false` on 2.6.1) |
 
-`ctx.random.shuffle(array)` (in-place) is **v2.13.0+ — project SDK is 2.6.1; don't use until the upgrade lands.**
+`ctx.random.shuffle(array)` (in-place) is **v2.13.0+**.
 
 ### Snake_case to camelCase conversion
 - Server: `export const do_something = spacetimedb.reducer(...)` — name from export
@@ -595,7 +593,7 @@ ctx.db.cleanupJob.scheduledId.delete(jobId);
 
 Upstream writes the forward reference as `scheduled: (): any => run_cleanup` — the cast is needed because the forward reference defeats type inference. When the table and reducer live in different files, this repo uses the `export let _reducer: any` + setter pattern (see SKILL.md "TypeScript patterns") to avoid a circular import.
 
-**`onSchedule` (v2.7.0+, PR #5435 — project SDK is 2.6.1; don't use until the upgrade lands):** the binding moves onto the reducer (or a `t.unit()`-returning procedure), so the table no longer references it and table/reducer can sit in separate files without a cycle — this would retire the `export let` workaround:
+**`onSchedule` (v2.7.0+, PR #5435):** the binding moves onto the reducer (or a `t.unit()`-returning procedure), so the table no longer references it and table/reducer can sit in separate files without a cycle — this would retire the `export let` workaround:
 ```typescript
 const cleanupJob = table({ name: 'cleanup_job' }, {
   scheduledId: t.u64().primaryKey().autoInc(),
@@ -1133,7 +1131,7 @@ spacetimedb.procedure({ url: t.string() }, t.unit(), (ctx, { url }) => {
 ### Procedure timeouts (HTTP calls)
 Default timeout: **30s**. Maximum ceiling: **180s** (3 minutes). These limits apply to `ctx.http.fetch()` calls within procedures. Sufficient for LLM API calls and most external services.
 
-**Server-side outbound-HTTP changes (apply on maincloud regardless of SDK):** v2.10.2 (#5698) transparently advertises/decodes gzip + Brotli — don't hand-roll `Accept-Encoding` + decompression; v2.12.0 (#6012) negotiates HTTP/2 when the remote supports it. **v2.13.0 SDK fix (#6140 — project SDK is 2.6.1):** on 2.6.1, TS request/response header values are split at commas (breaks webhook signatures, HTTP dates, cookies with `Expires`) and nonstandard status codes throw — work around or upgrade.
+**Server-side outbound-HTTP changes (apply on maincloud regardless of SDK):** v2.10.2 (#5698) transparently advertises/decodes gzip + Brotli — don't hand-roll `Accept-Encoding` + decompression; v2.12.0 (#6012) negotiates HTTP/2 when the remote supports it. **v2.13.0 SDK fix (#6140):** before 2.13, TS request/response header values were split at commas (breaking webhook signatures, HTTP dates, cookies with `Expires`) and nonstandard status codes threw. Fixed on this repo's 2.14.1.
 
 ### Key differences from reducers
 | Reducers | Procedures |
