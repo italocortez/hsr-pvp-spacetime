@@ -1,0 +1,13 @@
+{
+  "_comment": "Default AccountRatingConfig values seeded by admin_seed_rating_config. Single-row table (PK id=1). maxPossible is computed at seed time from the current character pool — not a static default.",
+  "id": 1,
+  "verticalWeight": 0.4,
+  "horizontalWeight": 0.6,
+  "compression": 0.2,
+  "roleExponentDps": 2.0,
+  "roleExponentSupport": 1.3,
+  "roleExponentSustain": 1.0,
+  "archetypeThreshold": 3.0,
+  "scale": 1000.0,
+  "maxPossible": "(computed: theoretical max combined score for all chars at E6)"
+}

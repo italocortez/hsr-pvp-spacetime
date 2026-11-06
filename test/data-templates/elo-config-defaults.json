@@ -1,0 +1,13 @@
+{
+  "_comment": "Default EloConfig values seeded by admin_seed_elo_config. Single-row table (PK id=1).",
+  "id": 1,
+  "kFactorNew": 40,
+  "kFactorMid": 20,
+  "kFactorVet": 10,
+  "newThreshold": 20,
+  "midThreshold": 100,
+  "initialRating": 1000,
+  "sizeBonus": 150,
+  "spreadDivisor": 2,
+  "maxAccountBonus": 200
+}

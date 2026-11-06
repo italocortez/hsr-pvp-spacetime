@@ -1,0 +1,35 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+web/dist/
+spacetimedb/dist/
+.vercel/
+*.tsbuildinfo
+coverage/
+
+# env (never committed; agents read key names only, never values)
+.env
+.env*.local
+
+# scratch (A10): plans, session notes, logs, tmp, backups
+notes/
+tmp/
+backups/
+*.log
+
+# legacy raw game data (canonical data lives in data/seed/)
+test/data/
+
+# playwright-cli
+.playwright/
+.playwright-cli/
+
+# claude local state
+.claude/settings.local.json
+.claude/worktrees/
+.mcp.json
+
+# os
+.DS_Store

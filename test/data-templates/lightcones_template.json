@@ -1,0 +1,55 @@
+[
+  {
+    "name": "adreamscentedinwheat",
+    "display_name": "A Dream Scented in Wheat",
+    "aliases": [
+      "adreamscentedinwheat"
+    ],
+    "rarity": 4,
+    "path": "erudition",
+    "image_url": "https://example.com/adreamscentedinwheat.png",
+    "positioning": {
+      "width": 120,
+      "x": -48,
+      "y": -32
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": { "S1": 1.5, "S2": 1.5, "S3": 1.5, "S4": 1.5, "S5": 1.5 }
+      },
+      "apocalyptic_shadow": {
+        "classic": { "S1": 1.5, "S2": 1.5, "S3": 1.5, "S4": 1.5, "S5": 1.5 }
+      },
+      "anomaly_arbitration": {
+        "classic": { "S1": 1.5, "S2": 1.5, "S3": 1.5, "S4": 1.5, "S5": 1.5 }
+      }
+    }
+  },
+  {
+    "name": "cornucopia",
+    "display_name": "Cornucopia",
+    "aliases": [
+      "cornucopia"
+    ],
+    "rarity": 3,
+    "path": "abundance",
+    "image_url": "https://example.com/cornucopia.png",
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": { "S1": 0.5, "S2": 0.5, "S3": 0.5, "S4": 0.5, "S5": 0.5 },
+        "auction": { "S1": 5, "S2": 5, "S3": 5, "S4": 5, "S5": 5 }
+      },
+      "apocalyptic_shadow": {
+        "auction": { "S1": 5, "S2": 5, "S3": 5, "S4": 5, "S5": 5 }
+      },
+      "anomaly_arbitration": {}
+    }
+  }
+]

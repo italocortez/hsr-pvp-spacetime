@@ -1,0 +1,22 @@
+[
+  {
+    "source_name": "cerydra",
+    "target_name": "anaxa",
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos":     { "classic": { "modifier": 3.0 }, "auction": { "modifier": 0.0 } },
+      "apocalyptic_shadow":  { "classic": { "modifier": 3.0 }, "auction": { "modifier": 0.0 } },
+      "anomaly_arbitration": { "classic": { "modifier": 3.0 }, "auction": { "modifier": 0.0 } }
+    }
+  },
+  {
+    "source_name": "feixiao",
+    "target_name": "moze",
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos":     { "classic": { "modifier": 4.0 }, "auction": { "modifier": 0.0 } },
+      "apocalyptic_shadow":  { "classic": { "modifier": 4.0 }, "auction": { "modifier": 0.0 } },
+      "anomaly_arbitration": { "classic": { "modifier": 4.0 }, "auction": { "modifier": 0.0 } }
+    }
+  }
+]

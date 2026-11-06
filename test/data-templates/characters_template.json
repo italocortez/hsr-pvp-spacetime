@@ -1,0 +1,82 @@
+[
+  {
+    "name": "acheron",
+    "display_name": "Acheron",
+    "aliases": [
+      "acheron"
+    ],
+    "rarity": 5,
+    "path": "nihility",
+    "element": "lightning",
+    "role": "dps",
+    "archetype": [
+      "Debuff",
+      "Ultimate DMG"
+    ],
+    "version_released": 2.1,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmy0SD4Bx0IkdESXzc2H3gZ1spCA9DTWBmMito",
+    "skel_url": "https://zmvtaeh9bl.ufs.sh/f/examplestring1",
+    "atlas_url": "https://zmvtaeh9bl.ufs.sh/f/examplestring2",
+    "atlas_img_url": [
+      "https://zmvtaeh9bl.ufs.sh/f/examplestring3"
+    ],
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": { "E0": 7, "E1": 8, "E2": 11, "E3": 11.5, "E4": 12.5, "E5": 13, "E6": 15 }
+      },
+      "apocalyptic_shadow": {
+        "classic": { "E0": 7, "E1": 8, "E2": 11, "E3": 11.5, "E4": 12.5, "E5": 13, "E6": 15 }
+      },
+      "anomaly_arbitration": {
+        "classic": { "E0": 7, "E1": 8, "E2": 11, "E3": 11.5, "E4": 12.5, "E5": 13, "E6": 15 }
+      }
+    }
+  },
+  {
+    "name": "aglaea",
+    "display_name": "Aglaea",
+    "aliases": [
+      "aglaea"
+    ],
+    "rarity": 5,
+    "path": "remembrance",
+    "element": "lightning",
+    "role": "dps",
+    "archetype": [
+      "Summon",
+      "Energy",
+      "Basic ATK DMG"
+    ],
+    "version_released": 3,
+    "treat_as_version": 0,
+    "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm5lExNpedYHdGFs9jtel6ZUbgXJT7Ck2aMP8I",
+    "skel_url": "https://zmvtaeh9bl.ufs.sh/f/examplestring4",
+    "atlas_url": "https://zmvtaeh9bl.ufs.sh/f/examplestring5",
+    "atlas_img_url": [
+      "https://zmvtaeh9bl.ufs.sh/f/examplestring6"
+    ],
+    "positioning": {
+      "width": 0,
+      "x": 0,
+      "y": 0
+    },
+    "cost": {
+      "cost_set_id": 0,
+      "memory_of_chaos": {
+        "classic": { "E0": 6, "E1": 10, "E2": 12, "E3": 12.5, "E4": 13.5, "E5": 14, "E6": 17 },
+        "auction": { "E0": 60, "E1": 100, "E2": 120, "E3": 125, "E4": 135, "E5": 140, "E6": 170 }
+      },
+      "apocalyptic_shadow": {
+        "auction": { "E0": 60, "E1": 100, "E2": 120, "E3": 125, "E4": 135, "E5": 140, "E6": 170 }
+      },
+      "anomaly_arbitration": {}
+    }
+  }
+]
