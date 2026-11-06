@@ -5,16 +5,10 @@ import { insertWithAudit, updateWithAudit } from './helpers/auditHelpers';
 import { transferCaptain, transferReferee, transferHost } from './helpers/flagTransferHelpers';
 import { checkProviderBan, DISCORD_BAN_TYPE } from './helpers/banHelper';
 import { slotToTeamSide } from './helpers/lobbyHelpers';
-import { SHARED_BUILD_SPIKE } from '@shared/build-spike';
 
 // Private auth tables — imported for schema registration
 import './tables/userPrivate';
 import './tables/banRecord';
-
-// M1 build spike (MIGRATION-PLAN §2.2): a value import from shared/ that the bundle must keep.
-// A plain `const x = SHARED_BUILD_SPIKE; void x;` is tree-shaken by the CLI's bundler, so the
-// value is written to a global instead. Removed in M2 with the spike.
-(globalThis as { __sharedBuildSpike?: string }).__sharedBuildSpike = SHARED_BUILD_SPIKE;
 
 // Phase 15 D-01/D-02: domain view barrel — each file holds views that match the `tables/` layout.
 // Every view must be named-re-exported here so [registerExport] fires during module init
@@ -75,7 +69,7 @@ export {
 export { broadcast_cursor } from './reducers/cursor';
 export { login_as_guest } from './reducers/auth';
 export { delete_guest_account, update_display_name, update_username, update_avatar } from './reducers/profile';
-export { register_server, server_link_provider, server_set_role, server_delete_user, server_set_datetime, server_set_online, server_set_mmr, server_nuke_test_data } from './reducers/server';
+export { server_register_delegate, server_revoke_delegate, server_link_provider, server_set_role, server_delete_user, server_set_datetime, server_set_online, server_set_mmr, server_nuke_test_data } from './reducers/server';
 export { admin_ban_user, admin_unban_user } from './reducers/banAdmin';
 export { admin_delete_row, admin_bulk_upsert, admin_update_user } from './reducers/admin';
 export { admin_update_elo_config, admin_seed_elo_config } from './reducers/eloAdmin';
@@ -121,6 +115,50 @@ export { select_match_account, deselect_match_account } from './reducers/account
 // module's exports. A bare `spacetimedb.clientConnected(...)` call is silently dropped
 // (no error, no lifecycle reducer in the schema). Export names follow the snake_case
 // reducer convention.
+// init runs on the first publish and on every --delete-data republish, never on a plain republish.
+// Its sender is the publisher (the database owner). ACCESS-SECURITY-OPS §C.4: register the owner and
+// create the SYSTEM user. This replaces the old first-come server registration reducer (removed in M2).
+export const init = spacetimedb.init((ctx) => {
+  // iter() required: checking table emptiness (no count/isEmpty API; the table holds 1-2 rows).
+  if ([...ctx.db.ServerIdentity.iter()].length === 0) {
+    ctx.db.ServerIdentity.insert({
+      identity: ctx.sender,
+      kind: { tag: 'Owner' },
+      label: 'owner',
+      registeredAt: ctx.timestamp,
+    });
+
+    // The SYSTEM user: the first user in the database. User.id is autoInc, so id: 0 asks for the
+    // next value; SYSTEM_USER_ID (0) is only the audit sentinel, never the row id. Reducers find the
+    // row by its unique username 'SYSTEM'.
+    const systemUser = ctx.db.User.insert(insertWithAudit(ctx, {
+      id: 0,
+      username: 'SYSTEM',
+      displayName: 'SYSTEM',
+      isGuest: false,
+      isOnline: false,
+      lastLoginAt: ctx.timestamp,
+      role: { tag: 'Admin' },
+      hasDiscordLinked: false,
+      avatarCharacterName: 'march7th',
+      displayedAchievementId: undefined,
+      deletedAt: undefined,
+    }, SYSTEM_USER_ID));
+
+    // Link the owner identity to the SYSTEM user so owner connections pass
+    // getAuthenticatedUser / ensureAdmin checks. Delegates get the same link in server_register_delegate.
+    ctx.db.UserIdentity.insert(insertWithAudit(ctx, {
+      identity: ctx.sender,
+      userId: systemUser.id,
+      lastSeenAt: ctx.timestamp,
+    }, SYSTEM_USER_ID));
+  }
+
+  // Arrive with their tables in later steps (idempotent, run on every init):
+  //   seedSystemLobbyPreset(ctx);   // S5 (A33a): system lobby preset owned by SYSTEM
+  //   seedAbuseConfigDefaults(ctx); // S6 (D-B5): abuse-config singleton defaults
+});
+
 export const client_connected = spacetimedb.clientConnected((ctx) => {
   console.log(`Client connected: ${ctx.sender.toHexString()}`);
 

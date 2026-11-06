@@ -336,7 +336,7 @@ export const admin_delete_row = spacetimedb.reducer(
 //   4. Insert branch retains its default-injection logic (per D-12); partial-update only
 //      kicks in when an existing row is found.
 //
-// Callers: `scripts/seed-data.ts`, `test/shared/seed-data.ts`, future admin UI editors.
+// Callers: `scripts/stdb/seed.ts` / `bootstrap.ts`, future admin UI editors.
 export const admin_bulk_upsert = spacetimedb.reducer(
     { tableName: t.string(), jsonData: t.string() },
     (ctx, { tableName, jsonData }) => {

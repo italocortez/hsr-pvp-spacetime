@@ -134,7 +134,6 @@ import PublishCostSetReducer from "./publish_cost_set_reducer";
 import ReclaimRefereeReducer from "./reclaim_referee_reducer";
 import RecordGameScoresReducer from "./record_game_scores_reducer";
 import RegisterForTournamentReducer from "./register_for_tournament_reducer";
-import RegisterServerReducer from "./register_server_reducer";
 import RejectTeamRequestReducer from "./reject_team_request_reducer";
 import RemoveAchievementCriteriaReducer from "./remove_achievement_criteria_reducer";
 import RemoveInviteReducer from "./remove_invite_reducer";
@@ -153,6 +152,8 @@ import SendChatMessageReducer from "./send_chat_message_reducer";
 import ServerDeleteUserReducer from "./server_delete_user_reducer";
 import ServerLinkProviderReducer from "./server_link_provider_reducer";
 import ServerNukeTestDataReducer from "./server_nuke_test_data_reducer";
+import ServerRegisterDelegateReducer from "./server_register_delegate_reducer";
+import ServerRevokeDelegateReducer from "./server_revoke_delegate_reducer";
 import ServerSetDatetimeReducer from "./server_set_datetime_reducer";
 import ServerSetMmrReducer from "./server_set_mmr_reducer";
 import ServerSetOnlineReducer from "./server_set_online_reducer";
@@ -1396,7 +1397,6 @@ const reducersSchema = __reducers(
   __reducerSchema("reclaim_referee", ReclaimRefereeReducer),
   __reducerSchema("record_game_scores", RecordGameScoresReducer),
   __reducerSchema("register_for_tournament", RegisterForTournamentReducer),
-  __reducerSchema("register_server", RegisterServerReducer),
   __reducerSchema("reject_team_request", RejectTeamRequestReducer),
   __reducerSchema("remove_achievement_criteria", RemoveAchievementCriteriaReducer),
   __reducerSchema("remove_invite", RemoveInviteReducer),
@@ -1415,6 +1415,8 @@ const reducersSchema = __reducers(
   __reducerSchema("server_delete_user", ServerDeleteUserReducer),
   __reducerSchema("server_link_provider", ServerLinkProviderReducer),
   __reducerSchema("server_nuke_test_data", ServerNukeTestDataReducer),
+  __reducerSchema("server_register_delegate", ServerRegisterDelegateReducer),
+  __reducerSchema("server_revoke_delegate", ServerRevokeDelegateReducer),
   __reducerSchema("server_set_datetime", ServerSetDatetimeReducer),
   __reducerSchema("server_set_mmr", ServerSetMmrReducer),
   __reducerSchema("server_set_online", ServerSetOnlineReducer),

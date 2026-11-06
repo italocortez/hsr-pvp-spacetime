@@ -4,7 +4,7 @@
  * Two harness types:
  *   - createTestHarness(): Guest user — for permission guard tests
  *   - createVerifiedTestHarness(): Verified user — for roster CRUD tests
- *     (requires SPACETIMEDB_SERVER_TOKEN env var)
+ *     (requires STDB_SERVER_TOKEN in .env.test.local)
  *
  * Reducer calls return Promises:
  *   - Resolves on success (committed)
@@ -12,13 +12,14 @@
  */
 
 import { DbConnection } from '@/src/module_bindings';
+import { readArgs } from '../../shared/stdb-targets';
+import { backendEnv, serverToken } from './env';
 
-// Default to maincloud, overridable via env.
-// Read lazily via getters so standalone scripts can parse .env.local
-// before first use (static imports evaluate before top-level side effects).
-function getUri() { return process.env.SPACETIMEDB_URI || 'wss://maincloud.spacetimedb.com'; }
-function getDb() { return process.env.SPACETIMEDB_DB || process.env.SPACETIMEDB_DB_NAME || process.env.PUBLIC_SPACETIMEDB_DB_NAME || 'hsr-spacetimedb-test1'; }
-function getServerToken() { return process.env.SPACETIMEDB_SERVER_TOKEN || ''; }
+// Resolved lazily through the shared/stdb-targets.ts resolver (STDB_TARGET=test + .env.test.local),
+// so the token rotated by globalSetup's bootstrap is picked up on the next call.
+function getUri() { return backendEnv().host; }
+function getDb() { return backendEnv().dbName; }
+function getServerToken() { return serverToken(); }
 
 export interface TestHarness {
   conn: DbConnection;
@@ -47,14 +48,14 @@ export async function createTestHarness(): Promise<TestHarness> {
 
 /**
  * Creates a connected test harness with a verified (non-guest) user.
- * Requires SPACETIMEDB_SERVER_TOKEN env var.
+ * Requires STDB_SERVER_TOKEN in .env.test.local.
  * Calls server_link_provider to upgrade the guest to a verified user.
  */
 export async function createVerifiedTestHarness(): Promise<TestHarness> {
   if (!hasServerToken()) {
     throw new Error(
-      'SPACETIMEDB_SERVER_TOKEN required for verified test harness. ' +
-      'Set it in .env.local (written by scripts/post-publish.ts)'
+      'STDB_SERVER_TOKEN required for verified test harness. ' +
+      'It lives in .env.test.local (written by npm run stdb:bootstrap:test)'
     );
   }
   return createHarnessInternal({ verify: true });
@@ -238,8 +239,8 @@ export function sleep(ms: number): Promise<void> {
  */
 export async function queryPrivateTable(sql: string): Promise<Record<string, string>[]> {
   const { execFileSync } = await import('child_process');
-  const db = getDb();
-  const raw = execFileSync('spacetime', ['sql', db, sql], {
+  // Explicit name + --server maincloud --no-config (never the spacetime.json default).
+  const raw = execFileSync('spacetime', readArgs(backendEnv().target, 'sql', [sql]), {
     encoding: 'utf-8',
     timeout: 15000,
   });

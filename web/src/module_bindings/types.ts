@@ -1548,9 +1548,20 @@ export type Season = __Infer<typeof Season>;
 
 export const ServerIdentity = __t.object("ServerIdentity", {
   identity: __t.identity(),
+  get kind() {
+    return ServerIdentityKind;
+  },
+  label: __t.string(),
   registeredAt: __t.timestamp(),
 });
 export type ServerIdentity = __Infer<typeof ServerIdentity>;
+
+// The tagged union or sum type for the algebraic type `ServerIdentityKind`.
+export const ServerIdentityKind = __t.enum("ServerIdentityKind", {
+  Owner: __t.unit(),
+  Delegate: __t.unit(),
+});
+export type ServerIdentityKind = __Infer<typeof ServerIdentityKind>;
 
 // The tagged union or sum type for the algebraic type `StepPayload`.
 export const StepPayload = __t.enum("StepPayload", {

@@ -16,7 +16,7 @@ const ENERGY = {
   PER_1M_REDUCER_CALLS: 840,
   PER_10GB_EGRESS: 2000,
   PER_1GB_STORAGE: 2592,
-  MONTHLY_BUDGET: 90000,
+  MONTHLY_BUDGET: 100000,
 };
 
 // ─── Type Sizes (bytes) ─────────────────────────────────────────────────────

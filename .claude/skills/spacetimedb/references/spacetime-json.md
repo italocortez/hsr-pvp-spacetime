@@ -105,6 +105,7 @@ Use `--no-config` to ignore `spacetime.json` entirely.
 - Pass the name **and** `--no-config`. `call`, `subscribe` and `describe` never fall back: naming another database errors with "not in the config file… pass --no-config". `sql` falls back only when given 2 or more positional arguments. Source: CLI `crates/cli/src/subcommands/db_arg_resolution.rs` (PR #4358).
 - Verified 2026-11-06: `spacetime describe hsr-spacetimedb-test1 --json` from this repo failed with "Invalid describe arguments" while `spacetime.json` named another database. `spacetime describe hsr-spacetimedb-test1 --json --no-config` worked.
 - Scripts that target test or prod should always pass both explicitly, never rely on the config default.
+- This repo: `spacetime.json` = `{ database: hsr-spacetimedb-test1, server: maincloud, module-path: ./spacetimedb }` (safe interactive default). `scripts/stdb/*.ts` build every target-bound command with `publishArgs` / `readArgs` from `shared/stdb-targets.ts` (explicit name + `--server maincloud --no-config`). There is no `spacetime.prod.json`.
 
 ---
 

@@ -10,11 +10,22 @@
         "spacetimedb"
     ],
     "scripts": {
-        "typecheck": "tsc -p spacetimedb --noEmit && tsc -p test",
+        "typecheck": "tsc -p spacetimedb --noEmit && tsc -p test && tsc -p tsconfig.json",
         "lint": "biome check .",
         "test": "vitest run --config test/vitest.config.ts",
         "test:watch": "vitest --config test/vitest.config.ts",
-        "test:integration": "vitest run --config test/vitest.integration.config.ts",
+        "test:integration": "tsx scripts/stdb/test-integration.ts --target test",
+        "stdb:publish:test": "tsx scripts/stdb/publish.ts --target test",
+        "stdb:publish:test:clear": "tsx scripts/stdb/publish.ts --target test --clear",
+        "stdb:publish:prod": "tsx scripts/stdb/publish.ts --target prod",
+        "stdb:bootstrap:test": "tsx scripts/stdb/bootstrap.ts --target test",
+        "stdb:bootstrap:prod": "tsx scripts/stdb/bootstrap.ts --target prod",
+        "stdb:seed:test": "tsx scripts/stdb/seed.ts --target test",
+        "stdb:seed:prod": "tsx scripts/stdb/seed.ts --target prod",
+        "stdb:describe:test": "tsx scripts/stdb/describe.ts --target test",
+        "stdb:describe:prod": "tsx scripts/stdb/describe.ts --target prod",
+        "stdb:generate": "tsx scripts/stdb/generate.ts",
+        "stdb:manage-user": "tsx scripts/stdb/manage-user.ts",
         "energy": "node tools/energy-model.js"
     },
     "devDependencies": {

@@ -1,5 +1,6 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { createTestHarness, hasServerToken, TestHarness } from '../../shared/connection';
+import { backendEnv } from '../../shared/env';
 import { DbConnection } from '@/src/module_bindings';
 
 /**
@@ -30,12 +31,12 @@ describe('Auth Subscription Gate (Phase 15.5 S-05)', () => {
     // Stage 2 never fires because stage2Gate is false (no currentUser, no token, no cookie).
     // The client's local cache for the User table is therefore empty.
     //
-    // Does NOT require SPACETIMEDB_SERVER_TOKEN — connects anonymously.
+    // Does NOT require STDB_SERVER_TOKEN — connects anonymously.
 
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('Timeout waiting for onApplied (20s)')), 20000);
-      const uri = process.env.SPACETIMEDB_URI || 'wss://maincloud.spacetimedb.com';
-      const db = process.env.SPACETIMEDB_DB || process.env.SPACETIMEDB_DB_NAME || process.env.PUBLIC_SPACETIMEDB_DB_NAME || 'hsr-spacetimedb-test1';
+      const uri = backendEnv().host;
+      const db = backendEnv().dbName;
 
       DbConnection.builder()
         .withUri(uri)

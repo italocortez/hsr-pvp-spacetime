@@ -216,3 +216,10 @@ export const BracketSide = t.enum('BracketSide', {
 export const BanType = t.enum('BanType', {
     DiscordId: t.unit(),
 });
+
+// ServerIdentity row kind (M2, ACCESS-SECURITY-OPS §C.4): the publisher is registered as Owner by `init`;
+// the owner registers Delegate identities (e.g. the Vercel auth function) with server_register_delegate.
+export const ServerIdentityKind = t.enum('ServerIdentityKind', {
+    Owner: t.unit(),
+    Delegate: t.unit(),
+});

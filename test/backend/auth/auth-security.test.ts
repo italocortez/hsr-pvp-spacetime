@@ -10,6 +10,7 @@ import {
   TestHarness,
 } from '../../shared/connection';
 import { promoteToRole } from '../../shared/helpers/promoteUser';
+import { backendEnv } from '../../shared/env';
 import { DbConnection } from '@/src/module_bindings';
 
 describe('Auth Security Hardening', () => {
@@ -94,9 +95,9 @@ describe('Auth Security Hardening', () => {
       // Server connection for serverLinkProvider call later
       const serverConn = await new Promise<any>((resolve, reject) => {
         DbConnection.builder()
-          .withUri(process.env.SPACETIMEDB_URI || 'wss://maincloud.spacetimedb.com')
-          .withDatabaseName(process.env.SPACETIMEDB_DB || 'hsr-spacetimedb-test1')
-          .withToken(process.env.SPACETIMEDB_SERVER_TOKEN!)
+          .withUri(backendEnv().host)
+          .withDatabaseName(backendEnv().dbName)
+          .withToken(backendEnv().serverToken!)
           .withConfirmedReads(false)
           .onConnect((conn: any) => resolve(conn))
           .onConnectError((_: any, err: any) => reject(new Error(`Server conn failed: ${err}`)))

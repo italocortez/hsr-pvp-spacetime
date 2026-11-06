@@ -7,7 +7,7 @@ description: "Build and debug SpacetimeDB TypeScript modules and React clients, 
 
 This skill guides you through building correct SpacetimeDB applications. SpacetimeDB has many API pitfalls that LLMs commonly hallucinate — this skill exists to prevent those mistakes and keep you on the correct APIs.
 
-## This is a maincloud SpacetimeDB project. Connection: `wss://maincloud.spacetimedb.com` / database name in `spacetime.json`. No local server — do not use `spacetime start`. `spacetime call` uses the CLI identity (not an app user) so avoid it for testing authenticated reducers.
+## This is a maincloud SpacetimeDB project. Connection: `wss://maincloud.spacetimedb.com` / database names in `shared/stdb-targets.ts` (`test` = `hsr-spacetimedb-test1`, `prod` = `hsr-spacetimedb-prod`). No local server — do not use `spacetime start`. `spacetime call` uses the CLI identity (not an app user) so avoid it for testing authenticated reducers.
 
 **Maintaining this skill:** When updating any pattern or API behavior in this file: (1) check whether the content already exists before adding — grep SKILL.md and references to avoid duplication, (2) check whether the same topic appears in the reference files (especially `references/api-guide.md` — see its table of contents) and update those too. Stale or duplicated references are worse than none — they teach agents the wrong pattern or waste context.
 
@@ -460,7 +460,7 @@ The SpacetimeDB v2.2.0 engine itself rejects external WebSocket calls to schedul
 
 | Project gate | Concept | Replace with `AuthCtx`? |
 |---|---|---|
-| `requireServer(ctx)` | "Identity matches registered SERVER_TOKEN row" | NO — `post-publish.ts` is an external WebSocket client; `AuthCtx.isInternal` would always be `false` for it (and is broken in v2.2.0 anyway). The SERVER_TOKEN/`ServerIdentity` row check is orthogonal. |
+| `requireServer(ctx)` | "Caller has a `ServerIdentity` row (Owner from `init`, or a Delegate)" | NO — `scripts/stdb/bootstrap.ts` and the auth function are external WebSocket clients; `AuthCtx.isInternal` would always be `false` for it (and is broken in v2.2.0 anyway). The SERVER_TOKEN/`ServerIdentity` row check is orthogonal. |
 | `getAuthenticatedUser(ctx)` | "Resolve `ctx.sender → UserIdentity → User → role.tag`" | NO — project auth model is not JWT-claims-based; `AuthCtx.jwt` is for native OIDC, which the project intentionally does not use (guest-play UX, see `notes/v09-frontend-subscription-strategy.md`). |
 | `ensureModerator/Admin(ctx)` | Role-tag-based admin gates | NO — same reason as above. |
 
@@ -584,8 +584,8 @@ When implementing a feature that spans backend and client:
 
 1. **Backend:** Define table(s) in `tables/` folder (one file per table), then import in `schema.ts`
 2. **Backend:** Define reducer(s) in `reducers/` folder (grouped by domain), then re-export in `index.ts`
-3. **Backend:** Publish module (`spacetime publish`)
-4. **Backend:** Generate bindings — use the CLI path, `npm run spacetime:generate` (this repo has **no local Cargo workspace / `gen-bindings` crate**, so the cargo-based `npm run generate` script fails or is stale; `spacetime:generate` always uses the currently-installed `spacetime` CLI version)
+3. **Backend:** Publish module to test (`npm run stdb:publish:test`; prod only via the §C.5 checklist)
+4. **Backend:** Generate bindings — `npm run stdb:generate` (local `spacetime generate` into `web/src/module_bindings`, no database contact), then review `git diff --stat web/src/module_bindings`
 5. **Client:** Subscribe to the table(s)
 6. **Client:** Call the reducer(s) from UI
 7. **Client:** Render data from `useTable(tables.tableName)`
@@ -594,30 +594,32 @@ Common mistake: building backend tables/reducers but forgetting to wire up the c
 
 ## CLI commands
 
-### Connecting to the database
+### Connecting to the database (env scheme, Phase M2)
 
-The database name and server are configured in `spacetime.json` at the project root:
-- `database` — the published database name (use this as `<name>` in all CLI commands)
-- `server` — the target server nickname (e.g. `maincloud`)
-
-**When running CLI commands from the project root**, `spacetime.json` is auto-detected — so you can omit `-s <server>` and sometimes even `<name>`. But always prefer being explicit to avoid confusion.
+Two targets, one vocabulary (ACCESS-SECURITY-OPS §C.2), implemented by `shared/stdb-targets.ts`:
+- Database names are committed constants: `STDB_DATABASES.test = hsr-spacetimedb-test1`, `.prod = hsr-spacetimedb-prod`. Never type them by hand in scripts; use `publishArgs` / `readArgs`.
+- Node-side target: `--target test|prod` on every `scripts/stdb/*.ts` call, or `STDB_TARGET` (the flag wins; neither → fail fast). Browser: `VITE_STDB_TARGET`.
+- Secrets: `STDB_SERVER_TOKEN` (+ `STDB_SERVER_IDENTITY`) in `.env.test.local` / `.env.prod.local`, written by bootstrap. Nothing reads `.env.local`.
+- **Every CLI call names the database and passes `--server maincloud --no-config`.** `spacetime.json` keeps `hsr-spacetimedb-test1` only as the safe interactive default; `call` / `describe` / `subscribe` refuse a database that is not the config's one without `--no-config` (see `references/spacetime-json.md`).
+- Module env: `schema({...}, { env: { STDB_TARGET: t.enum('StdbTarget', ['test', 'prod']) } })`; `publish.ts` spawns the CLI with `STDB_TARGET=<target>` in the **process environment** (the CLI's `--env <name>` selects a `spacetime.<name>.json` file, it does not set a value). On SDK 2.14.1 + TS 7.1 beta `ctx.env.STDB_TARGET` is typed `string`, not the literal union.
 
 ```bash
-# Read the database name from spacetime.json before running any CLI command:
-#   "database": "hsr-spacetimedb-test1"
-#   "server": "maincloud"
+npm run stdb:publish:test            # publish to test1 (runs npm run typecheck first)
+npm run stdb:publish:test:clear      # wipe test1: --delete-data=always --yes=delete-data (test only)
+npm run stdb:publish:prod            # --yes=migrate only; refuses a dirty tree and any wipe flag
+npm run stdb:bootstrap:test          # delegate token -> .env.test.local, seed data/seed/, GC jobs
+npm run stdb:describe:test           # describe <db> --server maincloud --no-config --json
+npm run stdb:generate                # local bindings regeneration
+npm run stdb:manage-user -- --target prod set-role <username> Admin
+# Append -- --dry-run to publish/describe/bootstrap to print the exact command without running it.
 ```
 
 ### Common commands
 
 ```bash
-spacetime publish <name> --module-path <dir>       # Publish module
-spacetime publish <name> --clear-database -y --module-path <dir>  # Clear & republish
-spacetime generate --lang typescript --out-dir <client>/src/module_bindings --module-path <dir>
-spacetime logs <name>                              # View logs
-spacetime logs <name> --level warn                 # Filter by log level (warn and above)
-spacetime sql <name> "SELECT * FROM table_name"    # Query tables via SQL
-spacetime call <name> <reducer_name> [args...]     # Call a reducer
+spacetime logs <name> --server maincloud --no-config                 # View logs
+spacetime sql <name> "SELECT * FROM table_name" --server maincloud --no-config
+spacetime call <name> <reducer_name> [args...] --server maincloud --no-config  # CLI identity = the Owner
 ```
 
 **v2.5.0 CLI changes:** `spacetime publish --delete-data` no longer forces a positional db name — it falls back to the name in `spacetime.json` if omitted. `spacetime call` now accepts **hex strings for `Identity` params** (e.g. `spacetime call <name> <reducer> <hex-identity>`) — no more manual byte-array construction for identity args.
@@ -626,16 +628,11 @@ spacetime call <name> <reducer_name> [args...]     # Call a reducer
 
 **v2.6.1 SQL parser — no constant projections (verified live 2026-07-04):** the `spacetime sql` parser rejects literal/constant SELECT projections — `SELECT 1 AS ok` fails with `Error: Unsupported projection expression: 1` (HTTP 400). A connectivity smoke-test must project a real column from a real table, e.g. `spacetime sql <name> "SELECT COUNT(*) AS n FROM user"`, not `SELECT 1`. (Behavior change in the 2.3–2.6 line; caught during the Phase 16.5 upgrade.)
 
-### Publishing: use :migrate for reviewed schema deltas
+### Publishing: `--yes=migrate` only for reviewed schema deltas
 
-`npm run spacetime:publish` stays interactive — the destructive-migration confirm dialog is a safety feature, not friction. Use `npm run spacetime:publish:migrate` (v2.2.0+, PR #4885) when you have already reviewed the schema delta in a prior diff.
+`npm run stdb:publish:test` stays interactive — the destructive-migration confirm dialog is a safety feature, not friction. `npm run stdb:publish:prod` always passes `--yes=migrate` (v2.2.0+, PR #4885) and nothing else, so it runs only after the §C.5 schema-delta gate (`stdb:describe:prod` vs `stdb:describe:test`).
 
-```bash
-npm run spacetime:publish           # Interactive: confirms destructive migrations.
-npm run spacetime:publish:migrate   # Auto-confirms ONLY the migration prompt (--yes=migrate).
-```
-
-The `--yes=migrate` value must attach with `=` (per `spacetime publish --help`). Other `--yes` values (`break-clients`, `delete-data`, `remote`, `skip-login`) remain interactive in this script — opt them in explicitly only when the situation warrants.
+The `--yes=migrate` value must attach with `=` (per `spacetime publish --help`). Other `--yes` values (`break-clients`, `delete-data`, `remote`, `skip-login`) are never passed for prod; `assertNoForbiddenProdFlags` refuses them.
 
 Related v2.2.0 informational notes:
 - `.withCompression('brotli')` exists on `DbConnection.builder()` as an alternative to gzip; project has not adopted it (browser-support floor too high for current users; realistic ratio gain on BSATN binary frames is 5-15% — not worth the failure mode on older browsers).
@@ -752,8 +749,8 @@ lastModifiedDate: t.timestamp(),
 - Each table defines its own audit columns inline — do NOT import/spread a shared object. SpacetimeDB's `table()` resolves column types at call time, so if tables share a column definition object, a change to that object silently alters every table that uses it — causing unintended schema migrations or `--clear-database` requirements.
 - Use `auditInsert(ctx, userId)` from `helpers/auditColumns.ts` when inserting a new row
 - Use `auditUpdate(ctx, existingRow, userId)` from `helpers/auditColumns.ts` when updating a row — this preserves original `createdById`/`createdDate`
-- `SYSTEM_USER_ID = 0` is used for bootstrap operations (e.g. `register_server` creating the SYSTEM user) and scheduled reducers
-- The SYSTEM user (discordId = `"1"`, role = Admin) is created during `register_server` as the first user
+- `SYSTEM_USER_ID = 0` is the audit sentinel for bootstrap operations (e.g. `init` creating the SYSTEM user) and scheduled reducers; it is NOT the SYSTEM row's id (User.id is autoInc; find the row by `username = 'SYSTEM'`)
+- The SYSTEM user (role = Admin) is created by `init` as the first user; the Owner and every Delegate server identity are linked to it through `UserIdentity`
 - When upserting (delete + re-insert for composite PK tables), preserve audit fields from the deleted row: `...(existing ? auditUpdate(ctx, existing, userId) : auditInsert(ctx, userId))`
 - Admin reducers should capture `const admin = ensureAdmin(ctx)` once at the top and use `admin.id` for all audit fields
 
@@ -879,7 +876,7 @@ A reducer whose writes reach many subscribers costs **writes × subscribers** in
 - **Input bounds:** clamp or reject out-of-range values and cap payload sizes.
 - **Membership and state checks** before inserting.
 
-Example: `broadcast_cursor` (`reducers/cursor.ts`) checks lobby membership but has **no rate limit and no x/y bounds**, as of 2026-11-06. Put tunable thresholds (cursor Hz, spam limits) in a config singleton row the reducers read, like `elo_config`, so they change without a redeploy. Seed that row in the post-publish bootstrap, not in `init`, which only runs on first publish or a wipe.
+Example: `broadcast_cursor` (`reducers/cursor.ts`) checks lobby membership but has **no rate limit and no x/y bounds**, as of 2026-11-06. Put tunable thresholds (cursor Hz, spam limits) in a config singleton row the reducers read, like `elo_config`, so they change without a redeploy. Seed that row in `scripts/stdb/bootstrap.ts` (or idempotently in `init`, which only runs on first publish or a wipe).
 
 ### Measuring egress in the app (dev-only)
 

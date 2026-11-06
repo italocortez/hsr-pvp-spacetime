@@ -131,7 +131,7 @@ Transactions require durability confirmation before sending updates to clients. 
 For latency-sensitive applications (games, real-time), disable confirmed reads:
 ```typescript
 const builder = DbConnection.builder()
-  .withUri(SPACETIMEDB_URI)
+  .withUri(STDB_HOST)
   .withDatabaseName(MODULE_NAME)
   .withConfirmedReads(false)  // Prioritize speed over consistency
   // ...
@@ -219,7 +219,7 @@ This is a known rough edge on 2.6.1.
 **v2.12.0+ (PR #5927), this repo's baseline since M1:** reconnection is built into `DbConnection`, and the key-remount workaround above is obsolete.
 ```typescript
 const builder = DbConnection.builder()
-  .withUri(SPACETIMEDB_URI)
+  .withUri(STDB_HOST)
   .withDatabaseName(MODULE_NAME)
   .withToken(storedToken)
   .withAutomaticReconnect()                  // optional { minDelayMs (≥500, default 1000), maxDelayMs (≥1000, default 30000) }

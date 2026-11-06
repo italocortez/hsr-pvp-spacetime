@@ -1,4 +1,4 @@
-import { schema } from 'spacetimedb/server';
+import { schema, t } from 'spacetimedb/server';
 import { User } from './tables/user';
 import { UserPrivate } from './tables/userPrivate';
 import { DeletedUser } from './tables/deletedUser';
@@ -228,6 +228,14 @@ const spacetimedb = schema({
     UserDeletionJob,
     LobbyGcJob,
     IdentityGcJob,
+}, {
+    // Module environment (SpacetimeDB 2.12+, D-C1): supplied from the publisher's process environment at
+    // publish time (scripts/stdb/publish.ts spawns the CLI with STDB_TARGET=<target>), preserved across
+    // publishes, cleared by --delete-data. Read as ctx.env.STDB_TARGET ('test' | 'prod'). The test-only
+    // server_* reducers are default-deny: anything but 'test' (including a publish that forgot it) rejects.
+    env: {
+        STDB_TARGET: t.enum('StdbTarget', ['test', 'prod']),
+    },
 });
 
 export default spacetimedb;

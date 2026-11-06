@@ -4,75 +4,89 @@
 
 ## Feature Overview
 
-Bootstrap infrastructure handles the one-time setup of a freshly published SpacetimeDB database — registering the trusted server identity, creating the SYSTEM user, persisting the server token, and seeding game data. The test harness provides reusable connection patterns for integration tests: guest harnesses for permission guard testing and verified harnesses for feature CRUD testing. This contract covers the bootstrap lifecycle and test infrastructure only; individual reducer behaviors are documented in [admin/contract.md](../admin/contract.md) and [auth/contract.md](../auth/contract.md).
+Bootstrap infrastructure handles the setup of a freshly published SpacetimeDB database: the module's `init` registers the publisher as the **Owner** server identity and creates the SYSTEM user; the bootstrap script registers a **Delegate** server identity, persists its token per target, and seeds game data. The test harness provides reusable connection patterns for integration tests: guest harnesses for permission guard testing and verified harnesses for feature CRUD testing. This contract covers the bootstrap lifecycle and test infrastructure only; individual reducer behaviors are documented in [admin/contract.md](../admin/contract.md) and [auth/contract.md](../auth/contract.md).
+
+## Environment Scheme (Phase M2)
+
+One vocabulary in every layer (ACCESS-SECURITY-OPS §C.2), implemented by `shared/stdb-targets.ts`:
+
+| Concept | Name | Notes |
+|---------|------|-------|
+| Target | `test` \| `prod` | The only two values that parse; a missing target throws (no fallback) |
+| Databases | `hsr-spacetimedb-test1` / `hsr-spacetimedb-prod` | Committed constants (`STDB_DATABASES`), not env vars |
+| Node-side target | `--target <t>` flag or `STDB_TARGET` env | The flag wins |
+| Browser target | `VITE_STDB_TARGET` | `web/.env.development` = `test`; Vercel Preview = `test`, Production = `prod` |
+| Server token | `STDB_SERVER_TOKEN` (+ `STDB_SERVER_IDENTITY`) | Same keys, one file per target: `.env.test.local` / `.env.prod.local` |
+| Module env | `STDB_TARGET` declared in `schema(..., { env })` | Supplied from the publisher's process environment by `publish.ts` |
+
+Every CLI call names the database explicitly and passes `--server maincloud --no-config`. `spacetime.json` keeps `hsr-spacetimedb-test1` only as the safe interactive default. Nothing reads `.env.local` or the legacy Next.js keys.
 
 ## Bootstrap Scripts
 
-### `scripts/post-publish.ts` (Full Bootstrap)
+All scripts live in `scripts/stdb/`, run with `tsx`, take `--target test|prod`, and exit 1 on any unexpected disconnect (`onDisconnect`, upgrade report R6).
 
-**Purpose:** End-to-end database initialization after `spacetime publish --clear-database`
-
-For re-publishes that include schema deltas already reviewed in a prior diff, use `npm run spacetime:publish:migrate` (appends `--yes=migrate`, skips ONLY the destructive-migration confirm prompt). Default `npm run spacetime:publish` stays interactive.
-
-**Run:** `npx tsx scripts/post-publish.ts`
+### `scripts/stdb/publish.ts` (`npm run stdb:publish:<t>`)
 
 **Flow:**
-1. Reads `spacetime.json` for database name and server
-2. Connects to SpacetimeDB with **no token** (receives a fresh identity)
-3. Calls `registerServer` — inserts ServerIdentity, creates SYSTEM user (id=0, role=Admin), links identity via UserIdentity
-4. Writes the connection token to `.env.local` as `SPACETIMEDB_SERVER_TOKEN`
-5. Calls `seedAll()` — upserts HsrCharacter, HsrLightcone, costs, archetypes, synergies
-6. Seeds 3 starter achievements (MMR Elite, Veteran, Solar First Tournament Winner)
-7. Seeds config tables (EloConfig, AccountRatingConfig) with defaults
+1. Arguments come only from `publishArgs(target, …)`: explicit name, `--server maincloud --no-config --module-path spacetimedb`, and `STDB_TARGET=<target>` in the child environment
+2. `--clear` (test only, `npm run stdb:publish:test:clear`) adds `--delete-data=always --yes=delete-data`; `assertWipeAllowed` refuses it for prod
+3. Prod adds `--yes=migrate` and nothing else; `assertNoForbiddenProdFlags` re-checks; a dirty `git status` is refused
+4. Runs `npm run typecheck` first and aborts on errors (`spacetime build` cannot find `tsc` in the workspace layout)
+
+**Dry run** (prints the command and the child environment keys, contacts nothing):
+```text
+$ npx tsx scripts/stdb/publish.ts --target prod --dry-run
+[dry-run] pre-flight: npm run typecheck; git status --porcelain must be empty
+[dry-run] STDB_TARGET=prod spacetime publish hsr-spacetimedb-prod --server maincloud --no-config --module-path spacetimedb --yes=migrate
+[dry-run] child environment keys: STDB_TARGET
+
+$ npx tsx scripts/stdb/publish.ts --target test --clear --dry-run
+[dry-run] pre-flight: npm run typecheck
+[dry-run] STDB_TARGET=test spacetime publish hsr-spacetimedb-test1 --server maincloud --no-config --module-path spacetimedb --delete-data=always --yes=delete-data
+[dry-run] child environment keys: STDB_TARGET
+
+$ npx tsx scripts/stdb/describe.ts --target test --dry-run
+[dry-run] STDB_TARGET=test spacetime describe hsr-spacetimedb-test1 --server maincloud --no-config --json
+[dry-run] child environment keys: STDB_TARGET
+```
+
+### `init` (module, on first publish and every `--delete-data` republish)
+
+When `ServerIdentity` is empty: inserts `ctx.sender` (the publisher) as `kind = Owner`, `label = 'owner'`; creates the SYSTEM user (`username = 'SYSTEM'`, role Admin, `id` from autoInc, audit actor `SYSTEM_USER_ID = 0`); links the owner identity to SYSTEM through `UserIdentity`. A plain republish does not run `init`.
+
+### `scripts/stdb/bootstrap.ts` (`npm run stdb:bootstrap:<t>`)
+
+**Flow:**
+1. Reads the owner token from `spacetime login show --token` (stdout only; never written or logged)
+2. Opens a token-less connection to mint a fresh identity + token
+3. As owner: best-effort `server_revoke_delegate` of the `STDB_SERVER_IDENTITY` recorded in `.env.<t>.local`, then `server_register_delegate(freshHex, 'vercel-auth-<t>')`
+4. Writes `STDB_SERVER_TOKEN` and `STDB_SERVER_IDENTITY` into `.env.<t>.local` (other lines kept)
+5. As the delegate: seeds `data/seed/{characters,lightcones,synergies}.json` through `admin_bulk_upsert` (plus archetypes and junction rows), the starter achievements from `data/seed/achievements.json`, `admin_seed_elo_config`, `admin_seed_rating_config`, `seed_identity_gc_job`, `seed_lobby_gc_job`
+6. Subscribes only to `achievement` and `archetype` (to read back auto-increment ids)
 
 **Preconditions:**
-- Database must be freshly cleared (no ServerIdentity row exists)
-- Must run from project root (reads `spacetime.json`)
-- `.env.local` may or may not exist (creates/appends as needed)
+- The module was published by the CLI login running the script (that identity is the Owner)
+- Run from anywhere: paths resolve from the repository root
 
 **Postconditions:**
-- `SPACETIMEDB_SERVER_TOKEN` written to `.env.local`
-- SYSTEM user exists with id=0, role=Admin
-- All game data tables populated
-- Config tables seeded with defaults
+- One new Delegate row in `ServerIdentity`, linked to the SYSTEM user; the previous delegate revoked when it still existed
+- `.env.<t>.local` holds the new token and identity
+- Game data, starter achievements, config singletons and GC jobs present
 
-**Error Cases:**
-| Condition | Behavior |
-|-----------|----------|
-| ServerIdentity already exists | `registerServer` throws; script exits with error |
-| `spacetime.json` not found | Script exits with "run from project root" error |
-| Seed data fails | Token is still written; script advises manual `seed-data.ts` retry |
+**Idempotency:** re-running is safe. Game data is upserted; achievements are skipped by name (their criteria are left as they are); EloConfig / AccountRatingConfig report "exists"; the GC seeds are no-ops when a job exists. Each run rotates the delegate.
 
-### `scripts/register-server.ts` (Lightweight Registration)
+### `scripts/stdb/seed.ts` (`npm run stdb:seed:<t>`)
 
-**Purpose:** Register server identity only — no seeding, no `.env.local` write
+Bootstrap step 5 alone, as the delegate whose token is in `.env.<t>.local`.
 
-**Run:** `npx tsx scripts/register-server.ts`
+### Other scripts
 
-**Flow:**
-1. Reads `spacetime.json` for database name
-2. Connects with no token (fresh identity)
-3. Calls `registerServer`
-4. Prints token to stdout — user must manually add to `.env.local`
-
-**Use case:** When you only need the server token (e.g., re-registering on a test database without re-seeding).
-
-### `test/shared/bootstrap.ts` (Test Database Bootstrap)
-
-**Purpose:** Re-register server identity on a test database using an **existing** token
-
-**Run:** `npx tsx test/shared/bootstrap.ts`
-
-**Flow:**
-1. Reads `SPACETIMEDB_SERVER_TOKEN`, `SPACETIMEDB_URI`, `SPACETIMEDB_DB` from `.env.local`
-2. Connects **with** the existing token
-3. Calls `registerServer`
-
-**Preconditions:**
-- `SPACETIMEDB_SERVER_TOKEN` must exist in `.env.local`
-- Database must be freshly cleared
-
-**Use case:** After `--clear-database` on the test DB, when the token is already known.
+| Script | npm | Purpose |
+|--------|-----|---------|
+| `describe.ts` | `stdb:describe:<t>` | `spacetime describe <db> --server maincloud --no-config --json` (schema-delta gate) |
+| `generate.ts` | `stdb:generate` | Local `spacetime generate` into `web/src/module_bindings` (no target) |
+| `manage-user.ts` | `stdb:manage-user -- --target <t> set-role <user> <role>` / `delete <user>` | `server_set_role` / `server_delete_user` as the delegate |
+| `test-integration.ts` | `test:integration` | Runs the live suite with `STDB_TARGET=test`; refuses prod |
 
 ## Test Harness
 
@@ -81,7 +95,7 @@ For re-publishes that include schema deltas already reviewed in a prior diff, us
 **Purpose:** Create a connected guest user for permission guard tests
 
 **Flow:**
-1. `DbConnection.builder()` connects to test DB (defaults: `wss://maincloud.spacetimedb.com`, `hsr-spacetimedb-test1`)
+1. `DbConnection.builder()` connects to the test DB resolved by `backendEnv()` (`test/shared/env.ts`: `STDB_TARGET=test` + `.env.test.local`)
 2. Subscribes to all tables
 3. Calls `loginAsGuest` — creates User + UserIdentity
 4. Resolves `userId` from subscription cache by matching `Guest_{hex8}` username pattern
@@ -89,7 +103,7 @@ For re-publishes that include schema deltas already reviewed in a prior diff, us
 
 **Preconditions:**
 - Database must be bootstrapped (ServerIdentity + SYSTEM user exist)
-- No `SPACETIMEDB_SERVER_TOKEN` required
+- No `STDB_SERVER_TOKEN` required
 
 ### `createVerifiedTestHarness()` (Verified Harness)
 
@@ -97,7 +111,7 @@ For re-publishes that include schema deltas already reviewed in a prior diff, us
 
 **Flow:**
 1. Same as guest harness steps 1-3
-2. Opens a **second** connection using `SPACETIMEDB_SERVER_TOKEN`
+2. Opens a **second** connection using the delegate `STDB_SERVER_TOKEN`
 3. Server connection calls `serverLinkProvider` with test Discord ID (`test_{timestamp}_{random}`) and name (`TestUser_{suffix}`)
 4. Re-calls `loginAsGuest` on the original connection to refresh subscription cache
 5. Resolves `userId` by matching `TestUser_*` username pattern
@@ -105,12 +119,12 @@ For re-publishes that include schema deltas already reviewed in a prior diff, us
 
 **Preconditions:**
 - Database must be bootstrapped
-- `SPACETIMEDB_SERVER_TOKEN` must be set in environment (from `.env.local`)
+- `STDB_SERVER_TOKEN` must be in `.env.test.local` (written by bootstrap)
 
 **Error Cases:**
 | Condition | Behavior |
 |-----------|----------|
-| `SPACETIMEDB_SERVER_TOKEN` missing | Throws immediately with descriptive error |
+| `STDB_SERVER_TOKEN` missing | Throws immediately with descriptive error |
 | Connection timeout (15s) | Rejects with "Connection timeout (15s)" |
 | Server connection timeout (10s) | Rejects with "Server connection timeout" |
 
@@ -134,20 +148,40 @@ interface TestHarness {
 | `expectReducerError(promise)` | Asserts a reducer call fails; returns the error message string |
 | `queryPrivateTable(sql)` | Runs `spacetime sql` CLI to read private tables (UserPrivate, BanRecord, UserIdentity, etc.) |
 | `getTestDiscordId(userId)` | Queries UserPrivate via SQL for the test Discord provider ID |
-| `hasServerToken()` | Returns `true` if `SPACETIMEDB_SERVER_TOKEN` is available in environment |
+| `hasServerToken()` | Returns `true` if `STDB_SERVER_TOKEN` is available (`.env.test.local`) |
 | `sleep(ms)` | Fixed-duration wait (use sparingly; prefer `sync()`) |
 
 ## Acceptance Scenarios
 
-### Full Bootstrap (Clean Database)
-**Given:** Database freshly published with `--clear-database`, no ServerIdentity exists
-**When:** `npx tsx scripts/post-publish.ts` is run from project root
-**Then:** ServerIdentity row inserted. SYSTEM user created (id=0, username=`SYSTEM`, role=Admin). UserIdentity links server identity to SYSTEM user. Token written to `.env.local`. Game data tables seeded. Config tables seeded.
+### Init Registers the Owner (Clean Database)
+**Given:** Database freshly published (first publish or `--delete-data`), `ServerIdentity` empty
+**When:** `init` runs
+**Then:** One `ServerIdentity` row: the publisher, `kind=Owner`, `label='owner'`. SYSTEM user created (username `SYSTEM`, role Admin). `UserIdentity` links the owner identity to SYSTEM.
 
-### Bootstrap Rejection (Already Registered)
-**Given:** ServerIdentity row already exists (database not cleared)
-**When:** `npx tsx scripts/post-publish.ts` is run
-**Then:** `registerServer` throws "Server identity already registered. To re-register, clear the database first." Script exits with error.
+### Full Bootstrap
+**Given:** `init` has run; the CLI login is the publisher
+**When:** `npm run stdb:bootstrap:test` is run
+**Then:** A fresh identity is registered as `kind=Delegate`, `label='vercel-auth-test'`, linked to SYSTEM. `.env.test.local` holds its `STDB_SERVER_TOKEN` + `STDB_SERVER_IDENTITY`. Game data, starter achievements, config singletons and GC jobs seeded.
+
+### Bootstrap Re-run (Delegate Rotation)
+**Given:** A previous bootstrap wrote `STDB_SERVER_IDENTITY` and that delegate is still registered
+**When:** Bootstrap runs again
+**Then:** The previous delegate is revoked (its `ServerIdentity` and `UserIdentity` rows deleted), a new delegate is registered, seeding is a no-op apart from upserts.
+
+### Delegate Management Is Owner-Only
+**Given:** Caller is a Delegate (or any non-owner)
+**When:** `server_register_delegate` or `server_revoke_delegate` is called
+**Then:** Rejected with "Forbidden: only the owner server identity may do this." (non-server callers: "Forbidden: caller is not a registered server identity.")
+
+### Test-Only Reducers Are Default-Deny
+**Given:** A database published with `STDB_TARGET=prod` (or without the value)
+**When:** `server_set_datetime`, `server_set_online`, `server_set_mmr` or `server_nuke_test_data` is called, by anyone
+**Then:** Rejected with "Not a test database." before any other check.
+
+### Prod Wipe Refused
+**Given:** `--target prod`
+**When:** `scripts/stdb/publish.ts --target prod --clear` is run (dry run or not)
+**Then:** Exits 1 with "refusing a destructive operation on target \"prod\"; only \"test\" may be wiped." Nothing is spawned.
 
 ### Guest Harness Connection
 **Given:** Database is bootstrapped (ServerIdentity + SYSTEM user exist)
@@ -155,14 +189,14 @@ interface TestHarness {
 **Then:** Resolves with a `TestHarness` where `userId` > 0, User row has `isGuest=true`, `username=Guest_{hex8}`.
 
 ### Verified Harness Connection
-**Given:** Database is bootstrapped, `SPACETIMEDB_SERVER_TOKEN` is set
+**Given:** Database is bootstrapped, `STDB_SERVER_TOKEN` is in `.env.test.local`
 **When:** `createVerifiedTestHarness()` is called
 **Then:** Resolves with a `TestHarness` where `userId` > 0, User row has `isGuest=false`, `hasDiscordLinked=true`, `username=TestUser_{suffix}`.
 
 ### Verified Harness Without Token
-**Given:** `SPACETIMEDB_SERVER_TOKEN` is not set in environment
+**Given:** `.env.test.local` has no `STDB_SERVER_TOKEN`
 **When:** `createVerifiedTestHarness()` is called
-**Then:** Throws immediately: "SPACETIMEDB_SERVER_TOKEN required for verified test harness. Set it in .env.local (written by scripts/post-publish.ts)"
+**Then:** Throws immediately: "STDB_SERVER_TOKEN required for verified test harness. It lives in .env.test.local (written by npm run stdb:bootstrap:test)"
 
 ### Connection Timeout
 **Given:** SpacetimeDB host is unreachable or database does not exist
@@ -230,12 +264,14 @@ interface TestHarness {
 
 | Case | Expected Behavior | Notes |
 |------|-------------------|-------|
-| Two `post-publish.ts` runs without clearing | Second run fails on `registerServer` | First-come-first-served; token from first run is valid |
+| Two bootstrap runs without clearing | Second run revokes the first delegate and registers a new one | The first run's token stops working; `.env.<t>.local` holds the new one |
+| Bootstrap run by a CLI login that did not publish | `server_register_delegate` rejects (caller is not the owner) | Only the publisher is registered as Owner by `init` |
+| `STDB_TARGET` / `--target` missing or unknown | Script exits 1 before connecting | No fallback database |
 | Guest harness userId resolution fallback | Falls back to most recently inserted non-SYSTEM user | Handles edge cases where username pattern match fails |
 | Verified harness re-login after link | Calls `loginAsGuest` again to refresh subscription cache | Without re-login, cached User row still shows `isGuest=true` |
 | `queryPrivateTable` on empty result | Returns empty array `[]` | Parser handles < 2 output lines gracefully |
 | `queryPrivateTable` with WARNING lines | Filters out lines starting with "WARNING" | SpacetimeDB CLI sometimes emits warnings before table output |
-| Connection to wrong database name | `onConnectError` fires; harness rejects | Database name comes from `SPACETIMEDB_DB` env var or default |
+| Harness run without `STDB_TARGET=test` | `backendEnv()` throws | The database name comes from `shared/stdb-targets.ts`, never from env |
 | Multiple harnesses in one test file | Each gets a unique identity and userId | `afterAll` should disconnect all harnesses to avoid connection leaks |
 | `sync()` timing insufficient | Subscription cache may not reflect reducer changes | Increase `sync(ms)` parameter for slow operations; default is 500ms |
 | Identity GC with only one identity per user | That identity is preserved even if past TTL | D-07: preserve-newest guard keeps at least one identity per user |
@@ -250,17 +286,18 @@ interface TestHarness {
 
 | This Feature | Connects To | How | Direction |
 |-------------|------------|-----|-----------|
-| `post-publish.ts` | `register_server` reducer | Calls reducer to bootstrap ServerIdentity + SYSTEM user | writes |
-| `post-publish.ts` | `seedAll()` in `scripts/seed-data.ts` | Seeds HsrCharacter, HsrLightcone, costs, archetypes, synergies | writes |
-| `post-publish.ts` | Achievement reducers | Creates starter achievements + criteria | writes |
-| `post-publish.ts` | Config reducers (`adminSeedEloConfig`, `adminSeedRatingConfig`) | Seeds default config rows | writes |
-| `post-publish.ts` | `.env.local` | Writes `SPACETIMEDB_SERVER_TOKEN` | writes |
+| `init` | `ServerIdentity`, `User`, `UserIdentity` | Registers the Owner + SYSTEM user on a fresh database | writes |
+| `bootstrap.ts` | `server_register_delegate` / `server_revoke_delegate` | Rotates the delegate (as Owner) | writes |
+| `bootstrap.ts` / `seed.ts` | `admin_bulk_upsert`, `admin_assign_character_archetypes` | Seeds `data/seed/` game data | writes |
+| `bootstrap.ts` / `seed.ts` | Achievement reducers | Creates starter achievements + criteria (skipped by name) | writes |
+| `bootstrap.ts` / `seed.ts` | Config reducers (`adminSeedEloConfig`, `adminSeedRatingConfig`) | Seeds default config rows | writes |
+| `bootstrap.ts` | `.env.<t>.local` | Writes `STDB_SERVER_TOKEN`, `STDB_SERVER_IDENTITY` | writes |
 | `createVerifiedTestHarness` | `server_link_provider` reducer | Upgrades guest to verified via server connection | writes |
 | `createTestHarness` | `login_as_guest` reducer | Creates guest User + UserIdentity | writes |
 | `queryPrivateTable` | SpacetimeDB CLI (`spacetime sql`) | Reads private tables not in client subscriptions | reads |
-| `vitest.integration.config.ts` | `.env.local` | Loads `SPACETIMEDB_*` env vars at config time | reads |
-| `test/shared/load-env.ts` | `.env.local` | Parses env vars for standalone scripts outside vitest | reads |
-| All scripts | `spacetime.json` | Database name + server (single source of truth) | reads |
+| `vitest.integration.config.ts` | `test/shared/env.ts` | Resolves the backend (`STDB_TARGET=test` + `.env.test.local`) at config time | reads |
+| `test/shared/load-env.ts` | `test/shared/env.ts` | Same, for standalone scripts outside vitest | reads |
+| All scripts | `shared/stdb-targets.ts` | Database names, host, CLI argument builders (single source of truth) | reads |
 | `run_identity_gc` | `UserIdentity` table | Scans all rows, deletes stale/orphaned | reads/writes |
 | `run_identity_gc` | `User` table | Checks isGuest, isOnline, existence (orphan detection) | reads |
 | `run_identity_gc` | `GcResult` table | Writes audit row when identities deleted | writes |
@@ -269,8 +306,8 @@ interface TestHarness {
 | `admin_gc_lobbies` | `performLobbyGc` helper | On-demand lobby GC trigger | reads/writes |
 | `seed_identity_gc_job` | `IdentityGcJob` table | Idempotent bootstrap insert | writes |
 | `clientConnected` | `UserIdentity.lastSeenAt` | Bumps timestamp on WebSocket connect | writes |
-| `post-publish.ts` | `seed_identity_gc_job` | Seeds weekly identity GC schedule | writes |
-| `post-publish.ts` | `seed_lobby_gc_job` | Seeds lobby GC schedule | writes |
+| `bootstrap.ts` / `seed.ts` | `seed_identity_gc_job` | Seeds weekly identity GC schedule | writes |
+| `bootstrap.ts` / `seed.ts` | `seed_lobby_gc_job` | Seeds lobby GC schedule | writes |
 
 ## Integration Test Configuration
 
@@ -287,8 +324,8 @@ interface TestHarness {
 
 | Decision | Source | Date |
 |----------|--------|------|
-| First-come-first-served `register_server` with SYSTEM user bootstrap | Phase 1 execution | 2026-03-16 |
-| `post-publish.ts` as single bootstrap entry point (replaces manual steps) | Quick task 260318-2ci | 2026-03-18 |
+| First-come-first-served server registration with SYSTEM user bootstrap (removed in M2) | Phase 1 execution | 2026-03-16 |
+| `post-publish.ts` as single bootstrap entry point (replaced by `scripts/stdb/bootstrap.ts` in M2) | Quick task 260318-2ci | 2026-03-18 |
 | Test harness dual-connection pattern for verified user creation | Quick task 260318-2ci | 2026-03-18 |
 | `queryPrivateTable` for private table assertions via `spacetime sql` CLI | Phase 10.5 execution | 2026-04-03 |
 | Sequential test execution (`fileParallelism: false`) to avoid shared-state races | Phase 10.5 execution | 2026-04-03 |
@@ -306,3 +343,4 @@ interface TestHarness {
 ---
 
 *Last updated: 2026-04-09*
+| Env scheme (`shared/stdb-targets.ts`, `STDB_TARGET` / `VITE_STDB_TARGET`, `.env.<t>.local`); `init` registers the Owner + SYSTEM; owner-only `server_register_delegate` / `server_revoke_delegate`; `scripts/stdb/*` with `--target` and `--dry-run`; test-only reducers gated by module env `STDB_TARGET` | Phase M2 execution | 2026-11-06 |

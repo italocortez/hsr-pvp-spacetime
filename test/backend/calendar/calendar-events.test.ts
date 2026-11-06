@@ -4,7 +4,7 @@
  * Tests event CRUD, invite management, invite response, permission guards,
  * invite cap enforcement, delete cascade, and user deletion cascade.
  *
- * Requires: SPACETIMEDB_SERVER_TOKEN in .env.local (post-publish bootstrap)
+ * Requires: STDB_SERVER_TOKEN in .env.test.local (npm run stdb:bootstrap:test)
  *
  * Contract: docs/calendar/contract.md — Calendar Event + Invite scenarios
  * UAT: .planning/phases/08-calendar-and-scheduling/08-UAT.md — Tests 9-15, 17
@@ -19,8 +19,9 @@ import {
 } from '../../shared/connection';
 import { DbConnection } from '@/src/module_bindings';
 import { promoteUser } from '../../shared/helpers/promoteUser';
+import { backendEnv } from '../../shared/env';
 
-const DB = process.env.SPACETIMEDB_DB ?? 'hsr-spacetimedb-test1';
+const DB = backendEnv().dbName;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -398,8 +399,8 @@ describe('Calendar Events & Invites', () => {
         expect(victimUser).toBeDefined();
 
         // Need server-token connection to call serverDeleteUser
-        const host = process.env.SPACETIMEDB_URI ?? 'wss://maincloud.spacetimedb.com';
-        const token = process.env.SPACETIMEDB_SERVER_TOKEN!;
+        const host = backendEnv().host;
+        const token = backendEnv().serverToken!;
         await new Promise<void>((resolve, reject) => {
             const timeout = setTimeout(() => reject(new Error('Delete timeout')), 10000);
             DbConnection.builder()

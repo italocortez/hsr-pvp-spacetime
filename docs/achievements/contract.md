@@ -321,7 +321,7 @@ The achievement checker runs at step 16.5 of `runFinalization`, after all stat i
 | User.displayedAchievementId | Achievement.id | FK reference | Reads |
 | manual_award_achievement | Tournament/TournamentEnrolled | TO scope check via organizer_id index | Reads |
 | delete_achievement cascade | User table | Clears displayedAchievementId | Writes |
-| post-publish.ts | Achievement/AchievementCriteria | Seeds 3 starter achievements | Writes |
+| scripts/stdb/bootstrap.ts (data/seed/achievements.json) | Achievement/AchievementCriteria | Seeds 3 starter achievements | Writes |
 
 ## Phase History
 

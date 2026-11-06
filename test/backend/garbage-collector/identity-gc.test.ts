@@ -4,7 +4,7 @@
  *
  * Uses server_set_datetime to age identities past 90-day TTL for time-dependent tests.
  *
- * Requires: SPACETIMEDB_SERVER_TOKEN in .env.local
+ * Requires: STDB_SERVER_TOKEN in .env.test.local
  *
  * Contract: docs/smoke/contract.md — GC (D-06, D-07, D-08, D-11)
  * Phase: 12.1 (Identity Garbage Collection)
@@ -21,24 +21,25 @@ import {
     type TestHarness,
 } from '../../shared/connection';
 import { promoteToRole } from '../../shared/helpers/promoteUser';
+import { backendEnv } from '../../shared/env';
 import { DbConnection } from '@/src/module_bindings';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getUri(): string {
-    return process.env.SPACETIMEDB_URI || 'wss://maincloud.spacetimedb.com';
+    return backendEnv().host;
 }
 function getDb(): string {
-    return process.env.SPACETIMEDB_DB || process.env.SPACETIMEDB_DB_NAME || process.env.PUBLIC_SPACETIMEDB_DB_NAME || 'hsr-spacetimedb-test1';
+    return backendEnv().dbName;
 }
 function getServerToken(): string {
-    return process.env.SPACETIMEDB_SERVER_TOKEN || '';
+    return backendEnv().serverToken ?? '';
 }
 
 /** Call server_set_datetime via server-token connection. */
 function setDatetime(tableName: string, primaryKey: string, field: string, timestampMicros: bigint): Promise<void> {
     const token = getServerToken();
-    if (!token) throw new Error('SPACETIMEDB_SERVER_TOKEN required for setDatetime');
+    if (!token) throw new Error('STDB_SERVER_TOKEN required for setDatetime');
     return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error('setDatetime timeout')), 10000);
         DbConnection.builder()
@@ -70,7 +71,7 @@ function setDatetime(tableName: string, primaryKey: string, field: string, times
 /** Link a second identity to an existing user's discord ID via server_link_provider. */
 function linkIdentityToDiscord(identityHex: string, discordId: string, discordName: string): Promise<void> {
     const token = getServerToken();
-    if (!token) throw new Error('SPACETIMEDB_SERVER_TOKEN required');
+    if (!token) throw new Error('STDB_SERVER_TOKEN required');
     return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error('linkIdentity timeout')), 10000);
         DbConnection.builder()
@@ -107,7 +108,7 @@ const NINETY_ONE_DAYS_AGO_MICROS = () =>
  *  Maincloud disconnect detection can take 30-60s — too slow for tests. */
 function setOnline(userId: number, isOnline: boolean): Promise<void> {
     const token = getServerToken();
-    if (!token) throw new Error('SPACETIMEDB_SERVER_TOKEN required for setOnline');
+    if (!token) throw new Error('STDB_SERVER_TOKEN required for setOnline');
     return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error('setOnline timeout')), 10000);
         DbConnection.builder()

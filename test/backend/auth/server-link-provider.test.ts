@@ -9,6 +9,7 @@ import {
   sleep,
   TestHarness,
 } from '../../shared/connection';
+import { backendEnv } from '../../shared/env';
 import { DbConnection } from '@/src/module_bindings';
 
 /**
@@ -18,8 +19,8 @@ import { DbConnection } from '@/src/module_bindings';
  * and input validation. Ban-related scenarios are covered in auth-security.test.ts (SEC-03).
  */
 
-function getUri() { return process.env.SPACETIMEDB_URI || 'wss://maincloud.spacetimedb.com'; }
-function getDb() { return process.env.SPACETIMEDB_DB || process.env.SPACETIMEDB_DB_NAME || 'hsr-spacetimedb-test1'; }
+function getUri() { return backendEnv().host; }
+function getDb() { return backendEnv().dbName; }
 
 /** Create an inline server-token connection for calling server-only reducers. */
 function createServerConnection(): Promise<any> {
@@ -28,7 +29,7 @@ function createServerConnection(): Promise<any> {
     DbConnection.builder()
       .withUri(getUri())
       .withDatabaseName(getDb())
-      .withToken(process.env.SPACETIMEDB_SERVER_TOKEN!)
+      .withToken(backendEnv().serverToken!)
       .withConfirmedReads(false)
       .onConnect((conn: any) => {
         clearTimeout(timeout);

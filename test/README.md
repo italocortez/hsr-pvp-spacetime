@@ -9,11 +9,10 @@ test/
 ├── vitest.config.ts                  # Unit test config (no SpacetimeDB needed)
 ├── vitest.integration.config.ts      # Integration test config — wires globalSetup
 ├── tsconfig.json                     # TypeScript config for test files
-├── global-setup.ts                   # Vitest globalSetup: --clear-database, reseed, refresh process.env
+├── global-setup.ts                   # Vitest globalSetup: stdb publish --clear + bootstrap (test only)
 ├── shared/
-│   ├── bootstrap.ts                  # One-time DB bootstrap (register_server, admin seed)
-│   ├── seed-data.ts                  # Seeds characters/lightcones/pairing from test/data/
-│   ├── load-env.ts                   # Loads .env.local into process.env
+│   ├── env.ts                        # backendEnv(): STDB_TARGET=test + .env.test.local via shared/stdb-targets.ts
+│   ├── load-env.ts                   # Same, for standalone tmp/uat-*.ts scripts
 │   ├── connection.ts                 # SpacetimeDB WebSocket test harness (createTestHarness)
 │   ├── fixtures.ts                   # Test data factories and constants
 │   ├── helpers/                      # Cross-suite helpers (import from here, don't duplicate)
@@ -21,9 +20,7 @@ test/
 │   │   ├── queries.ts · scores.ts · seed.ts · tournaments.ts · users.ts
 │   └── mocks/
 │       └── spacetimedb-server.ts     # Mock for spacetimedb/server (unit tests only)
-├── data/                             # Seed tables consumed by seed-data.ts
-│   ├── characters_table.json · characters_table_archetype.json
-│   ├── lightcones_table.json · pairing_table.json
+│                                     # (game seed data lives in data/seed/, seeded by scripts/stdb/bootstrap.ts)
 ├── data-templates/                   # Canonical templates + default configs
 │   ├── characters_template.json · lightcones_template.json · pairing_template.json
 │   ├── account-rating-config-defaults.json · elo-config-defaults.json
@@ -57,11 +54,9 @@ test/
 |---------|-------------|
 | `npm test` | Unit tests only (fast, no deps, ~0.5s) |
 | `npm run test:watch` | Unit tests in watch mode |
-| `npm run test:integration` | Integration tests (triggers globalSetup) |
-| `npm run test:integration:watch` | Integration tests in watch mode |
-| `npm run test:all` | Unit + integration |
+| `npm run test:integration` | Integration tests against test1 (sets `STDB_TARGET=test`, triggers globalSetup; refuses prod) |
 
-Single file: `npx vitest run --config test/vitest.integration.config.ts <path>`
+Single file: `npm run test:integration -- <path>`
 
 ## Prerequisites
 
@@ -69,21 +64,21 @@ Single file: `npx vitest run --config test/vitest.integration.config.ts <path>`
 None. `npm test` runs pure-function tests with a mocked `spacetimedb/server`.
 
 ### Integration tests
-1. SpacetimeDB module published: `npm run spacetime:publish`
-2. SpacetimeDB server reachable (maincloud or local)
-3. `.env.local` populated with at minimum:
-   - `PUBLIC_SPACETIMEDB_DB_NAME` — must contain `-test` (safety guard in `global-setup.ts`)
-   - `SPACETIMEDB_SERVER_TOKEN` — refreshed automatically by globalSetup after `--clear-database`
-   - `SPACETIMEDB_URI` (default: `wss://maincloud.spacetimedb.com`)
+1. `spacetime login` as the account that owns `hsr-spacetimedb-test1` (the publisher becomes the Owner in `init`).
+2. Env scheme (ACCESS-SECURITY-OPS §C.2): the database name and host are committed constants in
+   `shared/stdb-targets.ts`; the target comes from `STDB_TARGET` (`npm run test:integration` sets `test`;
+   anything else is refused). Nothing reads `.env.local` or the legacy `SPACETIMEDB_*` keys.
+3. `.env.test.local` holds `STDB_SERVER_TOKEN` + `STDB_SERVER_IDENTITY`, written by
+   `npm run stdb:bootstrap:test` (globalSetup runs it, so the file appears after the first run).
 
 ## globalSetup behavior
 
 `test/vitest.integration.config.ts` wires `test/global-setup.ts` as Vitest `globalSetup`. It runs **once per suite invocation** before any test file:
 
-1. Loads `.env.local` and refuses to run unless `PUBLIC_SPACETIMEDB_DB_NAME` contains `-test`.
-2. Runs `spacetime publish --clear-database -y --module-path spacetimedb`.
-3. Runs `npx tsx scripts/post-publish.ts` (reseeds characters/lightcones/archetypes/achievements/configs/GC jobs and rotates `SPACETIMEDB_SERVER_TOKEN` in `.env.local`).
-4. Re-reads the refreshed server token from `.env.local` and mutates `process.env` so vitest worker forks inherit the new value. **This step is load-bearing** — without it, every server-token call fails with `Forbidden: caller is not the registered server identity` (see Phase 14 Round 9 debug session).
+1. Requires `STDB_TARGET=test`; `assertNameMatchesTarget` + `assertWipeAllowed` refuse anything but the committed "-test" database.
+2. Runs `npx tsx scripts/stdb/publish.ts --target test --clear` (typecheck, then `--delete-data=always --yes=delete-data`, `STDB_TARGET=test` in the CLI environment).
+3. Runs `npx tsx scripts/stdb/bootstrap.ts --target test` (registers a fresh delegate, writes `STDB_SERVER_TOKEN` to `.env.test.local`, reseeds data/seed/, achievements, configs, GC jobs).
+4. Re-reads `.env.test.local` through `backendEnv()`. The harness reads the token lazily through the same function, so the rotated token is used. **This step is load-bearing** — a stale token fails every server-token call with `Forbidden: caller is not a registered server identity` (Phase 14 Round 9 debug session).
 
 Cost: **~11.5s per suite invocation** (<1% of a 48 min run).
 
@@ -92,7 +87,7 @@ Cost: **~11.5s per suite invocation** (<1% of a 48 min run).
 Set `SKIP_DB_CLEAR=1` to bypass the clear+reseed when you're iterating on a single test file and know the DB is already in a clean state:
 
 ```bash
-SKIP_DB_CLEAR=1 npx vitest run --config test/vitest.integration.config.ts test/backend/chat/chat-messages.test.ts
+SKIP_DB_CLEAR=1 npm run test:integration -- test/backend/chat/chat-messages.test.ts
 ```
 
 ## Adding tests for new features
@@ -131,7 +126,7 @@ Even with globalSetup starting from a clean DB, a single suite run leaks rows in
 
 These are **rooted in backend design choices**, not test bugs. The suite passes cleanly at current scale. If test count doubles (or intra-suite flakes return), options are:
 1. Add `afterAll` cleanup hooks to rejection tests (blocked by test-file edit policy — needs explicit task)
-2. Call `server_nuke_test_data` reducer via `npx tsx scripts/nuke-test-data.ts` from a periodic mid-suite hook (~500ms wipe, 23× faster than the globalSetup path)
+2. Call `server_nuke_test_data` reducer through a delegate connection from a periodic mid-suite hook (the old nuke script was removed in M2) (~500ms wipe, 23× faster than the globalSetup path)
 3. Move integration tests off maincloud to a local/staging instance
 
 Full root-cause investigation and per-table leak counts: `.planning/phases/14-test-harness-modern/14-DEBUG-SESSION.md`.
@@ -140,12 +135,11 @@ Full root-cause investigation and per-table leak counts: `.planning/phases/14-te
 
 Normally unnecessary — `globalSetup` handles clear+reseed automatically. Only run manually if globalSetup itself is failing or you need a bare-metal reset outside of vitest:
 
-1. `spacetime publish --module-path spacetimedb --server maincloud --delete-data=always --yes hsr-spacetimedb-test1`
-2. `spacetime generate --lang typescript --out-dir src/module_bindings --module-path spacetimedb`
-3. `npx tsx scripts/post-publish.ts` (bootstrap + seed in one step, also rotates server token)
-4. `npm run test:all`
+1. `npm run stdb:publish:test:clear` (test only; add `-- --dry-run` to print the command)
+2. `npm run stdb:bootstrap:test` (delegate + seed in one step, also rotates the server token)
+3. `npm run stdb:generate` if the schema changed, then review `git diff --stat web/src/module_bindings`
+4. `SKIP_DB_CLEAR=1 npm run test:integration`
 
 Fast wipe of non-seed state (keeps characters/lightcones/configs intact):
-```bash
-npx tsx scripts/nuke-test-data.ts
-```
+call the `server_nuke_test_data` reducer (`confirmation: 'NUKE_TEST_DATA'`) through a delegate connection;
+it rejects on any database whose `STDB_TARGET` is not `test`.

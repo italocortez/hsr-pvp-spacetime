@@ -211,7 +211,7 @@ Lobby-owned reducers live in `reducers/lobbyLifecycle.ts`, `lobbySettings.ts`, `
 ### run_lobby_gc / admin_gc_lobbies / seed_lobby_gc_job
 - `run_lobby_gc` (scheduled): `performLobbyGc` scans all lobbies -- D-48 skip AwaitingResult; D-16 casual Shelved hard-deleted after 72h idle (tournament Shelved persists); D-17/D-47 active stages skipped while any member is online, else idle check; D-49 Waiting/Finished hard-deleted after 30 min idle. D-14 writes a `GcResult` audit row if anything was deleted. Requeues itself +15 min.
 - `admin_gc_lobbies`: Moderator+ manual one-shot; same sweep, no self-requeue.
-- `seed_lobby_gc_job`: server-identity-only (called from `post-publish.ts`); idempotent; inserts the first `LobbyGcJob` row to bootstrap the chain.
+- `seed_lobby_gc_job`: server-identity-only (called from `scripts/stdb/bootstrap.ts`); idempotent; inserts the first `LobbyGcJob` row to bootstrap the chain.
 
 ### select_match_account(lobbyId, hsrAccountId) / deselect_match_account(lobbyId, hsrAccountId)
 1. `getAuthenticatedUser(ctx)`; load lobby; `ensureLobbyMember`. D-06: stage must be Waiting or BetweenGames.

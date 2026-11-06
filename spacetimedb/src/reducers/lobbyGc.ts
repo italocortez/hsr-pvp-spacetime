@@ -218,7 +218,7 @@ export const admin_gc_lobbies = spacetimedb.reducer((ctx) => {
 
 // ─── seed_lobby_gc_job (server-only, idempotent) ────────────────────────────
 // Inserts the first LobbyGcJob row to kick off the scheduled GC chain.
-// Called from post-publish.ts after every --clear-database publish.
+// Called from scripts/stdb/bootstrap.ts after every wipe publish.
 // Retroactive fix: Phase 09 required manual seeding — this automates it.
 
 export const seed_lobby_gc_job = spacetimedb.reducer((ctx) => {

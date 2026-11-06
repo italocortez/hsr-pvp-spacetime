@@ -10,7 +10,7 @@
  * LobbyMemberAccount and HsrAccount are PRIVATE tables — assertions use
  * `spacetime sql` via execSync, NOT subscription cache.
  *
- * Requires: SPACETIMEDB_SERVER_TOKEN in .env.local (post-publish bootstrap)
+ * Requires: STDB_SERVER_TOKEN in .env.test.local (npm run stdb:bootstrap:test)
  *
  * Contract: docs/lobby/contract.md — Account Selection scenarios
  */
@@ -23,11 +23,12 @@ import {
     type TestHarness,
 } from '../../shared/connection';
 import { promoteUser } from '../../shared/helpers/promoteUser';
+import { backendEnv } from '../../shared/env';
 import { defaultLobbyArgs as sharedDefaultLobbyArgs } from '../../shared/helpers/lobbies';
 import { execFileSync } from 'child_process';
 import { myLobbies, lobbyMembers } from '../../shared/helpers/queries';
 
-const DB = process.env.SPACETIMEDB_DB ?? 'hsr-spacetimedb-test1';
+const DB = backendEnv().dbName;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 

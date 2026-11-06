@@ -8,6 +8,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createVerifiedTestHarness, hasServerToken, expectReducerError, type TestHarness } from '../../shared/connection';
 import { cleanupTournament } from '../../shared/helpers/tournaments';
+import { backendEnv } from '../../shared/env';
 
 describe.skipIf(!hasServerToken())('Tournament Management', () => {
   let h: TestHarness;
@@ -23,9 +24,9 @@ describe.skipIf(!hasServerToken())('Tournament Management', () => {
     if (!user) throw new Error(`User ${h.userId} not found in cache`);
 
     const { DbConnection } = await import('@/src/module_bindings');
-    const serverToken = process.env.SPACETIMEDB_SERVER_TOKEN || '';
-    const uri = process.env.SPACETIMEDB_URI || 'wss://maincloud.spacetimedb.com';
-    const db = process.env.SPACETIMEDB_DB || 'hsr-spacetimedb-test1';
+    const serverToken = backendEnv().serverToken ?? '';
+    const uri = backendEnv().host;
+    const db = backendEnv().dbName;
 
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('Server promote timeout')), 10000);

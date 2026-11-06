@@ -2,8 +2,8 @@
  * Shared user-role promotion helpers.
  *
  * promoteUser opens a server-token connection and calls server_set_role to
- * promote a user by username. Requires SPACETIMEDB_SERVER_TOKEN env var
- * (written by scripts/post-publish.ts into .env.local).
+ * promote a user by username. Requires STDB_SERVER_TOKEN
+ * (written by npm run stdb:bootstrap:test into .env.test.local).
  *
  * Convenience wrappers:
  *   - promoteToAdmin(username): shorthand for promoteUser(username, 'Admin')
@@ -12,17 +12,18 @@
 
 import { DbConnection } from '@/src/module_bindings';
 import type { TestHarness } from '../connection';
+import { backendEnv, serverToken } from '../env';
 
 function getUri(): string {
-    return process.env.SPACETIMEDB_URI || 'wss://maincloud.spacetimedb.com';
+    return backendEnv().host;
 }
 
 function getDb(): string {
-    return process.env.SPACETIMEDB_DB || process.env.SPACETIMEDB_DB_NAME || 'hsr-spacetimedb-test1';
+    return backendEnv().dbName;
 }
 
 function getServerToken(): string {
-    return process.env.SPACETIMEDB_SERVER_TOKEN || '';
+    return serverToken();
 }
 
 /**
@@ -32,7 +33,7 @@ function getServerToken(): string {
 export async function promoteUser(username: string, roleTag: string): Promise<void> {
     const token = getServerToken();
     if (!token) {
-        throw new Error('SPACETIMEDB_SERVER_TOKEN required for promoteUser');
+        throw new Error('STDB_SERVER_TOKEN required for promoteUser (.env.test.local)');
     }
     return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error('Promote timeout')), 10000);

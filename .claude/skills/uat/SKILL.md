@@ -168,11 +168,9 @@ Architecture docs cross-reference behavior specs. No duplication between them.
 | Command | What it runs | When to use |
 |---------|-------------|-------------|
 | `npm test` | Unit tests only (fast, no deps) | After any code change |
-| `npm run test:integration` | Integration tests (needs live SpacetimeDB) | After spacetime publish |
-| `npm run test:phase -- test/backend/{feature}` | Single feature tests | During feature development |
-| `npm run test:all` | Unit + integration combined | Full verification |
+| `npm run test:integration` | Integration tests against test1 (sets `STDB_TARGET=test`; wipes + bootstraps test1 in globalSetup; refuses prod) | Once per release (energy rule) |
+| `SKIP_DB_CLEAR=1 npm run test:integration -- test/backend/{feature}` | Single feature tests, no wipe | During feature development |
 | `npm run test:watch` | Unit tests in watch mode | During active development |
-| `npm run test:integration:watch` | Integration tests in watch mode | Debugging integration issues |
 
 After running any test command, always produce the failure report format from Process Integrity, regardless of whether you were explicitly asked. If all tests pass, "All {count} tests passing" is sufficient.
 
@@ -182,21 +180,21 @@ After running any test command, always produce the failure report format from Pr
 
 This project publishes to SpacetimeDB maincloud (hosted). No local server to start/stop.
 
-1. **Publish** -- `spacetime publish hsr-spacetimedb-test1 -y`
-2. **Check logs** -- `spacetime logs hsr-spacetimedb-test1`
-3. **Basic query** -- `spacetime sql hsr-spacetimedb-test1 "SELECT * FROM user"`
+1. **Publish** -- `npm run stdb:publish:test` (add `-- --dry-run` to print the command first)
+2. **Check logs** -- `spacetime logs hsr-spacetimedb-test1 --server maincloud --no-config`
+3. **Basic query** -- `spacetime sql hsr-spacetimedb-test1 "SELECT COUNT(*) AS n FROM user" --server maincloud --no-config`
 
-Do NOT include `spacetime start` or "kill the server" -- maincloud is always running. Only use `--clear-database` when the plan explicitly requires it.
+Do NOT include `spacetime start` or "kill the server" -- maincloud is always running. Only wipe (`npm run stdb:publish:test:clear`, test only) when the plan explicitly requires it. Every target comes from `--target` / `STDB_TARGET` (`test` | `prod`); database names live in `shared/stdb-targets.ts`.
 
 ## Post-Publish Bootstrap
 
-After every `spacetime publish --clear-database`:
+After every wipe publish (`npm run stdb:publish:test:clear`):
 
 ```bash
-npx tsx scripts/post-publish.ts
+npm run stdb:bootstrap:test
 ```
 
-Auto-bootstraps: fresh identity -> writes token to `.env.local` -> `register_server` -> seeds game data from `test/data/` JSONs.
+Auto-bootstraps: `init` has already registered the publisher as Owner + SYSTEM user -> bootstrap mints a fresh identity -> `server_register_delegate` (as Owner) -> writes `STDB_SERVER_TOKEN` + `STDB_SERVER_IDENTITY` to `.env.test.local` -> seeds game data from `data/seed/` JSONs, achievements, configs, GC jobs. Re-seed alone: `npm run stdb:seed:test`.
 
 ---
 

@@ -1,8 +1,8 @@
 /**
  * Vitest globalSetup for integration suite.
  *
- * Runs ONCE before the entire suite (not per-file) and clears the maincloud
- * test database + runs post-publish bootstrap so every `npm run test:all`
+ * Runs ONCE before the entire suite (not per-file) and wipes the maincloud
+ * test database + runs the bootstrap so every `npm run test:integration`
  * invocation starts from a clean slate.
  *
  * Why: tests leak state that has no auto-cleanup path —
@@ -17,8 +17,9 @@
  * flakiness investigation, Rounds 1-8).
  *
  * Safety:
- *   - Refuses to run unless DB name contains "-test" (prevents accidental
- *     production wipes if env is misconfigured).
+ *   - STDB_TARGET must be `test` (set by `npm run test:integration`); the
+ *     database name comes from shared/stdb-targets.ts and must pass
+ *     assertNameMatchesTarget (carries "-test") and assertWipeAllowed.
  *   - Opt out per invocation with `SKIP_DB_CLEAR=1` (useful when iterating
  *     on a single failing file and you want to preserve DB state).
  *
@@ -28,23 +29,13 @@
  */
 
 import { execSync } from 'child_process';
-import { readFileSync, existsSync } from 'fs';
-import { resolve } from 'path';
-
-function loadEnvValue(key: string): string | undefined {
-    const envPath = resolve(process.cwd(), '.env.local');
-    if (!existsSync(envPath)) return undefined;
-    const content = readFileSync(envPath, 'utf-8');
-    for (const line of content.split('\n')) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith('#')) continue;
-        const eqIdx = trimmed.indexOf('=');
-        if (eqIdx === -1) continue;
-        const k = trimmed.slice(0, eqIdx).trim();
-        if (k === key) return trimmed.slice(eqIdx + 1).trim();
-    }
-    return undefined;
-}
+import {
+    STDB_DATABASES,
+    assertNameMatchesTarget,
+    assertWipeAllowed,
+    parseTarget,
+} from '../shared/stdb-targets';
+import { backendEnv } from './shared/env';
 
 export default async function setup() {
     if (process.env.SKIP_DB_CLEAR === '1') {
@@ -52,72 +43,49 @@ export default async function setup() {
         return;
     }
 
-    const dbName = loadEnvValue('PUBLIC_SPACETIMEDB_DB_NAME');
-    if (!dbName) {
-        throw new Error(
-            '[global-setup] PUBLIC_SPACETIMEDB_DB_NAME not found in .env.local — ' +
-            'cannot safely clear database. Set SKIP_DB_CLEAR=1 to bypass.'
-        );
-    }
-
-    // Safety: refuse to wipe anything that doesn't look like a test database.
-    if (!dbName.includes('-test')) {
-        throw new Error(
-            `[global-setup] Refusing to clear database "${dbName}" — name does not ` +
-            'contain "-test". Safety guard to prevent accidental production wipes. ' +
-            'Set SKIP_DB_CLEAR=1 to bypass this check entirely.'
-        );
-    }
+    const target = parseTarget(process.env.STDB_TARGET);
+    const dbName = STDB_DATABASES[target];
+    // Safety: refuse to wipe anything that is not the committed "-test" database.
+    assertNameMatchesTarget(target, dbName);
+    assertWipeAllowed(target);
 
     console.log(`[global-setup] Clearing database "${dbName}" before suite...`);
     const t0 = Date.now();
 
     try {
-        execSync(
-            `spacetime publish ${dbName} --clear-database -y --module-path spacetimedb`,
-            { stdio: 'inherit', cwd: process.cwd() }
-        );
-    } catch (err) {
-        throw new Error(
-            `[global-setup] spacetime publish --clear-database failed. ` +
-            `Check spacetime CLI, network, and maincloud login. Original: ${(err as Error).message}`
-        );
-    }
-
-    console.log('[global-setup] Running post-publish bootstrap (register server + seed data)...');
-    try {
-        execSync('npx tsx scripts/post-publish.ts', {
+        execSync('npx tsx scripts/stdb/publish.ts --target test --clear', {
             stdio: 'inherit',
             cwd: process.cwd(),
         });
     } catch (err) {
         throw new Error(
-            `[global-setup] post-publish.ts failed after successful --clear-database. ` +
+            `[global-setup] scripts/stdb/publish.ts --target test --clear failed. ` +
+            `Check typecheck, spacetime CLI, network, and maincloud login. Original: ${(err as Error).message}`
+        );
+    }
+
+    console.log('[global-setup] Running bootstrap (delegate + seed data)...');
+    try {
+        execSync('npx tsx scripts/stdb/bootstrap.ts --target test', {
+            stdio: 'inherit',
+            cwd: process.cwd(),
+        });
+    } catch (err) {
+        throw new Error(
+            `[global-setup] scripts/stdb/bootstrap.ts failed after a successful wipe. ` +
             `Database is now empty and unseeded — rerun manually before next test invocation. ` +
             `Original: ${(err as Error).message}`
         );
     }
 
-    // post-publish.ts ROTATES the server identity and writes a fresh token to
-    // .env.local. The vitest runner process already loaded the OLD token into
-    // process.env at config-import time (vitest.integration.config.ts calls
-    // loadEnvLocal() before globalSetup runs). Tests read the token lazily via
-    // getServerToken() in test/shared/connection.ts, so refreshing process.env
-    // here is sufficient — subsequent getServerToken() calls will see the new
-    // token. Without this, every server-token reducer call fails with
-    // "Forbidden: caller is not the registered server identity" because the
-    // stale token maps to an Identity that no longer exists in ServerIdentity.
-    const freshToken = loadEnvValue('SPACETIMEDB_SERVER_TOKEN');
-    if (!freshToken) {
+    // bootstrap ROTATES the delegate token and writes it to .env.test.local.
+    // backendEnv() re-reads the file into process.env, so subsequent harness
+    // connections use the fresh token, not a stale one from before the wipe.
+    if (!backendEnv().serverToken) {
         throw new Error(
-            '[global-setup] post-publish completed but SPACETIMEDB_SERVER_TOKEN is missing from .env.local. ' +
+            '[global-setup] bootstrap completed but STDB_SERVER_TOKEN is missing from .env.test.local. ' +
             'Something went wrong during bootstrap.'
         );
-    }
-    const prevToken = process.env.SPACETIMEDB_SERVER_TOKEN;
-    process.env.SPACETIMEDB_SERVER_TOKEN = freshToken;
-    if (prevToken !== freshToken) {
-        console.log('[global-setup] Refreshed process.env.SPACETIMEDB_SERVER_TOKEN with rotated token.');
     }
 
     const elapsed = ((Date.now() - t0) / 1000).toFixed(1);

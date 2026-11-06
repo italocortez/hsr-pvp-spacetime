@@ -66,7 +66,7 @@ Entry point for any agent or human working with behavior specs and tests. Maps e
 |------|---------|
 | `test/shared/connection.ts` | WebSocket test harness -- `createTestHarness()`, `createVerifiedTestHarness()`, `expectReducerError()`, `sleep()`, `hasServerToken()` |
 | `test/shared/fixtures.ts` | Data factories -- `nextUid()`, `createAccountArgs()`, `characterBatch()`, `resetUidCounter()`, etc. |
-| `test/shared/seed-data.ts` | Test-specific data seeder (characters, lightcones, costs, archetypes) |
+| `test/shared/env.ts` | `backendEnv()` -- resolves `STDB_TARGET=test` + `.env.test.local` through `shared/stdb-targets.ts` |
 | `test/shared/mocks/spacetimedb-server.ts` | Mock for unit tests (no live SpacetimeDB needed) |
 
 ### Shared Helpers (`test/shared/helpers/`)
@@ -77,10 +77,11 @@ See `test-writing-guide.md` for the full helpers reference table. Phase 10.5 ext
 
 | Script | Purpose | When to run |
 |--------|---------|-------------|
-| `scripts/post-publish.ts` | Bootstrap after `--clear-database` -- identity, server, seed data | After every destructive publish |
-| `scripts/seed-data.ts` | Standalone game data seeder (characters, lightcones, costs) | When you need to re-seed without full bootstrap |
-| `scripts/register-server.ts` | Register server identity only | First-time setup or manual re-register |
-| `scripts/manage-user.ts` | User management utilities (set-role, delete) | Admin operations |
+| `scripts/stdb/publish.ts` (`npm run stdb:publish:<t>`, `:test:clear`) | Typecheck, then publish with `STDB_TARGET=<t>`; wipe on test only | Every module change (test first) |
+| `scripts/stdb/bootstrap.ts` (`npm run stdb:bootstrap:<t>`) | Register a fresh delegate (as Owner), write `.env.<t>.local`, seed `data/seed/` + achievements + configs + GC jobs | After every wipe publish |
+| `scripts/stdb/seed.ts` (`npm run stdb:seed:<t>`) | Bootstrap's seeding step alone, as the delegate | Re-seed without rotating the token |
+| `scripts/stdb/manage-user.ts` (`npm run stdb:manage-user -- --target <t> …`) | set-role / delete through the delegate | Admin operations |
+| `scripts/stdb/describe.ts`, `generate.ts` | Schema JSON (`--no-config`), local bindings regeneration | Schema-delta gate, after schema changes |
 
 ## Data
 

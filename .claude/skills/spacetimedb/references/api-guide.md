@@ -893,7 +893,7 @@ import { DbConnection } from './module_bindings';
 
 // connectionBuilder prop takes builder WITHOUT calling .build()
 const builder = DbConnection.builder()
-  .withUri(SPACETIMEDB_URI)
+  .withUri(STDB_HOST)
   .withDatabaseName(MODULE_NAME)
   .withToken(localStorage.getItem('auth_token') || undefined)
   .onConnect((conn, identity, token) => {

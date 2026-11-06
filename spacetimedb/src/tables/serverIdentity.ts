@@ -1,14 +1,21 @@
 import { table, t } from 'spacetimedb/server';
+import { ServerIdentityKind } from '../types/enums';
 
 /**
- * Stores the trusted server identity (Next.js API server).
- * Only one row should ever exist. The server identity is the only caller
- * allowed to invoke server_link_provider (which links OAuth provider accounts to users).
+ * Trusted server identities (ACCESS-SECURITY-OPS §C.4).
  *
- * Bootstrap: call register_server when the table is empty.
+ * - Owner: the database publisher, inserted by `init` on the first publish (and on every
+ *   `--delete-data` republish). Only the owner may register or revoke delegates.
+ * - Delegate: identities the owner registered with `server_register_delegate` (the bootstrap
+ *   script's token, the Vercel auth function). Delegates may call the `server_*` reducers
+ *   guarded by `requireServer` (e.g. `server_link_provider`), but not manage other delegates.
+ *
+ * Nothing in the module accepts an unregistered caller: there is no first-come registration.
  */
 export const serverIdentityColumns = {
     identity: t.identity().primaryKey(),
+    kind: ServerIdentityKind,
+    label: t.string(),
     registeredAt: t.timestamp(),
 };
 

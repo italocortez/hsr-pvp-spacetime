@@ -4,13 +4,13 @@
  * Phase 16.4 D-01 / D-04 — the "pre" measurement is unrecoverable; this
  * capture is the durable "maincloud-as-shipped" snapshot.
  *
- * Usage: npx tsx tools/capture-ws-frames.ts
+ * Usage: STDB_TARGET=test npx tsx tools/capture-ws-frames.ts
  *
  * Output:
  *   .planning/phases/16.4-spacetimedb-v2-2-0-refactor-pass/transport-evidence/frames.jsonl
  *
- * Requires CAPTURE_WS_FIXTURE_TOKEN in .env.local (low-privilege guest token,
- * NOT the admin SPACETIMEDB_SERVER_TOKEN — admin token would skew bandwidth).
+ * Requires CAPTURE_WS_FIXTURE_TOKEN in .env.<target>.local (low-privilege guest token,
+ * NOT the admin STDB_SERVER_TOKEN — admin token would skew bandwidth).
  */
 
 import {
@@ -23,69 +23,57 @@ import {
 import { resolve, dirname } from 'path';
 import WebSocket from 'ws';
 import { DbConnection } from '../web/src/module_bindings';
+import { ENV_KEYS, envFileFor, parseTarget, resolveBackendEnv } from '../shared/stdb-targets';
 
-function loadEnvFile(filename: string) {
+// Env scheme (ACCESS-SECURITY-OPS §C.2): STDB_TARGET picks the database; secrets come from
+// .env.<target>.local only. The file wins over the shell environment.
+function loadEnvFile(filename: string): Record<string, string> {
+    const out: Record<string, string> = {};
     try {
         const content = readFileSync(resolve(process.cwd(), filename), 'utf-8');
-        for (const line of content.split('\n')) {
+        for (const line of content.split(/\r?\n/)) {
             const trimmed = line.trim();
             if (!trimmed || trimmed.startsWith('#')) continue;
             const eqIdx = trimmed.indexOf('=');
             if (eqIdx === -1) continue;
-            const key = trimmed.slice(0, eqIdx).trim();
-            const value = trimmed.slice(eqIdx + 1).trim();
-            if (!process.env[key]) process.env[key] = value;
+            out[trimmed.slice(0, eqIdx).trim()] = trimmed.slice(eqIdx + 1).trim();
         }
     } catch {
         /* file missing, skip */
     }
+    return out;
 }
 
-loadEnvFile('.env.local');
-loadEnvFile('.env');
+const target = parseTarget(process.env[ENV_KEYS.target]);
+const env: Record<string, string | undefined> = { ...process.env, ...loadEnvFile(envFileFor(target)) };
+const backend = resolveBackendEnv(target, env);
+const host = backend.host;
+const dbName = backend.dbName;
 
-const fixtureToken = process.env.CAPTURE_WS_FIXTURE_TOKEN;
+const fixtureToken = env.CAPTURE_WS_FIXTURE_TOKEN;
 if (!fixtureToken) {
-    console.error('CAPTURE_WS_FIXTURE_TOKEN not found in .env.local.');
+    console.error(`CAPTURE_WS_FIXTURE_TOKEN not found in ${backend.envFile}.`);
     console.error(
-        'Add a LOW-PRIVILEGE GUEST TOKEN (not admin SPACETIMEDB_SERVER_TOKEN).',
+        'Add a LOW-PRIVILEGE GUEST TOKEN (not the admin STDB_SERVER_TOKEN).',
     );
     console.error('To generate a guest token:');
     console.error('  1. Run dev server: npm run dev');
     console.error('  2. Sign in as guest from the UI');
-    console.error('  3. Copy SPACETIMEDB_TOKEN from browser localStorage');
-    console.error('  4. Add to .env.local: CAPTURE_WS_FIXTURE_TOKEN=<paste>');
+    console.error('  3. Copy the SDK auth token from browser localStorage');
+    console.error(`  4. Add to ${backend.envFile}: CAPTURE_WS_FIXTURE_TOKEN=<paste>`);
     process.exit(1);
 }
-if (!process.env.SPACETIMEDB_SERVER_TOKEN) {
+if (!backend.serverToken) {
     console.warn(
-        '[CAPTURE] SPACETIMEDB_SERVER_TOKEN not set in environment — cannot verify CAPTURE_WS_FIXTURE_TOKEN is not the admin token. Continuing on caller responsibility.',
+        '[CAPTURE] STDB_SERVER_TOKEN not set — cannot verify CAPTURE_WS_FIXTURE_TOKEN is not the admin token. Continuing on caller responsibility.',
     );
-} else if (fixtureToken === process.env.SPACETIMEDB_SERVER_TOKEN) {
+} else if (fixtureToken === backend.serverToken) {
     console.error(
-        'CAPTURE_WS_FIXTURE_TOKEN must NOT equal SPACETIMEDB_SERVER_TOKEN.',
+        'CAPTURE_WS_FIXTURE_TOKEN must NOT equal STDB_SERVER_TOKEN.',
     );
     console.error(
         'Admin token would skew the bandwidth profile (per RESEARCH.md OQ-2).',
     );
-    process.exit(1);
-}
-
-let host =
-    process.env.SPACETIMEDB_HOST ??
-    process.env.NEXT_PUBLIC_SPACETIMEDB_HOST ??
-    'wss://maincloud.spacetimedb.com';
-if (host.startsWith('https://')) host = host.replace('https://', 'wss://');
-else if (host.startsWith('http://')) host = host.replace('http://', 'ws://');
-
-let dbName: string;
-try {
-    const stConfig = JSON.parse(
-        readFileSync(resolve(process.cwd(), 'spacetime.json'), 'utf-8'),
-    );
-    dbName = stConfig.database;
-} catch {
-    console.error('spacetime.json not found — run from project root');
     process.exit(1);
 }
 

@@ -161,7 +161,7 @@ export const admin_gc_identities = spacetimedb.reducer((ctx) => {
 
 // ─── seed_identity_gc_job (server-only, idempotent) ──────────────────────────
 // Inserts the first IdentityGcJob row to kick off the scheduled GC chain.
-// Called from post-publish.ts after every --clear-database publish.
+// Called from scripts/stdb/bootstrap.ts after every wipe publish.
 // Server-identity-gated: rejects non-server callers.
 // Idempotent: skips if a row already exists.
 

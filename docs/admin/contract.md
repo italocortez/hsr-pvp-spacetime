@@ -4,29 +4,50 @@
 
 ## Feature Overview
 
-Admin and server operations handle privileged actions: server identity registration, Discord account linking, user role management, bulk game data seeding, user deletion cascades, and field-level user updates. All admin reducers require `ensureAdmin(ctx)`, all server reducers require `requireServer(ctx)`.
+Admin and server operations handle privileged actions: server identity registration (Owner by `init`, Delegates by the owner), Discord account linking, user role management, bulk game data seeding, user deletion cascades, and field-level user updates. All admin reducers require `ensureAdmin(ctx)`, all server reducers require `requireServer(ctx)`.
 
 ## Reducers
 
-### register_server
+### init (lifecycle hook, Phase M2)
 
-**Purpose:** Register the server's SpacetimeDB identity (first-come-first-served) and create the SYSTEM user
+**Purpose:** Register the publisher as the Owner server identity and create the SYSTEM user
 
-**Permission:** First caller only (subsequent calls rejected)
-
-**Parameters:** None (uses `ctx.sender`)
+**Permission:** Runs only on the first publish and every `--delete-data` republish (`ctx.sender` = publisher)
 
 **Flow:**
-1. Check if any ServerIdentity row exists
-2. If exists → reject
-3. Insert ServerIdentity row with `ctx.sender`
-4. Create SYSTEM user (id=autoInc, discordId="1", role=Admin)
-5. Link ServerIdentity → UserIdentity for SYSTEM user
+1. If `ServerIdentity` is empty: insert `ctx.sender` with `kind=Owner`, `label='owner'`
+2. Create SYSTEM user (`username='SYSTEM'`, id=autoInc, role=Admin)
+3. Link the owner identity → UserIdentity for SYSTEM user
+
+### server_register_delegate
+
+**Purpose:** Register a Delegate server identity (bootstrap / auth-function token)
+
+**Permission:** Owner server identity only
+
+**Parameters:** `identityHex: string`, `label: string`
+
+**Flow:**
+1. `requireOwner(ctx)`
+2. Reject an identity already in `ServerIdentity` or already linked to a user
+3. Insert `ServerIdentity` (`kind=Delegate`, `label`) and `UserIdentity` → SYSTEM user
 
 **Error Cases:**
 | Condition | Error Message |
 |-----------|--------------|
-| Server identity already registered | "Server identity already registered. To re-register, clear the database first." |
+| Caller is not a server identity | "Forbidden: caller is not a registered server identity." |
+| Caller is a Delegate | "Forbidden: only the owner server identity may do this." |
+| Identity already registered | "Already registered." |
+
+### server_revoke_delegate
+
+**Purpose:** Revoke a Delegate (leaked token, rotation by bootstrap) without a wipe
+
+**Permission:** Owner server identity only
+
+**Parameters:** `identityHex: string`
+
+**Flow:** `requireOwner(ctx)`; reject unknown identities ("Not a registered server identity.") and the Owner ("Only delegates can be revoked."); delete the delegate's `ServerIdentity` and `UserIdentity` rows.
 
 ### server_link_discord
 
@@ -202,15 +223,20 @@ Admin and server operations handle privileged actions: server identity registrat
 
 ## Acceptance Scenarios
 
-### Server Registration (First Time)
+### Owner Registration (First Publish)
 **Given:** No ServerIdentity row exists
-**When:** `register_server` is called
-**Then:** ServerIdentity inserted. SYSTEM user created with discordId="1", role=Admin. UserIdentity links server identity to SYSTEM user.
+**When:** The module is published (`init` runs)
+**Then:** ServerIdentity inserted for the publisher with `kind=Owner`. SYSTEM user created with role=Admin. UserIdentity links the owner identity to SYSTEM user.
 
-### Server Registration (Already Registered)
-**Given:** ServerIdentity row exists
-**When:** `register_server` is called again
-**Then:** Throws "Server identity already registered. To re-register, clear the database first."
+### Delegate Registration
+**Given:** Caller is the Owner
+**When:** `server_register_delegate(identityHex, 'vercel-auth-test')` is called with a fresh identity
+**Then:** ServerIdentity row with `kind=Delegate` inserted; UserIdentity links it to SYSTEM. The delegate can call `server_link_provider`, `server_set_role`, `server_delete_user`.
+
+### Delegate Registration by a Non-Owner
+**Given:** Caller is a Delegate
+**When:** `server_register_delegate` or `server_revoke_delegate` is called
+**Then:** Throws "Forbidden: only the owner server identity may do this."
 
 ### Discord Link (New User from Guest)
 **Given:** Guest user exists with identity matching callerIdentityHex
@@ -302,7 +328,7 @@ Admin and server operations handle privileged actions: server identity registrat
 
 | Decision | Source | Date |
 |----------|--------|------|
-| register_server first-come-first-served + SYSTEM user | Phase 1 execution | 2026-03-16 |
+| First-come-first-served server registration + SYSTEM user (replaced in M2) | Phase 1 execution | 2026-03-16 |
 | server_link_discord with guest upgrade + returning user re-point | Phase 1 execution | 2026-03-16 |
 | admin_bulk_upsert with EXPECTED_KEYS validation | Phase 1 execution | 2026-03-16 |
 | User deletion soft-delete pattern with 5s scheduled cascade | Phase 2 execution | 2026-03-16 |
@@ -313,3 +339,4 @@ Admin and server operations handle privileged actions: server identity registrat
 | `admin_bulk_upsert` HsrCharacterCost/HsrLightconeCost/HsrSynergyCost EXPECTED_KEYS updated: new `draftMode` key, unified `costs` struct replaces separate `classicCosts`+`auctionBaseBid` keys | Phase 15.4 execution | 2026-04-15 |
 | HsrCharacterCost+HsrLightconeCost upsert branches: delete+insert pattern retained; A2_FALLBACK_ITER (SpacetimeDB 2.1.0 enum-struct btree limitation) extends Phase 15.1 precedent | Phase 15.4 execution | 2026-04-15 |
 | HsrSynergyCost upsert uses `id.update()` (autoInc PK) — tuple match via iter()+predicate follows the Phase 15.4 reducer pattern | Phase 15.4 execution | 2026-04-15 |
+| `init` registers the Owner + SYSTEM user; `server_register_delegate` / `server_revoke_delegate` (owner-only); test-only `server_*` reducers default-deny unless module env `STDB_TARGET=test` | Phase M2 execution | 2026-11-06 |

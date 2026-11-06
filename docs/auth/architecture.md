@@ -1,12 +1,21 @@
 # Auth & Users -- Architecture
 
-Last updated: 2026-04-09
+Last updated: 2026-11-06
 
 ## Overview
 
-Authentication is built on SpacetimeDB identities with optional Discord OAuth linking. Every client gets a SpacetimeDB identity on first connection. `login_as_guest` creates a User row and UserIdentity mapping. The Next.js server calls `server_link_provider` to upgrade guests to verified accounts after Discord OAuth completes. Private auth data (discordId, email) lives in `UserPrivate` which is never exposed to client subscriptions directly -- clients use the `view_my_profile` view instead.
+Authentication is built on SpacetimeDB identities with optional Discord OAuth linking. Every client gets a SpacetimeDB identity on first connection. `login_as_guest` creates a User row and UserIdentity mapping. A trusted server identity (the auth function, M5) calls `server_link_provider` to upgrade guests to verified accounts after Discord OAuth completes. Private auth data (discordId, email) lives in `UserPrivate` which is never exposed to client subscriptions directly -- clients use the `view_my_profile` view instead.
 
 Ban enforcement runs at three points: at link-time, at reconnect, and when a ban is created.
+
+## Server Identity: Owner and Delegates (Phase M2)
+
+`ServerIdentity` (private) holds every identity allowed to call the `server_*` reducers:
+
+- **Owner**: the database publisher, inserted by `init` on the first publish (and on every `--delete-data` republish) together with the SYSTEM user. Only the owner may call `server_register_delegate` / `server_revoke_delegate`.
+- **Delegate**: an identity the owner registered (label `vercel-auth-<target>`). `scripts/stdb/bootstrap.ts` mints it and writes its token as `STDB_SERVER_TOKEN` to `.env.<target>.local`; the same value goes into the Vercel function secrets (M5). Each delegate is linked to the SYSTEM user through `UserIdentity`, so `ensureAdmin` passes for seeding.
+
+`server_link_provider`, `server_set_role` and `server_delete_user` accept **any** registered server identity (`requireServer`: Owner or Delegate). Nothing in the module accepts an unregistered caller; there is no first-come registration. A leaked delegate token is revoked with `server_revoke_delegate` (or by re-running bootstrap, which revokes the previous delegate) without a wipe.
 
 ## Table Relationships
 
@@ -67,7 +76,7 @@ BanRecord (id: u32 autoInc PK)  [PRIVATE -- public: false]
 5. Insert `UserIdentity` row linking `ctx.sender -> newUser.id`
 
 ### server_link_provider(identity, discordId, discordUsername, email?) -- server-only
-1. `requireServer(ctx)` -- caller must be in ServerIdentity table
+1. `requireServer(ctx)` -- caller must have a ServerIdentity row (Owner or Delegate)
 2. `rejectIfBanned(ctx, discordId)` -- check BanRecord via `ban_record_provider_id` index (D-08 point 1)
 3. Look up `UserIdentity` by provided identity
 4. Three merge cases:
@@ -260,6 +269,7 @@ Any new frontend subscription to a raw table (no projection view body) OR a per-
 | Link-discord API route uses ephemeral connection identity verification (replaces trusting client-supplied hex) (SEC-04) | Phase 12 execution | 2026-04-05 |
 | Multi-column index on BanRecord causes PANIC; use single-column index + in-memory filter (WR-01) | Phase 12 execution | 2026-04-05 |
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
+| ServerIdentity gains `kind` (Owner \| Delegate) + `label`; `init` registers the publisher as Owner; owner-only `server_register_delegate` / `server_revoke_delegate`; `server_link_provider` accepts Owner or Delegate | Phase M2 execution | 2026-11-06 |
 | User.isPrivate removed (D-02 dead code); DeletedUser private archive table added (D-05); view_user_directory flipped to authenticated-only spacetimedb.view() (D-06); performUserDeletion eviction rewrite (D-09); R1 fix — all three soft-delete writers now insert UserDeletionJob (D-10); resolveUserLabel helper added (D-12) | Phase 15.2 execution | 2026-04-15 |
 | UAT verify-work confirmed all 9 cascade + archive behaviors on live maincloud. Two issues surfaced for follow-up (scoped to Phase 15.5 via seed `.planning/seeds/phase-15.5-auth-gated-user-subscription.md`): (1) D-06's `spacetimedb.view()` does NOT reject anonymous subscribers at the framework level — per SpacetimeDB docs, `view` vs `anonymousView` only differs in whether `ctx.sender()` is exposed, not in who can call; the runtime flip is a no-op without an explicit body-level auth check. (2) The actual bandwidth-leak surface is `useAuth.ts:38`'s unconditional `SELECT * FROM user` subscription pre-auth — no client ever subscribes to `view_user_directory`. Phase 15.5 will delete the dead view and gate the raw `user` subscription behind auth state | Phase 15.2 execution | 2026-04-16 |
 | Phase 15.5: `view_user_directory` deleted (dead code — zero client subscribers, cosmetic 15.2 D-06 flip retired); `view_public_accounts` renamed to `view_public_hsr_accounts` (D-04) — underlying table is HsrAccount, name now explicit; `useAuth.ts` subscription split into Stage 1 (`view_my_profile`, always) and Stage 2 (`SELECT * FROM user`, gated on `currentUser != null \|\| hadUserIdOnMount.current \|\| hadSessionCookie.current`) — closes the UAT Test 4 bandwidth leak; gate signal swapped from `hadTokenOnMount` (SDK auto-persists anonymous identity token, false-positive) to `hadUserIdOnMount` (`spacetimedb_user_id`, only written by `setResolvedUser`) per Plan 02 D-01 deviation `790a39c`; new `guestLoginPending` state drives a narrow Login-button spinner scoped strictly to the `loginAsGuest` pending window (D-03); `docs/auth/architecture.md` Subscription Lifecycle section codifies the projection-vs-subscription privacy distinction (D-05) with `view_lobby_browser` and `view_public_hsr_accounts` named as intentional anonymous exceptions | Phase 15.5 execution | 2026-04-16 |

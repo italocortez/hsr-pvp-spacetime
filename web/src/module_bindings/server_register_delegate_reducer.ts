@@ -10,4 +10,7 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-export default {};
+export default {
+  identityHex: __t.string(),
+  label: __t.string(),
+};

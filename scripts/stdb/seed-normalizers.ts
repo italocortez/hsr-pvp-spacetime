@@ -1,9 +1,9 @@
 /**
  * Pure data-shape normalizers for the D-22 canonical seed format
- * (test/data/{characters,lightcones,pairing}_table.json).
+ * (data/seed/{characters,lightcones,synergies}.json).
  *
- * Shared between scripts/seed-data.ts (CLI bootstrap after `--clear-database`
- * publish) and components/features/admin-view/components/BulkUpsert.tsx
+ * Shared between scripts/stdb/_seed.ts (bootstrap / seed after a wipe)
+ * and components/features/admin-view/components/BulkUpsert.tsx
  * (admin UI bulk-upsert flow that auto-splits a fat character / lightcone /
  * pairing payload into multi-table reducer calls).
  *

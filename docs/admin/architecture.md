@@ -1,18 +1,20 @@
 # Admin & Server Operations -- Architecture
 
-Last updated: 2026-04-13
+Last updated: 2026-11-06
 
 ## Overview
 
-The admin feature covers privileged server operations: server identity bootstrapping, user management, ban enforcement, and generic row deletion/bulk upsert for game data tables. A trusted server identity (the Next.js API server) is registered once via `register_server` and gates all `server_*` reducers. Admin match tools (`admin_force_finalize`, `admin_void_match`, `admin_set_bracket_winner`) provide override capabilities for stuck or disputed matches.
+The admin feature covers privileged server operations: server identity bootstrapping, user management, ban enforcement, and generic row deletion/bulk upsert for game data tables. Trusted server identities gate all `server_*` reducers: the **Owner** (the publisher, registered by `init`) and the **Delegates** the owner registers with `server_register_delegate` (the bootstrap / auth-function token). Admin match tools (`admin_force_finalize`, `admin_void_match`, `admin_set_bracket_winner`) provide override capabilities for stuck or disputed matches.
 
-The SYSTEM user (id=1) is created during `register_server` and serves as the audit trail identity for bootstrap and server-initiated operations.
+The SYSTEM user (`username='SYSTEM'`, id from autoInc, usually 1) is created by `init` and serves as the audit trail identity for bootstrap and server-initiated operations. Owner and delegates are linked to it through `UserIdentity`.
 
 ## Table Relationships
 
 ```
 ServerIdentity (identity: Identity PK)  [PRIVATE -- public: false]
   +-- identity -> SpacetimeDB sender identity (hex)
+  +-- kind: ServerIdentityKind (Owner | Delegate)
+  +-- label: string
   +-- registeredAt: Timestamp
 
 UserDeletionJob (scheduledId: u64 autoInc PK)  -- scheduled table
@@ -31,32 +33,38 @@ BanRecord (id: u32 autoInc PK)  [PRIVATE -- public: false]
 
 ## Reducer Flows
 
-### register_server()
-1. First-come-first-served: any caller can register if `ServerIdentity` table is empty
-2. Insert `ServerIdentity` row with `ctx.sender` as identity
-3. Create SYSTEM user: `id=1, discordId="1", role=Admin, username="SYSTEM"`
-4. Insert `UserIdentity` linking `ServerIdentity.identity -> SYSTEM user.id`
+### init (lifecycle hook)
+1. Runs on the first publish and every `--delete-data` republish; `ctx.sender` is the publisher
+2. If `ServerIdentity` is empty: insert `ctx.sender` as `kind=Owner`, `label='owner'`
+3. Create SYSTEM user: `username="SYSTEM"`, role=Admin, id from autoInc (audit actor `SYSTEM_USER_ID=0`)
+4. Insert `UserIdentity` linking the owner identity -> SYSTEM user.id
+
+### server_register_delegate(identityHex, label) / server_revoke_delegate(identityHex)
+1. `requireOwner(ctx)` -- only the Owner row may manage delegates
+2. Register: insert `ServerIdentity` (`kind=Delegate`) + `UserIdentity` -> SYSTEM user; rejects duplicates
+3. Revoke: delete the delegate's `ServerIdentity` and `UserIdentity` rows; the Owner cannot be revoked
 
 ### server_link_provider(identity, discordId, discordUsername, email?)
-1. `requireServer(ctx)` -- validate caller is in ServerIdentity table
+1. `requireServer(ctx)` -- validate caller has a ServerIdentity row (Owner or Delegate)
 2. Look up `UserIdentity` by provided identity
 3. Check ban: `rejectIfBanned(ctx, discordId)` -- reject if BanRecord exists
 4. Three merge cases based on current state (see auth/architecture.md for case details)
 5. Write `UserPrivate` (discordId, discordUsername, email), set `User.hasDiscordLinked=true`
 
 ### server_set_role(username, roleTag)
-1. `requireServer(ctx)` -- validate caller is in ServerIdentity table
+1. `requireServer(ctx)` -- validate caller has a ServerIdentity row (Owner or Delegate)
 2. Find user by `User.username.find(username)` -- reject if not found
 3. Validate roleTag against Role enum variants
 4. `User.id.update()` with new role
 
 ### server_delete_user(username)
-1. `requireServer(ctx)` -- validate caller is in ServerIdentity table
+1. `requireServer(ctx)` -- validate caller has a ServerIdentity row (Owner or Delegate)
 2. Find user by `User.username.find(username)` -- reject if not found
 3. Call `performUserDeletion(ctx, userId, callerId)` -- same cascade as scheduled path
 
-### server_set_mmr(userId, gameModeTag, rating)
-1. `requireServer(ctx)` -- validate caller is in ServerIdentity table
+### server_set_mmr(userId, gameModeTag, rating) -- test databases only
+1. `requireTestDatabase(ctx)` -- module env `STDB_TARGET` must be `test` ("Not a test database.")
+2. `requireServer(ctx)` -- validate caller is in ServerIdentity table
 2. Validate gameModeTag against GameMode enum variants
 3. Upsert `MmrRating` row for userId + gameMode
 
@@ -191,7 +199,7 @@ Previous behavior matched on `(characterName, gameMode)` only, silently overwrit
 
 | Decision | Source | Date |
 |----------|--------|------|
-| register_server is first-come-first-served; SYSTEM user id=1 created on bootstrap | Phase 01 execution | 2026-02-01 |
+| Server registration is first-come-first-served; SYSTEM user id=1 created on bootstrap (replaced in M2) | Phase 01 execution | 2026-02-01 |
 | User deletion is always async (5s delay via UserDeletionJob) to avoid blocking transaction | Phase 01 execution | 2026-02-01 |
 | admin_bulk_upsert validates field keys per table (EXPECTED_KEYS map) and rejects unknown fields | Phase 02 execution | 2026-02-10 |
 | admin_delete_row guards User deletion: blocks if hosting/in active lobby or match | Phase 02 execution | 2026-02-10 |
@@ -203,6 +211,7 @@ Previous behavior matched on `(characterName, gameMode)` only, silently overwrit
 | hsr_character: added 6 columns (skelUrl, atlasUrl, atlasImgUrls, posX, posY, width) for Spine + card positioning (D-05, D-05a) | Phase 15 execution | 2026-04-13 |
 | admin_bulk_upsert: null-preserve partial-update wire convention across 5 cases; mergeForUpdate + validateEnumIfPresent helpers (D-08, D-10, D-12) | Phase 15 execution | 2026-04-13 |
 | Cost-table existence checks match on full composite tuple including costSetId; fixes silent default-set overwrite (D-09) | Phase 15 execution | 2026-04-13 |
+| `init` registers the Owner + SYSTEM user; owner-only `server_register_delegate` / `server_revoke_delegate`; `server_set_*` test utilities and `server_nuke_test_data` gated by `requireTestDatabase` | Phase M2 execution | 2026-11-06 |
 
 ---
 

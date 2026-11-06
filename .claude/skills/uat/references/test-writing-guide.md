@@ -22,7 +22,7 @@ import { createTestHarness, createVerifiedTestHarness, expectReducerError } from
 | Function | User type | Use for |
 |---|---|---|
 | `createTestHarness()` | Guest | Permission guard tests (expect rejection) |
-| `createVerifiedTestHarness()` | Verified (discord-linked) | Most feature tests -- requires `SPACETIMEDB_SERVER_TOKEN` in `.env.local` |
+| `createVerifiedTestHarness()` | Verified (discord-linked) | Most feature tests -- requires `STDB_SERVER_TOKEN` in `.env.test.local` |
 
 Use `test/shared/fixtures.ts` for data factories.
 
@@ -31,19 +31,18 @@ Use `test/shared/fixtures.ts` for data factories.
 The harness creates Guest or Verified (User-role) users. For tests requiring TournamentHost, Admin, or Moderator roles, promote after creation:
 
 ```bash
-SPACETIMEDB_DB_NAME=<db-name> npx tsx scripts/manage-user.ts set-role <username> <role>
+npm run stdb:manage-user -- --target test set-role <username> <role>
 ```
 
-To promote within a script, create a server-token connection (same pattern as `verifyUserViaServerConnection` in `test/shared/connection.ts` -- connect with `.withToken(SERVER_TOKEN)`, then call `serverConn.reducers.serverSetRole({...})`).
+To promote within a script, create a server-token connection (same pattern as `verifyUserViaServerConnection` in `test/shared/connection.ts` -- connect with `.withToken(backendEnv().serverToken)` from `test/shared/env.ts`, then call `serverConn.reducers.serverSetRole({...})`).
 
 ## UAT Test Scripts
 
 Write standalone `.ts` scripts (NOT vitest test files) in `tmp/` for UAT verification. These are disposable -- they exist to exercise reducers step-by-step and produce snapshots.
 
 ```typescript
-// tmp/uat-test-X.ts
-import { loadEnvFile } from 'node:process';
-loadEnvFile('.env.local');
+// tmp/uat-test-X.ts -- run with STDB_TARGET=test in the environment
+import '../test/shared/load-env'; // resolves the target and loads .env.test.local
 
 import { createVerifiedTestHarness, expectReducerError } from '../test/shared/connection';
 
@@ -52,7 +51,7 @@ async function main() {
   const userA = await createVerifiedTestHarness();
   console.log(`User A: id=${userA.userId}`);
 
-  // Promote role if needed (via manage-user.ts or inline server connection)
+  // Promote role if needed (promoteUser helper, stdb:manage-user, or inline server connection)
 
   // Step 1: Call a reducer
   await userA.call.someReducer({ param: 'value' });
@@ -143,10 +142,9 @@ The harness uses `subscribeToAllTables()` internally, but all existing tests alr
 
 Integration tests connect to a live SpacetimeDB instance. Configuration:
 
-| Env var | Default | Purpose |
-|---------|---------|---------|
-| `SPACETIMEDB_URI` | `wss://maincloud.spacetimedb.com` | WebSocket endpoint |
-| `SPACETIMEDB_DB` | `hsr-spacetimedb-test1` | Database name |
-| `SPACETIMEDB_SERVER_TOKEN` | -- | Required for verified user tests |
+| Key | Where | Purpose |
+|-----|-------|---------|
+| `STDB_TARGET` | process env (set to `test` by `npm run test:integration`) | Selects the database; the harness refuses anything but `test` |
+| `STDB_SERVER_TOKEN` | `.env.test.local` (written by `npm run stdb:bootstrap:test`) | Delegate token, required for verified user tests |
 
-Set these in `.env.local` (written by `post-publish.ts`). The integration test runner (`vitest.integration.config.ts`) loads `.env.local` only -- do NOT use `.env.test`.
+Host and database name are committed constants in `shared/stdb-targets.ts` (`wss://maincloud.spacetimedb.com`, `hsr-spacetimedb-test1`); read them through `backendEnv()` in `test/shared/env.ts`, never from `process.env`. Nothing reads `.env.local`.

@@ -7,58 +7,112 @@ import { performUserDeletion } from '../helpers/userDeletionHelper';
 import { rejectIfBanned, DISCORD_BAN_TYPE } from '../helpers/banHelper';
 
 /**
- * Helper: verify the caller is the registered server identity.
+ * Guard: the caller is a registered server identity (Owner or Delegate, §C.4).
+ * Used by every server_* reducer.
  */
 function requireServer(ctx: any) {
     const server = ctx.db.ServerIdentity.identity.find(ctx.sender);
     if (!server) {
-        throw new SenderError('Forbidden: caller is not the registered server identity.');
+        throw new SenderError('Forbidden: caller is not a registered server identity.');
     }
     return server;
 }
 
 /**
- * Bootstrap reducer: register the calling identity as the trusted server.
- * Only works when no server identity exists yet (first-come-first-served).
- * Also creates a SYSTEM user for audit trail purposes.
- *
- * Run via: npx tsx scripts/register-server.ts
+ * Guard: the caller is the Owner server identity (the publisher, registered by `init`).
+ * Only the owner may register or revoke delegates.
  */
-export const register_server = spacetimedb.reducer((ctx) => {
-    // iter() required: checking table emptiness — no count/isEmpty API exists, and PK is identity (unknown value)
-    const existing = [...ctx.db.ServerIdentity.iter()];
-    if (existing.length > 0) {
-        throw new SenderError('Server identity already registered. To re-register, clear the database first.');
+function requireOwner(ctx: any) {
+    const server = requireServer(ctx);
+    if (server.kind.tag !== 'Owner') {
+        throw new SenderError('Forbidden: only the owner server identity may do this.');
+    }
+    return server;
+}
+
+/**
+ * Guard for the test-only reducers (D-C1). Default-deny: anything but 'test' rejects, including a
+ * database published without STDB_TARGET (the value is then absent and reads as undefined).
+ * Must be the FIRST line of server_set_datetime, server_set_online, server_set_mmr, server_nuke_test_data.
+ */
+// ctx.env.STDB_TARGET is typed `string` on SDK 2.14.1 + TS 7.1 beta (the t.enum literal union is not surfaced).
+function requireTestDatabase(ctx: { readonly env: { readonly STDB_TARGET: string } }) {
+    if (ctx.env.STDB_TARGET !== 'test') throw new SenderError('Not a test database.');
+}
+
+function parseIdentityHex(identityHex: string): Identity {
+    if (!identityHex || identityHex.length === 0) {
+        throw new SenderError('identityHex is required');
+    }
+    try {
+        return Identity.fromString(identityHex);
+    } catch {
+        throw new SenderError('identityHex is not a valid identity');
+    }
+}
+
+/**
+ * Owner-only: register a delegate server identity (e.g. the bootstrap script's fresh token,
+ * the Vercel auth function). The delegate is linked to the SYSTEM user through UserIdentity so
+ * its connections pass the getAuthenticatedUser / ensureAdmin checks (admin_bulk_upsert, seeding).
+ *
+ * Run via: scripts/stdb/bootstrap.ts --target <test|prod>
+ */
+export const server_register_delegate = spacetimedb.reducer({
+    identityHex: t.string(),
+    label: t.string(),
+}, (ctx, { identityHex, label }) => {
+    requireOwner(ctx);
+    const identity = parseIdentityHex(identityHex);
+    if (!label || label.length === 0) {
+        throw new SenderError('label is required');
+    }
+    if (ctx.db.ServerIdentity.identity.find(identity)) {
+        throw new SenderError('Already registered.');
+    }
+    if (ctx.db.UserIdentity.identity.find(identity)) {
+        throw new SenderError('Identity is already linked to a user; mint a fresh identity for the delegate.');
     }
 
-    // Register the server identity (no audit columns on this table)
+    // SYSTEM_USER_ID is the audit sentinel (0), not the SYSTEM row's id: User.id is autoInc,
+    // so the SYSTEM row created by `init` is found by its unique username.
+    const systemUser = ctx.db.User.username.find('SYSTEM');
+    if (!systemUser) {
+        throw new SenderError('SYSTEM user missing; the database was not initialized by init.');
+    }
+
     ctx.db.ServerIdentity.insert({
-        identity: ctx.sender,
+        identity,
+        kind: { tag: 'Delegate' },
+        label,
         registeredAt: ctx.timestamp,
     });
-
-    // Create the SYSTEM user — the first user in the database.
-    const systemUser = ctx.db.User.insert(insertWithAudit(ctx, {
-        id: 0,
-        username: 'SYSTEM',
-        displayName: 'SYSTEM',
-        isGuest: false,
-        isOnline: false,
-        lastLoginAt: ctx.timestamp,
-        role: { tag: 'Admin' },
-        hasDiscordLinked: false,
-        avatarCharacterName: 'march7th',
-        displayedAchievementId: undefined,
-        deletedAt: undefined,
-    }, SYSTEM_USER_ID));
-
-    // Link server identity to SYSTEM user so server-token connections
-    // pass getAuthenticatedUser/ensureAdmin checks (e.g. seed-data.ts)
     ctx.db.UserIdentity.insert(insertWithAudit(ctx, {
-        identity: ctx.sender,
+        identity,
         userId: systemUser.id,
         lastSeenAt: ctx.timestamp,
     }, SYSTEM_USER_ID));
+});
+
+/**
+ * Owner-only: revoke a delegate server identity (a leaked token is revoked here and a new one
+ * minted by bootstrap, without a wipe). Deletes the ServerIdentity row and the delegate's
+ * UserIdentity row. The Owner row cannot be revoked.
+ */
+export const server_revoke_delegate = spacetimedb.reducer({
+    identityHex: t.string(),
+}, (ctx, { identityHex }) => {
+    requireOwner(ctx);
+    const identity = parseIdentityHex(identityHex);
+    const row = ctx.db.ServerIdentity.identity.find(identity);
+    if (!row) {
+        throw new SenderError('Not a registered server identity.');
+    }
+    if (row.kind.tag !== 'Delegate') {
+        throw new SenderError('Only delegates can be revoked.');
+    }
+    ctx.db.ServerIdentity.identity.delete(identity);
+    ctx.db.UserIdentity.identity.delete(identity);
 });
 
 /**
@@ -66,7 +120,8 @@ export const register_server = spacetimedb.reducer((ctx) => {
  * Replaces server_link_discord with a unified, extensible approach.
  * Currently supports: discord (only provider in scope).
  *
- * Called by the Next.js API route after verifying the OAuth session.
+ * Called by a registered server identity (Owner or Delegate): the auth function (Vercel, M5)
+ * uses the delegate token from bootstrap after verifying the OAuth session.
  *
  * The callerIdentityHex is the verified SpacetimeDB identity hex of the
  * end-user (verified via ephemeral connection in the API route).
@@ -190,7 +245,7 @@ export const server_link_provider = spacetimedb.reducer({
 
 /**
  * Server-only reducer: set a user's role.
- * Called via: npx tsx scripts/manage-user.ts set-role <username> <role>
+ * Called via: npm run stdb:manage-user -- --target <test|prod> set-role <username> <role>
  */
 export const server_set_role = spacetimedb.reducer({
     username: t.string(),
@@ -221,7 +276,7 @@ export const server_set_role = spacetimedb.reducer({
 
 /**
  * Server-only reducer: delete a user by username.
- * Called via: npx tsx scripts/manage-user.ts delete <username>
+ * Called via: npm run stdb:manage-user -- --target <test|prod> delete <username>
  * Guest users with no history references are hard-deleted; others are soft-deleted.
  */
 export const server_delete_user = spacetimedb.reducer({
@@ -247,7 +302,7 @@ export const server_delete_user = spacetimedb.reducer({
  * Upserts MmrRating row for the given userId + gameMode.
  * Useful for test seeding and future admin tools.
  *
- * Called via server-token connection (e.g. test harness or manage-user.ts).
+ * Called via server-token connection (test harness). Test databases only.
  */
 /**
  * Server-only reducer: set a datetime field on a supported table.
@@ -284,6 +339,7 @@ export const server_set_datetime = spacetimedb.reducer({
     field: t.string(),
     timestampMicros: t.string(),  // BigInt micros as string
 }, (ctx, { tableName, primaryKey, field, timestampMicros }) => {
+    requireTestDatabase(ctx);
     requireServer(ctx);
 
     const ts = new Timestamp(BigInt(timestampMicros));
@@ -342,6 +398,7 @@ export const server_set_online = spacetimedb.reducer({
     userId: t.u32(),
     isOnline: t.bool(),
 }, (ctx, { userId, isOnline }) => {
+    requireTestDatabase(ctx);
     requireServer(ctx);
 
     const user = ctx.db.User.id.find(userId);
@@ -357,6 +414,7 @@ export const server_set_mmr = spacetimedb.reducer({
     gameMode: t.string(),
     rating: t.u32(),
 }, (ctx, { userId, gameMode, rating }) => {
+    requireTestDatabase(ctx);
     requireServer(ctx);
     const systemUserId = SYSTEM_USER_ID;
 
@@ -398,7 +456,7 @@ export const server_set_mmr = spacetimedb.reducer({
 /**
  * Server-only reducer: wipe all test state from non-seed tables.
  *
- * Fast alternative to `spacetime publish --clear-database` + post-publish.ts
+ * Fast alternative to `npm run stdb:publish:test:clear` + `stdb:bootstrap:test`
  * (expected ~100ms vs ~11s) for tests that need a clean slate mid-suite or
  * for suite-level afterAll cleanup.
  *
@@ -409,20 +467,22 @@ export const server_set_mmr = spacetimedb.reducer({
  *     HsrSynergyCost, Archetype, HsrCharacterArchetype
  *   - Starter achievements: Achievement + AchievementCriteria
  *   - Config: EloConfigTable, AccountRatingConfig
- *   - Scheduled jobs: IdentityGcJob, LobbyGcJob (seeded by post-publish.ts)
+ *   - Scheduled jobs: IdentityGcJob, LobbyGcJob (seeded by scripts/stdb/bootstrap.ts)
  *
  * Deletes everything else: users (except SYSTEM), rosters, lobbies, tournaments,
  * match sessions + history, chat, stats, cost sets, calendar events, leaderboards,
  * pending user deletion jobs, bans, gc audit logs.
  *
  * Safety:
- *   - Gated by requireServer() — only callable with SPACETIMEDB_SERVER_TOKEN
+ *   - Gated by requireTestDatabase() (STDB_TARGET must be 'test') and requireServer()
+ *     (a registered Owner/Delegate identity, e.g. STDB_SERVER_TOKEN from .env.test.local)
  *   - Requires confirmation="NUKE_TEST_DATA" to prevent accidental invocation
  *   - DO NOT CALL IN PRODUCTION
  */
 export const server_nuke_test_data = spacetimedb.reducer({
     confirmation: t.string(),
 }, (ctx, { confirmation }) => {
+    requireTestDatabase(ctx);
     requireServer(ctx);
 
     if (confirmation !== 'NUKE_TEST_DATA') {

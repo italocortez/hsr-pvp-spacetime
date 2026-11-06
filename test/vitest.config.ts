@@ -4,7 +4,7 @@ import path from 'path';
 export default defineConfig({
   test: {
     // Default: run unit tests only (fast, no dependencies)
-    include: ['test/backend/**/*.unit.test.ts'],
+    include: ['test/backend/**/*.unit.test.ts', 'shared/**/*.test.ts'],
     testTimeout: 5000,
     hookTimeout: 10000,
   },
