@@ -82,7 +82,7 @@ function validateKeys(rows: any[], tableName: string, ctx: any): void {
  *     JSON inputs only produce `null`; programmatic router inputs may use either —
  *     treated equivalently to match the router's own null-guards at the enum sites.
  *   - Value `null` on an INSERT row = "apply schema default" (required columns) OR
- *     "stay null" (optional columns like skelUrl/atlasUrl).
+ *     "stay null" (optional columns).
  *   - Non-null/undefined value = "set to this value".
  *
  * This helper returns the merged row for UPDATE only. The insert branch stays on its
@@ -326,7 +326,7 @@ export const admin_delete_row = spacetimedb.reducer(
 //   2. Partial-update is expressed in VALUES:
 //        - `null` on an EXISTING row  → preserve the existing field value (no overwrite).
 //        - `null` on an INSERT row    → apply schema default for required columns,
-//                                        or keep null for optional columns (skelUrl/atlasUrl).
+//                                        or keep null for optional columns.
 //        - non-null value              → set the field to that value.
 //
 //   3. Cost tables (HsrCharacterCost, HsrLightconeCost, HsrSynergyCost) match existing rows
@@ -354,7 +354,7 @@ export const admin_bulk_upsert = spacetimedb.reducer(
                 const HSR_CHARACTER_FIELDS = [
                     'displayName', 'aliases', 'rarity', 'path', 'element', 'role',
                     'imageUrl', 'versionReleased', 'treatAsVersion',
-                    'skelUrl', 'atlasUrl', 'atlasImgUrls', 'posX', 'posY', 'width',
+                    'posX', 'posY', 'width', // A17: Spine columns dropped
                 ] as const;
                 for (const r of rows) {
                     // Enum validation: skip on null (preserve-existing path on update).
@@ -376,9 +376,6 @@ export const admin_bulk_upsert = spacetimedb.reducer(
                             imageUrl: r.imageUrl,
                             versionReleased: r.versionReleased,
                             treatAsVersion: r.treatAsVersion,
-                            skelUrl: r.skelUrl,
-                            atlasUrl: r.atlasUrl,
-                            atlasImgUrls: r.atlasImgUrls,
                             posX: r.posX,
                             posY: r.posY,
                             width: r.width,
@@ -402,10 +399,7 @@ export const admin_bulk_upsert = spacetimedb.reducer(
                             imageUrl: r.imageUrl ?? '',
                             versionReleased: r.versionReleased ?? 0,
                             treatAsVersion: r.treatAsVersion ?? 0,
-                            // Plan 02 columns — optional stays null; required defaults to 0 / [].
-                            skelUrl: r.skelUrl ?? null,
-                            atlasUrl: r.atlasUrl ?? null,
-                            atlasImgUrls: r.atlasImgUrls ?? [],
+                            // Positioning columns default to 0 (A17: no Spine columns).
                             posX: r.posX ?? 0,
                             posY: r.posY ?? 0,
                             width: r.width ?? 0,
@@ -594,8 +588,9 @@ export const admin_bulk_upsert = spacetimedb.reducer(
                 break;
             }
             case 'HsrSynergyCost': {
-                // 15.4 D-19: Existence match uses (sourceName, targetName, gameMode, draftMode, costSetId).
+                // 15.4 D-19: Existence match uses (characterA, characterB, gameMode, draftMode, costSetId).
                 // PK is auto-inc id; the tuple above is the logical unique key.
+                // S7 (A21): canonical (alphabetical) order enforced here and a pair that exists in either order rejected.
                 const HSR_SYNERGY_COST_FIELDS = ['costModifier'] as const;
                 for (const r of rows) {
                     validateEnumIfPresent('gameMode', r.gameMode, ctx, tableName);
@@ -604,8 +599,8 @@ export const admin_bulk_upsert = spacetimedb.reducer(
 
                     let existing: any = null;
                     for (const e of ctx.db.HsrSynergyCost.iter()) {
-                        if (e.sourceName === r.sourceName &&
-                            e.targetName === r.targetName &&
+                        if (e.characterA === r.characterA &&
+                            e.characterB === r.characterB &&
                             e.gameMode.tag === r.gameMode &&
                             e.draftMode.tag === r.draftMode &&
                             e.costSetId === csId) {
@@ -626,8 +621,8 @@ export const admin_bulk_upsert = spacetimedb.reducer(
                         validateEnum('draftMode', r.draftMode, ctx, tableName);
                         const row = {
                             id: 0,
-                            sourceName: r.sourceName,
-                            targetName: r.targetName,
+                            characterA: r.characterA,
+                            characterB: r.characterB,
                             gameMode: { tag: r.gameMode, value: {} },
                             draftMode: { tag: r.draftMode, value: {} },
                             costModifier: r.costModifier,

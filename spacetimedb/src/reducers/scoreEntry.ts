@@ -6,6 +6,9 @@ import { insertWithAudit } from '../helpers/auditHelpers';
 import { ensureMatchAlive } from '../helpers/disconnectHelpers';
 
 // ─── record_game_scores ─────────────────────────────────────────────────────
+// S7 (A21): replaced by record_group_scores (per lineup group, MatchResultGroupScore rows) + deaths per team;
+// the server computes winnerTeamSide. The boss1/boss2 arguments below are dead since S3 dropped the columns
+// and are kept only so the fixtures compile until S7 rewrites the reducer.
 // Records or updates per-game scores for a match result.
 // Two authority paths:
 // 1. Participant captain: can set scores for their OWN side only.
@@ -111,10 +114,11 @@ export const record_game_scores = spacetimedb.reducer(
                 teamRedCyclesUsed: args.teamRedCyclesUsed !== undefined ? args.teamRedCyclesUsed : existing.teamRedCyclesUsed,
                 teamBlueScore: args.teamBlueScore !== undefined ? args.teamBlueScore : existing.teamBlueScore,
                 teamRedScore: args.teamRedScore !== undefined ? args.teamRedScore : existing.teamRedScore,
-                teamBlueBoss1Score: args.teamBlueBoss1Score !== undefined ? args.teamBlueBoss1Score : existing.teamBlueBoss1Score,
-                teamBlueBoss2Score: args.teamBlueBoss2Score !== undefined ? args.teamBlueBoss2Score : existing.teamBlueBoss2Score,
-                teamRedBoss1Score: args.teamRedBoss1Score !== undefined ? args.teamRedBoss1Score : existing.teamRedBoss1Score,
-                teamRedBoss2Score: args.teamRedBoss2Score !== undefined ? args.teamRedBoss2Score : existing.teamRedBoss2Score,
+                teamBlueDeaths: existing.teamBlueDeaths,
+                teamRedDeaths: existing.teamRedDeaths,
+                teamBlueAdjustedResult: existing.teamBlueAdjustedResult,
+                teamRedAdjustedResult: existing.teamRedAdjustedResult,
+                tieBreakLevel: existing.tieBreakLevel,
                 winnerTeamSide: { tag: args.winnerTeamSide, value: {} } as any,
                 validationStatus: { tag: 'Pending', value: {} } as any,
                 validatedByUserId: undefined,
@@ -132,10 +136,11 @@ export const record_game_scores = spacetimedb.reducer(
                 teamRedCyclesUsed: args.teamRedCyclesUsed,
                 teamBlueScore: args.teamBlueScore,
                 teamRedScore: args.teamRedScore,
-                teamBlueBoss1Score: args.teamBlueBoss1Score,
-                teamBlueBoss2Score: args.teamBlueBoss2Score,
-                teamRedBoss1Score: args.teamRedBoss1Score,
-                teamRedBoss2Score: args.teamRedBoss2Score,
+                teamBlueDeaths: 0,
+                teamRedDeaths: 0,
+                teamBlueAdjustedResult: undefined,
+                teamRedAdjustedResult: undefined,
+                tieBreakLevel: undefined,
                 winnerTeamSide: { tag: args.winnerTeamSide, value: {} } as any,
                 validationStatus: { tag: 'Pending', value: {} } as any,
                 validatedByUserId: undefined,

@@ -4,7 +4,6 @@ import { Timestamp } from 'spacetimedb';
 import { ensureTournamentHost } from '../helpers/ensurePermissions';
 import { ensureTournamentAccess, validateStageTransition, validateRegistrationToSeeding, validateSeedingToInProgress, cleanupTeamRequests, cascadeCleanupTournament, removeUncheckedInParticipants } from '../helpers/tournamentHelpers';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
-import { revealTournamentHistory } from '../helpers/finalizationHelpers';
 
 // Valid enum tag lists for runtime validation
 const VALID_TOURNAMENT_FORMATS = ['SingleElimination', 'DoubleElimination', 'GroupOnly', 'GroupIntoSingleElim', 'GroupIntoDoubleElim'];
@@ -37,7 +36,9 @@ export const create_tournament = spacetimedb.reducer(
         defaultBestOf: t.u8(),
         groupSize: t.u8(),
         has3rdPlaceMatch: t.bool(),
-        autoAdvanceBracket: t.bool(),
+        // S8: the auto-advance argument was removed with its column (A24/A36); the create/update signatures
+        // gain the A33/A36 integrity-set arguments (lineupFormat, allowMirrorPicks, checkInEnabled, groupAdvanceCount,
+        // disconnectForfeitSeconds, requireResultValidation, grandFinalBestOf, lobbyPresetId) in S8.
         countTowardsMmr: t.bool(),
         winnerAdvantage: t.u8(),
         requireOwnership: t.bool(),
@@ -64,7 +65,6 @@ export const create_tournament = spacetimedb.reducer(
         defaultBestOf,
         groupSize,
         has3rdPlaceMatch,
-        autoAdvanceBracket,
         countTowardsMmr,
         winnerAdvantage,
         requireOwnership,
@@ -162,22 +162,23 @@ export const create_tournament = spacetimedb.reducer(
             isAnonymousSpectators: isAnonymousDefault,
             rosterVisibility: { tag: rosterVisibility, value: {} } as any,
             disconnectPolicy: { tag: disconnectPolicy, value: {} } as any,
-            checkInEnabled: false,
-            checkInPerRound: false,
-            autoForfeitEnabled: false,
-            autoForfeitMinutes: 0,
-            bracketRevealAt: undefined,
+            disconnectForfeitSeconds: undefined, // S8: create/update argument (A36)
+            checkInEnabled: false,               // S8: create/update argument (A36)
             winnerAdvantage,
             groupAssignmentMode: { tag: 'Auto', value: {} } as any,
-            groupAdvanceCount: 2,
+            groupAdvanceCount: 2,                // S8: create/update argument, 1 or 2 (A36)
             costSetId,
-            seasonId: undefined,
+            seasonId: 0,                         // A36: the active season, 0 for now
             countTowardsMmr,
+            requireResultValidation: countTowardsMmr, // S8: argument, forced true when countTowardsMmr (A36)
             defaultBestOf,
+            grandFinalBestOf: defaultBestOf,     // S8: argument, {1,3}, with winnerAdvantage < ceil(grandFinalBestOf / 2) (A27/A28)
             groupSize,
             has3rdPlaceMatch,
-            autoAdvanceBracket,
             requireOwnership,
+            allowMirrorPicks: !countTowardsMmr,  // S8: integrity-set argument (A33); Ranked forces false (D-42)
+            lineupFormat: { tag: 'Halves', value: {} } as any, // S8: integrity-set argument (A21/A33)
+            lobbyPresetId: 0,                    // S6/S8: defaults to the system preset id (A33a)
             requireVerified,
             requireRoster,
             minimumMmr: minimumMmr > 0 ? minimumMmr : undefined,
@@ -186,6 +187,10 @@ export const create_tournament = spacetimedb.reducer(
             maxAccountsPerPlayer: maxAccountsPerPlayer > 0 ? maxAccountsPerPlayer : 1,
             scheduledStartAt: parsedScheduledStartAt !== undefined ? new Timestamp(parsedScheduledStartAt) : undefined,
             registrationDeadline: parsedRegistrationDeadline !== undefined ? new Timestamp(parsedRegistrationDeadline) : undefined,
+            lastSeedChangeAt: undefined,
+            bracketGeneratedAt: undefined,
+            finalizationStartedAt: undefined,
+            finalizedAt: undefined,
         }, user.id));
     }
 );
@@ -206,7 +211,6 @@ export const update_tournament = spacetimedb.reducer(
         defaultBestOf: t.u8(),
         groupSize: t.u8(),
         has3rdPlaceMatch: t.bool(),
-        autoAdvanceBracket: t.bool(),
         winnerAdvantage: t.u8(),
         requireOwnership: t.bool(),
         requireVerified: t.bool(),
@@ -229,7 +233,6 @@ export const update_tournament = spacetimedb.reducer(
         defaultBestOf,
         groupSize,
         has3rdPlaceMatch,
-        autoAdvanceBracket,
         winnerAdvantage,
         requireOwnership,
         requireVerified,
@@ -321,7 +324,6 @@ export const update_tournament = spacetimedb.reducer(
             defaultBestOf,
             groupSize,
             has3rdPlaceMatch,
-            autoAdvanceBracket,
             winnerAdvantage,
             requireOwnership,
             requireVerified,
@@ -390,10 +392,8 @@ export const advance_tournament_stage = spacetimedb.reducer(
             stage: { tag: nextStage, value: {} } as any,
         }, user.id));
 
-        // D-91: Reveal all associated match history when tournament reaches Completed
-        if (nextStage === 'Completed') {
-            revealTournamentHistory(ctx, tournamentId);
-        }
+        // S8 (A24): Completed inserts a TournamentFinalizeJob { tournamentId, cursor: 0 } and sets
+        // finalizationStartedAt; the D-91 reveal is gone (A37: history is never public).
     }
 );
 
@@ -415,7 +415,7 @@ export const cancel_tournament = spacetimedb.reducer(
             stage: { tag: 'Cancelled', value: {} } as any,
         }, user.id));
 
-        // D-91: Reveal all associated match history when tournament is Cancelled
-        revealTournamentHistory(ctx, tournamentId);
+        // S8 (A24(5)): Cancelled runs the same chunked finalization with stats counted and MMR skipped;
+        // the D-91 reveal is gone (A37).
     }
 );

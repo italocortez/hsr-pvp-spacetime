@@ -373,7 +373,6 @@ describe.skipIf(!hasServerToken())('Account Selection', () => {
                 defaultBestOf: 1,
                 groupSize: 4,
                 has3RdPlaceMatch: false,
-                autoAdvanceBracket: false,
                 countTowardsMmr: false,
                 winnerAdvantage: 0,
                 requireOwnership: false,

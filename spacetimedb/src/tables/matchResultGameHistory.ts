@@ -1,6 +1,7 @@
 import { table, t } from 'spacetimedb/server';
 import { GameMode, TeamSide } from '../types/enums';
 
+// Archived copy of MatchResultGame (same A21 shape: deaths + stored computation, no boss columns).
 export const matchResultGameHistoryColumns = {
     matchHistoryId: t.u32(),
     gameNumber: t.u8(),
@@ -11,10 +12,11 @@ export const matchResultGameHistoryColumns = {
     teamRedCyclesUsed: t.u32().optional(),
     teamBlueScore: t.u64().optional(),
     teamRedScore: t.u64().optional(),
-    teamBlueBoss1Score: t.u64().optional(),
-    teamBlueBoss2Score: t.u64().optional(),
-    teamRedBoss1Score: t.u64().optional(),
-    teamRedBoss2Score: t.u64().optional(),
+    teamBlueDeaths: t.u8(),
+    teamRedDeaths: t.u8(),
+    teamBlueAdjustedResult: t.i32().optional(),
+    teamRedAdjustedResult: t.i32().optional(),
+    tieBreakLevel: t.u8().optional(),
     winnerTeamSide: TeamSide,
     createdById: t.u32(),
     createdDate: t.timestamp(),
@@ -22,9 +24,10 @@ export const matchResultGameHistoryColumns = {
     lastModifiedDate: t.timestamp(),
 };
 
+// S3 (A37, R5): private; participants and Moderator+ read view_my_match_result_game_history (S9).
 export const MatchResultGameHistory = table({
     name: 'match_result_game_history',
-    public: true,
+    public: false,
     primaryKey: ['matchHistoryId', 'gameNumber'],
     indexes: [
         { accessor: 'by_match_history', algorithm: 'btree', columns: ['matchHistoryId'] },

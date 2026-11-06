@@ -195,16 +195,12 @@ import WithdrawFromTournamentReducer from "./withdraw_from_tournament_reducer";
 import AccountRatingConfigRow from "./account_rating_config_table";
 import AchievementRow from "./achievement_table";
 import AchievementCriteriaRow from "./achievement_criteria_table";
+import AdminAlertRow from "./admin_alert_table";
 import ArchetypeRow from "./archetype_table";
-import AvailabilitySlotRow from "./availability_slot_table";
 import BracketMatchRow from "./bracket_match_table";
-import CalendarEventRow from "./calendar_event_table";
-import CalendarEventInviteRow from "./calendar_event_invite_table";
-import ChatMessageRow from "./chat_message_table";
 import CostSetRow from "./cost_set_table";
 import EloConfigTableRow from "./elo_config_table_table";
 import GlobalCharacterStatRow from "./global_character_stat_table";
-import GroupPhaseRecordRow from "./group_phase_record_table";
 import HsrCharacterRow from "./hsr_character_table";
 import HsrCharacterArchetypeRow from "./hsr_character_archetype_table";
 import HsrCharacterCostRow from "./hsr_character_cost_table";
@@ -212,32 +208,9 @@ import HsrLightconeRow from "./hsr_lightcone_table";
 import HsrLightconeCostRow from "./hsr_lightcone_cost_table";
 import HsrSynergyCostRow from "./hsr_synergy_cost_table";
 import LeaderboardRow from "./leaderboard_table";
-import LobbyRow from "./lobby_table";
-import LobbyBanRow from "./lobby_ban_table";
 import LobbyCursorEventRow from "./lobby_cursor_event_table";
-import LobbyMemberRow from "./lobby_member_table";
-import LobbyPresetRow from "./lobby_preset_table";
-import MatchParticipantHistoryRow from "./match_participant_history_table";
-import MatchResultGameRow from "./match_result_game_table";
-import MatchResultGameHistoryRow from "./match_result_game_history_table";
-import MatchResultParticipantRow from "./match_result_participant_table";
-import MatchResultRecordRow from "./match_result_record_table";
-import MatchSessionRow from "./match_session_table";
-import MatchSessionHistoryRow from "./match_session_history_table";
-import MatchSessionStepRow from "./match_session_step_table";
-import MatchSessionStepHistoryRow from "./match_session_step_history_table";
-import MmrHistoryRow from "./mmr_history_table";
-import MmrRatingRow from "./mmr_rating_table";
-import SavedCalendarRow from "./saved_calendar_table";
 import SeasonRow from "./season_table";
 import TournamentRow from "./tournament_table";
-import TournamentAssistantRow from "./tournament_assistant_table";
-import TournamentEnrolledRow from "./tournament_enrolled_table";
-import TournamentPlayerAccountRow from "./tournament_player_account_table";
-import TournamentStandInRow from "./tournament_stand_in_table";
-import TournamentTeamRow from "./tournament_team_table";
-import TournamentTeamMemberRow from "./tournament_team_member_table";
-import TournamentTeamRequestRow from "./tournament_team_request_table";
 import UserRow from "./user_table";
 import UserAchievementRow from "./user_achievement_table";
 import ViewAdminUserPrivateRow from "./view_admin_user_private_table";
@@ -267,7 +240,6 @@ import ViewMyRelationshipsRow from "./view_my_relationships_table";
 import ViewMyRosterRow from "./view_my_roster_table";
 import ViewMyRosterVisibilityRow from "./view_my_roster_visibility_table";
 import ViewMyTournamentEnrolledRow from "./view_my_tournament_enrolled_table";
-import ViewMyTournamentGroupStandingsRow from "./view_my_tournament_group_standings_table";
 import ViewMyTournamentLobbiesRow from "./view_my_tournament_lobbies_table";
 import ViewMyTournamentMatchResultsRow from "./view_my_tournament_match_results_table";
 import ViewMyTournamentMatchesRow from "./view_my_tournament_matches_table";
@@ -327,6 +299,20 @@ const tablesSchema = __schema({
       { name: 'achievement_criteria_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, AchievementCriteriaRow),
+  adminAlert: __table({
+    name: 'admin_alert',
+    indexes: [
+      { accessor: 'id', name: 'admin_alert_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'is_acknowledged', name: 'admin_alert_is_acknowledged_idx_btree', algorithm: 'btree', columns: [
+        'isAcknowledged',
+      ] },
+    ],
+    constraints: [
+      { name: 'admin_alert_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, AdminAlertRow),
   archetype: __table({
     name: 'archetype',
     indexes: [
@@ -342,23 +328,6 @@ const tablesSchema = __schema({
       { name: 'archetype_name_key', constraint: 'unique', columns: ['name'] },
     ],
   }, ArchetypeRow),
-  availabilitySlot: __table({
-    name: 'availability_slot',
-    indexes: [
-      { accessor: 'id', name: 'availability_slot_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-      { accessor: 'start_at', name: 'availability_slot_start_at_idx_btree', algorithm: 'btree', columns: [
-        'startAt',
-      ] },
-      { accessor: 'user_id', name: 'availability_slot_user_id_idx_btree', algorithm: 'btree', columns: [
-        'userId',
-      ] },
-    ],
-    constraints: [
-      { name: 'availability_slot_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, AvailabilitySlotRow),
   bracketMatch: __table({
     name: 'bracket_match',
     indexes: [
@@ -368,62 +337,15 @@ const tablesSchema = __schema({
       { accessor: 'tournament_id', name: 'bracket_match_tournament_id_idx_btree', algorithm: 'btree', columns: [
         'tournamentId',
       ] },
+      { accessor: 'by_tournament_and_position', name: 'bracket_match_tournament_id_position_key_idx_btree', algorithm: 'btree', columns: [
+        'tournamentId',
+        'positionKey',
+      ] },
     ],
     constraints: [
       { name: 'bracket_match_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, BracketMatchRow),
-  calendarEvent: __table({
-    name: 'calendar_event',
-    indexes: [
-      { accessor: 'bracket_match_id', name: 'calendar_event_bracket_match_id_idx_btree', algorithm: 'btree', columns: [
-        'bracketMatchId',
-      ] },
-      { accessor: 'id', name: 'calendar_event_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-      { accessor: 'organizer_id', name: 'calendar_event_organizer_id_idx_btree', algorithm: 'btree', columns: [
-        'organizerId',
-      ] },
-      { accessor: 'start_at', name: 'calendar_event_start_at_idx_btree', algorithm: 'btree', columns: [
-        'startAt',
-      ] },
-    ],
-    constraints: [
-      { name: 'calendar_event_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, CalendarEventRow),
-  calendarEventInvite: __table({
-    name: 'calendar_event_invite',
-    indexes: [
-      { accessor: 'event_id', name: 'calendar_event_invite_event_id_idx_btree', algorithm: 'btree', columns: [
-        'eventId',
-      ] },
-      { accessor: 'by_event_and_invitee', name: 'calendar_event_invite_event_id_invitee_user_id_idx_btree', algorithm: 'btree', columns: [
-        'eventId',
-        'inviteeUserId',
-      ] },
-      { accessor: 'invitee_user_id', name: 'calendar_event_invite_invitee_user_id_idx_btree', algorithm: 'btree', columns: [
-        'inviteeUserId',
-      ] },
-    ],
-    constraints: [
-    ],
-  }, CalendarEventInviteRow),
-  chatMessage: __table({
-    name: 'chat_message',
-    indexes: [
-      { accessor: 'id', name: 'chat_message_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-      { accessor: 'lobby_id', name: 'chat_message_lobby_id_idx_btree', algorithm: 'btree', columns: [
-        'lobbyId',
-      ] },
-    ],
-    constraints: [
-      { name: 'chat_message_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, ChatMessageRow),
   costSet: __table({
     name: 'cost_set',
     indexes: [
@@ -463,21 +385,6 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, GlobalCharacterStatRow),
-  groupPhaseRecord: __table({
-    name: 'group_phase_record',
-    indexes: [
-      { accessor: 'by_tournament_group_and_team', name: 'group_phase_record_tournament_id_group_id_team_id_idx_btree', algorithm: 'btree', columns: [
-        'tournamentId',
-        'groupId',
-        'teamId',
-      ] },
-      { accessor: 'tournament_id', name: 'group_phase_record_tournament_id_idx_btree', algorithm: 'btree', columns: [
-        'tournamentId',
-      ] },
-    ],
-    constraints: [
-    ],
-  }, GroupPhaseRecordRow),
   hsrCharacter: __table({
     name: 'hsr_character',
     indexes: [
@@ -564,26 +471,26 @@ const tablesSchema = __schema({
   hsrSynergyCost: __table({
     name: 'hsr_synergy_cost',
     indexes: [
+      { accessor: 'by_tuple', name: 'hsr_synergy_cost_character_a_character_b_game_mode_draft_mode_cost_set_id_idx_btree', algorithm: 'btree', columns: [
+        'characterA',
+        'characterB',
+        'gameMode',
+        'draftMode',
+        'costSetId',
+      ] },
+      { accessor: 'character_a_mode', name: 'hsr_synergy_cost_character_a_game_mode_draft_mode_idx_btree', algorithm: 'btree', columns: [
+        'characterA',
+        'gameMode',
+        'draftMode',
+      ] },
+      { accessor: 'character_b', name: 'hsr_synergy_cost_character_b_idx_btree', algorithm: 'btree', columns: [
+        'characterB',
+      ] },
       { accessor: 'cost_set_id', name: 'hsr_synergy_cost_cost_set_id_idx_btree', algorithm: 'btree', columns: [
         'costSetId',
       ] },
       { accessor: 'id', name: 'hsr_synergy_cost_id_idx_btree', algorithm: 'btree', columns: [
         'id',
-      ] },
-      { accessor: 'source_mode', name: 'hsr_synergy_cost_source_name_game_mode_draft_mode_idx_btree', algorithm: 'btree', columns: [
-        'sourceName',
-        'gameMode',
-        'draftMode',
-      ] },
-      { accessor: 'by_tuple', name: 'hsr_synergy_cost_source_name_target_name_game_mode_draft_mode_cost_set_id_idx_btree', algorithm: 'btree', columns: [
-        'sourceName',
-        'targetName',
-        'gameMode',
-        'draftMode',
-        'costSetId',
-      ] },
-      { accessor: 'target_name', name: 'hsr_synergy_cost_target_name_idx_btree', algorithm: 'btree', columns: [
-        'targetName',
       ] },
     ],
     constraints: [
@@ -605,47 +512,6 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, LeaderboardRow),
-  lobby: __table({
-    name: 'lobby',
-    indexes: [
-      { accessor: 'bracket_match_id', name: 'lobby_bracket_match_id_idx_btree', algorithm: 'btree', columns: [
-        'bracketMatchId',
-      ] },
-      { accessor: 'host_user_id', name: 'lobby_host_user_id_idx_btree', algorithm: 'btree', columns: [
-        'hostUserId',
-      ] },
-      { accessor: 'id', name: 'lobby_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-      { accessor: 'joinCode', name: 'lobby_join_code_idx_btree', algorithm: 'btree', columns: [
-        'joinCode',
-      ] },
-      { accessor: 'stage', name: 'lobby_stage_idx_btree', algorithm: 'btree', columns: [
-        'stage',
-      ] },
-      { accessor: 'tournament_id', name: 'lobby_tournament_id_idx_btree', algorithm: 'btree', columns: [
-        'tournamentId',
-      ] },
-    ],
-    constraints: [
-      { name: 'lobby_id_key', constraint: 'unique', columns: ['id'] },
-      { name: 'lobby_join_code_key', constraint: 'unique', columns: ['joinCode'] },
-    ],
-  }, LobbyRow),
-  lobbyBan: __table({
-    name: 'lobby_ban',
-    indexes: [
-      { accessor: 'by_lobby_and_user', name: 'lobby_ban_lobby_id_banned_user_id_idx_btree', algorithm: 'btree', columns: [
-        'lobbyId',
-        'bannedUserId',
-      ] },
-      { accessor: 'lobby_id', name: 'lobby_ban_lobby_id_idx_btree', algorithm: 'btree', columns: [
-        'lobbyId',
-      ] },
-    ],
-    constraints: [
-    ],
-  }, LobbyBanRow),
   lobbyCursorEvent: __table({
     name: 'lobby_cursor_event',
     indexes: [
@@ -654,216 +520,6 @@ const tablesSchema = __schema({
     ],
     event: true,
   }, LobbyCursorEventRow),
-  lobbyMember: __table({
-    name: 'lobby_member',
-    indexes: [
-      { accessor: 'lobby_id', name: 'lobby_member_lobby_id_idx_btree', algorithm: 'btree', columns: [
-        'lobbyId',
-      ] },
-      { accessor: 'by_lobby_and_user', name: 'lobby_member_lobby_id_user_id_idx_btree', algorithm: 'btree', columns: [
-        'lobbyId',
-        'userId',
-      ] },
-      { accessor: 'user_id', name: 'lobby_member_user_id_idx_btree', algorithm: 'btree', columns: [
-        'userId',
-      ] },
-    ],
-    constraints: [
-    ],
-  }, LobbyMemberRow),
-  lobbyPreset: __table({
-    name: 'lobby_preset',
-    indexes: [
-      { accessor: 'creator_user_id', name: 'lobby_preset_creator_user_id_idx_btree', algorithm: 'btree', columns: [
-        'creatorUserId',
-      ] },
-      { accessor: 'id', name: 'lobby_preset_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-    ],
-    constraints: [
-      { name: 'lobby_preset_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, LobbyPresetRow),
-  matchParticipantHistory: __table({
-    name: 'match_participant_history',
-    indexes: [
-      { accessor: 'by_match_history', name: 'match_participant_history_match_history_id_idx_btree', algorithm: 'btree', columns: [
-        'matchHistoryId',
-      ] },
-      { accessor: 'by_user', name: 'match_participant_history_user_id_idx_btree', algorithm: 'btree', columns: [
-        'userId',
-      ] },
-      { accessor: 'by_user_and_match', name: 'match_participant_history_user_id_match_history_id_idx_btree', algorithm: 'btree', columns: [
-        'userId',
-        'matchHistoryId',
-      ] },
-    ],
-    constraints: [
-    ],
-  }, MatchParticipantHistoryRow),
-  matchResultGame: __table({
-    name: 'match_result_game',
-    indexes: [
-      { accessor: 'by_result_and_game', name: 'match_result_game_match_result_id_game_number_idx_btree', algorithm: 'btree', columns: [
-        'matchResultId',
-        'gameNumber',
-      ] },
-      { accessor: 'match_result_id', name: 'match_result_game_match_result_id_idx_btree', algorithm: 'btree', columns: [
-        'matchResultId',
-      ] },
-    ],
-    constraints: [
-    ],
-  }, MatchResultGameRow),
-  matchResultGameHistory: __table({
-    name: 'match_result_game_history',
-    indexes: [
-      { accessor: 'by_match_history', name: 'match_result_game_history_match_history_id_idx_btree', algorithm: 'btree', columns: [
-        'matchHistoryId',
-      ] },
-    ],
-    constraints: [
-    ],
-  }, MatchResultGameHistoryRow),
-  matchResultParticipant: __table({
-    name: 'match_result_participant',
-    indexes: [
-      { accessor: 'match_result_id', name: 'match_result_participant_match_result_id_idx_btree', algorithm: 'btree', columns: [
-        'matchResultId',
-      ] },
-      { accessor: 'by_result_and_user', name: 'match_result_participant_match_result_id_user_id_idx_btree', algorithm: 'btree', columns: [
-        'matchResultId',
-        'userId',
-      ] },
-      { accessor: 'user_id', name: 'match_result_participant_user_id_idx_btree', algorithm: 'btree', columns: [
-        'userId',
-      ] },
-    ],
-    constraints: [
-    ],
-  }, MatchResultParticipantRow),
-  matchResultRecord: __table({
-    name: 'match_result_record',
-    indexes: [
-      { accessor: 'bracket_match_id', name: 'match_result_record_bracket_match_id_idx_btree', algorithm: 'btree', columns: [
-        'bracketMatchId',
-      ] },
-      { accessor: 'id', name: 'match_result_record_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-      { accessor: 'lobby_id', name: 'match_result_record_lobby_id_idx_btree', algorithm: 'btree', columns: [
-        'lobbyId',
-      ] },
-    ],
-    constraints: [
-      { name: 'match_result_record_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, MatchResultRecordRow),
-  matchSession: __table({
-    name: 'match_session',
-    indexes: [
-      { accessor: 'lobbyId', name: 'match_session_lobby_id_idx_btree', algorithm: 'btree', columns: [
-        'lobbyId',
-      ] },
-    ],
-    constraints: [
-      { name: 'match_session_lobby_id_key', constraint: 'unique', columns: ['lobbyId'] },
-    ],
-  }, MatchSessionRow),
-  matchSessionHistory: __table({
-    name: 'match_session_history',
-    indexes: [
-      { accessor: 'game_mode', name: 'match_session_history_game_mode_idx_btree', algorithm: 'btree', columns: [
-        'gameMode',
-      ] },
-      { accessor: 'id', name: 'match_session_history_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-      { accessor: 'played_at', name: 'match_session_history_played_at_idx_btree', algorithm: 'btree', columns: [
-        'playedAt',
-      ] },
-    ],
-    constraints: [
-      { name: 'match_session_history_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, MatchSessionHistoryRow),
-  matchSessionStep: __table({
-    name: 'match_session_step',
-    indexes: [
-      { accessor: 'by_actor_user', name: 'match_session_step_actor_user_id_idx_btree', algorithm: 'btree', columns: [
-        'actorUserId',
-      ] },
-      { accessor: 'id', name: 'match_session_step_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-      { accessor: 'lobby_id', name: 'match_session_step_lobby_id_idx_btree', algorithm: 'btree', columns: [
-        'lobbyId',
-      ] },
-    ],
-    constraints: [
-      { name: 'match_session_step_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, MatchSessionStepRow),
-  matchSessionStepHistory: __table({
-    name: 'match_session_step_history',
-    indexes: [
-      { accessor: 'by_match_history', name: 'match_session_step_history_match_history_id_idx_btree', algorithm: 'btree', columns: [
-        'matchHistoryId',
-      ] },
-    ],
-    constraints: [
-    ],
-  }, MatchSessionStepHistoryRow),
-  mmrHistory: __table({
-    name: 'mmr_history',
-    indexes: [
-      { accessor: 'id', name: 'mmr_history_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-      { accessor: 'match_history_id', name: 'mmr_history_match_history_id_idx_btree', algorithm: 'btree', columns: [
-        'matchHistoryId',
-      ] },
-      { accessor: 'user_id', name: 'mmr_history_user_id_idx_btree', algorithm: 'btree', columns: [
-        'userId',
-      ] },
-    ],
-    constraints: [
-      { name: 'mmr_history_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, MmrHistoryRow),
-  mmrRating: __table({
-    name: 'mmr_rating',
-    indexes: [
-      { accessor: 'rating', name: 'mmr_rating_rating_idx_btree', algorithm: 'btree', columns: [
-        'rating',
-      ] },
-      { accessor: 'by_user_mode_season', name: 'mmr_rating_user_id_game_mode_season_id_idx_btree', algorithm: 'btree', columns: [
-        'userId',
-        'gameMode',
-        'seasonId',
-      ] },
-      { accessor: 'user_id', name: 'mmr_rating_user_id_idx_btree', algorithm: 'btree', columns: [
-        'userId',
-      ] },
-    ],
-    constraints: [
-    ],
-  }, MmrRatingRow),
-  savedCalendar: __table({
-    name: 'saved_calendar',
-    indexes: [
-      { accessor: 'user_id', name: 'saved_calendar_user_id_idx_btree', algorithm: 'btree', columns: [
-        'userId',
-      ] },
-      { accessor: 'by_user_and_target', name: 'saved_calendar_user_id_target_user_id_idx_btree', algorithm: 'btree', columns: [
-        'userId',
-        'targetUserId',
-      ] },
-    ],
-    constraints: [
-    ],
-  }, SavedCalendarRow),
   season: __table({
     name: 'season',
     indexes: [
@@ -895,116 +551,6 @@ const tablesSchema = __schema({
       { name: 'tournament_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, TournamentRow),
-  tournamentAssistant: __table({
-    name: 'tournament_assistant',
-    indexes: [
-      { accessor: 'tournament_id', name: 'tournament_assistant_tournament_id_idx_btree', algorithm: 'btree', columns: [
-        'tournamentId',
-      ] },
-      { accessor: 'by_tournament_and_user', name: 'tournament_assistant_tournament_id_user_id_idx_btree', algorithm: 'btree', columns: [
-        'tournamentId',
-        'userId',
-      ] },
-      { accessor: 'user_id', name: 'tournament_assistant_user_id_idx_btree', algorithm: 'btree', columns: [
-        'userId',
-      ] },
-    ],
-    constraints: [
-    ],
-  }, TournamentAssistantRow),
-  tournamentEnrolled: __table({
-    name: 'tournament_enrolled',
-    indexes: [
-      { accessor: 'tournament_id', name: 'tournament_enrolled_tournament_id_idx_btree', algorithm: 'btree', columns: [
-        'tournamentId',
-      ] },
-      { accessor: 'by_tournament_and_user', name: 'tournament_enrolled_tournament_id_user_id_idx_btree', algorithm: 'btree', columns: [
-        'tournamentId',
-        'userId',
-      ] },
-      { accessor: 'user_id', name: 'tournament_enrolled_user_id_idx_btree', algorithm: 'btree', columns: [
-        'userId',
-      ] },
-    ],
-    constraints: [
-    ],
-  }, TournamentEnrolledRow),
-  tournamentPlayerAccount: __table({
-    name: 'tournament_player_account',
-    indexes: [
-      { accessor: 'by_tournament_and_user', name: 'tournament_player_account_tournament_id_user_id_idx_btree', algorithm: 'btree', columns: [
-        'tournamentId',
-        'userId',
-      ] },
-      { accessor: 'by_user', name: 'tournament_player_account_user_id_idx_btree', algorithm: 'btree', columns: [
-        'userId',
-      ] },
-    ],
-    constraints: [
-    ],
-  }, TournamentPlayerAccountRow),
-  tournamentStandIn: __table({
-    name: 'tournament_stand_in',
-    indexes: [
-      { accessor: 'bracket_match_id', name: 'tournament_stand_in_bracket_match_id_idx_btree', algorithm: 'btree', columns: [
-        'bracketMatchId',
-      ] },
-      { accessor: 'by_match_and_user', name: 'tournament_stand_in_bracket_match_id_user_id_idx_btree', algorithm: 'btree', columns: [
-        'bracketMatchId',
-        'userId',
-      ] },
-    ],
-    constraints: [
-    ],
-  }, TournamentStandInRow),
-  tournamentTeam: __table({
-    name: 'tournament_team',
-    indexes: [
-      { accessor: 'captain_user_id', name: 'tournament_team_captain_user_id_idx_btree', algorithm: 'btree', columns: [
-        'captainUserId',
-      ] },
-      { accessor: 'id', name: 'tournament_team_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-      { accessor: 'tournament_id', name: 'tournament_team_tournament_id_idx_btree', algorithm: 'btree', columns: [
-        'tournamentId',
-      ] },
-    ],
-    constraints: [
-      { name: 'tournament_team_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, TournamentTeamRow),
-  tournamentTeamMember: __table({
-    name: 'tournament_team_member',
-    indexes: [
-      { accessor: 'team_id', name: 'tournament_team_member_team_id_idx_btree', algorithm: 'btree', columns: [
-        'teamId',
-      ] },
-      { accessor: 'by_tournament_and_user', name: 'tournament_team_member_tournament_id_user_id_idx_btree', algorithm: 'btree', columns: [
-        'tournamentId',
-        'userId',
-      ] },
-    ],
-    constraints: [
-    ],
-  }, TournamentTeamMemberRow),
-  tournamentTeamRequest: __table({
-    name: 'tournament_team_request',
-    indexes: [
-      { accessor: 'team_id', name: 'tournament_team_request_team_id_idx_btree', algorithm: 'btree', columns: [
-        'teamId',
-      ] },
-      { accessor: 'by_team_and_user', name: 'tournament_team_request_team_id_user_id_idx_btree', algorithm: 'btree', columns: [
-        'teamId',
-        'userId',
-      ] },
-      { accessor: 'user_id', name: 'tournament_team_request_user_id_idx_btree', algorithm: 'btree', columns: [
-        'userId',
-      ] },
-    ],
-    constraints: [
-    ],
-  }, TournamentTeamRequestRow),
   user: __table({
     name: 'user',
     indexes: [
@@ -1230,13 +776,6 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, ViewMyTournamentEnrolledRow),
-  viewMyTournamentGroupStandings: __table({
-    name: 'view_my_tournament_group_standings',
-    indexes: [
-    ],
-    constraints: [
-    ],
-  }, ViewMyTournamentGroupStandingsRow),
   viewMyTournamentLobbies: __table({
     name: 'view_my_tournament_lobbies',
     indexes: [
@@ -1465,26 +1004,18 @@ type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "ta
     readonly "Achievement": Omit<typeof tablesSchema.schemaType.tables["achievement"], "accessorName"> & { readonly accessorName: "Achievement" };
     /** @deprecated Use `achievementCriteria` instead. This alias will be removed in the next major version. */
     readonly "AchievementCriteria": Omit<typeof tablesSchema.schemaType.tables["achievementCriteria"], "accessorName"> & { readonly accessorName: "AchievementCriteria" };
+    /** @deprecated Use `adminAlert` instead. This alias will be removed in the next major version. */
+    readonly "AdminAlert": Omit<typeof tablesSchema.schemaType.tables["adminAlert"], "accessorName"> & { readonly accessorName: "AdminAlert" };
     /** @deprecated Use `archetype` instead. This alias will be removed in the next major version. */
     readonly "Archetype": Omit<typeof tablesSchema.schemaType.tables["archetype"], "accessorName"> & { readonly accessorName: "Archetype" };
-    /** @deprecated Use `availabilitySlot` instead. This alias will be removed in the next major version. */
-    readonly "AvailabilitySlot": Omit<typeof tablesSchema.schemaType.tables["availabilitySlot"], "accessorName"> & { readonly accessorName: "AvailabilitySlot" };
     /** @deprecated Use `bracketMatch` instead. This alias will be removed in the next major version. */
     readonly "BracketMatch": Omit<typeof tablesSchema.schemaType.tables["bracketMatch"], "accessorName"> & { readonly accessorName: "BracketMatch" };
-    /** @deprecated Use `calendarEvent` instead. This alias will be removed in the next major version. */
-    readonly "CalendarEvent": Omit<typeof tablesSchema.schemaType.tables["calendarEvent"], "accessorName"> & { readonly accessorName: "CalendarEvent" };
-    /** @deprecated Use `calendarEventInvite` instead. This alias will be removed in the next major version. */
-    readonly "CalendarEventInvite": Omit<typeof tablesSchema.schemaType.tables["calendarEventInvite"], "accessorName"> & { readonly accessorName: "CalendarEventInvite" };
-    /** @deprecated Use `chatMessage` instead. This alias will be removed in the next major version. */
-    readonly "ChatMessage": Omit<typeof tablesSchema.schemaType.tables["chatMessage"], "accessorName"> & { readonly accessorName: "ChatMessage" };
     /** @deprecated Use `costSet` instead. This alias will be removed in the next major version. */
     readonly "CostSet": Omit<typeof tablesSchema.schemaType.tables["costSet"], "accessorName"> & { readonly accessorName: "CostSet" };
     /** @deprecated Use `eloConfigTable` instead. This alias will be removed in the next major version. */
     readonly "EloConfigTable": Omit<typeof tablesSchema.schemaType.tables["eloConfigTable"], "accessorName"> & { readonly accessorName: "EloConfigTable" };
     /** @deprecated Use `globalCharacterStat` instead. This alias will be removed in the next major version. */
     readonly "GlobalCharacterStat": Omit<typeof tablesSchema.schemaType.tables["globalCharacterStat"], "accessorName"> & { readonly accessorName: "GlobalCharacterStat" };
-    /** @deprecated Use `groupPhaseRecord` instead. This alias will be removed in the next major version. */
-    readonly "GroupPhaseRecord": Omit<typeof tablesSchema.schemaType.tables["groupPhaseRecord"], "accessorName"> & { readonly accessorName: "GroupPhaseRecord" };
     /** @deprecated Use `hsrCharacter` instead. This alias will be removed in the next major version. */
     readonly "HsrCharacter": Omit<typeof tablesSchema.schemaType.tables["hsrCharacter"], "accessorName"> & { readonly accessorName: "HsrCharacter" };
     /** @deprecated Use `hsrCharacterArchetype` instead. This alias will be removed in the next major version. */
@@ -1499,58 +1030,12 @@ type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "ta
     readonly "HsrSynergyCost": Omit<typeof tablesSchema.schemaType.tables["hsrSynergyCost"], "accessorName"> & { readonly accessorName: "HsrSynergyCost" };
     /** @deprecated Use `leaderboard` instead. This alias will be removed in the next major version. */
     readonly "Leaderboard": Omit<typeof tablesSchema.schemaType.tables["leaderboard"], "accessorName"> & { readonly accessorName: "Leaderboard" };
-    /** @deprecated Use `lobby` instead. This alias will be removed in the next major version. */
-    readonly "Lobby": Omit<typeof tablesSchema.schemaType.tables["lobby"], "accessorName"> & { readonly accessorName: "Lobby" };
-    /** @deprecated Use `lobbyBan` instead. This alias will be removed in the next major version. */
-    readonly "LobbyBan": Omit<typeof tablesSchema.schemaType.tables["lobbyBan"], "accessorName"> & { readonly accessorName: "LobbyBan" };
     /** @deprecated Use `lobbyCursorEvent` instead. This alias will be removed in the next major version. */
     readonly "LobbyCursorEvent": Omit<typeof tablesSchema.schemaType.tables["lobbyCursorEvent"], "accessorName"> & { readonly accessorName: "LobbyCursorEvent" };
-    /** @deprecated Use `lobbyMember` instead. This alias will be removed in the next major version. */
-    readonly "LobbyMember": Omit<typeof tablesSchema.schemaType.tables["lobbyMember"], "accessorName"> & { readonly accessorName: "LobbyMember" };
-    /** @deprecated Use `lobbyPreset` instead. This alias will be removed in the next major version. */
-    readonly "LobbyPreset": Omit<typeof tablesSchema.schemaType.tables["lobbyPreset"], "accessorName"> & { readonly accessorName: "LobbyPreset" };
-    /** @deprecated Use `matchParticipantHistory` instead. This alias will be removed in the next major version. */
-    readonly "MatchParticipantHistory": Omit<typeof tablesSchema.schemaType.tables["matchParticipantHistory"], "accessorName"> & { readonly accessorName: "MatchParticipantHistory" };
-    /** @deprecated Use `matchResultGame` instead. This alias will be removed in the next major version. */
-    readonly "MatchResultGame": Omit<typeof tablesSchema.schemaType.tables["matchResultGame"], "accessorName"> & { readonly accessorName: "MatchResultGame" };
-    /** @deprecated Use `matchResultGameHistory` instead. This alias will be removed in the next major version. */
-    readonly "MatchResultGameHistory": Omit<typeof tablesSchema.schemaType.tables["matchResultGameHistory"], "accessorName"> & { readonly accessorName: "MatchResultGameHistory" };
-    /** @deprecated Use `matchResultParticipant` instead. This alias will be removed in the next major version. */
-    readonly "MatchResultParticipant": Omit<typeof tablesSchema.schemaType.tables["matchResultParticipant"], "accessorName"> & { readonly accessorName: "MatchResultParticipant" };
-    /** @deprecated Use `matchResultRecord` instead. This alias will be removed in the next major version. */
-    readonly "MatchResultRecord": Omit<typeof tablesSchema.schemaType.tables["matchResultRecord"], "accessorName"> & { readonly accessorName: "MatchResultRecord" };
-    /** @deprecated Use `matchSession` instead. This alias will be removed in the next major version. */
-    readonly "MatchSession": Omit<typeof tablesSchema.schemaType.tables["matchSession"], "accessorName"> & { readonly accessorName: "MatchSession" };
-    /** @deprecated Use `matchSessionHistory` instead. This alias will be removed in the next major version. */
-    readonly "MatchSessionHistory": Omit<typeof tablesSchema.schemaType.tables["matchSessionHistory"], "accessorName"> & { readonly accessorName: "MatchSessionHistory" };
-    /** @deprecated Use `matchSessionStep` instead. This alias will be removed in the next major version. */
-    readonly "MatchSessionStep": Omit<typeof tablesSchema.schemaType.tables["matchSessionStep"], "accessorName"> & { readonly accessorName: "MatchSessionStep" };
-    /** @deprecated Use `matchSessionStepHistory` instead. This alias will be removed in the next major version. */
-    readonly "MatchSessionStepHistory": Omit<typeof tablesSchema.schemaType.tables["matchSessionStepHistory"], "accessorName"> & { readonly accessorName: "MatchSessionStepHistory" };
-    /** @deprecated Use `mmrHistory` instead. This alias will be removed in the next major version. */
-    readonly "MmrHistory": Omit<typeof tablesSchema.schemaType.tables["mmrHistory"], "accessorName"> & { readonly accessorName: "MmrHistory" };
-    /** @deprecated Use `mmrRating` instead. This alias will be removed in the next major version. */
-    readonly "MmrRating": Omit<typeof tablesSchema.schemaType.tables["mmrRating"], "accessorName"> & { readonly accessorName: "MmrRating" };
-    /** @deprecated Use `savedCalendar` instead. This alias will be removed in the next major version. */
-    readonly "SavedCalendar": Omit<typeof tablesSchema.schemaType.tables["savedCalendar"], "accessorName"> & { readonly accessorName: "SavedCalendar" };
     /** @deprecated Use `season` instead. This alias will be removed in the next major version. */
     readonly "Season": Omit<typeof tablesSchema.schemaType.tables["season"], "accessorName"> & { readonly accessorName: "Season" };
     /** @deprecated Use `tournament` instead. This alias will be removed in the next major version. */
     readonly "Tournament": Omit<typeof tablesSchema.schemaType.tables["tournament"], "accessorName"> & { readonly accessorName: "Tournament" };
-    /** @deprecated Use `tournamentAssistant` instead. This alias will be removed in the next major version. */
-    readonly "TournamentAssistant": Omit<typeof tablesSchema.schemaType.tables["tournamentAssistant"], "accessorName"> & { readonly accessorName: "TournamentAssistant" };
-    /** @deprecated Use `tournamentEnrolled` instead. This alias will be removed in the next major version. */
-    readonly "TournamentEnrolled": Omit<typeof tablesSchema.schemaType.tables["tournamentEnrolled"], "accessorName"> & { readonly accessorName: "TournamentEnrolled" };
-    /** @deprecated Use `tournamentPlayerAccount` instead. This alias will be removed in the next major version. */
-    readonly "TournamentPlayerAccount": Omit<typeof tablesSchema.schemaType.tables["tournamentPlayerAccount"], "accessorName"> & { readonly accessorName: "TournamentPlayerAccount" };
-    /** @deprecated Use `tournamentStandIn` instead. This alias will be removed in the next major version. */
-    readonly "TournamentStandIn": Omit<typeof tablesSchema.schemaType.tables["tournamentStandIn"], "accessorName"> & { readonly accessorName: "TournamentStandIn" };
-    /** @deprecated Use `tournamentTeam` instead. This alias will be removed in the next major version. */
-    readonly "TournamentTeam": Omit<typeof tablesSchema.schemaType.tables["tournamentTeam"], "accessorName"> & { readonly accessorName: "TournamentTeam" };
-    /** @deprecated Use `tournamentTeamMember` instead. This alias will be removed in the next major version. */
-    readonly "TournamentTeamMember": Omit<typeof tablesSchema.schemaType.tables["tournamentTeamMember"], "accessorName"> & { readonly accessorName: "TournamentTeamMember" };
-    /** @deprecated Use `tournamentTeamRequest` instead. This alias will be removed in the next major version. */
-    readonly "TournamentTeamRequest": Omit<typeof tablesSchema.schemaType.tables["tournamentTeamRequest"], "accessorName"> & { readonly accessorName: "TournamentTeamRequest" };
     /** @deprecated Use `user` instead. This alias will be removed in the next major version. */
     readonly "User": Omit<typeof tablesSchema.schemaType.tables["user"], "accessorName"> & { readonly accessorName: "User" };
     /** @deprecated Use `userAchievement` instead. This alias will be removed in the next major version. */
@@ -1609,8 +1094,6 @@ type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "ta
     readonly "view_my_roster_visibility": Omit<typeof tablesSchema.schemaType.tables["viewMyRosterVisibility"], "accessorName"> & { readonly accessorName: "view_my_roster_visibility" };
     /** @deprecated Use `viewMyTournamentEnrolled` instead. This alias will be removed in the next major version. */
     readonly "view_my_tournament_enrolled": Omit<typeof tablesSchema.schemaType.tables["viewMyTournamentEnrolled"], "accessorName"> & { readonly accessorName: "view_my_tournament_enrolled" };
-    /** @deprecated Use `viewMyTournamentGroupStandings` instead. This alias will be removed in the next major version. */
-    readonly "view_my_tournament_group_standings": Omit<typeof tablesSchema.schemaType.tables["viewMyTournamentGroupStandings"], "accessorName"> & { readonly accessorName: "view_my_tournament_group_standings" };
     /** @deprecated Use `viewMyTournamentLobbies` instead. This alias will be removed in the next major version. */
     readonly "view_my_tournament_lobbies": Omit<typeof tablesSchema.schemaType.tables["viewMyTournamentLobbies"], "accessorName"> & { readonly accessorName: "view_my_tournament_lobbies" };
     /** @deprecated Use `viewMyTournamentMatchResults` instead. This alias will be removed in the next major version. */
@@ -1648,16 +1131,12 @@ const tableAccessorAliases = {
   "AccountRatingConfig": "accountRatingConfig",
   "Achievement": "achievement",
   "AchievementCriteria": "achievementCriteria",
+  "AdminAlert": "adminAlert",
   "Archetype": "archetype",
-  "AvailabilitySlot": "availabilitySlot",
   "BracketMatch": "bracketMatch",
-  "CalendarEvent": "calendarEvent",
-  "CalendarEventInvite": "calendarEventInvite",
-  "ChatMessage": "chatMessage",
   "CostSet": "costSet",
   "EloConfigTable": "eloConfigTable",
   "GlobalCharacterStat": "globalCharacterStat",
-  "GroupPhaseRecord": "groupPhaseRecord",
   "HsrCharacter": "hsrCharacter",
   "HsrCharacterArchetype": "hsrCharacterArchetype",
   "HsrCharacterCost": "hsrCharacterCost",
@@ -1665,32 +1144,9 @@ const tableAccessorAliases = {
   "HsrLightconeCost": "hsrLightconeCost",
   "HsrSynergyCost": "hsrSynergyCost",
   "Leaderboard": "leaderboard",
-  "Lobby": "lobby",
-  "LobbyBan": "lobbyBan",
   "LobbyCursorEvent": "lobbyCursorEvent",
-  "LobbyMember": "lobbyMember",
-  "LobbyPreset": "lobbyPreset",
-  "MatchParticipantHistory": "matchParticipantHistory",
-  "MatchResultGame": "matchResultGame",
-  "MatchResultGameHistory": "matchResultGameHistory",
-  "MatchResultParticipant": "matchResultParticipant",
-  "MatchResultRecord": "matchResultRecord",
-  "MatchSession": "matchSession",
-  "MatchSessionHistory": "matchSessionHistory",
-  "MatchSessionStep": "matchSessionStep",
-  "MatchSessionStepHistory": "matchSessionStepHistory",
-  "MmrHistory": "mmrHistory",
-  "MmrRating": "mmrRating",
-  "SavedCalendar": "savedCalendar",
   "Season": "season",
   "Tournament": "tournament",
-  "TournamentAssistant": "tournamentAssistant",
-  "TournamentEnrolled": "tournamentEnrolled",
-  "TournamentPlayerAccount": "tournamentPlayerAccount",
-  "TournamentStandIn": "tournamentStandIn",
-  "TournamentTeam": "tournamentTeam",
-  "TournamentTeamMember": "tournamentTeamMember",
-  "TournamentTeamRequest": "tournamentTeamRequest",
   "User": "user",
   "UserAchievement": "userAchievement",
   "view_admin_user_private": "viewAdminUserPrivate",
@@ -1720,7 +1176,6 @@ const tableAccessorAliases = {
   "view_my_roster": "viewMyRoster",
   "view_my_roster_visibility": "viewMyRosterVisibility",
   "view_my_tournament_enrolled": "viewMyTournamentEnrolled",
-  "view_my_tournament_group_standings": "viewMyTournamentGroupStandings",
   "view_my_tournament_lobbies": "viewMyTournamentLobbies",
   "view_my_tournament_match_results": "viewMyTournamentMatchResults",
   "view_my_tournament_matches": "viewMyTournamentMatches",
@@ -1755,26 +1210,18 @@ export type DbView = __DbViewBase & {
   readonly "Achievement": __DbViewBase["achievement"];
   /** @deprecated Use `achievementCriteria` instead. This alias will be removed in the next major version. */
   readonly "AchievementCriteria": __DbViewBase["achievementCriteria"];
+  /** @deprecated Use `adminAlert` instead. This alias will be removed in the next major version. */
+  readonly "AdminAlert": __DbViewBase["adminAlert"];
   /** @deprecated Use `archetype` instead. This alias will be removed in the next major version. */
   readonly "Archetype": __DbViewBase["archetype"];
-  /** @deprecated Use `availabilitySlot` instead. This alias will be removed in the next major version. */
-  readonly "AvailabilitySlot": __DbViewBase["availabilitySlot"];
   /** @deprecated Use `bracketMatch` instead. This alias will be removed in the next major version. */
   readonly "BracketMatch": __DbViewBase["bracketMatch"];
-  /** @deprecated Use `calendarEvent` instead. This alias will be removed in the next major version. */
-  readonly "CalendarEvent": __DbViewBase["calendarEvent"];
-  /** @deprecated Use `calendarEventInvite` instead. This alias will be removed in the next major version. */
-  readonly "CalendarEventInvite": __DbViewBase["calendarEventInvite"];
-  /** @deprecated Use `chatMessage` instead. This alias will be removed in the next major version. */
-  readonly "ChatMessage": __DbViewBase["chatMessage"];
   /** @deprecated Use `costSet` instead. This alias will be removed in the next major version. */
   readonly "CostSet": __DbViewBase["costSet"];
   /** @deprecated Use `eloConfigTable` instead. This alias will be removed in the next major version. */
   readonly "EloConfigTable": __DbViewBase["eloConfigTable"];
   /** @deprecated Use `globalCharacterStat` instead. This alias will be removed in the next major version. */
   readonly "GlobalCharacterStat": __DbViewBase["globalCharacterStat"];
-  /** @deprecated Use `groupPhaseRecord` instead. This alias will be removed in the next major version. */
-  readonly "GroupPhaseRecord": __DbViewBase["groupPhaseRecord"];
   /** @deprecated Use `hsrCharacter` instead. This alias will be removed in the next major version. */
   readonly "HsrCharacter": __DbViewBase["hsrCharacter"];
   /** @deprecated Use `hsrCharacterArchetype` instead. This alias will be removed in the next major version. */
@@ -1789,58 +1236,12 @@ export type DbView = __DbViewBase & {
   readonly "HsrSynergyCost": __DbViewBase["hsrSynergyCost"];
   /** @deprecated Use `leaderboard` instead. This alias will be removed in the next major version. */
   readonly "Leaderboard": __DbViewBase["leaderboard"];
-  /** @deprecated Use `lobby` instead. This alias will be removed in the next major version. */
-  readonly "Lobby": __DbViewBase["lobby"];
-  /** @deprecated Use `lobbyBan` instead. This alias will be removed in the next major version. */
-  readonly "LobbyBan": __DbViewBase["lobbyBan"];
   /** @deprecated Use `lobbyCursorEvent` instead. This alias will be removed in the next major version. */
   readonly "LobbyCursorEvent": __DbViewBase["lobbyCursorEvent"];
-  /** @deprecated Use `lobbyMember` instead. This alias will be removed in the next major version. */
-  readonly "LobbyMember": __DbViewBase["lobbyMember"];
-  /** @deprecated Use `lobbyPreset` instead. This alias will be removed in the next major version. */
-  readonly "LobbyPreset": __DbViewBase["lobbyPreset"];
-  /** @deprecated Use `matchParticipantHistory` instead. This alias will be removed in the next major version. */
-  readonly "MatchParticipantHistory": __DbViewBase["matchParticipantHistory"];
-  /** @deprecated Use `matchResultGame` instead. This alias will be removed in the next major version. */
-  readonly "MatchResultGame": __DbViewBase["matchResultGame"];
-  /** @deprecated Use `matchResultGameHistory` instead. This alias will be removed in the next major version. */
-  readonly "MatchResultGameHistory": __DbViewBase["matchResultGameHistory"];
-  /** @deprecated Use `matchResultParticipant` instead. This alias will be removed in the next major version. */
-  readonly "MatchResultParticipant": __DbViewBase["matchResultParticipant"];
-  /** @deprecated Use `matchResultRecord` instead. This alias will be removed in the next major version. */
-  readonly "MatchResultRecord": __DbViewBase["matchResultRecord"];
-  /** @deprecated Use `matchSession` instead. This alias will be removed in the next major version. */
-  readonly "MatchSession": __DbViewBase["matchSession"];
-  /** @deprecated Use `matchSessionHistory` instead. This alias will be removed in the next major version. */
-  readonly "MatchSessionHistory": __DbViewBase["matchSessionHistory"];
-  /** @deprecated Use `matchSessionStep` instead. This alias will be removed in the next major version. */
-  readonly "MatchSessionStep": __DbViewBase["matchSessionStep"];
-  /** @deprecated Use `matchSessionStepHistory` instead. This alias will be removed in the next major version. */
-  readonly "MatchSessionStepHistory": __DbViewBase["matchSessionStepHistory"];
-  /** @deprecated Use `mmrHistory` instead. This alias will be removed in the next major version. */
-  readonly "MmrHistory": __DbViewBase["mmrHistory"];
-  /** @deprecated Use `mmrRating` instead. This alias will be removed in the next major version. */
-  readonly "MmrRating": __DbViewBase["mmrRating"];
-  /** @deprecated Use `savedCalendar` instead. This alias will be removed in the next major version. */
-  readonly "SavedCalendar": __DbViewBase["savedCalendar"];
   /** @deprecated Use `season` instead. This alias will be removed in the next major version. */
   readonly "Season": __DbViewBase["season"];
   /** @deprecated Use `tournament` instead. This alias will be removed in the next major version. */
   readonly "Tournament": __DbViewBase["tournament"];
-  /** @deprecated Use `tournamentAssistant` instead. This alias will be removed in the next major version. */
-  readonly "TournamentAssistant": __DbViewBase["tournamentAssistant"];
-  /** @deprecated Use `tournamentEnrolled` instead. This alias will be removed in the next major version. */
-  readonly "TournamentEnrolled": __DbViewBase["tournamentEnrolled"];
-  /** @deprecated Use `tournamentPlayerAccount` instead. This alias will be removed in the next major version. */
-  readonly "TournamentPlayerAccount": __DbViewBase["tournamentPlayerAccount"];
-  /** @deprecated Use `tournamentStandIn` instead. This alias will be removed in the next major version. */
-  readonly "TournamentStandIn": __DbViewBase["tournamentStandIn"];
-  /** @deprecated Use `tournamentTeam` instead. This alias will be removed in the next major version. */
-  readonly "TournamentTeam": __DbViewBase["tournamentTeam"];
-  /** @deprecated Use `tournamentTeamMember` instead. This alias will be removed in the next major version. */
-  readonly "TournamentTeamMember": __DbViewBase["tournamentTeamMember"];
-  /** @deprecated Use `tournamentTeamRequest` instead. This alias will be removed in the next major version. */
-  readonly "TournamentTeamRequest": __DbViewBase["tournamentTeamRequest"];
   /** @deprecated Use `user` instead. This alias will be removed in the next major version. */
   readonly "User": __DbViewBase["user"];
   /** @deprecated Use `userAchievement` instead. This alias will be removed in the next major version. */
@@ -1899,8 +1300,6 @@ export type DbView = __DbViewBase & {
   readonly "view_my_roster_visibility": __DbViewBase["viewMyRosterVisibility"];
   /** @deprecated Use `viewMyTournamentEnrolled` instead. This alias will be removed in the next major version. */
   readonly "view_my_tournament_enrolled": __DbViewBase["viewMyTournamentEnrolled"];
-  /** @deprecated Use `viewMyTournamentGroupStandings` instead. This alias will be removed in the next major version. */
-  readonly "view_my_tournament_group_standings": __DbViewBase["viewMyTournamentGroupStandings"];
   /** @deprecated Use `viewMyTournamentLobbies` instead. This alias will be removed in the next major version. */
   readonly "view_my_tournament_lobbies": __DbViewBase["viewMyTournamentLobbies"];
   /** @deprecated Use `viewMyTournamentMatchResults` instead. This alias will be removed in the next major version. */
@@ -1927,26 +1326,18 @@ export type Tables = __TablesBase & {
   readonly "Achievement": __TablesBase["achievement"];
   /** @deprecated Use `achievementCriteria` instead. This alias will be removed in the next major version. */
   readonly "AchievementCriteria": __TablesBase["achievementCriteria"];
+  /** @deprecated Use `adminAlert` instead. This alias will be removed in the next major version. */
+  readonly "AdminAlert": __TablesBase["adminAlert"];
   /** @deprecated Use `archetype` instead. This alias will be removed in the next major version. */
   readonly "Archetype": __TablesBase["archetype"];
-  /** @deprecated Use `availabilitySlot` instead. This alias will be removed in the next major version. */
-  readonly "AvailabilitySlot": __TablesBase["availabilitySlot"];
   /** @deprecated Use `bracketMatch` instead. This alias will be removed in the next major version. */
   readonly "BracketMatch": __TablesBase["bracketMatch"];
-  /** @deprecated Use `calendarEvent` instead. This alias will be removed in the next major version. */
-  readonly "CalendarEvent": __TablesBase["calendarEvent"];
-  /** @deprecated Use `calendarEventInvite` instead. This alias will be removed in the next major version. */
-  readonly "CalendarEventInvite": __TablesBase["calendarEventInvite"];
-  /** @deprecated Use `chatMessage` instead. This alias will be removed in the next major version. */
-  readonly "ChatMessage": __TablesBase["chatMessage"];
   /** @deprecated Use `costSet` instead. This alias will be removed in the next major version. */
   readonly "CostSet": __TablesBase["costSet"];
   /** @deprecated Use `eloConfigTable` instead. This alias will be removed in the next major version. */
   readonly "EloConfigTable": __TablesBase["eloConfigTable"];
   /** @deprecated Use `globalCharacterStat` instead. This alias will be removed in the next major version. */
   readonly "GlobalCharacterStat": __TablesBase["globalCharacterStat"];
-  /** @deprecated Use `groupPhaseRecord` instead. This alias will be removed in the next major version. */
-  readonly "GroupPhaseRecord": __TablesBase["groupPhaseRecord"];
   /** @deprecated Use `hsrCharacter` instead. This alias will be removed in the next major version. */
   readonly "HsrCharacter": __TablesBase["hsrCharacter"];
   /** @deprecated Use `hsrCharacterArchetype` instead. This alias will be removed in the next major version. */
@@ -1961,58 +1352,12 @@ export type Tables = __TablesBase & {
   readonly "HsrSynergyCost": __TablesBase["hsrSynergyCost"];
   /** @deprecated Use `leaderboard` instead. This alias will be removed in the next major version. */
   readonly "Leaderboard": __TablesBase["leaderboard"];
-  /** @deprecated Use `lobby` instead. This alias will be removed in the next major version. */
-  readonly "Lobby": __TablesBase["lobby"];
-  /** @deprecated Use `lobbyBan` instead. This alias will be removed in the next major version. */
-  readonly "LobbyBan": __TablesBase["lobbyBan"];
   /** @deprecated Use `lobbyCursorEvent` instead. This alias will be removed in the next major version. */
   readonly "LobbyCursorEvent": __TablesBase["lobbyCursorEvent"];
-  /** @deprecated Use `lobbyMember` instead. This alias will be removed in the next major version. */
-  readonly "LobbyMember": __TablesBase["lobbyMember"];
-  /** @deprecated Use `lobbyPreset` instead. This alias will be removed in the next major version. */
-  readonly "LobbyPreset": __TablesBase["lobbyPreset"];
-  /** @deprecated Use `matchParticipantHistory` instead. This alias will be removed in the next major version. */
-  readonly "MatchParticipantHistory": __TablesBase["matchParticipantHistory"];
-  /** @deprecated Use `matchResultGame` instead. This alias will be removed in the next major version. */
-  readonly "MatchResultGame": __TablesBase["matchResultGame"];
-  /** @deprecated Use `matchResultGameHistory` instead. This alias will be removed in the next major version. */
-  readonly "MatchResultGameHistory": __TablesBase["matchResultGameHistory"];
-  /** @deprecated Use `matchResultParticipant` instead. This alias will be removed in the next major version. */
-  readonly "MatchResultParticipant": __TablesBase["matchResultParticipant"];
-  /** @deprecated Use `matchResultRecord` instead. This alias will be removed in the next major version. */
-  readonly "MatchResultRecord": __TablesBase["matchResultRecord"];
-  /** @deprecated Use `matchSession` instead. This alias will be removed in the next major version. */
-  readonly "MatchSession": __TablesBase["matchSession"];
-  /** @deprecated Use `matchSessionHistory` instead. This alias will be removed in the next major version. */
-  readonly "MatchSessionHistory": __TablesBase["matchSessionHistory"];
-  /** @deprecated Use `matchSessionStep` instead. This alias will be removed in the next major version. */
-  readonly "MatchSessionStep": __TablesBase["matchSessionStep"];
-  /** @deprecated Use `matchSessionStepHistory` instead. This alias will be removed in the next major version. */
-  readonly "MatchSessionStepHistory": __TablesBase["matchSessionStepHistory"];
-  /** @deprecated Use `mmrHistory` instead. This alias will be removed in the next major version. */
-  readonly "MmrHistory": __TablesBase["mmrHistory"];
-  /** @deprecated Use `mmrRating` instead. This alias will be removed in the next major version. */
-  readonly "MmrRating": __TablesBase["mmrRating"];
-  /** @deprecated Use `savedCalendar` instead. This alias will be removed in the next major version. */
-  readonly "SavedCalendar": __TablesBase["savedCalendar"];
   /** @deprecated Use `season` instead. This alias will be removed in the next major version. */
   readonly "Season": __TablesBase["season"];
   /** @deprecated Use `tournament` instead. This alias will be removed in the next major version. */
   readonly "Tournament": __TablesBase["tournament"];
-  /** @deprecated Use `tournamentAssistant` instead. This alias will be removed in the next major version. */
-  readonly "TournamentAssistant": __TablesBase["tournamentAssistant"];
-  /** @deprecated Use `tournamentEnrolled` instead. This alias will be removed in the next major version. */
-  readonly "TournamentEnrolled": __TablesBase["tournamentEnrolled"];
-  /** @deprecated Use `tournamentPlayerAccount` instead. This alias will be removed in the next major version. */
-  readonly "TournamentPlayerAccount": __TablesBase["tournamentPlayerAccount"];
-  /** @deprecated Use `tournamentStandIn` instead. This alias will be removed in the next major version. */
-  readonly "TournamentStandIn": __TablesBase["tournamentStandIn"];
-  /** @deprecated Use `tournamentTeam` instead. This alias will be removed in the next major version. */
-  readonly "TournamentTeam": __TablesBase["tournamentTeam"];
-  /** @deprecated Use `tournamentTeamMember` instead. This alias will be removed in the next major version. */
-  readonly "TournamentTeamMember": __TablesBase["tournamentTeamMember"];
-  /** @deprecated Use `tournamentTeamRequest` instead. This alias will be removed in the next major version. */
-  readonly "TournamentTeamRequest": __TablesBase["tournamentTeamRequest"];
   /** @deprecated Use `user` instead. This alias will be removed in the next major version. */
   readonly "User": __TablesBase["user"];
   /** @deprecated Use `userAchievement` instead. This alias will be removed in the next major version. */
@@ -2071,8 +1416,6 @@ export type Tables = __TablesBase & {
   readonly "view_my_roster_visibility": __TablesBase["viewMyRosterVisibility"];
   /** @deprecated Use `viewMyTournamentEnrolled` instead. This alias will be removed in the next major version. */
   readonly "view_my_tournament_enrolled": __TablesBase["viewMyTournamentEnrolled"];
-  /** @deprecated Use `viewMyTournamentGroupStandings` instead. This alias will be removed in the next major version. */
-  readonly "view_my_tournament_group_standings": __TablesBase["viewMyTournamentGroupStandings"];
   /** @deprecated Use `viewMyTournamentLobbies` instead. This alias will be removed in the next major version. */
   readonly "view_my_tournament_lobbies": __TablesBase["viewMyTournamentLobbies"];
   /** @deprecated Use `viewMyTournamentMatchResults` instead. This alias will be removed in the next major version. */

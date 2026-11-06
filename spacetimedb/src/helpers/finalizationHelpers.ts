@@ -216,12 +216,8 @@ export function runFinalization(
 
     // Determine match end reason (per D-31/D-32/D-33):
     // winnerTeamSide answers WHO won, matchEndReason answers HOW it ended
-    let matchEndReason: any;
-    if (matchResult.winnerTeamSide === undefined) {
-        matchEndReason = { tag: 'Draw', value: {} } as any;
-    } else {
-        matchEndReason = { tag: 'Completed', value: {} } as any;
-    }
+    // S7 (A31): no draws — MatchEndReason.Draw was removed; the server-computed winner is always set.
+    let matchEndReason: any = { tag: 'Completed', value: {} } as any;
 
     // ── Concede Detection (D-74) ────────────────────────────────────────────
     const isConcede = matchResult.matchEndReason?.tag === 'Concede';
@@ -289,6 +285,7 @@ export function runFinalization(
             teamSize: lobby.teamSize,
             draftMode: lobby.draftMode,
             banMode: lobby.banMode,
+            lineupFormat: lobby.lineupFormat,
             standardTurnSeconds: lobby.standardTurnSeconds,
             reserveBankSeconds: lobby.reserveBankSeconds,
             characterBudget: lobby.characterBudget,
@@ -302,6 +299,7 @@ export function runFinalization(
             teamSize: 1,
             draftMode: { tag: 'Classic', value: {} } as any,
             banMode: { tag: 'None', value: {} } as any,
+            lineupFormat: { tag: 'Halves', value: {} } as any,
             standardTurnSeconds: 60,
             reserveBankSeconds: 120,
             characterBudget: 0,
@@ -317,9 +315,11 @@ export function runFinalization(
         // totalSpent = characterBudget + lightconeBudget - remainingLcBudget (correct carryover math)
         teamBlueSpent: session && lobby ? (lobby.characterBudget + lobby.lightconeBudget - session.teamBlueLcBudget) : 0,
         teamRedSpent: session && lobby ? (lobby.characterBudget + lobby.lightconeBudget - session.teamRedLcBudget) : 0,
-        handicapApplied: 0,
-        // D-84/D-91: Tournament matches hidden until tournament completes; standalone matches always visible
-        isPubliclyVisible: lobby?.isTournamentControlled ? false : true,
+        handicapApplied: 0, // S7: the applied handicap in hundredths from the shared scoring module
+        // A24/A37: tournament linkage instead of the D-84 public-visibility flag (history is never public)
+        tournamentId: lobby?.tournamentId,
+        bracketMatchId: lobby?.bracketMatchId,
+        voidedAt: undefined,
     }, actingUserId));
     } // end step 7 concede gate
 
@@ -373,10 +373,11 @@ export function runFinalization(
                     teamRedCyclesUsed: game.teamRedCyclesUsed,
                     teamBlueScore: game.teamBlueScore,
                     teamRedScore: game.teamRedScore,
-                    teamBlueBoss1Score: game.teamBlueBoss1Score,
-                    teamBlueBoss2Score: game.teamBlueBoss2Score,
-                    teamRedBoss1Score: game.teamRedBoss1Score,
-                    teamRedBoss2Score: game.teamRedBoss2Score,
+                    teamBlueDeaths: game.teamBlueDeaths,
+                    teamRedDeaths: game.teamRedDeaths,
+                    teamBlueAdjustedResult: game.teamBlueAdjustedResult,
+                    teamRedAdjustedResult: game.teamRedAdjustedResult,
+                    tieBreakLevel: game.tieBreakLevel,
                     winnerTeamSide: game.winnerTeamSide,
                 }, actingUserId));
             }
@@ -439,6 +440,8 @@ export function runFinalization(
         }
     }
 
+    // S9 (R2(3), A37): write SYSTEM_USER_ID as the audit actor of the public Leaderboard rows; actingUserId
+    // may be a player in an anonymous lobby.
     // 13b. Rebuild leaderboard after PlayerStat increments (reads PlayerStat.wins)
     if (!isConcede || concedeFlags.doLeaderboard) {
         if (matchResult.matchType.tag === 'Ranked' && !matchResult.isTournamentControlled) {
@@ -499,6 +502,7 @@ export function runFinalization(
                         incrementFacedStat(ctx, p.userId, charName, gameMode, draftMode, seasonId, matchType, teamSize, didOpponentWin, actingUserId);
                     }
                 }
+                // S9 (R2(3), A37): SYSTEM_USER_ID as the audit actor of the public GlobalCharacterStat rows.
                 incrementGlobalCharacterStat(ctx, charName, gameMode, draftMode, seasonId, matchType, teamSize, true, didActorWin, actingUserId);
             }
 
@@ -506,6 +510,7 @@ export function runFinalization(
                 for (const p of effectiveParticipants) {
                     incrementBanStat(ctx, p.userId, charName, gameMode, draftMode, seasonId, matchType, teamSize, actingUserId);
                 }
+                // S9 (R2(3), A37): SYSTEM_USER_ID as the audit actor of the public GlobalCharacterStat rows.
                 incrementGlobalCharacterStat(ctx, charName, gameMode, draftMode, seasonId, matchType, teamSize, false, false, actingUserId);
             }
         }
@@ -552,43 +557,8 @@ export function runFinalization(
     console.log(`[MATCH] Match result #${matchResult.id} finalized by user #${actingUserId}. History ID: ${historyRow?.id ?? 'none'}`);
 }
 
-// ─── revealTournamentHistory ──────────────────────────────────────────────────
-// Batch-updates all MatchSessionHistory rows associated with a tournament to
-// isPubliclyVisible=true. Called when tournament stage transitions to
-// Completed or Cancelled per D-91.
-
-export function revealTournamentHistory(ctx: any, tournamentId: number): void {
-    // D-42: tournamentId removed from MatchResultRecord; derive via BracketMatch.tournamentId
-    // Find all bracket matches for this tournament, then find match results via bracket_match_id index
-    const bracketMatches = [...ctx.db.BracketMatch.tournament_id.filter(tournamentId)];
-
-    // Build a set of lobby join codes from match results linked to these bracket matches
-    const lobbyCodes = new Set<string>();
-    for (const bracketMatch of bracketMatches) {
-        const matchResults = [...ctx.db.MatchResultRecord.bracket_match_id.filter(bracketMatch.id)];
-        for (const mr of matchResults) {
-            const lobby = ctx.db.Lobby.id.find(mr.lobbyId);
-            if (lobby) {
-                lobbyCodes.add(lobby.joinCode);
-            }
-        }
-    }
-
-    if (lobbyCodes.size === 0) return;
-
-    // Iterate MatchSessionHistory and reveal any row whose lobbyCode matches
-    // a lobby belonging to this tournament.
-    // Note: MatchSessionHistory has no lobbyId column or tournamentId column,
-    // so we use iter() to scan. Acceptable for tournament completion
-    // (infrequent batch operation, not a hot path).
-    for (const history of ctx.db.MatchSessionHistory.iter()) {
-        if (!history.isPubliclyVisible && lobbyCodes.has(history.lobbyCode)) {
-            ctx.db.MatchSessionHistory.id.update(
-                updateWithAudit(ctx, history, { isPubliclyVisible: true }, 0),
-            );
-        }
-    }
-}
+// revealTournamentHistory (D-91) was removed in S3: A37 makes history private for good and A24 replaces
+// the per-match reveal by finalize-at-Completed; MatchSessionHistory.tournamentId (indexed) is the link.
 
 // ─── Internal: incrementSpectatedCount ───────────────────────────────────────
 // Increments matchesSpectated on PlayerStat for a spectator (per D-30/D-31/D-32).
@@ -615,7 +585,6 @@ function incrementSpectatedCount(
             matchesPlayed: existing.matchesPlayed,
             wins: existing.wins,
             losses: existing.losses,
-            draws: existing.draws,
             matchesSpectated: existing.matchesSpectated + 1,
             seasonId,
             matchType,
@@ -630,7 +599,6 @@ function incrementSpectatedCount(
             matchesPlayed: 0,
             wins: 0,
             losses: 0,
-            draws: 0,
             matchesSpectated: 1,
             seasonId,
             matchType,

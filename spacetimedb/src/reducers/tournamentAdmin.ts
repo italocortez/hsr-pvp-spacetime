@@ -121,8 +121,10 @@ export const dq_participant = spacetimedb.reducer(
                 }
             } else {
                 // Auto-advance opponent in bracket if tournament is InProgress (D-27)
+                // S8 (A23/A24): the inline advancement is deleted; dq_participant settles the match through
+                // applyBracketResult with decidedBy Dq. The auto-advance flag was dropped (A36).
                 const tournament = ctx.db.Tournament.id.find(tournamentId);
-                if (tournament && tournament.autoAdvanceBracket && tournament.stage.tag === 'InProgress') {
+                if (tournament && tournament.stage.tag === 'InProgress') {
                     const bracketMatches = [...ctx.db.BracketMatch.tournament_id.filter(tournamentId)];
                     const activeMatch = bracketMatches.find((m: any) =>
                         !m.winnerTeamId &&
@@ -142,7 +144,7 @@ export const dq_participant = spacetimedb.reducer(
                             // Set opponent as winner
                             ctx.db.BracketMatch.id.update(updateWithAudit(ctx, activeMatch, {
                                 winnerTeamId: opponentTeamId,
-                                resultStatus: { tag: 'Validated', value: {} } as any,
+                                state: { tag: 'Decided', value: {} } as any,
                             }, user.id));
 
                             // Place opponent in next match
@@ -257,10 +259,10 @@ export const override_match_result = spacetimedb.reducer(
         ctx.db.MatchResultRecord.id.update(updateWithAudit(ctx, matchResult, {
             status: { tag: newStatusTag, value: {} } as any,
             winnerTeamSide: newStatusTag === 'Validated' ? winnerTeamSide : undefined,
+            // S7/S8 (A31): no draws; a Validated result always has a winner, and override_match_result is
+            // replaced by resolve_bracket_match / rollback_bracket_match through the single writer (A24).
             matchEndReason: newStatusTag === 'Validated'
-                ? (winnerTeamSide !== undefined
-                    ? { tag: 'Completed', value: {} } as any
-                    : { tag: 'Draw', value: {} } as any)
+                ? { tag: 'Completed', value: {} } as any
                 : matchResult.matchEndReason,
             disputeReason: reason, // Reuse disputeReason field to store override reason
         }, actingUserId));
@@ -285,6 +287,14 @@ export const assign_tournament_assistant = spacetimedb.reducer(
     },
     (ctx, { tournamentId, userId, canValidateResults, canOverrideResults, canDqParticipants, canManageBracket, canAssignSeeds }) => {
         const callerUser = getAuthenticatedUser(ctx);
+
+        // S8 (A25): the reducer takes the three flags directly (canManageParticipants, canManageBracket,
+        // canResolveResults). Until then the five legacy arguments fold into them so the fixtures compile.
+        const flags = {
+            canManageParticipants: canDqParticipants,
+            canManageBracket: canManageBracket || canAssignSeeds,
+            canResolveResults: canValidateResults || canOverrideResults,
+        };
 
         // Find the tournament
         const tournament = ctx.db.Tournament.id.find(tournamentId);
@@ -316,24 +326,15 @@ export const assign_tournament_assistant = spacetimedb.reducer(
         if (existing) {
             // Delete + re-insert with updated permissions
             ctx.db.TournamentAssistant.delete(existing);
-            ctx.db.TournamentAssistant.insert(updateWithAudit(ctx, existing, {
-                canValidateResults,
-                canOverrideResults,
-                canDqParticipants,
-                canManageBracket,
-                canAssignSeeds,
-            }, callerUser.id));
+            ctx.db.TournamentAssistant.insert(updateWithAudit(ctx, existing, flags, callerUser.id));
             console.log(`[TOURNAMENT] Updated assistant #${userId} permissions for tournament #${tournamentId}`);
         } else {
             // Insert new assistant row
             ctx.db.TournamentAssistant.insert(insertWithAudit(ctx, {
+                id: 0,
                 tournamentId,
                 userId,
-                canValidateResults,
-                canOverrideResults,
-                canDqParticipants,
-                canManageBracket,
-                canAssignSeeds,
+                ...flags,
             }, callerUser.id));
             console.log(`[TOURNAMENT] Assigned user #${userId} as assistant for tournament #${tournamentId}`);
         }

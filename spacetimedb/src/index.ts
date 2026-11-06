@@ -3,7 +3,7 @@ import { ScheduleAt } from 'spacetimedb';
 import { auditUpdate, SYSTEM_USER_ID } from './helpers/auditColumns';
 import { insertWithAudit, updateWithAudit } from './helpers/auditHelpers';
 import { transferCaptain, transferReferee, transferHost } from './helpers/flagTransferHelpers';
-import { checkProviderBan, DISCORD_BAN_TYPE } from './helpers/banHelper';
+import { checkProviderBan } from './helpers/banHelper';
 import { slotToTeamSide } from './helpers/lobbyHelpers';
 
 // Private auth tables — imported for schema registration
@@ -63,7 +63,6 @@ export {
     view_my_tournament_matches,
     view_my_tournament_match_results,
     view_my_tournament_lobbies,
-    view_my_tournament_group_standings,
     view_tournament_registrant_accounts,
 } from './views/tournamentViews';
 export { broadcast_cursor } from './reducers/cursor';
@@ -102,6 +101,8 @@ export { create_lobby_preset, update_lobby_preset, delete_lobby_preset } from '.
 export { create_tournament_lobby, approve_stand_in } from './reducers/tournamentLobby';
 export { run_lobby_gc, admin_gc_lobbies, seed_lobby_gc_job } from './reducers/lobbyGc';
 export { run_identity_gc, admin_gc_identities, seed_identity_gc_job } from './reducers/identityGc';
+export { run_referee_transfer_check } from './reducers/refereeTransfer';
+export { run_tournament_finalize } from './reducers/tournamentFinalize';
 export { start_draft, pick_character, ban_character, timer_expiry_classic } from './reducers/draftClassic';
 export { undo_last_step, pause_draft, resume_draft } from './reducers/draftControl';
 export { nominate_character, place_bid, pass_bid, timer_expiry_auction } from './reducers/draftAuction';
@@ -136,8 +137,6 @@ export const init = spacetimedb.init((ctx) => {
       username: 'SYSTEM',
       displayName: 'SYSTEM',
       isGuest: false,
-      isOnline: false,
-      lastLoginAt: ctx.timestamp,
       role: { tag: 'Admin' },
       hasDiscordLinked: false,
       avatarCharacterName: 'march7th',
@@ -162,12 +161,30 @@ export const init = spacetimedb.init((ctx) => {
 export const client_connected = spacetimedb.clientConnected((ctx) => {
   console.log(`Client connected: ${ctx.sender.toHexString()}`);
 
-  // Set isOnline = true for the connected user
+  // S3 (A48, D-A1): presence lives in the private per-identity UserPresence row, not on the public User row.
+  // S4: this upsert becomes the real presence logic (restore LobbyMember.isOnline for all memberships (F1),
+  // delete the pending RefereeTransferCheck via by_lobby_and_user, maintenance-mode rejection (B-8)).
   const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
   if (mapping) {
     const user = ctx.db.User.id.find(mapping.userId);
     if (user) {
-      ctx.db.User.id.update(updateWithAudit(ctx, user, { isOnline: true }, user.id));
+      const presence = ctx.db.UserPresence.identity.find(ctx.sender);
+      if (presence) {
+        ctx.db.UserPresence.identity.update(updateWithAudit(ctx, presence, {
+          userId: user.id,
+          isOnline: true,
+          lastLoginAt: ctx.timestamp,
+          lastSeenAt: ctx.timestamp,
+        }, user.id));
+      } else {
+        ctx.db.UserPresence.insert(insertWithAudit(ctx, {
+          identity: ctx.sender,
+          userId: user.id,
+          isOnline: true,
+          lastLoginAt: ctx.timestamp,
+          lastSeenAt: ctx.timestamp,
+        }, user.id));
+      }
 
       // D-01: Bump lastSeenAt for GC staleness tracking
       // Note: `lastSeenAt: ctx.timestamp` paired with `updateWithAudit` is safe (NOT Pitfall 6) —
@@ -176,13 +193,12 @@ export const client_connected = spacetimedb.clientConnected((ctx) => {
         lastSeenAt: ctx.timestamp,
       }, user.id));
 
-      // D-08 enforcement point 2: Check if the user's provider is banned on reconnect
+      // D-08 enforcement point 2: Check if the user's provider is banned on reconnect (A46: loginMethod + providerId)
       const userPrivate = ctx.db.UserPrivate.userId.find(mapping.userId);
-      if (userPrivate && userPrivate.discordId) {
-        const isBanned = checkProviderBan(ctx, DISCORD_BAN_TYPE, userPrivate.discordId);
+      if (userPrivate) {
+        const isBanned = checkProviderBan(ctx, userPrivate.loginMethod, userPrivate.providerId);
         if (isBanned && !user.deletedAt) {
           ctx.db.User.id.update(updateWithAudit(ctx, user, {
-            isOnline: false,
             deletedAt: ctx.timestamp,
           }, user.id));
           // D-10 R1 fix: schedule deletion cascade 5s out (matches admin.ts:181-188 pattern)
@@ -193,7 +209,7 @@ export const client_connected = spacetimedb.clientConnected((ctx) => {
             scheduledAt: ScheduleAt.time(deleteAt),
             userId: user.id,
           }, user.id));
-          console.log(`[BAN-RECONNECT] User #${user.id} soft-deleted -- banned Discord ID detected on reconnect.`);
+          console.log(`[BAN-RECONNECT] User #${user.id} soft-deleted -- banned provider id detected on reconnect.`);
         }
       }
     }
@@ -203,14 +219,20 @@ export const client_connected = spacetimedb.clientConnected((ctx) => {
 export const client_disconnected = spacetimedb.clientDisconnected((ctx) => {
   console.log(`Client disconnected: ${ctx.sender.toHexString()}`);
 
-  // Set isOnline = false for the disconnected user
+  // S3 (A48): mark this identity's presence row offline; "user offline" = no live row left (user_id index).
+  // S4: the rest of this hook shrinks to "per active-stage membership: isOnline=false, disconnectedAt, insert a
+  // RefereeTransferCheck 15 s out" (D.8.2) and only when the user has no other live connection; the flag
+  // transfers and the auto-pause below move into run_referee_transfer_check.
   const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
   if (!mapping) return;
   const userId = mapping.userId;
 
-  const user = ctx.db.User.id.find(userId);
-  if (user) {
-    ctx.db.User.id.update(updateWithAudit(ctx, user, { isOnline: false }, userId));
+  const presence = ctx.db.UserPresence.identity.find(ctx.sender);
+  if (presence) {
+    ctx.db.UserPresence.identity.update(updateWithAudit(ctx, presence, {
+      isOnline: false,
+      lastSeenAt: ctx.timestamp,
+    }, userId));
   }
 
   // Handle lobby member disconnect tracking (D-01, D-08, D-72, D-73)

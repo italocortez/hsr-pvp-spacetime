@@ -10,9 +10,10 @@ export const lobbyBanColumns = {
     lastModifiedDate: t.timestamp(),
 };
 
+// S3 (A37): private; host/referee read view_my_lobby_bans, staff view_admin_lobby_bans (S9).
 export const LobbyBan = table({
     name: 'lobby_ban',
-    public: true,
+    public: false,
     primaryKey: ['lobbyId', 'bannedUserId'],
     indexes: [
         { accessor: 'lobby_id', algorithm: 'btree', columns: ['lobbyId'] },

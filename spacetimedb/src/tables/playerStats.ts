@@ -8,7 +8,7 @@ export const playerStatColumns = {
     matchesPlayed: t.u32(),
     wins: t.u32(),
     losses: t.u32(),
-    draws: t.u32(),
+    // A31 (S3): the draws column was dropped; every match produces a winner.
     matchesSpectated: t.u32(),
     seasonId: t.u32(),
     matchType: MatchType,

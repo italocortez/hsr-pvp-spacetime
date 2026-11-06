@@ -21,8 +21,16 @@ function getUri() { return backendEnv().host; }
 function getDb() { return backendEnv().dbName; }
 function getServerToken() { return serverToken(); }
 
+/**
+ * T-S3 compile-only fix: S3 made 27 tables private (A37, Appendix A), so their accessors left the generated
+ * bindings and the live suite's raw-table reads (`h.conn.db.Lobby`, ...) no longer type-check. The suite is
+ * rewritten in-memory in S10 (D-D2); until then `db` is untyped on the harness connection so the files
+ * compile unchanged. Reducers stay fully typed.
+ */
+export type LiveConnection = Omit<DbConnection, 'db'> & { readonly db: any };
+
 export interface TestHarness {
-  conn: DbConnection;
+  conn: LiveConnection;
   identity: string;
   /** Numeric user ID from the User table — use to filter iter() results to this test's user */
   userId: number;

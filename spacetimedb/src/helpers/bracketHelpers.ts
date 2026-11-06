@@ -4,11 +4,11 @@
 
 import { SenderError } from 'spacetimedb/server';
 import { updateWithAudit } from './auditHelpers';
-import type { GroupPhaseRecord } from '@bindings/types';
 
-// ─── Group standings points ────────────────────────────────────────────────────
-const WIN_POINTS = 2;
-const DRAW_POINTS = 1;
+// S3: the group_phase_record table was dropped (A23) and the W2/D1/L0 scheme with it (A30/A31). The two
+// group-standings helpers below are stubs so the legacy advancement reducers compile; S8 deletes them with
+// those reducers and replaces them by the shared pure rankGroup(decidedGroupMatches, teams, rule) over
+// BracketMatch.team1Games/team2Games.
 
 /**
  * Places a teamId into the next available slot of a given BracketMatch.
@@ -35,71 +35,21 @@ export function placeParticipantInNextMatch(ctx: any, nextMatchId: number, teamI
 }
 
 /**
- * Updates GroupPhaseRecord rows for both participants after a group match resolves.
- * Win=2, Draw=1, Loss=0.
+ * S3 stub (was: the W2/D1/L0 stored-standings update). S8: group standings are computed, not stored (A23/A30).
  */
-export function updateGroupPhaseRecords(ctx: any, bracketMatch: any, userId: number): void {
-    const groupId = bracketMatch.groupId;
-    const tournamentId = bracketMatch.tournamentId;
-
-    const tournamentStandings = [...ctx.db.GroupPhaseRecord.tournament_id.filter(tournamentId)];
-    const standing1 = tournamentStandings
-        .find((row: any) => row.groupId === groupId && row.teamId === bracketMatch.team1Id);
-    const standing2 = tournamentStandings
-        .find((row: any) => row.groupId === groupId && row.teamId === bracketMatch.team2Id);
-
-    if (!standing1 || !standing2) return;
-
-    let updated1: GroupPhaseRecord;
-    let updated2: GroupPhaseRecord;
-
-    if (bracketMatch.winnerTeamId === undefined) {
-        // Draw: both get draws+1, points+1
-        updated1 = updateWithAudit(ctx, standing1, {
-            draws: standing1.draws + 1,
-            points: standing1.points + DRAW_POINTS,
-        }, userId);
-        updated2 = updateWithAudit(ctx, standing2, {
-            draws: standing2.draws + 1,
-            points: standing2.points + DRAW_POINTS,
-        }, userId);
-    } else if (bracketMatch.winnerTeamId === bracketMatch.team1Id) {
-        // Team1 wins
-        updated1 = updateWithAudit(ctx, standing1, {
-            wins: standing1.wins + 1,
-            points: standing1.points + WIN_POINTS,
-        }, userId);
-        updated2 = updateWithAudit(ctx, standing2, {
-            losses: standing2.losses + 1,
-        }, userId);
-    } else {
-        // Team2 wins
-        updated1 = updateWithAudit(ctx, standing1, {
-            losses: standing1.losses + 1,
-        }, userId);
-        updated2 = updateWithAudit(ctx, standing2, {
-            wins: standing2.wins + 1,
-            points: standing2.points + WIN_POINTS,
-        }, userId);
-    }
-
-    // Delete + insert pattern for composite PK tables
-    ctx.db.GroupPhaseRecord.delete(standing1);
-    ctx.db.GroupPhaseRecord.insert(updated1);
-
-    ctx.db.GroupPhaseRecord.delete(standing2);
-    ctx.db.GroupPhaseRecord.insert(updated2);
+export function updateGroupStandingsStub(_ctx: any, _bracketMatch: any, _userId: number): void {
+    // S8: no stored standings; rankGroup reads decided group BracketMatch rows.
 }
 
 /**
- * Sorts GroupPhaseRecord rows for a single group using tiebreaker rules:
+ * Sorts stored-standings rows for a single group using tiebreaker rules (S3 stub input: always []):
  * 1. Head-to-head result (did A beat B in their direct match?)
  * 2. Total points (higher = better)
  * 3. Seed number (lower = better)
  *
  * Returns standings sorted best-first (index 0 = group winner).
  */
-export function sortGroupPhaseRecords(
+export function sortGroupStandingsStub(
     ctx: any,
     standings: any[],
     tournamentId: number,
@@ -115,7 +65,9 @@ export function sortGroupPhaseRecords(
         teamSeed.set(t.id, t.seedNumber ?? 9999);
     }
 
-    // Head-to-head cache: key "teamA-teamB" → 1 if A beat B, -1 if B beat A, 0 if draw/no match
+    // Head-to-head cache: key "teamA-teamB" → 1 if A beat B, -1 if B beat A, 0 if no match
+    // S8: replaced by the shared rankGroup (A30: points → head-to-head → game differential → seed); the
+    // `standings` argument used to be group_phase_record rows and is now always [] from the stubbed callers.
     const h2hCache = new Map<string, number>();
     function headToHead(a: number, b: number): number {
         const key = `${a}-${b}`;
@@ -123,7 +75,7 @@ export function sortGroupPhaseRecords(
 
         const match = groupMatches.find((m: any) =>
             ((m.team1Id === a && m.team2Id === b) || (m.team1Id === b && m.team2Id === a)) &&
-            m.resultStatus.tag === 'Validated'
+            m.state.tag === 'Decided'
         );
 
         let result = 0;
@@ -167,11 +119,12 @@ export function advanceBracketMatch(ctx: any, bracketMatchId: number, winnerTeam
         throw new SenderError('Tournament must be InProgress for bracket advancement.');
     }
 
-    // Set winnerTeamId and resultStatus
+    // Set winnerTeamId and state (S8: applyBracketResult is the single writer; it also sets loserTeamId,
+    // decidedBy, team1Games/team2Games and audits with SYSTEM_USER_ID so no player id lands on the public row, A37)
     ctx.db.BracketMatch.id.update(
         updateWithAudit(ctx, bracketMatch, {
             winnerTeamId,
-            resultStatus: { tag: 'Validated', value: {} } as any,
+            state: { tag: 'Decided', value: {} } as any,
         }, userId),
     );
 
@@ -179,7 +132,9 @@ export function advanceBracketMatch(ctx: any, bracketMatchId: number, winnerTeam
     const updatedBracketMatch = ctx.db.BracketMatch.id.find(bracketMatchId);
     if (!updatedBracketMatch) return;
 
-    if (tournament.autoAdvanceBracket) {
+    // S8: the tournament's auto-advance flag was dropped (A24/A36: every settled result advances); this
+    // legacy path always advances until applyBracketResult replaces it.
+    {
         // Place winner in nextWinnerMatchId
         if (updatedBracketMatch.nextWinnerMatchId) {
             placeParticipantInNextMatch(ctx, updatedBracketMatch.nextWinnerMatchId, winnerTeamId, userId);
@@ -199,7 +154,7 @@ export function advanceBracketMatch(ctx: any, bracketMatchId: number, winnerTeam
         if (updatedBracketMatch.bracketSide.tag === 'Group' &&
             updatedBracketMatch.team1Id &&
             updatedBracketMatch.team2Id) {
-            updateGroupPhaseRecords(ctx, updatedBracketMatch, userId);
+            updateGroupStandingsStub(ctx, updatedBracketMatch, userId);
         }
     }
 }

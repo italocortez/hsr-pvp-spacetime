@@ -5,6 +5,7 @@ import {
     ActionType,
     TeamSide,
     RecurrenceType,
+    LineupFormat,
 } from './enums';
 
 // -------------------- STRUCTS --------------------
@@ -13,17 +14,19 @@ export const LobbyConfigSnapshot = t.object('LobbyConfigSnapshot', {
     teamSize: t.u8(),               // 1, 2, or 3
     draftMode: DraftMode,
     banMode: BanMode,
+    lineupFormat: LineupFormat,     // A21: halves or thirds, needed to replay the group arrangement
     standardTurnSeconds: t.u32(),
     reserveBankSeconds: t.u32(),
     characterBudget: t.f32(),
     lightconeBudget: t.f32(),
 
-    // Balance Math
-    rosterDiffAdvantage: t.f32(),
-    rosterThreshold: t.f32(),
-    underThresholdAdvantage: t.f32(),
-    aboveThresholdPenalty: t.f32(),
-    deathPenalty: t.f32(),
+    // Balance Math (A21: fixed-point hundredths of the game mode's unit, never floats;
+    // rosterThreshold is a roster cost in hundredths, 0 disables)
+    rosterDiffAdvantage: t.i32(),
+    rosterThreshold: t.u32(),
+    underThresholdAdvantage: t.i32(),
+    aboveThresholdPenalty: t.i32(),
+    deathPenalty: t.i32(),
 });
 
 export const PlayerSnapshot = t.object('PlayerSnapshot', {
@@ -133,13 +136,8 @@ export const StepPayload = t.enum('StepPayload', {
 });
 
 // -------------------- NEW STRUCTS --------------------
-
-export const GameScore = t.object('GameScore', {
-    cyclesUsed: t.u32().optional(),
-    scorePoints: t.u64().optional(),
-    boss1Score: t.u64().optional(),
-    boss2Score: t.u64().optional(),
-});
+// GameScore (cycles / points / boss1 / boss2) was dropped in S3: no column used it, and A21 replaced
+// the fixed boss columns with MatchResultGroupScore rows.
 
 export const RecurrenceRule = t.object('RecurrenceRule', {
     recurrenceType: RecurrenceType,

@@ -3,16 +3,14 @@ import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser } from '../helpers/ensurePermissions';
 import { ensureTournamentAccess } from '../helpers/tournamentHelpers';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
-import { placeParticipantInNextMatch, updateGroupPhaseRecords, sortGroupPhaseRecords } from '../helpers/bracketHelpers';
+import { placeParticipantInNextMatch, updateGroupStandingsStub, sortGroupStandingsStub } from '../helpers/bracketHelpers';
 import { deleteCalendarEventForBracketMatch } from '../helpers/calendarCascade';
 import { foldSeeding } from '../helpers/bracketGeneration';
-import type { BracketMatch, GroupPhaseRecord } from '@bindings/types';
+import type { BracketMatch } from '@bindings/types';
 
-// ─── Group standings points ────────────────────────────────────────────────────
-// Win=2, Draw=1, Loss=0 (per CONTEXT.md)
-const WIN_POINTS = 2;
-const DRAW_POINTS = 1;
-// const LOSS_POINTS = 0;  // implied
+// S8 (A23): advance_bracket_match, submit_and_advance_bracket and the inline advancement are deleted and
+// replaced by the single-writer applyBracketResult over the shared bracket engine. S3 only keeps this file
+// compiling against the new BracketMatch shape (state instead of the old result status, no stored standings).
 
 // ─── Internal helper: removeParticipantFromMatch ──────────────────────────────
 // Removes the slot containing teamId from a BracketMatch. Also clears winnerTeamId if it was that team.
@@ -38,60 +36,12 @@ function removeParticipantFromMatch(ctx: any, matchId: number, teamId: number, u
     ctx.db.BracketMatch.id.update(updatedMatch);
 }
 
-// ─── Internal helper: reverseGroupPhaseRecords ───────────────────────────────────
-// Reverses GroupPhaseRecord changes for a group match (used during rollback).
+// ─── Internal helper: reverseGroupStandingsStub ─────────────────────────────────
+// S3 stub: group_phase_record dropped (A23). S8: rollback re-opens the BracketMatch (state Ready, games 0-0)
+// and the computed standings follow.
 
-function reverseGroupPhaseRecords(ctx: any, bracketMatch: any, userId: number): void {
-    const groupId = bracketMatch.groupId;
-    const tournamentId = bracketMatch.tournamentId;
-
-    const tournamentStandings = [...ctx.db.GroupPhaseRecord.tournament_id.filter(tournamentId)];
-    const standing1 = tournamentStandings
-        .find((row: any) => row.groupId === groupId && row.teamId === bracketMatch.team1Id);
-    const standing2 = tournamentStandings
-        .find((row: any) => row.groupId === groupId && row.teamId === bracketMatch.team2Id);
-
-    if (!standing1 || !standing2) return;
-
-    let updated1: GroupPhaseRecord;
-    let updated2: GroupPhaseRecord;
-
-    if (bracketMatch.winnerTeamId === undefined) {
-        // Was a draw: reverse draws+1 and points+1 for both
-        updated1 = updateWithAudit(ctx, standing1, {
-            draws: Math.max(0, standing1.draws - 1),
-            points: Math.max(0, standing1.points - DRAW_POINTS),
-        }, userId);
-        updated2 = updateWithAudit(ctx, standing2, {
-            draws: Math.max(0, standing2.draws - 1),
-            points: Math.max(0, standing2.points - DRAW_POINTS),
-        }, userId);
-    } else if (bracketMatch.winnerTeamId === bracketMatch.team1Id) {
-        // Was team1 win: reverse
-        updated1 = updateWithAudit(ctx, standing1, {
-            wins: Math.max(0, standing1.wins - 1),
-            points: Math.max(0, standing1.points - WIN_POINTS),
-        }, userId);
-        updated2 = updateWithAudit(ctx, standing2, {
-            losses: Math.max(0, standing2.losses - 1),
-        }, userId);
-    } else {
-        // Was team2 win: reverse
-        updated1 = updateWithAudit(ctx, standing1, {
-            losses: Math.max(0, standing1.losses - 1),
-        }, userId);
-        updated2 = updateWithAudit(ctx, standing2, {
-            wins: Math.max(0, standing2.wins - 1),
-            points: Math.max(0, standing2.points - WIN_POINTS),
-        }, userId);
-    }
-
-    // Delete + insert pattern for composite PK tables
-    ctx.db.GroupPhaseRecord.delete(standing1);
-    ctx.db.GroupPhaseRecord.insert(updated1);
-
-    ctx.db.GroupPhaseRecord.delete(standing2);
-    ctx.db.GroupPhaseRecord.insert(updated2);
+function reverseGroupStandingsStub(_ctx: any, _bracketMatch: any, _userId: number): void {
+    // S8: nothing stored to reverse.
 }
 
 // ─── Internal helper: setEliminatedStatus ─────────────────────────────────────
@@ -133,7 +83,7 @@ function setEliminatedStatus(ctx: any, loserTeamId: number, bracketMatch: any, u
 
 // ─── advance_bracket_match ────────────────────────────────────────────────────
 // Places winner in nextWinnerMatchId slot. Routes loser to nextLoserMatchId (double elim).
-// Updates GroupPhaseRecord for group matches.
+// Updates stored group standings for group matches (stubbed since S3).
 // Permission: Tournament Access (TO/assistant/mod/admin).
 
 export const advance_bracket_match = spacetimedb.reducer(
@@ -188,12 +138,12 @@ export const advance_bracket_match = spacetimedb.reducer(
 
         // Update group standings if this is a group match (handles wins, losses, AND draws)
         if (isGroupMatch && bracketMatch.team1Id && bracketMatch.team2Id) {
-            updateGroupPhaseRecords(ctx, bracketMatch, user.id);
+            updateGroupStandingsStub(ctx, bracketMatch, user.id);
 
-            // Mark group draw as resolved (resultStatus → Validated) so TO knows it's processed
-            if (bracketMatch.winnerTeamId === undefined && bracketMatch.resultStatus.tag !== 'Validated') {
+            // S8 (A31): no draws; a group match is Decided with a winner like any other.
+            if (bracketMatch.winnerTeamId === undefined && bracketMatch.state.tag !== 'Decided') {
                 ctx.db.BracketMatch.id.update(updateWithAudit(ctx, bracketMatch, {
-                    resultStatus: { tag: 'Validated', value: {} } as any,
+                    state: { tag: 'Decided', value: {} } as any,
                 }, user.id));
             }
         }
@@ -258,7 +208,7 @@ export const submit_and_advance_bracket = spacetimedb.reducer(
         // Set winnerTeamId on BracketMatch
         ctx.db.BracketMatch.id.update(updateWithAudit(ctx, bracketMatch, {
             winnerTeamId: winnerTeamId,
-            resultStatus: { tag: 'Validated', value: {} } as any,
+            state: { tag: 'Decided', value: {} } as any,
         }, user.id));
 
         // Re-read the updated bracketMatch for downstream logic
@@ -276,8 +226,8 @@ export const submit_and_advance_bracket = spacetimedb.reducer(
             }
         }
 
-        // If autoAdvanceBracket is true, run advancement inline
-        if (tournament.autoAdvanceBracket) {
+        // S8: the auto-advance flag was dropped (A24/A36); the legacy path always advances until it is deleted
+        {
             // Place winner in nextWinnerMatchId
             if (updatedBracketMatch.nextWinnerMatchId) {
                 placeParticipantInNextMatch(ctx, updatedBracketMatch.nextWinnerMatchId, winnerTeamId, user.id);
@@ -297,11 +247,11 @@ export const submit_and_advance_bracket = spacetimedb.reducer(
             if (isGroupMatch &&
                 updatedBracketMatch.team1Id &&
                 updatedBracketMatch.team2Id) {
-                updateGroupPhaseRecords(ctx, updatedBracketMatch, user.id);
+                updateGroupStandingsStub(ctx, updatedBracketMatch, user.id);
             }
         }
 
-        console.log(`[BRACKET] submit_and_advance_bracket: match result #${matchResultId}, winner team #${winnerTeamId}, auto-advance: ${tournament.autoAdvanceBracket}`);
+        console.log(`[BRACKET] submit_and_advance_bracket: match result #${matchResultId}, winner team #${winnerTeamId}`);
     }
 );
 
@@ -363,17 +313,18 @@ export const rollback_bracket_match = spacetimedb.reducer(
 
         // Reverse group standings if group match
         if (bracketMatch.bracketSide.tag === 'Group' && bracketMatch.team1Id && bracketMatch.team2Id) {
-            reverseGroupPhaseRecords(ctx, bracketMatch, user.id);
+            reverseGroupStandingsStub(ctx, bracketMatch, user.id);
         }
 
         // Re-read bracketMatch in case it was updated by removeParticipantFromMatch above
         const currentBracketMatch = ctx.db.BracketMatch.id.find(bracketMatchId);
         if (!currentBracketMatch) throw new SenderError('Bracket match not found after reversal.');
 
-        // Clear winnerTeamId and reset resultStatus to Pending
+        // Clear winnerTeamId and re-open the match (S8: state Ready, loserTeamId/decidedBy cleared, games 0-0,
+        // record marked Voided, lobby hard-deleted — A24(3))
         ctx.db.BracketMatch.id.update(updateWithAudit(ctx, currentBracketMatch, {
             winnerTeamId: undefined,
-            resultStatus: { tag: 'Pending', value: {} } as any,
+            state: { tag: 'Ready', value: {} } as any,
         }, user.id));
 
         console.log(`[BRACKET] rollback_bracket_match: bracket match #${bracketMatchId} rolled back by user #${user.id}`);
@@ -413,11 +364,11 @@ export const advance_group_to_elimination = spacetimedb.reducer(
         const groupMatches = allMatches.filter((m: any) => m.bracketSide.tag === 'Group');
         const elimMatches = allMatches.filter((m: any) => m.bracketSide.tag !== 'Group');
 
-        // Verify all group matches are resolved (resultStatus = Validated)
-        const unresolvedGroup = groupMatches.find((m: any) => m.resultStatus.tag !== 'Validated');
+        // Verify all group matches are resolved (state Decided / Walkover / Void)
+        const unresolvedGroup = groupMatches.find((m: any) => m.state.tag !== 'Decided' && m.state.tag !== 'Walkover' && m.state.tag !== 'Void');
         if (unresolvedGroup) {
             throw new SenderError(
-                `Not all group matches are resolved. Match #${unresolvedGroup.id} is still ${unresolvedGroup.resultStatus.tag}.`
+                `Not all group matches are resolved. Match #${unresolvedGroup.id} is still ${unresolvedGroup.state.tag}.`
             );
         }
 
@@ -428,9 +379,14 @@ export const advance_group_to_elimination = spacetimedb.reducer(
             throw new SenderError('Elimination bracket already has teams placed. Rollback first if re-advancing.');
         }
 
-        // Load group phase records and sort each group
-        const allStandings = [...ctx.db.GroupPhaseRecord.tournament_id.filter(tournamentId)];
-        const groupIds = [...new Set(allStandings.map(s => s.groupId))].sort((a, b) => a - b);
+        // S8 (A23/A30): standings = rankGroup(decided group matches, TournamentTeam rows by groupId, rule);
+        // group_phase_record was dropped, so this legacy path sees no standings until S8 rewrites it.
+        const allStandings: any[] = [];
+        if (allStandings.length === 0) {
+            // S3 review L1: never advance on empty standings; S8 replaces this whole path with rankGroup.
+            throw new SenderError('Group advancement is unavailable until the S8 bracket rewrite (A23).');
+        }
+        const groupIds = [...new Set(allStandings.map(s => s.groupId as number))].sort((a, b) => a - b);
 
         // Collect advancing teams: cross-seed across groups
         // Pattern: rank 1 from each group first, then rank 2 from each, etc.
@@ -440,7 +396,7 @@ export const advance_group_to_elimination = spacetimedb.reducer(
 
         for (const groupId of groupIds) {
             const groupStandings = allStandings.filter(s => s.groupId === groupId);
-            const sorted = sortGroupPhaseRecords(ctx, groupStandings, tournamentId);
+            const sorted = sortGroupStandingsStub(ctx, groupStandings, tournamentId);
             groupRankings.set(groupId, sorted);
 
             // Validate enough teams in group
@@ -479,7 +435,7 @@ export const advance_group_to_elimination = spacetimedb.reducer(
 
             const match = sortedElimR1[i];
             // Writable BracketMatch shape -- tagged-enum getters in the inferred type
-            // (resultStatus, bracketSide, gameMode) are read-only, so strip readonly
+            // (state, bracketSide) are read-only, so strip readonly
             // locally to allow post-construction field mutations.
             const updates: { -readonly [K in keyof BracketMatch]: BracketMatch[K] } =
                 updateWithAudit(ctx, match, {}, user.id);
@@ -487,13 +443,13 @@ export const advance_group_to_elimination = spacetimedb.reducer(
             if (t1 !== undefined) updates.team1Id = t1;
             if (t2 !== undefined) updates.team2Id = t2;
 
-            // If one team is a BYE (undefined), auto-advance the other
+            // If one team is a BYE (undefined), auto-advance the other (S8: team1IsBye/team2IsBye + Walkover via the engine)
             if (t1 !== undefined && t2 === undefined) {
                 updates.winnerTeamId = t1;
-                updates.resultStatus = { tag: 'Validated', value: {} } as any;
+                updates.state = { tag: 'Walkover', value: {} } as any;
             } else if (t2 !== undefined && t1 === undefined) {
                 updates.winnerTeamId = t2;
-                updates.resultStatus = { tag: 'Validated', value: {} } as any;
+                updates.state = { tag: 'Walkover', value: {} } as any;
             }
 
             ctx.db.BracketMatch.id.update(updates);

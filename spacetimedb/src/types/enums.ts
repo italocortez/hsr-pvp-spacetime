@@ -82,9 +82,10 @@ export const TeamSide = t.enum('TeamSide', {
     Red: t.unit(),
 });
 
+// A31: no draws anywhere. The server computes a winner for every match (A21 chain ending in the
+// referee's winnerOverride), so the former Draw variant is gone.
 export const MatchEndReason = t.enum('MatchEndReason', {
-    Completed: t.unit(), // Normal completion — winnerTeamSide indicates who won (or undefined for draw)
-    Draw: t.unit(),
+    Completed: t.unit(), // Normal completion — winnerTeamSide names the winner
     Concede: t.unit(),
 });
 
@@ -142,6 +143,7 @@ export const MatchResultStatus = t.enum('MatchResultStatus', {
     Disputed: t.unit(),
     Validated: t.unit(),
     Rejected: t.unit(),
+    Voided: t.unit(),      // A24(3): a mid-tournament rollback keeps the record for audit and marks it Voided
 });
 
 export const ValidationStatus = t.enum('ValidationStatus', {
@@ -213,13 +215,64 @@ export const BracketSide = t.enum('BracketSide', {
     Group: t.unit(),
 });
 
-export const BanType = t.enum('BanType', {
-    DiscordId: t.unit(),
-});
+// BanType was dropped in S3 (A46): BanRecord.loginMethod is a string that mirrors the token's
+// `login_method` claim ('discord' today), so a new provider needs no enum variant and no wipe.
 
 // ServerIdentity row kind (M2, ACCESS-SECURITY-OPS §C.4): the publisher is registered as Owner by `init`;
 // the owner registers Delegate identities (e.g. the Vercel auth function) with server_register_delegate.
 export const ServerIdentityKind = t.enum('ServerIdentityKind', {
     Owner: t.unit(),
     Delegate: t.unit(),
+});
+
+// ─── S3 backend reset enums ──────────────────────────────────────────────────
+
+// A21: lineups are 8 characters in halves (4+4) or 12 in thirds (4+4+4); the format is a lobby
+// setting (preset-able) and part of the tournament integrity set (A33).
+export const LineupFormat = t.enum('LineupFormat', {
+    Halves: t.unit(),
+    Thirds: t.unit(),
+});
+
+// A27/A28 (todo 2026-07-06): which side starts a best-of-3 series one game up. None when bestOf = 1.
+export const AdvantageSide = t.enum('AdvantageSide', {
+    None: t.unit(),
+    Blue: t.unit(),
+    Red: t.unit(),
+});
+
+// A26: the single gate for seeding, team edits, lobby seats and bracket placement. Participants never set it.
+export const TeamStatus = t.enum('TeamStatus', {
+    Forming: t.unit(),
+    Ready: t.unit(),
+    Active: t.unit(),
+    Eliminated: t.unit(),
+    Withdrawn: t.unit(),
+    Disqualified: t.unit(),
+});
+
+// A23 (review 5.2): exact-slot, single-writer bracket. Pending = slots not yet filled, Ready = both
+// teams known, Walkover = decided by a BYE, Void = never played (cancelled / rolled back), Decided = result settled.
+export const BracketMatchState = t.enum('BracketMatchState', {
+    Pending: t.unit(),
+    Ready: t.unit(),
+    Walkover: t.unit(),
+    Void: t.unit(),
+    Decided: t.unit(),
+});
+
+// A23/A24/A38(1): how a Decided bracket match was settled.
+export const BracketDecision = t.enum('BracketDecision', {
+    Played: t.unit(),
+    Concede: t.unit(),
+    Dq: t.unit(),
+    Staff: t.unit(),
+});
+
+// A45(2): the mockup's four ban-restriction options, enforced per team in ban_character using HsrCharacter.role.
+export const BanRestriction = t.enum('BanRestriction', {
+    NoRestriction: t.unit(),
+    MaxOneDps: t.unit(),
+    MaxTwoDps: t.unit(),
+    MaxOnePerRole: t.unit(),
 });

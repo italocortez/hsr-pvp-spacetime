@@ -14,7 +14,7 @@ export const calendarEventInviteColumns = {
 
 export const CalendarEventInvite = table({
     name: 'calendar_event_invite',
-    public: true,
+    public: false, // S3 (A37 calendar contexts): private, read through view_my_calendar_* / view_saved_calendar_availability (S9)
     primaryKey: ['eventId', 'inviteeUserId'],
     indexes: [
         { accessor: 'event_id', algorithm: 'btree', columns: ['eventId'] },

@@ -1,13 +1,13 @@
 import { table, t } from 'spacetimedb/server';
 import { Role } from '../types/enums';
 
+// S3 (A48, D-A1): presence (isOnline, lastLoginAt) moved to the private UserPresence table, so this
+// public directory row is stable and carries no presence side channel (CH-S2).
 export const userColumns = {
     id: t.u32().primaryKey().autoInc(),
     username: t.string().unique(),
     displayName: t.string(),
     isGuest: t.bool(),
-    isOnline: t.bool(),
-    lastLoginAt: t.timestamp(),
     role: Role,
     hasDiscordLinked: t.bool(),           // D-02: replaces sensitive auth ID; only bool exposed on public table
     avatarCharacterName: t.string(), // FK reference to HsrCharacter name

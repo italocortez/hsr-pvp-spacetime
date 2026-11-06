@@ -66,9 +66,7 @@ export type RawCharacter = {
     version_released?: number;
     treat_as_version?: number;
     image_url?: string;
-    skel_url?: string;
-    atlas_url?: string;
-    atlas_img_url?: string[];
+    // A17 (S3): skel_url / atlas_url / atlas_img_url are no longer read; the seed files carry no Spine keys.
     positioning?: RawPositioning;
     cost?: RawCharacterCost;
 };
@@ -125,9 +123,6 @@ export function normalizeCharacters(raw: RawCharacter[]): object[] {
         imageUrl: c.image_url ?? '',
         versionReleased: c.version_released ?? 0,
         treatAsVersion: c.treat_as_version ?? 0,
-        skelUrl: c.skel_url && c.skel_url.length > 0 ? c.skel_url : null,
-        atlasUrl: c.atlas_url && c.atlas_url.length > 0 ? c.atlas_url : null,
-        atlasImgUrls: c.atlas_img_url ?? [],
         posX: c.positioning?.x ?? 0,
         posY: c.positioning?.y ?? 0,
         width: c.positioning?.width ?? 0,
@@ -283,12 +278,20 @@ export function normalizeLightconeCosts(raw: RawLightcone[]): object[] {
     return rows;
 }
 
-/** Extract HsrSynergyCost rows from pairing_table.json (Phase 15.4 D-12 / D-14:
- *  sibling-block shape with classic + auction sub-blocks; one row per present sub-block). */
+/** A21 (S3): synergies are unordered pairs stored as characterA/characterB in canonical (alphabetical)
+ *  order. The seed keeps its source_name/target_name keys; this orders them. */
+export function canonicalPair(a: string, b: string): [string, string] {
+    return a <= b ? [a, b] : [b, a];
+}
+
+/** Extract HsrSynergyCost rows from synergies.json (Phase 15.4 D-12 / D-14:
+ *  sibling-block shape with classic + auction sub-blocks; one row per present sub-block).
+ *  Emits characterA/characterB in canonical order (A21). */
 export function normalizePairings(raw: RawPairing[]): object[] {
     const rows: object[] = [];
     for (const p of raw) {
         if (!p.cost) continue;
+        const [characterA, characterB] = canonicalPair(p.source_name, p.target_name);
         const csId = p.cost.cost_set_id ?? 0;
         const modes = Object.keys(p.cost).filter(k => k !== 'cost_set_id');
         for (const rawMode of modes) {
@@ -299,8 +302,8 @@ export function normalizePairings(raw: RawPairing[]): object[] {
 
             if (modeBlock.classic !== undefined) {
                 rows.push({
-                    sourceName: p.source_name,
-                    targetName: p.target_name,
+                    characterA,
+                    characterB,
                     gameMode,
                     draftMode: 'Classic',
                     costModifier: Number(modeBlock.classic.modifier),
@@ -309,8 +312,8 @@ export function normalizePairings(raw: RawPairing[]): object[] {
             }
             if (modeBlock.auction !== undefined) {
                 rows.push({
-                    sourceName: p.source_name,
-                    targetName: p.target_name,
+                    characterA,
+                    characterB,
                     gameMode,
                     draftMode: 'Auction',
                     costModifier: Number(modeBlock.auction.modifier),

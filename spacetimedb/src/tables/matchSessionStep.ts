@@ -25,7 +25,7 @@ export const matchSessionStepColumns = {
 
 export const MatchSessionStep = table({
     name: 'match_session_step',
-    public: true,
+    public: false, // S3 (A37): private, read through views (S9)
     indexes: [
         // Fast lookup: "Get full history for Lobby 123"
         { accessor: 'lobby_id', algorithm: 'btree', columns: ['lobbyId'] },

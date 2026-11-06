@@ -16,6 +16,7 @@ import {
   RosterVisibility,
   DisconnectPolicy,
   GroupAssignmentMode,
+  LineupFormat,
 } from "./types";
 
 
@@ -43,25 +44,28 @@ export default __t.row({
   get disconnectPolicy() {
     return DisconnectPolicy.name("disconnect_policy");
   },
+  disconnectForfeitSeconds: __t.option(__t.u32()).name("disconnect_forfeit_seconds"),
   checkInEnabled: __t.bool().name("check_in_enabled"),
-  checkInPerRound: __t.bool().name("check_in_per_round"),
-  autoForfeitEnabled: __t.bool().name("auto_forfeit_enabled"),
-  autoForfeitMinutes: __t.u32().name("auto_forfeit_minutes"),
-  bracketRevealAt: __t.option(__t.timestamp()).name("bracket_reveal_at"),
   winnerAdvantage: __t.u8().name("winner_advantage"),
   get groupAssignmentMode() {
     return GroupAssignmentMode.name("group_assignment_mode");
   },
   groupAdvanceCount: __t.u8().name("group_advance_count"),
   costSetId: __t.u32().name("cost_set_id"),
-  seasonId: __t.option(__t.u32()).name("season_id"),
+  seasonId: __t.u32().name("season_id"),
   countTowardsMmr: __t.bool().name("count_towards_mmr"),
+  requireResultValidation: __t.bool().name("require_result_validation"),
   defaultBestOf: __t.u8().name("default_best_of"),
+  grandFinalBestOf: __t.u8().name("grand_final_best_of"),
   maxAccountsPerPlayer: __t.u8().name("max_accounts_per_player"),
   groupSize: __t.u8().name("group_size"),
   has3RdPlaceMatch: __t.bool().name("has_3_rd_place_match"),
-  autoAdvanceBracket: __t.bool().name("auto_advance_bracket"),
   requireOwnership: __t.bool().name("require_ownership"),
+  allowMirrorPicks: __t.bool().name("allow_mirror_picks"),
+  get lineupFormat() {
+    return LineupFormat.name("lineup_format");
+  },
+  lobbyPresetId: __t.u32().name("lobby_preset_id"),
   requireVerified: __t.bool().name("require_verified"),
   requireRoster: __t.bool().name("require_roster"),
   minimumMmr: __t.option(__t.u32()).name("minimum_mmr"),
@@ -69,6 +73,10 @@ export default __t.row({
   waitlistEnabled: __t.bool().name("waitlist_enabled"),
   scheduledStartAt: __t.option(__t.timestamp()).name("scheduled_start_at"),
   registrationDeadline: __t.option(__t.timestamp()).name("registration_deadline"),
+  lastSeedChangeAt: __t.option(__t.timestamp()).name("last_seed_change_at"),
+  bracketGeneratedAt: __t.option(__t.timestamp()).name("bracket_generated_at"),
+  finalizationStartedAt: __t.option(__t.timestamp()).name("finalization_started_at"),
+  finalizedAt: __t.option(__t.timestamp()).name("finalized_at"),
   createdById: __t.u32().name("created_by_id"),
   createdDate: __t.timestamp().name("created_date"),
   lastModifiedById: __t.u32().name("last_modified_by_id"),

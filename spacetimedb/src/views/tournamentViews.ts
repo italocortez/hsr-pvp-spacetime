@@ -9,7 +9,7 @@
 // 5. view_my_tournament_matches          — BracketMatch rows
 // 6. view_my_tournament_match_results    — MatchResultRecord rows
 // 7. view_my_tournament_lobbies          — Lobby rows
-// 8. view_my_tournament_group_standings  — GroupPhaseRecord rows
+// (8. view_my_tournament_group_standings removed in S3 with group_phase_record, A23: standings are computed client-side)
 // 9. view_tournament_registrant_accounts — locked-account rows for enrolled users
 //
 // Note (Phase 15): the phase plan referenced "7 tournament views" in the file
@@ -22,7 +22,6 @@ import { t } from 'spacetimedb/server';
 import { Lobby } from '../tables/lobby';
 import { Tournament } from '../tables/tournament';
 import { BracketMatch } from '../tables/bracketMatch';
-import { GroupPhaseRecord } from '../tables/groupPhaseRecord';
 import { MatchResultRecord } from '../tables/matchResult';
 import { TournamentEnrolled } from '../tables/tournamentEnrolled';
 import { TournamentTeam } from '../tables/tournamentTeam';
@@ -203,28 +202,6 @@ export const view_my_tournament_lobbies = spacetimedb.view(
         const results: any[] = [];
         for (const tid of resolved.tournamentIds) {
             for (const row of ctx.db.Lobby.tournament_id.filter(tid)) {
-                results.push(row);
-            }
-        }
-        return results;
-    }
-);
-
-// ---------------------------------------------------------------------------
-// 8. My Tournament Group Standings (per-user view) — GroupPhaseRecord rows for
-//    all tournaments where the caller is the organizer or an assistant.
-//    Direct tournament_id btree filter. (TO-VIEW-02)
-// ---------------------------------------------------------------------------
-// Phase 15 D-01/D-02: moved from securityViews.ts
-export const view_my_tournament_group_standings = spacetimedb.view(
-    { name: 'view_my_tournament_group_standings', public: true },
-    t.array(GroupPhaseRecord.rowType),
-    (ctx) => {
-        const resolved = getMyTournamentIds(ctx);
-        if (!resolved || resolved.tournamentIds.size === 0) return [];
-        const results: any[] = [];
-        for (const tid of resolved.tournamentIds) {
-            for (const row of ctx.db.GroupPhaseRecord.tournament_id.filter(tid)) {
                 results.push(row);
             }
         }

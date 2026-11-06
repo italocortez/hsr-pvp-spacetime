@@ -4,7 +4,7 @@ import { Identity, Timestamp } from 'spacetimedb';
 import { auditUpdate, SYSTEM_USER_ID } from '../helpers/auditColumns';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { performUserDeletion } from '../helpers/userDeletionHelper';
-import { rejectIfBanned, DISCORD_BAN_TYPE } from '../helpers/banHelper';
+import { rejectIfBanned, DISCORD_LOGIN_METHOD } from '../helpers/banHelper';
 
 /**
  * Guard: the caller is a registered server identity (Owner or Delegate, §C.4).
@@ -147,15 +147,15 @@ export const server_link_provider = spacetimedb.reducer({
         throw new SenderError('callerIdentityHex is required');
     }
 
-    // 3. Validate provider and map to BanType
-    const validProviders = ['discord'];
+    // 3. Validate provider (A46: the token's login_method; Discord-only policy at launch)
+    const validProviders = [DISCORD_LOGIN_METHOD];
     if (!validProviders.includes(provider)) {
         throw new SenderError(`Invalid provider "${provider}". Must be one of: ${validProviders.join(', ')}`);
     }
-    const banType = DISCORD_BAN_TYPE;  // Only discord for now
+    const loginMethod = provider;
 
     // 4. Ban check (D-08 enforcement point 1: link-time)
-    rejectIfBanned(ctx, banType, providerId);
+    rejectIfBanned(ctx, loginMethod, providerId);
 
     // 5. Resolve the end-user's identity -> UserIdentity -> User
     let callerIdentity: any;
@@ -171,8 +171,10 @@ export const server_link_provider = spacetimedb.reducer({
         currentUser = ctx.db.User.id.find(userMapping.userId);
     }
 
-    // 6. Check if a UserPrivate row with this providerId already exists
-    const existingByProvider = [...ctx.db.UserPrivate.user_private_discord_id.filter(providerId)];
+    // 6. Check if a UserPrivate row with this provider identity already exists
+    // M5: switch to by_method_and_provider.filter([loginMethod, providerId]) with the link-code flow.
+    const existingByProvider = [...ctx.db.UserPrivate.provider_id.filter(providerId)]
+        .filter((p: any) => p.loginMethod === loginMethod);
     const providerOwnerPrivate = existingByProvider.length > 0 ? existingByProvider[0] : null;
     const providerOwner = providerOwnerPrivate ? ctx.db.User.id.find(providerOwnerPrivate.userId) : null;
 
@@ -189,9 +191,8 @@ export const server_link_provider = spacetimedb.reducer({
                 lastSeenAt: ctx.timestamp,
             }, systemUserId));
 
-            ctx.db.User.id.update(updateWithAudit(ctx, providerOwner, {
-                lastLoginAt: ctx.timestamp,
-            }, systemUserId));
+            // S4/M5 (A48, review M3): client_connected does not re-run after a mid-connection re-point, so rewrite
+            // UserPresence.userId (+ lastLoginAt) for the re-pointed identity here, or the verified user shows offline on this device.
 
             if (wasGuest) {
                 const remainingLinks = [...ctx.db.UserIdentity.user_id.filter(oldGuestId)];
@@ -209,7 +210,6 @@ export const server_link_provider = spacetimedb.reducer({
             displayName: currentUser.isGuest ? providerName : currentUser.displayName,
             isGuest: false,
             hasDiscordLinked: true,
-            lastLoginAt: ctx.timestamp,
         }, systemUserId));
         ctx.db.UserIdentity.identity.update(updateWithAudit(ctx, userMapping, {
             lastSeenAt: ctx.timestamp,
@@ -219,15 +219,16 @@ export const server_link_provider = spacetimedb.reducer({
         const existingPrivate = ctx.db.UserPrivate.userId.find(currentUser.id);
         if (existingPrivate) {
             ctx.db.UserPrivate.userId.update(updateWithAudit(ctx, existingPrivate, {
-                discordId: providerId,
-                discordUsername: providerName,
+                loginMethod,
+                providerId,
+                providerUsername: providerName,
             }, systemUserId));
         } else {
             ctx.db.UserPrivate.insert(insertWithAudit(ctx, {
                 userId: currentUser.id,
-                discordId: providerId,
-                discordUsername: providerName,
-                email: undefined,
+                loginMethod,
+                providerId,
+                providerUsername: providerName,
             }, systemUserId));
         }
         return;
@@ -404,9 +405,22 @@ export const server_set_online = spacetimedb.reducer({
     const user = ctx.db.User.id.find(userId);
     if (!user) throw new SenderError(`User #${userId} not found`);
 
-    ctx.db.User.id.update(updateWithAudit(ctx, user, {
-        isOnline,
-    }, SYSTEM_USER_ID));
+    // S3 (A48): presence is per identity in UserPresence; force every identity row of the user.
+    // S4: decide whether this test utility stays once the in-memory harness calls the lifecycle hooks directly.
+    for (const mapping of [...ctx.db.UserIdentity.user_id.filter(userId)]) {
+        const presence = ctx.db.UserPresence.identity.find(mapping.identity);
+        if (presence) {
+            ctx.db.UserPresence.identity.update(updateWithAudit(ctx, presence, { isOnline, lastSeenAt: ctx.timestamp }, SYSTEM_USER_ID));
+        } else {
+            ctx.db.UserPresence.insert(insertWithAudit(ctx, {
+                identity: mapping.identity,
+                userId,
+                isOnline,
+                lastLoginAt: ctx.timestamp,
+                lastSeenAt: ctx.timestamp,
+            }, SYSTEM_USER_ID));
+        }
+    }
 });
 
 export const server_set_mmr = spacetimedb.reducer({
@@ -527,9 +541,11 @@ export const server_nuke_test_data = spacetimedb.reducer({
     ctx.db.LobbyPreset.clear();
     ctx.db.Lobby.clear();
 
-    // ── Bracket + group phase
+    // ── Bracket (group_phase_record dropped in S3, A23)
     ctx.db.BracketMatch.clear();
-    ctx.db.GroupPhaseRecord.clear();
+    // S4/S5/S7/S8: also clear the S3 tables (UserPresence, LinkRequest, MatchResultGroupScore,
+    // MatchResultAdjustment, MatchLineup, RefereeTransferCheck, TournamentFinalizeJob, UserRateState, AdminAlert)
+    // once their writers exist; AbuseConfig is seeded by init and must survive the nuke.
 
     // ── Tournaments (children first)
     ctx.db.TournamentStandIn.clear();

@@ -1,6 +1,5 @@
 import spacetimedb from '../schema';
 import { t } from 'spacetimedb/server';
-import { insertWithAudit } from '../helpers/auditHelpers';
 import { computeAnonymousLabel } from '../helpers/anonymousLabels';
 
 export const broadcast_cursor = spacetimedb.reducer({
@@ -29,13 +28,14 @@ export const broadcast_cursor = spacetimedb.reducer({
     const lobby = ctx.db.Lobby.id.find(lobbyId);
     const isAnon = lobby?.isAnonymousPlayers;
 
-    // Broadcast (event table — ephemeral, but audit columns still applied per policy)
-    ctx.db.LobbyCursorEvent.insert(insertWithAudit(ctx, {
+    // S5: bounds check (0..1), AbuseConfig.cursorMinIntervalMs throttle via LobbyMember.lastCursorAt (§B.5).
+    // Broadcast (event table — no audit columns, A19 / R2(4))
+    ctx.db.LobbyCursorEvent.insert({
         lobbyId,
         senderUserId: isAnon ? 0 : mapping.userId,
         anonymousLabel: isAnon ? computeAnonymousLabel(ctx, lobbyId, mapping.userId) : undefined,
         x,
         y,
         timestamp: ctx.timestamp,
-    }, mapping.userId));
+    });
 });

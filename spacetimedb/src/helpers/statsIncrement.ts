@@ -31,7 +31,7 @@ export function incrementPlayerStat(
             matchesPlayed: existing.matchesPlayed + 1,
             wins: existing.wins + (isWin ? 1 : 0),
             losses: existing.losses + (!isWin && !isDraw ? 1 : 0),
-            draws: existing.draws + (isDraw ? 1 : 0),
+            // S7 (A31): PlayerStat.draws dropped; isDraw is always false once the scoring module decides every match
             matchesSpectated: existing.matchesSpectated,
             seasonId,
             matchType,
@@ -46,7 +46,6 @@ export function incrementPlayerStat(
             matchesPlayed: 1,
             wins: isWin ? 1 : 0,
             losses: !isWin && !isDraw ? 1 : 0,
-            draws: isDraw ? 1 : 0,
             matchesSpectated: 0,
             seasonId,
             matchType,

@@ -16,5 +16,5 @@ export const lobbyPasswordColumns = {
 
 export const LobbyPassword = table({
     name: 'lobby_password',
-    // Intentionally NOT public — never broadcast to clients
+    public: false, // Intentionally NOT public — never broadcast to clients
 }, lobbyPasswordColumns);

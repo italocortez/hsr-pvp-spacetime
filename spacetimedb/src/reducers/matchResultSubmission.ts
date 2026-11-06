@@ -146,7 +146,7 @@ export const submit_match_result = spacetimedb.reducer(
                 }
                 if (!hasAuthority) {
                     const assistant = [...ctx.db.TournamentAssistant.by_tournament_and_user.filter([derivedTournamentId, user.id])][0];
-                    if (assistant && assistant.canValidateResults) {
+                    if (assistant && assistant.canResolveResults) { // A25
                         hasAuthority = true;
                     }
                 }
@@ -165,10 +165,9 @@ export const submit_match_result = spacetimedb.reducer(
             ? { tag: 'Validated', value: {} }
             : { tag: 'Submitted', value: {} };
 
-        // Determine matchEndReason based on whether there is a winner
-        const matchEndReason: any = winnerTeamSide
-            ? { tag: 'Completed', value: {} }
-            : { tag: 'Draw', value: {} };
+        // S7 (A21/A31): the server computes the winner; submit_match_result drops winnerId and a result
+        // without a winner no longer exists, so MatchEndReason.Draw was removed.
+        const matchEndReason: any = { tag: 'Completed', value: {} };
 
         ctx.db.MatchResultRecord.id.update(updateWithAudit(ctx, matchResult, {
             status: newStatus as MatchResultRecord['status'],

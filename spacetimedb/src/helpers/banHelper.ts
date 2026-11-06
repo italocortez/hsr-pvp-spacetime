@@ -1,33 +1,30 @@
 import { SenderError } from 'spacetimedb/server';
 
 /**
- * Canonical BanType payload — SpacetimeDB enum tag is the only discriminant
- * checkProviderBan uses; `value: {}` satisfies the struct shape. Extract to
- * eliminate the `as any` repetition across call sites.
+ * A46 (S3): bans are keyed by loginMethod + providerId, the shape of the token claims
+ * (`login_method`, `provider_id`). Discord is the only login method accepted at launch.
  */
-export const DISCORD_BAN_TYPE = { tag: 'DiscordId', value: {} } as any;
+export const DISCORD_LOGIN_METHOD = 'discord';
 
 /**
- * Check if a provider ID is banned for the given ban type.
+ * Check if a provider id is banned for the given login method.
  *
- * WR-01: MUST filter by banType, not just providerId alone (prevents
- * cross-provider false positives).
- *
- * Note: Multi-column index .filter() causes PANIC in the SpacetimeDB TS SDK.
- * Uses single-column ban_record_provider_id index lookup, then filters banType
- * in-memory. Still WR-01 compliant — banType.tag is checked on every match.
+ * WR-01: MUST filter by loginMethod, not just providerId alone (prevents
+ * cross-provider false positives). Uses the single-column provider_id index,
+ * then filters loginMethod in memory (the by_method_and_provider index is the
+ * M5 replacement once the multi-column filter is re-verified on 2.14.1).
  */
-export function checkProviderBan(ctx: any, banType: any, providerId: string): boolean {
-    const matches = [...ctx.db.BanRecord.ban_record_provider_id.filter(providerId)];
-    return matches.some((r: any) => r.banType.tag === banType.tag);
+export function checkProviderBan(ctx: any, loginMethod: string, providerId: string): boolean {
+    const matches = [...ctx.db.BanRecord.provider_id.filter(providerId)];
+    return matches.some((r: any) => r.loginMethod === loginMethod);
 }
 
 /**
- * Throws SenderError if the provider ID is banned for the given ban type.
+ * Throws SenderError if the provider id is banned for the given login method.
  * Convenience wrapper for use in reducers.
  */
-export function rejectIfBanned(ctx: any, banType: any, providerId: string): void {
-    if (checkProviderBan(ctx, banType, providerId)) {
-        throw new SenderError(`This ${banType.tag} provider is banned and cannot be linked.`);
+export function rejectIfBanned(ctx: any, loginMethod: string, providerId: string): void {
+    if (checkProviderBan(ctx, loginMethod, providerId)) {
+        throw new SenderError(`This ${loginMethod} account is banned and cannot be linked.`);
     }
 }

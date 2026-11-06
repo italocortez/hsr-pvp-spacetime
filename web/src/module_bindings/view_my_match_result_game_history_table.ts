@@ -27,10 +27,11 @@ export default __t.row({
   teamRedCyclesUsed: __t.option(__t.u32()).name("team_red_cycles_used"),
   teamBlueScore: __t.option(__t.u64()).name("team_blue_score"),
   teamRedScore: __t.option(__t.u64()).name("team_red_score"),
-  teamBlueBoss1Score: __t.option(__t.u64()).name("team_blue_boss_1_score"),
-  teamBlueBoss2Score: __t.option(__t.u64()).name("team_blue_boss_2_score"),
-  teamRedBoss1Score: __t.option(__t.u64()).name("team_red_boss_1_score"),
-  teamRedBoss2Score: __t.option(__t.u64()).name("team_red_boss_2_score"),
+  teamBlueDeaths: __t.u8().name("team_blue_deaths"),
+  teamRedDeaths: __t.u8().name("team_red_deaths"),
+  teamBlueAdjustedResult: __t.option(__t.i32()).name("team_blue_adjusted_result"),
+  teamRedAdjustedResult: __t.option(__t.i32()).name("team_red_adjusted_result"),
+  tieBreakLevel: __t.option(__t.u8()).name("tie_break_level"),
   get winnerTeamSide() {
     return TeamSide.name("winner_team_side");
   },

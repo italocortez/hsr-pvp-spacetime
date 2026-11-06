@@ -16,7 +16,7 @@ export const calendarEventColumns = {
 
 export const CalendarEvent = table({
     name: 'calendar_event',
-    public: true,
+    public: false, // S3 (A37 calendar contexts): private, read through view_my_calendar_* / view_saved_calendar_availability (S9)
     indexes: [
         { accessor: 'organizer_id', algorithm: 'btree', columns: ['organizerId'] },
         { accessor: 'start_at', algorithm: 'btree', columns: ['startAt'] },

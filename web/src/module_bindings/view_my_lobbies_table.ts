@@ -14,8 +14,11 @@ import {
   DraftMode,
   RosterVisibility,
   DisconnectPolicy,
+  LineupFormat,
   MatchType,
   BanMode,
+  BanRestriction,
+  AdvantageSide,
   LobbyStage,
 } from "./types";
 
@@ -23,6 +26,7 @@ import {
 export default __t.row({
   id: __t.u32().primaryKey(),
   joinCode: __t.string().name("join_code"),
+  name: __t.string(),
   hostUserId: __t.u32().name("host_user_id"),
   teamBlueAlias: __t.string().name("team_blue_alias"),
   teamRedAlias: __t.string().name("team_red_alias"),
@@ -33,13 +37,19 @@ export default __t.row({
   get banMode() {
     return BanMode.name("ban_mode");
   },
+  get banRestriction() {
+    return BanRestriction.name("ban_restriction");
+  },
+  get lineupFormat() {
+    return LineupFormat.name("lineup_format");
+  },
   standardTurnSeconds: __t.u32().name("standard_turn_seconds"),
   reserveBankSeconds: __t.u32().name("reserve_bank_seconds"),
-  rosterDiffAdvantage: __t.f32().name("roster_diff_advantage"),
-  rosterThreshold: __t.f32().name("roster_threshold"),
-  underThresholdAdvantage: __t.f32().name("under_threshold_advantage"),
-  aboveThresholdPenalty: __t.f32().name("above_threshold_penalty"),
-  deathPenalty: __t.f32().name("death_penalty"),
+  rosterDiffAdvantage: __t.i32().name("roster_diff_advantage"),
+  rosterThreshold: __t.u32().name("roster_threshold"),
+  underThresholdAdvantage: __t.i32().name("under_threshold_advantage"),
+  aboveThresholdPenalty: __t.i32().name("above_threshold_penalty"),
+  deathPenalty: __t.i32().name("death_penalty"),
   get matchType() {
     return MatchType.name("match_type");
   },
@@ -60,6 +70,7 @@ export default __t.row({
   isTournamentControlled: __t.bool().name("is_tournament_controlled"),
   isAnonymousPlayers: __t.bool().name("is_anonymous_players"),
   isAnonymousSpectators: __t.bool().name("is_anonymous_spectators"),
+  hideMmr: __t.bool().name("hide_mmr"),
   get rosterVisibility() {
     return RosterVisibility.name("roster_visibility");
   },
@@ -67,6 +78,9 @@ export default __t.row({
   costSetId: __t.u32().name("cost_set_id"),
   isPublic: __t.bool().name("is_public"),
   bestOf: __t.u8().name("best_of"),
+  get bestOfNAdvantage() {
+    return AdvantageSide.name("best_of_n_advantage");
+  },
   refereeControlsShelving: __t.bool().name("referee_controls_shelving"),
   get disconnectPolicy() {
     return DisconnectPolicy.name("disconnect_policy");

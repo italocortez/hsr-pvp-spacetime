@@ -12,7 +12,7 @@ export const tournamentPlayerAccountColumns = {
 
 export const TournamentPlayerAccount = table({
     name: 'tournament_player_account',
-    public: true,
+    public: false, // S3 (A37, C-c8): private, read through the tournament arg views and view_my_* (S9)
     primaryKey: ['tournamentId', 'userId', 'hsrAccountId'],
     indexes: [
         { accessor: 'by_tournament_and_user', algorithm: 'btree', columns: ['tournamentId', 'userId'] },

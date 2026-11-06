@@ -11,7 +11,7 @@ Each executed step writes its log to `docs/log/<date>-<step>.md` (goal, decision
 | M0 | Import `471a481`, npm-workspace layout, `.gitignore`, CLAUDE.md, skills, DECISIONS.md, `design/` (local only since A53), `data/seed/` | — | done 2026-11-06 (`docs/log/2026-11-06-m0.md`) |
 | M1 | SDK 2.14.1, Node 26, TS 7.1 beta; regenerate bindings; `shared/` build spike | M0 | done 2026-11-06 (`docs/log/2026-11-06-m1.md`) |
 | M2 | Env scheme: `shared/stdb-targets.ts`, `scripts/stdb/*`, `init` owner/delegate, test-only reducer guards; root `tsconfig.json` covering `scripts/` (Node types) added to `npm run typecheck`; upgrade report R6: `onDisconnect` fail-fast in every script; the publish script runs `npm run typecheck` first because `spacetime build` cannot find `tsc` in a workspace (M1 finding 1) | M1 | done 2026-11-06 (`docs/log/2026-11-06-m2.md`) |
-| S3 | Every schema change in one commit (A17, A19, A21, A25–A36, A45, A48 tables and columns) | M2 | pending |
+| S3 | Every schema change in one commit (A17, A19, A21, A25–A36, A45, A48 tables and columns) | M2 | done 2026-11-06 (`docs/log/2026-11-06-s3.md`) |
 | S4 | Lobby/lifecycle fixes F1–F9, paused-draft rejects, A22a referee check, A48 multi-device presence | S3 | pending |
 | S5 | Abuse throttles, caps, guest kill switch, circuit breaker (A42) | S4 | pending |
 | S6 | Series settings, presets and system preset, bestOf cap, cost-set guards, merged rating, Ban Restriction, new reducers (A33a, A45) | S5 | pending |

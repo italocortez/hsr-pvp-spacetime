@@ -16,7 +16,6 @@ function getField(row: any, fieldName: string): number | undefined {
         case 'matchesPlayed':        return row.matchesPlayed;
         case 'wins':                 return row.wins;
         case 'losses':               return row.losses;
-        case 'draws':                return row.draws;
         case 'matchesSpectated':     return row.matchesSpectated;
         // PlayerCharacterStat fields (shares matchesPlayed, wins, losses with above)
         case 'timesBannedInMatch':   return row.timesBannedInMatch;
@@ -141,6 +140,8 @@ export function checkAndAwardAchievements(ctx: any, userId: number, actingUserId
         if (!allPassed) continue;
 
         // Award the achievement
+        // S9 (R2(3), A37): auto-awards write SYSTEM_USER_ID as awardedById and audit actor; the public
+        // UserAchievement row must not carry the finalizing player's id (anonymous lobbies).
         ctx.db.UserAchievement.insert(insertWithAudit(ctx, {
             id: 0,
             userId,

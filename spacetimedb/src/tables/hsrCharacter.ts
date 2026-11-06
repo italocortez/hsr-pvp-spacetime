@@ -13,12 +13,9 @@ export const hsrCharacterColumns = {
     versionReleased: t.f64(),
     treatAsVersion: t.f64(),
 
-    // NEW (Phase 15, D-05): Spine asset URLs — optional, most characters lack Spine.
-    skelUrl: t.string().optional(),
-    atlasUrl: t.string().optional(),
-    atlasImgUrls: t.array(t.string()),
+    // A17 (S3): the three Spine asset columns were dropped; static images only.
 
-    // NEW (Phase 15, D-05a): Card positioning — required i32 with 0 defaults.
+    // Card positioning (Phase 15, D-05a) — required i32 with 0 defaults.
     posX: t.i32(),
     posY: t.i32(),
     width: t.i32(),
@@ -28,7 +25,6 @@ export const hsrCharacterColumns = {
     lastModifiedDate: t.timestamp(),
 };
 
-// People from the forums say we dont need "name": XXXXXXXXX on indexes anymore
 export const HsrCharacter = table({
     name: 'hsr_character',
     public: true,

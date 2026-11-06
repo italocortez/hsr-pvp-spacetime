@@ -15,7 +15,7 @@ export const matchResultParticipantColumns = {
 
 export const MatchResultParticipant = table({
     name: 'match_result_participant',
-    public: true,
+    public: false, // S3 (A37): private, read through views (S9)
     primaryKey: ['matchResultId', 'userId'],
     indexes: [
         { accessor: 'match_result_id', algorithm: 'btree', columns: ['matchResultId'] },

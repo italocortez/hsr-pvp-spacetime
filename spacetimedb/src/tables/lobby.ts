@@ -1,9 +1,10 @@
 import { table, t } from 'spacetimedb/server';
-import { DraftMode, BanMode, LobbyStage, DisconnectPolicy, GameMode, RosterVisibility, MatchType } from '../types/enums';
+import { DraftMode, BanMode, LobbyStage, DisconnectPolicy, GameMode, RosterVisibility, MatchType, LineupFormat, AdvantageSide, BanRestriction } from '../types/enums';
 
 export const lobbyColumns = {
     id: t.u32().primaryKey().autoInc(),
     joinCode: t.string().unique(),
+    name: t.string(),                   // D-A8: the lobbies mockup lists a lobby name
     hostUserId: t.u32(),
     teamBlueAlias: t.string(),
     teamRedAlias: t.string(),
@@ -12,13 +13,17 @@ export const lobbyColumns = {
     teamSize: t.u8(),
     draftMode: DraftMode,
     banMode: BanMode,
+    banRestriction: BanRestriction,     // A45(2): per-team ban restriction (free set)
+    lineupFormat: LineupFormat,         // A21: halves (8 characters) or thirds (12); integrity set in tournament lobbies (A33)
     standardTurnSeconds: t.u32(),
     reserveBankSeconds: t.u32(),
-    rosterDiffAdvantage: t.f32(),
-    rosterThreshold: t.f32(),
-    underThresholdAdvantage: t.f32(),
-    aboveThresholdPenalty: t.f32(),
-    deathPenalty: t.f32(),
+    // A21 handicaps: fixed-point hundredths of the game mode's unit (cycles or points), never floats.
+    // rosterThreshold is a roster cost in hundredths; 0 disables the threshold pair.
+    rosterDiffAdvantage: t.i32(),
+    rosterThreshold: t.u32(),
+    underThresholdAdvantage: t.i32(),
+    aboveThresholdPenalty: t.i32(),
+    deathPenalty: t.i32(),
 
     // Match type:
     matchType: MatchType,
@@ -44,7 +49,7 @@ export const lobbyColumns = {
     // Player pause per D-33:
     allowPlayerPause: t.bool(),
 
-    // Referee exclusive concede per D-92:
+    // Referee exclusive concede per D-92 (A45(5): a create_lobby argument, preset-able):
     refereeExclusiveConcede: t.bool(),
 
     // Tournament linkage:
@@ -55,6 +60,7 @@ export const lobbyColumns = {
     // Anonymous play:
     isAnonymousPlayers: t.bool(),
     isAnonymousSpectators: t.bool(),
+    hideMmr: t.bool(),                  // A40 mitigation (2): seats and cards show the account rating but not MMR
 
     // Roster:
     rosterVisibility: RosterVisibility,
@@ -65,8 +71,9 @@ export const lobbyColumns = {
     isPublic: t.bool(),
     // passwordHash moved to LobbyPassword (private table) — never broadcast to clients
 
-    // Best-of-N series (per D-11):
-    bestOf: t.u8(),                    // Default 1 (set in reducer). 1 = single game, 3/5/7 = series.
+    // Best-of-N series (per D-11; A28/A38(2): capped to {1, 3} by S6):
+    bestOf: t.u8(),                    // Default 1 (set in reducer). 1 = single game, 3 = series.
+    bestOfNAdvantage: AdvantageSide,   // A27/A28: side that starts a Bo3 one game up; None when bestOf = 1
     refereeControlsShelving: t.bool(), // Default true (set in reducer). When true + 3rd party referee present, only referee controls shelve/continue in BetweenGames.
 
     // Disconnect behavior:
@@ -87,9 +94,11 @@ export const lobbyColumns = {
     lastModifiedDate: t.timestamp(),
 };
 
+// S3 (A37, Appendix A): private. Members read it through view_my_lobby, the browser through
+// view_lobby_browser, staff through view_admin_lobbies (S9).
 export const Lobby = table({
     name: 'lobby',
-    public: true,
+    public: false,
     indexes: [
         { accessor: 'host_user_id', algorithm: 'btree', columns: ['hostUserId'] },
         { accessor: 'stage', algorithm: 'btree', columns: ['stage'] },

@@ -445,7 +445,7 @@ export function snakeSeedIntoGroups(sortedTeamIds: number[], groupCount: number)
 
 /**
  * Generates match descriptors and group assignments for a round-robin group phase.
- * Returns both match descriptors and group assignments (for GroupPhaseRecord row creation).
+ * Returns both match descriptors and group assignments (S8: written to TournamentTeam.groupId, A23).
  */
 export function generateGroupPhaseBracket(
     teamIds: number[],

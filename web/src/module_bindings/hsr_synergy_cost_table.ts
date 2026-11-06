@@ -17,8 +17,8 @@ import {
 
 export default __t.row({
   id: __t.u32().primaryKey(),
-  sourceName: __t.string().name("source_name"),
-  targetName: __t.string().name("target_name"),
+  characterA: __t.string().name("character_a"),
+  characterB: __t.string().name("character_b"),
   get gameMode() {
     return GameMode.name("game_mode");
   },

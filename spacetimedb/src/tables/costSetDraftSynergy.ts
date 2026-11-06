@@ -1,10 +1,12 @@
 import { table, t } from 'spacetimedb/server';
 import { GameMode, DraftMode } from '../types/enums';
 
+// A21 (S3): mirrors HsrSynergyCost (publish_cost_set copies draft rows into it column for column), so the
+// pair columns were renamed to characterA/characterB here too, canonical order included.
 export const costSetDraftSynergyColumns = {
     costSetId: t.u32(),
-    sourceName: t.string(),
-    targetName: t.string(),
+    characterA: t.string(),
+    characterB: t.string(),
     gameMode: GameMode,
     draftMode: DraftMode,
     costModifier: t.f32(),
@@ -16,9 +18,9 @@ export const costSetDraftSynergyColumns = {
 
 export const CostSetDraftSynergy = table({
     name: 'cost_set_draft_synergy',
-    primaryKey: ['costSetId', 'sourceName', 'targetName', 'gameMode', 'draftMode'],
+    primaryKey: ['costSetId', 'characterA', 'characterB', 'gameMode', 'draftMode'],
     indexes: [
         { accessor: 'cost_set_id', algorithm: 'btree', columns: ['costSetId'] },
-        { accessor: 'by_tuple', algorithm: 'btree', columns: ['costSetId', 'sourceName', 'targetName', 'gameMode', 'draftMode'] },
+        { accessor: 'by_tuple', algorithm: 'btree', columns: ['costSetId', 'characterA', 'characterB', 'gameMode', 'draftMode'] },
     ],
 }, costSetDraftSynergyColumns);

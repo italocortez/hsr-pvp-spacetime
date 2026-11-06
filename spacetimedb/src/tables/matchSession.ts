@@ -48,6 +48,6 @@ export const matchSessionColumns = {
 
 export const MatchSession = table({
     name: 'match_session',
-    public: true,
+    public: false, // S3 (A37): private, read through views (S9)
     // 1-to-1 relationship with Lobby: The Lobby ID is the Primary Key
 }, matchSessionColumns);

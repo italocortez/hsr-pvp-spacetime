@@ -32,7 +32,6 @@ export function createTournamentArgs(overrides: Record<string, unknown> = {}) {
         defaultBestOf: 1,
         groupSize: 4,
         has3RdPlaceMatch: false,
-        autoAdvanceBracket: true,
         countTowardsMmr: false,
         winnerAdvantage: 0,
         requireOwnership: false,

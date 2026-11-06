@@ -51,7 +51,10 @@ export const create_tournament_team = spacetimedb.reducer(
             tournamentId,
             name: trimmedName,
             captainUserId: user.id,
+            status: { tag: 'Forming', value: {} } as any, // S8 (A26): the team status machine
             seedNumber: undefined,
+            groupId: undefined,
+            finalPlacement: undefined,
         }, user.id));
 
         const teamId = newTeam.id;

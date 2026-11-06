@@ -1,16 +1,21 @@
 import { table, t } from 'spacetimedb/server';
 
 /**
- * Stores sensitive auth provider data for each user.
+ * Stores the auth-provider identity of a verified user.
  * Private (public: false) — never exposed to client subscriptions.
- * 1:1 with User (userId is both PK and FK to User.id).
+ * 1:1 with User (userId is both PK and FK to User.id); a row exists only once a provider is linked.
  * D-01, CR-01
+ *
+ * S3 (A46): generalized from discordId/discordUsername to loginMethod + providerId + providerUsername,
+ * the shape of the SpacetimeAuth token claims (`login_method`, `provider_id`, `preferred_username`), so a
+ * later switch to SpacetimeAuth needs no schema change. Policy stays Discord-only at launch (reducer check).
+ * `email` was dropped (D-B4): never written, one less personal-data column.
  */
 export const userPrivateColumns = {
     userId: t.u32().primaryKey(),       // FK to User.id (1:1)
-    discordId: t.string().optional(),
-    discordUsername: t.string().optional(),
-    email: t.string().optional(),        // schema-only, not populated (D-01)
+    loginMethod: t.string(),            // 'discord' today; mirrors the token's login_method claim
+    providerId: t.string(),             // the provider's user id (Discord snowflake)
+    providerUsername: t.string(),       // display name at link time
     createdById: t.u32(),
     createdDate: t.timestamp(),
     lastModifiedById: t.u32(),
@@ -21,6 +26,7 @@ export const UserPrivate = table({
     name: 'user_private',
     public: false,      // CR-01: MUST be explicit
     indexes: [
-        { accessor: 'user_private_discord_id', algorithm: 'btree', columns: ['discordId'] },
+        { accessor: 'provider_id', algorithm: 'btree', columns: ['providerId'] },
+        { accessor: 'by_method_and_provider', algorithm: 'btree', columns: ['loginMethod', 'providerId'] },
     ],
 }, userPrivateColumns);

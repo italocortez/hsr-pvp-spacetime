@@ -82,10 +82,8 @@ export const admin_force_finalize = spacetimedb.reducer(
             else if (winnerTeamId === 2) winnerTeamSide = 'Red';
         }
 
-        // Determine matchEndReason: Draw when no winner, Completed when there is one
-        const matchEndReason: any = winnerTeamSide
-            ? { tag: 'Completed', value: {} }
-            : { tag: 'Draw', value: {} };
+        // S7/S8 (A31): no draws; D.8.3: for tournament lobbies this reducer points at resolve_bracket_match instead.
+        const matchEndReason: any = { tag: 'Completed', value: {} };
 
         // Update MatchResultRecord with winner and validated status
         ctx.db.MatchResultRecord.id.update(updateWithAudit(ctx, matchResult, {

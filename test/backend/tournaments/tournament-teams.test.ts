@@ -56,7 +56,6 @@ describe.skipIf(!hasServerToken())('Tournament Teams', () => {
       defaultBestOf: 3,
       groupSize: 4,
       has3RdPlaceMatch: false,
-      autoAdvanceBracket: true,
       countTowardsMmr: false,
       winnerAdvantage: 0,
       requireOwnership: false,

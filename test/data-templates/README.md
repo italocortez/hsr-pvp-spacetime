@@ -39,9 +39,6 @@ the template level. The seed emits one DB row per present sub-block, tagged with
 | `image_url` | `imageUrl` | snake_case -> camelCase; missing -> `""` |
 | `version_released` | `versionReleased` | snake_case -> camelCase; missing -> `0` |
 | `treat_as_version` | `treatAsVersion` | snake_case -> camelCase; missing -> `0` |
-| `skel_url` | `skelUrl` | snake_case -> camelCase; empty string -> `null` |
-| `atlas_url` | `atlasUrl` | snake_case -> camelCase; empty string -> `null` |
-| `atlas_img_url` | `atlasImgUrls` | snake_case -> camelCase; missing -> `[]` |
 | `positioning.x` | `posX` | nested -> flat int; missing block -> `0` |
 | `positioning.y` | `posY` | nested -> flat int; missing block -> `0` |
 | `positioning.width` | `width` | nested -> flat int; missing block -> `0` |

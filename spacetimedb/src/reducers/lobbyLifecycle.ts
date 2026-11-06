@@ -46,11 +46,12 @@ export const create_lobby = spacetimedb.reducer(
         characterBudget: t.f32(),
         lightconeBudget: t.f32(),
         minimumBidRaise: t.f32(),
-        rosterDiffAdvantage: t.f32(),
-        rosterThreshold: t.f32(),
-        underThresholdAdvantage: t.f32(),
-        aboveThresholdPenalty: t.f32(),
-        deathPenalty: t.f32(),
+        // A21 (S3): handicap arguments are fixed-point hundredths (i32 / u32), matching the columns.
+        rosterDiffAdvantage: t.i32(),
+        rosterThreshold: t.u32(),
+        underThresholdAdvantage: t.i32(),
+        aboveThresholdPenalty: t.i32(),
+        deathPenalty: t.i32(),
         isAnonymousPlayers: t.bool(),
         isAnonymousSpectators: t.bool(),
         rosterVisibility: RosterVisibility,
@@ -108,12 +109,15 @@ export const create_lobby = spacetimedb.reducer(
         const lobby = ctx.db.Lobby.insert(insertWithAudit(ctx, {
             id: 0, // autoInc
             joinCode,
+            name: '', // S6: create_lobby argument (D-A8)
             hostUserId: user.id,
             teamBlueAlias: args.teamBlueAlias,
             teamRedAlias: args.teamRedAlias,
             teamSize: args.teamSize,
             draftMode: args.draftMode,
             banMode: args.banMode,
+            banRestriction: { tag: 'NoRestriction', value: {} }, // S6: argument (A45(2))
+            lineupFormat: { tag: 'Halves', value: {} },          // S6: argument (A21), Thirds for 12-character lobbies
             standardTurnSeconds: args.standardTurnSeconds,
             reserveBankSeconds: args.reserveBankSeconds,
             rosterDiffAdvantage: args.rosterDiffAdvantage,
@@ -139,6 +143,7 @@ export const create_lobby = spacetimedb.reducer(
             isTournamentControlled: false,
             isAnonymousPlayers: args.isAnonymousPlayers,
             isAnonymousSpectators: args.isAnonymousSpectators,
+            hideMmr: false, // S6: argument (A40 mitigation 2)
             rosterVisibility,
             requireOwnership: args.requireOwnership,
             costSetId: args.costSetId,
@@ -146,8 +151,9 @@ export const create_lobby = spacetimedb.reducer(
             disconnectPolicy: args.disconnectPolicy,
             disconnectForfeitSeconds,
             gameMode: args.gameMode,
-            // D-11: bestOf 0 is sentinel for default (1)
+            // D-11: bestOf 0 is sentinel for default (1). S6: cap to {1, 3} (A28/A38(2))
             bestOf: args.bestOf > 0 ? args.bestOf : 1,
+            bestOfNAdvantage: { tag: 'None', value: {} }, // S6: argument (A27), forced None when bestOf = 1
             // D-06: refereeControlsShelving default true per plan
             refereeControlsShelving: args.refereeControlsShelving,
             lastActivityAt: ctx.timestamp,
@@ -166,6 +172,9 @@ export const create_lobby = spacetimedb.reducer(
             voluntarilyLeft: false,
             disconnectedAt: undefined,
             disconnectPoolRemainingMs: 0,
+            joinSeq: 0, // S4/S9: per-lobby join counter (R4) assigned at join; labels derive from it
+            lastCursorAt: undefined,
+            lastLineupAt: undefined,
         }, user.id));
 
         // D-02: store password for private lobbies
@@ -307,6 +316,9 @@ export const join_lobby = spacetimedb.reducer(
             voluntarilyLeft: false,
             disconnectedAt: undefined,
             disconnectPoolRemainingMs: 0,
+            joinSeq: 0, // S4/S9: per-lobby join counter (R4) assigned at join; labels derive from it
+            lastCursorAt: undefined,
+            lastLineupAt: undefined,
         }, user.id));
 
         // D-04, D-09: Auto-create LobbyMemberAccount row with player's active account

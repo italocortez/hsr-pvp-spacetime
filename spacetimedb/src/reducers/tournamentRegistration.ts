@@ -83,7 +83,10 @@ export const register_for_tournament = spacetimedb.reducer(
                 tournamentId,
                 name: user.displayName,
                 captainUserId: user.id,
+                status: { tag: 'Forming', value: {} } as any, // S8 (A26): Forming -> Ready when teamSize members are eligible
                 seedNumber: undefined,
+                groupId: undefined,
+                finalPlacement: undefined,
             }, user.id));
 
             // Insert TournamentTeamMember row for the auto-created team (D-20)

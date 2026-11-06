@@ -27,7 +27,6 @@ export default __t.row({
   matchesPlayed: __t.u32().name("matches_played"),
   wins: __t.u32(),
   losses: __t.u32(),
-  draws: __t.u32(),
   matchesSpectated: __t.u32().name("matches_spectated"),
   seasonId: __t.u32().name("season_id"),
   get matchType() {

@@ -12,9 +12,9 @@ import {
 
 export default __t.row({
   userId: __t.u32().primaryKey().name("user_id"),
-  discordId: __t.option(__t.string()).name("discord_id"),
-  discordUsername: __t.option(__t.string()).name("discord_username"),
-  email: __t.option(__t.string()),
+  loginMethod: __t.string().name("login_method"),
+  providerId: __t.string().name("provider_id"),
+  providerUsername: __t.string().name("provider_username"),
   createdById: __t.u32().name("created_by_id"),
   createdDate: __t.timestamp().name("created_date"),
   lastModifiedById: __t.u32().name("last_modified_by_id"),

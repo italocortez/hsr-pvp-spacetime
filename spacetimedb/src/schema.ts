@@ -1,6 +1,8 @@
 import { schema, t } from 'spacetimedb/server';
 import { User } from './tables/user';
+import { UserPresence } from './tables/userPresence';
 import { UserPrivate } from './tables/userPrivate';
+import { LinkRequest } from './tables/linkRequest';
 import { DeletedUser } from './tables/deletedUser';
 import { BanRecord } from './tables/banRecord';
 import { UserIdentity } from './tables/userIdentity';
@@ -35,14 +37,16 @@ import { TournamentTeam } from './tables/tournamentTeam';
 import { TournamentTeamMember } from './tables/tournamentTeamMember';
 import { TournamentTeamRequest } from './tables/tournamentTeamRequest';
 
-// Bracket & Group
+// Bracket (group_phase_record dropped in S3, A23: group standings are computed by the shared rankGroup)
 import { BracketMatch } from './tables/bracketMatch';
-import { GroupPhaseRecord } from './tables/groupPhaseRecord';
 
 // Match Results
 import { MatchResultRecord } from './tables/matchResult';
 import { MatchResultGame } from './tables/matchResultGame';
 import { MatchResultParticipant } from './tables/matchResultParticipant';
+import { MatchResultGroupScore } from './tables/matchResultGroupScore';
+import { MatchResultAdjustment } from './tables/matchResultAdjustment';
+import { MatchLineup } from './tables/matchLineup';
 import { PlayerRelationship } from './tables/playerRelationship';
 import { MatchParticipantHistory } from './tables/matchParticipantHistory';
 
@@ -111,15 +115,24 @@ import { GcResult } from './tables/gcResult';
 import { UserDeletionJob } from './tables/userDeletionJob';
 import { LobbyGcJob } from './tables/lobbyGcJob';
 import { IdentityGcJob } from './tables/identityGcJob';
+import { RefereeTransferCheck } from './tables/refereeTransferCheck';
+import { TournamentFinalizeJob } from './tables/tournamentFinalizeJob';
+
+// Abuse controls (S3; §B.5, A42)
+import { AbuseConfig } from './tables/abuseConfig';
+import { UserRateState } from './tables/userRateState';
+import { AdminAlert } from './tables/adminAlert';
 
 const spacetimedb = schema({
     // User / Auth
     User,
+    UserPresence,
     UserPrivate,
     DeletedUser,
     BanRecord,
     UserIdentity,
     ServerIdentity,
+    LinkRequest,
 
     // Static Assets
     HsrCharacter,
@@ -154,14 +167,16 @@ const spacetimedb = schema({
     TournamentTeamMember,
     TournamentTeamRequest,
 
-    // Bracket & Group
+    // Bracket
     BracketMatch,
-    GroupPhaseRecord,
 
     // Match Results
     MatchResultRecord,
     MatchResultGame,
     MatchResultParticipant,
+    MatchResultGroupScore,
+    MatchResultAdjustment,
+    MatchLineup,
     PlayerRelationship,
 
     // MMR
@@ -228,6 +243,13 @@ const spacetimedb = schema({
     UserDeletionJob,
     LobbyGcJob,
     IdentityGcJob,
+    RefereeTransferCheck,
+    TournamentFinalizeJob,
+
+    // Abuse controls
+    AbuseConfig,
+    UserRateState,
+    AdminAlert,
 }, {
     // Module environment (SpacetimeDB 2.12+, D-C1): supplied from the publisher's process environment at
     // publish time (scripts/stdb/publish.ts spawns the CLI with STDB_TARGET=<target>), preserved across

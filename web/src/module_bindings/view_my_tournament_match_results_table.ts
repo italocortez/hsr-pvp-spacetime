@@ -47,6 +47,12 @@ export default __t.row({
   },
   concedeSummary: __t.option(__t.string()).name("concede_summary"),
   concedeAtStage: __t.option(__t.string()).name("concede_at_stage"),
+  get winnerOverride() {
+    return __t.option(TeamSide).name("winner_override");
+  },
+  winnerOverrideById: __t.option(__t.u32()).name("winner_override_by_id"),
+  winnerOverrideReason: __t.option(__t.string()).name("winner_override_reason"),
+  settledAt: __t.option(__t.timestamp()).name("settled_at"),
   createdById: __t.u32().name("created_by_id"),
   createdDate: __t.timestamp().name("created_date"),
   lastModifiedById: __t.u32().name("last_modified_by_id"),

@@ -16,7 +16,7 @@ export const mmrRatingColumns = {
 
 export const MmrRating = table({
     name: 'mmr_rating',
-    public: true,
+    public: false, // S3 (A40/A45): private; MMR shown only where the UI names a player (views, S9), the top-20 Leaderboard stays public
     primaryKey: ['userId', 'gameMode', 'seasonId'],
     indexes: [
         { accessor: 'user_id', algorithm: 'btree', columns: ['userId'] },

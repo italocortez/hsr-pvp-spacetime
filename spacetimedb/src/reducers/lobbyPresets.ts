@@ -66,11 +66,12 @@ export const create_lobby_preset = spacetimedb.reducer(
         characterBudget: t.f32(),
         lightconeBudget: t.f32(),
         minimumBidRaise: t.f32(),
-        rosterDiffAdvantage: t.f32(),
-        rosterThreshold: t.f32(),
-        underThresholdAdvantage: t.f32(),
-        aboveThresholdPenalty: t.f32(),
-        deathPenalty: t.f32(),
+        // A21 (S3): handicap arguments are fixed-point hundredths (i32 / u32), matching the columns.
+        rosterDiffAdvantage: t.i32(),
+        rosterThreshold: t.u32(),
+        underThresholdAdvantage: t.i32(),
+        aboveThresholdPenalty: t.i32(),
+        deathPenalty: t.i32(),
         isPublic: t.bool(),
         isAnonymousPlayers: t.bool(),
         isAnonymousSpectators: t.bool(),
@@ -114,6 +115,8 @@ export const create_lobby_preset = spacetimedb.reducer(
             teamSize: args.teamSize,
             draftMode: args.draftMode,
             banMode: args.banMode,
+            banRestriction: { tag: 'NoRestriction', value: {} }, // S6: argument (A45(2))
+            lineupFormat: { tag: 'Halves', value: {} },          // S6: argument (A21, backlog #6)
             gameMode: args.gameMode,
             matchType: args.matchType,
             standardTurnSeconds: args.standardTurnSeconds,
@@ -129,6 +132,7 @@ export const create_lobby_preset = spacetimedb.reducer(
             isPublic: args.isPublic,
             isAnonymousPlayers: args.isAnonymousPlayers,
             isAnonymousSpectators: args.isAnonymousSpectators,
+            hideMmr: false, // S6: argument (A40)
             rosterVisibility: args.rosterVisibility,
             requireOwnership: args.requireOwnership,
             costSetId: args.costSetId,
@@ -142,6 +146,10 @@ export const create_lobby_preset = spacetimedb.reducer(
             refereeCanKick: args.refereeCanKick,
             allowPlayerPause: args.allowPlayerPause,
             refereeExclusiveConcede: args.refereeExclusiveConcede,
+            // S6: series arguments (backlog #6; A28 cap {1,3}; bestOfNAdvantage None when bestOf = 1)
+            bestOf: 1,
+            bestOfNAdvantage: { tag: 'None', value: {} },
+            refereeControlsShelving: true,
         }, user.id));
 
         console.log(`[PRESET] Lobby preset "${args.name}" created by user #${user.id}`);
@@ -166,11 +174,12 @@ export const update_lobby_preset = spacetimedb.reducer(
         characterBudget: t.f32(),
         lightconeBudget: t.f32(),
         minimumBidRaise: t.f32(),
-        rosterDiffAdvantage: t.f32(),
-        rosterThreshold: t.f32(),
-        underThresholdAdvantage: t.f32(),
-        aboveThresholdPenalty: t.f32(),
-        deathPenalty: t.f32(),
+        // A21 (S3): handicap arguments are fixed-point hundredths (i32 / u32), matching the columns.
+        rosterDiffAdvantage: t.i32(),
+        rosterThreshold: t.u32(),
+        underThresholdAdvantage: t.i32(),
+        aboveThresholdPenalty: t.i32(),
+        deathPenalty: t.i32(),
         isPublic: t.bool(),
         isAnonymousPlayers: t.bool(),
         isAnonymousSpectators: t.bool(),

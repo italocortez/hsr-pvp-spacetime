@@ -185,6 +185,10 @@ export const start_draft = spacetimedb.reducer(
             concedeTrigger: undefined,
             concedeSummary: undefined,
             concedeAtStage: undefined,
+            winnerOverride: undefined,
+            winnerOverrideById: undefined,
+            winnerOverrideReason: undefined,
+            settledAt: undefined,
         }, user.id));
 
         // Create MatchResultParticipant rows for each Blue+Red non-coach member

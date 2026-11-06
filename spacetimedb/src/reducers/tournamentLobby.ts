@@ -99,6 +99,7 @@ export const create_tournament_lobby = spacetimedb.reducer(
         const lobby = ctx.db.Lobby.insert(insertWithAudit(ctx, {
             id: 0, // autoInc
             joinCode,
+            name: tournament.name, // S8: lobby name for tournament lobbies (D-A8)
             hostUserId: user.id,
             teamBlueAlias: 'Blue',
             teamRedAlias: 'Red',
@@ -106,9 +107,14 @@ export const create_tournament_lobby = spacetimedb.reducer(
             // Team size inherited from tournament
             teamSize: tournament.teamSize,
 
+            // S8 (A33a): the free set below is copied from the preset at tournament.lobbyPresetId
+            // (falling back to the system preset) instead of these constants.
             // Draft/ban mode — tournament defaults (Standard Classic with 4 bans)
             draftMode: { tag: 'Classic', value: {} } as any,
             banMode: { tag: 'Four', value: {} } as any,
+            banRestriction: { tag: 'NoRestriction', value: {} } as any,
+            // Integrity set (A33): lineup format comes from the tournament
+            lineupFormat: tournament.lineupFormat,
 
             // Timers — tournament standard defaults
             standardTurnSeconds: 60,
@@ -153,6 +159,7 @@ export const create_tournament_lobby = spacetimedb.reducer(
             // Anonymous play inherited from tournament
             isAnonymousPlayers: tournament.isAnonymousDefault,
             isAnonymousSpectators: tournament.isAnonymousSpectators,
+            hideMmr: false, // S8: from the preset (free set, A40)
 
             // Roster visibility inherited from tournament
             rosterVisibility: tournament.rosterVisibility,
@@ -168,7 +175,7 @@ export const create_tournament_lobby = spacetimedb.reducer(
 
             // Disconnect behavior inherited from tournament
             disconnectPolicy: tournament.disconnectPolicy,
-            disconnectForfeitSeconds: tournament.autoForfeitEnabled ? tournament.autoForfeitMinutes * 60 : undefined,
+            disconnectForfeitSeconds: tournament.disconnectForfeitSeconds, // A36: one optional timer
 
             // Game mode from tournament
             gameMode: tournament.defaultGameMode,
@@ -178,6 +185,8 @@ export const create_tournament_lobby = spacetimedb.reducer(
 
             // D-11: Copy bestOf from BracketMatch (tournament match series length)
             bestOf: bracketMatch.bestOf > 0 ? bracketMatch.bestOf : 1,
+            // S8 (A27): Blue when bracketMatch.winnerAdvantage > 0 (the WB finalist is always slot 1 = Blue)
+            bestOfNAdvantage: { tag: 'None', value: {} } as any,
 
             // D-06: Referee controls shelving for tournament lobbies (default true)
             refereeControlsShelving: true,
@@ -199,6 +208,9 @@ export const create_tournament_lobby = spacetimedb.reducer(
             voluntarilyLeft: false,
             disconnectedAt: undefined,
             disconnectPoolRemainingMs: 0,
+            joinSeq: 0, // S4/S9: per-lobby join counter (R4)
+            lastCursorAt: undefined,
+            lastLineupAt: undefined,
         }, user.id));
 
         console.log(`[TOURNAMENT_LOBBY] Lobby #${lobby.id} created for bracket match #${args.bracketMatchId} by user #${user.id}`);
@@ -261,7 +273,9 @@ export const approve_stand_in = spacetimedb.reducer(
 
         // Insert TournamentStandIn row
         ctx.db.TournamentStandIn.insert(insertWithAudit(ctx, {
+            id: 0,
             bracketMatchId: args.bracketMatchId,
+            teamId: 0, // S8 (A35): the team the stand-in covers (team1 -> Blue, team2 -> Red), a reducer argument
             userId: args.userId,
             approvedByUserId: user.id,
         }, user.id));

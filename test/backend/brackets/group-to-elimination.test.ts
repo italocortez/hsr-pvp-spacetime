@@ -2,7 +2,7 @@
  * Integration tests for group-to-elimination bracket advancement.
  *
  * Covers:
- * - sortGroupPhaseRecords tiebreaker: head-to-head → points → seed
+ * - group-standings tiebreaker (stored standings dropped in S3, A23; T-S8 rewrites): head-to-head → points → seed
  * - advance_group_to_elimination: places top N teams per group into elimination slots
  * - Cross-seeded fold placement (group winners face group runners-up)
  * - Validation: wrong format, unresolved group matches, already populated slots
@@ -99,7 +99,6 @@ describe('Group-to-Elimination Advancement', () => {
                 defaultBestOf: 1,
                 groupSize: 4,
                 has3RdPlaceMatch: false,
-                autoAdvanceBracket: true,
                 countTowardsMmr: false,
                 winnerAdvantage: 0,
                 requireOwnership: false,
@@ -173,7 +172,6 @@ describe('Group-to-Elimination Advancement', () => {
                 defaultBestOf: 1,
                 groupSize: 3, // 6 teams / 3 per group = 2 groups
                 has3RdPlaceMatch: false,
-                autoAdvanceBracket: true,
                 countTowardsMmr: false,
                 winnerAdvantage: 0,
                 requireOwnership: false,

@@ -17,7 +17,7 @@ export const tournamentEnrolledColumns = {
 
 export const TournamentEnrolled = table({
     name: 'tournament_enrolled',
-    public: true,
+    public: false, // S3 (A37, C-c8): private, read through the tournament arg views and view_my_* (S9)
     primaryKey: ['tournamentId', 'userId'],
     indexes: [
         { accessor: 'tournament_id', algorithm: 'btree', columns: ['tournamentId'] },

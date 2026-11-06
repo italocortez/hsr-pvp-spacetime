@@ -28,9 +28,11 @@ export const view_my_identity = spacetimedb.view(
 
 // ---------------------------------------------------------------------------
 // 2. My Profile (per-user view) -- merged User + UserPrivate for the requesting
-//    user. Returns full User fields plus private auth fields (discordId,
-//    discordUsername, email) so the caller sees their own data in a single
+//    user. Returns full User fields plus private auth fields (loginMethod,
+//    providerId, providerUsername) so the caller sees their own data in a single
 //    subscription. (D-04)
+//    S3: isOnline / lastLoginAt / email left the row with the User columns (A48, D-B4);
+//    S9 re-shapes this view for the profile page (PAGE-MAP).
 // ---------------------------------------------------------------------------
 const MyProfileRow = t.object('MyProfileRow', {
     // User fields
@@ -38,17 +40,15 @@ const MyProfileRow = t.object('MyProfileRow', {
     username: t.string(),
     displayName: t.string(),
     isGuest: t.bool(),
-    isOnline: t.bool(),
-    lastLoginAt: t.timestamp(),
     role: Role,
     hasDiscordLinked: t.bool(),
     avatarCharacterName: t.string(),
     displayedAchievementId: t.u32().optional(),
     deletedAt: t.timestamp().optional(),
-    // UserPrivate fields (only visible to the user themselves)
-    discordId: t.string().optional(),
-    discordUsername: t.string().optional(),
-    email: t.string().optional(),
+    // UserPrivate fields (only visible to the user themselves; A46 provider generalization)
+    loginMethod: t.string().optional(),
+    providerId: t.string().optional(),
+    providerUsername: t.string().optional(),
     // Audit from User
     createdById: t.u32(),
     createdDate: t.timestamp(),
@@ -74,16 +74,14 @@ export const view_my_profile = spacetimedb.view(
             username: user.username,
             displayName: user.displayName,
             isGuest: user.isGuest,
-            isOnline: user.isOnline,
-            lastLoginAt: user.lastLoginAt,
             role: user.role,
             hasDiscordLinked: user.hasDiscordLinked,
             avatarCharacterName: user.avatarCharacterName,
             displayedAchievementId: user.displayedAchievementId,
             deletedAt: user.deletedAt,
-            discordId: priv?.discordId,
-            discordUsername: priv?.discordUsername,
-            email: priv?.email,
+            loginMethod: priv?.loginMethod,
+            providerId: priv?.providerId,
+            providerUsername: priv?.providerUsername,
             createdById: user.createdById,
             createdDate: user.createdDate,
             lastModifiedById: user.lastModifiedById,
@@ -159,7 +157,7 @@ export const view_public_hsr_accounts = spacetimedb.anonymousView(
 // ---------------------------------------------------------------------------
 // 4. Admin User Private (admin/mod view) -- returns all UserPrivate rows
 //    when caller has role >= Moderator (level 75). Enables admins and
-//    moderators to look up discordUsername for moderation. (D-05)
+//    moderators to look up providerUsername for moderation. (D-05)
 // ---------------------------------------------------------------------------
 // Phase 15 D-01/D-02: moved from securityViews.ts
 export const view_admin_user_private = spacetimedb.view(

@@ -19,7 +19,7 @@ export const matchSessionStepHistoryColumns = {
 
 export const MatchSessionStepHistory = table({
     name: 'match_session_step_history',
-    public: true,
+    public: false, // S3 (A37): private, read through views (S9)
     primaryKey: ['matchHistoryId', 'gameNumber', 'sequence'],
     indexes: [
         { accessor: 'by_match_history', algorithm: 'btree', columns: ['matchHistoryId'] },

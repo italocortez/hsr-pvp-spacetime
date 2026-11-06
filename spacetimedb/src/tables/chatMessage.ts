@@ -15,9 +15,10 @@ export const chatMessageColumns = {
     lastModifiedDate: t.timestamp(),
 };
 
+// S3 (A37): private; members read view_my_lobby_chat (anonymized, S9).
 export const ChatMessage = table({
     name: 'chat_message',
-    public: true,
+    public: false,
     indexes: [
         { accessor: 'lobby_id', algorithm: 'btree', columns: ['lobbyId'] },
     ],

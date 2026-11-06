@@ -27,27 +27,35 @@ function insertBracketMatches(
     // Pass 1: Insert all matches with null FKs, build positionKey -> insertedId map
     const idMap = new Map<string, number>();
     for (const desc of descriptors) {
+        // S8 (A23): replaced by the shared bracket engine (shared/bracket/): exact slots, BYE walkovers,
+        // nextWinnerSlot / nextLoserSlot, team1IsBye / team2IsBye. S3 writes the new columns with placeholders.
         const row = ctx.db.BracketMatch.insert(insertWithAudit(ctx, {
             id: 0,
             tournamentId: tournament.id,
+            positionKey: desc.positionKey,
+            bracketSide: { tag: desc.bracketSide, value: {} } as any,
             roundNumber: desc.roundNumber,
             matchNumber: desc.matchNumber,
-            bracketSide: { tag: desc.bracketSide, value: {} } as any,
             groupId: desc.groupId,
             team1Id: desc.team1Id,
             team2Id: desc.team2Id,
+            team1IsBye: false,
+            team2IsBye: false,
             nextWinnerMatchId: undefined,
+            nextWinnerSlot: 0,
             nextLoserMatchId: undefined,
+            nextLoserSlot: 0,
             bestOf: desc.bestOf,
-            gameMode: tournament.defaultGameMode,
             winnerAdvantage: desc.winnerAdvantage,
             scheduledAt: undefined,
-            lobbyId: undefined,
-            checkInRequired: tournament.checkInEnabled,
-            winnerTeamId: desc.winnerTeamId,
-            resultStatus: desc.winnerTeamId
-                ? { tag: 'Validated', value: {} } as any
+            state: desc.winnerTeamId
+                ? { tag: 'Walkover', value: {} } as any
                 : { tag: 'Pending', value: {} } as any,
+            winnerTeamId: desc.winnerTeamId,
+            loserTeamId: undefined,
+            decidedBy: undefined,
+            team1Games: 0,
+            team2Games: 0,
         }, userId));
         idMap.set(desc.positionKey, row.id);
     }
@@ -98,27 +106,18 @@ function insertBracketMatches(
 }
 
 /**
- * Creates GroupPhaseRecord rows for all teams assigned to each group.
+ * S3 stub: group_phase_record was dropped (A23); group membership lives on TournamentTeam.groupId and
+ * standings are computed by the shared rankGroup (A30).
+ * S8: write TournamentTeam.groupId for each assignment here (manual assignment in Seeding per A36a) and
+ * delete this helper with the legacy generation path.
  */
-function insertGroupPhaseRecords(
-    ctx: any,
-    tournamentId: number,
-    userId: number,
-    groupAssignments: Map<number, number[]>,
+function insertGroupStandingsStub(
+    _ctx: any,
+    _tournamentId: number,
+    _userId: number,
+    _groupAssignments: Map<number, number[]>,
 ): void {
-    for (const [groupId, teamIds] of groupAssignments) {
-        for (const teamId of teamIds) {
-            ctx.db.GroupPhaseRecord.insert(insertWithAudit(ctx, {
-                tournamentId,
-                groupId,
-                teamId: teamId,
-                wins: 0,
-                losses: 0,
-                draws: 0,
-                points: 0,
-            }, userId));
-        }
-    }
+    // S8: TournamentTeam.groupId assignment.
 }
 
 // ─── generate_bracket ─────────────────────────────────────────────────────────
@@ -138,10 +137,7 @@ export const generate_bracket = spacetimedb.reducer(
             ctx.db.BracketMatch.id.delete(match.id);
         }
 
-        // Delete all existing GroupPhaseRecord rows for this tournament
-        for (const gpr of [...ctx.db.GroupPhaseRecord.tournament_id.filter(tournamentId)]) {
-            ctx.db.GroupPhaseRecord.delete(gpr);
-        }
+        // S8: clear TournamentTeam.groupId for this tournament (group_phase_record dropped, A23)
 
         // Get all active teams for this tournament (teams with at least one TournamentTeamMember)
         const teams = [...ctx.db.TournamentTeam.tournament_id.filter(tournamentId)]
@@ -193,7 +189,7 @@ export const generate_bracket = spacetimedb.reducer(
                 tournament.groupAssignmentMode.tag,
             );
             insertBracketMatches(ctx, tournament, user.id, matches);
-            insertGroupPhaseRecords(ctx, tournamentId, user.id, groupAssignments);
+            insertGroupStandingsStub(ctx, tournamentId, user.id, groupAssignments);
             descriptorCount = matches.length;
 
         } else if (formatTag === 'GroupIntoSingleElim') {
@@ -209,7 +205,7 @@ export const generate_bracket = spacetimedb.reducer(
             );
             insertBracketMatches(ctx, tournament, user.id, groupMatches);
             insertBracketMatches(ctx, tournament, user.id, elimMatches);
-            insertGroupPhaseRecords(ctx, tournamentId, user.id, groupAssignments);
+            insertGroupStandingsStub(ctx, tournamentId, user.id, groupAssignments);
             descriptorCount = groupMatches.length + elimMatches.length;
 
         } else if (formatTag === 'GroupIntoDoubleElim') {
@@ -225,7 +221,7 @@ export const generate_bracket = spacetimedb.reducer(
             );
             insertBracketMatches(ctx, tournament, user.id, groupMatches);
             insertBracketMatches(ctx, tournament, user.id, elimMatches);
-            insertGroupPhaseRecords(ctx, tournamentId, user.id, groupAssignments);
+            insertGroupStandingsStub(ctx, tournamentId, user.id, groupAssignments);
             descriptorCount = groupMatches.length + elimMatches.length;
 
         } else {

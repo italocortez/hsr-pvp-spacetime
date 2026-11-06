@@ -161,7 +161,7 @@ export function removeUncheckedInParticipants(ctx: any, tournamentId: number, ac
  *            usually already been deleted by runFinalization step 18 before
  *            this helper runs).
  * Deletes:   TournamentTeamRequest, TournamentTeamMember, TournamentTeam, TournamentAssistant,
- *            BracketMatch, GroupPhaseRecord, TournamentPlayerAccount.
+ *            BracketMatch, TournamentPlayerAccount.
  *            Also hard-deletes Shelved/BetweenGames lobbies linked to bracket
  *            matches (D-18), which cascades to any still-ephemeral MRR/MRP rows.
  *
@@ -192,10 +192,7 @@ export function cascadeCleanupTournament(ctx: any, tournamentId: number): void {
         }
     }
 
-    // 2. Group phase records (renamed from GroupStanding in Plan 01)
-    for (const record of [...ctx.db.GroupPhaseRecord.tournament_id.filter(tournamentId)]) {
-        ctx.db.GroupPhaseRecord.delete(record);
-    }
+    // 2. (group_phase_record dropped in S3, A23: standings are computed; nothing to delete)
 
     // 3. Calendar events linked to tournament bracket matches (D-21)
     //    Must run before bracket match rows are deleted, since it reads BracketMatch to find linked events
@@ -270,7 +267,7 @@ export function validateRegistrationToSeeding(ctx: any, tournamentId: number): v
 /**
  * Validates that the transition from Seeding -> InProgress is allowed.
  * Requires bracket rows to exist. All first-round matches (non-Losers) must have at least one participant.
- * Group-format tournaments must have GroupPhaseRecord rows.
+ * Group-format tournaments must have every team assigned to a group (TournamentTeam.groupId, S8).
  */
 export function validateSeedingToInProgress(ctx: any, tournamentId: number): void {
     const tournament = ctx.db.Tournament.id.find(tournamentId);
@@ -299,12 +296,6 @@ export function validateSeedingToInProgress(ctx: any, tournamentId: number): voi
         }
     }
 
-    // For group-format tournaments, verify GroupPhaseRecord rows exist
-    const formatTag = tournament.format.tag as string;
-    if (formatTag === 'GroupOnly' || formatTag === 'GroupIntoSingleElim' || formatTag === 'GroupIntoDoubleElim') {
-        const records = [...ctx.db.GroupPhaseRecord.tournament_id.filter(tournamentId)];
-        if (records.length === 0) {
-            throw new SenderError('Group phase records must be generated before advancing to InProgress.');
-        }
-    }
+    // S8 (A23/A32/A36a): for group formats, verify every Active team has TournamentTeam.groupId set and the
+    // group sizes respect groupSize (group_phase_record was dropped).
 }

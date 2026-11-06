@@ -57,19 +57,16 @@ describe.skipIf(!hasServerToken())('admin_bulk_upsert — PK tuple isolation wit
                 name: TEST_CHAR, displayName: 'CS', aliases: [], rarity: 5,
                 path: 'Destruction', element: 'Physical', role: 'Dps',
                 imageUrl: '', versionReleased: 1, treatAsVersion: 1,
-                skelUrl: null, atlasUrl: null, atlasImgUrls: [],
                 posX: 0, posY: 0, width: 0,
             }, {
                 name: TEST_SRC, displayName: 'CS Src', aliases: [], rarity: 5,
                 path: 'Destruction', element: 'Physical', role: 'Dps',
                 imageUrl: '', versionReleased: 1, treatAsVersion: 1,
-                skelUrl: null, atlasUrl: null, atlasImgUrls: [],
                 posX: 0, posY: 0, width: 0,
             }, {
                 name: TEST_TGT, displayName: 'CS Tgt', aliases: [], rarity: 5,
                 path: 'Destruction', element: 'Physical', role: 'Dps',
                 imageUrl: '', versionReleased: 1, treatAsVersion: 1,
-                skelUrl: null, atlasUrl: null, atlasImgUrls: [],
                 posX: 0, posY: 0, width: 0,
             }]),
         });

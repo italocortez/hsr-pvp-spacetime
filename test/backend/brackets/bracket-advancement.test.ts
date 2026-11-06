@@ -5,15 +5,15 @@
  * - advance_bracket_match: places winner in next slot, group standings update
  * - submit_and_advance_bracket: maps userId → teamId, auto-advances
  * - rollback_bracket_match: clears winner, removes from next slot
- * - DQ auto-advance: autoAdvanceBracket=true sets opponent as winner + advances
+ * - DQ auto-advance (legacy, column dropped in S3) sets opponent as winner + advances
  * - Finalization auto-advance: step 17 (isTournamentControlled) via Casual auto-finalize
  * - Rollback after finalization: guard + no re-advance path
  * - Group phase scoring: Win=2, Draw=1, Loss=0
  *
  * Three tournaments:
- *   A: SingleElim, autoAdvanceBracket=true, Casual (countTowardsMmr=false) — DQ, finalization, rollback
- *   B: SingleElim, autoAdvanceBracket=true, Ranked (countTowardsMmr=true) — submit_and_advance_bracket
- *   C: GroupOnly, autoAdvanceBracket=true — group standings scoring
+ *   A: SingleElim, Casual (countTowardsMmr=false) — DQ, finalization, rollback
+ *   B: SingleElim, Ranked (countTowardsMmr=true) — submit_and_advance_bracket
+ *   C: GroupOnly — group standings scoring
  *
  * Contract: docs/brackets/contract.md
  */
@@ -39,13 +39,11 @@ async function setupTournament(
     players: TestHarness[],
     opts: {
         format?: string;
-        autoAdvanceBracket?: boolean;
         countTowardsMmr?: boolean;
         groupSize?: number;
     } = {},
 ): Promise<{ tournamentId: number; bracketMatches: any[] }> {
     const format = opts.format ?? 'SingleElimination';
-    const autoAdvanceBracket = opts.autoAdvanceBracket ?? true;
     const countTowardsMmr = opts.countTowardsMmr ?? false;
     const groupSize = opts.groupSize ?? 4;
 
@@ -63,7 +61,6 @@ async function setupTournament(
         defaultBestOf: 1,
         groupSize,
         has3RdPlaceMatch: false,
-        autoAdvanceBracket,
         countTowardsMmr,
         winnerAdvantage: 0,
         requireOwnership: false,
@@ -307,7 +304,7 @@ describe('Bracket Advancement', () => {
     }, 90000);
 
     // ═════════════════════════════════════════════════════════════════════════
-    // Tournament A: SingleElim, autoAdvanceBracket=true, Casual
+    // Tournament A: SingleElim, Casual
     // ═════════════════════════════════════════════════════════════════════════
 
     describe('Tournament A: SingleElim + DQ + Finalization', () => {
@@ -323,7 +320,6 @@ describe('Bracket Advancement', () => {
         beforeAll(async () => {
             const result = await setupTournament(toUser, [p1, p2, p3, p4], {
                 format: 'SingleElimination',
-                autoAdvanceBracket: true,
                 countTowardsMmr: false, // Casual → auto-finalize
             });
             tournamentId = result.tournamentId;
@@ -565,7 +561,7 @@ describe('Bracket Advancement', () => {
     });
 
     // ═════════════════════════════════════════════════════════════════════════
-    // Tournament B: SingleElim, autoAdvanceBracket=true, Ranked
+    // Tournament B: SingleElim, Ranked
     // ═════════════════════════════════════════════════════════════════════════
 
     describe('Tournament B: submit_and_advance_bracket', () => {
@@ -578,7 +574,6 @@ describe('Bracket Advancement', () => {
         beforeAll(async () => {
             const result = await setupTournament(toUser, [p1, p2, p3, p4], {
                 format: 'SingleElimination',
-                autoAdvanceBracket: true,
                 countTowardsMmr: true, // Ranked → does NOT auto-finalize
             });
             tournamentId = result.tournamentId;
@@ -653,7 +648,7 @@ describe('Bracket Advancement', () => {
             expect(updatedSemi!.winnerTeamId).toBe(winnerTeamId);
         }, 60000);
 
-        it('winner auto-placed in final (autoAdvanceBracket=true)', () => {
+        it('winner auto-placed in final (auto-advance)', () => {
             const final_ = [...toUser.conn.db.BracketMatch.iter()].find(bm => bm.id === finalId);
             expect(final_).toBeDefined();
             const winnerTeamId = getTeamId(toUser, tournamentId, bluePlayer.userId);
@@ -670,7 +665,7 @@ describe('Bracket Advancement', () => {
     });
 
     // ═════════════════════════════════════════════════════════════════════════
-    // Tournament C: GroupOnly, autoAdvanceBracket=true — Group Scoring
+    // Tournament C: GroupOnly — Group Scoring (stored standings dropped in S3, A23; T-S8 rewrites these)
     // ═════════════════════════════════════════════════════════════════════════
 
     describe('Tournament C: Group Phase Scoring', () => {
@@ -683,7 +678,6 @@ describe('Bracket Advancement', () => {
         beforeAll(async () => {
             const result = await setupTournament(toUser, [p1, p2, p3, p4], {
                 format: 'GroupOnly',
-                autoAdvanceBracket: true,
                 countTowardsMmr: false,
                 groupSize: 4, // One group of 4 → 6 round-robin matches
             });

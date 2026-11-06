@@ -1,7 +1,9 @@
 // ─── Match History Views ──────────────────────────────────────────────────────
 // Visibility-filtered history views spanning the archived *_history tables.
 //
-// Visibility-filtered (public OR participated — scouting-safe, D-93):
+// S9 (A37/R5): views 1-3 are removed (history is participants + Moderator+ only, through view_my_*);
+// S3 only dropped the public-visibility branch so they compile.
+// Visibility-filtered (participated only since S3; was public OR participated, D-93):
 // 1. view_match_history              — visibility-filtered MatchSessionHistory
 // 2. view_match_participant_history  — visibility-filtered MatchParticipantHistory
 // 3. view_match_step_history         — visibility-filtered MatchSessionStepHistory
@@ -24,13 +26,13 @@ import { MmrHistory } from '../tables/mmrHistory';
 // ---------------------------------------------------------------------------
 // 1. view_match_history (per D-93)
 //    NOT prefixed "my" because it returns both personal AND public data:
-//      - isPubliclyVisible === true (standalone + completed tournament matches), OR
+//      - (dropped in S3) the row was publicly visible, OR
 //      - Caller is a participant (MatchParticipantHistory lookup)
 //    The "view_my_*" views are strictly scoped to the caller's lobbies.
 //    This view includes any user's publicly visible matches — hence no "my" prefix.
 //    Prevents tournament scouting during active tournaments (D-72/D-73).
 //
-//    Implementation note: MatchSessionHistory has no isPubliclyVisible index.
+//    Implementation note: MatchSessionHistory has no visibility index.
 //    We scan via 3 btree filters (one per GameMode) to avoid .iter() and
 //    combine with participated matchHistoryIds from MatchParticipantHistory.
 // ---------------------------------------------------------------------------
@@ -63,7 +65,7 @@ function buildVisibleMatches(ctx: any): { ids: Set<number>; sessions: any[] } {
 
     for (const gm of gameModes) {
         for (const history of ctx.db.MatchSessionHistory.game_mode.filter(gm)) {
-            if (history.isPubliclyVisible || participatedIds.has(history.id)) {
+            if (participatedIds.has(history.id)) { // S3: the public-visibility flag was dropped (A37)
                 ids.add(history.id);
                 sessions.push(history);
             }
@@ -84,7 +86,7 @@ export const view_match_history = spacetimedb.view(
 // 2. view_match_participant_history (per D-93)
 //    NOT prefixed "my" — returns participants for public matches + caller's matches.
 //    Same visibility rule as view_match_history:
-//      - Match isPubliclyVisible === true, OR
+//      - (dropped in S3) the match was publicly visible, OR
 //      - Caller is a participant in that match
 //    Prevents tournament scouting — opponent identities hidden until reveal.
 // ---------------------------------------------------------------------------

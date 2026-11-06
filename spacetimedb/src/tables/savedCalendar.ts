@@ -12,7 +12,7 @@ export const savedCalendarColumns = {
 
 export const SavedCalendar = table({
     name: 'saved_calendar',
-    public: true,
+    public: false, // S3 (A37 calendar contexts): private, read through view_my_calendar_* / view_saved_calendar_availability (S9)
     primaryKey: ['userId', 'targetUserId'],
     indexes: [
         { accessor: 'user_id', algorithm: 'btree', columns: ['userId'] },

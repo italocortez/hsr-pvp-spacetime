@@ -9,20 +9,19 @@ import {
   type AlgebraicTypeType as __AlgebraicTypeType,
   type Infer as __Infer,
 } from "spacetimedb";
-import {
-  InviteStatus,
-} from "./types";
-
 
 export default __t.row({
-  eventId: __t.u32().name("event_id"),
-  inviteeUserId: __t.u32().name("invitee_user_id"),
+  id: __t.u32().primaryKey(),
+  kind: __t.string(),
+  windowStartAt: __t.timestamp().name("window_start_at"),
+  windowEndAt: __t.timestamp().name("window_end_at"),
+  count: __t.u32(),
+  threshold: __t.u32(),
+  isAcknowledged: __t.bool().name("is_acknowledged"),
+  createdAt: __t.timestamp().name("created_at"),
+  acknowledgedAt: __t.option(__t.timestamp()).name("acknowledged_at"),
   createdById: __t.u32().name("created_by_id"),
   createdDate: __t.timestamp().name("created_date"),
   lastModifiedById: __t.u32().name("last_modified_by_id"),
   lastModifiedDate: __t.timestamp().name("last_modified_date"),
-  get inviteStatus() {
-    return InviteStatus.name("invite_status");
-  },
-  respondedAt: __t.option(__t.timestamp()).name("responded_at"),
 });

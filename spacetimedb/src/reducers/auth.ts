@@ -12,10 +12,9 @@ export const login_as_guest = spacetimedb.reducer((ctx) => {
     if (mapping) {
         const user = ctx.db.User.id.find(mapping.userId);
         if (user) {
-            // Already registered — update lastLoginAt and lastSeenAt
-            ctx.db.User.id.update(
-                updateWithAudit(ctx, user, { lastLoginAt: ctx.timestamp, isOnline: true }, user.id),
-            );
+            // Already registered — bump lastSeenAt
+            // S4: presence (isOnline / lastLoginAt) is written to UserPresence by client_connected (A48); the
+            // first connect of a fresh guest has no mapping yet, so S4 also upserts the presence row here.
             ctx.db.UserIdentity.identity.update(
                 updateWithAudit(ctx, mapping, { lastSeenAt: ctx.timestamp }, user.id),
             );
@@ -33,8 +32,6 @@ export const login_as_guest = spacetimedb.reducer((ctx) => {
         username: guestUsername,
         displayName: guestUsername,
         isGuest: true,
-        isOnline: true,
-        lastLoginAt: ctx.timestamp,
         role: { tag: 'User' },
         hasDiscordLinked: false,
         avatarCharacterName: 'march7th',

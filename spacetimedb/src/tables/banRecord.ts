@@ -1,20 +1,18 @@
 import { table, t } from 'spacetimedb/server';
-import { BanType } from '../types/enums';
 
 /**
- * Stores ban records keyed by auth provider ID.
+ * Stores ban records keyed by auth provider identity.
  * Private (public: false) — never exposed to client subscriptions.
- * banType narrows which provider namespace the ban applies to.
  * D-06, CR-01, WR-01
  *
- * Note: Multi-column index (.filter() on composite key) causes PANIC in the
- * SpacetimeDB TypeScript SDK. Only a single-column provider_id index is used.
- * checkProviderBan performs in-memory banType filtering after the index lookup.
+ * S3 (A46): keyed by loginMethod + providerId like UserPrivate. The former BanType enum (one variant,
+ * DiscordId) became the string `loginMethod`: it mirrors the token claim, and adding a provider later is
+ * a value, not an enum variant (an enum change would be a type change, hence a wipe).
  */
 export const banRecordColumns = {
     id: t.u32().primaryKey().autoInc(),
-    banType: BanType,                    // enum: DiscordId
-    providerId: t.string(),              // the banned Discord ID string
+    loginMethod: t.string(),             // 'discord' today
+    providerId: t.string(),              // the banned provider user id
     reason: t.string(),
     bannedByUserId: t.u32(),             // FK to User.id (the admin who banned)
     createdById: t.u32(),
@@ -27,6 +25,7 @@ export const BanRecord = table({
     name: 'ban_record',
     public: false,      // CR-01: MUST be explicit
     indexes: [
-        { accessor: 'ban_record_provider_id', algorithm: 'btree', columns: ['providerId'] },
+        { accessor: 'provider_id', algorithm: 'btree', columns: ['providerId'] },
+        { accessor: 'by_method_and_provider', algorithm: 'btree', columns: ['loginMethod', 'providerId'] },
     ],
 }, banRecordColumns);

@@ -70,8 +70,10 @@ function performIdentityGc(ctx: any): { itemsScanned: number; itemsDeleted: numb
         // D-06: Skip guest users entirely
         if (user.isGuest) continue;
 
-        // D-08: Skip users currently online
-        if (user.isOnline) continue;
+        // D-08: Skip users currently online (A48: any live UserPresence row of the user)
+        // S4: identity GC also deletes the UserPresence row together with the identity it removes.
+        const isOnline = [...ctx.db.UserPresence.user_id.filter(userId)].some((p: any) => p.isOnline);
+        if (isOnline) continue;
 
         // D-07: Sort by lastSeenAt descending -- preserve newest even if past TTL
         const sorted = [...identities].sort((a: any, b: any) =>

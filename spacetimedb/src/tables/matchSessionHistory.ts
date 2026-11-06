@@ -20,10 +20,13 @@ export const matchSessionHistoryColumns = {
     // Budget analysis (per D-88):
     teamBlueSpent: t.f32().optional(),
     teamRedSpent: t.f32().optional(),
-    handicapApplied: t.f32().optional(),
+    handicapApplied: t.i32().optional(), // A21: fixed-point hundredths
 
-    // Tournament scouting prevention (per D-84):
-    isPubliclyVisible: t.bool(),
+    // A24 / A37: tournament linkage replaces the D-84 public-visibility flag and the D-91 reveal scan.
+    // History is never public; participants and Moderator+ read it through views (R5).
+    tournamentId: t.u32().optional(),
+    bracketMatchId: t.u32().optional(),
+    voidedAt: t.timestamp().optional(),  // A24(3): set when a tournament rollback voids the match
 
     createdById: t.u32(),
     createdDate: t.timestamp(),
@@ -33,9 +36,10 @@ export const matchSessionHistoryColumns = {
 
 export const MatchSessionHistory = table({
     name: 'match_session_history',
-    public: true,
+    public: false,
     indexes: [
         { accessor: 'played_at', algorithm: 'btree', columns: ['playedAt'] },
         { accessor: 'game_mode', algorithm: 'btree', columns: ['gameMode'] },
+        { accessor: 'tournament_id', algorithm: 'btree', columns: ['tournamentId'] },
     ]
 }, matchSessionHistoryColumns);

@@ -10,36 +10,43 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 import {
-  GameMode,
   BracketSide,
-  MatchResultStatus,
+  BracketMatchState,
+  BracketDecision,
 } from "./types";
 
 
 export default __t.row({
   id: __t.u32().primaryKey(),
   tournamentId: __t.u32().name("tournament_id"),
-  roundNumber: __t.u32().name("round_number"),
-  matchNumber: __t.u32().name("match_number"),
+  positionKey: __t.string().name("position_key"),
   get bracketSide() {
     return BracketSide.name("bracket_side");
   },
+  roundNumber: __t.u32().name("round_number"),
+  matchNumber: __t.u32().name("match_number"),
   groupId: __t.option(__t.u32()).name("group_id"),
   team1Id: __t.option(__t.u32()).name("team_1_id"),
   team2Id: __t.option(__t.u32()).name("team_2_id"),
+  team1IsBye: __t.bool().name("team_1_is_bye"),
+  team2IsBye: __t.bool().name("team_2_is_bye"),
   nextWinnerMatchId: __t.option(__t.u32()).name("next_winner_match_id"),
+  nextWinnerSlot: __t.u8().name("next_winner_slot"),
   nextLoserMatchId: __t.option(__t.u32()).name("next_loser_match_id"),
+  nextLoserSlot: __t.u8().name("next_loser_slot"),
   bestOf: __t.u8().name("best_of"),
-  get gameMode() {
-    return GameMode.name("game_mode");
-  },
   winnerAdvantage: __t.u8().name("winner_advantage"),
   scheduledAt: __t.option(__t.timestamp()).name("scheduled_at"),
-  checkInRequired: __t.bool().name("check_in_required"),
-  winnerTeamId: __t.option(__t.u32()).name("winner_team_id"),
-  get resultStatus() {
-    return MatchResultStatus.name("result_status");
+  get state() {
+    return BracketMatchState;
   },
+  winnerTeamId: __t.option(__t.u32()).name("winner_team_id"),
+  loserTeamId: __t.option(__t.u32()).name("loser_team_id"),
+  get decidedBy() {
+    return __t.option(BracketDecision).name("decided_by");
+  },
+  team1Games: __t.u8().name("team_1_games"),
+  team2Games: __t.u8().name("team_2_games"),
   createdById: __t.u32().name("created_by_id"),
   createdDate: __t.timestamp().name("created_date"),
   lastModifiedById: __t.u32().name("last_modified_by_id"),

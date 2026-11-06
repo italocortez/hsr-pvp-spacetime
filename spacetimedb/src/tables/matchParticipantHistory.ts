@@ -17,7 +17,7 @@ export const matchParticipantHistoryColumns = {
 
 export const MatchParticipantHistory = table({
     name: 'match_participant_history',
-    public: true,
+    public: false, // S3 (A37): private, read through views (S9)
     primaryKey: ['userId', 'matchHistoryId'],
     indexes: [
         { accessor: 'by_user', algorithm: 'btree', columns: ['userId'] },

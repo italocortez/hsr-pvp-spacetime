@@ -6,7 +6,7 @@
  *     (validateKeys strict-key contract).
  *   - `null` on an EXISTING row = "preserve this field" (do not overwrite).
  *   - `null` on an INSERT row = "apply schema default" (required columns)
- *     OR "stay null" (optional columns: skelUrl, atlasUrl).
+ *     OR "stay null" (optional columns; HsrCharacter has none since S3, A17).
  *   - Non-null value = "set to this value".
  *
  * ────────────────────────────────────────────────────────────────────────────
@@ -67,7 +67,6 @@ describe.skipIf(!hasServerToken())('admin_bulk_upsert — partial-update preserv
                 name: TEST_CHAR, displayName: 'PU Char', aliases: [], rarity: 5,
                 path: 'Destruction', element: 'Physical', role: 'Dps',
                 imageUrl: '', versionReleased: 1, treatAsVersion: 1,
-                skelUrl: null, atlasUrl: null, atlasImgUrls: [],
                 posX: 0, posY: 0, width: 0,
             }]),
         });
@@ -206,9 +205,6 @@ describe.skipIf(!hasServerToken())('admin_bulk_upsert — partial-update preserv
                 imageUrl: null,
                 versionReleased: null,
                 treatAsVersion: null,
-                skelUrl: null,
-                atlasUrl: null,
-                atlasImgUrls: null,
                 posX: null,
                 posY: null,
                 width: null,

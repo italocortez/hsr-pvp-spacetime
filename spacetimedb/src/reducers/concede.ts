@@ -45,9 +45,15 @@ export function performConcede(
         concedeTrigger: concedeTrigger,
         concedeSummary: summary,
         concedeAtStage: lobby.stage.tag,
+        winnerOverride: undefined,
+        winnerOverrideById: undefined,
+        winnerOverrideReason: undefined,
+        settledAt: ctx.timestamp, // A24(1): a concede counts as a settled result
     }, triggerUserId));
 
-    // 5. Set BracketMatch.winnerTeamId if tournament (D-27, D-80 — set but do NOT auto-advance)
+    // 5. Set BracketMatch.winnerTeamId if tournament (D-27)
+    // S8 (A38(1)): a concede is a settled result and advances the bracket through applyBracketResult
+    // (decidedBy Concede, SYSTEM_USER_ID as audit actor so the conceding player's id never lands on the public row, A37).
     if (lobby.isTournamentControlled && lobby.bracketMatchId) {
         const bracketMatch = ctx.db.BracketMatch.id.find(lobby.bracketMatchId);
         if (bracketMatch) {
@@ -56,7 +62,7 @@ export function performConcede(
             if (winnerTeamId) {
                 ctx.db.BracketMatch.id.update(updateWithAudit(ctx, bracketMatch, {
                     winnerTeamId: winnerTeamId,
-                    resultStatus: { tag: 'Validated', value: {} } as any,
+                    state: { tag: 'Decided', value: {} } as any,
                 }, triggerUserId));
             }
         }
@@ -318,6 +324,10 @@ export const defer_match = spacetimedb.reducer(
             concedeTrigger: undefined,
             concedeSummary: summary,
             concedeAtStage: lobby.stage.tag,
+            winnerOverride: undefined,
+            winnerOverrideById: undefined,
+            winnerOverrideReason: undefined,
+            settledAt: undefined,
         }, user.id));
 
         // Transition lobby to AwaitingResult (D-22)

@@ -1,18 +1,19 @@
 # HSRPVP SpacetimeDB ERD
 
-67 tables. All v0.5 tables included. Updated 2026-04-12. Paste into [mermaid.live](https://mermaid.live) to preview.
+76 tables. Updated 2026-11-06 (S3 backend reset: 27 tables public → private per A37 / ACCESS-SECURITY-OPS Appendix A, 10 new, `group_phase_record` dropped per A23). Visibility: **21 public** (reference data, aggregates, `user`, `tournament`, `bracket_match`, `admin_alert`, the `lobby_cursor_event` event table); every other table is PRIVATE and read through views (S9). Paste into [mermaid.live](https://mermaid.live) to preview.
 
-| Color | Tables |
+| Color | Tables (PUBLIC unless marked) |
 |-------|--------|
-| blue | user, user_identity (PRIVATE Phase 12), user_private (PRIVATE Phase 12), ban_record (PRIVATE Phase 12), server_identity, user_deletion_job, identity_gc_job (Phase 12.1), gc_result (PRIVATE Phase 12.1) |
+| blue | user, user_presence (PRIVATE, new S3 A48), user_identity (PRIVATE), user_private (PRIVATE), ban_record (PRIVATE), link_request (PRIVATE, new S3 A46), deleted_user (PRIVATE), server_identity (PRIVATE), user_deletion_job, identity_gc_job, gc_result (PRIVATE) |
 | green | hsr_character, hsr_lightcone, archetype, hsr_character_archetype, season |
-| orange | hsr_account (PRIVATE D-20), hsr_account_character (PRIVATE D-20), hsr_account_lightcone, cost_set, hsr_character_cost, hsr_lightcone_cost, hsr_synergy_cost, cost_set_draft_character, cost_set_draft_lightcone, cost_set_draft_synergy |
-| purple | tournament, tournament_enrolled, tournament_team_member, tournament_assistant, tournament_team, tournament_team_request, tournament_stand_in, tournament_player_account, bracket_match, group_phase_record |
-| cyan | lobby, lobby_member_account (NON-PUBLIC D-02), lobby_member, lobby_ban, lobby_preset, lobby_password, lobby_cursor_event, lobby_gc_job, match_session, match_session_step, chat_message, elo_config |
-| red | match_result_record, match_result_game, match_result_participant |
-| grey | match_session_history, match_session_step_history, match_participant_history, match_result_game_history |
-| pink | mmr_rating, mmr_history, leaderboard, player_stat, player_character_stat, global_character_stat, player_relationship, account_rating_config (Phase 11) |
-| yellow | achievement, user_achievement, achievement_criteria, calendar_event, calendar_event_invite, availability_slot, saved_calendar |
+| orange | hsr_account (PRIVATE), hsr_account_character (PRIVATE), cost_set, hsr_character_cost, hsr_lightcone_cost, hsr_synergy_cost (characterA/characterB, A21), cost_set_draft_character (PRIVATE), cost_set_draft_lightcone (PRIVATE), cost_set_draft_synergy (PRIVATE) |
+| purple | tournament, bracket_match, tournament_enrolled (PRIVATE), tournament_team_member (PRIVATE), tournament_assistant (PRIVATE), tournament_team (PRIVATE), tournament_team_request (PRIVATE), tournament_stand_in (PRIVATE), tournament_player_account (PRIVATE), tournament_finalize_job (scheduled, new S3 A24) |
+| cyan | lobby (PRIVATE), lobby_member_account (PRIVATE), lobby_member (PRIVATE), lobby_ban (PRIVATE), lobby_preset (PRIVATE), lobby_password (PRIVATE), lobby_cursor_event (public event, no audit columns A19), lobby_gc_job, referee_transfer_check (scheduled, new S3 A22a), match_session (PRIVATE), match_session_step (PRIVATE), match_lineup (PRIVATE, new S3 A21), chat_message (PRIVATE), elo_config |
+| red | match_result_record (PRIVATE), match_result_game (PRIVATE), match_result_participant (PRIVATE), match_result_group_score (PRIVATE, new S3 A21), match_result_adjustment (PRIVATE, new S3 A21) |
+| grey | match_session_history (PRIVATE), match_session_step_history (PRIVATE), match_participant_history (PRIVATE), match_result_game_history (PRIVATE) |
+| pink | mmr_rating (PRIVATE A40), mmr_history (PRIVATE), leaderboard (top 20 per category, A45), player_stat (PRIVATE), player_character_stat (PRIVATE), global_character_stat, player_relationship (PRIVATE), account_rating_config |
+| yellow | achievement, user_achievement, achievement_criteria, calendar_event (PRIVATE), calendar_event_invite (PRIVATE), availability_slot (PRIVATE), saved_calendar (PRIVATE) |
+| brown | abuse_config (PRIVATE, new S3 §B.5), user_rate_state (PRIVATE, new S3 §B.5), admin_alert (public, counts only, new S3 A42) |
 
 ```mermaid
 erDiagram
@@ -27,12 +28,29 @@ erDiagram
         Identity identity PK
         u32 userId FK
     }
+    user_presence {
+        Identity identity PK
+        u32 userId FK
+        bool isOnline "A48: one row per identity, no per-user count"
+    }
     user_private {
         u32 userId PK_FK
+        string loginMethod "A46: 'discord'"
+        string providerId
     }
     ban_record {
         u32 id PK
+        string loginMethod "A46: keyed by loginMethod + providerId"
+        string providerId
         u32 bannedByUserId FK
+    }
+    link_request {
+        string code PK
+        Identity identity UK
+        u32 userId FK
+    }
+    deleted_user {
+        u32 id PK "archived displayName of a hard-deleted user (Phase 15.2 D-05)"
     }
     server_identity {
         Identity identity PK
@@ -98,8 +116,8 @@ erDiagram
     }
     hsr_synergy_cost {
         u32 id PK
-        string sourceName FK
-        string targetName FK
+        string characterA FK "A21: unordered pair, canonical order"
+        string characterB FK
         u32 costSetId FK
     }
     cost_set_draft_character {
@@ -114,8 +132,8 @@ erDiagram
     }
     cost_set_draft_synergy {
         u32 costSetId PK_FK
-        string sourceName PK
-        string targetName PK
+        string characterA PK
+        string characterB PK
         string gameMode PK
     }
 
@@ -124,9 +142,12 @@ erDiagram
         u32 id PK
         u32 organizerId FK
         u32 costSetId FK
-        u32 seasonId FK
+        u32 seasonId FK "A36: 0 for now"
+        u32 lobbyPresetId FK "A33a: free-set starting values"
         u8 maxAccountsPerPlayer "default 1 — Phase 10.4 D-33"
         bool requireOwnership "character ownership validation in draft — Phase 12.3"
+        bool requireResultValidation "A36"
+        string lineupFormat "A21/A33 integrity set"
     }
     tournament_enrolled {
         u32 tournamentId PK_FK
@@ -139,21 +160,27 @@ erDiagram
         u32 tournamentId FK
     }
     tournament_assistant {
-        u32 tournamentId PK_FK
-        u32 userId PK_FK
+        u32 id PK
+        u32 tournamentId FK
+        u32 userId FK
+        bool canManageParticipants "A25: three flags"
     }
     tournament_team {
         u32 id PK
         u32 tournamentId FK
         u32 captainUserId FK
+        string status "A26: Forming|Ready|Active|Eliminated|Withdrawn|Disqualified"
+        u32 groupId "A23: replaces group_phase_record"
     }
     tournament_team_request {
         u32 teamId PK_FK
         u32 userId PK_FK
     }
     tournament_stand_in {
-        u32 bracketMatchId PK_FK
-        u32 userId PK_FK
+        u32 id PK
+        u32 bracketMatchId FK
+        u32 teamId FK "A35"
+        u32 userId FK
         u32 approvedByUserId FK
     }
     tournament_player_account {
@@ -164,26 +191,34 @@ erDiagram
     bracket_match {
         u32 id PK
         u32 tournamentId FK
+        string positionKey "A23: engine address"
         u32 team1Id FK
         u32 team2Id FK
         u32 nextWinnerMatchId FK
         u32 nextLoserMatchId FK
         u32 winnerTeamId FK
+        u32 loserTeamId FK
+        string state "Pending|Ready|Walkover|Void|Decided"
     }
-    group_phase_record {
-        u32 tournamentId PK_FK
-        u32 groupId PK
-        u32 teamId PK_FK
+    tournament_finalize_job {
+        u64 scheduledId PK
+        u32 tournamentId FK
+        u32 cursor "D.8.1 chunked finalization"
     }
 
     %% cyan  (lobby_member_account is NON-PUBLIC since Phase 10.4 — D-02)
     lobby {
         u32 id PK
         string joinCode UK
+        string name "D-A8"
         u32 hostUserId FK
         u32 tournamentId FK
         u32 bracketMatchId FK
         u32 costSetId FK
+        string lineupFormat "A21 Halves|Thirds"
+        string bestOfNAdvantage "A27 None|Blue|Red"
+        string banRestriction "A45"
+        bool hideMmr "A40"
     }
     lobby_member_account {
         u32 lobbyId PK_FK
@@ -193,6 +228,18 @@ erDiagram
     lobby_member {
         u32 lobbyId PK_FK
         u32 userId PK_FK
+        u32 joinSeq "R4: anonymous labels derive from it"
+    }
+    referee_transfer_check {
+        u64 scheduledId PK
+        u32 lobbyId FK
+        u32 userId FK
+    }
+    match_lineup {
+        u32 id PK
+        u32 lobbyId FK
+        u8 gameNumber
+        string groups "A21: JSON string[][] of 4-character groups"
     }
     lobby_ban {
         u32 lobbyId PK_FK
@@ -209,7 +256,7 @@ erDiagram
     }
     lobby_cursor_event {
         u32 lobbyId FK
-        u32 senderUserId FK
+        u32 senderUserId FK "0 when anonymized; no audit columns (A19)"
     }
     lobby_gc_job {
         u64 scheduledId PK
@@ -238,11 +285,27 @@ erDiagram
         u32 lobbyId FK
         u32 refereeUserId FK
         u32 disputedByUserId FK
+        u32 winnerOverrideById FK "A21/A39 tie-break override"
     }
     match_result_game {
         u32 matchResultId PK_FK
         u8 gameNumber PK
+        u8 teamBlueDeaths "A21"
         u32 validatedByUserId FK
+    }
+    match_result_group_score {
+        u32 id PK
+        u32 matchResultId FK
+        u8 gameNumber
+        u8 groupIndex "A21: per half/third"
+        u32 value "hundredths"
+    }
+    match_result_adjustment {
+        u32 id PK
+        u32 matchResultId FK
+        u8 gameNumber
+        i32 value "A21: signed hundredths, required reason"
+        u32 setById FK
     }
     match_result_participant {
         u32 matchResultId PK_FK
@@ -253,6 +316,8 @@ erDiagram
     %% grey
     match_session_history {
         u32 id PK
+        u32 tournamentId FK "A24/A37: replaces isPubliclyVisible"
+        u32 bracketMatchId FK
     }
     match_session_step_history {
         u32 matchHistoryId PK_FK
@@ -357,6 +422,18 @@ erDiagram
         u32 targetUserId PK_FK
     }
 
+    %% brown (S3 abuse controls, §B.5 / A42)
+    abuse_config {
+        u32 id PK "singleton 1"
+    }
+    user_rate_state {
+        u32 userId PK_FK
+    }
+    admin_alert {
+        u32 id PK
+        string kind "counts only, no user ids, no audit columns"
+    }
+
     %% ── relationships ──────────────────────────────────────
     %% Notation: ||--|| one-to-one, }o--|| many-to-one, }o--o| many-to-zero-or-one (optional)
 
@@ -382,20 +459,21 @@ erDiagram
     hsr_lightcone_cost }o--|| hsr_lightcone : "lightconeName (many-to-one)"
     hsr_lightcone_cost }o--|| cost_set : "costSetId (many-to-one)"
     hsr_synergy_cost }o--|| cost_set : "costSetId (many-to-one)"
-    hsr_synergy_cost }o--|| hsr_character : "sourceName (many-to-one)"
-    hsr_synergy_cost }o--|| hsr_character : "targetName (many-to-one)"
+    hsr_synergy_cost }o--|| hsr_character : "characterA (many-to-one)"
+    hsr_synergy_cost }o--|| hsr_character : "characterB (many-to-one)"
     cost_set_draft_character }o--|| cost_set : "costSetId (many-to-one)"
     cost_set_draft_character }o--|| hsr_character : "characterName (many-to-one)"
     cost_set_draft_lightcone }o--|| cost_set : "costSetId (many-to-one)"
     cost_set_draft_lightcone }o--|| hsr_lightcone : "lightconeName (many-to-one)"
     cost_set_draft_synergy }o--|| cost_set : "costSetId (many-to-one)"
-    cost_set_draft_synergy }o--|| hsr_character : "sourceName (many-to-one)"
-    cost_set_draft_synergy }o--|| hsr_character : "targetName (many-to-one)"
+    cost_set_draft_synergy }o--|| hsr_character : "characterA (many-to-one)"
+    cost_set_draft_synergy }o--|| hsr_character : "characterB (many-to-one)"
 
     %% purple: tournament (many-to-many enrollment via junction tables)
     tournament }o--|| user : "organizerId (many-to-one)"
     tournament }o--|| cost_set : "costSetId (many-to-one)"
-    tournament }o--o| season : "seasonId (many-to-one, optional)"
+    tournament }o--|| season : "seasonId (many-to-one; 0 until seasons are designed, A36)"
+    tournament }o--|| lobby_preset : "lobbyPresetId (many-to-one, A33a)"
     tournament_enrolled }o--|| tournament : "tournamentId (many-to-many junction)"
     tournament_enrolled }o--|| user : "userId (many-to-many junction)"
     %% tournament_enrolled.hsrAccountId removed in Phase 10.4 (D-23)
@@ -409,6 +487,7 @@ erDiagram
     tournament_team_request }o--|| tournament_team : "teamId (many-to-many junction)"
     tournament_team_request }o--|| user : "userId (many-to-many junction)"
     tournament_stand_in }o--|| bracket_match : "bracketMatchId (many-to-one)"
+    tournament_stand_in }o--|| tournament_team : "teamId (many-to-one, A35)"
     tournament_stand_in }o--|| user : "userId (many-to-one)"
     tournament_stand_in }o--|| user : "approvedByUserId (many-to-one)"
     tournament_player_account }o--|| tournament : "tournamentId (many-to-many junction)"
@@ -420,8 +499,8 @@ erDiagram
     bracket_match }o--o| bracket_match : "nextWinnerMatchId (self-ref, optional)"
     bracket_match }o--o| bracket_match : "nextLoserMatchId (self-ref, optional)"
     bracket_match }o--o| tournament_team : "winnerTeamId (many-to-one, optional)"
-    group_phase_record }o--|| tournament : "tournamentId (many-to-one)"
-    group_phase_record }o--|| tournament_team : "teamId (many-to-one)"
+    bracket_match }o--o| tournament_team : "loserTeamId (many-to-one, optional)"
+    tournament_finalize_job }o--|| tournament : "tournamentId (many-to-one, D.8.1)"
 
     %% cyan: lobby/match (one lobby has many members, one-to-one match session)
     lobby }o--|| user : "hostUserId (many-to-one)"
@@ -433,6 +512,9 @@ erDiagram
     lobby_member_account }o--|| hsr_account : "hsrAccountId (many-to-one)"
     lobby_member }o--|| lobby : "lobbyId (many-to-many junction)"
     lobby_member }o--|| user : "userId (many-to-many junction)"
+    referee_transfer_check }o--|| lobby : "lobbyId (many-to-one, A22a)"
+    referee_transfer_check }o--|| user : "userId (many-to-one)"
+    match_lineup }o--|| lobby : "lobbyId (many-to-one, A21)"
     lobby_ban }o--|| lobby : "lobbyId (many-to-one)"
     lobby_ban }o--|| user : "bannedUserId (many-to-one)"
     lobby_ban }o--|| user : "bannedByUserId (many-to-one)"
@@ -452,12 +534,18 @@ erDiagram
     match_result_record }o--|| lobby : "lobbyId (many-to-one)"
     match_result_record }o--o| user : "refereeUserId (many-to-one, optional)"
     match_result_record }o--o| user : "disputedByUserId (many-to-one, optional)"
+    match_result_record }o--o| user : "winnerOverrideById (many-to-one, optional, A39)"
+    match_result_group_score }o--|| match_result_record : "matchResultId (many-to-one)"
+    match_result_adjustment }o--|| match_result_record : "matchResultId (many-to-one)"
+    match_result_adjustment }o--|| user : "setById (many-to-one)"
     match_result_game }o--|| match_result_record : "matchResultId (many-to-one)"
     match_result_game }o--o| user : "validatedByUserId (many-to-one, optional)"
     match_result_participant }o--|| match_result_record : "matchResultId (many-to-many junction)"
     match_result_participant }o--|| user : "userId (many-to-many junction)"
 
     %% grey: history (archived snapshots, many-to-one from history)
+    match_session_history }o--o| tournament : "tournamentId (many-to-one, optional, A24)"
+    match_session_history }o--o| bracket_match : "bracketMatchId (many-to-one, optional)"
     match_session_step_history }o--|| match_session_history : "matchHistoryId (many-to-one)"
     match_session_step_history }o--|| user : "actorUserId (many-to-one)"
     match_participant_history }o--|| match_session_history : "matchHistoryId (many-to-many junction)"
@@ -499,6 +587,12 @@ erDiagram
     %% Phase 12: Auth Security Hardening
     user_private ||--|| user : "userId (one-to-one)"
     ban_record }o--|| user : "bannedByUserId (many-to-one)"
+
+    %% S3 backend reset (A46 link codes, A48 presence, §B.5 rate state)
+    user_presence }o--|| user : "userId (many-to-one: one row per identity)"
+    link_request }o--|| user : "userId (many-to-one)"
+    user_rate_state ||--|| user : "userId (one-to-one)"
+    deleted_user ||--o| user : "id (the former User.id; archive row, no live FK)"
 
     %% Phase 12.1: Identity GC + GC audit log
     gc_result }o--|| user : "createdById (many-to-one)"

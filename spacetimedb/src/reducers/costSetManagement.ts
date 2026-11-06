@@ -89,8 +89,8 @@ export const create_cost_set = spacetimedb.reducer(
             if (row.gameMode.tag === gameModeTag) {
                 ctx.db.CostSetDraftSynergy.insert(insertWithAudit(ctx, {
                     costSetId: costSet.id,
-                    sourceName: row.sourceName,
-                    targetName: row.targetName,
+                    characterA: row.characterA,
+                    characterB: row.characterB,
                     gameMode: row.gameMode,
                     draftMode: row.draftMode,
                     costModifier: row.costModifier,
@@ -271,6 +271,10 @@ export const edit_draft_synergy_cost = spacetimedb.reducer(
     },
     (ctx, { costSetId, sourceName, targetName, gameModeTag, draftModeTag, costModifier }) => {
         const user = getAuthenticatedUser(ctx);
+        // S7 (A21): the arguments become characterA/characterB, stored in canonical (alphabetical) order, and a
+        // pair that already exists in either order is rejected. S3 maps the legacy names so the editor compiles.
+        const characterA = sourceName;
+        const characterB = targetName;
 
         const costSet = ctx.db.CostSet.id.find(costSetId);
         if (!costSet) {
@@ -291,8 +295,8 @@ export const edit_draft_synergy_cost = spacetimedb.reducer(
         // 15.4 D-18: Find existing draft row by 5-tuple (source, target, gameMode, draftMode, costSetId).
         const drafts = [...ctx.db.CostSetDraftSynergy.cost_set_id.filter(costSetId)];
         const existing = drafts.find(d =>
-            d.sourceName === sourceName &&
-            d.targetName === targetName &&
+            d.characterA === characterA &&
+            d.characterB === characterB &&
             d.gameMode.tag === gameModeTag &&
             d.draftMode.tag === draftModeTag
         );
@@ -301,8 +305,8 @@ export const edit_draft_synergy_cost = spacetimedb.reducer(
             ctx.db.CostSetDraftSynergy.delete(existing);
             ctx.db.CostSetDraftSynergy.insert({
                 costSetId,
-                sourceName,
-                targetName,
+                characterA,
+                characterB,
                 gameMode,
                 draftMode,
                 costModifier,
@@ -311,8 +315,8 @@ export const edit_draft_synergy_cost = spacetimedb.reducer(
         } else {
             ctx.db.CostSetDraftSynergy.insert({
                 costSetId,
-                sourceName,
-                targetName,
+                characterA,
+                characterB,
                 gameMode,
                 draftMode,
                 costModifier,
@@ -399,8 +403,8 @@ export const publish_cost_set = spacetimedb.reducer(
             const liveSyns = [...ctx.db.HsrSynergyCost.cost_set_id.filter(costSetId)];
             const existingLive = liveSyns.find(
                 r =>
-                    r.sourceName === draft.sourceName &&
-                    r.targetName === draft.targetName &&
+                    r.characterA === draft.characterA &&
+                    r.characterB === draft.characterB &&
                     r.gameMode.tag === draft.gameMode.tag &&
                     r.draftMode.tag === draft.draftMode.tag
             );
@@ -415,8 +419,8 @@ export const publish_cost_set = spacetimedb.reducer(
                 // regardless, so migrating only this branch yields zero eviction win.
                 ctx.db.HsrSynergyCost.insert({
                     id: 0,
-                    sourceName: draft.sourceName,
-                    targetName: draft.targetName,
+                    characterA: draft.characterA,
+                    characterB: draft.characterB,
                     gameMode: draft.gameMode,
                     draftMode: draft.draftMode,
                     costModifier: draft.costModifier,
