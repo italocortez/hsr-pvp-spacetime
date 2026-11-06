@@ -1,0 +1,8 @@
+# Normalize line endings: the repo is LF; tools (spacetime generate, agents) write LF.
+# Without this a Windows checkout (core.autocrlf=true) is CRLF and every generation
+# shows hundreds of identical files as modified.
+* text=auto eol=lf
+*.webp binary
+*.png binary
+*.ico binary
+*.woff2 binary
