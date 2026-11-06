@@ -527,3 +527,11 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   - Not imported: the GSD tooling under `.claude/` (`get-shit-done`, `agents`, `commands`, `hooks`, `gsd-file-manifest.json`, `context-library`), the old `.claude/settings.json` hooks (`gsd-session-state.sh` and the GSD-versioned security hooks), and `.planning/` except the research files listed in the migration plan (now under `docs/research/`).
 - **Supersedes:** the old repo's GSD workflow (`.claude/CLAUDE.md` autonomous-execution, Playwright and enforcement sections).
 - **Where implemented:** M0 (`CLAUDE.md`, skill trims, `.claude/settings.json`)
+
+### A53 — `design/` stays local for now
+
+- **Date:** 2026-11-06 · **Status:** decided
+- **Decision:** The `design/` folder (`DESIGN.md`, `UI-DECISIONS.md`, the ten frozen mockups and their assets) is **not versioned for now**: it is gitignored and kept on the developer's machine as a mirror of the Open Design project, which remains the source. Page ports still check against the local copy (PAGE-MAP recipe step 3), `web/src/styles/tokens.css` is still derived from the local `DESIGN.md`, and the §11 deltas per page still go into the local file. Revisit when the port is further along or the duplication is resolved (for example icons served from the CDN or an SVG sprite, A50 M7 done-check).
+- **Why:** 24 of its asset files duplicate `web/public/`, and the mockups add 2.4 MB of reference material to a public repo that Open Design already holds.
+- **Supersedes:** the "committed" part of A49a (D-M13). The six-step breakpoint scale and the later `scripts/design/import-mockup.ts` idea stand; the script now refreshes the local mirror instead of a repo copy.
+- **Where implemented:** M0 follow-up commit (`.gitignore`, `git rm --cached design`).

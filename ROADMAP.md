@@ -8,7 +8,7 @@ Each executed step writes its log to `docs/log/<date>-<step>.md` (goal, decision
 
 | Step | What | Depends on | Status |
 |---|---|---|---|
-| M0 | Import `471a481`, npm-workspace layout, `.gitignore`, CLAUDE.md, skills, DECISIONS.md, `design/`, `data/seed/` | — | done 2026-11-06 (`docs/log/2026-11-06-m0.md`) |
+| M0 | Import `471a481`, npm-workspace layout, `.gitignore`, CLAUDE.md, skills, DECISIONS.md, `design/` (local only since A53), `data/seed/` | — | done 2026-11-06 (`docs/log/2026-11-06-m0.md`) |
 | M1 | SDK 2.14.1, Node 26, TS 7.1 beta; regenerate bindings; `shared/` build spike | M0 | pending |
 | M2 | Env scheme: `shared/stdb-targets.ts`, `scripts/stdb/*`, `init` owner/delegate, test-only reducer guards; root `tsconfig.json` covering `scripts/` (Node types) added to `npm run typecheck` | M1 | pending |
 | S3 | Every schema change in one commit (A17, A19, A21, A25–A36, A45, A48 tables and columns) | M2 | pending |

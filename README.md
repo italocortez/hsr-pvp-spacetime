@@ -38,7 +38,7 @@ scripts/stdb/   publish, bootstrap, seed, generate, describe, backup, restore
 data/seed/      public reference data (characters, light cones, synergies, achievements)
 test/           live integration residue and harness, frontend screenshots
 docs/           feature contracts and architecture, research, execution logs
-design/         design system, UI decisions, frozen mockups and assets
+design/         local only, gitignored (A53): design system, UI decisions, frozen mockups and assets
 tools/          energy model and capture tools
 ```
 

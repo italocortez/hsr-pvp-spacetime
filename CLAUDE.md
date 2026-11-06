@@ -16,7 +16,7 @@ Migration in progress: `ROADMAP.md` lists which steps have landed; a path or scr
 | `data/seed/` | public reference data: characters, light cones, synergies, achievements (A18) |
 | `test/` | live residue + harness, `frontend/screenshots/<page>/` |
 | `docs/` | `<feature>/{contract,architecture}.md`, `ERD.md`, `frontend/`, `research/`, `log/<date>-<step>.md` |
-| `design/` | `DESIGN.md`, `UI-DECISIONS.md`, frozen `mockups/*.html`, `assets/` |
+| `design/` | local only, gitignored (A53): `DESIGN.md`, `UI-DECISIONS.md`, frozen `mockups/*.html`, `assets/`; mirror of the Open Design project |
 | `tools/` | `energy-model.js`, `capture-ws-frames.ts` |
 
 Two databases: `hsr-spacetimedb-test1` and `hsr-spacetimedb-prod`. The names live in `shared/stdb-targets.ts` and are never typed by hand in code or scripts. Every `spacetime` CLI call carries `--server maincloud --no-config`; prefer the `stdb:*` scripts over raw CLI calls.
