@@ -2,3 +2,4 @@
 // resolves the tsconfig alias only one segment deep (`@shared/lobby-rules`, not
 // `@shared/lobby-rules/refereeTransfer`), so consumers import this index.
 export * from './refereeTransfer';
+export * from './allowedSlots';
