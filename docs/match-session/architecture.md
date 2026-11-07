@@ -1,6 +1,6 @@
 # Match Session -- Architecture
 
-Last updated: 2026-04-12
+Last updated: 2026-11-06
 
 ## Overview
 
@@ -212,6 +212,20 @@ query. Cosmetic for `bestOf=1`, genuine inconsistency for `bestOf>1` archives.
 `SenderError('Match session not found.')` guard at reducer entry, matching the
 pattern already present in `equip_lightcone`.
 
+### Phase S4 execution: paused-draft guards, step sequences, undo, auto-pause source
+
+Decisions: DECISIONS.md A22(3), A22(4), A22a; bug review F3, F5, F8, F9.
+
+**Paused draft (A22(3), F3).** `pick_character`, `ban_character`, `nominate_character`, `place_bid`, `pass_bid`, `timer_expiry_classic` and `timer_expiry_auction` throw `SenderError('Draft is paused.')` while `MatchSession.timerState.isPaused`. The two `timer_expiry_*` reducers also call `ensureLobbyMember` (F3): a non-member can no longer burn a paused team's turns.
+
+**Step sequences (F9).** Every `MatchSessionStep` writer takes `sequence` from `helpers/stepSequence.ts::getNextSequence(ctx, lobbyId)` (max existing sequence in the lobby + 1, 0 for the first step): Classic Pick/Ban (`draftClassic.ts`, including the timer-expiry auto-steps), every auction step (`draftAuction.ts`), the manual Pause (`pause_draft`), the auto-Pause (`run_referee_transfer_check`) and the Undo record (`undo_last_step`). `MatchSession.turnIndex` is Classic turn progress, not a sequence number, so Pause/Undo rows never collide with a draft step and the history key `[matchHistoryId, gameNumber, sequence]` stays unique. `postDraft.ts` already computed max + 1 inline (unchanged). Until the first pause or undo the Classic sequences still equal 0, 1, 2, ... as before.
+
+**undo_last_step (F9).** Rejects while paused ("Nothing to undo right now.") and during the auction phase ("Undo is not available during the auction phase."). It deletes the highest-sequence **Pick or Ban** step (never a Pause / Undo row), inserts the Undo record with `originalSequenceId = <deleted step's sequence>` and its own sequence, and decrements `turnIndex`. The old "undo crosses back out of the auction phase" branch is gone: unreachable under the auction-phase rejection.
+
+**Auto-pause (A22a, F5).** The disconnect hook no longer pauses. `run_referee_transfer_check` (`reducers/refereeTransfer.ts`, bound with `onSchedule`) fires 15 s after a user's last device disconnected and inserts the auto-Pause step (`actorUserId = 0`, `isAutoPause = true`, `timeRemainingMs` computed like `pause_draft`) and sets `timerState.isPaused` only when `decideAutoPause` (`shared/lobby-rules`) says so: the subject is still offline, a team player (not a spectator, coach or spectator-referee), the lobby is Drafting under Standard/Deferred and the draft is not already paused. `join_lobby`'s auto-resume on reconnect is unchanged. Details: `docs/lobby/architecture.md`.
+
+**Result reducers (A22(4), F8).** `ensureMatchAlive` stays on the draft/equip reducers; `confirm_match_scores`, `submit_match_result` and `record_game_scores` use `ensureNotConceded` (`helpers/disconnectHelpers.ts`), which rejects a conceded record or a Finished lobby but allows AwaitingResult, where `advance_stage` parks the lobby after Scoring (`docs/match-results/contract.md`).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -230,10 +244,11 @@ pattern already present in `equip_lightcone`.
 | Phase 15.4 execution | timer_expiry_classic autoRandomPick pool builders now filter `draftMode='Classic'` — prevents 0-cost auto-picks of Auction-only characters (WR-02, matches pick_character cost lookup pattern) | 2026-04-15 |
 | Phase 15.4 execution | postDraft step inserts (equip_lightcone, arrange_lineup, confirm_lineup) stamp `gameNumber: session.currentGameNumber` — matches draft-phase invariant; preserves step-to-game attribution in MatchSessionStepHistory for bestOf>1 archives (WR-04); arrange_lineup + confirm_lineup gained session-lookup guard matching equip_lightcone | 2026-04-15 |
 | Phase 15.3 execution | Typed audit helpers (`insertWithAudit` / `updateWithAudit`) migration surfaced latent schema drift hidden by bare-spread `as any` closures: Rule 2 — `draftControl.ts` Undo (L60) + Pause (L176) steps and `index.ts` clientConnected audit step (L215) now stamp `gameNumber: session.currentGameNumber` (broadens WR-04 invariant from 2 files to 4). Rule 2 — `draftClassic.ts` MatchResultRecord now populates `concedeTrigger` / `concedeSummary` / `concedeAtStage`. Rule 1 — `seriesManagement.ts::advance_to_next_game` `initialTimerState` now writes the canonical 5-field TimerState shape (`turnStartAt`, `teamBlueReserveMs`, `teamRedReserveMs`, `isPaused`, `accumulatedPauseMs`); pre-fix code wrote non-existent `pausedAt` + `pauseRemainingMs`, silently dropped at serialization | 2026-04-18 |
+| Phase S4 execution | Paused-draft guard on pick/ban/nominate/bid/pass and both timer expiries (DECISIONS.md A22(3)); `timer_expiry_*` require lobby membership (F3); all step writers use `getNextSequence` (F9); `undo_last_step` undoes the last Pick/Ban only and rejects while paused / in the auction phase (F9); auto-pause moved from `client_disconnected` to `run_referee_transfer_check` (DECISIONS.md A22a, F5); result reducers switched to `ensureNotConceded` (DECISIONS.md A22(4), F8) | 2026-11-06 |
 
 ---
 
-*Last updated: 2026-04-18*
+*Last updated: 2026-11-06*
 *Feature owner: Phase 07 / Phase 09 / Phase 12.3 / Phase 15.4 / Phase 15.3*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

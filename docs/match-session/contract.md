@@ -107,6 +107,8 @@ The match session system manages the entire draft lifecycle within a lobby: char
 | Character banned | "Character is banned and cannot be picked." |
 | Ownership validation fails | "You do not own this character." (or custom reason) |
 
+**Phase S4 execution (DECISIONS.md A22(3), F9):** after the membership check the reducer throws "Draft is paused." while `timerState.isPaused`; the Pick step takes `sequence = getNextSequence(lobbyId)` (max existing + 1), not `turnIndex`.
+
 ---
 
 ### ban_character
@@ -153,6 +155,8 @@ The match session system manages the entire draft lifecycle within a lobby: char
 | Character already banned | "Character already banned." |
 | Character already picked | "Character already picked and cannot be banned." |
 
+**Phase S4 execution (DECISIONS.md A22(3), F9):** after the membership check the reducer throws "Draft is paused." while `timerState.isPaused`; the Ban step takes `sequence = getNextSequence(lobbyId)`.
+
 ---
 
 ### timer_expiry_classic
@@ -197,6 +201,8 @@ The match session system manages the entire draft lifecycle within a lobby: char
 | Wrong stage | Stage assertion error |
 | Timer not yet expired | "Turn timer has not yet expired." |
 | No more steps | "No more steps in draft sequence." |
+
+**Phase S4 execution (F3, DECISIONS.md A22(3), F9):** the caller must be a lobby member (`ensureLobbyMember`: "You are not a member of this lobby.") and the reducer throws "Draft is paused." while `timerState.isPaused`; the auto Pick/Ban step takes `sequence = getNextSequence(lobbyId)`. The "Timer expiry with paused timer: not validated" edge case below is superseded.
 
 ---
 
@@ -251,6 +257,8 @@ The match session system manages the entire draft lifecycle within a lobby: char
 | Character banned | "Character is banned and cannot be nominated." |
 | Budget insufficient | "Not enough budget to nominate this character." |
 
+**Phase S4 execution (DECISIONS.md A22(3)):** after the membership check the reducer throws "Draft is paused." while `timerState.isPaused`.
+
 ---
 
 ### place_bid
@@ -299,6 +307,8 @@ The match session system manages the entire draft lifecycle within a lobby: char
 | Not captain (but captain exists) | "Only the team captain can place bids." |
 | Bid too low | "Bid must be at least {min} (current bid {current} + minimum raise {raise})." |
 | Bid exceeds budget | "Bid exceeds your remaining character budget." |
+
+**Phase S4 execution (DECISIONS.md A22(3)):** after the membership check the reducer throws "Draft is paused." while `timerState.isPaused`.
 
 ---
 
@@ -352,6 +362,8 @@ The match session system manages the entire draft lifecycle within a lobby: char
 | Same team as bid holder | "Your team holds the current bid. The other team must respond." |
 | Not captain (but captain exists) | "Only the team captain can pass the bid." |
 
+**Phase S4 execution (DECISIONS.md A22(3)):** after the membership check the reducer throws "Draft is paused." while `timerState.isPaused`.
+
 ---
 
 ### timer_expiry_auction
@@ -396,6 +408,8 @@ The match session system manages the entire draft lifecycle within a lobby: char
 | Not auction phase | "Auction phase not active." |
 | Timer not yet expired | "Turn timer has not yet expired." |
 
+**Phase S4 execution (F3, DECISIONS.md A22(3)):** the caller must be a lobby member (`ensureLobbyMember`: "You are not a member of this lobby.") and the reducer throws "Draft is paused." while `timerState.isPaused`, before the auction-phase and elapsed-time checks.
+
 ---
 
 ### undo_last_step
@@ -435,6 +449,8 @@ The match session system manages the entire draft lifecycle within a lobby: char
 | Not referee or undo disabled | "Only referees with undo permission can undo." |
 | No steps to undo (turnIndex=0) | "No steps to undo." |
 | No step rows found | "No steps to undo." |
+
+**Phase S4 execution (F9, DECISIONS.md A22(2)):** steps 5–8 are superseded. After the `turnIndex=0` check the reducer throws "Nothing to undo right now." while `timerState.isPaused` and "Undo is not available during the auction phase." when `isAuctionPhase`. It deletes the highest-sequence **Pick or Ban** step (Pause and Undo audit rows are skipped; "Nothing to undo right now." if none), inserts the Undo record with `originalSequenceId = <deleted step's sequence>` and `sequence = getNextSequence(lobbyId)`, decrements `turnIndex` and resets the timer. `isAuctionPhase` is never reverted by undo.
 
 ---
 
@@ -477,6 +493,8 @@ The match session system manages the entire draft lifecycle within a lobby: char
 | Player pause disabled | "Player pausing is not allowed in this lobby." |
 | Blue team exhausted | "Blue team has used all 3 pauses." |
 | Red team exhausted | "Red team has used all 3 pauses." |
+
+**Phase S4 execution (F9, DECISIONS.md A22a, F5):** the Pause step takes `sequence = getNextSequence(lobbyId)` instead of `turnIndex`, so it never shares a sequence with a draft step. The auto-pause on disconnect is no longer written by `client_disconnected`: `run_referee_transfer_check` writes it 15 s after the player's last device disconnected, only for an offline team player, never for a spectator or coach (`docs/lobby/contract.md`).
 
 ---
 
@@ -855,6 +873,41 @@ D-50 applies to ALL Drafting→Equipping transitions: auto (last Classic pick, l
 
 ---
 
+### Paused Draft Rejects Draft Actions (Phase S4 execution, A22(3))
+**Given:** Active Classic draft, timerState.isPaused=true
+**When:** The team on turn calls `pick_character` / `ban_character`; in an auction lobby `nominate_character` / `place_bid` / `pass_bid`
+**Then:** Throws "Draft is paused." No step inserted, turnIndex unchanged.
+
+### Timer Expiry by a Non-Member (Phase S4 execution, F3)
+**Given:** Lobby #10 in Drafting, turn timer elapsed; user #99 is not a member
+**When:** #99 calls `timer_expiry_classic(10)` (or `timer_expiry_auction`)
+**Then:** Throws "You are not a member of this lobby." No EMPTY/SKIP step.
+
+### Timer Expiry While Paused (Phase S4 execution, F3)
+**Given:** Lobby #10 in Drafting, timerState.isPaused=true, `turnStartAt` older than `standardTurnSeconds`
+**When:** A member calls `timer_expiry_classic(10)`
+**Then:** Throws "Draft is paused." The paused team's turn is not consumed.
+
+### Undo Skips the Pause Row (Phase S4 execution, F9)
+**Given:** Steps Pick(seq 0), Pick(seq 1), Pause(seq 2); draft resumed; turnIndex=2
+**When:** Referee calls `undo_last_step`
+**Then:** Pick(seq 1) deleted; Undo record inserted with originalSequenceId=1 and sequence=3; turnIndex=1; the Pause row is untouched. The next pick takes sequence 4.
+
+### Undo While Paused (Phase S4 execution, F9)
+**Given:** Active draft, timerState.isPaused=true, turnIndex>0
+**When:** Referee calls `undo_last_step`
+**Then:** Throws "Nothing to undo right now."
+
+### Undo During the Auction Phase (Phase S4 execution, F9)
+**Given:** Auction lobby, ban phase complete, isAuctionPhase=true
+**When:** Referee calls `undo_last_step`
+**Then:** Throws "Undo is not available during the auction phase." Supersedes "Referee Undo: Reverts Auction Phase Transition" above.
+
+### Auto-Pause Comes From the Grace Check (Phase S4 execution, A22a, F5)
+**Given:** Lobby #10 in Drafting (Standard), Blue player #10 connected on one device
+**When:** #10 disconnects
+**Then:** No Pause step and isPaused unchanged at disconnect time. 15 s later, if #10 is still offline, `run_referee_transfer_check` inserts Pause(actorUserId=0, isAutoPause=true, sequence=max+1) and sets isPaused=true; a spectator's or coach's disconnect never does.
+
 ## Edge Cases
 
 | Case | Expected Behavior | Notes |
@@ -874,6 +927,9 @@ D-50 applies to ALL Drafting→Equipping transitions: auto (last Classic pick, l
 | advance_stage from Finished | Rejected | "Cannot advance stage from Finished." |
 | Duplicate LobbyMember.isCaptain on same team | First captain wins captain check | Only one captain should exist per team |
 | Auction sold when only one team needs characters | Normal flow, no short circuit | Other team's won count already at 8, one team still filling |
+| Timer expiry with paused timer (Phase S4 execution, F3) | Rejected: "Draft is paused." Supersedes the "Not validated" row above | Non-members rejected too |
+| Undo auction phase boundary (Phase S4 execution, F9) | Rejected: "Undo is not available during the auction phase." Supersedes the "isAuctionPhase reverts" row above | No budget / won-count rollback exists |
+| Undo when the highest-sequence row is a Pause or Undo record (Phase S4 execution, F9) | The last Pick/Ban is undone; audit rows are skipped | Audit rows carry their own sequence |
 
 ---
 
@@ -935,8 +991,12 @@ D-50 applies to ALL Drafting→Equipping transitions: auto (last Classic pick, l
 | Auction nomination base-cost lookup filters by `draftMode=Auction` and reads `costs.eN` (was `auctionBaseBid[eN]`); D-53 semantics retained, column shape updated | Phase 15.4 execution | 2026-04-15 |
 | `timer_expiry_classic` autoRandomPick pool builders now filter `draftMode=Classic` — prevents 0-cost auto-picks of Auction-only characters (WR-02 fix) | Phase 15.4 execution | 2026-04-15 |
 | `equip_lightcone`, `arrange_lineup`, `confirm_lineup` stamp `gameNumber: session.currentGameNumber` on MatchSessionStep inserts — matches draft-phase invariant; preserves step-to-game attribution in MatchSessionStepHistory for bestOf>1 archives (WR-04 fix) | Phase 15.4 execution | 2026-04-15 |
+| pick/ban/nominate/bid/pass and both timer expiries reject while paused ("Draft is paused.") | Phase S4 execution (DECISIONS.md A22(3)) | 2026-11-06 |
+| `timer_expiry_classic` / `timer_expiry_auction` require lobby membership (F3) | Phase S4 execution (DECISIONS.md A22(2)) | 2026-11-06 |
+| `undo_last_step` undoes the last Pick/Ban only; rejected while paused and in the auction phase; Pick/Ban/Pause/Undo sequences from `getNextSequence` (F9) | Phase S4 execution (DECISIONS.md A22(2)) | 2026-11-06 |
+| Auto-pause decided by `run_referee_transfer_check` 15 s after the last disconnect, team players only (F5) | Phase S4 execution (DECISIONS.md A22(5), A22a) | 2026-11-06 |
 
 ---
 
-*Last updated: 2026-04-15*
+*Last updated: 2026-11-06*
 *Feature owner: Phase 9 / Phase 12.3 / Phase 15.4*

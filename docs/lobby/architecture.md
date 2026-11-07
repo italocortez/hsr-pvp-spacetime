@@ -1,6 +1,6 @@
 # Lobby -- Architecture
 
-Last updated: 2026-07-05
+Last updated: 2026-11-06
 
 ## Overview
 
@@ -9,6 +9,8 @@ Lobbies are the per-match rooms where players draft characters and play games. E
 Key membership model (D-24 / D-27): the host is inserted as a `LobbyMember` with `lobbySlot=Spectator` and `isReferee=true`. **Every** joiner also lands in the `Spectator` slot; team/coach placement happens afterward via `set_team_slot`. There is no `allowSpectators`/`maxSpectators` configuration — spectating is always allowed, capped by hardcoded limits (max 12 spectators, max 20 total members) enforced in `join_lobby` and `set_team_slot`.
 
 Passwords live in the private `LobbyPassword` table (never broadcast). Anonymous play zeroes `senderUserId` at write time on cursor/chat events. `LobbyPreset` stores a full flat copy of the lobby config fields for save/restore. `LobbyMemberAccount` records which HSR account(s) each member uses for the match (private, D-02). Stand-ins (`TournamentStandIn`) track approved substitutes per bracket match.
+
+Presence and disconnects (Phase S4 execution; A22a, A48): a member's `isOnline` follows the user's `UserPresence` rows (one per device, see `docs/auth/architecture.md`), so closing one device while another is connected changes nothing. `client_disconnected` only marks the member offline, stamps `disconnectedAt` (Standard/Deferred) and inserts a `RefereeTransferCheck` 15 s out; `run_referee_transfer_check` then moves the referee / captain / host flags and auto-pauses the draft only if the user is still offline. A reconnect (`client_connected`, or the explicit `join_lobby`) restores the member and cancels the pending check, so a page refresh moves no flag and pauses nothing.
 
 ## Table Relationships
 
@@ -43,17 +45,19 @@ Lobby (id: u32 autoInc PK)  [public: true]
   +-- audit columns
   Indexes: host_user_id (btree), stage (btree), tournament_id (btree), bracket_match_id (btree)
 
-  +-- LobbyMember (PK: [lobbyId, userId])  [public: true]
+  +-- LobbyMember (PK: [lobbyId, userId])  [PRIVATE since S3 (A37); members read view_my_lobby_members (S9)]
   |     lobbyId -> Lobby.id  [btree: lobby_id]
   |     userId -> User.id  [btree: user_id]
-  |     isOnline: bool
+  |     isOnline: bool                       (follows UserPresence: false only once the user has no live device, A48)
   |     lobbySlot: LobbySlot (BluePlayer | BlueCoach | RedPlayer | RedCoach | Spectator)
   |     isReferee: bool   (admin powers within this lobby)
   |     isConfirmed: bool (ready-up per D-29)
   |     isCaptain: bool   (captain designation per D-30)
   |     voluntarilyLeft: bool                (D-31: player voluntarily left an active match)
-  |     disconnectedAt: Timestamp?           (D-08: disconnect event time)
+  |     disconnectedAt: Timestamp?           (D-08: disconnect event time; A22a grace check and isForfeitEligible read it)
   |     disconnectPoolRemainingMs: u32       (D-10: remaining disconnect pool, init 300000 at draft start)
+  |     joinSeq: u32                         (R4, S4: per-lobby join counter, host = 1 then max + 1; A22(5) order and S9 labels derive from it)
+  |     lastCursorAt: Timestamp? / lastLineupAt: Timestamp?   (B-4 throttle stamps, written from S5)
   |     audit columns
   |     Indexes: lobby_id (btree), user_id (btree), by_lobby_and_user (btree, [lobbyId, userId])
   |
@@ -97,6 +101,13 @@ LobbyGcJob (scheduledId: u64 autoInc PK)  [PRIVATE, scheduled]
   Single self-rescheduling sweep row (NOT one per lobby). run_lobby_gc scans all Lobby rows,
   then requeues itself +15 min. Seeded once by seed_lobby_gc_job (server-only).
 
+RefereeTransferCheck (scheduledId: u64 autoInc PK)  [PRIVATE, scheduled, no audit columns]  (S3 table, S4 behaviour)
+  scheduledAt: ScheduleAt / lobbyId: u32 / userId: u32
+  Indexes: by_lobby_and_user (btree, [lobbyId, userId])
+  A22a: one row per (lobby, user), inserted by client_disconnected 15 s out for every active-stage membership
+  of a user whose last device disconnected; deleted by client_connected (reconnect inside the window) or
+  consumed by run_referee_transfer_check. Bound through `spacetimedb.reducer({ onSchedule: RefereeTransferCheck }, ...)`.
+
 TournamentStandIn (PK: [bracketMatchId, userId])  [public: true]
   bracketMatchId -> BracketMatch.id  [btree: bracket_match_id]
   userId -> User.id
@@ -109,7 +120,7 @@ TournamentStandIn (PK: [bracketMatchId, userId])  [public: true]
 
 ## Reducer Flows
 
-Lobby-owned reducers live in `reducers/lobbyLifecycle.ts`, `lobbySettings.ts`, `lobbyPresets.ts`, `refereeManagement.ts`, `cursor.ts`, `lobbyGc.ts`, `accountSelection.ts`, and (tournament-linked) `tournamentLobby.ts`. Draft-stage transitions (`start_draft`, picks/bans) live in the draft feature, not here.
+Lobby-owned reducers live in `reducers/lobbyLifecycle.ts`, `lobbySettings.ts`, `lobbyPresets.ts`, `refereeManagement.ts`, `cursor.ts`, `lobbyGc.ts`, `accountSelection.ts`, `concede.ts` (concede / claim_forfeit / defer), `refereeTransfer.ts` (the A22a scheduled check), the lifecycle hooks in `index.ts`, and (tournament-linked) `tournamentLobby.ts`. Draft-stage transitions (`start_draft`, picks/bans) live in the draft feature, not here.
 
 ### create_lobby(config fields..., presetId, joinCode, password)
 1. `getAuthenticatedUser(ctx)` -- reject guests.
@@ -119,17 +130,17 @@ Lobby-owned reducers live in `reducers/lobbyLifecycle.ts`, `lobbySettings.ts`, `
 5. D-23: reject guest + `matchType=Ranked`; force `rosterVisibility=ClosedNoRating` for guests.
 6. D-42: if `matchType=Ranked`, force `allowMirrorPicks=false`. Resolve `disconnectForfeitSeconds` (0 sentinel -> undefined).
 7. Insert `Lobby` (`insertWithAudit`) with `stage=Waiting`, `currentPlayerCount=1`, `hostUserId`, `isTournamentControlled=false`, `bestOf` (0 -> 1), `lastActivityAt=now`.
-8. D-24 / D-27: insert host as `LobbyMember` with `lobbySlot=Spectator`, `isReferee=true`, `isConfirmed=false`, `isOnline=true`.
+8. D-24 / D-27: insert host as `LobbyMember` with `lobbySlot=Spectator`, `isReferee=true`, `isConfirmed=false`, `isOnline=true`, `joinSeq=1` (R4, S4).
 9. D-02: if `!isPublic` and password provided, insert `LobbyPassword` row.
 
 ### join_lobby(lobbyId, joinCode, password)
 1. `getAuthenticatedUser(ctx)`.
 2. D-03: resolve lobby by `id` (if `lobbyId>0`) else by `joinCode`; throw "Lobby not found." if neither resolves.
-3. D-22 `ensureNotInLobby`; D-23 guest restrictions; D-21 `ensureNotBanned` (reject if a `LobbyBan` row exists).
-4. **Reconnect path** (existing LobbyMember row): require an active stage (Drafting..AwaitingResult); D-38 reject if `voluntarilyLeft`; D-39 recompute `disconnectPoolRemainingMs`; delete+reinsert member `isOnline=true`, clear `disconnectedAt`; auto-resume the MatchSession timer if it was auto-paused; bump activity; return (no count change, no chat).
-5. **New-join path**: require stage Waiting or Drafting; D-02 verify password against `LobbyPassword` if `!isPublic`.
+3. **Reconnect path** (existing LobbyMember row; F1 / Phase S4 execution: evaluated BEFORE the one-lobby check, which counts the row being rejoined and used to reject every reconnect): require a reconnect stage (Waiting, Drafting, Equipping, Scoring, BetweenGames, Shelved, AwaitingResult); D-38 reject if `voluntarilyLeft`; D-39 recompute `disconnectPoolRemainingMs`; delete+reinsert member `isOnline=true`, clear `disconnectedAt`; auto-resume the MatchSession timer if it was auto-paused; bump activity; return (no count change, no chat).
+4. **New-join path** only: D-22 `ensureNotInLobby`; D-23 guest restrictions; D-21 `ensureNotBanned` (reject if a `LobbyBan` row exists).
+5. Require stage Waiting or Drafting; D-02 verify password against `LobbyPassword` if `!isPublic`.
 6. Cap enforcement: reject if total members >= 20 ("Lobby is full (max 20 members)."); reject if spectators >= 12 ("Spectator slots are full (max 12)."). Hardcoded -- no config knob.
-7. D-27: insert `LobbyMember` with `lobbySlot=Spectator`, `isReferee=false`, `isConfirmed=false`.
+7. D-27: insert `LobbyMember` with `lobbySlot=Spectator`, `isReferee=false`, `isConfirmed=false`, `joinSeq = max(joinSeq in lobby) + 1` (R4, S4).
 8. D-04 / D-09 / D-26: auto-insert `LobbyMemberAccount` for the user's active HSR account (tournament path validates/snapshots against `TournamentPlayerAccount`; approved stand-ins snapshot all their accounts into TPA first).
 9. Increment `currentPlayerCount`, bump `lastActivityAt`, insert System `ChatMessage` "{name} joined the lobby."
 
@@ -138,7 +149,7 @@ Lobby-owned reducers live in `reducers/lobbyLifecycle.ts`, `lobbySettings.ts`, `
 2. **Active stage** (Drafting/Equipping/Scoring/BetweenGames):
    - D-29 spectators/coaches: delete their `LobbyMemberAccount` rows, delete `LobbyMember`, decrement count, return.
    - D-31 players: delete `LobbyMemberAccount` rows; delete+reinsert member with `voluntarilyLeft=true`, `isOnline=false` (row KEPT for finalization; count unchanged).
-   - D-34/35/36: `transferCaptain`, `transferReferee`, `transferHost` to the next eligible online team member (see flag-transfer priority below).
+   - D-34/35/36: `transferCaptain`, `transferReferee`, `transferHost` to the next eligible online team member (see flag-transfer priority below). F6 (Phase S4 execution): the `Lobby` row is re-read after the transfers; `performConcede` and the final `lastActivityAt` update spread the fresh row, so a transferred host is not handed back to the leaver.
    - D-31/D-82: if the leaver's team has no remaining non-left members, `performConcede` (their team loses, reason `VoluntaryLeave`) -- UNLESS `refereeExclusiveConcede` + a third-party referee is present (then blocked; referee decides).
    - Insert System `ChatMessage` "{name} left the match."; return.
 3. **Normal** (Waiting/AwaitingResult/Finished): delete `LobbyMemberAccount` rows; delete `LobbyMember`; compute new count.
@@ -219,14 +230,36 @@ Lobby-owned reducers live in `reducers/lobbyLifecycle.ts`, `lobbySettings.ts`, `
 3. `deselect`: find and delete the matching `LobbyMemberAccount` row (throw if not selected). No snapshot hook.
 
 ### create_tournament_lobby(bracketMatchId, joinCode) / approve_stand_in(bracketMatchId, userId)
-- `create_tournament_lobby`: resolve BracketMatch + Tournament; D-64 authorize (Moderator+, organizer, `TournamentAssistant`, or a team member of `team1Id`/`team2Id`); D-45 reject a duplicate non-Finished lobby for the match; D-22 `ensureNotInLobby`; D-67 `matchType` from `countTowardsMmr`; insert `Lobby` with `isTournamentControlled=true` inheriting tournament fields + hardcoded tournament defaults; D-24/D-27 insert creator as `Spectator` + `isReferee=true`.
+- `create_tournament_lobby`: resolve BracketMatch + Tournament; D-64 authorize (Moderator+, organizer, `TournamentAssistant`, or a team member of `team1Id`/`team2Id`); D-45 reject a duplicate non-Finished lobby for the match; D-22 `ensureNotInLobby`; D-67 `matchType` from `countTowardsMmr`; insert `Lobby` with `isTournamentControlled=true` inheriting tournament fields + hardcoded tournament defaults; D-24/D-27 insert creator as `Spectator` + `isReferee=true`, `joinSeq=1` (R4, S4).
 - `approve_stand_in`: resolve BracketMatch + Tournament; D-68 authorize (Moderator+, organizer, or assistant); validate target user; reject duplicate; insert `TournamentStandIn` (PK `[bracketMatchId, userId]`, `approvedByUserId=caller`). There is no `remove_stand_in` reducer.
 
-### Flag-transfer priority (flagTransferHelpers.ts)
-Used by `leave_lobby` auto-transfer. All candidates filtered to online, non-spectator, non-coach, non-left members:
+### claim_forfeit(lobbyId, forfeitingTeamSide) (concede.ts; F7, Phase S4 execution)
+1. `getAuthenticatedUser(ctx)`; `ensureLobbyMember`; load lobby; stage must be Drafting / Equipping / Scoring / BetweenGames.
+2. D-81: with `refereeExclusiveConcede` and a third-party (Spectator) referee present, only that referee may call; otherwise spectators and coaches are rejected. D-15: `disconnectPolicy` must be Standard.
+3. F7: `forfeitingTeamSide` 0 = the team opposing the caller's slot (rejected for the exclusive referee, who has no team: "Referee must specify forfeitingTeamSide: 1=Blue, 2=Red."), 1 = Blue, 2 = Red; any other value is rejected.
+4. D-16: `isForfeitEligible(targetTeam)` stays the gate (every non-coach player of that team offline with `disconnectedAt` set and pool depleted or `disconnectForfeitSeconds` elapsed); then `performConcede` (trigger RefereeDecision for a referee, Disconnect otherwise). `concede_match` and `defer_match` are unchanged.
+
+### client_connected / client_disconnected (index.ts; lobby side, Phase S4 execution)
+- `client_connected`: after the presence upsert (`docs/auth/architecture.md`), for every `LobbyMember` of the user: delete pending `RefereeTransferCheck` rows (`by_lobby_and_user`); if the row is offline, delete+reinsert with `isOnline=true`, `disconnectedAt` cleared and `disconnectPoolRemainingMs` decremented by the offline time (`handleDisconnectPoolUpdate`, D-10/D-11). Idempotent (F1). `join_lobby`'s reconnect branch does the same explicitly and additionally auto-resumes an auto-paused draft.
+- `client_disconnected`: marks the identity's presence row offline; if the user still has another live `UserPresence` row, stops (A48). Otherwise for every membership: `isOnline=false`; in an active stage (Drafting, Equipping, Scoring, BetweenGames, Shelved) one `RefereeTransferCheck { lobbyId, userId, scheduledAt: now + 15 s }` (a stale pending row for the pair is replaced); `disconnectedAt=now` only in Drafting, Equipping, Scoring (the D-08 forfeit clock; never in BetweenGames or Shelved, never under NoAction). No flag transfer, no pause (A22a, F5).
+
+### run_referee_transfer_check(arg: RefereeTransferCheck) (refereeTransfer.ts; scheduled, A22a)
+1. Re-read `Lobby` and the `LobbyMember`; no-op if either is gone (the scheduler consumed the row).
+2. "Still offline" = `LobbyMember.isOnline=false` and no live `UserPresence` row of the user (A48).
+3. `decideRefereeTransfer` (`shared/lobby-rules`): `transfer` only if still offline, still `isReferee` and the stage is active; `moveRefereeFlag` writes the two rows with the SYSTEM_USER_ID audit actor.
+4. Still offline and active stage: `transferCaptain` (D-34), then `transferHost` (D-36) on the re-read lobby.
+5. Drafting only: `decideAutoPause` -> insert the auto-Pause step (`actorUserId=0`, `isAutoPause=true`, `timeRemainingMs` as in `pause_draft`, `sequence = getNextSequence` per F9) and set `timerState.isPaused=true`.
+
+### Flag-transfer priority (flagTransferHelpers.ts, shared/lobby-rules/refereeTransfer.ts)
+`leave_lobby` (a player leaving voluntarily) keeps the D-34/35/36 helpers. All candidates filtered to online, non-spectator, non-coach, non-left members:
 - **Captain** -> lowest-userId teammate on the same team.
 - **Referee** -> current host first, else lowest-userId eligible member.
 - **Host** -> current referee first, else lowest-userId eligible member.
+
+**Disconnects** (Phase S4 execution; A22(5), A22a, F5) move nothing in the hook. `run_referee_transfer_check` fires 15 s after the user's last device disconnected and, only if the member is still offline:
+- **Referee** -> `pickRefereeSuccessor`: the host if online, else Blue players, Red players, spectators, Blue coach, Red coach, each tier by `joinSeq`; the leaver, offline members and `voluntarilyLeft` are skipped; no candidate = the flag stays (GC handles the orphan).
+- **Captain / Host** -> the D-34 / D-36 helpers above, with the same grace, while the lobby is still in an active stage.
+- **Auto-pause** -> only an offline team player (never a spectator, coach or spectator-referee), only in Drafting, only under Standard/Deferred, only when not already paused.
 
 ## Phase History
 
@@ -248,10 +281,15 @@ Used by `leave_lobby` auto-transfer. All candidates filtered to online, non-spec
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
 | Phase 16 route-group rename: frontend lobby page moved from `app/(authenticated)/lobby/page.tsx` -> `app/(authed)/lobby/page.tsx`. Backend unchanged -- pure file-path change | Phase 16 execution | 2026-04-18 |
 | Full schema/reducer reconciliation against shipped code: removed nonexistent columns (maxSpectators, allowSpectators, timerDurationSeconds/timerPausedAt/timerResumedOffset, currentGame, blueScore/redScore, isPrivate, password, gcJobId) and reducers (transfer_host, assign/remove_referee, unban_member, remove_stand_in, set_ready, send_cursor_event); added the real column set, LobbyPassword/LobbyMemberAccount/LobbyCursorEvent(event) shapes, and current reducer roster. Matches contract.md | Doc correction | 2026-07-05 |
+| F1: `join_lobby` evaluates the reconnect branch before `ensureNotInLobby`; Waiting is a reconnect stage; `client_connected` restores every membership (isOnline, disconnectedAt cleared, pool via `handleDisconnectPoolUpdate`) and deletes the pending `RefereeTransferCheck` rows | Phase S4 execution (DECISIONS.md A22(2), A22a) | 2026-11-06 |
+| A22a / A48 / F5: `client_disconnected` only marks the member offline (`disconnectedAt` for Standard/Deferred) and schedules `RefereeTransferCheck` 15 s out, and only when the user has no other live `UserPresence` row; `run_referee_transfer_check` moves referee (A22(5) order by `joinSeq`, SYSTEM actor) / captain / host and auto-pauses for offline team players only; decision core in `shared/lobby-rules/refereeTransfer.ts` (tests `refereeTransfer.test.ts`, T-S4(a)) | Phase S4 execution (DECISIONS.md A22(5), A22a, A48) | 2026-11-06 |
+| F6: `leave_lobby` re-reads the Lobby row after `transferHost` before `performConcede` and the final update | Phase S4 execution (DECISIONS.md A22(2)) | 2026-11-06 |
+| F7: `claim_forfeit(lobbyId, forfeitingTeamSide)`: 0 derives the opposing team, 1 = Blue, 2 = Red; non-zero required for the exclusive referee; `isForfeitEligible` stays the gate | Phase S4 execution (DECISIONS.md A22(2)) | 2026-11-06 |
+| R4: `LobbyMember.joinSeq` assigned at insert (host = 1, then max + 1) in `create_lobby`, `join_lobby`, `create_tournament_lobby`; `LobbyMember` documented as private (S3, A37) | Phase S4 execution (DECISIONS.md A22(5), A37) | 2026-11-06 |
 
 ---
 
-*Last updated: 2026-07-05*
+*Last updated: 2026-11-06*
 *Feature owner: Phase 05 / Phase 09 / Phase 10.1 / Phase 10.4 / Phase 12.1 / Phase 16*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

@@ -6,6 +6,7 @@ import { ensureLobbyMember, ensureHostOrAbove, ensureStageIs, slotTeam, slotIsCo
 import { validateCharacterOwnership } from '../helpers/ownershipValidation';
 import { buildClassicSequence, buildAuctionBanSequence } from '../helpers/draftSequences';
 import { ensureMatchAlive } from '../helpers/disconnectHelpers';
+import { getNextSequence } from '../helpers/stepSequence';
 
 // ─── start_draft ──────────────────────────────────────────────────────────────
 // Initializes the draft for a lobby.
@@ -286,6 +287,11 @@ export const pick_character = spacetimedb.reducer(
 
         const member = ensureLobbyMember(ctx, lobbyId, user.id);
 
+        // A22(3): no draft action while the draft is paused
+        if (session.timerState.isPaused) {
+            throw new SenderError('Draft is paused.');
+        }
+
         // D-39 Coach guard (MOUS-03)
         if (slotIsCoach(member.lobbySlot)) {
             throw new SenderError('Coaches cannot perform draft actions.');
@@ -368,7 +374,7 @@ export const pick_character = spacetimedb.reducer(
             id: 0,
             lobbyId,
             gameNumber: session.currentGameNumber,
-            sequence: session.turnIndex,
+            sequence: getNextSequence(ctx, lobbyId), // F9: never collides with Pause/Undo audit rows
             actorUserId: user.id,
             anonymousLabel: undefined,
             actorSlot: slotToTeamSide(member.lobbySlot),
@@ -471,6 +477,11 @@ export const ban_character = spacetimedb.reducer(
 
         const member = ensureLobbyMember(ctx, lobbyId, user.id);
 
+        // A22(3): no draft action while the draft is paused
+        if (session.timerState.isPaused) {
+            throw new SenderError('Draft is paused.');
+        }
+
         // D-39 Coach guard (MOUS-03)
         if (slotIsCoach(member.lobbySlot)) {
             throw new SenderError('Coaches cannot perform draft actions.');
@@ -525,7 +536,7 @@ export const ban_character = spacetimedb.reducer(
             id: 0,
             lobbyId,
             gameNumber: session.currentGameNumber,
-            sequence: session.turnIndex,
+            sequence: getNextSequence(ctx, lobbyId), // F9: never collides with Pause/Undo audit rows
             actorUserId: user.id,
             anonymousLabel: undefined,
             actorSlot: slotToTeamSide(member.lobbySlot),
@@ -599,6 +610,12 @@ export const timer_expiry_classic = spacetimedb.reducer(
 
         ensureStageIs(lobby, 'Drafting');
         ensureMatchAlive(ctx, lobby);
+
+        // F3: only a lobby member may fire the expiry (contract :162), and never while the draft is paused
+        ensureLobbyMember(ctx, lobbyId, user.id);
+        if (session.timerState.isPaused) {
+            throw new SenderError('Draft is paused.');
+        }
 
         // Server-side timer validation: check that enough time has actually elapsed
         const elapsedMicros =
@@ -692,7 +709,7 @@ export const timer_expiry_classic = spacetimedb.reducer(
                 id: 0,
                 lobbyId,
                 gameNumber: session.currentGameNumber,
-                sequence: session.turnIndex,
+                sequence: getNextSequence(ctx, lobbyId), // F9: never collides with Pause/Undo audit rows
                 actorUserId: 0,  // System actor
                 anonymousLabel: undefined,
                 actorSlot: currentStep.teamTurn,
@@ -747,7 +764,7 @@ export const timer_expiry_classic = spacetimedb.reducer(
                 id: 0,
                 lobbyId,
                 gameNumber: session.currentGameNumber,
-                sequence: session.turnIndex,
+                sequence: getNextSequence(ctx, lobbyId), // F9: never collides with Pause/Undo audit rows
                 actorUserId: 0,  // System actor
                 anonymousLabel: undefined,
                 actorSlot: currentStep.teamTurn,

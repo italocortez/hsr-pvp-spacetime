@@ -14,6 +14,7 @@ import { SenderError } from 'spacetimedb/server';
 import { SYSTEM_USER_ID } from '../helpers/auditColumns';
 import { insertWithAudit } from '../helpers/auditHelpers';
 import { ensureModerator } from '../helpers/ensurePermissions';
+import { hasLivePresence } from '../helpers/presenceHelpers';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -27,6 +28,13 @@ const IDENTITY_TTL_MICROS = BigInt(IDENTITY_TTL_DAYS) * MICROS_PER_DAY;
 // D-03: scheduled GC runs weekly.
 const GC_INTERVAL_DAYS = 7;
 const GC_INTERVAL_MICROS = BigInt(GC_INTERVAL_DAYS) * MICROS_PER_DAY;
+
+// A48: the per-identity UserPresence row goes with the identity it describes.
+function deletePresenceRow(ctx: any, identity: any): void {
+    if (ctx.db.UserPresence.identity.find(identity)) {
+        ctx.db.UserPresence.identity.delete(identity);
+    }
+}
 
 // ─── performIdentityGc ────────────────────────────────────────────────────────
 // Shared GC logic called by both scheduled and admin-triggered reducers (Pitfall 6).
@@ -60,6 +68,7 @@ function performIdentityGc(ctx: any): { itemsScanned: number; itemsDeleted: numb
         if (!user) {
             for (const ui of identities) {
                 ctx.db.UserIdentity.identity.delete(ui.identity);
+                deletePresenceRow(ctx, ui.identity);
                 console.log(`[IDENTITY_GC] Deleted orphaned identity for missing user #${userId}`);  // D-05
                 itemsDeleted++;
                 orphanedCount++;
@@ -71,9 +80,7 @@ function performIdentityGc(ctx: any): { itemsScanned: number; itemsDeleted: numb
         if (user.isGuest) continue;
 
         // D-08: Skip users currently online (A48: any live UserPresence row of the user)
-        // S4: identity GC also deletes the UserPresence row together with the identity it removes.
-        const isOnline = [...ctx.db.UserPresence.user_id.filter(userId)].some((p: any) => p.isOnline);
-        if (isOnline) continue;
+        if (hasLivePresence(ctx, userId)) continue;
 
         // D-07: Sort by lastSeenAt descending -- preserve newest even if past TTL
         const sorted = [...identities].sort((a: any, b: any) =>
@@ -86,6 +93,7 @@ function performIdentityGc(ctx: any): { itemsScanned: number; itemsDeleted: numb
             const idleMicros = nowMicros - ui.lastSeenAt.microsSinceUnixEpoch;
             if (idleMicros >= IDENTITY_TTL_MICROS) {
                 ctx.db.UserIdentity.identity.delete(ui.identity);
+                deletePresenceRow(ctx, ui.identity);
                 console.log(`[IDENTITY_GC] Deleted stale identity for user #${userId} (idle: ${idleMicros / MICROS_PER_DAY} days)`);  // D-05
                 itemsDeleted++;
                 staleCount++;

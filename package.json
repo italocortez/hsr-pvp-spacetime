@@ -12,7 +12,7 @@
     "scripts": {
         "typecheck": "tsc -p spacetimedb --noEmit && tsc -p test && tsc -p tsconfig.json",
         "lint": "biome check .",
-        "test": "vitest run --config test/vitest.config.ts",
+        "test": "vitest run --config test/vitest.config.ts && vitest run --config spacetimedb/vitest.config.mts",
         "test:watch": "vitest --config test/vitest.config.ts",
         "test:integration": "tsx scripts/stdb/test-integration.ts --target test",
         "stdb:publish:test": "tsx scripts/stdb/publish.ts --target test",

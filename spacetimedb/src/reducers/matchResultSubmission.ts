@@ -3,7 +3,7 @@ import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser, isRoleAtLeast } from '../helpers/ensurePermissions';
 import { updateWithAudit } from '../helpers/auditHelpers';
 import { runFinalization } from '../helpers/finalizationHelpers';
-import { ensureMatchAlive } from '../helpers/disconnectHelpers';
+import { ensureNotConceded } from '../helpers/disconnectHelpers';
 import type { MatchResultRecord } from '@bindings/types';
 
 // ─── confirm_match_scores ─────────────────────────────────────────────────────
@@ -30,10 +30,10 @@ export const confirm_match_scores = spacetimedb.reducer(
             throw new SenderError('Scores can only be confirmed when the match is in Pending status.');
         }
 
-        // D-12: Liveness guard — block confirmation after concede
+        // D-12: Liveness guard — block confirmation after concede (F8/A22(4): AwaitingResult is allowed here)
         const confirmLobby = ctx.db.Lobby.id.find(matchResult.lobbyId);
         if (confirmLobby) {
-            ensureMatchAlive(ctx, confirmLobby);
+            ensureNotConceded(ctx, confirmLobby);
         }
 
         // Check if caller is a participant
@@ -98,10 +98,10 @@ export const submit_match_result = spacetimedb.reducer(
             throw new SenderError('Match result can only be submitted when in Pending status.');
         }
 
-        // D-12: Liveness guard — block submission after concede
+        // D-12: Liveness guard — block submission after concede (F8/A22(4): AwaitingResult is allowed here)
         const submitLobby = ctx.db.Lobby.id.find(matchResult.lobbyId);
         if (submitLobby) {
-            ensureMatchAlive(ctx, submitLobby);
+            ensureNotConceded(ctx, submitLobby);
         }
 
         // Check both sides have confirmed (record-level flags)

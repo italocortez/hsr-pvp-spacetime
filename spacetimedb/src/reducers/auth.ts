@@ -1,20 +1,20 @@
 import spacetimedb from '../schema';
 import { SYSTEM_USER_ID } from '../helpers/auditColumns';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
+import { markPresenceOnline } from '../helpers/presenceHelpers';
 
 /**
  * Login as a guest user.
- * - If identity already linked → update lastLoginAt (no-op).
- * - Otherwise → create a new User + UserIdentity mapping.
+ * - If identity already linked → bump UserIdentity.lastSeenAt (presence was written by client_connected).
+ * - Otherwise → create a new User + UserIdentity mapping and the UserPresence row (A48): the fresh guest's
+ *   connect ran before the mapping existed, so client_connected could not write it.
  */
 export const login_as_guest = spacetimedb.reducer((ctx) => {
     const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
     if (mapping) {
         const user = ctx.db.User.id.find(mapping.userId);
         if (user) {
-            // Already registered — bump lastSeenAt
-            // S4: presence (isOnline / lastLoginAt) is written to UserPresence by client_connected (A48); the
-            // first connect of a fresh guest has no mapping yet, so S4 also upserts the presence row here.
+            // Already registered — bump lastSeenAt; isOnline / lastLoginAt live on UserPresence (client_connected)
             ctx.db.UserIdentity.identity.update(
                 updateWithAudit(ctx, mapping, { lastSeenAt: ctx.timestamp }, user.id),
             );
@@ -45,4 +45,7 @@ export const login_as_guest = spacetimedb.reducer((ctx) => {
         userId: newUser.id,
         lastSeenAt: ctx.timestamp,
     }, newUser.id));
+
+    // A48: this identity's presence row; its connect preceded the mapping
+    markPresenceOnline(ctx, ctx.sender, newUser.id);
 });

@@ -83,6 +83,27 @@ export function transferReferee(ctx: any, lobbyId: number, leavingUserId: number
 }
 
 /**
+ * Moves the referee flag from `fromUserId` to `toUserId` (A22(5)/A22a). The candidate is chosen by
+ * `decideRefereeTransfer` (shared/lobby-rules) in `run_referee_transfer_check`; this helper only writes the
+ * two rows, re-read at call time, with the SYSTEM_USER_ID audit actor. No-op when either row is missing or
+ * the source no longer holds the flag.
+ */
+export function moveRefereeFlag(ctx: any, lobbyId: number, fromUserId: number, toUserId: number): void {
+    const from = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, fromUserId])][0];
+    const to = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, toUserId])][0];
+    if (!from || !to || !from.isReferee) return;
+
+    ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, toUserId]);
+    ctx.db.LobbyMember.insert(
+        updateWithAudit(ctx, to, { isReferee: true }, SYSTEM_USER_ID),
+    );
+    ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, fromUserId]);
+    ctx.db.LobbyMember.insert(
+        updateWithAudit(ctx, from, { isReferee: false }, SYSTEM_USER_ID),
+    );
+}
+
+/**
  * Transfers host from the leaving user to next eligible member (D-36).
  * Priority: (1) current referee if online and on a team, (2) lowest-userId eligible member.
  */

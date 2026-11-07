@@ -2,7 +2,7 @@ import spacetimedb from '../schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser, isRoleAtLeast } from '../helpers/ensurePermissions';
 import { insertWithAudit } from '../helpers/auditHelpers';
-import { ensureNotInLobby, generateJoinCode } from '../helpers/lobbyHelpers';
+import { ensureNotInLobby, generateJoinCode, nextJoinSeq } from '../helpers/lobbyHelpers';
 import type { Lobby } from '@bindings/types';
 
 // ─── create_tournament_lobby ─────────────────────────────────────────────────
@@ -208,7 +208,7 @@ export const create_tournament_lobby = spacetimedb.reducer(
             voluntarilyLeft: false,
             disconnectedAt: undefined,
             disconnectPoolRemainingMs: 0,
-            joinSeq: 0, // S4/S9: per-lobby join counter (R4)
+            joinSeq: nextJoinSeq(ctx, lobby.id), // R4: per-lobby join counter; A22(5) order and the S9 labels derive from it
             lastCursorAt: undefined,
             lastLineupAt: undefined,
         }, user.id));

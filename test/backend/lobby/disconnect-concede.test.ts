@@ -9,8 +9,9 @@
  * - defer_match: Deferred policy only (Standard rejects), no winner, concedeSummary populated
  *
  * NOT COVERED (gaps):
- * - claim_forfeit success path: requires clientDisconnected to fire (sets LobbyMember.disconnectedAt),
- *   which does not trigger from harness disconnect() on maincloud. Needs real browser tab close.
+ * - claim_forfeit success path and the reconnect / grace-window behaviour: covered in memory by
+ *   spacetimedb/src/__tests__/s4-lobby-fixes.test.ts and s4-referee-transfer.test.ts (T-S4), which call
+ *   client_disconnected / client_connected and the scheduled check directly.
  * - Ranked Scoring concede finalization matrix (D-79): requires full draft + equip completion to reach
  *   Scoring stage. Verify MMR + stats written, achievement check skipped, character stats at Equipping+.
  *   Heavyweight setup — deferred to dedicated test or manual UAT.
@@ -209,7 +210,7 @@ describe('Concede / Forfeit / Defer', () => {
                 );
 
                 const err = await expectReducerError(
-                    blue.call.claimForfeit({ lobbyId })
+                    blue.call.claimForfeit({ lobbyId, forfeitingTeamSide: 0 })
                 );
                 expect(err).toContain('only available under Standard disconnect policy');
             } finally {

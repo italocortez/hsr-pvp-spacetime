@@ -535,3 +535,11 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** 24 of its asset files duplicate `web/public/`, and the mockups add 2.4 MB of reference material to a public repo that Open Design already holds.
 - **Supersedes:** the "committed" part of A49a (D-M13). The six-step breakpoint scale and the later `scripts/design/import-mockup.ts` idea stand; the script now refreshes the local mirror instead of a repo copy.
 - **Where implemented:** M0 follow-up commit (`.gitignore`, `git rm --cached design`).
+
+### A54 — One result record per lobby; the consolidation belongs to S8
+
+- **Date:** 2026-11-06 · **Status:** decided
+- **Decision:** A lobby has **one** `MatchResultRecord`. The old code's `performConcede` and `defer_match` insert a second record (Validated/Concede, resp. Deferred) next to the Pending record `start_draft` creates. That was a phase-10 sequencing accident, not a design: no plan, decision or contract chose it, and the phase context says the reducers "need to create records mid-draft" as if none existed. **S8 consolidates:** concede and defer update the Pending record in place; `admin_force_finalize`, `process_tournament_mmr` and the dispute guard read that one record explicitly; the finalization participant fallback (D-75) becomes the rule for concedes (live `LobbyMember` roster, not the start-of-draft copy). **S4 only** makes `ensureMatchAlive` / `ensureNotConceded` scan every record of the lobby, so a concede is detected either way. The user chose S8 because the defects are tournament-only (a casual concede finalizes inline and deletes both rows) and S8 rewrites that lifecycle.
+- **Why:** F8's guard split (A22(4)) removed the blanket AwaitingResult rejection, so the concede check has to actually see the concede; the T-S4 in-memory test was the first to ask it to. Updating the record in S4 would have shifted audit stamps, `playedAt`, the participant roster and BetweenGames game rows (S7/S8 territory).
+- **Supersedes:** nothing (the two-record shape was never decided).
+- **Where implemented:** S4 (guard scan), S8 (consolidation)

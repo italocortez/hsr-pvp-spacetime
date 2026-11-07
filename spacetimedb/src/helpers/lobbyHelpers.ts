@@ -52,6 +52,17 @@ export function ensureGuestRestrictions(user: any, matchType: any): void {
 }
 
 /**
+ * Next per-lobby join counter (R4): max existing `LobbyMember.joinSeq` in the lobby + 1, starting at 1
+ * for the first member (the host). Assigned at insert time by create_lobby, join_lobby and
+ * create_tournament_lobby; the A22(5) referee-candidate order and the S9 anonymous labels derive from it.
+ */
+export function nextJoinSeq(ctx: any, lobbyId: number): number {
+    const members = [...ctx.db.LobbyMember.lobby_id.filter(lobbyId)];
+    if (members.length === 0) return 1;
+    return Math.max(...members.map((m: any) => m.joinSeq)) + 1;
+}
+
+/**
  * Returns the LobbyMember row for the given user in the given lobby.
  * Throws if the user is not a member of the lobby.
  */

@@ -35,7 +35,7 @@ Match results manage the full lifecycle of determining a match outcome: per-game
 1. Authenticate caller via `getAuthenticatedUser(ctx)`
 2. Look up `MatchResultRecord` by id; throw if not found
 3. Validate status is `Pending`; throw if not
-4. Liveness guard: `ensureMatchAlive` — blocks scoring after concede
+4. Liveness guard: `ensureNotConceded` (Phase S4 execution, F8 / DECISIONS.md A22(4)) — blocks scoring after a concede or in Finished; AwaitingResult is allowed
 5. Validate `winnerTeamSide` is "Blue" or "Red"
 6. Authority check:
    - If participant: must be `isCaptain=true`; Blue captain rejects Red-side fields, Red captain rejects Blue-side fields
@@ -74,7 +74,7 @@ Match results manage the full lifecycle of determining a match outcome: per-game
 1. Authenticate caller
 2. Look up `MatchResultRecord`; throw if not found
 3. Validate status is `Pending`
-4. Liveness guard: block after concede
+4. Liveness guard: `ensureNotConceded` — block after a concede or in Finished; AwaitingResult is allowed (Phase S4 execution, F8 / DECISIONS.md A22(4))
 5. Participant path: caller must be `isCaptain=true`; sets `blueConfirmed` or `redConfirmed`
 6. Non-participant path: requires `refereeFullControl=true` and `isReferee=true`; sets both `blueConfirmed` and `redConfirmed`
 
@@ -108,7 +108,7 @@ Match results manage the full lifecycle of determining a match outcome: per-game
 1. Authenticate caller
 2. Look up `MatchResultRecord`; throw if not found
 3. Validate status is `Pending`
-4. Liveness guard: block after concede
+4. Liveness guard: `ensureNotConceded` — block after a concede or in Finished; AwaitingResult is allowed (Phase S4 execution, F8 / DECISIONS.md A22(4))
 5. Require both `blueConfirmed` and `redConfirmed` to be `true`
 6. Validate `winnerId`: must be a participant userId, or 0 for draw
 7. Authority check: caller is lobby referee, OR Moderator+, OR tournament TO/assistant (derived via BracketMatch since `tournamentId` removed from MatchResultRecord per D-42)
@@ -442,6 +442,11 @@ after `start_draft`).
 **When:** Moderator calls `finalize_match_result(matchResultId)`
 **Then:** Finalization proceeds normally — 19-step pipeline runs, stats and MMR written, lobby hard-deleted.
 
+### Result Submitted After advance_stage Parked the Lobby (Phase S4 execution, F8)
+**Given:** bestOf=1, scores confirmed, host called `advance_stage` from Scoring, so the lobby is in AwaitingResult and the MatchResultRecord is Pending
+**When:** Captains call `record_game_scores` / `confirm_match_scores`, then the referee calls `submit_match_result`
+**Then:** All three succeed (`ensureNotConceded` allows AwaitingResult). A conceded record still rejects with "Match has been conceded."; a Finished lobby with "Match has ended."
+
 ## Edge Cases
 
 | Case | Expected Behavior | Notes |
@@ -455,6 +460,7 @@ after `start_draft`).
 | `admin_set_bracket_winner` before rollback | Rejected: "Bracket match already has a winner." | Must rollback first |
 | Override non-tournament match as non-moderator | Rejected by `ensureModerator` | Tournament vs non-tournament permission split |
 | Ranked override without screenshots | Rejected: "Cannot validate Ranked match: game N is missing screenshot(s)." | All games must have both URLs |
+| Result reducers in AwaitingResult (Phase S4 execution, F8) | Allowed; only a concede or Finished rejects | `ensureMatchAlive` stays on the draft/equip reducers (DECISIONS.md A22(4)) |
 
 ## Integration Points
 
@@ -489,8 +495,9 @@ after `start_draft`).
 | Ranked override requires screenshots (D-07) | Phase 11 execution | 2026-04-06 |
 | Full hydration from codebase | Phase 13 normalization | 2026-04-09 |
 | Phase 12.3 execution | accountRatingSnapshot capture at MRP insert (MMR-RACE-01); processMatchMmr snapshot read-path (MMR-RACE-02) replacing live HsrAccount lookup; select_match_account monotonic-upward hook in BetweenGames; finalize_match_result D-H-01 tournament ordering guard | 2026-04-12 |
+| Phase S4 execution | Liveness guard split (DECISIONS.md A22(4), F8): `record_game_scores`, `confirm_match_scores`, `submit_match_result` use `ensureNotConceded` (concede or Finished rejected, AwaitingResult allowed); `ensureMatchAlive` unchanged for draft/equip reducers | 2026-11-06 |
 
 ---
 
-*Last updated: 2026-04-12*
+*Last updated: 2026-11-06*
 *Feature owner: Phase 7 / Phase 12.3*

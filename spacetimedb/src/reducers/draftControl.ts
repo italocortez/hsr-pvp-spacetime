@@ -4,11 +4,13 @@ import { getAuthenticatedUser } from '../helpers/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { ensureLobbyMember, ensureStageIs, slotToTeamSide } from '../helpers/lobbyHelpers';
 import { ensureMatchAlive } from '../helpers/disconnectHelpers';
+import { getNextSequence } from '../helpers/stepSequence';
 
 // ─── undo_last_step ───────────────────────────────────────────────────────────
 // Undoes the last draft step.
 // Per D-60: Referee only (when refereeCanUndo=true). Last step only.
-// Decrements turnIndex, deletes the most recent MatchSessionStep, inserts Undo record.
+// F9: "last step" = the highest-sequence Pick/Ban, never a Pause or Undo audit row; rejected while paused
+// and during the auction phase. Decrements turnIndex, deletes that step, inserts an Undo record.
 
 export const undo_last_step = spacetimedb.reducer(
     {
@@ -42,49 +44,49 @@ export const undo_last_step = spacetimedb.reducer(
             throw new SenderError('No steps to undo.');
         }
 
-        // Find the most recent step (highest sequence value)
+        // F9: no undo while paused (the Pause step is not a draft action) and none during the auction
+        // phase (undoing an AuctionSold would not restore budgets, won counts or the nomination).
+        if (session.timerState.isPaused) {
+            throw new SenderError('Nothing to undo right now.');
+        }
+        if (session.isAuctionPhase) {
+            throw new SenderError('Undo is not available during the auction phase.');
+        }
+
+        // F9: the last *draft action* = the highest-sequence Pick or Ban; Pause / Undo audit rows are skipped
         const allSteps = [...ctx.db.MatchSessionStep.lobby_id.filter(lobbyId)];
-        // Sort by sequence descending to find last step
-        const sortedSteps = allSteps.sort(
-            (a: any, b: any) => b.sequence - a.sequence
-        );
-        const lastStep = sortedSteps[0];
+        const lastStep = allSteps
+            .filter((s) => s.action.tag === 'Pick' || s.action.tag === 'Ban')
+            .sort((a, b) => b.sequence - a.sequence)[0];
         if (!lastStep) {
-            throw new SenderError('No steps to undo.');
+            throw new SenderError('Nothing to undo right now.');
         }
 
         // Delete the last step
         ctx.db.MatchSessionStep.id.delete(lastStep.id);
 
-        // Insert an Undo audit record
+        // Insert an Undo audit record (F9: its own sequence, so it never collides with a draft step)
         ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
             id: 0,
             lobbyId,
             gameNumber: session.currentGameNumber,
-            sequence: session.turnIndex,
+            sequence: getNextSequence(ctx, lobbyId),
             actorUserId: user.id,
             anonymousLabel: undefined,
             actorSlot: slotToTeamSide(member.lobbySlot),
-            action: { tag: 'Undo', value: {} } as any,
+            action: { tag: 'Undo' },
             payload: {
                 tag: 'Undo',
-                value: { originalSequenceId: session.turnIndex - 1 },
-            } as any,
+                value: { originalSequenceId: lastStep.sequence },
+            },
             timestamp: ctx.timestamp,
         }, user.id));
 
-        // Decrement turnIndex
+        // Decrement turnIndex (the undone Pick/Ban advanced it by one)
         const newTurnIndex = session.turnIndex - 1;
-
-        // If the session was in auction phase and the undone step brought it back to ban phase,
-        // check if we're back before the ban sequence completed
-        const wasAuctionPhase = session.isAuctionPhase;
-        const isBackInBanPhase =
-            wasAuctionPhase && newTurnIndex < session.draftSequence.length;
 
         ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
             turnIndex: newTurnIndex,
-            isAuctionPhase: isBackInBanPhase ? false : session.isAuctionPhase,
             timerState: {
                 ...session.timerState,
                 turnStartAt: ctx.timestamp,
@@ -96,7 +98,7 @@ export const undo_last_step = spacetimedb.reducer(
             lastActivityAt: ctx.timestamp,
         }, user.id));
 
-        console.log(`[DRAFT] undo_last_step: Referee #${user.id} undid step ${session.turnIndex - 1} in lobby #${lobbyId}`);
+        console.log(`[DRAFT] undo_last_step: Referee #${user.id} undid ${lastStep.action.tag} step (sequence ${lastStep.sequence}) in lobby #${lobbyId}`);
     }
 );
 
@@ -172,20 +174,20 @@ export const pause_draft = spacetimedb.reducer(
             lobby.standardTurnSeconds * 1000 - elapsedMs + session.timerState.accumulatedPauseMs
         );
 
-        // Insert Pause step
+        // Insert Pause step (F9: its own sequence, so it never collides with a draft step)
         ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
             id: 0,
             lobbyId,
             gameNumber: session.currentGameNumber,
-            sequence: session.turnIndex,
+            sequence: getNextSequence(ctx, lobbyId),
             actorUserId: user.id,
             anonymousLabel: undefined,
             actorSlot: slotToTeamSide(member.lobbySlot),
-            action: { tag: 'Pause', value: {} } as any,
+            action: { tag: 'Pause' },
             payload: {
                 tag: 'Pause',
                 value: { timeRemainingMs: Math.round(timeRemainingMs), isAutoPause: false },
-            } as any,
+            },
             timestamp: ctx.timestamp,
         }, user.id));
 

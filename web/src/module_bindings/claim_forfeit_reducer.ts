@@ -12,4 +12,5 @@ import {
 
 export default {
   lobbyId: __t.u32(),
+  forfeitingTeamSide: __t.u8(),
 };

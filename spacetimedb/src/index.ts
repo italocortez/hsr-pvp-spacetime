@@ -1,10 +1,18 @@
 import spacetimedb from './schema';
 import { ScheduleAt } from 'spacetimedb';
-import { auditUpdate, SYSTEM_USER_ID } from './helpers/auditColumns';
+import { SYSTEM_USER_ID } from './helpers/auditColumns';
 import { insertWithAudit, updateWithAudit } from './helpers/auditHelpers';
-import { transferCaptain, transferReferee, transferHost } from './helpers/flagTransferHelpers';
 import { checkProviderBan } from './helpers/banHelper';
-import { slotToTeamSide } from './helpers/lobbyHelpers';
+import { handleDisconnectPoolUpdate } from './helpers/disconnectHelpers';
+import { hasLivePresence, markPresenceOnline } from './helpers/presenceHelpers';
+import { ACTIVE_STAGES, type LobbyStage } from '@shared/lobby-rules';
+
+// A22a: the grace period between a user's last disconnect and the referee / captain / host transfer check.
+const REFEREE_TRANSFER_GRACE_MICROS = 15_000_000n;
+// D-08: the forfeit clock (disconnectedAt -> pool decrement, isForfeitEligible) runs only in the three live-match
+// stages. BetweenGames and Shelved still schedule the grace check (ACTIVE_STAGES) but never start that clock: a
+// shelved series expects its players offline for days (review finding 1, 2026-11-06).
+const DISCONNECT_CLOCK_STAGES: readonly LobbyStage[] = ['Drafting', 'Equipping', 'Scoring'];
 
 // Private auth tables — imported for schema registration
 import './tables/userPrivate';
@@ -161,57 +169,65 @@ export const init = spacetimedb.init((ctx) => {
 export const client_connected = spacetimedb.clientConnected((ctx) => {
   console.log(`Client connected: ${ctx.sender.toHexString()}`);
 
-  // S3 (A48, D-A1): presence lives in the private per-identity UserPresence row, not on the public User row.
-  // S4: this upsert becomes the real presence logic (restore LobbyMember.isOnline for all memberships (F1),
-  // delete the pending RefereeTransferCheck via by_lobby_and_user, maintenance-mode rejection (B-8)).
+  // B-8 (ACCESS-SECURITY-OPS §B.3 / §B.5): under maintenance mode only registered server identities may connect.
+  // Throwing in this hook rejects the socket (skill how-to "Rejecting Client Connections"). The AbuseConfig
+  // singleton (id 1) is seeded in S5; while the row is absent this check is inert.
+  const abuseConfig = ctx.db.AbuseConfig.id.find(1);
+  if (abuseConfig?.maintenanceMode && !ctx.db.ServerIdentity.identity.find(ctx.sender)) {
+    throw new Error('Maintenance mode: connections are not accepted right now.');
+  }
+
+  // A fresh guest has no mapping yet: login_as_guest creates it and upserts the presence row itself.
   const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
-  if (mapping) {
-    const user = ctx.db.User.id.find(mapping.userId);
-    if (user) {
-      const presence = ctx.db.UserPresence.identity.find(ctx.sender);
-      if (presence) {
-        ctx.db.UserPresence.identity.update(updateWithAudit(ctx, presence, {
-          userId: user.id,
-          isOnline: true,
-          lastLoginAt: ctx.timestamp,
-          lastSeenAt: ctx.timestamp,
-        }, user.id));
-      } else {
-        ctx.db.UserPresence.insert(insertWithAudit(ctx, {
-          identity: ctx.sender,
-          userId: user.id,
-          isOnline: true,
-          lastLoginAt: ctx.timestamp,
-          lastSeenAt: ctx.timestamp,
-        }, user.id));
-      }
+  if (!mapping) return;
+  const user = ctx.db.User.id.find(mapping.userId);
+  if (!user) return;
 
-      // D-01: Bump lastSeenAt for GC staleness tracking
-      // Note: `lastSeenAt: ctx.timestamp` paired with `updateWithAudit` is safe (NOT Pitfall 6) —
-      // there is no custom `ts` variable; both lastSeenAt and lastModifiedDate use ctx.timestamp.
-      ctx.db.UserIdentity.identity.update(updateWithAudit(ctx, mapping, {
-        lastSeenAt: ctx.timestamp,
+  // A48 (D-A1): presence lives in the private per-identity UserPresence row, not on the public User row.
+  markPresenceOnline(ctx, ctx.sender, user.id);
+
+  // D-01: Bump lastSeenAt for GC staleness tracking
+  // Note: `lastSeenAt: ctx.timestamp` paired with `updateWithAudit` is safe (NOT Pitfall 6) —
+  // there is no custom `ts` variable; both lastSeenAt and lastModifiedDate use ctx.timestamp.
+  ctx.db.UserIdentity.identity.update(updateWithAudit(ctx, mapping, {
+    lastSeenAt: ctx.timestamp,
+  }, user.id));
+
+  // F1 (A22(2)): restore every membership of the user and cancel its pending A22a checks, so a reconnect inside
+  // the 15 s window keeps every flag and never pauses the draft. Idempotent: a row already online is left alone.
+  // The pool decrement is the D-10/D-11 rule (handleDisconnectPoolUpdate); join_lobby stays the explicit path.
+  for (const member of [...ctx.db.LobbyMember.user_id.filter(user.id)]) {
+    for (const check of [...ctx.db.RefereeTransferCheck.by_lobby_and_user.filter([member.lobbyId, user.id])]) {
+      ctx.db.RefereeTransferCheck.scheduledId.delete(check.scheduledId);
+    }
+    if (member.isOnline) continue;
+    const lobby = ctx.db.Lobby.id.find(member.lobbyId);
+    if (!lobby) continue;
+    ctx.db.LobbyMember.by_lobby_and_user.delete([member.lobbyId, user.id]);
+    ctx.db.LobbyMember.insert(updateWithAudit(ctx, member, {
+      isOnline: true,
+      disconnectedAt: undefined,
+      disconnectPoolRemainingMs: handleDisconnectPoolUpdate(ctx, member, lobby, ctx.timestamp),
+    }, user.id));
+  }
+
+  // D-08 enforcement point 2: Check if the user's provider is banned on reconnect (A46: loginMethod + providerId)
+  const userPrivate = ctx.db.UserPrivate.userId.find(mapping.userId);
+  if (userPrivate) {
+    const isBanned = checkProviderBan(ctx, userPrivate.loginMethod, userPrivate.providerId);
+    if (isBanned && !user.deletedAt) {
+      ctx.db.User.id.update(updateWithAudit(ctx, user, {
+        deletedAt: ctx.timestamp,
       }, user.id));
-
-      // D-08 enforcement point 2: Check if the user's provider is banned on reconnect (A46: loginMethod + providerId)
-      const userPrivate = ctx.db.UserPrivate.userId.find(mapping.userId);
-      if (userPrivate) {
-        const isBanned = checkProviderBan(ctx, userPrivate.loginMethod, userPrivate.providerId);
-        if (isBanned && !user.deletedAt) {
-          ctx.db.User.id.update(updateWithAudit(ctx, user, {
-            deletedAt: ctx.timestamp,
-          }, user.id));
-          // D-10 R1 fix: schedule deletion cascade 5s out (matches admin.ts:181-188 pattern)
-          // Actor is user.id — no human admin present on reconnect; matches existing audit pattern
-          const deleteAt = ctx.timestamp.microsSinceUnixEpoch + 5_000_000n;
-          ctx.db.UserDeletionJob.insert(insertWithAudit(ctx, {
-            scheduledId: 0n,
-            scheduledAt: ScheduleAt.time(deleteAt),
-            userId: user.id,
-          }, user.id));
-          console.log(`[BAN-RECONNECT] User #${user.id} soft-deleted -- banned provider id detected on reconnect.`);
-        }
-      }
+      // D-10 R1 fix: schedule deletion cascade 5s out (matches admin.ts:181-188 pattern)
+      // Actor is user.id — no human admin present on reconnect; matches existing audit pattern
+      const deleteAt = ctx.timestamp.microsSinceUnixEpoch + 5_000_000n;
+      ctx.db.UserDeletionJob.insert(insertWithAudit(ctx, {
+        scheduledId: 0n,
+        scheduledAt: ScheduleAt.time(deleteAt),
+        userId: user.id,
+      }, user.id));
+      console.log(`[BAN-RECONNECT] User #${user.id} soft-deleted -- banned provider id detected on reconnect.`);
     }
   }
 });
@@ -219,14 +235,11 @@ export const client_connected = spacetimedb.clientConnected((ctx) => {
 export const client_disconnected = spacetimedb.clientDisconnected((ctx) => {
   console.log(`Client disconnected: ${ctx.sender.toHexString()}`);
 
-  // S3 (A48): mark this identity's presence row offline; "user offline" = no live row left (user_id index).
-  // S4: the rest of this hook shrinks to "per active-stage membership: isOnline=false, disconnectedAt, insert a
-  // RefereeTransferCheck 15 s out" (D.8.2) and only when the user has no other live connection; the flag
-  // transfers and the auto-pause below move into run_referee_transfer_check.
   const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
   if (!mapping) return;
   const userId = mapping.userId;
 
+  // A48: mark this identity's presence row offline; "user offline" = no live row left (user_id index).
   const presence = ctx.db.UserPresence.identity.find(ctx.sender);
   if (presence) {
     ctx.db.UserPresence.identity.update(updateWithAudit(ctx, presence, {
@@ -234,77 +247,40 @@ export const client_disconnected = spacetimedb.clientDisconnected((ctx) => {
       lastSeenAt: ctx.timestamp,
     }, userId));
   }
+  // Another device of the same user is still connected: memberships stay online, nothing is scheduled.
+  if (hasLivePresence(ctx, userId)) return;
 
-  // Handle lobby member disconnect tracking (D-01, D-08, D-72, D-73)
-  const memberships = [...ctx.db.LobbyMember.user_id.filter(userId)];
-  for (const member of memberships) {
+  // A22a (D.8.2): per membership, mark offline; in an active stage also stamp disconnectedAt (Standard/Deferred
+  // only, D-08; NoAction tracks nothing) and schedule the grace check 15 s out. Nothing else happens here: the
+  // referee / captain / host transfers and the player auto-pause are decided by run_referee_transfer_check.
+  for (const member of [...ctx.db.LobbyMember.user_id.filter(userId)]) {
     const lobby = ctx.db.Lobby.id.find(member.lobbyId);
     if (!lobby) continue;
 
-    // Only process active stages (Drafting/Equipping/Scoring)
-    const stageTag = lobby.stage.tag;
-    if (stageTag !== 'Drafting' && stageTag !== 'Equipping' && stageTag !== 'Scoring') {
-      // For Waiting/AwaitingResult/Finished: just set isOnline=false
-      ctx.db.LobbyMember.by_lobby_and_user.delete([member.lobbyId, userId]);
-      ctx.db.LobbyMember.insert({
-        ...member,
-        isOnline: false,
-        ...auditUpdate(ctx, member, SYSTEM_USER_ID),
-      } as any);
-      continue;
-    }
+    const stageTag = lobby.stage.tag as LobbyStage;
+    const isActiveStage = ACTIVE_STAGES.includes(stageTag);
+    const tracksDisconnect = DISCONNECT_CLOCK_STAGES.includes(stageTag) && lobby.disconnectPolicy.tag !== 'NoAction';
 
-    // NoAction policy: tracking only, no pool/pause (D-23, D-25)
-    if (lobby.disconnectPolicy.tag === 'NoAction') {
-      ctx.db.LobbyMember.by_lobby_and_user.delete([member.lobbyId, userId]);
-      ctx.db.LobbyMember.insert({
-        ...member,
-        isOnline: false,
-        ...auditUpdate(ctx, member, SYSTEM_USER_ID),
-      } as any);
-      continue;
-    }
-
-    // Standard/Deferred: set disconnectedAt, isOnline=false (D-08)
     ctx.db.LobbyMember.by_lobby_and_user.delete([member.lobbyId, userId]);
-    ctx.db.LobbyMember.insert({
-      ...member,
+    ctx.db.LobbyMember.insert(updateWithAudit(ctx, member, {
       isOnline: false,
-      disconnectedAt: ctx.timestamp,
-      ...auditUpdate(ctx, member, SYSTEM_USER_ID),
-    } as any);
+      disconnectedAt: tracksDisconnect ? ctx.timestamp : member.disconnectedAt,
+    }, SYSTEM_USER_ID));
 
-    // Transfer captain/referee/host flags (D-34, D-35, D-36) — permanent
-    transferCaptain(ctx, member.lobbyId, userId);
-    transferReferee(ctx, member.lobbyId, userId);
-    transferHost(ctx, member.lobbyId, lobby, userId);
+    if (!isActiveStage) continue;
 
-    // Auto-pause if match session is not already paused (D-08)
-    if (stageTag === 'Drafting') {
-      const session = ctx.db.MatchSession.lobbyId.find(member.lobbyId);
-      if (session && !session.timerState.isPaused) {
-        ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
-          id: 0,
-          lobbyId: member.lobbyId,
-          gameNumber: session.currentGameNumber,
-          sequence: session.turnIndex,
-          actorUserId: SYSTEM_USER_ID,
-          anonymousLabel: undefined,
-          actorSlot: slotToTeamSide(member.lobbySlot),
-          action: { tag: 'Pause', value: {} } as any,
-          payload: { tag: 'Pause', value: { isAutoPause: true, accumulatedPauseMs: session.timerState.accumulatedPauseMs ?? 0 } } as any,
-          timestamp: ctx.timestamp,
-        }, SYSTEM_USER_ID));
-        ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
-          timerState: {
-            ...session.timerState,
-            isPaused: true,
-          },
-        }, SYSTEM_USER_ID));
-      }
+    // One pending check per (lobby, user): drop a stale one before scheduling.
+    for (const check of [...ctx.db.RefereeTransferCheck.by_lobby_and_user.filter([member.lobbyId, userId])]) {
+      ctx.db.RefereeTransferCheck.scheduledId.delete(check.scheduledId);
     }
+    ctx.db.RefereeTransferCheck.insert({
+      scheduledId: 0n,
+      scheduledAt: ScheduleAt.time(ctx.timestamp.microsSinceUnixEpoch + REFEREE_TRANSFER_GRACE_MICROS),
+      lobbyId: member.lobbyId,
+      userId,
+    });
 
-    console.log(`[DISCONNECT] User #${userId} disconnected from lobby #${member.lobbyId} (stage: ${stageTag})`);
+    console.log(`[DISCONNECT] User #${userId} offline in lobby #${member.lobbyId} (stage: ${stageTag}); transfer check scheduled in 15 s`);
   }
 });
 

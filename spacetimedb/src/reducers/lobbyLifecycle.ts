@@ -12,6 +12,7 @@ import {
     ensureStageIs,
     canKickOrBan,
     generateJoinCode,
+    nextJoinSeq,
     slotTeam,
     slotIsCoach,
     slotIsSpectator,
@@ -172,7 +173,7 @@ export const create_lobby = spacetimedb.reducer(
             voluntarilyLeft: false,
             disconnectedAt: undefined,
             disconnectPoolRemainingMs: 0,
-            joinSeq: 0, // S4/S9: per-lobby join counter (R4) assigned at join; labels derive from it
+            joinSeq: nextJoinSeq(ctx, lobby.id), // R4: per-lobby join counter; A22(5) order and the S9 labels derive from it
             lastCursorAt: undefined,
             lastLineupAt: undefined,
         }, user.id));
@@ -221,19 +222,14 @@ export const join_lobby = spacetimedb.reducer(
 
         const lobbyId = lobby.id;
 
-        // D-22: one lobby at a time
-        ensureNotInLobby(ctx, user.id);
-
-        // D-23: guest restrictions
-        ensureGuestRestrictions(user, lobby.matchType);
-
-        // D-21: ban check
-        ensureNotBanned(ctx, lobbyId, user.id);
-
+        // F1: the reconnect branch runs BEFORE ensureNotInLobby, which counts the row of the lobby being
+        // rejoined and would reject every reconnect. The guest and ban checks are not needed for an existing
+        // member: they passed them at join time, and ban_member deletes the membership row.
         // D-04, D-37, D-38, D-39, D-40: stage-specific join logic with extended reconnect
         const existingMember = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, user.id])][0];
         if (existingMember) {
-            const reconnectStages = ['Drafting', 'Equipping', 'Scoring', 'BetweenGames', 'Shelved', 'AwaitingResult'];
+            // F1: Waiting included — a refresh in the waiting room is a reconnect too.
+            const reconnectStages = ['Waiting', 'Drafting', 'Equipping', 'Scoring', 'BetweenGames', 'Shelved', 'AwaitingResult'];
             if (!reconnectStages.includes(lobby.stage.tag)) {
                 throw new SenderError('Cannot rejoin this lobby in its current stage.');
             }
@@ -281,6 +277,16 @@ export const join_lobby = spacetimedb.reducer(
             console.log(`[LOBBY] User #${user.id} reconnected to lobby #${lobbyId} (stage: ${lobby.stage.tag})`);
             return;
         }
+
+        // D-22: one lobby at a time (genuinely new joins only, F1)
+        ensureNotInLobby(ctx, user.id);
+
+        // D-23: guest restrictions
+        ensureGuestRestrictions(user, lobby.matchType);
+
+        // D-21: ban check
+        ensureNotBanned(ctx, lobbyId, user.id);
+
         // New join: only allowed during Waiting or Drafting (as Spectator)
         if (lobby.stage.tag !== 'Waiting' && lobby.stage.tag !== 'Drafting') {
             throw new SenderError('Cannot join a lobby in stage: ' + lobby.stage.tag);
@@ -316,7 +322,7 @@ export const join_lobby = spacetimedb.reducer(
             voluntarilyLeft: false,
             disconnectedAt: undefined,
             disconnectPoolRemainingMs: 0,
-            joinSeq: 0, // S4/S9: per-lobby join counter (R4) assigned at join; labels derive from it
+            joinSeq: nextJoinSeq(ctx, lobby.id), // R4: per-lobby join counter; A22(5) order and the S9 labels derive from it
             lastCursorAt: undefined,
             lastLineupAt: undefined,
         }, user.id));
@@ -446,6 +452,9 @@ export const leave_lobby = spacetimedb.reducer(
             transferCaptain(ctx, lobbyId, user.id);
             transferReferee(ctx, lobbyId, user.id);
             transferHost(ctx, lobbyId, lobby, user.id);
+            // F6: transferHost may have rewritten Lobby.hostUserId; every later Lobby write spreads the fresh
+            // row, or the stale `lobby` would hand the host flag back to the leaver.
+            const freshLobby = ctx.db.Lobby.id.find(lobbyId) ?? lobby;
 
             // Check if last player on team — auto-concede (D-31)
             // But NOT if refereeExclusiveConcede + 3rd party referee present (D-82)
@@ -463,7 +472,7 @@ export const leave_lobby = spacetimedb.reducer(
                 } else {
                     // D-31: Auto-concede — conceding team = leaving player's team
                     const losingTeam = slotTeam(member.lobbySlot)!;
-                    performConcede(ctx, lobby, losingTeam, user.id, { tag: 'VoluntaryLeave', value: {} });
+                    performConcede(ctx, freshLobby, losingTeam, user.id, { tag: 'VoluntaryLeave', value: {} });
                     autoConcedeFired = true;
                 }
             }
@@ -481,9 +490,9 @@ export const leave_lobby = spacetimedb.reducer(
 
             // Update activity (do NOT decrement currentPlayerCount — row is kept)
             // Skip if auto-concede fired — performConcede already updated the lobby
-            // (spreading the stale `lobby` object here would overwrite AwaitingResult back to Drafting)
+            // (spreading a stale lobby object here would overwrite AwaitingResult back to Drafting)
             if (!autoConcedeFired) {
-                ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
+                ctx.db.Lobby.id.update(updateWithAudit(ctx, freshLobby, {
                     lastActivityAt: ctx.timestamp,
                 }, user.id));
             }

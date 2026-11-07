@@ -12,13 +12,13 @@ Each executed step writes its log to `docs/log/<date>-<step>.md` (goal, decision
 | M1 | SDK 2.14.1, Node 26, TS 7.1 beta; regenerate bindings; `shared/` build spike | M0 | done 2026-11-06 (`docs/log/2026-11-06-m1.md`) |
 | M2 | Env scheme: `shared/stdb-targets.ts`, `scripts/stdb/*`, `init` owner/delegate, test-only reducer guards; root `tsconfig.json` covering `scripts/` (Node types) added to `npm run typecheck`; upgrade report R6: `onDisconnect` fail-fast in every script; the publish script runs `npm run typecheck` first because `spacetime build` cannot find `tsc` in a workspace (M1 finding 1) | M1 | done 2026-11-06 (`docs/log/2026-11-06-m2.md`) |
 | S3 | Every schema change in one commit (A17, A19, A21, A25–A36, A45, A48 tables and columns) | M2 | done 2026-11-06 (`docs/log/2026-11-06-s3.md`) |
-| S4 | Lobby/lifecycle fixes F1–F9, paused-draft rejects, A22a referee check, A48 multi-device presence | S3 | pending |
+| S4 | Lobby/lifecycle fixes F1, F3, F5–F9 (F2 → S6, F4 done in M2), paused-draft rejects, A22a referee check, A48 multi-device presence; the in-memory harness spike (D.7(2)) landed here: `spacetimedb/vitest.config.mts`, `src/__tests__/`, `npm test` runs unit + module configs | S3 | done 2026-11-06 (`docs/log/2026-11-06-s4.md`) |
 | S5 | Abuse throttles, caps, guest kill switch, circuit breaker (A42) | S4 | pending |
 | S6 | Series settings, presets and system preset, bestOf cap, cost-set guards, merged rating, Ban Restriction, new reducers (A33a, A45) | S5 | pending |
-| S7 | Scoring foundation in `shared/scoring/`, tie-break chain, override authority, server-resolved eidolon (A21, A39, A43) | S6 | pending |
-| S8 | Tournament partial rewrite: `shared/bracket/`, permissions, team status, single-writer advancement, finalize at Completed (A23–A36b, A38) | S7 | pending |
+| S7 | Scoring foundation in `shared/scoring/`, tie-break chain, override authority, server-resolved eidolon (A21, A39, A43); `shared/scoring/` exports a barrel (nested `@shared` paths do not bundle, S4 finding 1) | S6 | pending |
+| S8 | Tournament partial rewrite: `shared/bracket/`, permissions, team status, single-writer advancement, finalize at Completed (A23–A36b, A38); result-record consolidation: one `MatchResultRecord` per lobby, concede/defer update the Pending record, force-finalize / tournament MMR / dispute read it explicitly (A54, S4 finding 13); `shared/bracket/` exports a barrel (S4 finding 1) | S7 | pending |
 | S9 | Views catalogue and anonymity rules (A37, A40, A44) | S8 | pending |
-| S10 | In-memory test harness and rewritten suites; `npm test` with no maincloud contact | S9 | pending |
+| S10 | Rewritten suites on the in-memory harness that landed in S4 (`spacetimedb/vitest.config.mts`, `src/__tests__/`); live residue list; the harness cannot set the module env, so the four `server_*` test-only reducers stay live; `npm test` with no maincloud contact | S9 | pending |
 | M3 | Vite shell: tokens, base and media CSS, fonts, standby/404 | S10 | pending |
 | M4 | Router and guards (TanStack Router, typed links) | M3 | pending |
 | M9 | Test strategy wiring and CI workflow | M4 | pending |

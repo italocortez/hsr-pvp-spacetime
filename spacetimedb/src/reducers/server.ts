@@ -191,8 +191,16 @@ export const server_link_provider = spacetimedb.reducer({
                 lastSeenAt: ctx.timestamp,
             }, systemUserId));
 
-            // S4/M5 (A48, review M3): client_connected does not re-run after a mid-connection re-point, so rewrite
-            // UserPresence.userId (+ lastLoginAt) for the re-pointed identity here, or the verified user shows offline on this device.
+            // A48 (S3 review M3): client_connected does not re-run after a mid-connection re-point, so the
+            // identity's UserPresence row follows the mapping here (userId + lastLoginAt), before the guest's
+            // own presence rows go with performUserDeletion below. M5 owns the rest of the link flow.
+            const presence = ctx.db.UserPresence.identity.find(callerIdentity);
+            if (presence) {
+                ctx.db.UserPresence.identity.update(updateWithAudit(ctx, presence, {
+                    userId: providerOwner.id,
+                    lastLoginAt: ctx.timestamp,
+                }, systemUserId));
+            }
 
             if (wasGuest) {
                 const remainingLinks = [...ctx.db.UserIdentity.user_id.filter(oldGuestId)];
@@ -405,8 +413,8 @@ export const server_set_online = spacetimedb.reducer({
     const user = ctx.db.User.id.find(userId);
     if (!user) throw new SenderError(`User #${userId} not found`);
 
-    // S3 (A48): presence is per identity in UserPresence; force every identity row of the user.
-    // S4: decide whether this test utility stays once the in-memory harness calls the lifecycle hooks directly.
+    // A48: presence is per identity in UserPresence; force every identity row of the user. Kept as the
+    // test-side way to correct a stale row (see the staleness rule on the UserPresence table).
     for (const mapping of [...ctx.db.UserIdentity.user_id.filter(userId)]) {
         const presence = ctx.db.UserPresence.identity.find(mapping.identity);
         if (presence) {
@@ -534,6 +542,7 @@ export const server_nuke_test_data = spacetimedb.reducer({
 
     // ── Lobby ephemeral (children first)
     ctx.db.LobbyCursorEvent.clear();
+    ctx.db.RefereeTransferCheck.clear(); // A22a pending grace checks
     ctx.db.LobbyMemberAccount.clear();
     ctx.db.LobbyMember.clear();
     ctx.db.LobbyBan.clear();
@@ -543,9 +552,9 @@ export const server_nuke_test_data = spacetimedb.reducer({
 
     // ── Bracket (group_phase_record dropped in S3, A23)
     ctx.db.BracketMatch.clear();
-    // S4/S5/S7/S8: also clear the S3 tables (UserPresence, LinkRequest, MatchResultGroupScore,
-    // MatchResultAdjustment, MatchLineup, RefereeTransferCheck, TournamentFinalizeJob, UserRateState, AdminAlert)
-    // once their writers exist; AbuseConfig is seeded by init and must survive the nuke.
+    // S5/S7/S8: also clear the remaining S3 tables (LinkRequest, MatchResultGroupScore, MatchResultAdjustment,
+    // MatchLineup, TournamentFinalizeJob, UserRateState, AdminAlert) once their writers exist; AbuseConfig is
+    // seeded by init and must survive the nuke.
 
     // ── Tournaments (children first)
     ctx.db.TournamentStandIn.clear();
@@ -614,6 +623,13 @@ export const server_nuke_test_data = spacetimedb.reducer({
     totalDeleted += userPrivates.length;
 
     ctx.db.DeletedUser.clear();
+
+    // A48: presence rows of every non-SYSTEM user; the server identities' rows survive with their chain.
+    const presences = [...ctx.db.UserPresence.iter()]
+        .filter((p: any) => systemUserRowId === undefined || p.userId !== systemUserRowId);
+    for (const p of presences) { ctx.db.UserPresence.delete(p); }
+    if (presences.length > 0) console.log(`[NUKE] UserPresence: ${presences.length}`);
+    totalDeleted += presences.length;
 
     const userIdents = [...ctx.db.UserIdentity.iter()]
         .filter((ui: any) => systemUserRowId === undefined || ui.userId !== systemUserRowId);

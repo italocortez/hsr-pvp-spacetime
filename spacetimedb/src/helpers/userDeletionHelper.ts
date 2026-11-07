@@ -52,7 +52,10 @@ export function performUserDeletion(ctx: any, userId: number, actorId: number): 
     // Cascade: delete all calendar data (availability slots, saved calendars, events, invites) (D-23)
     deleteAllCalendarDataForUser(ctx, userId);
 
-    // Cascade: delete all UserIdentity rows (severs auth link)
+    // Cascade: delete the per-identity presence rows (A48) and all UserIdentity rows (severs auth link)
+    for (const presence of [...ctx.db.UserPresence.user_id.filter(userId)]) {
+        ctx.db.UserPresence.identity.delete(presence.identity);
+    }
     const identities = [...ctx.db.UserIdentity.user_id.filter(userId)];
     for (const ui of identities) {
         ctx.db.UserIdentity.identity.delete(ui.identity);

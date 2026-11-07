@@ -3,7 +3,7 @@ import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser } from '../helpers/ensurePermissions';
 import { auditUpdate } from '../helpers/auditColumns';
 import { insertWithAudit } from '../helpers/auditHelpers';
-import { ensureMatchAlive } from '../helpers/disconnectHelpers';
+import { ensureNotConceded } from '../helpers/disconnectHelpers';
 
 // ─── record_game_scores ─────────────────────────────────────────────────────
 // S7 (A21): replaced by record_group_scores (per lineup group, MatchResultGroupScore rows) + deaths per team;
@@ -44,10 +44,10 @@ export const record_game_scores = spacetimedb.reducer(
             throw new SenderError('Scores can only be recorded when the match is in Pending status.');
         }
 
-        // D-12: Liveness guard — block scoring after concede
+        // D-12: Liveness guard — block scoring after concede (F8/A22(4): AwaitingResult is allowed here)
         const scoreEntryLobby = ctx.db.Lobby.id.find(matchResult.lobbyId);
         if (scoreEntryLobby) {
-            ensureMatchAlive(ctx, scoreEntryLobby);
+            ensureNotConceded(ctx, scoreEntryLobby);
         }
 
         // Validate winnerTeamSide

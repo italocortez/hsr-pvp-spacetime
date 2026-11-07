@@ -24,8 +24,7 @@ User (id: u32 autoInc PK)  [public: true]
   +-- username: string (unique)
   +-- displayName: string
   +-- isGuest: bool
-  +-- isOnline: bool
-  +-- lastLoginAt: Timestamp
+  +-- (isOnline / lastLoginAt moved to UserPresence in S3, A48; see below)
   +-- role: Role (User | TournamentHost | Moderator | Admin)
   +-- hasDiscordLinked: bool
   +-- avatarCharacterName: string -> HsrCharacter.name
@@ -49,6 +48,20 @@ UserIdentity (identity: Identity PK)  [PRIVATE -- public: false]
   +-- lastSeenAt: Timestamp
   Indexes: identity (PK), user_id (btree, userId)
 
+UserPresence (identity: Identity PK)  [PRIVATE -- public: false]  (S3 table; behaviour from Phase S4 execution; A48, D-A1)
+  +-- identity -> the connected SpacetimeDB identity (one row per device)
+  +-- userId -> User.id  [btree: user_id]
+  +-- isOnline: bool / lastLoginAt: Timestamp / lastSeenAt: Timestamp
+  +-- audit columns
+  "User online" = any row of the user with isOnline=true. Writers: client_connected (upsert online),
+  login_as_guest (fresh guest), server_link_provider case 1b (userId re-pointed), client_disconnected
+  (isOnline=false, lastSeenAt), run_identity_gc and performUserDeletion (delete with the identity),
+  server_set_online (test only, forces every row of the user). Reader: view_admin_presence (S9).
+  Staleness rule (S3 review L3): a live row whose disconnect was missed is corrected only by that identity's
+  next connect/disconnect, by identity GC when it removes the identity, or by server_set_online. There is no
+  heartbeat (energy, A16); until one of those runs the user reads as online on that device and the A22a
+  check does not fire.
+
 UserPrivate (userId: u32 PK)  [PRIVATE -- public: false]
   +-- userId -> User.id (1:1)
   +-- discordId: string?
@@ -70,10 +83,11 @@ BanRecord (id: u32 autoInc PK)  [PRIVATE -- public: false]
 
 ### login_as_guest()
 1. Check `UserIdentity.identity.find(ctx.sender)` for existing mapping
-2. If found: update `User.lastLoginAt`, `User.isOnline=true`, `UserIdentity.lastSeenAt` -- return
+2. If found: update `UserIdentity.lastSeenAt` -- return (presence was written by `client_connected`; Phase S4 execution)
 3. If not found: generate `guestUsername = "Guest_{identity_hex8}"`
-4. Insert `User` row (isGuest=true, isOnline=true, role=User, avatarCharacterName='march7th')
+4. Insert `User` row (isGuest=true, role=User, avatarCharacterName='march7th')
 5. Insert `UserIdentity` row linking `ctx.sender -> newUser.id`
+6. A48 (Phase S4 execution): upsert `UserPresence { identity: ctx.sender, userId, isOnline: true, lastLoginAt, lastSeenAt }` -- the guest's connect ran before the mapping existed, so `client_connected` could not write it
 
 ### server_link_provider(identity, discordId, discordUsername, email?) -- server-only
 1. `requireServer(ctx)` -- caller must have a ServerIdentity row (Owner or Delegate)
@@ -81,22 +95,31 @@ BanRecord (id: u32 autoInc PK)  [PRIVATE -- public: false]
 3. Look up `UserIdentity` by provided identity
 4. Three merge cases:
    - **Case 1a**: Identity -> guest, no existing provider owner -- upgrade guest: `isGuest=false`, `hasDiscordLinked=true`, username=providerName
-   - **Case 1b**: Identity -> guest, provider already linked to different user -- re-point identity to existing user, delete orphaned guest
+   - **Case 1b**: Identity -> guest, provider already linked to different user -- re-point identity to existing user, delete orphaned guest. Phase S4 execution (A48, S3 review M3): the identity's `UserPresence.userId` + `lastLoginAt` follow the re-point before `performUserDeletion` removes the guest's own presence rows
    - **Case 1c**: Identity -> verified user, refresh -- update timestamps, upsert `UserPrivate`
 5. Write/upsert `UserPrivate` (discordId, discordUsername, email), set `User.hasDiscordLinked=true`
 
 ### clientConnected() -- lifecycle hook (exported as `client_connected`)
 > Both lifecycle hooks register only because `index.ts` exports them. Before 2026-11-05 they were bare `spacetimedb.clientConnected(...)` calls, which the SDK silently drops, so neither hook ever ran on a published database. Behavior below is the spec; it takes effect on the first publish that includes the fix.
 
-1. Find `UserIdentity.identity.find(ctx.sender)`
-2. If found: set `User.isOnline=true`, update `UserIdentity.lastSeenAt`
-3. D-08 point 2: if `UserPrivate.discordId` is in BanRecord -> soft-delete user immediately
-4. Phase 15.2 D-10: insert `UserDeletionJob` (scheduled 5s out) after ban-reconnect soft-delete (R1 fix)
+1. B-8 (Phase S4 execution, ACCESS-SECURITY-OPS §B.5): if `AbuseConfig` row 1 has `maintenanceMode=true` and `ctx.sender` has no `ServerIdentity` row, `throw` -- the socket is rejected. `AbuseConfig` is seeded in S5; until then this check is inert.
+2. Find `UserIdentity.identity.find(ctx.sender)`; return if none (a fresh guest: see `login_as_guest`)
+3. A48 (Phase S4 execution): upsert `UserPresence` for this identity (`userId`, `isOnline=true`, `lastLoginAt=now`, `lastSeenAt=now`); update `UserIdentity.lastSeenAt`
+4. F1 (Phase S4 execution): for every `LobbyMember` of the user: delete pending `RefereeTransferCheck` rows (`by_lobby_and_user`); if the row is offline, delete+reinsert with `isOnline=true`, `disconnectedAt` cleared and `disconnectPoolRemainingMs` decremented by the offline time (`handleDisconnectPoolUpdate`). Idempotent.
+5. D-08 point 2: if `UserPrivate.loginMethod/providerId` is banned -> soft-delete user immediately
+6. Phase 15.2 D-10: insert `UserDeletionJob` (scheduled 5s out) after ban-reconnect soft-delete (R1 fix)
 
 ### clientDisconnected() -- lifecycle hook (exported as `client_disconnected`)
-1. Find `UserIdentity.identity.find(ctx.sender)`
-2. If found: set `User.isOnline=false`
-3. Lobby memberships: mark `LobbyMember.isOnline=false`; in Drafting/Equipping/Scoring under Standard/Deferred policy also set `disconnectedAt`, transfer captain/referee/host, and auto-pause an unpaused draft (see `docs/lobby/contract.md`)
+1. Find `UserIdentity.identity.find(ctx.sender)`; return if none
+2. A48 (Phase S4 execution): set this identity's `UserPresence.isOnline=false`, `lastSeenAt=now`
+3. If the user still has another live `UserPresence` row: stop -- the other device keeps every membership online
+4. A22a (Phase S4 execution, ACCESS-SECURITY-OPS D.8.2): for every `LobbyMember` of the user: `isOnline=false`; in an active stage (Drafting, Equipping, Scoring, BetweenGames, Shelved) insert `RefereeTransferCheck { lobbyId, userId, scheduledAt: now + 15 s }` (a stale pending row for the pair is replaced); `disconnectedAt=now` only in Drafting, Equipping, Scoring (the D-08 forfeit clock; never in BetweenGames or Shelved, never under NoAction). Nothing else: no flag transfer, no pause
+
+### run_referee_transfer_check(arg: RefereeTransferCheck) -- scheduled (Phase S4 execution, A22a)
+Fires 15 s after the user's last disconnect; no-op when the lobby or the member is gone. "Still offline" = `LobbyMember.isOnline=false` and no live `UserPresence` row. Moves the referee flag in the A22(5) order, runs the captain/host transfers, and auto-pauses the draft for an offline team player. Full rules: `docs/lobby/architecture.md` (Flag-transfer priority) and `shared/lobby-rules/refereeTransfer.ts`.
+
+### run_identity_gc / performUserDeletion -- presence cascade (Phase S4 execution, A48)
+Identity GC deletes the `UserPresence` row together with each identity it removes (orphaned or stale) and treats "online" as any live row of the user. `performUserDeletion` deletes every `UserPresence` row of the user before the `UserIdentity` rows.
 
 ### admin_ban_user(banTypeTag, providerId, reason)
 1. `ensureAdmin(ctx)` -- requires Admin role
@@ -277,10 +300,12 @@ Any new frontend subscription to a raw table (no projection view body) OR a per-
 | Phase 16 reshuffle: Subscription Lifecycle ownership relocated — Stage 1 (`view_my_profile`) moved from `useAuth.ts:72-111` to `components/features/auth/components/AuthProvider.tsx` (D-03); Stage 2 (`SELECT * FROM user`) moved from `useAuth.ts:115-181` to `app/(authed)/layout.tsx` (D-07); route-group mount replaces 15.5's ref-based `stage2Gate` check as the structural gate (D-07). `useAuth.ts` retains `readProfileFromConnection` + login/logout/Discord-link/guest-login/soft-delete state only; `setProfileReady` + `triggerReadProfile` exposed as `@internal` on the auth context. D-12 regression guard `test/backend/auth/auth-subscriptions.test.ts` confirmed green unmodified across all Phase 16 plan commits. `middleware.ts` (Plan 03 new) clarified as UX-only redirect — NOT an auth trust boundary (real access control remains at SpacetimeDB reducer/view level). | Phase 16 execution | 2026-04-18 |
 | Phase 16 post-execution perf pass: `useAuth()` return object memoized so context consumers re-render only when their used subset changes; collapsed duplicate auth-context reads in the `(authed)/layout.tsx` mount path. No public API change — memoization only. Commit `42944fa` | Phase 16 execution | 2026-04-19 |
 | Phase 16 verify-work infrastructure fixes (no auth-API change, but prerequisites for the auth + SDK pipeline to function in prod): (a) CSP `script-src 'unsafe-eval'` required in BOTH dev AND prod — SpacetimeDB SDK generates BSATN codecs at runtime via `Function()` constructor (~7 call sites in `spacetimedb/dist/index.browser.mjs`); original WR-04 assumption that only dev needed it was wrong, prod builds crash at SDK init without it (commit `c6ce7e1`). (b) CSP `connect-src` extended with `https://*.ufs.sh` so the Service Worker's CDN-intercept fetch passes CSP — otherwise any authed page loading UploadThing-hosted profile assets fails the SW round-trip (commit `6ad7ba0`). Neither change touches auth logic; both are required for auth to render any profile picture or character art without errors | Phase 16 verify-work | 2026-04-19 |
+| Per-identity presence goes live: `client_connected` upserts `UserPresence`, restores lobby memberships (F1) and deletes pending `RefereeTransferCheck` rows; `client_disconnected` marks the identity offline and, only when no other device is live, marks memberships offline and schedules the 15 s check; `login_as_guest` writes the fresh guest's row; `server_link_provider` case 1b re-points the row; identity GC and `performUserDeletion` delete rows with the identity; staleness rule recorded (no heartbeat) | Phase S4 execution (DECISIONS.md A22a, A48, A16; S3 review L3/M3) | 2026-11-06 |
+| B-8 maintenance-mode rejection in `client_connected` (`AbuseConfig.maintenanceMode`, server identities exempt); inert until S5 seeds the row | Phase S4 execution (ACCESS-SECURITY-OPS §B.5) | 2026-11-06 |
 
 ---
 
-*Last updated: 2026-04-19*
+*Last updated: 2026-11-06*
 *Feature owner: Phase 01 / Phase 12 / Phase 16*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

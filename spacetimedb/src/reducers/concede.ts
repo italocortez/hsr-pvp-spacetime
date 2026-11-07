@@ -179,8 +179,9 @@ export const concede_match = spacetimedb.reducer(
 export const claim_forfeit = spacetimedb.reducer(
     {
         lobbyId: t.u32(),
+        forfeitingTeamSide: t.u8(), // F7: 0 = the team opposing the caller's slot; 1 = Blue, 2 = Red (required for the exclusive referee)
     },
-    (ctx, { lobbyId }) => {
+    (ctx, { lobbyId, forfeitingTeamSide }) => {
         const user = getAuthenticatedUser(ctx);
         const member = ensureLobbyMember(ctx, lobbyId, user.id);
 
@@ -222,12 +223,26 @@ export const claim_forfeit = spacetimedb.reducer(
             throw new SenderError('Forfeit claim is only available under Standard disconnect policy.');
         }
 
-        // Determine caller's team and target (opposing) team
-        const callerTeam = slotTeam(member.lobbySlot);
-        if (!callerTeam) {
-            throw new SenderError('Cannot determine team for forfeit claim.');
+        // F7: the forfeiting team. The exclusive referee holds the Spectator slot and has no team to derive
+        // from, so they must name it (1 = Blue, 2 = Red); 0 derives the team opposing the caller's own slot.
+        // isForfeitEligible below stays the gate whichever way the team was named.
+        let targetTeam: 'Blue' | 'Red';
+        if (forfeitingTeamSide === 1) {
+            targetTeam = 'Blue';
+        } else if (forfeitingTeamSide === 2) {
+            targetTeam = 'Red';
+        } else if (forfeitingTeamSide === 0) {
+            if (isCallerExclusiveReferee) {
+                throw new SenderError('Referee must specify forfeitingTeamSide: 1=Blue, 2=Red.');
+            }
+            const callerTeam = slotTeam(member.lobbySlot);
+            if (!callerTeam) {
+                throw new SenderError('Cannot determine team for forfeit claim.');
+            }
+            targetTeam = callerTeam === 'Blue' ? 'Red' : 'Blue';
+        } else {
+            throw new SenderError('forfeitingTeamSide must be 0 (derive), 1 (Blue) or 2 (Red).');
         }
-        const targetTeam = callerTeam === 'Blue' ? 'Red' : 'Blue';
 
         // D-16: Check forfeit eligibility — all opposing team players offline > grace
         if (!isForfeitEligible(ctx, lobby, targetTeam, ctx.timestamp)) {

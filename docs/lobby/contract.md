@@ -130,6 +130,8 @@ The lobby system manages the lifecycle of match rooms where players assemble, co
 | 20 members already | "Lobby is full (max 20 members)." |
 | 12 spectators already | "Spectator slots are full (max 12)." |
 
+**Phase S4 execution (F1, DECISIONS.md A22(2)):** the reconnect branch (step 6, existing member) is evaluated **before** steps 3–5. `ensureNotInLobby` counts the row of the lobby being rejoined, so the old order rejected every reconnect with "You are already in a lobby…". The guest and ban checks apply to new joins only (an existing member passed them at join time; `ban_member` deletes the membership row). Reconnect stages are Waiting, Drafting, Equipping, Scoring, BetweenGames, Shelved and AwaitingResult (Waiting added: a refresh in the waiting room is a reconnect, so "Cannot rejoin this lobby in its current stage." no longer applies to it). `client_connected` performs the same restore for every membership of the reconnecting user, so `join_lobby` is the explicit path, not the only one. New rows take `joinSeq = max(joinSeq in lobby) + 1` (R4).
+
 ---
 
 ### leave_lobby
@@ -167,6 +169,8 @@ The lobby system manages the lifecycle of match rooms where players assemble, co
 |-----------|--------------|
 | Lobby not found | "Lobby not found." |
 | Not a member | "You are not a member of this lobby." |
+
+**Phase S4 execution (F6):** after `transferCaptain` / `transferReferee` / `transferHost`, the `Lobby` row is re-read; `performConcede` and the final `lastActivityAt` update spread the fresh row, so a host flag transferred to a teammate is not handed back to the leaver.
 
 ---
 
@@ -572,6 +576,44 @@ The lobby system manages the lifecycle of match rooms where players assemble, co
 
 ---
 
+### claim_forfeit
+
+**Purpose:** Claims a forfeit against a team whose players are all offline past the disconnect grace (D-15, D-16). Section added in Phase S4 execution (F7); `concede_match` and `defer_match` keep their Phase 10 history rows.
+
+**Permission:** A team player, or the exclusive spectator referee when `refereeExclusiveConcede` is on and a third-party referee exists (D-81)
+
+**Parameters:**
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| lobbyId | u32 | Yes | Target lobby |
+| forfeitingTeamSide | u8 | Yes | 0 = the team opposing the caller's slot; 1 = Blue; 2 = Red. Non-zero is required for the exclusive referee (Spectator slot, no team to derive from) — F7 |
+
+**Flow:**
+1. Authenticate caller; `ensureLobbyMember`; load lobby
+2. Stage must be Drafting, Equipping, Scoring or BetweenGames
+3. D-81: if `refereeExclusiveConcede` and a third-party referee exists, only that referee may call; otherwise spectators and coaches are rejected
+4. D-15: `disconnectPolicy` must be Standard
+5. F7: resolve the forfeiting team from `forfeitingTeamSide` (0 derives the team opposing the caller's slot)
+6. D-16: `isForfeitEligible` — every non-coach player of that team is offline with `disconnectedAt` set and either the pool is depleted or `disconnectForfeitSeconds` (default 60) has elapsed
+7. `performConcede` (trigger RefereeDecision for a referee, Disconnect otherwise)
+
+**Expected State Changes:**
+- As `performConcede`: MatchResultRecord (Validated, winner = the other team, matchEndReason Concede), Lobby.stage = AwaitingResult, system ChatMessage; casual lobbies finalize inline
+
+**Error Cases:**
+| Condition | Error Message |
+|-----------|--------------|
+| Wrong stage | "Forfeit claim is only available during Drafting, Equipping, Scoring, or BetweenGames." |
+| Not the exclusive referee while one exists | "Only the referee can claim forfeit when referee exclusive concede is active." |
+| Spectator / coach caller (no exclusive referee) | "Spectators cannot claim forfeit." / "Coaches cannot claim forfeit." |
+| Policy not Standard | "Forfeit claim is only available under Standard disconnect policy." |
+| Exclusive referee passes 0 | "Referee must specify forfeitingTeamSide: 1=Blue, 2=Red." |
+| Value outside 0–2 | "forfeitingTeamSide must be 0 (derive), 1 (Blue) or 2 (Red)." |
+| 0 from a caller without a team | "Cannot determine team for forfeit claim." |
+| Team not eligible | "Opposing team is not eligible for forfeit. At least one player is still connected or grace period has not expired." |
+
+---
+
 ## Acceptance Scenarios
 
 ### Lobby Creation (Happy Path)
@@ -914,6 +956,61 @@ The lobby system manages the lifecycle of match rooms where players assemble, co
 **When:** `close_lobby(lobbyId)` or lobby GC triggers `hardDeleteLobby`
 **Then:** All LobbyMemberAccount rows for this lobbyId deleted before LobbyMember rows. No orphaned LMA rows. (D-28, Phase 10.4 execution)
 
+### Reconnect Precedes the One-Lobby Check (Phase S4 execution, F1)
+**Given:** User #5 has an offline LobbyMember row in lobby #10 (Drafting)
+**When:** User #5 calls `join_lobby(lobbyId=10)`
+**Then:** The reconnect branch runs first: isOnline=true, disconnectedAt cleared, pool decremented by the offline time. No "You are already in a lobby…" error.
+
+### Reconnect in Waiting (Phase S4 execution, F1)
+**Given:** Lobby #10 in Waiting, user #5 is a member whose client disconnected (isOnline=false)
+**When:** User #5 reconnects (`client_connected`) or calls `join_lobby(lobbyId=10)`
+**Then:** isOnline=true; no new row; "Cannot rejoin this lobby in its current stage." is no longer raised for Waiting.
+
+### Disconnect Marks Offline and Schedules the Grace Check (Phase S4 execution, A22a)
+**Given:** Lobby #10 in Drafting (Standard); user #5 is a Blue player, captain and referee, connected on one device
+**When:** The device disconnects (`client_disconnected`)
+**Then:** LobbyMember(10, 5): isOnline=false, disconnectedAt=now. One RefereeTransferCheck row (lobbyId=10, userId=5, scheduledAt=now+15 s). No flag moved, no Pause step, timerState.isPaused unchanged.
+
+### Refresh Within 15 s Keeps Every Flag (Phase S4 execution, A22a)
+**Given:** The state above, 5 s later
+**When:** User #5 reconnects (`client_connected`)
+**Then:** isOnline=true, disconnectedAt cleared, the RefereeTransferCheck row is deleted; isReferee, isCaptain and Lobby.hostUserId unchanged; the draft was never paused.
+
+### Referee Still Offline After 15 s (Phase S4 execution, A22(5))
+**Given:** Lobby #10 in Drafting; host #1 is the Spectator referee, offline for 15 s with no other device; members by joinSeq: #20 (Red), #10 (Blue), #30 (Spectator), all online
+**When:** `run_referee_transfer_check` fires for (10, 1)
+**Then:** isReferee moves to #10 (Blue players come before Red players, whatever the join order; spectators after both teams); Lobby.hostUserId moves per D-36; audit actor SYSTEM_USER_ID. No Pause step: the subject is a spectator-referee (F5).
+
+### Offline Team Player After 15 s Pauses the Draft (Phase S4 execution, A22a, F5)
+**Given:** Lobby #10 in Drafting (Standard), timerState.isPaused=false; Blue player #10 offline for 15 s
+**When:** `run_referee_transfer_check` fires for (10, 10)
+**Then:** One Pause step (actorUserId=0, isAutoPause=true, sequence = max step sequence + 1); timerState.isPaused=true. Under NoAction, or outside Drafting, no Pause step.
+
+### Spectator or Coach Disconnect Never Pauses (Phase S4 execution, F5)
+**Given:** Lobby #10 in Drafting; spectator #30 (or Blue coach #40) offline for 15 s
+**When:** `run_referee_transfer_check` fires
+**Then:** No Pause step; no referee / captain / host change unless the subject held the flag.
+
+### Second Device Keeps the Player Online (Phase S4 execution, A48)
+**Given:** User #5 connected from two identities (two UserPresence rows with isOnline=true), member of lobby #10 in Drafting
+**When:** One device disconnects
+**Then:** Only that identity's UserPresence row turns offline; LobbyMember.isOnline stays true; no disconnectedAt, no RefereeTransferCheck.
+
+### Host Leaves Mid-Draft, Host Transfer Survives (Phase S4 execution, F6)
+**Given:** Lobby #10 in Drafting, host #1 plays Blue with teammate #11 (online)
+**When:** #1 calls `leave_lobby(10)`
+**Then:** `transferHost` sets hostUserId to an eligible member and the final activity update keeps it; #1's row has voluntarilyLeft=true.
+
+### Exclusive Referee Claims a Forfeit (Phase S4 execution, F7)
+**Given:** Default lobby (refereeExclusiveConcede=true), host #1 is the Spectator referee; every Red player offline past `disconnectForfeitSeconds`
+**When:** #1 calls `claim_forfeit(lobbyId, forfeitingTeamSide=2)`
+**Then:** Red forfeits (`performConcede`, trigger RefereeDecision). With `forfeitingTeamSide=0` the call is rejected: "Referee must specify forfeitingTeamSide: 1=Blue, 2=Red."
+
+### Player Claims a Forfeit (Phase S4 execution, F7)
+**Given:** Lobby without an exclusive referee; Blue player #10 online; every Red player offline past the grace
+**When:** #10 calls `claim_forfeit(lobbyId, forfeitingTeamSide=0)`
+**Then:** Red (the opposing team) forfeits, trigger Disconnect. `isForfeitEligible` stays the gate for every value of `forfeitingTeamSide`.
+
 ## Edge Cases
 
 | Case | Expected Behavior | Notes |
@@ -943,6 +1040,12 @@ The lobby system manages the lifecycle of match rooms where players assemble, co
 | Tournament with countTowardsMmr=false | Lobby matchType=Casual | D-67: matchType derived from tournament flag |
 | Duplicate bracketMatchId (non-Finished lobby exists) | Throws "A lobby already exists for this bracket match." | D-45: iterates all lobbies checking bracketMatchId + stage |
 | Duplicate bracketMatchId (only Finished lobby exists) | New lobby created successfully | Finished lobbies do not block recreation |
+| Reconnect when already online (Phase S4 execution, F1) | `client_connected` leaves rows already online alone; `join_lobby` reconnect rewrites the row with the same values and bumps activity | Supersedes the "No-op (silently returns)" row above |
+| Disconnect in Waiting / AwaitingResult / Finished (Phase S4 execution, A22a) | isOnline=false only; no disconnectedAt, no RefereeTransferCheck | Only Drafting, Equipping, Scoring, BetweenGames, Shelved schedule the check |
+| Disconnect under NoAction in an active stage (Phase S4 execution, A22a) | isOnline=false, disconnectedAt untouched, check scheduled (referee / captain / host may still move after 15 s); never a pause | `decideAutoPause` rejects NoAction |
+| Disconnect in BetweenGames or Shelved under Standard/Deferred (Phase S4 execution, A22a; S4 review #1) | isOnline=false, check scheduled (flags may move after 15 s), **no disconnectedAt**: the D-08 forfeit clock runs only in Drafting, Equipping, Scoring, so a shelved series never drains the pool or becomes forfeit-eligible on resume | `DISCONNECT_CLOCK_STAGES` in `index.ts` |
+| Member leaves or the lobby closes before the 15 s check fires (Phase S4 execution, A22a) | `run_referee_transfer_check` is a no-op | The scheduler consumes the row |
+| Two disconnects of the same (lobby, user) without a reconnect between them (Phase S4 execution) | The stale pending check is replaced; one row per pair | Idempotent scheduling |
 
 ## Integration Points
 
@@ -1013,8 +1116,13 @@ The lobby system manages the lifecycle of match rooms where players assemble, co
 | Full hydration from codebase | Phase 13 normalization | 2026-04-09 |
 | Phase 16 route-group rename: client-facing lobby URL remains `/lobby` (no URL change) but the file path moved `app/(authenticated)/lobby/` → `app/(authed)/lobby/`. No backend reducer, view, table, or behavior change. Acceptance scenarios and edge cases in this contract remain valid as-is | Phase 16 execution | 2026-04-18 |
 | Doc-alignment correction (no new decisions): reconciled leave_lobby flow (active-stage voluntarilyLeft/concede/flag-transfer branch) and hardDeleteLobby cascade (MatchResult* + LobbyMemberAccount) with shipped code; fixed GC edge-case rows to match D-47/D-48; added missing create_lobby params (bestOf, refereeControlsShelving); corrected `_hardDeleteLobby` → `hardDeleteLobby`. Prose now matches code + this contract's own Phase 10/10.4 history | Doc correction | 2026-07-05 |
+| F1: reconnect branch before `ensureNotInLobby`; Waiting is a reconnect stage; `client_connected` restores every membership and cancels pending checks | Phase S4 execution (DECISIONS.md A22(2), A22a) | 2026-11-06 |
+| A22a / A48 / F5: `client_disconnected` marks offline and schedules `RefereeTransferCheck` (15 s) only when the user's last device dropped; `run_referee_transfer_check` decides referee (A22(5) order by joinSeq) / captain / host transfers and the player-only auto-pause; supersedes the Phase 10 row "clientDisconnected: auto-pause drafting…, flag transfers permanent" | Phase S4 execution (DECISIONS.md A22(5), A22a, A48) | 2026-11-06 |
+| F6: `leave_lobby` spreads the re-read Lobby row after `transferHost` | Phase S4 execution (DECISIONS.md A22(2)) | 2026-11-06 |
+| F7: `claim_forfeit(lobbyId, forfeitingTeamSide)`; the exclusive referee must name the team; section added to this contract | Phase S4 execution (DECISIONS.md A22(2)) | 2026-11-06 |
+| R4: `LobbyMember.joinSeq` assigned at insert (host = 1, then max + 1) | Phase S4 execution (DECISIONS.md A22(5), A37) | 2026-11-06 |
 
 ---
 
-*Last updated: 2026-07-05*
+*Last updated: 2026-11-06*
 *Feature owner: Phase 10 / Phase 16*

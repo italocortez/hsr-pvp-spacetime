@@ -2,16 +2,40 @@ import { SenderError } from 'spacetimedb/server';
 import { slotTeam, slotIsCoach, slotIsSpectator } from './lobbyHelpers';
 
 /**
+ * True when any MatchResultRecord of the lobby carries matchEndReason Concede. Scans every record on purpose:
+ * performConcede and defer_match insert a second record next to the Pending one from start_draft (an old-repo
+ * sequencing accident, see docs/log/2026-11-06-s4.md finding 13), so reading [0] misses the concede. S8 consolidates
+ * to one record per lobby (DECISIONS.md A54); this scan stays correct either way.
+ */
+function hasConcededRecord(ctx: any, lobbyId: number): boolean {
+    return [...ctx.db.MatchResultRecord.lobby_id.filter(lobbyId)].some((r: any) => r.matchEndReason?.tag === 'Concede');
+}
+
+/**
  * Guard: ensures the match has not ended or been conceded.
- * Called at the top of every draft/equip/score reducer (D-12).
+ * Called at the top of every draft/equip reducer (D-12). Result reducers use `ensureNotConceded`
+ * instead (F8, A22(4)): they legitimately run in AwaitingResult.
  */
 export function ensureMatchAlive(ctx: any, lobby: any): void {
     if (lobby.stage.tag === 'AwaitingResult' || lobby.stage.tag === 'Finished') {
         throw new SenderError('Match has ended.');
     }
-    const existingResult = [...ctx.db.MatchResultRecord.lobby_id.filter(lobby.id)][0];
-    if (existingResult?.matchEndReason?.tag === 'Concede') {
+    if (hasConcededRecord(ctx, lobby.id)) {
         throw new SenderError('Match has been conceded.');
+    }
+}
+
+/**
+ * Guard for the result reducers (`record_game_scores`, `confirm_match_scores`, `submit_match_result`):
+ * rejects a conceded record or a Finished lobby, but allows AwaitingResult, where `advance_stage` parks the
+ * lobby after Scoring (F8, A22(4)).
+ */
+export function ensureNotConceded(ctx: any, lobby: any): void {
+    if (hasConcededRecord(ctx, lobby.id)) {
+        throw new SenderError('Match has been conceded.');
+    }
+    if (lobby.stage.tag === 'Finished') {
+        throw new SenderError('Match has ended.');
     }
 }
 

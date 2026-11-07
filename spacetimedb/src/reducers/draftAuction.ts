@@ -4,6 +4,7 @@ import { getAuthenticatedUser } from '../helpers/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { ensureLobbyMember, ensureStageIs, slotTeam, slotIsCoach, slotToTeamSide } from '../helpers/lobbyHelpers';
 import { ensureMatchAlive } from '../helpers/disconnectHelpers';
+import { getNextSequence } from '../helpers/stepSequence';
 import type { NominatePayload } from '@bindings/types';
 
 // ─── Helper: Get set of characters already won via AuctionSold ──────────────
@@ -64,13 +65,6 @@ function getCharacterBaseCost(
     return costRow.costs[eidolonKey] ?? 0;
 }
 
-// ─── Helper: Determine next sequence number ─────────────────────────────────
-function getNextSequence(ctx: any, lobbyId: number): number {
-    const steps = [...ctx.db.MatchSessionStep.lobby_id.filter(lobbyId)];
-    if (steps.length === 0) return 0;
-    return Math.max(...steps.map((s: any) => s.sequence)) + 1;
-}
-
 // ─── Helper: Check auction end condition ────────────────────────────────────
 // Per D-48: each team drafts 8 characters (fixed). The number of characters
 // is determined by the game mode (2 bosses × 4 chars = 8), not teamSize.
@@ -111,6 +105,11 @@ export const nominate_character = spacetimedb.reducer(
         ensureMatchAlive(ctx, lobby);
 
         const member = ensureLobbyMember(ctx, lobbyId, user.id);
+
+        // A22(3): no draft action while the draft is paused
+        if (session.timerState.isPaused) {
+            throw new SenderError('Draft is paused.');
+        }
 
         // D-39 Coach guard (MOUS-03)
         if (slotIsCoach(member.lobbySlot)) {
@@ -243,6 +242,11 @@ export const place_bid = spacetimedb.reducer(
 
         const member = ensureLobbyMember(ctx, lobbyId, user.id);
 
+        // A22(3): no draft action while the draft is paused
+        if (session.timerState.isPaused) {
+            throw new SenderError('Draft is paused.');
+        }
+
         // D-39 Coach guard (MOUS-03)
         if (slotIsCoach(member.lobbySlot)) {
             throw new SenderError('Coaches cannot perform draft actions.');
@@ -363,6 +367,11 @@ export const pass_bid = spacetimedb.reducer(
         ensureMatchAlive(ctx, lobby);
 
         const member = ensureLobbyMember(ctx, lobbyId, user.id);
+
+        // A22(3): no draft action while the draft is paused
+        if (session.timerState.isPaused) {
+            throw new SenderError('Draft is paused.');
+        }
 
         // D-39 Coach guard (MOUS-03)
         if (slotIsCoach(member.lobbySlot)) {
@@ -578,6 +587,12 @@ export const timer_expiry_auction = spacetimedb.reducer(
 
         ensureStageIs(lobby, 'Drafting');
         ensureMatchAlive(ctx, lobby);
+
+        // F3: only a lobby member may fire the expiry (contract :162), and never while the draft is paused
+        ensureLobbyMember(ctx, lobbyId, user.id);
+        if (session.timerState.isPaused) {
+            throw new SenderError('Draft is paused.');
+        }
 
         if (!session.isAuctionPhase) {
             throw new SenderError('Auction phase not active.');

@@ -295,8 +295,8 @@ describe('Identity & Lobby GC', () => {
             // Age identity1 past 90-day TTL (make it the stale one)
             await setDatetime('user_identity', identity1, 'lastSeenAt', NINETY_ONE_DAYS_AGO_MICROS());
 
-            // Force user offline via server reducer (maincloud disconnect detection
-            // is too slow for tests — can take 30-60s to fire clientDisconnected)
+            // Force user offline via server reducer: presence is per identity (UserPresence, A48),
+            // and server_set_online forces every identity row of the user offline at once
             await setOnline(userA.userId, false);
 
             // Disconnect harnesses (cleanup only — isOnline already set above)
