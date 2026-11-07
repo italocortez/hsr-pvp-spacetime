@@ -1,8 +1,9 @@
 // T-S7(b): builders for the S7 scoring / lineup in-memory tests. Not a test file: imported by s7-*.test.ts.
 // Reuses the S4 builders; reference rows (characters, costs, synergies, roster accounts) are inserted straight into
 // the in-memory datastore, outside any reducer, like the S4 tests' direct row edits. Nothing reaches maincloud.
-// T-S7b: confirm_lineup / confirm_match_scores are gone (A60): confirmGame / closeGame / confirmBoth drive the per-game
-// confirmation and close; finishGame closes the current game through the full-control host (S4 / S6 / S7b suites).
+// T-S7b: confirm_lineup / confirm_match_scores are gone (A60). A63: confirmGame only sets a side's ready flag;
+// submitGame / closeGame (close_game) is the explicit submit; confirmAndClose = both ready + a captain's submit;
+// finishGame closes the current game through the host referee's staff close (S4 / S6 / S7b suites).
 import { expect } from 'vitest';
 import { groupCount, type LineupFormatTag } from '@shared/scoring';
 import { teamDraft } from '../helpers/scoringHelpers';
@@ -123,12 +124,12 @@ export function arrange(s: Lobby, who: Actor, team: 'Blue' | 'Red', groups: stri
     tx(s.test, who, (ctx) => M.arrange_lineup(ctx, { lobbyId: s.lobbyId, teamSide: side(team), groups: JSON.stringify(groups) }));
 }
 
-/** A60(3): confirm_game for `team` (its captain; the full-control spectator referee sets both sides at once). */
+/** A63(1): confirm_game for `team` by its captain: sets that side's ready flag, never closes. */
 export function confirmGame(s: Lobby, who: Actor, team: 'Blue' | 'Red') {
     tx(s.test, who, (ctx) => M.confirm_game(ctx, { lobbyId: s.lobbyId, teamSide: side(team) }));
 }
 
-/** A60(4): the staff close, optionally with a winner override (level-4 tie only). */
+/** A63(2): close_game (the submit): a captain once both sides are ready, or staff at any time; override = staff, tie only. */
 export function closeGame(s: Lobby, who: Actor, override?: 'Blue' | 'Red', reason?: string) {
     tx(s.test, who, (ctx) => M.close_game(ctx, {
         lobbyId: s.lobbyId,
@@ -137,10 +138,19 @@ export function closeGame(s: Lobby, who: Actor, override?: 'Blue' | 'Red', reaso
     }));
 }
 
-/** Both captains confirm the current game (the second confirmation closes it unless it is a level-4 tie). */
+/** Same as closeGame, under the A63 name: the explicit submit of the current game. */
+export const submitGame = closeGame;
+
+/** Both captains confirm the current game (A63: both flags set, the game stays open). */
 export function confirmBoth(s: Lobby) {
     confirmGame(s, captain(s, 'Blue'), 'Blue');
     confirmGame(s, captain(s, 'Red'), 'Red');
+}
+
+/** A63: both captains ready, then the Blue captain submits (closes) the game. */
+export function confirmAndClose(s: Lobby) {
+    confirmBoth(s);
+    submitGame(s, captain(s, 'Blue'));
 }
 
 /** Halves groups: the first four names, then the next four. */
@@ -195,9 +205,9 @@ export function recordScores(s: Lobby, who: Actor, team: 'Blue' | 'Red', values:
 const groupsOf4 = (names: string[]) => Array.from({ length: Math.ceil(names.length / 4) }, (_, i) => names.slice(i * 4, i * 4 + 4));
 
 /**
- * T-S7b: closes the current game through the host (spectator referee, refereeFullControl): the host arranges any
- * missing lineup from the game's draft, advances Equipping → Scoring if needed, records both sides' group scores
- * (distinct: `winner` gets 10 cycles per group, the other 20) and confirms once (full control = both flags → close).
+ * T-S7b: closes the current game through the host (a lobby referee): the host arranges any missing lineup from the
+ * game's draft, advances Equipping → Scoring if needed, records both sides' group scores (distinct: `winner` gets
+ * 10 cycles per group, the other 20) and closes the game directly (A63: staff close, no ready flags needed).
  * The draft must be complete (stage Equipping or Scoring).
  */
 export function finishGame(s: Lobby, winner: 'Blue' | 'Red' = 'Blue') {
@@ -214,7 +224,7 @@ export function finishGame(s: Lobby, winner: 'Blue' | 'Red' = 'Blue') {
     const values = (team: 'Blue' | 'Red') => Array.from({ length: groups }, () => H(team === winner ? 10 : 20));
     recordScores(s, s.host, 'Blue', values('Blue'));
     recordScores(s, s.host, 'Red', values('Red'));
-    confirmGame(s, s.host, 'Blue');
+    closeGame(s, s.host);
 }
 
 /** A light-cone cost row (cost set 0, Memory of Chaos); equip_lightcone reads the Classic row in both draft modes. */

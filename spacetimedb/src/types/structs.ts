@@ -129,8 +129,8 @@ export const SetEidolonPayload = t.object('SetEidolonPayload', {
     costPaid: t.f32(),
 });
 
-// A60(3)/(4): a game confirmation or close. confirmedSide = the side whose flag this step set (Spectator when both
-// were set at once: a full-control referee or a staff close); closed = this step closed the game; the override
+// A60(3)/(4): a game confirmation or close. confirmedSide = the side whose flag this step set (on a close: the closer's
+// team side, or Spectator for a close by a spectator referee or other staff, A63); closed = this step closed the game; the override
 // fields carry a staff close's tie decision.
 export const ConfirmGamePayload = t.object('ConfirmGamePayload', {
     confirmedSide: TeamSide,

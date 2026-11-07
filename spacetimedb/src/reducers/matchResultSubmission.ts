@@ -8,7 +8,7 @@ import { getNextSequence } from '../helpers/stepSequence';
 import { closeGame } from '../helpers/gameClose';
 import {
     ensureAuctionSurchargeFits,
-    ensureResultAuthority,
+    resultAuthority,
     ensureTeamTag,
     findGame,
     findLineup,
@@ -53,17 +53,14 @@ function readyGame(ctx: any, lobby: any, sides: TeamTag[], verb: 'confirming' | 
 }
 
 // ─── confirm_game ─────────────────────────────────────────────────────────────
-// A60(3): one confirmation per captain per game, covering lineup, light cones, eidolons and scores. Callers:
-// 1. The captain of teamSide (live LobbyMember.isCaptain on a player seat of that team): sets that side's flag. A
-//    referee seated on a team acts only as the captain of its own side, if it is the captain.
-// 2. A spectator referee when the record has refereeFullControl: sets both flags at once (teamSide is ignored).
-// Preconditions (readyGame): Equipping or Scoring, match alive, Pending record, the game open, the confirming side's
-// lineup arranged (both for the full-control referee), both sides' group scores complete, and in Auction the
-// confirming team's synergy surcharge within its remaining budget (A60(4)).
-// Effect: the flag(s) are set. When both flags are now set the game closes (closeGame: one ConfirmGame step with
-// closed: true; BetweenGames, or the series submits itself), after the Auction gate for both teams; a level-4 tie
-// stays open with both flags set (no error) until staff close it with an override (close_game). Otherwise a
-// ConfirmGame step with closed: false is logged. A side that already confirmed cannot confirm again (S7b choice).
+// A63 (amends A60(3)): the captain's ready flag for the game package (lineup, light cones, eidolons, scores). It only
+// sets that side's flag and never closes a game, tie or not; close_game is the explicit submit. Caller: the captain
+// of teamSide (live LobbyMember.isCaptain on a player seat of that team; a referee who is that captain confirms as the
+// captain). The full-control spectator referee's shortcut is gone (A63(4)): the referee closes with close_game.
+// Preconditions (readyGame): Equipping or Scoring, match alive, Pending record, the game open, the side's lineup
+// arranged, both sides' group scores complete, and in Auction the side's synergy surcharge within its remaining
+// budget (A60(4)). A side cannot confirm twice; every edit of the game clears both flags (A60(2)).
+// Effect: the flag is set, a ConfirmGame step { confirmedSide: side, closed: false } is logged, lastActivityAt bumped.
 
 export const confirm_game = spacetimedb.reducer(
     {
@@ -76,38 +73,20 @@ export const confirm_game = spacetimedb.reducer(
         if (!lobby) throw new SenderError('Lobby not found.');
 
         const member = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, user.id])][0];
-        let sides: TeamTag[];
-        if (member && member.isCaptain && !slotIsCoach(member.lobbySlot) && !slotIsSpectator(member.lobbySlot)) {
-            const side = ensureTeamTag(teamSide);
-            if (slotTeam(member.lobbySlot) !== side) {
-                throw new SenderError(`Only the team captain can confirm the ${side} side of the game.`);
-            }
-            sides = [side];
-        } else if (member && member.isReferee && slotIsSpectator(member.lobbySlot)) {
-            const fullControl = [...ctx.db.MatchResultRecord.lobby_id.filter(lobbyId)]
-                .find((r: any) => r.status.tag === 'Pending')?.refereeFullControl;
-            if (!fullControl) throw new SenderError('Referee full control is not enabled for this match.');
-            sides = ['Blue', 'Red'];
-        } else {
+        if (!member || !member.isCaptain || slotIsCoach(member.lobbySlot) || slotIsSpectator(member.lobbySlot)) {
             throw new SenderError('Only the team captain can confirm the game.');
         }
-
-        const { game, record, session } = readyGame(ctx, lobby, sides, 'confirming', user.id);
-        if (sides.length === 1 && (sides[0] === 'Blue' ? game.blueConfirmed : game.redConfirmed)) {
-            throw new SenderError(`The ${sides[0]} captain has already confirmed this game.`);
-        }
-        const blueConfirmed = game.blueConfirmed || sides.includes('Blue');
-        const redConfirmed = game.redConfirmed || sides.includes('Red');
-        const confirmedSide: 'Blue' | 'Red' | 'Spectator' = sides.length === 1 ? sides[0] : 'Spectator';
-
-        if (blueConfirmed && redConfirmed && !isUnresolvedTie(game)) {
-            // The close covers both teams: the Auction gate for the other side too.
-            for (const side of ['Blue', 'Red'] as TeamTag[]) ensureAuctionSurchargeFits(ctx, lobby, session, game.gameNumber, side);
-            closeGame(ctx, lobby, record, game, { userId: user.id, actorSlot: confirmedSide });
-            return;
+        const side = ensureTeamTag(teamSide);
+        if (slotTeam(member.lobbySlot) !== side) {
+            throw new SenderError(`Only the team captain can confirm the ${side} side of the game.`);
         }
 
-        replaceGame(ctx, game, { blueConfirmed, redConfirmed }, user.id);
+        const { game, record } = readyGame(ctx, lobby, [side], 'confirming', user.id);
+        if (side === 'Blue' ? game.blueConfirmed : game.redConfirmed) {
+            throw new SenderError(`The ${side} captain has already confirmed this game.`);
+        }
+
+        replaceGame(ctx, game, side === 'Blue' ? { blueConfirmed: true } : { redConfirmed: true }, user.id);
         ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
             id: 0, // autoInc
             lobbyId,
@@ -115,30 +94,34 @@ export const confirm_game = spacetimedb.reducer(
             sequence: getNextSequence(ctx, lobbyId),
             actorUserId: user.id,
             anonymousLabel: undefined,
-            actorSlot: teamSideValue(confirmedSide),
+            actorSlot: teamSideValue(side),
             action: { tag: 'ConfirmGame', value: {} } as any,
             payload: {
                 tag: 'ConfirmGame',
-                value: { confirmedSide: teamSideValue(confirmedSide), closed: false, winnerOverride: undefined, winnerOverrideReason: undefined },
+                value: { confirmedSide: teamSideValue(side), closed: false, winnerOverride: undefined, winnerOverrideReason: undefined },
             } as any,
             timestamp: ctx.timestamp,
         }, user.id));
         ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, { lastActivityAt: ctx.timestamp }, user.id));
 
-        console.log(`[MATCH] Game ${game.gameNumber} of match result #${record.id}: ${confirmedSide} confirmation by user #${user.id}${blueConfirmed && redConfirmed ? ' (tied: open until a staff close)' : ''}`);
+        console.log(`[MATCH] Game ${game.gameNumber} of match result #${record.id}: ${side} ready (confirm_game) by user #${user.id}`);
     }
 );
 
 // ─── close_game ───────────────────────────────────────────────────────────────
-// A60(4): the staff close, without both confirmations. Authority (A39 staff set, ensureResultAuthority): any lobby
-// referee (seated or spectator), Moderator+, or in a tournament lobby the organizer or an assistant with
-// canResolveResults. Preconditions (readyGame): Equipping or Scoring, match alive, Pending record, the game open,
-// both lineups arranged, both sides' scores complete, the Auction gate for both teams.
-// winnerOverride: accepted only while the game is a level-4 tie (and required then: closeGame rejects a tie without
-// it); reason trimmed, at most 1000 characters. A39 at the close (replaces S7's Disputed route): in a tournament
-// lobby a referee seated on a Blue/Red slot (player or coach) who is not staff cannot decide a tie; in a casual lobby
-// the same referee's override is accepted and audited. The override becomes the game's winner (tieBreakLevel stays
-// 4) and MatchResultRecord.winnerOverride* (copied to MatchSessionHistory by runFinalization, A60(6)).
+// A63(2): the submit of a game. Authority: (a) the A60(4) staff set at any time (ensureResultAuthority's lookup: any
+// lobby referee, seated or spectator; Moderator+; in a tournament lobby the organizer or an assistant with
+// canResolveResults), which is the staff close when the flags are not both set; (b) once both captains confirmed
+// (MatchResultGame.blueConfirmed && redConfirmed), the captain of either team (player seat).
+// Preconditions (readyGame): Equipping or Scoring, match alive, Pending record, the game open, both lineups arranged,
+// both sides' scores complete, the Auction gate for both teams.
+// winnerOverride: from the staff set only (a captain cannot decide a tie); accepted only while the game is a level-4
+// tie (and required then: closeGame rejects a tie without it); reason trimmed, at most 1000 characters. A39 at the
+// close: in a tournament lobby a referee seated on a Blue/Red slot (player or coach) who is not staff cannot decide a
+// tie; in a casual lobby the same referee's override is accepted and audited. The override becomes the game's winner
+// (tieBreakLevel stays 4) and MatchResultRecord.winnerOverride* (copied to MatchSessionHistory, A60(6)).
+// The ConfirmGame step's actorSlot / confirmedSide = the closer's team side when the closer is a captain or a referee
+// seated on a team, Spectator otherwise (A63(5)).
 
 const MAX_OVERRIDE_REASON_LENGTH = 1000;
 
@@ -153,8 +136,22 @@ export const close_game = spacetimedb.reducer(
         const lobby = ctx.db.Lobby.id.find(lobbyId);
         if (!lobby) throw new SenderError('Lobby not found.');
 
-        const { member, isStaff } = ensureResultAuthority(ctx, lobby, user,
-            'Only a referee, a Moderator or, in a tournament lobby, the organizer or a results assistant can close a game.');
+        const { member, isReferee, isStaff } = resultAuthority(ctx, lobby, user);
+        const staffSet = isReferee || isStaff;
+        const isCaptain = !!member && member.isCaptain && !slotIsCoach(member.lobbySlot) && !slotIsSpectator(member.lobbySlot);
+        if (!staffSet) {
+            if (!isCaptain) {
+                throw new SenderError('Only a captain (once both sides confirmed), a referee, a Moderator or, in a tournament lobby, the organizer or a results assistant can close a game.');
+            }
+            const pending = findPendingResult(ctx, lobbyId); // no Pending record → 'No pending match result for this lobby.'
+            const session = ctx.db.MatchSession.lobbyId.find(lobbyId);
+            const current = session ? findGame(ctx, pending.id, session.currentGameNumber) : undefined;
+            if (!current || !current.blueConfirmed || !current.redConfirmed) {
+                throw new SenderError('Both captains must confirm the game before it can be submitted.');
+            }
+            if (winnerOverride !== undefined) throw new SenderError('Only staff may decide a tie.');
+        }
+
         const { game, record } = readyGame(ctx, lobby, ['Blue', 'Red'], 'closing', user.id);
 
         let override: { side: TeamTag; reason?: string } | undefined;
@@ -176,7 +173,11 @@ export const close_game = spacetimedb.reducer(
             override = { side, reason: trimmed ? trimmed : undefined };
         }
 
-        closeGame(ctx, lobby, record, game, { userId: user.id, actorSlot: 'Spectator' }, override);
+        // A63(5): a captain or a referee seated on a team closes as that team; anyone else as Spectator.
+        const seatedTeam = member && !slotIsSpectator(member.lobbySlot) && (isCaptain || member.isReferee)
+            ? (slotTeam(member.lobbySlot) as TeamTag)
+            : undefined;
+        closeGame(ctx, lobby, record, game, { userId: user.id, actorSlot: seatedTeam ?? 'Spectator' }, override);
     }
 );
 

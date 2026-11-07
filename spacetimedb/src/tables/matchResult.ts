@@ -13,7 +13,7 @@ export const matchResultColumns = {
     disputedByUserId: t.u32().optional(),
     disputeReason: t.string().optional(),
     // A60(3): the captains' confirmations live on MatchResultGame (per game) since S7b; the record-level flags were removed.
-    refereeFullControl: t.bool(),
+    refereeFullControl: t.bool(),           // set at start_draft for the views; no reducer reads it since A63 (the full-control confirm shortcut was removed)
     matchType: MatchType,
     matchEndReason: MatchEndReason.optional(), // HOW it ended: Completed/Concede — per D-31/D-32
     concedeTrigger: ConcedeTrigger.optional(),

@@ -981,7 +981,7 @@ D-50 applies to ALL Drafting→Equipping transitions: auto (last Classic pick, l
 **When:** `requireOwnership = true` and Blue's selected accounts own Blue-1 only at E0 and E6, and a Blue player asks for E2
 **Then:** rejected: "Your team does not own that eidolon level on its selected accounts." E6 is accepted.
 
-**When:** the game has been closed (both confirmations) and a player or a Moderator edits it
+**When:** the game has been closed (both confirmations) and a player or a Moderator edits it (A63: closed through `close_game`)
 **Then:** rejected: "This game is closed." (light cones, lineups, scores and adjustments the same).
 
 ### Light Cones and Lineups Stay Editable in Scoring (Phase S7b execution, A60(1))

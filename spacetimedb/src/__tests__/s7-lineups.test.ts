@@ -10,6 +10,7 @@ import {
     arrange,
     blueNames,
     captain,
+    confirmAndClose,
     confirmBoth,
     confirmGame,
     draftAuction,
@@ -199,7 +200,7 @@ describe('review fix: light cones equipped after a confirmation (A60(2))', () =>
         expect(g.tieBreakLevel).toBe(1);
         expect(g.winnerTeamSide.tag).toBe('Red');
 
-        confirmBoth(s); // closes the game and finalizes the casual Bo1
+        confirmAndClose(s); // A63: both ready, a captain submits; the casual Bo1 finalizes
         const history = [...test.db.MatchSessionHistory.iter()][0];
         const gh = [...test.db.MatchResultGameHistory.by_match_history.filter(history.id)][0];
         expect(gh.tieBreakLevel).toBe(1); // Blue's light cone made Blue the costlier roster

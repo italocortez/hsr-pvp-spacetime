@@ -142,6 +142,8 @@ async function setupValidatedTournamentMatch(
     await blue.sync(500);
     // S10: rewrite (confirm_match_scores removed by A60: per-game confirmGame per captain; needs arranged lineups + both scores; the second one closes the game and submits)
     await red.call.confirmGame({ lobbyId, teamSide: { tag: 'Red' } });
+    // S10: rewrite (A63: confirm_game only sets the ready flag; close_game is the explicit submit once both captains are ready)
+    await red.call.closeGame({ lobbyId });
     await red.sync(500);
     await toUser.sync(1000);
 
@@ -216,6 +218,8 @@ async function setupValidatedNonTournamentMatch(
     await blue.sync(500);
     // S10: rewrite (confirm_match_scores removed by A60: per-game confirmGame per captain; needs arranged lineups + both scores; the second one closes the game and submits)
     await red.call.confirmGame({ lobbyId, teamSide: { tag: 'Red' } });
+    // S10: rewrite (A63: confirm_game only sets the ready flag; close_game is the explicit submit once both captains are ready)
+    await red.call.closeGame({ lobbyId });
     await red.sync(500);
     await host.sync(1000);
 

@@ -123,6 +123,13 @@ export function ensureOpenGame(ctx: any, lobby: any, record: any, gameNumber: nu
  * close_game.
  */
 export function ensureResultAuthority(ctx: any, lobby: any, user: any, message: string): { member: any; isReferee: boolean; isStaff: boolean } {
+    const authority = resultAuthority(ctx, lobby, user);
+    if (!authority.isReferee && !authority.isStaff) throw new SenderError(message);
+    return authority;
+}
+
+/** The non-throwing lookup behind ensureResultAuthority (close_game also admits captains, A63). */
+export function resultAuthority(ctx: any, lobby: any, user: any): { member: any; isReferee: boolean; isStaff: boolean } {
     const member = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobby.id, user.id])][0];
     const isReferee = !!member?.isReferee;
     let isStaff = isRoleAtLeast(user.role, 'Moderator');
@@ -132,7 +139,6 @@ export function ensureResultAuthority(ctx: any, lobby: any, user: any, message: 
         const assistant = [...ctx.db.TournamentAssistant.by_tournament_and_user.filter([lobby.tournamentId, user.id])][0];
         if (assistant?.canResolveResults) isStaff = true; // A25
     }
-    if (!isReferee && !isStaff) throw new SenderError(message);
     return { member, isReferee, isStaff };
 }
 
@@ -358,7 +364,7 @@ export function resetConfirmations(ctx: any, game: any, actorId: number): void {
 /** True when the stored outcome of the game is an unresolved tie (level 4). */
 export const isUnresolvedTie = (game: any) => game.tieBreakLevel === TIE_BREAK_UNRESOLVED;
 
-/** A closed game (A60(3)): closedAt set by the second confirmation or a staff close. */
+/** A closed game (A60(3)): closedAt set by close_game (a captain once both flags are set, or staff; A63). */
 export const isClosedGame = (game: any) => game?.closedAt !== undefined;
 
 /**

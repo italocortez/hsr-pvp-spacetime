@@ -366,6 +366,8 @@ The server decides every game and the series from the submitted inputs; the form
 
 ## Game Confirmation, Close and Series Submission (Phase S7b execution, A60)
 
+> Amended by DECISIONS.md A63 (Phase S7b follow-up): the second confirmation no longer closes the game and the full-control referee shortcut is gone; confirmations are ready flags and `close_game` is the explicit submit. See "Both Captains Ready, a Captain Submits the Game".
+
 Supersedes, for games played from S7b on, the series-level confirmation (`confirm_match_scores`), the referee's submission (`submit_match_result`) and the S7 override routing above. Reducer reference: [architecture.md](architecture.md) "Game package".
 
 - **One confirmation per captain per game** (`confirm_game(lobbyId, teamSide)`), covering lineup, light cones, eidolons and scores of the current game. Needs the side's lineup, both sides' complete group scores and, in Auction, the side's synergy surcharge within its remaining budget (character + light cones). A spectator referee with `refereeFullControl` confirms both sides at once. A side cannot confirm twice.
@@ -518,6 +520,7 @@ after `start_draft`).
 **Then:** the record is **Disputed** with no `winnerTeamSide`, `winnerOverride = Blue`, `winnerOverrideById` = the referee; the lobby goes to AwaitingResult; nothing is finalized. Staff resolve it with `override_match_result`. In a casual lobby the same override is accepted and finalized.
 
 ### Both Captains Confirm a Bo1: the Game Closes and the Series Submits Itself (Phase S7b execution, A60(3)(6))
+*Superseded by DECISIONS.md A63 (Phase S7b follow-up): see "Both Captains Ready, a Captain Submits the Game (Phase S7b follow-up, A63)".*
 **Given:** a Casual Bo1 lobby in Scoring; both lineups arranged; both sides' group scores entered; Blue wins on the adjusted result
 **When:** the Blue captain calls `confirm_game(lobbyId, Blue)`
 **Then:** `MatchResultGame.blueConfirmed = true`, a `ConfirmGame` step `{ confirmedSide: Blue, closed: false }` is logged; nothing else changes.
@@ -532,11 +535,13 @@ after `start_draft`).
 **Then:** rejected: "Arrange the lineup before confirming the game." / "Both teams' group scores are needed before confirming."
 
 ### A Bo3 Game 1 Close Moves to BetweenGames With the Tally (Phase S7b execution, A60(3), A27)
+*Superseded by DECISIONS.md A63 (Phase S7b follow-up): see "Both Captains Ready, a Captain Submits the Game (Phase S7b follow-up, A63)".*
 **Given:** a Bo3 lobby, game 1 in Scoring, Red wins game 1
 **When:** both captains confirm
 **Then:** game 1 is closed, `MatchSession.gamesWonRed = 1` (plus the A27 head start, if any), the lobby moves to BetweenGames with "Game 1 complete (0-1). Stage: BetweenGames"; the record stays Pending. Any edit of game 1 by a player, referee or Moderator is now rejected ("This game is closed."), also before the next draft starts. The close of the deciding game (2-0 or 2-1) submits the series ("Series complete (b-r). Stage: AwaitingResult").
 
 ### A Tie Stays Open Until a Staff Close With an Override (Phase S7b execution, A60(3)(4))
+*Superseded by DECISIONS.md A63 (Phase S7b follow-up): see "Both Captains Ready, a Captain Submits the Game (Phase S7b follow-up, A63)".*
 **Given:** game 1 is a level-4 tie (equal adjusted results, roster cost, 4★ count and 5★ eidolons)
 **When:** both captains confirm
 **Then:** both flags are set, no error, and the game stays **open** (no close, no stage change).
@@ -570,6 +575,23 @@ after `start_draft`).
 
 **When:** in a Ranked Bo1 (Submitted, Blue 1-0) an Admin's edit makes Red win the game
 **Then:** accepted: the series is still decided (Red 1-0) and `MatchResultRecord.winnerTeamSide` becomes Red.
+
+### Both Captains Ready, a Captain Submits the Game (Phase S7b follow-up, A63)
+**Given:** a Casual Bo1 lobby in Scoring; both lineups arranged; both sides' group scores entered; Blue wins on the adjusted result
+**When:** the Blue captain calls `confirm_game(lobbyId, Blue)`, then the Red captain calls `confirm_game(lobbyId, Red)`
+**Then:** `blueConfirmed` and `redConfirmed` are both true and each call logged a `ConfirmGame` step `{ confirmedSide: <side>, closed: false }`; the game is still **open** (no close, no stage change), tie or not.
+
+**When:** a non-captain player, a coach, a spectator, a referee who is not that side's captain (seated or spectator, full control or not) calls `confirm_game`
+**Then:** rejected: "Only the team captain can confirm the game." A captain naming the other side: "Only the team captain can confirm the Red side of the game."
+
+**When:** before both flags are set, a captain calls `close_game(lobbyId)`
+**Then:** rejected: "Both captains must confirm the game before it can be submitted." A player who is neither captain nor staff: "Only a captain (once both sides confirmed), a referee, a Moderator or, in a tournament lobby, the organizer or a results assistant can close a game."
+
+**When:** with both flags set, either captain (here Red) calls `close_game(lobbyId)`
+**Then:** the game closes (`closedAt`, `closedById` = the Red captain), one `ConfirmGame` step `{ confirmedSide: Red, closed: true }` with `actorSlot = Red` is logged, and the series submits itself: Casual → Validated and finalized inline ("Match complete. Stage: AwaitingResult"); Ranked → Submitted. In a Bo3 that is not decided yet the lobby moves to BetweenGames with the tally.
+
+**When:** with both flags set on a level-4 tie, a captain calls `close_game(lobbyId, Blue)`
+**Then:** rejected: "Only staff may decide a tie." Without the override it is rejected by the tie rule; a referee or other staff closes it with `winnerOverride` (A39 seating rule unchanged). A referee or staff may also close without both flags at any time (staff close); a spectator referee's close logs `confirmedSide: Spectator`.
 
 ## Edge Cases
 
@@ -635,6 +657,7 @@ after `start_draft`).
 | Phase S7 execution | Server-computed scoring (A21): `record_group_scores` + `set_score_adjustment` replace `record_game_scores`; `submit_match_result` drops `winnerId`; tie-break chain; threshold boundary neutral, hundredths, eidolons from step payloads (backlog #11 settled items); `winnerOverride` authority (A39); no draws in submit / force-finalize / override / finalization (A31); optional adjustment reason (A55); `MatchLineupHistory` + deletions on both exits (A56); scenarios "A 4v4 + 4v4 Bo1 Scored by the Server" … "Seated Player-Referee Overrides in a Tournament Lobby" added | 2026-11-06 |
 | Phase S7 execution | Review fixes: roster cost computed live (light cones equipped after `confirm_lineup` count); `set_score_adjustment` authority widened to the A39 staff set; input caps; series rule for `winnerOverride` stated. Synergy pairs (A21 / backlog #3): canonical storage + update-on-resubmit supersedes the literal "reject a pair that exists in either order" wording, **pending the user's confirmation** (docs/cost-sets/architecture.md) | 2026-11-06 |
 | Phase S7b execution | Game package (DECISIONS.md A60): per-game confirmation `confirm_game` (second confirmation closes the game; a level-4 tie stays open), staff close `close_game` with `winnerOverride` (A39 seating rule at the close replaces the Disputed route), automatic series submission at the deciding close (Casual finalizes inline, Ranked → Submitted), closed-game rule for every edit reducer, Admin edits of a closed game; `confirm_match_scores`, `submit_match_result` and `MatchResultRecord.blueConfirmed/redConfirmed` removed. Rules section "Game Confirmation, Close and Series Submission" and scenarios "Both Captains Confirm a Bo1" … "An Admin Edit That Would Undo the Series Is Rejected" added; the `confirm_match_scores` / `submit_match_result` reducer sections and the S7 override scenarios describe the removed path | 2026-11-07 |
+| Phase S7b follow-up (DECISIONS.md A63) | `confirm_game` sets only the captain's ready flag (never closes; full-control referee shortcut removed); `close_game` is the explicit submit: either captain once both flags are set, or the staff set at any time; only staff may pass `winnerOverride`. Scenario "Both Captains Ready, a Captain Submits the Game" added; "Both Captains Confirm a Bo1", "A Bo3 Game 1 Close Moves to BetweenGames" and "A Tie Stays Open Until a Staff Close" marked superseded | 2026-11-07 |
 
 ---
 

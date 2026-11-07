@@ -25,11 +25,13 @@ function writeTally(ctx: any, lobbyId: number, tally: { blue: number; red: numbe
 }
 
 /**
- * A60(3)/(4): closes a game. Sets closedAt / closedById and both confirmation flags; with a staff override (only
+ * A60(3)/(4), A63: closes a game. Called only by close_game, the explicit submit (A63(2)): the confirmations are the
+ * captains' ready flags and never close a game by themselves. Sets closedAt / closedById and both confirmation flags; with a staff override (only
  * on a level-4 tie; the caller checks the authority) the game's winner becomes the override (tieBreakLevel stays 4)
  * and MatchResultRecord.winnerOverride* records it (the latest one; runFinalization copies it to
  * MatchSessionHistory, A60(6)). Then the series tally (closed games + A27 head start) goes to MatchSession, the
- * ConfirmGame step is logged (closed: true; actorSlot = confirmedSide = closedBy.actorSlot), and either the lobby
+ * ConfirmGame step is logged (closed: true; actorSlot = confirmedSide = closedBy.actorSlot: the closer's team side for a
+ * captain or a seated referee, Spectator otherwise, A63(5)), and either the lobby
  * moves to BetweenGames or, when the series is decided, submitSeriesResult runs. A level-4 tie without an override
  * is rejected.
  */

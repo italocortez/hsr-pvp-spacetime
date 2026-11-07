@@ -20,7 +20,7 @@ import {
     type Lobby,
 } from './s4-fixtures';
 import { groupCount, type LineupFormatTag } from '@shared/scoring';
-import { H, confirmBoth, gameRow, playToScoring, record, recordScores, setRole } from './s7-fixtures';
+import { H, confirmAndClose, gameRow, playToScoring, record, recordScores, setRole } from './s7-fixtures';
 
 const NOT_ELIGIBLE = /Opposing team is not eligible for forfeit/;
 const rejoin = (s: Lobby, who: Actor) =>
@@ -191,7 +191,7 @@ describe('F8 / A22(4): result reducers in AwaitingResult', () => {
         recordScores(s, blueCaptain(s), 'Blue', [H(5), H(5)]);
         recordScores(s, redCaptain(s), 'Red', [H(6), H(6)]);
         const recordId = record(test, s.lobbyId).id;
-        confirmBoth(s);
+        confirmAndClose(s); // A63: both ready, a captain submits
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('AwaitingResult');
         const rec = test.db.MatchResultRecord.id.find(recordId)!;
         expect(rec.status.tag).toBe('Submitted');
@@ -253,9 +253,9 @@ describe('F8 / A22(4): result reducers in AwaitingResult', () => {
 
         const blueScores = scores(s, 'Blue', 1000);
         expectReject(test, s.host, (ctx) => M.record_group_scores(ctx, blueScores), 'Match has been conceded.');
-        // confirm_game / close_game check the stage (Equipping or Scoring) before liveness: the lobby is AwaitingResult.
+        // A63: confirm_game is the captain's (the host referee is not one). confirm_game / close_game check the stage (Equipping or Scoring) before liveness: the lobby is AwaitingResult.
         const STAGE = 'This action is not allowed in the current lobby stage (AwaitingResult).';
-        expectReject(test, s.host, (ctx) => M.confirm_game(ctx, { lobbyId: s.lobbyId, teamSide: { tag: 'Blue' } as any }), STAGE);
+        expectReject(test, blueCaptain(s), (ctx) => M.confirm_game(ctx, { lobbyId: s.lobbyId, teamSide: { tag: 'Blue' } as any }), STAGE);
         expectReject(test, s.host, (ctx) => M.close_game(ctx, { lobbyId: s.lobbyId }), STAGE);
     });
 });

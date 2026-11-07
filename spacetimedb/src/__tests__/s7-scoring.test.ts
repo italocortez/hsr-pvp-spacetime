@@ -1,14 +1,15 @@
 // T-S7(b): in-memory tests for the S7 server-computed scoring (A21, A31, A39, A55, A56; backlog #11): group scores,
 // deaths, adjustments, the computed winner and tie-break chain, the A39 override authority, finalization history and
 // cleanup. In-memory datastore on the TestClock; nothing reaches maincloud.
-// T-S7b (A60): confirmations live on the game row; the second captain's confirm_game closes the game and submits the
-// series; the staff close (close_game) carries the winner override; A39 applies at the close.
+// T-S7b (A60, A63): ready flags live on the game row; both captains confirm, then a captain submits with close_game,
+// which closes the game and submits the series; the staff close carries the winner override; A39 applies at the close.
 import { describe, expect, it } from 'vitest';
 import { M, expectReject, guest, lobbyRow, newHarness, tx, type Harness } from './s4-fixtures';
 import {
     H,
     captain,
     closeGame,
+    confirmAndClose,
     confirmBoth,
     confirmGame,
     game,
@@ -32,7 +33,7 @@ function tiedGame(test: Harness, opts: ScoringLobbyOpts = {}) {
 }
 
 describe('A21 end to end: a 4v4 + 4v4 Bo1 scored by the server', () => {
-    it('lineups, group scores + deaths per captain, an adjustment that resets the game confirmations, both confirm → close + submit', () => {
+    it('lineups, group scores + deaths per captain, an adjustment that resets the game confirmations, both ready → submit', () => {
         const test = newHarness();
         const s = playToScoring(test, { lobby: { deathPenalty: H(1) } });
         const { lobbyId } = s;
@@ -66,8 +67,11 @@ describe('A21 end to end: a 4v4 + 4v4 Bo1 scored by the server', () => {
         expect(g.tieBreakLevel).toBe(0);
         expect([...test.db.MatchResultAdjustment.by_result_game.filter([rec0.id, 1])][0].reason).toBeUndefined();
 
-        // The second confirmation closes the game and submits the Bo1 (A60(3)/(6)).
+        // A63: both ready flags leave the game open; a captain's close_game submits the Bo1 (A60(6)).
         confirmBoth(s);
+        expect(game(test, rec0.id).closedAt).toBeUndefined();
+        closeGame(s, captain(s, 'Red')); // the Red captain submits
+
 
         // Casual: validated and finalized inline. History keeps raw vs adjusted, the level, the winner and the lineups.
         const history = [...test.db.MatchSessionHistory.iter()];

@@ -26,7 +26,7 @@ export const matchResultGameColumns = {
     validationStatus: ValidationStatus,
     validatedByUserId: t.u32().optional(),
     // A60(3): one confirmation per captain per game (confirm_game); every open-game edit resets both. The game is
-    // closed when closedAt is set (second confirmation or a staff close): every edit reducer then rejects it, except
+    // closed when closedAt is set (set by close_game: a captain once both flags are set, or staff; A63): every edit reducer then rejects it, except
     // an Admin's edit while the record is Pending or Submitted (A60(7)).
     blueConfirmed: t.bool(),
     redConfirmed: t.bool(),

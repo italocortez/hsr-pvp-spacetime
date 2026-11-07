@@ -126,7 +126,7 @@ const captain = (s: Lobby, team: 'Blue' | 'Red') =>
 
 /**
  * T-S7b: a game reaches BetweenGames only through a close (A60(3)). The drafted game is closed by the full-control
- * host: lineups arranged, Equipping → Scoring, both sides' scores (Blue wins), one confirm_game.
+ * host: lineups arranged, Equipping → Scoring, both sides' scores (Blue wins), close_game (A63 staff close).
  */
 function finishGame(s: Lobby) {
     closeCurrentGame(s, 'Blue');
