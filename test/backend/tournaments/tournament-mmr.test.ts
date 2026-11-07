@@ -89,9 +89,9 @@ async function setupTournamentMatch(
     await toUser.sync(1500);
 
     // Confirm lineups + advance to Equipping → Scoring
-    await blue.call.confirmLineup({ lobbyId, teamSide: { tag: 'Blue' } });
+    // S10: rewrite (confirm_lineup removed by A60; lineups need no confirmation, the game is confirmed with confirmGame): await blue.call.confirmLineup({ lobbyId, teamSide: { tag: 'Blue' } });
     await blue.sync();
-    await red.call.confirmLineup({ lobbyId, teamSide: { tag: 'Red' } });
+    // S10: rewrite (confirm_lineup removed by A60; lineups need no confirmation, the game is confirmed with confirmGame): await red.call.confirmLineup({ lobbyId, teamSide: { tag: 'Red' } });
     await red.sync();
     await toUser.call.advanceStage({ lobbyId });
     await toUser.sync(1500);
@@ -108,9 +108,11 @@ async function setupTournamentMatch(
     await toUser.sync(1000);
 
     // Confirm both sides
-    await blue.call.confirmMatchScores({ matchResultId: mr.id });
+    // S10: rewrite (confirm_match_scores removed by A60: per-game confirmGame per captain; needs arranged lineups + both scores; the second one closes the game and submits)
+    await blue.call.confirmGame({ lobbyId, teamSide: { tag: 'Blue' } });
     await blue.sync(500);
-    await red.call.confirmMatchScores({ matchResultId: mr.id });
+    // S10: rewrite (confirm_match_scores removed by A60: per-game confirmGame per captain; needs arranged lineups + both scores; the second one closes the game and submits)
+    await red.call.confirmGame({ lobbyId, teamSide: { tag: 'Red' } });
     await red.sync(500);
     await toUser.sync(1000);
 
@@ -248,9 +250,7 @@ describe.skipIf(!hasServerToken())('Tournament MMR — process_tournament_mmr', 
             openedLobbyIds.push(result.lobbyId);
 
             // Submit match result → Submitted (Ranked)
-            await toUser.call.submitMatchResult({
-                matchResultId: result.matchResultId,
-            });
+            // S10: rewrite (submit_match_result removed by A60(6): the close of the deciding game submits the series): await toUser.call.submitMatchResult({ matchResultId: result.matchResultId, });
             await toUser.sync(1500);
 
             // Override to Validated (admin — screenshots already present)

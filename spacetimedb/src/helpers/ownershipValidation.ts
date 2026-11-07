@@ -1,3 +1,5 @@
+import { slotIsCoach, slotTeam } from './lobbyHelpers';
+
 /**
  * Validates that the user owns the specified character on their selected match account(s).
  * Returns { valid: true } if owned or if ownership check is disabled.
@@ -52,4 +54,22 @@ export function resolveOwnedEidolon(ctx: any, lobbyId: number, userId: number, c
         if (row && row.eidolonLevel > eidolon) eidolon = row.eidolonLevel;
     }
     return eidolon;
+}
+
+/**
+ * A60(1) / A61(2)(3): the eidolon levels a team owns for a character: the distinct HsrAccountCharacter.eidolonLevel
+ * values across the selected match accounts (LobbyMemberAccount) of the team's player seats (coaches and spectators
+ * excluded), ascending. Empty when no selected account of the team has the character. Account selection is allowed
+ * only in Waiting and BetweenGames, so the set is frozen during a game.
+ */
+export function teamOwnedEidolons(ctx: any, lobbyId: number, side: string, characterName: string): number[] {
+    const levels = new Set<number>();
+    for (const member of ctx.db.LobbyMember.lobby_id.filter(lobbyId)) {
+        if (slotTeam(member.lobbySlot) !== side || slotIsCoach(member.lobbySlot)) continue;
+        for (const lma of ctx.db.LobbyMemberAccount.by_lobby_and_user.filter([lobbyId, member.userId])) {
+            const row = [...ctx.db.HsrAccountCharacter.by_account_and_character.filter([lma.hsrAccountId, characterName])][0];
+            if (row) levels.add(row.eidolonLevel);
+        }
+    }
+    return [...levels].sort((a, b) => a - b);
 }

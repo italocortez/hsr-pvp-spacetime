@@ -142,8 +142,6 @@ export const start_draft = spacetimedb.reducer(
             refereeUserId,
             disputedByUserId: undefined,
             disputeReason: undefined,
-            blueConfirmed: false,
-            redConfirmed: false,
             refereeFullControl,
             matchType: lobby.matchType,
             matchEndReason: undefined,

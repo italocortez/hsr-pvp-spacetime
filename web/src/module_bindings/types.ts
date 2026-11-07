@@ -113,7 +113,8 @@ export const ActionType = __t.enum("ActionType", {
   Undo: __t.unit(),
   EquipLightcone: __t.unit(),
   ArrangeLineup: __t.unit(),
-  ConfirmLineup: __t.unit(),
+  SetEidolon: __t.unit(),
+  ConfirmGame: __t.unit(),
 });
 export type ActionType = __Infer<typeof ActionType>;
 
@@ -224,6 +225,7 @@ export const AuctionSoldPayload = __t.object("AuctionSoldPayload", {
     return TeamSide;
   },
   eidolon: __t.u8(),
+  eidolonCost: __t.f32(),
 });
 export type AuctionSoldPayload = __Infer<typeof AuctionSoldPayload>;
 
@@ -431,11 +433,17 @@ export const ConcedeTrigger = __t.enum("ConcedeTrigger", {
 });
 export type ConcedeTrigger = __Infer<typeof ConcedeTrigger>;
 
-export const ConfirmLineupPayload = __t.object("ConfirmLineupPayload", {
-  confirmed: __t.bool(),
-  groups: __t.string(),
+export const ConfirmGamePayload = __t.object("ConfirmGamePayload", {
+  get confirmedSide() {
+    return TeamSide;
+  },
+  closed: __t.bool(),
+  get winnerOverride() {
+    return __t.option(TeamSide);
+  },
+  winnerOverrideReason: __t.option(__t.string()),
 });
-export type ConfirmLineupPayload = __Infer<typeof ConfirmLineupPayload>;
+export type ConfirmGamePayload = __Infer<typeof ConfirmGamePayload>;
 
 export const CostSet = __t.object("CostSet", {
   id: __t.u32(),
@@ -1137,7 +1145,6 @@ export const MatchLineup = __t.object("MatchLineup", {
   groups: __t.string(),
   synergySurcharge: __t.u32(),
   rosterCost: __t.u32(),
-  isConfirmed: __t.bool(),
   createdById: __t.u32(),
   createdDate: __t.timestamp(),
   lastModifiedById: __t.u32(),
@@ -1220,6 +1227,10 @@ export const MatchResultGame = __t.object("MatchResultGame", {
     return ValidationStatus;
   },
   validatedByUserId: __t.option(__t.u32()),
+  blueConfirmed: __t.bool(),
+  redConfirmed: __t.bool(),
+  closedAt: __t.option(__t.timestamp()),
+  closedById: __t.option(__t.u32()),
   createdById: __t.u32(),
   createdDate: __t.timestamp(),
   lastModifiedById: __t.u32(),
@@ -1300,8 +1311,6 @@ export const MatchResultRecord = __t.object("MatchResultRecord", {
   refereeUserId: __t.option(__t.u32()),
   disputedByUserId: __t.option(__t.u32()),
   disputeReason: __t.option(__t.string()),
-  blueConfirmed: __t.bool(),
-  redConfirmed: __t.bool(),
   refereeFullControl: __t.bool(),
   get matchType() {
     return MatchType;
@@ -1536,7 +1545,6 @@ export type MyRosterAccountRow = __Infer<typeof MyRosterAccountRow>;
 
 export const NominatePayload = __t.object("NominatePayload", {
   characterName: __t.string(),
-  eidolon: __t.u8(),
 });
 export type NominatePayload = __Infer<typeof NominatePayload>;
 
@@ -1762,6 +1770,14 @@ export const ServerIdentityKind = __t.enum("ServerIdentityKind", {
 });
 export type ServerIdentityKind = __Infer<typeof ServerIdentityKind>;
 
+export const SetEidolonPayload = __t.object("SetEidolonPayload", {
+  characterName: __t.string(),
+  eidolon: __t.u8(),
+  previousEidolon: __t.u8(),
+  costPaid: __t.f32(),
+});
+export type SetEidolonPayload = __Infer<typeof SetEidolonPayload>;
+
 // The tagged union or sum type for the algebraic type `ShuffleMode`.
 export const ShuffleMode = __t.enum("ShuffleMode", {
   RandomSwap: __t.unit(),
@@ -1798,8 +1814,11 @@ export const StepPayload = __t.enum("StepPayload", {
   get ArrangeLineup() {
     return ArrangeLineupPayload;
   },
-  get ConfirmLineup() {
-    return ConfirmLineupPayload;
+  get SetEidolon() {
+    return SetEidolonPayload;
+  },
+  get ConfirmGame() {
+    return ConfirmGamePayload;
   },
 });
 export type StepPayload = __Infer<typeof StepPayload>;

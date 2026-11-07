@@ -1,6 +1,7 @@
 /**
  * Generates the DraftStep[] sequence for Classic and Auction draft modes.
- * All sequences match exactly the notes/draft_order.md specification.
+ * The 8-pick (Halves) orders match docs/match-session/draft-order.md (the user's spec); the 12-pick (Thirds)
+ * orders are DECISIONS.md A59, written out in the same file.
  */
 
 /**
@@ -21,19 +22,33 @@ function step(action: string, team: string): any {
  * BanMode 'Four' → 20 steps (2 bans, 4 picks, 2 bans, 12 picks)
  * BanMode 'Six'  → 22 steps (2 bans, 4 picks, 2 bans, 4 picks, 2 bans, 8 picks)
  *
- * A21: the lineup format is the character count. Halves = the sequences above (8 picks per team);
- * Thirds appends THIRDS_EXTRA_PICKS (8 more picks, 4 per team, continuing the Red-Blue-Blue-Red snake) for
- * 12 picks per team. notes/draft_order.md defines only the 8-pick orders; the extension is this implementation's choice (A21 only fixes the count).
+ * A21: the lineup format is the character count. Halves = the sequences above (8 picks per team).
+ * Thirds = 12 picks per team in the A59 order of the ban mode (THIRDS_ORDERS): Blue first, Red last, no run
+ * longer than two, every ban position as in Halves, no extra bans.
  */
 export function buildClassicSequence(banMode: string, lineupFormat: string): any[] {
-    const base = buildHalvesClassicSequence(banMode);
-    return lineupFormat === 'Thirds' ? [...base, ...THIRDS_EXTRA_PICKS()] : base;
+    if (lineupFormat !== 'Thirds') return buildHalvesClassicSequence(banMode);
+    return fromOrder(THIRDS_ORDERS[banMode] ?? THIRDS_ORDERS.None);
 }
 
-const THIRDS_EXTRA_PICKS = () => [
-    step('Pick', 'Red'), step('Pick', 'Blue'), step('Pick', 'Blue'), step('Pick', 'Red'),
-    step('Pick', 'Red'), step('Pick', 'Blue'), step('Pick', 'Blue'), step('Pick', 'Red'),
-];
+/**
+ * DECISIONS.md A59: the Classic Thirds orders, one token per step (B / R = Blue / Red pick, [B] / [R] = ban).
+ *   None: B · RR · B · R · BB · RR · BB · RR · BB · R · B · R · B · R · BB · RR                       (24 steps)
+ *   Four: [B] · [R] · B · RR · B · [R] · [B] · R · BB · RR · BB · RR · BB · RR · BB · RR · BB · R     (28 steps)
+ *   Six:  [B] · [R] · B · RR · B · [R] · [B] · R · BB · R · [B] · [R] · BB · RR · BB · RR · BB · RR · B · R · B · R  (30 steps)
+ */
+const THIRDS_ORDERS: Record<string, string> = {
+    None: 'B R R B R B B R R B B R R B B R B R B R B B R R',
+    Four: '[B] [R] B R R B [R] [B] R B B R R B B R R B B R R B B R R B B R',
+    Six: '[B] [R] B R R B [R] [B] R B B R [B] [R] B B R R B B R R B B R R B R B R',
+};
+
+function fromOrder(order: string): any[] {
+    return order.split(' ').map((token) => {
+        const team = token.includes('B') ? 'Blue' : 'Red';
+        return step(token.startsWith('[') ? 'Ban' : 'Pick', team);
+    });
+}
 
 function buildHalvesClassicSequence(banMode: string): any[] {
     switch (banMode) {

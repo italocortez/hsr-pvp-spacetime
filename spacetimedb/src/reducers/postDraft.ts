@@ -1,32 +1,98 @@
 // ─── Post-Draft Reducers ──────────────────────────────────────────────────────
-// Four reducers for the Equipping stage and stage advancement.
-// Per D-56/D-57/D-58/D-59.
+// The game-package edits (A60, S7b) and stage advancement.
+// Per D-56/D-57/D-58/D-59, amended by A60: light cones and lineups are editable in Equipping and Scoring, eidolons
+// from Drafting (once the character is drafted) through Scoring, while the current game is open. Every open-game
+// edit recomputes the game and resets both captains' confirmations; an Admin may still edit a closed game while the
+// record is Pending or Submitted (A60(7): no stage check, no throttle, no reset, series recomputed).
 
 import spacetimedb from '../schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser } from '../helpers/ensurePermissions';
 import { ensureLobbyMember, ensureStageIs, ensureHostOrAbove, slotTeam, slotIsCoach, slotIsSpectator, slotToTeamSide } from '../helpers/lobbyHelpers';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
-import { ensureMatchAlive } from '../helpers/disconnectHelpers';
+import { ensureMatchAlive, ensureNotConceded } from '../helpers/disconnectHelpers';
 import { readAbuseConfig } from '../helpers/abuseControls';
 import { getNextSequence } from '../helpers/stepSequence';
+import { teamOwnedEidolons } from '../helpers/ownershipValidation';
 import {
     ensureCaptainOrReferee,
+    ensureOpenGame,
     ensureTeamTag,
+    findGame,
     findLineup,
+    isAdminRole,
+    isClosedGame,
     lineupCosts,
     recomputeGame,
     refreshLineupCosts,
+    resetConfirmations,
     teamDraft,
     teamSideValue,
+    type TeamTag,
 } from '../helpers/scoringHelpers';
+import { recomputeSeriesAfterAdminEdit } from '../helpers/gameClose';
+import { auctionEidolonExtra, chargeExtra, teamDefaultEidolon } from './draftAuction';
 import { TeamSide } from '../types/enums';
-import { fromHundredths, lineupError, toHundredths, type LineupFormatTag } from '@shared/scoring';
+import { lineupError, type LineupFormatTag } from '@shared/scoring';
+
+// ─── Edit window (A60(3)/(7)) ─────────────────────────────────────────────────
+// 'admin': the current game is closed and the caller is an Admin (ensureOpenGame rejects everyone else); only the
+// liveness guard for result reducers applies (the lobby may be BetweenGames or AwaitingResult).
+// 'open': the stage must be one of `stages`, the match alive, the record Pending and the current game not closed.
+
+interface EditWindow { mode: 'open' | 'admin'; session: any; record: any }
+
+function resolveEditWindow(ctx: any, lobby: any, user: any, stages: string[]): EditWindow {
+    const session = ctx.db.MatchSession.lobbyId.find(lobby.id);
+    const records = [...ctx.db.MatchResultRecord.lobby_id.filter(lobby.id)];
+    const record = records.find((r: any) => r.status.tag === 'Pending')
+        ?? (isAdminRole(user) ? records.find((r: any) => r.status.tag === 'Submitted') : undefined);
+    if (session && record && isClosedGame(findGame(ctx, record.id, session.currentGameNumber))) {
+        ensureOpenGame(ctx, lobby, record, session.currentGameNumber, user); // throws unless the caller is an Admin
+        ensureNotConceded(ctx, lobby);
+        return { mode: 'admin', session, record };
+    }
+    ensureStageIs(lobby, ...stages);
+    ensureMatchAlive(ctx, lobby);
+    if (!session) throw new SenderError('Match session not found.');
+    if (!record || record.status.tag !== 'Pending') throw new SenderError('No pending match result for this lobby.');
+    return { mode: ensureOpenGame(ctx, lobby, record, session.currentGameNumber, user), session, record };
+}
+
+/** A60(2)/(7): after an edit: open → recompute the game (if its row exists) and reset both confirmations; admin → series recompute. */
+function afterEdit(ctx: any, lobby: any, window: EditWindow, actorId: number): void {
+    if (window.mode === 'admin') {
+        recomputeSeriesAfterAdminEdit(ctx, lobby, window.record, actorId);
+        return;
+    }
+    const gameNumber = window.session.currentGameNumber;
+    if (!findGame(ctx, window.record.id, gameNumber)) return;
+    recomputeGame(ctx, window.record, lobby, gameNumber, actorId);
+    resetConfirmations(ctx, findGame(ctx, window.record.id, gameNumber), actorId);
+}
+
+/** B-4 throttle (fan-out): reject a move that comes faster than AbuseConfig.lineupMinIntervalMs. */
+function ensureLineupThrottle(ctx: any, member: any): void {
+    const minIntervalMicros = BigInt(readAbuseConfig(ctx).lineupMinIntervalMs) * 1000n;
+    const now = ctx.timestamp.microsSinceUnixEpoch;
+    if (member.lastLineupAt && now - member.lastLineupAt.microsSinceUnixEpoch < minIntervalMicros) {
+        throw new SenderError('Lineup changes are too frequent. Please wait a moment.');
+    }
+}
+
+/** Throttle stamp on the private member row: no audit bump (not a user edit, like lastCursorAt). */
+function stampLineupThrottle(ctx: any, lobbyId: number, member: any): void {
+    ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, member.userId]);
+    ctx.db.LobbyMember.insert({ ...member, lastLineupAt: ctx.timestamp });
+}
 
 // ─── equip_lightcone ─────────────────────────────────────────────────────────
 // Records LC equip as a backend step. Deducts LC cost from team's LC budget.
 // Per D-55: LCs not exclusive, duplicates allowed. Strict budget enforcement.
 // Per D-56: Recorded as backend step for match replay.
+// A60(1): Equipping or Scoring, open game only; recomputes the game and resets both confirmations. The S7
+// surcharge reservation is gone: the Auction surcharge gate sits at confirm_game / close_game (A60(4)).
+// A60(7) Admin path (closed game): the team is the one whose draft holds characterName.
 // CH-S6 / D.8.7: the superimposition argument stands even under requireOwnership; light cones have no
 // ownership data yet, so there is nothing to resolve it from. Once they do, resolve it like the pick eidolon.
 
@@ -42,23 +108,30 @@ export const equip_lightcone = spacetimedb.reducer(
         const lobby = ctx.db.Lobby.id.find(lobbyId);
         if (!lobby) throw new SenderError('Lobby not found.');
 
-        const member = ensureLobbyMember(ctx, lobbyId, user.id);
-        ensureStageIs(lobby, 'Equipping');
-        ensureMatchAlive(ctx, lobby);
+        let member = isAdminRole(user) ? undefined : ensureLobbyMember(ctx, lobbyId, user.id);
+        const window = resolveEditWindow(ctx, lobby, user, ['Equipping', 'Scoring']);
+        const session = window.session;
 
-        // Coach guard (D-39): coaches blocked from all draft/post-draft actions
-        if (slotIsCoach(member.lobbySlot)) {
-            throw new SenderError('Coaches cannot equip lightcones.');
+        let side: TeamTag;
+        if (window.mode === 'open') {
+            member ??= ensureLobbyMember(ctx, lobbyId, user.id);
+
+            // Coach guard (D-39): coaches blocked from all draft/post-draft actions
+            if (slotIsCoach(member.lobbySlot)) {
+                throw new SenderError('Coaches cannot equip lightcones.');
+            }
+
+            // Member must be on Blue or Red team (not spectator)
+            if (slotIsSpectator(member.lobbySlot)) {
+                throw new SenderError('Spectators cannot equip lightcones.');
+            }
+            side = slotTeam(member.lobbySlot) as TeamTag;
+        } else {
+            const owner = (['Blue', 'Red'] as TeamTag[])
+                .find((s) => teamDraft(ctx, lobbyId, session.currentGameNumber, s).characters.includes(characterName));
+            if (!owner) throw new SenderError(`${characterName} is not in either team's draft of this game.`);
+            side = owner;
         }
-
-        // Member must be on Blue or Red team (not spectator)
-        if (slotIsSpectator(member.lobbySlot)) {
-            throw new SenderError('Spectators cannot equip lightcones.');
-        }
-
-        // Read the current match session
-        const session = ctx.db.MatchSession.lobbyId.find(lobbyId);
-        if (!session) throw new SenderError('Match session not found.');
 
         // Look up LC cost from HsrLightconeCost table (15.4 D-10/D-11/Pitfall 6).
         // (lightconeName, gameMode, draftMode='Classic', costSetId) → SuperimpositionCost → s1..s5 field.
@@ -90,18 +163,10 @@ export const equip_lightcone = spacetimedb.reducer(
         }
 
         // Per D-55: Strict LC budget enforcement
-        const isBlue = slotTeam(member.lobbySlot) === 'Blue';
+        const isBlue = side === 'Blue';
         const currentLcBudget = isBlue ? session.teamBlueLcBudget : session.teamRedLcBudget;
         if (lcCost > currentLcBudget) {
             throw new SenderError('Not enough LC budget.');
-        }
-        // A21 / backlog #3 (Auction): a confirmed lineup's synergy surcharge is reserved out of the LC budget, so
-        // confirming first and then spending everything on light cones cannot defeat confirm_lineup's gate.
-        const side = isBlue ? 'Blue' : 'Red';
-        const lineup = findLineup(ctx, lobbyId, session.currentGameNumber, side);
-        if (lobby.draftMode.tag === 'Auction' && lineup?.isConfirmed
-            && lcCost + fromHundredths(lineup.synergySurcharge) > currentLcBudget) {
-            throw new SenderError('Not enough LC budget: the confirmed lineup\'s synergy surcharge is reserved.');
         }
 
         // Determine next sequence number
@@ -118,7 +183,7 @@ export const equip_lightcone = spacetimedb.reducer(
             sequence: nextSequence,
             actorUserId: user.id,
             anonymousLabel: undefined,
-            actorSlot: slotToTeamSide(member.lobbySlot),
+            actorSlot: window.mode === 'open' ? slotToTeamSide(member!.lobbySlot) : teamSideValue(side),
             action: { tag: 'EquipLightcone', value: {} } as any,
             payload: {
                 tag: 'EquipLightcone',
@@ -127,7 +192,7 @@ export const equip_lightcone = spacetimedb.reducer(
             timestamp: ctx.timestamp,
         }, user.id));
 
-        // A21: the side's lineup row (confirmed or not) follows the new light cone: roster cost and surcharge.
+        // A21: the side's lineup row follows the new light cone: roster cost and surcharge.
         refreshLineupCosts(ctx, lobby, session.currentGameNumber, side, user.id);
 
         // Deduct LC cost from budget
@@ -141,8 +206,11 @@ export const equip_lightcone = spacetimedb.reducer(
             }, user.id));
         }
 
+        // A60(2)/(7): recompute the game, reset confirmations (open) or recompute the series (admin).
+        afterEdit(ctx, lobby, window, user.id);
+
         // Update lobby lastActivityAt
-        ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
+        ctx.db.Lobby.id.update(updateWithAudit(ctx, ctx.db.Lobby.id.find(lobbyId)!, {
             lastActivityAt: ctx.timestamp,
         }, user.id));
     }
@@ -152,10 +220,11 @@ export const equip_lightcone = spacetimedb.reducer(
 // (A21, backlog #3): places the team's drafted characters into lineup groups (Lobby.lineupFormat: Halves = 2
 // groups of 4, Thirds = 3 groups of 4), every drafted character exactly once. Caller: the captain of that team,
 // or a referee for either team (tightens D-56's any non-coach team member). Upserts the one live MatchLineup row
-// per team per game with the synergy surcharge and the live roster cost (hundredths) and isConfirmed = false, so
-// arranging a confirmed lineup clears its confirmation. A fan-out reducer: throttled per member through
-// AbuseConfig.lineupMinIntervalMs (LobbyMember.lastLineupAt, stamped without an audit bump) and bounded in size.
-// No step is logged here (ArrangeLineupPayload is a position list; the replay keeps only the ConfirmLineup step).
+// per team per game with the synergy surcharge and the live roster cost (hundredths). A fan-out reducer: throttled
+// per member through AbuseConfig.lineupMinIntervalMs (LobbyMember.lastLineupAt, stamped without an audit bump) and
+// bounded in size. No step is logged here (ArrangeLineupPayload is a position list).
+// A60: Equipping or Scoring, open game only; recomputes the game and resets both confirmations (there is no lineup
+// confirmation any more: confirm_lineup was removed). A60(7) Admin path on a closed game: no throttle, no reset.
 
 const MAX_GROUPS_JSON_LENGTH = 2000;
 
@@ -187,19 +256,14 @@ export const arrange_lineup = spacetimedb.reducer(
         if (!lobby) throw new SenderError('Lobby not found.');
 
         const side = ensureTeamTag(teamSide);
-        const member = ensureCaptainOrReferee(ctx, lobbyId, user.id, side, 'arrange the lineup');
-        ensureStageIs(lobby, 'Equipping');
-        ensureMatchAlive(ctx, lobby);
+        let member = isAdminRole(user) ? undefined : ensureCaptainOrReferee(ctx, lobbyId, user.id, side, 'arrange the lineup');
+        const window = resolveEditWindow(ctx, lobby, user, ['Equipping', 'Scoring']);
+        const session = window.session;
 
-        // B-4 throttle (fan-out): reject a move that comes faster than lineupMinIntervalMs.
-        const minIntervalMicros = BigInt(readAbuseConfig(ctx).lineupMinIntervalMs) * 1000n;
-        const now = ctx.timestamp.microsSinceUnixEpoch;
-        if (member.lastLineupAt && now - member.lastLineupAt.microsSinceUnixEpoch < minIntervalMicros) {
-            throw new SenderError('Lineup changes are too frequent. Please wait a moment.');
+        if (window.mode === 'open') {
+            member ??= ensureCaptainOrReferee(ctx, lobbyId, user.id, side, 'arrange the lineup');
+            ensureLineupThrottle(ctx, member);
         }
-
-        const session = ctx.db.MatchSession.lobbyId.find(lobbyId);
-        if (!session) throw new SenderError('Match session not found.');
 
         const parsed = parseGroups(groups);
         const draft = teamDraft(ctx, lobbyId, session.currentGameNumber, side);
@@ -213,7 +277,6 @@ export const arrange_lineup = spacetimedb.reducer(
                 groups: JSON.stringify(parsed),
                 synergySurcharge: surcharge,
                 rosterCost,
-                isConfirmed: false,
             }, user.id));
         } else {
             ctx.db.MatchLineup.insert(insertWithAudit(ctx, {
@@ -224,89 +287,158 @@ export const arrange_lineup = spacetimedb.reducer(
                 groups: JSON.stringify(parsed),
                 synergySurcharge: surcharge,
                 rosterCost,
-                isConfirmed: false,
             }, user.id));
         }
 
-        // Throttle stamp on the private member row: no audit bump (not a user edit, like lastCursorAt).
-        ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, member.userId]);
-        ctx.db.LobbyMember.insert({ ...member, lastLineupAt: ctx.timestamp });
+        // A60(2)/(7): recompute the game, reset confirmations (open) or recompute the series (admin).
+        afterEdit(ctx, lobby, window, user.id);
+
+        if (window.mode === 'open') stampLineupThrottle(ctx, lobbyId, member);
     }
 );
 
-// ─── confirm_lineup ───────────────────────────────────────────────────────────
-// Same callers as arrange_lineup. Recomputes the surcharge and roster cost from the stored groups, fixes the
-// rosterCost on the row (equip_lightcone keeps it current afterwards), sets isConfirmed and logs the ConfirmLineup step with the
-// groups for replay (actorSlot = the lineup's team, so a spectator referee's confirmation replays on the right
-// side). Auction: rejected while the surcharge exceeds the team's remaining light-cone budget (the surcharge comes
-// out of that budget; an over-budget arrangement is allowed while arranging). The budget itself is not debited.
+// ─── set_eidolon ──────────────────────────────────────────────────────────────
+// A60(1), A61(6): changes the eidolon of a character in the team's draft of the current game (Classic: picked by
+// that side; Auction: sold to that side; EMPTY rejected). Stages Drafting, Equipping, Scoring, open game only.
+// Caller: a player seat of that team (not a coach, not a spectator) or any lobby referee (seated or not, naming the
+// team through teamSide, like arrange_lineup); throttled like arrange_lineup (AbuseConfig.lineupMinIntervalMs).
+// Level: 0..6; under requireOwnership only a level the team owns on its selected accounts (teamOwnedEidolons).
+// Cost: Classic → costPaid = the Classic cost row at the new level (0 without a row), no budget. Auction → the
+// difference of the eidolon extras: a positive delta is charged character budget first, then the light-cone budget
+// (rejected when it exceeds both); a negative delta is refunded to the light-cone budget in every stage
+// (orchestrator rule, S7b: a refund never restores bidding power, otherwise a team could overdraw its character
+// budget more than once, which A61 rules out; the two budgets merge at the D-50 rollover anyway); costPaid = the
+// extra at the new level. Logs a SetEidolon step (actorSlot = the team), refreshes the lineup row, then recomputes the
+// game and resets both confirmations. A60(7) Admin path on a closed game: no throttle, no reset, series recomputed.
 
-export const confirm_lineup = spacetimedb.reducer(
+function classicCostAt(ctx: any, lobby: any, characterName: string, eidolon: number): number {
+    const costRow = [...ctx.db.HsrCharacterCost.cost_set_id.filter(lobby.costSetId)].find(
+        (r: any) =>
+            r.characterName === characterName &&
+            r.gameMode.tag === lobby.gameMode.tag &&
+            r.draftMode.tag === 'Classic'
+    );
+    return costRow ? (costRow.costs[`e${eidolon}`] ?? 0) : 0;
+}
+
+/** A60(1): a player seat of that team (not a coach) or any lobby referee. Returns the caller's LobbyMember row. */
+function ensureEidolonEditor(ctx: any, lobbyId: number, userId: number, side: TeamTag): any {
+    const member = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, userId])][0];
+    const isTeamPlayer = member && !slotIsCoach(member.lobbySlot) && slotTeam(member.lobbySlot) === side;
+    if (!member || !(member.isReferee || isTeamPlayer)) {
+        throw new SenderError(`Only a ${side} player or a referee can set an eidolon for that team.`);
+    }
+    return member;
+}
+
+export const set_eidolon = spacetimedb.reducer(
     {
         lobbyId: t.u32(),
         teamSide: TeamSide,
+        characterName: t.string(),
+        eidolon: t.u8(),
     },
-    (ctx, { lobbyId, teamSide }) => {
+    (ctx, { lobbyId, teamSide, characterName, eidolon }) => {
         const user = getAuthenticatedUser(ctx);
         const lobby = ctx.db.Lobby.id.find(lobbyId);
         if (!lobby) throw new SenderError('Lobby not found.');
 
         const side = ensureTeamTag(teamSide);
-        ensureCaptainOrReferee(ctx, lobbyId, user.id, side, 'confirm the lineup');
-        ensureStageIs(lobby, 'Equipping');
-        ensureMatchAlive(ctx, lobby);
+        let member = isAdminRole(user) ? undefined : ensureEidolonEditor(ctx, lobbyId, user.id, side);
+        const window = resolveEditWindow(ctx, lobby, user, ['Drafting', 'Equipping', 'Scoring']);
+        const session = window.session;
 
-        const session = ctx.db.MatchSession.lobbyId.find(lobbyId);
-        if (!session) throw new SenderError('Match session not found.');
-
-        const lineup = findLineup(ctx, lobbyId, session.currentGameNumber, side);
-        if (!lineup) throw new SenderError('Arrange the lineup before confirming it.');
-
-        const draft = teamDraft(ctx, lobbyId, session.currentGameNumber, side);
-        const parsed: string[][] = JSON.parse(lineup.groups);
-        const problem = lineupError(parsed, draft.characters, lobby.lineupFormat.tag as LineupFormatTag);
-        if (problem) throw new SenderError(problem);
-        const { surcharge, rosterCost } = lineupCosts(ctx, lobby, draft, parsed);
-
-        if (lobby.draftMode.tag === 'Auction') {
-            const remainingLc = toHundredths(side === 'Blue' ? session.teamBlueLcBudget : session.teamRedLcBudget);
-            if (surcharge > remainingLc) {
-                throw new SenderError('The synergy surcharge exceeds the remaining light-cone budget; rearrange the lineup.');
-            }
+        if (window.mode === 'open') {
+            member ??= ensureEidolonEditor(ctx, lobbyId, user.id, side);
+            ensureLineupThrottle(ctx, member);
+            // A22(3): no edit while the draft is paused. Drafting only (Equipping may carry isPaused across
+            // advance_stage); client_connected's auto-resume looks at the last step for an auto-pause, so a SetEidolon
+            // step logged during a pause would block it.
+            if (lobby.stage.tag === 'Drafting' && session.timerState.isPaused) throw new SenderError('Draft is paused.');
         }
 
-        ctx.db.MatchLineup.id.update(updateWithAudit(ctx, lineup, {
-            synergySurcharge: surcharge,
-            rosterCost,
-            isConfirmed: true,
-        }, user.id));
+        if (eidolon > 6) throw new SenderError('eidolon must be between 0 and 6.');
+        if (characterName === 'EMPTY') throw new SenderError('EMPTY has no eidolon.');
+
+        const gameNumber = session.currentGameNumber;
+        const current = teamDraft(ctx, lobbyId, gameNumber, side).eidolons.find((e) => e.name === characterName);
+        if (!current) throw new SenderError(`${characterName} is not in the ${side} team's draft of this game.`);
+        if (current.eidolon === eidolon) throw new SenderError(`${characterName} is already at E${eidolon}.`);
+
+        if (lobby.requireOwnership && !teamOwnedEidolons(ctx, lobbyId, side, characterName).includes(eidolon)) {
+            throw new SenderError('Your team does not own that eidolon level on its selected accounts.');
+        }
+
+        let costPaid: number;
+        if (lobby.draftMode.tag === 'Auction') {
+            costPaid = auctionEidolonExtra(ctx, lobby, characterName, eidolon);
+            const delta = costPaid - auctionEidolonExtra(ctx, lobby, characterName, current.eidolon);
+            const charBudget = side === 'Blue' ? session.teamBlueCharBudget : session.teamRedCharBudget;
+            const lcBudget = side === 'Blue' ? session.teamBlueLcBudget : session.teamRedLcBudget;
+            let next = { charBudget, lcBudget };
+            // A61(4)/(5): while the team holds the current bid in Drafting, its commitment (the bid plus the extra it
+            // would owe at the sale) is reserved: the edit may not spend it, and the character budget never drops
+            // below the committed bid (the sale takes the bid from it).
+            const holdsBid = lobby.stage.tag === 'Drafting' && !!session.currentNomination && session.currentBidTeam?.tag === side;
+            const reservedBid = holdsBid ? (session.currentBidAmount ?? 0) : 0;
+            const reservedExtra = holdsBid
+                ? auctionEidolonExtra(ctx, lobby, session.currentNomination, teamDefaultEidolon(ctx, lobby, side, session.currentNomination))
+                : 0;
+            if (delta > 0) {
+                if (holdsBid && delta > charBudget + lcBudget - (reservedBid + reservedExtra)) {
+                    throw new SenderError('Not enough budget for that eidolon: your current bid is reserved.');
+                }
+                if (delta > charBudget + lcBudget) throw new SenderError('Not enough budget for that eidolon.');
+                const spendableChar = Math.max(0, charBudget - reservedBid);
+                const fromChar = Math.min(spendableChar, delta);
+                // chargeExtra over the spendable part only: it takes fromChar from it, the rest from the LC budget.
+                const charged = chargeExtra({ ...session, teamBlueCharBudget: fromChar, teamRedCharBudget: fromChar }, side, delta);
+                next = { charBudget: charBudget - fromChar + charged.charBudget, lcBudget: charged.lcBudget };
+            } else if (delta < 0) {
+                next = { charBudget, lcBudget: lcBudget - delta }; // refund to the light-cone budget (see header)
+            }
+            if (delta !== 0) {
+                ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, side === 'Blue'
+                    ? { teamBlueCharBudget: next.charBudget, teamBlueLcBudget: next.lcBudget }
+                    : { teamRedCharBudget: next.charBudget, teamRedLcBudget: next.lcBudget }, user.id));
+            }
+        } else {
+            costPaid = classicCostAt(ctx, lobby, characterName, eidolon);
+        }
 
         ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
             id: 0, // autoInc
             lobbyId,
-            gameNumber: session.currentGameNumber,
+            gameNumber,
             sequence: getNextSequence(ctx, lobbyId),
             actorUserId: user.id,
             anonymousLabel: undefined,
             actorSlot: teamSideValue(side),
-            action: { tag: 'ConfirmLineup', value: {} } as any,
+            action: { tag: 'SetEidolon', value: {} } as any,
             payload: {
-                tag: 'ConfirmLineup',
-                value: { confirmed: true, groups: lineup.groups },
+                tag: 'SetEidolon',
+                value: { characterName, eidolon, previousEidolon: current.eidolon, costPaid },
             } as any,
             timestamp: ctx.timestamp,
         }, user.id));
 
-        ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
+        refreshLineupCosts(ctx, lobby, gameNumber, side, user.id);
+        afterEdit(ctx, lobby, window, user.id);
+
+        if (window.mode === 'open') stampLineupThrottle(ctx, lobbyId, member);
+        ctx.db.Lobby.id.update(updateWithAudit(ctx, ctx.db.Lobby.id.find(lobbyId)!, {
             lastActivityAt: ctx.timestamp,
         }, user.id));
+
+        console.log(`[MATCH] set_eidolon: ${side} ${characterName} E${current.eidolon} → E${eidolon} (cost ${costPaid}) in lobby #${lobbyId} by user #${user.id}${window.mode === 'admin' ? ' (admin, closed game)' : ''}`);
     }
 );
 
 // ─── advance_stage ────────────────────────────────────────────────────────────
-// Host manually transitions between lobby sub-phases. Per D-58/D-59.
-// Transitions: Drafting → Equipping → Scoring
-// Scoring → Finished is handled by finalize_match_result (not this reducer).
+// Host manually transitions between lobby sub-phases. Per D-58/D-59, amended by A60(5)/(8).
+// Transitions: Drafting → Equipping (D-50 rollover) → Scoring (a host signal with no gate).
+// A60: there is no Scoring branch any more: a game closes through confirm_game or close_game, and the close moves
+// the lobby to BetweenGames or (series decided) submits the result and moves it to AwaitingResult.
 
 export const advance_stage = spacetimedb.reducer(
     {
@@ -367,7 +499,7 @@ export const advance_stage = spacetimedb.reducer(
 
         } else if (currentStage === 'Equipping') {
             // Transition: Equipping → Scoring
-            // Host can force transition (D-58). Check if both teams have confirmed lineup (optional validation).
+            // A60(5): a host signal with no gate (lineups, light cones and eidolons stay editable in Scoring).
 
             ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
                 stage: { tag: 'Scoring', value: {} } as any,
@@ -392,113 +524,7 @@ export const advance_stage = spacetimedb.reducer(
             }, user.id));
 
         } else if (currentStage === 'Scoring') {
-            // D-14: Series-aware Scoring transition.
-            // For best-of-N (seriesBestOf > 1): count games won per side from MatchResultGame,
-            // update gamesWonBlue/gamesWonRed on MatchSession, then decide next stage.
-            // For bestOf=1: go directly to AwaitingResult (unchanged behavior).
-
-            const session = ctx.db.MatchSession.lobbyId.find(lobbyId);
-            if (!session) throw new SenderError('Match session not found.');
-
-            if (session.seriesBestOf > 1) {
-                // Find the MatchResultRecord for this lobby (created by start_draft; game rows by record_group_scores)
-                const matchResult = [...ctx.db.MatchResultRecord.lobby_id.filter(lobbyId)][0];
-
-                let newGamesWonBlue = session.gamesWonBlue;
-                let newGamesWonRed = session.gamesWonRed;
-
-                if (matchResult) {
-                    // (A21): the current game's winner is server-computed; refresh it from its inputs first.
-                    recomputeGame(ctx, matchResult, lobby, session.currentGameNumber, user.id);
-                    // Count wins per side from MatchResultGame rows
-                    const games = [...ctx.db.MatchResultGame.match_result_id.filter(matchResult.id)];
-                    let blueWins = 0;
-                    let redWins = 0;
-                    for (const game of games) {
-                        if (game.winnerTeamSide.tag === 'Blue') blueWins++;
-                        else if (game.winnerTeamSide.tag === 'Red') redWins++;
-                    }
-                    // A27: the lobby's head start (seeded by start_draft) stays on top of the played games.
-                    newGamesWonBlue = blueWins + (lobby.bestOfNAdvantage?.tag === 'Blue' ? 1 : 0);
-                    newGamesWonRed = redWins + (lobby.bestOfNAdvantage?.tag === 'Red' ? 1 : 0);
-
-                    // Persist updated win counts to MatchSession
-                    ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
-                        gamesWonBlue: newGamesWonBlue,
-                        gamesWonRed: newGamesWonRed,
-                    }, user.id));
-                }
-
-                const winsNeeded = Math.ceil(session.seriesBestOf / 2);
-                if (newGamesWonBlue >= winsNeeded || newGamesWonRed >= winsNeeded) {
-                    // Series won — go to AwaitingResult for finalization
-                    ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
-                        stage: { tag: 'AwaitingResult', value: {} } as any,
-                        lastActivityAt: ctx.timestamp,
-                    }, user.id));
-
-                    // System chat message
-                    const msgs2 = [...ctx.db.ChatMessage.lobby_id.filter(lobbyId)];
-                    if (msgs2.length >= 50) {
-                        const sorted2 = [...msgs2].sort((a: any, b: any) => a.id - b.id);
-                        ctx.db.ChatMessage.id.delete(sorted2[0].id);
-                    }
-                    ctx.db.ChatMessage.insert(insertWithAudit(ctx, {
-                        id: 0,
-                        lobbyId,
-                        senderUserId: 0,
-                        senderType: { tag: 'System', value: {} } as any,
-                        content: `Series complete (${newGamesWonBlue}-${newGamesWonRed}). Stage: AwaitingResult`,
-                        metadata: undefined,
-                        anonymousLabel: undefined,
-                    }, user.id));
-                } else {
-                    // Series not won — go to BetweenGames
-                    ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
-                        stage: { tag: 'BetweenGames', value: {} } as any,
-                        lastActivityAt: ctx.timestamp,
-                    }, user.id));
-
-                    // System chat message
-                    const msgs3 = [...ctx.db.ChatMessage.lobby_id.filter(lobbyId)];
-                    if (msgs3.length >= 50) {
-                        const sorted3 = [...msgs3].sort((a: any, b: any) => a.id - b.id);
-                        ctx.db.ChatMessage.id.delete(sorted3[0].id);
-                    }
-                    ctx.db.ChatMessage.insert(insertWithAudit(ctx, {
-                        id: 0,
-                        lobbyId,
-                        senderUserId: 0,
-                        senderType: { tag: 'System', value: {} } as any,
-                        content: `Game ${session.currentGameNumber} complete (${newGamesWonBlue}-${newGamesWonRed}). Stage: BetweenGames`,
-                        metadata: undefined,
-                        anonymousLabel: undefined,
-                    }, user.id));
-                }
-            } else {
-                // bestOf=1 — direct to AwaitingResult (original behavior)
-                ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
-                    stage: { tag: 'AwaitingResult', value: {} } as any,
-                    lastActivityAt: ctx.timestamp,
-                }, user.id));
-
-                // System chat message
-                const msgs4 = [...ctx.db.ChatMessage.lobby_id.filter(lobbyId)];
-                if (msgs4.length >= 50) {
-                    const sorted4 = [...msgs4].sort((a: any, b: any) => a.id - b.id);
-                    ctx.db.ChatMessage.id.delete(sorted4[0].id);
-                }
-                ctx.db.ChatMessage.insert(insertWithAudit(ctx, {
-                    id: 0,
-                    lobbyId,
-                    senderUserId: 0,
-                    senderType: { tag: 'System', value: {} } as any,
-                    content: 'Match complete. Stage: AwaitingResult',
-                    metadata: undefined,
-                    anonymousLabel: undefined,
-                }, user.id));
-            }
-
+            throw new SenderError('Games close through confirm_game or close_game; the stage moves on the close.');
         } else {
             throw new SenderError(`Cannot advance stage from ${currentStage}.`);
         }

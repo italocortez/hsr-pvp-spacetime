@@ -214,8 +214,44 @@ Index note: the (id, gameNumber) indexes are scanned per full key over `lobbyGam
 | `confirm_match_scores` | `matchResultId: u32` | unchanged |
 | `submit_match_result` | `matchResultId: u32, winnerOverride?: TeamSide, winnerOverrideReason?: string` | recomputes the current game; every game needs complete scores; override only on a level-4 tie (A39 routing in the contract); series winner = game wins + A27 head start |
 | `advance_stage` (Scoring) | unchanged | recomputes the current game before counting game winners |
-| `equip_lightcone` | unchanged signature | refreshes the side's `MatchLineup.rosterCost` / `synergySurcharge` (confirmation kept); Auction: rejects when the light cone plus a confirmed lineup's surcharge exceeds the LC budget (review fix, Phase S7 execution) |
+| `equip_lightcone` | unchanged signature | refreshes the side's `MatchLineup.rosterCost` / `synergySurcharge` (confirmation kept); Auction: rejects when the light cone plus a confirmed lineup's surcharge exceeds the LC budget (review fix, Phase S7 execution) (superseded, Phase S7b execution: see "Game package: confirmation, close, automatic submission (S7b)" below and docs/match-session/architecture.md "Phase S7b execution") |
 | `override_match_result` / `admin_force_finalize` | unchanged signatures | A31: no winner-less Validated result; `runFinalization` throws on a record without a winner |
+
+## Game package: confirmation, close, automatic submission (S7b)
+
+Phase S7b execution (DECISIONS.md A60). Behavior: [contract.md](contract.md) "Game Confirmation, Close and Series Submission". Edit reducers (`equip_lightcone`, `arrange_lineup`, `set_eidolon`): `docs/match-session/architecture.md` "Phase S7b execution". This section supersedes the `confirm_match_scores` / `submit_match_result` rows of "Scoring (S7)" and the `advance_stage` (Scoring) row.
+
+**Removed:** `confirm_match_scores`, `submit_match_result` (the reducer; its body is the helper `submitSeriesResult`), `MatchResultRecord.blueConfirmed` / `redConfirmed`, the `winnerOverride*` reducer arguments, the S7 Disputed route for a seated referee's tie override.
+
+**Columns:** `MatchResultGame` gains `blueConfirmed: bool`, `redConfirmed: bool`, `closedAt: timestamp?` (closed ⇔ set), `closedById: u32?`; `ensureGame` initialises them (false / undefined). `MatchResultRecord.winnerOverride / winnerOverrideById / winnerOverrideReason` are now written by `closeGame` (the latest staff override; `runFinalization` copies them to `MatchSessionHistory`).
+
+**Helpers** (`helpers/scoringHelpers.ts` unless stated):
+
+| Helper | Does |
+|---|---|
+| `findEditableResult(ctx, lobbyId, allowSubmitted)` | the Pending record, or for an Admin caller a Submitted one |
+| `ensureOpenGame(ctx, lobby, record, gameNumber, user)` | `'open'` (no game row, or `closedAt` unset; Pending record) / `'admin'` (closed game, role Admin exactly, record Pending or Submitted) / throws `'This game is closed.'` (anyone else, Moderators included) or `'This match is finalized.'` |
+| `ensureResultAuthority(ctx, lobby, user, message)` | the A39 staff set: lobby referee, Moderator+, tournament organizer, assistant with `canResolveResults`; returns `{ member, isReferee, isStaff }` (shared by `set_score_adjustment` and `close_game`) |
+| `resetConfirmations(ctx, game, actorId)` | clears both flags on the game row (`replaceGame`), no-op when both are false |
+| `ensureAuctionSurchargeFits(ctx, lobby, session, gameNumber, side)` | Auction gate (A60(4)): `MatchLineup.synergySurcharge` ≤ `toHundredths(charBudget + lcBudget)` |
+| `seriesTally(ctx, record, lobby, seriesBestOf)` | wins over **closed** games + the A27 head start; `decided` = a side reached `ceil(seriesBestOf / 2)` |
+| `closeGame(...)` (`helpers/gameClose.ts`) | sets `closedAt`, `closedById`, both flags; applies a staff override (winner = override, `tieBreakLevel` stays 4, record `winnerOverride*`); writes `MatchSession.gamesWonBlue/Red`; logs one `ConfirmGame` step (`closed: true`); decided → `submitSeriesResult`, else lobby → BetweenGames + `Game N complete (b-r). Stage: BetweenGames`; rejects a level-4 tie without an override |
+| `submitSeriesResult(ctx, record, lobby, actorId)` (`helpers/gameClose.ts`) | every game closed with a result (defensive); winner from the tally (a level series is rejected); Casual → Validated + `runFinalization` inline (D-04 / D-37), otherwise Submitted; `winnerTeamSide`, `matchEndReason = Completed`, `refereeUserId` = the closer; lobby → AwaitingResult + `Series complete (b-r). Stage: AwaitingResult` (Bo1: `Match complete. Stage: AwaitingResult`) |
+| `recomputeSeriesAfterAdminEdit(ctx, lobby, record, actorId)` (`helpers/gameClose.ts`) | recompute the edited (current) game; a level-4 tie rejects the edit (`'The edit would leave the game tied; add an adjustment that decides it.'`) unless the game was already a tie closed with an override, whose winner is kept; rewrite the tally; Submitted: an undecided series rejects (`'The edit would undo the series result; void or force-finalize the match instead.'`), a changed winner updates `MatchResultRecord.winnerTeamSide`; Pending whose series becomes decided → `submitSeriesResult`; when the edit resolves a tie this game had closed with a staff override, `MatchResultRecord.winnerOverride*` is cleared so finalization does not copy a stale override (review fix) |
+
+`helpers/gameClose.ts` is separate from `scoringHelpers.ts` because it calls `runFinalization`, and `finalizationHelpers.ts` already imports `scoringHelpers.ts` (a back-import closes a cycle the bundler warns about).
+
+**Reducers** (`reducers/matchResultSubmission.ts`, `reducers/scoreEntry.ts`):
+
+| Reducer | Arguments | Notes |
+|---|---|---|
+| `confirm_game` | `lobbyId: u32, teamSide: TeamSide` | Equipping or Scoring; `ensureMatchAlive`; Pending record; game open; caller = the captain of `teamSide` (live `LobbyMember.isCaptain`, player seat; a seated referee only as its own side's captain) or a spectator referee with `refereeFullControl` (both flags, `teamSide` ignored); the side's lineup (both for full control); both sides' scores complete (the game is recomputed); Auction gate for the confirming side(s). A side cannot confirm twice. Both flags set → Auction gate for both, then `closeGame` (closer = caller, `confirmedSide` = the side or Spectator); a level-4 tie stays open with both flags set and a `ConfirmGame` step `closed: false` |
+| `close_game` | `lobbyId: u32, winnerOverride?: TeamSide, winnerOverrideReason?: string` | `ensureResultAuthority`; Equipping or Scoring; `ensureMatchAlive`; Pending record; game open; both lineups; scores complete; Auction gate for both. Override only on a level-4 tie (`'A winner override is only accepted on an unresolved tie.'`), required on one; reason trimmed ≤ 1000. A39: in a tournament lobby a seated referee (player or coach slot) who is not staff cannot override (`'A referee seated on a team cannot decide a tie in a tournament lobby; staff must close this game.'`); casual: accepted and audited. `confirmedSide = Spectator`, `closed: true` |
+| `record_group_scores`, `set_score_adjustment` | unchanged | current game only (`ensureCurrentGame`) + `ensureOpenGame` after `findEditableResult`; open game: recompute + `resetConfirmations` on the game row; Admin on a closed game: no reset, `recomputeSeriesAfterAdminEdit`. `record_group_scores` skips the captain/referee check for an Admin's closed-game edit |
+| `advance_stage` (Scoring) | — | rejected: `'Games close through confirm_game or close_game; the stage moves on the close.'` |
+| `dispute_match_result` | unchanged | still requires Submitted |
+
+**Admin edits reach the current game only** (A60(7) with the `ensureCurrentGame` limit: tie-breaks 2/3 read the game's steps, which `advance_to_next_game` deletes). Between a close and the next draft, and after the deciding close, the current game is the last closed one.
 
 ## Phase History
 
@@ -236,6 +272,7 @@ Index note: the (id, gameNumber) indexes are scanned per full key over `lobbyGam
 | Phase 12.3 | Freeze account-rating input to ELO via MRP.accountRatingSnapshot, monotonic-upward hook in select_match_account, read-path swap in processMatchMmr, finalize_match_result tournament-ordering guard, timer_expiry_classic auto-pick LMA migration |
 | "Scoring (S7)" section: `shared/scoring/`, `record_group_scores`, `set_score_adjustment`, `submit_match_result` without `winnerId`, stored computation, `MatchLineupHistory`, `MatchSessionHistory.winnerOverride*`, deletions on both exits (A21, A31, A39, A55, A56) | Phase S7 execution | 2026-11-06 |
 | Review fixes: roster cost always live (light cones after confirm count), `equip_lightcone` refreshes the lineup and reserves a confirmed Auction surcharge, adjustment authority = A39 staff set, input bounds, surcharge clamped before summing, `@shared/scoring` import | Phase S7 execution | 2026-11-06 |
+| "Game package" section: per-game `blueConfirmed` / `redConfirmed` / `closedAt` / `closedById` on `MatchResultGame`; `confirm_game`, `close_game` (A39 seating rule at the close), automatic series submission (`submitSeriesResult`), closed-game rule (`ensureOpenGame`), Admin edit path (`recomputeSeriesAfterAdminEdit`); `confirm_match_scores`, `submit_match_result`, `MatchResultRecord.blueConfirmed/redConfirmed` removed; `advance_stage` Scoring branch removed | Phase S7b execution (DECISIONS.md A60) | 2026-11-07 |
 
 ---
 

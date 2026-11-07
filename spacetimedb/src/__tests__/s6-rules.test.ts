@@ -22,6 +22,7 @@ import {
     type Harness,
     type Lobby,
 } from './s4-fixtures';
+import { finishGame } from './s7-fixtures';
 
 const actorOf = (s: Lobby, userId: number): Actor => Object.values(s.a).find((x) => x.userId === userId)!;
 const captain = (s: Lobby, team: 'Blue' | 'Red') =>
@@ -194,7 +195,13 @@ describe('Backlog #10: merged account rating', () => {
         });
         expect(snapshotOf(test, s.lobbyId, who.userId)).toBe(merged);
 
-        for (let i = 0; i < 3; i++) tx(test, s.host, (ctx) => M.advance_stage(ctx, { lobbyId: s.lobbyId }));
+        // T-S7b: BetweenGames is reached through a game close (A60(3)): draft game 1, then the full-control host closes it.
+        for (let guard = 0; lobbyRow(test, s.lobbyId).stage.tag === 'Drafting' && guard < 40; guard++) {
+            const sess = session(test, s.lobbyId);
+            const team = sess.draftSequence[sess.turnIndex].teamTurn.tag as 'Blue' | 'Red';
+            pick(s, team, `m${sess.turnIndex}`);
+        }
+        finishGame(s);
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('BetweenGames');
         tx(test, who, (ctx) => M.deselect_match_account(ctx, { lobbyId: s.lobbyId, hsrAccountId: acct2 }));
         expect(snapshotOf(test, s.lobbyId, who.userId)).toBe(merged);

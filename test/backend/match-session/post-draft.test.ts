@@ -336,13 +336,15 @@ describe('Post-Draft (Equipping + Scoring)', () => {
         it('spectator blocked from confirming lineup', async () => {
             const err = await expectReducerError(
                 // S10: rewrite (confirm_lineup takes teamSide; a referee may confirm for a side)
-                host.call.confirmLineup({ lobbyId, teamSide: { tag: 'Blue' } })
+                // S10: rewrite (confirm_game needs scores; ConfirmLineup step gone)
+                host.call.confirmGame({ lobbyId, teamSide: { tag: 'Blue' } })
             );
             expect(err).toContain('Spectators cannot confirm lineups.');
         });
 
         it('Blue captain confirms lineup — ConfirmLineup step inserted', async () => {
-            await blue.call.confirmLineup({ lobbyId, teamSide: { tag: 'Blue' } });
+            // S10: rewrite (confirm_game needs scores; ConfirmLineup step gone)
+            await blue.call.confirmGame({ lobbyId, teamSide: { tag: 'Blue' } });
             await blue.sync(1500);
             await host.sync(1500);
 
@@ -357,7 +359,8 @@ describe('Post-Draft (Equipping + Scoring)', () => {
         }, 15000);
 
         it('Red captain confirms lineup — ConfirmLineup step inserted', async () => {
-            await red.call.confirmLineup({ lobbyId, teamSide: { tag: 'Red' } });
+            // S10: rewrite (confirm_game needs scores; ConfirmLineup step gone)
+            await red.call.confirmGame({ lobbyId, teamSide: { tag: 'Red' } });
             await red.sync(1500);
             await host.sync(1500);
 
@@ -401,20 +404,20 @@ describe('Post-Draft (Equipping + Scoring)', () => {
 
     // ─── advance_stage: Scoring blocked ──────────────────────────────────
 
-    describe('advance_stage: Scoring advances to AwaitingResult (bestOf=1)', () => {
-        it('advance_stage from Scoring transitions to AwaitingResult for bestOf=1', async () => {
+    // S10: rewrite (A60(8): the Scoring branch of advance_stage is gone; a game closes through confirm_game / close_game)
+    describe('advance_stage: Scoring is rejected (A60)', () => {
+        it('advance_stage from Scoring is rejected; games close through confirm_game or close_game', async () => {
             // Lobby should now be in Scoring from the previous describe block
             const lobby = [...host.conn.db.Lobby.iter()].find(l => l.id === lobbyId);
             expect(lobby).toBeDefined();
             expect(lobby!.stage.tag).toBe('Scoring');
 
-            // Phase 10.1: advance_stage from Scoring now succeeds for bestOf=1
-            // Routes to AwaitingResult (series won or single game)
-            await host.call.advanceStage({ lobbyId });
+            const err = await expectReducerError(host.call.advanceStage({ lobbyId }));
+            expect(err).toContain('Games close through confirm_game or close_game; the stage moves on the close.');
             await host.sync(1000);
 
             const updated = [...host.conn.db.Lobby.iter()].find(l => l.id === lobbyId);
-            expect(updated!.stage.tag).toBe('AwaitingResult');
+            expect(updated!.stage.tag).toBe('Scoring');
         });
     });
 
@@ -593,7 +596,8 @@ describe('Post-Draft (Equipping + Scoring)', () => {
         it('coach cannot confirm lineup', async () => {
             const err = await expectReducerError(
                 // S10: rewrite (confirm_lineup takes teamSide)
-                cCoach.call.confirmLineup({ lobbyId: cLobbyId, teamSide: { tag: 'Blue' } })
+                // S10: rewrite (confirm_game needs scores; ConfirmLineup step gone)
+                cCoach.call.confirmGame({ lobbyId: cLobbyId, teamSide: { tag: 'Blue' } })
             );
             expect(err).toContain('Coaches cannot confirm lineups.');
         });

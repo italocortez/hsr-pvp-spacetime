@@ -15,9 +15,10 @@ import {
 } from "./types";
 
 export default {
-  matchResultId: __t.u32(),
-  get winnerOverride() {
-    return __t.option(TeamSide);
+  lobbyId: __t.u32(),
+  get teamSide() {
+    return TeamSide;
   },
-  winnerOverrideReason: __t.option(__t.string()),
+  characterName: __t.string(),
+  eidolon: __t.u8(),
 };

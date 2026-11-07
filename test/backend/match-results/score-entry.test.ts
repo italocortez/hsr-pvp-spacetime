@@ -63,6 +63,12 @@ function getMatchGames(h: TestHarness, matchResultId: number) {
     return [...h.conn.db.MatchResultGame.iter()].filter(g => g.matchResultId === matchResultId);
 }
 
+/** T-S7b (A60): game 1 of the lobby's record, where blueConfirmed / redConfirmed live now. */
+function getGame1(h: TestHarness, lobbyId: number) {
+    const mr = getMatchResult(h, lobbyId);
+    return mr ? getMatchGames(h, mr.id).find(g => g.gameNumber === 1) : undefined;
+}
+
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 describe.skipIf(!hasServerToken())('Score Entry + Confirmation', () => {
@@ -208,30 +214,33 @@ describe.skipIf(!hasServerToken())('Score Entry + Confirmation', () => {
     describe('confirm_match_scores — captain path', () => {
         it('non-participant rejected', async () => {
             const err = await expectReducerError(
-                outsider.call.confirmMatchScores({ matchResultId })
+                // S10: rewrite (confirm_match_scores removed by A60: confirmGame({ lobbyId, teamSide }); the flags live on the game row; the second confirmation closes the game)
+                outsider.call.confirmGame({ lobbyId, teamSide: { tag: 'Blue' } })
             );
             expect(err).toContain('You are not a participant or referee of this match.');
         });
 
         it('blue captain confirms → blueConfirmed=true', async () => {
-            const mrBefore = getMatchResult(host, lobbyId);
+            // S10: rewrite (confirm_match_scores removed by A60: confirmGame({ lobbyId, teamSide }); the flags live on the game row; the second confirmation closes the game)
+            const mrBefore = getGame1(host, lobbyId);
             expect(mrBefore!.blueConfirmed).toBe(false);
 
-            await blue.call.confirmMatchScores({ matchResultId });
+            await blue.call.confirmGame({ lobbyId, teamSide: { tag: 'Blue' } });
             await blue.sync(1000);
             await host.sync(1000);
 
-            const mrAfter = getMatchResult(host, lobbyId);
+            const mrAfter = getGame1(host, lobbyId);
             expect(mrAfter!.blueConfirmed).toBe(true);
             expect(mrAfter!.redConfirmed).toBe(false);
         }, 15000);
 
         it('red captain confirms → redConfirmed=true', async () => {
-            await red.call.confirmMatchScores({ matchResultId });
+            // S10: rewrite (confirm_match_scores removed by A60: confirmGame({ lobbyId, teamSide }); the flags live on the game row; the second confirmation closes the game)
+            await red.call.confirmGame({ lobbyId, teamSide: { tag: 'Red' } });
             await red.sync(1000);
             await host.sync(1000);
 
-            const mrAfter = getMatchResult(host, lobbyId);
+            const mrAfter = getGame1(host, lobbyId);
             expect(mrAfter!.blueConfirmed).toBe(true);
             expect(mrAfter!.redConfirmed).toBe(true);
         }, 15000);
@@ -287,14 +296,16 @@ describe.skipIf(!hasServerToken())('Score Entry + Confirmation', () => {
         });
 
         it('spectator referee confirms both sides at once', async () => {
-            const mrBefore = getMatchResult(refHost, refLobbyId);
+            // S10: rewrite (the flags live on the game row, A60)
+            const mrBefore = getGame1(refHost, refLobbyId);
             expect(mrBefore!.blueConfirmed).toBe(false);
             expect(mrBefore!.redConfirmed).toBe(false);
 
-            await refHost.call.confirmMatchScores({ matchResultId: refMatchResultId });
+            // S10: rewrite (confirm_match_scores removed by A60: per-game confirmGame per captain; needs arranged lineups + both scores; the second one closes the game and submits)
+            await refHost.call.confirmGame({ lobbyId: refLobbyId, teamSide: { tag: 'Blue' } });
             await refHost.sync(1000);
 
-            const mrAfter = getMatchResult(refHost, refLobbyId);
+            const mrAfter = getGame1(refHost, refLobbyId);
             expect(mrAfter!.blueConfirmed).toBe(true);
             expect(mrAfter!.redConfirmed).toBe(true);
         }, 15000);
@@ -377,9 +388,9 @@ describe.skipIf(!hasServerToken())('Score Entry + Confirmation', () => {
             await ncHost.sync(1500);
 
             // Advance to Scoring (captain confirms lineup, not non-captain)
-            await blueCaptainHarness.call.confirmLineup({ lobbyId: ncLobbyId, teamSide: { tag: 'Blue' } });
+            // S10: rewrite (confirm_lineup removed by A60; lineups need no confirmation, the game is confirmed with confirmGame): await blueCaptainHarness.call.confirmLineup({ lobbyId: ncLobbyId, teamSide: { tag: 'Blue' } });
             await blueCaptainHarness.sync();
-            await ncRed.call.confirmLineup({ lobbyId: ncLobbyId, teamSide: { tag: 'Red' } });
+            // S10: rewrite (confirm_lineup removed by A60; lineups need no confirmation, the game is confirmed with confirmGame): await ncRed.call.confirmLineup({ lobbyId: ncLobbyId, teamSide: { tag: 'Red' } });
             await ncRed.sync();
             await ncHost.call.advanceStage({ lobbyId: ncLobbyId });
             await ncHost.sync(1500);
@@ -435,7 +446,8 @@ describe.skipIf(!hasServerToken())('Score Entry + Confirmation', () => {
             await captainH.sync(1000);
 
             const err = await expectReducerError(
-                nonCaptainH.call.confirmMatchScores({ matchResultId: ncMatchResultId })
+                // S10: rewrite (confirm_match_scores removed by A60: per-game confirmGame per captain; needs arranged lineups + both scores; the second one closes the game and submits)
+                nonCaptainH.call.confirmGame({ lobbyId: ncLobbyId, teamSide: { tag: 'Blue' } })
             );
             expect(err).toContain('Only the team captain can confirm match scores.');
         }, 15000);

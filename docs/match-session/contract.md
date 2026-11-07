@@ -967,6 +967,51 @@ D-50 applies to ALL Drafting→Equipping transitions: auto (last Classic pick, l
 **When:** Blue's captain bans a second DPS character
 **Then:** Rejected: "Ban restriction: your team may ban at most one DPS character."; a Support ban is accepted; Red's own first DPS ban is unaffected. MaxTwoDps allows two DPS bans per team; MaxOnePerRole rejects a second ban of any role. When Blue's ban timer expires with autoRandomPick on, the auto-ban draws only characters Blue may still ban (SKIP when none).
 
+### Eidolon Edit in Scoring Recomputes and Resets Both Confirmations (Phase S7b execution, A60(1)(2))
+**Given:** a Classic Bo3 lobby in Scoring, game 1 open; Blue drafted Blue-1 at E0 (Classic cost 2 at E0, 5 at E2); both teams' group scores are in and the Red captain has confirmed the game (`MatchResultGame.redConfirmed = true`)
+**When:** a Blue player calls `set_eidolon(lobbyId, Blue, 'blue-1', 2)`
+**Then:** a `SetEidolon` step is logged with `{ characterName: 'blue-1', eidolon: 2, previousEidolon: 0, costPaid: 5 }` and `actorSlot = Blue`; Blue's roster cost rises by 300 hundredths (the lineup row too), the game is recomputed (tie-break 3 reads E2), and both `blueConfirmed` and `redConfirmed` are false. The Red captain must confirm again.
+
+**When:** the same player calls it again within `AbuseConfig.lineupMinIntervalMs`
+**Then:** rejected: "Lineup changes are too frequent. Please wait a moment."
+
+**When:** a Blue coach, a spectator who is not a referee, or a Red player sets a Blue eidolon
+**Then:** rejected: "Only a Blue player or a referee can set an eidolon for that team." A referee (seated or not) may set either team's eidolons.
+
+**When:** `requireOwnership = true` and Blue's selected accounts own Blue-1 only at E0 and E6, and a Blue player asks for E2
+**Then:** rejected: "Your team does not own that eidolon level on its selected accounts." E6 is accepted.
+
+**When:** the game has been closed (both confirmations) and a player or a Moderator edits it
+**Then:** rejected: "This game is closed." (light cones, lineups, scores and adjustments the same).
+
+### Light Cones and Lineups Stay Editable in Scoring (Phase S7b execution, A60(1))
+**Given:** a lobby in Scoring, game open
+**When:** the Blue captain calls `arrange_lineup` or a Blue player `equip_lightcone`
+**Then:** accepted (Equipping and Scoring both allowed); the game is recomputed and both confirmations reset. There is no lineup confirmation: `confirm_lineup` was removed (the game is confirmed as a whole with `confirm_game`, see `docs/match-results/contract.md`). In Auction, an over-budget arrangement is stored; the surcharge gate sits at `confirm_game` / `close_game`.
+
+### Auction Sale Charges the Eidolon Extra Across Both Budgets (Phase S7b execution, A61(1)(3)(5))
+**Given:** an Auction lobby with `requireOwnership = true`; Red's selected accounts own Red-1 at E2; Red-1's Auction costs are e0 = 4, e2 = 7 (extra 3); Red has a character budget of 5 and a light-cone budget of 10
+**When:** Red nominates Red-1 (`nominate_character(lobbyId, 'red-1')`, no `eidolon` argument) at its E0 base cost 4 (guards: 4 ≤ 5, and 4 + 3 ≤ 5 + 10) and Blue passes
+**Then:** at the sale the winning team's default eidolon is resolved (Red: E2, the highest it owns) and the extra 3 is charged immediately: the bid 4 leaves a character budget of 1, the extra takes that 1 (character budget 0, never negative) and the remaining 2 from the light-cone budget (10 → 8). The `AuctionSold` step records `{ winningAmount: 4, eidolon: 2, eidolonCost: 3 }`; the roster cost of the character is 7 (700 hundredths). Without `requireOwnership` the default eidolon is E0 and the extra is 0. Both sale paths (`pass_bid`, timer expiry) behave the same; the eidolon of the Nominate step is no longer used (the nominator may not be the winner).
+
+**When:** later, in Equipping, a Red player sets Red-1 to E0 with `set_eidolon`
+**Then:** the extra difference (−3) is refunded to Red's light-cone budget (never to the character budget); setting it back to E2 charges 3 again (character budget first while it is positive, otherwise the light-cone budget), rejected with "Not enough budget for that eidolon." when the difference exceeds both.
+
+### A Nomination or Bid Without Ownership Is Rejected (Phase S7b execution, A61(2)(4))
+**Given:** an Auction lobby with `requireOwnership = true`; none of Red's selected accounts owns Blue-2
+**When:** Blue nominates Blue-2 and the Red captain calls `place_bid`
+**Then:** rejected: "Your team does not own this character on any selected account." The same applies to a nomination by a team that does not own the character. `EMPTY` is exempt. A bid (or nomination) whose amount plus the team's eidolon extra exceeds its character + light-cone budget is rejected: "Not enough total budget: the eidolon extra for this character would exceed it." Bids stay capped by the character budget alone ("Bid exceeds your remaining character budget.").
+
+### A Thirds Draft Follows the A59 Order (Phase S7b execution, A59)
+**Given:** a Classic lobby with `lineupFormat = Thirds`
+**When:** the draft starts with ban mode None, Four or Six
+**Then:** `MatchSession.draftSequence` is the A59 order of that ban mode ([draft-order.md](draft-order.md) "Thirds (12 picks per team)"): None `B · RR · B · R · BB · RR · BB · RR · BB · R · B · R · B · R · BB · RR` (24 steps), Four `[B] · [R] · B · RR · B · [R] · [B] · R · BB · RR · BB · RR · BB · RR · BB · RR · BB · R` (28), Six `[B] · [R] · B · RR · B · [R] · [B] · R · BB · R · [B] · [R] · BB · RR · BB · RR · BB · RR · B · R · B · R` (30). 12 picks per team, Blue first, Red last, no run longer than two, ban positions as in Halves. Auction Thirds is unchanged (ban prefix only, 12 sales per team).
+
+### advance_stage From Scoring (Phase S7b execution, A60(5)(8))
+**Given:** a lobby in Scoring
+**When:** the host calls `advance_stage`
+**Then:** rejected: "Games close through confirm_game or close_game; the stage moves on the close." Drafting → Equipping (D-50 rollover) and Equipping → Scoring (no gate) are unchanged.
+
 ## Edge Cases
 
 | Case | Expected Behavior | Notes |
@@ -1065,6 +1110,9 @@ D-50 applies to ALL Drafting→Equipping transitions: auto (last Classic pick, l
 | Eidolon resolved from the selected accounts under requireOwnership (pick, nominate); light-cone superimposition argument stands; scenario "Eidolon Snapshot Under requireOwnership" | Phase S7 execution (DECISIONS.md A43 CH-S6) | 2026-11-06 |
 | `lineupFormat` drives the character count: Thirds = 12 picks per team (Classic sequence, Auction completion); scenario "Thirds Lobbies Draft 12 per Team" | Phase S7 execution (DECISIONS.md A21) | 2026-11-06 |
 | `equip_lightcone` refreshes the lineup row and reserves a confirmed Auction surcharge; scenario "Light Cones Equipped After confirm_lineup" | Phase S7 execution (review fix; DECISIONS.md A21) | 2026-11-06 |
+| Game package edits: eidolons (`set_eidolon`) from Drafting, light cones and lineups in Equipping and Scoring, open game only, each edit recomputes and resets both confirmations; `confirm_lineup` removed; `advance_stage` from Scoring rejected; scenarios "Eidolon Edit in Scoring Recomputes and Resets Both Confirmations", "Light Cones and Lineups Stay Editable in Scoring", "advance_stage From Scoring" added. The S7 scenarios naming `confirm_lineup` ("Lineup Groups" last When, "Auction: Over-Budget Lineup Cannot Be Confirmed", "Light Cones Equipped After confirm_lineup") and "Eidolon Snapshot Under requireOwnership" for `nominate_character` are superseded by these | Phase S7b execution (DECISIONS.md A60) | 2026-11-07 |
+| Auction eidolon economics: E0 nominations and bids, ownership on nominations and bids, total-budget guard, the extra charged at the sale across both budgets, edits pay or refund (refund to the light-cone budget); scenarios "Auction Sale Charges the Eidolon Extra Across Both Budgets", "A Nomination or Bid Without Ownership Is Rejected" added | Phase S7b execution (DECISIONS.md A61) | 2026-11-07 |
+| Thirds Classic orders per ban mode; scenario "A Thirds Draft Follows the A59 Order" added (supersedes the S7 extra-picks order in "Thirds Lobbies Draft 12 per Team") | Phase S7b execution (DECISIONS.md A59) | 2026-11-07 |
 
 ---
 

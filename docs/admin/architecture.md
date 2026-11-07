@@ -153,6 +153,11 @@ Defaults (D-B5): cursor 50 ms, chat 700 ms / 30 per minute, lineup 250 ms (no de
 - Cleanup: `performUserDeletion` deletes the user's `UserRateState` row; `server_nuke_test_data` clears `UserRateState`, `AbuseCounter` and `AdminAlert` and keeps `AbuseConfig`.
 - Not here: `view_admin_abuse_config` (S9), the GitHub Actions notifier that reads `AdminAlert` (S13 companion).
 
+### Game close and closed-game edits (Phase S7b execution, DECISIONS.md A60(4)(7))
+Two admin-side tools of the game package; the full reference is `docs/match-results/architecture.md` "Game package".
+- **Staff close** `close_game(lobbyId, winnerOverride?, winnerOverrideReason?)`: lobby referee, Moderator+, or tournament organizer / assistant with `canResolveResults` (`ensureResultAuthority`) closes the current game without both captains' confirmations; `winnerOverride` decides a level-4 tie (A39 seating rule at the close).
+- **Admin edit of a closed game**: role Admin exactly (`isAdminRole`; Moderators are rejected with "This game is closed.") may call `record_group_scores`, `set_score_adjustment`, `set_eidolon`, `equip_lightcone`, `arrange_lineup` on the current game while the record is Pending or Submitted; no stage check, no throttle, confirmations untouched, then `recomputeSeriesAfterAdminEdit` (tie or undone series → reject; Submitted winner follows the tally).
+
 ## Phase 15 -- Backend pre-work
 
 <!-- Phase 15 D-05, D-05a: Spine + positioning columns on hsr_character -->
@@ -226,6 +231,7 @@ Previous behavior matched on `(characterName, gameMode)` only, silently overwrit
 | `init` registers the Owner + SYSTEM user; owner-only `server_register_delegate` / `server_revoke_delegate`; `server_set_*` test utilities and `server_nuke_test_data` gated by `requireTestDatabase` | Phase M2 execution | 2026-11-06 |
 | Abuse controls: `init` seeds `AbuseConfig` + `AbuseBreakerJob`; `admin_update_abuse_config`, `admin_set_guest_lobby_creation`, `admin_acknowledge_alert`; scheduled `run_abuse_breaker` (5 min) trips the guest kill switch and writes one `AdminAlert`; `performUserDeletion` / `server_nuke_test_data` clean the new tables | Phase S5 execution (DECISIONS.md A42, A43) | 2026-11-06 |
 | Breaker inline in `create_lobby` on the private `AbuseCounter` fixed window (default 50 in 10 minutes); the S5 scheduled breaker reducer, its job table and its `init` seed deleted; `init` seeds the system lobby preset; `server_nuke_test_data` clears `AbuseCounter` and re-seeds the system preset | Phase S6 execution (DECISIONS.md A57, A58, A33a) | 2026-11-06 |
+| Staff close (`close_game`) and Admin edits of a closed game (role Admin, record Pending or Submitted, current game) as admin tools; cross-reference to match-results "Game package" | Phase S7b execution (DECISIONS.md A60) | 2026-11-07 |
 
 ---
 

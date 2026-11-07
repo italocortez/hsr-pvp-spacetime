@@ -12,8 +12,7 @@ export const matchResultColumns = {
     refereeUserId: t.u32().optional(),
     disputedByUserId: t.u32().optional(),
     disputeReason: t.string().optional(),
-    blueConfirmed: t.bool(),
-    redConfirmed: t.bool(),
+    // A60(3): the captains' confirmations live on MatchResultGame (per game) since S7b; the record-level flags were removed.
     refereeFullControl: t.bool(),
     matchType: MatchType,
     matchEndReason: MatchEndReason.optional(), // HOW it ended: Completed/Concede — per D-31/D-32

@@ -26,9 +26,10 @@ export function ensureMatchAlive(ctx: any, lobby: any): void {
 }
 
 /**
- * Guard for the result reducers (`record_group_scores`, `set_score_adjustment`, `confirm_match_scores`, `submit_match_result`):
- * rejects a conceded record or a Finished lobby, but allows AwaitingResult, where `advance_stage` parks the
- * lobby after Scoring (F8, A22(4)).
+ * Guard for the result reducers (`record_group_scores`, `set_score_adjustment`) and the A60(7) Admin edit path of a
+ * closed game (`equip_lightcone`, `arrange_lineup`, `set_eidolon`; S7b removed `confirm_match_scores` / `submit_match_result`):
+ * rejects a conceded record or a Finished lobby, but allows AwaitingResult and BetweenGames, where the game close parks the
+ * lobby (F8, A22(4), A60).
  */
 export function ensureNotConceded(ctx: any, lobby: any): void {
     if (hasConcededRecord(ctx, lobby.id)) {

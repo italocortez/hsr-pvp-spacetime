@@ -20,6 +20,7 @@ import {
 } from '@shared/scoring';
 import { auditUpdate } from './auditColumns';
 import { insertWithAudit, updateWithAudit } from './auditHelpers';
+import { isRoleAtLeast } from './ensurePermissions';
 import { slotIsCoach, slotTeam } from './lobbyHelpers';
 
 export type TeamTag = 'Blue' | 'Red';
@@ -82,29 +83,104 @@ export function findPendingResult(ctx: any, lobbyId: number): any {
     return record;
 }
 
+/**
+ * A60(7): the record an edit reducer works on. Pending always; with allowSubmitted (the caller is an Admin) a
+ * Submitted record too, so an Admin can still correct a closed game of a ranked series awaiting force-finalize.
+ */
+export function findEditableResult(ctx: any, lobbyId: number, allowSubmitted: boolean): any {
+    const records = [...ctx.db.MatchResultRecord.lobby_id.filter(lobbyId)];
+    const record = records.find((r: any) => r.status.tag === 'Pending')
+        ?? (allowSubmitted ? records.find((r: any) => r.status.tag === 'Submitted') : undefined);
+    if (!record) throw new SenderError('No pending match result for this lobby.');
+    return record;
+}
+
+/** A60(7): role Admin exactly (not Moderator). */
+export const isAdminRole = (user: any) => user?.role?.tag === 'Admin';
+
+/**
+ * A60(3)/(7): the open-game rule shared by every edit reducer. 'open' when the game row does not exist yet or is
+ * not closed (closedAt unset); 'admin' when the game is closed, the caller's role is Admin and the record is
+ * Pending or Submitted (the edit then keeps the game closed, does not reset confirmations and ends with
+ * recomputeSeriesAfterAdminEdit). Anyone else is rejected on a closed game, Moderators included.
+ */
+export function ensureOpenGame(ctx: any, lobby: any, record: any, gameNumber: number, user: any): 'open' | 'admin' {
+    const game = findGame(ctx, record.id, gameNumber);
+    const editable = record.status.tag === 'Pending' || record.status.tag === 'Submitted';
+    if (!game || game.closedAt === undefined) {
+        if (record.status.tag !== 'Pending') throw new SenderError('No pending match result for this lobby.');
+        return 'open';
+    }
+    if (editable && isAdminRole(user)) return 'admin';
+    if (editable) throw new SenderError('This game is closed.');
+    throw new SenderError('This match is finalized.');
+}
+
+/**
+ * A39 staff set (A60(4)): a lobby referee (seated or spectator), Moderator+ anywhere, or in a tournament lobby the
+ * organizer or an assistant with canResolveResults. Returns the caller's member row (if any) and whether the caller
+ * is staff beyond the referee seat (isStaff); throws with `message` otherwise. Shared by set_score_adjustment and
+ * close_game.
+ */
+export function ensureResultAuthority(ctx: any, lobby: any, user: any, message: string): { member: any; isReferee: boolean; isStaff: boolean } {
+    const member = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobby.id, user.id])][0];
+    const isReferee = !!member?.isReferee;
+    let isStaff = isRoleAtLeast(user.role, 'Moderator');
+    if (!isStaff && lobby.isTournamentControlled && lobby.tournamentId !== undefined) {
+        const tournament = ctx.db.Tournament.id.find(lobby.tournamentId);
+        if (tournament && tournament.organizerId === user.id) isStaff = true;
+        const assistant = [...ctx.db.TournamentAssistant.by_tournament_and_user.filter([lobby.tournamentId, user.id])][0];
+        if (assistant?.canResolveResults) isStaff = true; // A25
+    }
+    if (!isReferee && !isStaff) throw new SenderError(message);
+    return { member, isReferee, isStaff };
+}
+
 export interface TeamDraft {
     characters: string[];
-    /** Hundredths: Classic Pick.costPaid (cost at the eidolon) or Auction AuctionSold.winningAmount. */
+    /**
+     * Hundredths, the character's roster cost at its current eidolon. Classic: the latest SetEidolon.costPaid, else
+     * Pick.costPaid (the cost-set price at the level). Auction (A61(7)): AuctionSold.winningAmount plus the eidolon
+     * extra (the latest SetEidolon.costPaid, else AuctionSold.eidolonCost).
+     */
     characterCosts: number[];
     lightconeCosts: number[];
-    /** CH-S6 / D.8.7: the eidolon recorded in the Pick / AuctionSold payload (the scoring input). */
+    /**
+     * CH-S6 / D.8.7, A60(1): the eidolon the scoring uses (tie-break 3): the latest SetEidolon step of the character
+     * for that side in that game, else the level recorded in the Pick / AuctionSold payload.
+     */
     eidolons: Array<{ name: string; eidolon: number }>;
 }
 
-/** The team's draft for one game, read from that game's steps (the step payloads are the snapshot, D.8.7). */
+/**
+ * The team's draft for one game, read from that game's steps (the step payloads are the snapshot, D.8.7). A60:
+ * eidolon edits are SetEidolon steps (actorSlot = the team); the latest one per character wins (highest sequence).
+ */
 export function teamDraft(ctx: any, lobbyId: number, gameNumber: number, side: TeamTag): TeamDraft {
     const draft: TeamDraft = { characters: [], characterCosts: [], lightconeCosts: [], eidolons: [] };
-    for (const step of ctx.db.MatchSessionStep.lobby_id.filter(lobbyId)) {
-        if (step.gameNumber !== gameNumber) continue;
+    const steps = [...ctx.db.MatchSessionStep.lobby_id.filter(lobbyId)]
+        .filter((s: any) => s.gameNumber === gameNumber)
+        .sort((a: any, b: any) => a.sequence - b.sequence);
+    const latestEdit = new Map<string, { eidolon: number; costPaid: number; sequence: number }>();
+    for (const step of steps) {
+        if (step.payload.tag === 'SetEidolon' && step.actorSlot.tag === side) {
+            latestEdit.set(step.payload.value.characterName, { ...step.payload.value, sequence: step.sequence });
+        }
+    }
+    for (const step of steps) {
         const p = step.payload;
         if (p.tag === 'Pick' && step.action.tag === 'Pick' && step.actorSlot.tag === side) {
+            // Only an edit after this pick counts (an undone pick leaves its edits behind; a re-pick starts fresh).
+            const found = latestEdit.get(p.value.characterName);
+            const edit = found && found.sequence > step.sequence ? found : undefined;
             draft.characters.push(p.value.characterName);
-            draft.characterCosts.push(toHundredths(p.value.costPaid));
-            draft.eidolons.push({ name: p.value.characterName, eidolon: p.value.eidolon });
+            draft.characterCosts.push(toHundredths(edit ? edit.costPaid : p.value.costPaid));
+            draft.eidolons.push({ name: p.value.characterName, eidolon: edit ? edit.eidolon : p.value.eidolon });
         } else if (p.tag === 'AuctionSold' && p.value.winningTeam.tag === side) {
+            const edit = latestEdit.get(p.value.characterName);
             draft.characters.push(p.value.characterName);
-            draft.characterCosts.push(toHundredths(p.value.winningAmount));
-            draft.eidolons.push({ name: p.value.characterName, eidolon: p.value.eidolon });
+            draft.characterCosts.push(toHundredths(p.value.winningAmount) + toHundredths(edit ? edit.costPaid : p.value.eidolonCost));
+            draft.eidolons.push({ name: p.value.characterName, eidolon: edit ? edit.eidolon : p.value.eidolon });
         } else if (p.tag === 'EquipLightcone' && step.actorSlot.tag === side) {
             draft.lightconeCosts.push(toHundredths(p.value.costPaid));
         }
@@ -138,9 +214,8 @@ export function findLineup(ctx: any, lobbyId: number, gameNumber: number, side: 
 }
 
 /**
- * Tie-break 1 / handicap input: always live, from the game's steps (picks, sold characters, equipped light cones)
- * plus the surcharge of the current arrangement (none without a lineup row), confirmed or not, so a light cone
- * equipped after confirm_lineup still counts.
+ * Tie-break 1 / handicap input: always live, from the game's steps (picks, sold characters, eidolon edits, equipped
+ * light cones) plus the surcharge of the current arrangement (none without a lineup row).
  */
 export function teamRosterCost(ctx: any, lobby: any, gameNumber: number, side: TeamTag, draft: TeamDraft): number {
     const lineup = findLineup(ctx, lobby.id, gameNumber, side);
@@ -148,8 +223,8 @@ export function teamRosterCost(ctx: any, lobby: any, gameNumber: number, side: T
 }
 
 /**
- * equip_lightcone hook: after a light cone is equipped, the side's lineup row (if any) gets the new roster cost
- * and surcharge; isConfirmed is left as it is.
+ * equip_lightcone / set_eidolon hook: after a light cone or an eidolon changes, the side's lineup row (if any) gets
+ * the new roster cost and surcharge.
  */
 export function refreshLineupCosts(ctx: any, lobby: any, gameNumber: number, side: TeamTag, actorId: number): void {
     const lineup = findLineup(ctx, lobby.id, gameNumber, side);
@@ -202,6 +277,10 @@ export function ensureGame(ctx: any, record: any, lobby: any, gameNumber: number
         winnerTeamSide: teamSideValue('Spectator'),
         validationStatus: { tag: 'Pending', value: {} },
         validatedByUserId: undefined,
+        blueConfirmed: false,
+        redConfirmed: false,
+        closedAt: undefined,
+        closedById: undefined,
     }, actorId));
 }
 
@@ -267,14 +346,70 @@ export function recomputeGame(ctx: any, record: any, lobby: any, gameNumber: num
     return result;
 }
 
-/** Any change to scores or adjustments resets both captains' confirmations (A21). */
-export function resetConfirmations(ctx: any, record: any, actorId: number): void {
-    if (!record.blueConfirmed && !record.redConfirmed) return;
-    ctx.db.MatchResultRecord.id.update(updateWithAudit(ctx, record, { blueConfirmed: false, redConfirmed: false }, actorId));
+/**
+ * A60(2): every edit of an open game (scores, adjustments, eidolons, light cones, lineup) resets both captains'
+ * confirmations of that game. Works on the game row; a no-op when neither flag is set.
+ */
+export function resetConfirmations(ctx: any, game: any, actorId: number): void {
+    if (!game || (!game.blueConfirmed && !game.redConfirmed)) return;
+    replaceGame(ctx, game, { blueConfirmed: false, redConfirmed: false }, actorId);
 }
 
 /** True when the stored outcome of the game is an unresolved tie (level 4). */
 export const isUnresolvedTie = (game: any) => game.tieBreakLevel === TIE_BREAK_UNRESOLVED;
+
+/** A closed game (A60(3)): closedAt set by the second confirmation or a staff close. */
+export const isClosedGame = (game: any) => game?.closedAt !== undefined;
+
+/**
+ * A60(4) Auction gate: a team's synergy surcharge (its lineup row, hundredths) must fit its remaining budget
+ * (character + light-cone budget; after the D-50 rollover the character budget is 0). Replaces the S7 surcharge
+ * reservation in equip_lightcone. No-op in Classic.
+ */
+export function ensureAuctionSurchargeFits(ctx: any, lobby: any, session: any, gameNumber: number, side: TeamTag): void {
+    if (lobby.draftMode.tag !== 'Auction') return;
+    const lineup = findLineup(ctx, lobby.id, gameNumber, side);
+    const remaining = side === 'Blue'
+        ? session.teamBlueCharBudget + session.teamBlueLcBudget
+        : session.teamRedCharBudget + session.teamRedLcBudget;
+    if (lineup && lineup.synergySurcharge > toHundredths(remaining)) {
+        throw new SenderError('The synergy surcharge exceeds the remaining budget; rearrange the lineup.');
+    }
+}
+
+/** System chat line in the lobby (D-11), keeping the 50-message rolling window. */
+export function postSystemChat(ctx: any, lobbyId: number, content: string, actorId: number): void {
+    const existing = [...ctx.db.ChatMessage.lobby_id.filter(lobbyId)];
+    if (existing.length >= 50) {
+        const oldest = [...existing].sort((a: any, b: any) => a.id - b.id)[0];
+        ctx.db.ChatMessage.id.delete(oldest.id);
+    }
+    ctx.db.ChatMessage.insert(insertWithAudit(ctx, {
+        id: 0, // autoInc
+        lobbyId,
+        senderUserId: 0,
+        senderType: { tag: 'System', value: {} } as any,
+        content,
+        metadata: undefined,
+        anonymousLabel: undefined,
+    }, actorId));
+}
+
+/**
+ * A60(3)/(6), A27: the series tally = wins over the record's **closed** games plus the lobby's head start
+ * (Lobby.bestOfNAdvantage). decided = a side reached ceil(seriesBestOf / 2).
+ */
+export function seriesTally(ctx: any, record: any, lobby: any, seriesBestOf: number): { blue: number; red: number; decided: boolean } {
+    let blue = lobby.bestOfNAdvantage?.tag === 'Blue' ? 1 : 0;
+    let red = lobby.bestOfNAdvantage?.tag === 'Red' ? 1 : 0;
+    for (const g of ctx.db.MatchResultGame.match_result_id.filter(record.id)) {
+        if (!isClosedGame(g)) continue;
+        if (g.winnerTeamSide.tag === 'Blue') blue++;
+        else if (g.winnerTeamSide.tag === 'Red') red++;
+    }
+    const winsNeeded = Math.ceil(seriesBestOf / 2);
+    return { blue, red, decided: blue >= winsNeeded || red >= winsNeeded };
+}
 
 /**
  * MatchSessionHistory.handicapApplied (A21, hundredths): the net handicap advantage Blue received over Red,

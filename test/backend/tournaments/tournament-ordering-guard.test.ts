@@ -118,9 +118,9 @@ async function setupValidatedTournamentMatch(
     await toUser.sync(1500);
 
     // Advance Drafting -> Equipping -> Scoring (lineup confirmation + advanceStage)
-    await blue.call.confirmLineup({ lobbyId, teamSide: { tag: 'Blue' } });
+    // S10: rewrite (confirm_lineup removed by A60; lineups need no confirmation, the game is confirmed with confirmGame): await blue.call.confirmLineup({ lobbyId, teamSide: { tag: 'Blue' } });
     await blue.sync();
-    await red.call.confirmLineup({ lobbyId, teamSide: { tag: 'Red' } });
+    // S10: rewrite (confirm_lineup removed by A60; lineups need no confirmation, the game is confirmed with confirmGame): await red.call.confirmLineup({ lobbyId, teamSide: { tag: 'Red' } });
     await red.sync();
     await toUser.call.advanceStage({ lobbyId });
     await toUser.sync(1500);
@@ -137,16 +137,16 @@ async function setupValidatedTournamentMatch(
     await toUser.sync(1000);
 
     // Confirm both sides
-    await blue.call.confirmMatchScores({ matchResultId: mr.id });
+    // S10: rewrite (confirm_match_scores removed by A60: per-game confirmGame per captain; needs arranged lineups + both scores; the second one closes the game and submits)
+    await blue.call.confirmGame({ lobbyId, teamSide: { tag: 'Blue' } });
     await blue.sync(500);
-    await red.call.confirmMatchScores({ matchResultId: mr.id });
+    // S10: rewrite (confirm_match_scores removed by A60: per-game confirmGame per captain; needs arranged lineups + both scores; the second one closes the game and submits)
+    await red.call.confirmGame({ lobbyId, teamSide: { tag: 'Red' } });
     await red.sync(500);
     await toUser.sync(1000);
 
     // Submit
-    await toUser.call.submitMatchResult({
-        matchResultId: mr.id,
-    });
+    // S10: rewrite (submit_match_result removed by A60(6): the close of the deciding game submits the series): await toUser.call.submitMatchResult({ matchResultId: mr.id, });
     await toUser.sync(1500);
 
     // Override to Validated (admin)
@@ -211,13 +211,15 @@ async function setupValidatedNonTournamentMatch(
     await host.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0, screenshotUrl: 'https://i.imgur.com/test-red.png' });
     await host.sync(1000);
 
-    await blue.call.confirmMatchScores({ matchResultId: mr.id });
+    // S10: rewrite (confirm_match_scores removed by A60: per-game confirmGame per captain; needs arranged lineups + both scores; the second one closes the game and submits)
+    await blue.call.confirmGame({ lobbyId, teamSide: { tag: 'Blue' } });
     await blue.sync(500);
-    await red.call.confirmMatchScores({ matchResultId: mr.id });
+    // S10: rewrite (confirm_match_scores removed by A60: per-game confirmGame per captain; needs arranged lineups + both scores; the second one closes the game and submits)
+    await red.call.confirmGame({ lobbyId, teamSide: { tag: 'Red' } });
     await red.sync(500);
     await host.sync(1000);
 
-    await host.call.submitMatchResult({ matchResultId: mr.id });
+    // S10: rewrite (submit_match_result removed by A60(6): the close of the deciding game submits the series): await host.call.submitMatchResult({ matchResultId: mr.id });
     await host.sync(1500);
 
     await admin.call.overrideMatchResult({

@@ -37,8 +37,6 @@ export function performConcede(
         refereeUserId: undefined,
         disputedByUserId: undefined,
         disputeReason: undefined,
-        blueConfirmed: true,
-        redConfirmed: true,
         refereeFullControl: false,
         matchType: lobby.matchType,
         matchEndReason: { tag: 'Concede', value: {} } as any,
@@ -331,8 +329,6 @@ export const defer_match = spacetimedb.reducer(
             refereeUserId: undefined,
             disputedByUserId: undefined,
             disputeReason: undefined,
-            blueConfirmed: false,
-            redConfirmed: false,
             refereeFullControl: false,
             matchType: lobby.matchType,
             matchEndReason: undefined,  // Not yet determined

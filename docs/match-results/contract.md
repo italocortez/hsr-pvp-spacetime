@@ -364,6 +364,18 @@ The server decides every game and the series from the submitted inputs; the form
 
 **History (A56):** finalization archives each `MatchLineup` as a `MatchLineupHistory` row and the game row (raw totals, adjusted results, deaths, tie-break level, winner) as before; group scores, adjustments and live lineups are deleted with the result record on both exits (finalization and `hardDeleteLobby`).
 
+## Game Confirmation, Close and Series Submission (Phase S7b execution, A60)
+
+Supersedes, for games played from S7b on, the series-level confirmation (`confirm_match_scores`), the referee's submission (`submit_match_result`) and the S7 override routing above. Reducer reference: [architecture.md](architecture.md) "Game package".
+
+- **One confirmation per captain per game** (`confirm_game(lobbyId, teamSide)`), covering lineup, light cones, eidolons and scores of the current game. Needs the side's lineup, both sides' complete group scores and, in Auction, the side's synergy surcharge within its remaining budget (character + light cones). A spectator referee with `refereeFullControl` confirms both sides at once. A side cannot confirm twice.
+- **Every open-game edit resets both confirmations** (scores, adjustments, eidolons, light cones, lineups), after recomputing the game.
+- **The second confirmation closes the game**: `MatchResultGame.closedAt` / `closedById` are set, the series tally (`MatchSession.gamesWonBlue/Red` = wins over closed games + the A27 head start) is updated, and the lobby moves to **BetweenGames**, or, when the series is decided, the result **submits itself**: Casual → Validated and finalized inline (D-04 / D-37); Ranked and tournament → **Submitted** (staff force-finalize; tournament routing unchanged). `refereeUserId` = the closer. There is no submit click any more.
+- **A level-4 tie never closes on confirmations**: both flags stay set and the game stays open until staff close it with `winnerOverride`.
+- **Staff close** (`close_game(lobbyId, winnerOverride?, winnerOverrideReason?)`): any lobby referee, a Moderator+, or in a tournament lobby the organizer or an assistant with `canResolveResults` may close the current game without both confirmations (both lineups and both scores needed; Auction gate for both teams). `winnerOverride` only on a level-4 tie, and required there. **A39 at the close:** in a tournament lobby a referee seated on a team (player or coach) who is not staff cannot decide a tie (rejected; staff close it); in a casual lobby the override is accepted and audited in `MatchResultRecord.winnerOverride*` (copied to `MatchSessionHistory` at finalization).
+- **Closed is closed**: every edit reducer rejects a closed game ("This game is closed."), also between the close and the next draft, Moderators included.
+- **Admin edits a closed game** (role Admin only) while the record is Pending or Submitted: scores, adjustments, eidolons, light cones, lineup of the **current** game. The game stays closed, confirmations stay, the audit columns name the admin, and the series is recomputed: an edit that leaves the game tied (unless it was already closed with an override) or undoes a submitted series result is rejected; a changed series winner on a Submitted record updates `winnerTeamSide`. After finalization nothing is editable (force-finalize and disputes are the tools).
+
 ## Phase 12.3: accountRatingSnapshot lifecycle
 
 ### Capture (MMR-RACE-01)
@@ -505,6 +517,60 @@ after `start_draft`).
 **When:** the referee submits with `winnerOverride = Blue`
 **Then:** the record is **Disputed** with no `winnerTeamSide`, `winnerOverride = Blue`, `winnerOverrideById` = the referee; the lobby goes to AwaitingResult; nothing is finalized. Staff resolve it with `override_match_result`. In a casual lobby the same override is accepted and finalized.
 
+### Both Captains Confirm a Bo1: the Game Closes and the Series Submits Itself (Phase S7b execution, A60(3)(6))
+**Given:** a Casual Bo1 lobby in Scoring; both lineups arranged; both sides' group scores entered; Blue wins on the adjusted result
+**When:** the Blue captain calls `confirm_game(lobbyId, Blue)`
+**Then:** `MatchResultGame.blueConfirmed = true`, a `ConfirmGame` step `{ confirmedSide: Blue, closed: false }` is logged; nothing else changes.
+
+**When:** the Red captain calls `confirm_game(lobbyId, Red)`
+**Then:** the game closes (`closedAt`, `closedById` = the Red captain, both flags true), one `ConfirmGame` step `{ confirmedSide: Red, closed: true }` is logged, the record becomes Validated with `winnerTeamSide = Blue`, `matchEndReason = Completed`, `refereeUserId` = the Red captain, the system chat says "Match complete. Stage: AwaitingResult", and finalization runs inline. In a **Ranked** lobby the record lands in **Submitted** instead (lobby AwaitingResult) and waits for staff force-finalize.
+
+**When:** a captain confirms the other side, a non-captain player confirms, or a seated referee who is not its team's captain confirms
+**Then:** rejected ("Only the team captain can confirm …"). A spectator referee without `refereeFullControl`: "Referee full control is not enabled for this match."; with it, both flags are set at once and the game closes.
+
+**When:** a captain confirms before the side's lineup exists, or before both sides' scores are complete
+**Then:** rejected: "Arrange the lineup before confirming the game." / "Both teams' group scores are needed before confirming."
+
+### A Bo3 Game 1 Close Moves to BetweenGames With the Tally (Phase S7b execution, A60(3), A27)
+**Given:** a Bo3 lobby, game 1 in Scoring, Red wins game 1
+**When:** both captains confirm
+**Then:** game 1 is closed, `MatchSession.gamesWonRed = 1` (plus the A27 head start, if any), the lobby moves to BetweenGames with "Game 1 complete (0-1). Stage: BetweenGames"; the record stays Pending. Any edit of game 1 by a player, referee or Moderator is now rejected ("This game is closed."), also before the next draft starts. The close of the deciding game (2-0 or 2-1) submits the series ("Series complete (b-r). Stage: AwaitingResult").
+
+### A Tie Stays Open Until a Staff Close With an Override (Phase S7b execution, A60(3)(4))
+**Given:** game 1 is a level-4 tie (equal adjusted results, roster cost, 4★ count and 5★ eidolons)
+**When:** both captains confirm
+**Then:** both flags are set, no error, and the game stays **open** (no close, no stage change).
+
+**When:** the spectator referee calls `close_game(lobbyId)` without an override
+**Then:** rejected: "Game 1 is tied after every tie-break: staff closes the game with winnerOverride."
+
+**When:** the spectator referee calls `close_game(lobbyId, Blue, 'coin toss on stream')`
+**Then:** the game closes with `winnerTeamSide = Blue`, `tieBreakLevel = 4`; `MatchResultRecord.winnerOverride = Blue`, `winnerOverrideById` = the referee, `winnerOverrideReason` = the reason; the `ConfirmGame` step carries `{ confirmedSide: Spectator, closed: true, winnerOverride: Blue, … }`. An override on a game that is not a tie is rejected: "A winner override is only accepted on an unresolved tie."
+
+### A Seated Referee Cannot Close a Tie in a Tournament Lobby (Phase S7b execution, A39, A60(4))
+**Given:** a tournament lobby (`isTournamentControlled`), a level-4 tie, the lobby referee holds a Blue player seat and is not a Moderator, the organizer or a results assistant
+**When:** the referee calls `close_game(lobbyId, Blue)`
+**Then:** rejected: "A referee seated on a team cannot decide a tie in a tournament lobby; staff must close this game." Nothing changes; the organizer, a results assistant or a Moderator closes it. In a casual lobby the same call is accepted and audited. (Replaces the S7 Disputed route.)
+
+### An Admin Edits a Closed Game, a Moderator Cannot (Phase S7b execution, A60(7))
+**Given:** a Ranked Bo1 whose game closed with Blue winning; the record is Submitted, the lobby AwaitingResult
+**When:** a Moderator calls `set_score_adjustment` for game 1
+**Then:** rejected: "This game is closed."
+
+**When:** an Admin calls `record_group_scores` for game 1 with corrected Blue values that keep Blue the winner
+**Then:** accepted: the group rows and the game are recomputed, the game stays closed, both confirmations stay set, the audit columns name the Admin, the record stays Submitted with `winnerTeamSide = Blue`.
+
+### An Admin Edit That Would Undo the Series Is Rejected (Phase S7b execution, A60(7))
+**Given:** a Ranked Bo3 with the A27 head start for Blue (1-0); game 1 closed with Blue winning, so the series is 2-0, Submitted, lobby AwaitingResult
+**When:** an Admin enters game 1 values that make Red win it (the tally would be 1-1)
+**Then:** rejected: "The edit would undo the series result; void or force-finalize the match instead." Nothing changes.
+
+**When:** an Admin enters values that leave game 1 a level-4 tie
+**Then:** rejected: "The edit would leave the game tied; add an adjustment that decides it." (A game already closed on a tie with a staff override keeps its override winner when an edit leaves it tied.)
+
+**When:** in a Ranked Bo1 (Submitted, Blue 1-0) an Admin's edit makes Red win the game
+**Then:** accepted: the series is still decided (Red 1-0) and `MatchResultRecord.winnerTeamSide` becomes Red.
+
 ## Edge Cases
 
 | Case | Expected Behavior | Notes |
@@ -568,6 +634,7 @@ after `start_draft`).
 | Phase S6/S7 execution | Snapshot capture wording: MAX of the selected accounts → merged rating over the union of their rosters, ratchet kept (backlog #10) | 2026-11-06 |
 | Phase S7 execution | Server-computed scoring (A21): `record_group_scores` + `set_score_adjustment` replace `record_game_scores`; `submit_match_result` drops `winnerId`; tie-break chain; threshold boundary neutral, hundredths, eidolons from step payloads (backlog #11 settled items); `winnerOverride` authority (A39); no draws in submit / force-finalize / override / finalization (A31); optional adjustment reason (A55); `MatchLineupHistory` + deletions on both exits (A56); scenarios "A 4v4 + 4v4 Bo1 Scored by the Server" … "Seated Player-Referee Overrides in a Tournament Lobby" added | 2026-11-06 |
 | Phase S7 execution | Review fixes: roster cost computed live (light cones equipped after `confirm_lineup` count); `set_score_adjustment` authority widened to the A39 staff set; input caps; series rule for `winnerOverride` stated. Synergy pairs (A21 / backlog #3): canonical storage + update-on-resubmit supersedes the literal "reject a pair that exists in either order" wording, **pending the user's confirmation** (docs/cost-sets/architecture.md) | 2026-11-06 |
+| Phase S7b execution | Game package (DECISIONS.md A60): per-game confirmation `confirm_game` (second confirmation closes the game; a level-4 tie stays open), staff close `close_game` with `winnerOverride` (A39 seating rule at the close replaces the Disputed route), automatic series submission at the deciding close (Casual finalizes inline, Ranked → Submitted), closed-game rule for every edit reducer, Admin edits of a closed game; `confirm_match_scores`, `submit_match_result` and `MatchResultRecord.blueConfirmed/redConfirmed` removed. Rules section "Game Confirmation, Close and Series Submission" and scenarios "Both Captains Confirm a Bo1" … "An Admin Edit That Would Undo the Series Is Rejected" added; the `confirm_match_scores` / `submit_match_result` reducer sections and the S7 override scenarios describe the removed path | 2026-11-07 |
 
 ---
 

@@ -92,7 +92,7 @@ export { check_in_tournament } from './reducers/tournamentCheckIn';
 export { register_for_tournament, withdraw_from_tournament, approve_participant, waitlist_promote } from './reducers/tournamentRegistration';
 export { create_tournament_team, request_join_team, accept_team_request, reject_team_request, leave_tournament_team, disband_tournament_team } from './reducers/tournamentTeams';
 export { transfer_referee, reclaim_referee } from './reducers/refereeManagement';
-export { confirm_match_scores, submit_match_result, dispute_match_result } from './reducers/matchResultSubmission';
+export { confirm_game, close_game, dispute_match_result } from './reducers/matchResultSubmission';
 export { record_group_scores, set_score_adjustment } from './reducers/scoreEntry';
 export { dq_participant, override_match_result, assign_tournament_assistant, remove_tournament_assistant, mod_promote_to_host, mod_demote_from_host } from './reducers/tournamentAdmin';
 export { generate_bracket, seed_bracket, swap_seeds } from './reducers/bracketGeneration';
@@ -117,7 +117,7 @@ export { admin_update_abuse_config, admin_set_guest_lobby_creation, admin_acknow
 export { start_draft, pick_character, ban_character, timer_expiry_classic } from './reducers/draftClassic';
 export { undo_last_step, pause_draft, resume_draft } from './reducers/draftControl';
 export { nominate_character, place_bid, pass_bid, timer_expiry_auction } from './reducers/draftAuction';
-export { equip_lightcone, arrange_lineup, confirm_lineup, advance_stage } from './reducers/postDraft';
+export { equip_lightcone, arrange_lineup, set_eidolon, advance_stage } from './reducers/postDraft';
 export { concede_match, claim_forfeit, defer_match } from './reducers/concede';
 export { advance_to_next_game, shelve_series, resume_series } from './reducers/seriesManagement';
 export { admin_force_finalize, admin_void_match, admin_set_bracket_winner } from './reducers/adminMatchTools';

@@ -79,9 +79,11 @@ async function setupScoredMatch(
     await host.sync(1000);
 
     // Confirm both sides
-    await blue.call.confirmMatchScores({ matchResultId: mr.id });
+    // S10: rewrite (confirm_match_scores removed by A60: per-game confirmGame per captain; needs arranged lineups + both scores; the second one closes the game and submits)
+    await blue.call.confirmGame({ lobbyId, teamSide: { tag: 'Blue' } });
     await blue.sync(500);
-    await red.call.confirmMatchScores({ matchResultId: mr.id });
+    // S10: rewrite (confirm_match_scores removed by A60: per-game confirmGame per captain; needs arranged lineups + both scores; the second one closes the game and submits)
+    await red.call.confirmGame({ lobbyId, teamSide: { tag: 'Red' } });
     await red.sync(500);
     await host.sync(1000);
 
@@ -157,7 +159,7 @@ describe.skipIf(!hasServerToken())('Match Lifecycle', () => {
         }, 120000);
 
         it('submit → auto-Validated + auto-finalized', async () => {
-            await host.call.submitMatchResult({ matchResultId });
+            // S10: rewrite (submit_match_result removed by A60(6): the close of the deciding game submits the series): await host.call.submitMatchResult({ matchResultId });
             await host.sync(2000);
             await blue.sync(2000);
             await red.sync(2000);
@@ -220,7 +222,8 @@ describe.skipIf(!hasServerToken())('Match Lifecycle', () => {
 
         it('submit without authority rejected', async () => {
             const err = await expectReducerError(
-                outsider.call.submitMatchResult({ matchResultId })
+                // S10: rewrite (submit_match_result removed by A60(6); the staff close is close_game, message differs)
+                outsider.call.closeGame({ lobbyId })
             );
             expect(err).toMatch(/not a member|referee authority|not found/i);
         });
@@ -228,7 +231,7 @@ describe.skipIf(!hasServerToken())('Match Lifecycle', () => {
         // ── Submit ───────────────────────────────────────────────────
 
         it('submit by referee → Submitted', async () => {
-            await host.call.submitMatchResult({ matchResultId });
+            // S10: rewrite (submit_match_result removed by A60(6): the close of the deciding game submits the series): await host.call.submitMatchResult({ matchResultId });
             await host.sync(1500);
             await blue.sync(1500);
 
@@ -370,7 +373,7 @@ describe.skipIf(!hasServerToken())('Match Lifecycle', () => {
             matchResultId = result.matchResultId;
 
             // Submit to move to Submitted
-            await host.call.submitMatchResult({ matchResultId });
+            // S10: rewrite (submit_match_result removed by A60(6): the close of the deciding game submits the series): await host.call.submitMatchResult({ matchResultId });
             await host.sync(1500);
         }, 120000);
 
@@ -431,7 +434,7 @@ describe.skipIf(!hasServerToken())('Match Lifecycle', () => {
 
         it('submit with winnerId=0 → auto-finalized', async () => {
             // S10: rewrite (winnerId removed by A21/A31; the server computes the winner)
-            await host.call.submitMatchResult({ matchResultId });
+            // S10: rewrite (submit_match_result removed by A60(6): the close of the deciding game submits the series): await host.call.submitMatchResult({ matchResultId });
             await host.sync(2000);
             await blue.sync(2000);
 

@@ -1,17 +1,21 @@
 // T-S7(b): in-memory tests for the S7 lineups (backlog #3, A21, A56), the eidolon snapshot (CH-S6, D.8.7), the
 // format-driven character count (Thirds = 12 picks per team) and the hardDeleteLobby cleanup. TestClock throughout.
+// T-S7b (A60): no lineup confirmation any more (confirm_lineup / MatchLineup.isConfirmed removed); the Auction surcharge
+// gate sits at confirm_game; equips reset the game confirmations.
 import { describe, expect, it } from 'vitest';
 import { hardDeleteLobby } from '../reducers/lobbyGc';
-import { M, advance, expectReject, newHarness, session, setupLobby, steps, tx } from './s4-fixtures';
+import { M, advance, expectReject, lobbyRow, newHarness, session, setupLobby, steps, tx } from './s4-fixtures';
 import {
     H,
     arrange,
     blueNames,
     captain,
-    confirm,
+    confirmBoth,
+    confirmGame,
     draftAuction,
     draftClassic,
     equip,
+    game,
     halves,
     insertLightconeCost,
     insertRoster,
@@ -43,7 +47,7 @@ describe('backlog #3: synergy surcharge and who arranges', () => {
         expect(lineup(test, s.lobbyId, 'Blue').synergySurcharge).toBe(H(4));
     });
 
-    it('only the captain of that team or a referee arranges; throttled; arranging a confirmed lineup clears it', () => {
+    it('only the captain of that team or a referee arranges; throttled; the referee arranges either team', () => {
         const test = newHarness();
         insertRoster(test, [...blueNames(), ...redNames()]);
         const s = setupLobby(test);
@@ -67,19 +71,18 @@ describe('backlog #3: synergy surcharge and who arranges', () => {
         expectReject(test, blueCap, (ctx) =>
             M.arrange_lineup(ctx, { lobbyId: s.lobbyId, teamSide: { tag: 'Blue' }, groups: JSON.stringify(halves(blueNames())) }),
             /too frequent/);
-        confirm(s, blueCap, 'Blue');
-        expect(lineup(test, s.lobbyId, 'Blue').isConfirmed).toBe(true);
-        const confirmStep = steps(test, s.lobbyId).find((st) => st.action.tag === 'ConfirmLineup')!;
-        expect(confirmStep.actorSlot.tag).toBe('Blue');
-        expect(JSON.parse((confirmStep.payload.value as { groups: string }).groups)).toEqual(halves(blueNames()));
+        expect(JSON.parse(lineup(test, s.lobbyId, 'Blue').groups)).toEqual(halves(blueNames()));
 
-        // The spectator referee (host) may arrange either team; that clears Blue's confirmation.
+        // The spectator referee (host) may arrange either team; no step is logged for an arrangement.
         arrange(s, s.host, 'Blue', [blueNames().slice(4, 8), blueNames().slice(0, 4)]);
-        expect(lineup(test, s.lobbyId, 'Blue').isConfirmed).toBe(false);
+        expect(JSON.parse(lineup(test, s.lobbyId, 'Blue').groups)).toEqual([blueNames().slice(4, 8), blueNames().slice(0, 4)]);
+        advance(test, 300);
+        arrange(s, s.host, 'Red', halves(redNames()));
+        expect(lineup(test, s.lobbyId, 'Red')).toBeDefined();
         expect(steps(test, s.lobbyId).filter((st) => st.action.tag === 'ArrangeLineup')).toHaveLength(0);
     });
 
-    it('Auction: a lineup whose surcharge exceeds the remaining light-cone budget cannot be confirmed', () => {
+    it('Auction: a lineup whose surcharge exceeds the remaining budget can be arranged, but confirm_game is rejected (A60(4))', () => {
         const test = newHarness();
         insertRoster(test, [...blueNames(), ...redNames()]);
         insertSynergy(test, 'blue-1', 'blue-2', 500, 'Auction'); // 500 > 100 + 50 carried budget
@@ -88,14 +91,17 @@ describe('backlog #3: synergy surcharge and who arranges', () => {
         const blueCap = captain(s, 'Blue');
 
         arrange(s, blueCap, 'Blue', halves(blueNames())); // allowed while arranging
+        arrange(s, captain(s, 'Red'), 'Red', halves(redNames()));
         expect(lineup(test, s.lobbyId, 'Blue').synergySurcharge).toBe(H(500));
-        expectReject(test, blueCap, (ctx) => M.confirm_lineup(ctx, { lobbyId: s.lobbyId, teamSide: { tag: 'Blue' } }),
-            /exceeds the remaining light-cone budget/);
+        recordScores(s, s.host, 'Blue', [H(5), H(5)]);
+        recordScores(s, s.host, 'Red', [H(6), H(6)]);
+        expectReject(test, blueCap, (ctx) => M.confirm_game(ctx, { lobbyId: s.lobbyId, teamSide: { tag: 'Blue' } }),
+            'The synergy surcharge exceeds the remaining budget; rearrange the lineup.');
 
         advance(test, 300);
         arrange(s, blueCap, 'Blue', [['blue-1', 'blue-3', 'blue-4', 'blue-5'], ['blue-2', 'blue-6', 'blue-7', 'blue-8']]);
-        confirm(s, blueCap, 'Blue');
-        expect(lineup(test, s.lobbyId, 'Blue').isConfirmed).toBe(true);
+        confirmGame(s, blueCap, 'Blue');
+        expect(game(test, record(test, s.lobbyId).id).blueConfirmed).toBe(true);
     });
 });
 
@@ -167,8 +173,8 @@ describe('A56(3): hardDeleteLobby deletes the scoring rows', () => {
     });
 });
 
-describe('review fix: light cones equipped after confirm_lineup', () => {
-    it('an equip after confirm updates the lineup roster cost and the submitted game uses it', () => {
+describe('review fix: light cones equipped after a confirmation (A60(2))', () => {
+    it('an equip after both confirmations resets both flags, refreshes the roster cost, and the closed game uses it', () => {
         const test = newHarness();
         insertRoster(test, [...blueNames(), ...redNames()]);
         insertLightconeCost(test, 'lc-1', 3);
@@ -176,19 +182,24 @@ describe('review fix: light cones equipped after confirm_lineup', () => {
         draftClassic(s, blueNames(), redNames());
         for (const team of ['Blue', 'Red'] as const) {
             arrange(s, captain(s, team), team, halves(team === 'Blue' ? blueNames() : redNames()));
-            confirm(s, captain(s, team), team);
         }
-        equip(s, captain(s, 'Blue'), 'blue-1', 'lc-1');
-        expect(lineup(test, s.lobbyId, 'Blue').rosterCost).toBe(H(3));
-        expect(lineup(test, s.lobbyId, 'Blue').isConfirmed).toBe(true);
-
         tx(test, s.host, (ctx) => M.advance_stage(ctx, { lobbyId: s.lobbyId }));
         recordScores(s, captain(s, 'Blue'), 'Blue', [H(5), H(5)]);
         recordScores(s, captain(s, 'Red'), 'Red', [H(5), H(5)]);
         const rec = record(test, s.lobbyId);
-        tx(test, captain(s, 'Blue'), (ctx) => M.confirm_match_scores(ctx, { matchResultId: rec.id }));
-        tx(test, captain(s, 'Red'), (ctx) => M.confirm_match_scores(ctx, { matchResultId: rec.id }));
-        tx(test, s.host, (ctx) => M.submit_match_result(ctx, { matchResultId: rec.id }));
+        // Identical scores and rosters: a level-4 tie, so both confirmations leave the game open (A60(3)).
+        confirmBoth(s);
+        expect(game(test, rec.id).blueConfirmed && game(test, rec.id).redConfirmed).toBe(true);
+
+        equip(s, captain(s, 'Blue'), 'blue-1', 'lc-1'); // allowed in Scoring (A60(1))
+        expect(lineup(test, s.lobbyId, 'Blue').rosterCost).toBe(H(3));
+        const g = game(test, rec.id);
+        expect(g.blueConfirmed).toBe(false); // every edit resets both flags (A60(2))
+        expect(g.redConfirmed).toBe(false);
+        expect(g.tieBreakLevel).toBe(1);
+        expect(g.winnerTeamSide.tag).toBe('Red');
+
+        confirmBoth(s); // closes the game and finalizes the casual Bo1
         const history = [...test.db.MatchSessionHistory.iter()][0];
         const gh = [...test.db.MatchResultGameHistory.by_match_history.filter(history.id)][0];
         expect(gh.tieBreakLevel).toBe(1); // Blue's light cone made Blue the costlier roster
@@ -197,22 +208,33 @@ describe('review fix: light cones equipped after confirm_lineup', () => {
         expect(blueLineup.rosterCost).toBe(H(3));
     });
 
-    it('Auction: an equip that would eat the confirmed lineup\'s reserved surcharge is rejected', () => {
+    it('Auction: a team that spends its light-cone budget below its surcharge cannot confirm until it rearranges', () => {
         const test = newHarness();
         insertRoster(test, [...blueNames(), ...redNames()]);
         insertSynergy(test, 'blue-1', 'blue-2', 100, 'Auction'); // LC budget after the auction: 100 + 50 = 150
         insertLightconeCost(test, 'lc-60', 60);
-        insertLightconeCost(test, 'lc-50', 50);
         const s = setupLobby(test, { lobby: { draftMode: { tag: 'Auction' } } });
         draftAuction(s, blueNames(), redNames());
         const blueCap = captain(s, 'Blue');
         arrange(s, blueCap, 'Blue', halves(blueNames()));
-        confirm(s, blueCap, 'Blue');
+        arrange(s, captain(s, 'Red'), 'Red', halves(redNames()));
+        recordScores(s, s.host, 'Blue', [H(5), H(5)]);
+        recordScores(s, s.host, 'Red', [H(6), H(6)]);
 
-        expectReject(test, blueCap, (ctx) =>
-            M.equip_lightcone(ctx, { lobbyId: s.lobbyId, characterName: 'blue-1', lightconeName: 'lc-60', superimposition: 1 }),
-            /synergy surcharge is reserved/);
-        equip(s, blueCap, 'blue-1', 'lc-50'); // 50 + 100 = 150: fits exactly
-        expect(lineup(test, s.lobbyId, 'Blue').rosterCost).toBe(H(150));
+        // No reservation any more (A60(8)): the equip goes through and leaves 90 < the 100 surcharge.
+        equip(s, blueCap, 'blue-1', 'lc-60');
+        expect(session(test, s.lobbyId).teamBlueLcBudget).toBe(90);
+        expect(lineup(test, s.lobbyId, 'Blue').rosterCost).toBe(H(160));
+        expectReject(test, blueCap, (ctx) => M.confirm_game(ctx, { lobbyId: s.lobbyId, teamSide: { tag: 'Blue' } }),
+            'The synergy surcharge exceeds the remaining budget; rearrange the lineup.');
+        // The full-control referee cannot close it either (the gate covers both teams).
+        expectReject(test, s.host, (ctx) => M.close_game(ctx, { lobbyId: s.lobbyId }),
+            'The synergy surcharge exceeds the remaining budget; rearrange the lineup.');
+
+        advance(test, 300);
+        arrange(s, blueCap, 'Blue', [['blue-1', 'blue-3', 'blue-4', 'blue-5'], ['blue-2', 'blue-6', 'blue-7', 'blue-8']]);
+        confirmGame(s, blueCap, 'Blue');
+        expect(game(test, record(test, s.lobbyId).id).blueConfirmed).toBe(true);
+        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Equipping');
     });
 });

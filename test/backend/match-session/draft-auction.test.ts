@@ -209,7 +209,7 @@ describe('Auction Draft', () => {
             expect(session!.nextNominatorTeam.tag).toBe('Blue');
 
             // Blue nominates
-            await blue.call.nominateCharacter({ lobbyId, characterName: 'argenti', eidolon: 0 });
+            await blue.call.nominateCharacter({ lobbyId, characterName: 'argenti' });
             await blue.sync(1500);
             await host.sync(1500);
 
@@ -245,7 +245,7 @@ describe('Auction Draft', () => {
 
             // Blue tries to nominate when it's Red's turn
             const err = await expectReducerError(
-                blue.call.nominateCharacter({ lobbyId, characterName: 'aglaea', eidolon: 0 })
+                blue.call.nominateCharacter({ lobbyId, characterName: 'aglaea' })
             );
             expect(err).toContain('It is not your team\'s turn to nominate.');
         }, 15000);
@@ -282,7 +282,7 @@ describe('Auction Draft', () => {
 
             // Blue (first nominator) tries to nominate banned character 'acheron'
             const err = await expectReducerError(
-                b2.call.nominateCharacter({ lobbyId: lid, characterName: 'acheron', eidolon: 0 })
+                b2.call.nominateCharacter({ lobbyId: lid, characterName: 'acheron' })
             );
             expect(err).toContain('Character is banned and cannot be nominated.');
 
@@ -292,14 +292,14 @@ describe('Auction Draft', () => {
         it('auction already in progress rejected', async () => {
             // Back in the main lobby: Red is the current nominator (after Blue won argenti).
             // Red nominates a character.
-            await red.call.nominateCharacter({ lobbyId, characterName: 'acheron', eidolon: 0 });
+            await red.call.nominateCharacter({ lobbyId, characterName: 'acheron' });
             await red.sync(1500);
             await blue.sync(1500);
             await host.sync(1500);
 
             // Red tries to nominate again while acheron auction is in progress
             const err = await expectReducerError(
-                red.call.nominateCharacter({ lobbyId, characterName: 'aglaea', eidolon: 0 })
+                red.call.nominateCharacter({ lobbyId, characterName: 'aglaea' })
             );
             expect(err).toContain('An auction is already in progress.');
 
@@ -344,7 +344,7 @@ describe('Auction Draft', () => {
 
         it('opposing team places valid bid', async () => {
             // Blue nominates
-            await blue.call.nominateCharacter({ lobbyId, characterName: 'argenti', eidolon: 0 });
+            await blue.call.nominateCharacter({ lobbyId, characterName: 'argenti' });
             await blue.sync(1500);
             await host.sync(1500);
             await red.sync(1500);
@@ -388,7 +388,7 @@ describe('Auction Draft', () => {
 
             // The team that nominates also holds the first bid.
             if (nominator === 'Blue') {
-                await blue.call.nominateCharacter({ lobbyId, characterName: 'acheron', eidolon: 0 });
+                await blue.call.nominateCharacter({ lobbyId, characterName: 'acheron' });
                 await blue.sync(1500);
                 await host.sync(1500);
 
@@ -402,7 +402,7 @@ describe('Auction Draft', () => {
                 await red.call.passBid({ lobbyId });
                 await red.sync(1500); await blue.sync(1500); await host.sync(1500);
             } else {
-                await red.call.nominateCharacter({ lobbyId, characterName: 'acheron', eidolon: 0 });
+                await red.call.nominateCharacter({ lobbyId, characterName: 'acheron' });
                 await red.sync(1500);
                 await host.sync(1500);
 
@@ -424,7 +424,7 @@ describe('Auction Draft', () => {
             const nominator = session!.nextNominatorTeam.tag;
             const [nominatorH, opposingH] = nominator === 'Blue' ? [blue, red] : [red, blue];
 
-            await nominatorH.call.nominateCharacter({ lobbyId, characterName: 'aglaea', eidolon: 0 });
+            await nominatorH.call.nominateCharacter({ lobbyId, characterName: 'aglaea' });
             await nominatorH.sync(1500);
             await host.sync(1500);
             await opposingH.sync(1500);
@@ -460,7 +460,7 @@ describe('Auction Draft', () => {
             await startDraftAndSync(h2, b2, r2, lid);
 
             // Blue nominates
-            await b2.call.nominateCharacter({ lobbyId: lid, characterName: 'argenti', eidolon: 0 });
+            await b2.call.nominateCharacter({ lobbyId: lid, characterName: 'argenti' });
             await b2.sync(1500);
             await h2.sync(1500);
             await r2.sync(1500);
@@ -508,7 +508,7 @@ describe('Auction Draft', () => {
 
         it('pass concedes to current bidder', async () => {
             // Blue nominates argenti
-            await blue.call.nominateCharacter({ lobbyId, characterName: 'argenti', eidolon: 0 });
+            await blue.call.nominateCharacter({ lobbyId, characterName: 'argenti' });
             await blue.sync(1500);
             await host.sync(1500);
             await red.sync(1500);
@@ -550,7 +550,7 @@ describe('Auction Draft', () => {
             const [nominatorH, bidHolderH] = nominator === 'Blue' ? [blue, red] : [red, blue];
 
             // Nominator nominates — they hold the initial bid
-            await nominatorH.call.nominateCharacter({ lobbyId, characterName: 'acheron', eidolon: 0 });
+            await nominatorH.call.nominateCharacter({ lobbyId, characterName: 'acheron' });
             await nominatorH.sync(1500);
             await host.sync(1500);
             await bidHolderH.sync(1500);
@@ -574,7 +574,7 @@ describe('Auction Draft', () => {
             const [nominatorH, opponentH] = nominatorTag === 'Blue' ? [blue, red] : [red, blue];
 
             // Nominator nominates aglaea
-            await nominatorH.call.nominateCharacter({ lobbyId, characterName: 'aglaea', eidolon: 0 });
+            await nominatorH.call.nominateCharacter({ lobbyId, characterName: 'aglaea' });
             await nominatorH.sync(1500);
             await host.sync(1500);
             await opponentH.sync(1500);

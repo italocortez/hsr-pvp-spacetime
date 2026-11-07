@@ -1,12 +1,19 @@
 import spacetimedb from '../schema';
 import { t, SenderError } from 'spacetimedb/server';
-import { getAuthenticatedUser, isRoleAtLeast } from '../helpers/ensurePermissions';
-import { updateWithAudit } from '../helpers/auditHelpers';
-import { runFinalization } from '../helpers/finalizationHelpers';
-import { ensureNotConceded } from '../helpers/disconnectHelpers';
-import { slotIsSpectator } from '../helpers/lobbyHelpers';
+import { getAuthenticatedUser } from '../helpers/ensurePermissions';
+import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
+import { ensureMatchAlive } from '../helpers/disconnectHelpers';
+import { ensureStageIs, slotIsCoach, slotIsSpectator, slotTeam } from '../helpers/lobbyHelpers';
+import { getNextSequence } from '../helpers/stepSequence';
+import { closeGame } from '../helpers/gameClose';
 import {
+    ensureAuctionSurchargeFits,
+    ensureResultAuthority,
     ensureTeamTag,
+    findGame,
+    findLineup,
+    findPendingResult,
+    isClosedGame,
     isUnresolvedTie,
     recomputeGame,
     replaceGame,
@@ -14,257 +21,162 @@ import {
     type TeamTag,
 } from '../helpers/scoringHelpers';
 import { TeamSide } from '../types/enums';
-import type { MatchResultRecord } from '@bindings/types';
 
-// ─── confirm_match_scores ─────────────────────────────────────────────────────
-// Confirms scores for a team side. Two paths:
-// 1. Participant captain: confirms their own side only.
-// 2. Spectator referee (refereeFullControl=true): confirms both sides at once.
-//    A participant referee can only confirm their own side like any captain.
+// A60 (S7b): games are confirmed and closed one at a time. confirm_match_scores (series-level flags) and
+// submit_match_result (the referee's submission click) were removed: the close of the deciding game submits the
+// series itself (submitSeriesResult in helpers/gameClose.ts, A60(6)).
 
-export const confirm_match_scores = spacetimedb.reducer(
-    {
-        matchResultId: t.u32(),
-    },
-    (ctx, { matchResultId }) => {
-        const user = getAuthenticatedUser(ctx);
-
-        // Find the MatchResultRecord
-        const matchResult = ctx.db.MatchResultRecord.id.find(matchResultId);
-        if (!matchResult) {
-            throw new SenderError('Match result not found.');
-        }
-
-        // Validate status is Pending
-        if (matchResult.status.tag !== 'Pending') {
-            throw new SenderError('Scores can only be confirmed when the match is in Pending status.');
-        }
-
-        // D-12: Liveness guard — block confirmation after concede (F8/A22(4): AwaitingResult is allowed here)
-        const confirmLobby = ctx.db.Lobby.id.find(matchResult.lobbyId);
-        if (confirmLobby) {
-            ensureNotConceded(ctx, confirmLobby);
-        }
-
-        // Check if caller is a participant
-        const participant = [...ctx.db.MatchResultParticipant.by_result_and_user.filter([matchResultId, user.id])][0];
-
-        if (participant) {
-            // Participant path: must be a captain, confirms their own side
-            if (!participant.isCaptain) {
-                throw new SenderError('Only the team captain can confirm match scores.');
-            }
-
-            const sideFlag = participant.teamSide.tag === 'Blue' ? 'blueConfirmed' : 'redConfirmed';
-            ctx.db.MatchResultRecord.id.update(updateWithAudit(ctx, matchResult, {
-                [sideFlag]: true,
-            } as Partial<MatchResultRecord>, user.id));
-
-            console.log(`[MATCH] Captain #${user.id} confirmed ${participant.teamSide.tag} scores for match result #${matchResultId}`);
-        } else {
-            // Non-participant path: must be a spectator referee with refereeFullControl
-            if (!matchResult.refereeFullControl) {
-                throw new SenderError('Referee full control is not enabled for this match.');
-            }
-
-            const lobbyMember = [...ctx.db.LobbyMember.by_lobby_and_user.filter([matchResult.lobbyId, user.id])][0];
-            if (!lobbyMember || !lobbyMember.isReferee) {
-                throw new SenderError('You are not a participant or referee of this match.');
-            }
-
-            // Spectator referee confirms both sides
-            ctx.db.MatchResultRecord.id.update(updateWithAudit(ctx, matchResult, {
-                blueConfirmed: true,
-                redConfirmed: true,
-            }, user.id));
-
-            console.log(`[MATCH] Spectator referee #${user.id} confirmed both sides for match result #${matchResultId}`);
+/**
+ * Shared preconditions of confirm_game and close_game for the current game: Equipping or Scoring, match alive, the
+ * lobby's Pending record, the game not closed, the given sides' lineups arranged, both sides' group scores complete
+ * (the game is recomputed from its inputs) and the A60(4) Auction gate for the given sides. Returns the fresh game
+ * row, the record and the session.
+ */
+function readyGame(ctx: any, lobby: any, sides: TeamTag[], verb: 'confirming' | 'closing', actorId: number): { game: any; record: any; session: any } {
+    ensureStageIs(lobby, 'Equipping', 'Scoring');
+    ensureMatchAlive(ctx, lobby);
+    const record = findPendingResult(ctx, lobby.id);
+    const session = ctx.db.MatchSession.lobbyId.find(lobby.id);
+    if (!session) throw new SenderError('Match session not found.');
+    const gameNumber = session.currentGameNumber;
+    if (isClosedGame(findGame(ctx, record.id, gameNumber))) throw new SenderError('This game is closed.');
+    for (const side of sides) {
+        if (!findLineup(ctx, lobby.id, gameNumber, side)) {
+            throw new SenderError(`Arrange the lineup before ${verb} the game.`);
         }
     }
-);
+    if (!recomputeGame(ctx, record, lobby, gameNumber, actorId)) {
+        throw new SenderError(`Both teams' group scores are needed before ${verb}.`);
+    }
+    for (const side of sides) ensureAuctionSurchargeFits(ctx, lobby, session, gameNumber, side);
+    return { game: findGame(ctx, record.id, gameNumber), record, session };
+}
 
-// ─── submit_match_result ──────────────────────────────────────────────────────
-// Submits the final match result. A21/A31: the server computes the winner; there is no winnerId argument.
-// Permission: lobby referee OR Moderator/Admin (for tournament matches also the TO/assistant with
-// canResolveResults). Requires: both captains confirmed the scores.
-// Per game: the current game is recomputed from its inputs (earlier games of a series keep the outcome computed
-// while they were played: their steps are gone); every game needs complete group scores.
-// winnerOverride (A21 tie-break 4, A39): accepted only while a game is an unresolved tie (level 4); it decides
-// every tied game. From a referee not seated on either team, or from staff (Moderator+, the tournament organizer,
-// an assistant with canResolveResults): accepted. From a referee seated on a team (player or coach seat): in a
-// tournament lobby the record goes to Disputed for staff (no winner, no finalization); in a casual
-// (non-tournament) lobby it is accepted. Both are audited in winnerOverride / winnerOverrideById / winnerOverrideReason.
-// Series winner: game wins plus the A27 head start; the side with more wins.
+// ─── confirm_game ─────────────────────────────────────────────────────────────
+// A60(3): one confirmation per captain per game, covering lineup, light cones, eidolons and scores. Callers:
+// 1. The captain of teamSide (live LobbyMember.isCaptain on a player seat of that team): sets that side's flag. A
+//    referee seated on a team acts only as the captain of its own side, if it is the captain.
+// 2. A spectator referee when the record has refereeFullControl: sets both flags at once (teamSide is ignored).
+// Preconditions (readyGame): Equipping or Scoring, match alive, Pending record, the game open, the confirming side's
+// lineup arranged (both for the full-control referee), both sides' group scores complete, and in Auction the
+// confirming team's synergy surcharge within its remaining budget (A60(4)).
+// Effect: the flag(s) are set. When both flags are now set the game closes (closeGame: one ConfirmGame step with
+// closed: true; BetweenGames, or the series submits itself), after the Auction gate for both teams; a level-4 tie
+// stays open with both flags set (no error) until staff close it with an override (close_game). Otherwise a
+// ConfirmGame step with closed: false is logged. A side that already confirmed cannot confirm again (S7b choice).
 
-export const submit_match_result = spacetimedb.reducer(
+export const confirm_game = spacetimedb.reducer(
     {
-        matchResultId: t.u32(),
-        winnerOverride: TeamSide.optional(),
-        winnerOverrideReason: t.string().optional(),
+        lobbyId: t.u32(),
+        teamSide: TeamSide,
     },
-    (ctx, { matchResultId, winnerOverride, winnerOverrideReason }) => {
+    (ctx, { lobbyId, teamSide }) => {
         const user = getAuthenticatedUser(ctx);
+        const lobby = ctx.db.Lobby.id.find(lobbyId);
+        if (!lobby) throw new SenderError('Lobby not found.');
 
-        // Find the MatchResultRecord
-        const matchResult = ctx.db.MatchResultRecord.id.find(matchResultId);
-        if (!matchResult) {
-            throw new SenderError('Match result not found.');
-        }
-
-        // Validate status is Pending
-        if (matchResult.status.tag !== 'Pending') {
-            throw new SenderError('Match result can only be submitted when in Pending status.');
-        }
-
-        // D-12: Liveness guard — block submission after concede (F8/A22(4): AwaitingResult is allowed here)
-        const submitLobby = ctx.db.Lobby.id.find(matchResult.lobbyId);
-        if (submitLobby) {
-            ensureNotConceded(ctx, submitLobby);
-        }
-
-        // Check both sides have confirmed (record-level flags)
-        if (!matchResult.blueConfirmed || !matchResult.redConfirmed) {
-            throw new SenderError('All team captains must confirm scores before submission.');
-        }
-
-        // Validate caller has referee authority:
-        // 1. The lobby referee (seated or not)
-        const lobbyMember = [...ctx.db.LobbyMember.by_lobby_and_user.filter([matchResult.lobbyId, user.id])][0];
-        const isReferee = !!lobbyMember && lobbyMember.isReferee;
-
-        // 2. Staff (A39): Moderator/Admin, and for tournament matches the organizer or an assistant with
-        // canResolveResults. Derive tournamentId from bracketMatch (no tournamentId on MatchResultRecord, D-42).
-        let isStaff = isRoleAtLeast(user.role, 'Moderator');
-        if (!isStaff && matchResult.isTournamentControlled && matchResult.bracketMatchId !== undefined) {
-            const bracketMatch = ctx.db.BracketMatch.id.find(matchResult.bracketMatchId);
-            const derivedTournamentId = bracketMatch?.tournamentId;
-            if (derivedTournamentId) {
-                const tournament = ctx.db.Tournament.id.find(derivedTournamentId);
-                if (tournament && tournament.organizerId === user.id) {
-                    isStaff = true;
-                }
-                if (!isStaff) {
-                    const assistant = [...ctx.db.TournamentAssistant.by_tournament_and_user.filter([derivedTournamentId, user.id])][0];
-                    if (assistant && assistant.canResolveResults) { // A25
-                        isStaff = true;
-                    }
-                }
+        const member = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, user.id])][0];
+        let sides: TeamTag[];
+        if (member && member.isCaptain && !slotIsCoach(member.lobbySlot) && !slotIsSpectator(member.lobbySlot)) {
+            const side = ensureTeamTag(teamSide);
+            if (slotTeam(member.lobbySlot) !== side) {
+                throw new SenderError(`Only the team captain can confirm the ${side} side of the game.`);
             }
+            sides = [side];
+        } else if (member && member.isReferee && slotIsSpectator(member.lobbySlot)) {
+            const fullControl = [...ctx.db.MatchResultRecord.lobby_id.filter(lobbyId)]
+                .find((r: any) => r.status.tag === 'Pending')?.refereeFullControl;
+            if (!fullControl) throw new SenderError('Referee full control is not enabled for this match.');
+            sides = ['Blue', 'Red'];
+        } else {
+            throw new SenderError('Only the team captain can confirm the game.');
         }
 
-        if (!isReferee && !isStaff) {
-            throw new SenderError('You do not have referee authority to submit this match result.');
+        const { game, record, session } = readyGame(ctx, lobby, sides, 'confirming', user.id);
+        if (sides.length === 1 && (sides[0] === 'Blue' ? game.blueConfirmed : game.redConfirmed)) {
+            throw new SenderError(`The ${sides[0]} captain has already confirmed this game.`);
         }
+        const blueConfirmed = game.blueConfirmed || sides.includes('Blue');
+        const redConfirmed = game.redConfirmed || sides.includes('Red');
+        const confirmedSide: 'Blue' | 'Red' | 'Spectator' = sides.length === 1 ? sides[0] : 'Spectator';
 
-        // Recompute the game being played (its steps still exist), then read every game of the record.
-        const lobby = ctx.db.Lobby.id.find(matchResult.lobbyId);
-        const session = ctx.db.MatchSession.lobbyId.find(matchResult.lobbyId);
-        if (lobby && session) {
-            recomputeGame(ctx, matchResult, lobby, session.currentGameNumber, user.id);
-        }
-        const games = [...ctx.db.MatchResultGame.match_result_id.filter(matchResultId)]
-            .sort((a: any, b: any) => a.gameNumber - b.gameNumber);
-        if (games.length === 0) {
-            throw new SenderError('No game scores have been recorded.');
-        }
-        const incomplete = games.find((g: any) => g.tieBreakLevel === undefined);
-        if (incomplete) {
-            throw new SenderError(`Game ${incomplete.gameNumber} does not have complete group scores for both teams.`);
-        }
-
-        const tiedGames = games.filter(isUnresolvedTie);
-        let overrideTag: TeamTag | undefined;
-        if (winnerOverride !== undefined) {
-            overrideTag = ensureTeamTag(winnerOverride);
-            if (tiedGames.length === 0) {
-                throw new SenderError('A winner override is only accepted on an unresolved tie.');
-            }
-        } else if (tiedGames.length > 0) {
-            throw new SenderError(
-                `Game ${tiedGames[0].gameNumber} is tied after every tie-break: the referee decides with winnerOverride.`,
-            );
-        }
-        const trimmedReason = winnerOverrideReason?.trim();
-        if (trimmedReason && trimmedReason.length > 1000) {
-            throw new SenderError('winnerOverrideReason cannot exceed 1000 characters.');
-        }
-        const overrideAudit = overrideTag
-            ? {
-                winnerOverride: teamSideValue(overrideTag),
-                winnerOverrideById: user.id,
-                winnerOverrideReason: trimmedReason ? trimmedReason : undefined,
-            }
-            : {};
-
-        // A39: an override from a referee seated on a team, without staff authority, in a tournament lobby goes to staff.
-        const isSeatedReferee = isReferee && !slotIsSpectator(lobbyMember.lobbySlot);
-        if (overrideTag && !isStaff && isSeatedReferee && matchResult.isTournamentControlled) {
-            ctx.db.MatchResultRecord.id.update(updateWithAudit(ctx, matchResult, {
-                ...overrideAudit,
-                status: { tag: 'Disputed', value: {} } as MatchResultRecord['status'],
-                disputedByUserId: user.id,
-                disputeReason: 'A39: tie override by a referee seated on a team; staff must resolve the result.',
-                refereeUserId: user.id,
-            }, user.id));
-            if (lobby && lobby.stage.tag !== 'AwaitingResult' && lobby.stage.tag !== 'Finished') {
-                ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
-                    stage: { tag: 'AwaitingResult' as const },
-                    lastActivityAt: ctx.timestamp,
-                }, user.id));
-            }
-            console.log(`[MATCH] Match result #${matchResultId} Disputed: seated referee #${user.id} overrode a tie (A39)`);
+        if (blueConfirmed && redConfirmed && !isUnresolvedTie(game)) {
+            // The close covers both teams: the Auction gate for the other side too.
+            for (const side of ['Blue', 'Red'] as TeamTag[]) ensureAuctionSurchargeFits(ctx, lobby, session, game.gameNumber, side);
+            closeGame(ctx, lobby, record, game, { userId: user.id, actorSlot: confirmedSide });
             return;
         }
 
-        // The override decides every tied game; then the series winner from the games (+ the A27 head start).
-        let blueWins = lobby?.bestOfNAdvantage?.tag === 'Blue' ? 1 : 0;
-        let redWins = lobby?.bestOfNAdvantage?.tag === 'Red' ? 1 : 0;
-        for (const game of games) {
-            let winnerTag = game.winnerTeamSide.tag;
-            if (isUnresolvedTie(game) && overrideTag) {
-                winnerTag = overrideTag;
-                replaceGame(ctx, game, { winnerTeamSide: teamSideValue(overrideTag) }, user.id);
-            }
-            if (winnerTag === 'Blue') blueWins++;
-            else if (winnerTag === 'Red') redWins++;
-        }
-        if (blueWins === redWins) {
-            throw new SenderError(`The series is level (${blueWins}-${redWins}): play the deciding game first.`);
-        }
-        const winnerTeamSide: TeamTag = blueWins > redWins ? 'Blue' : 'Red';
-
-        // Determine status based on matchType (per D-04, D-05)
-        // NOTE: D-04 (locked decision) supersedes MTCH-05's mismatch clause for Casual matches.
-        // Casual matches auto-validate on submit -- there is no mismatch detection path for Casual.
-        // Mismatch detection only applies to Ranked matches (both sides submit, referee validates).
-        const newStatus = matchResult.matchType.tag === 'Casual'
-            ? { tag: 'Validated', value: {} }
-            : { tag: 'Submitted', value: {} };
-
-        ctx.db.MatchResultRecord.id.update(updateWithAudit(ctx, matchResult, {
-            ...overrideAudit,
-            status: newStatus as MatchResultRecord['status'],
-            winnerTeamSide: teamSideValue(winnerTeamSide),
-            matchEndReason: { tag: 'Completed', value: {} } as MatchResultRecord['matchEndReason'],
-            refereeUserId: user.id,
+        replaceGame(ctx, game, { blueConfirmed, redConfirmed }, user.id);
+        ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
+            id: 0, // autoInc
+            lobbyId,
+            gameNumber: game.gameNumber,
+            sequence: getNextSequence(ctx, lobbyId),
+            actorUserId: user.id,
+            anonymousLabel: undefined,
+            actorSlot: teamSideValue(confirmedSide),
+            action: { tag: 'ConfirmGame', value: {} } as any,
+            payload: {
+                tag: 'ConfirmGame',
+                value: { confirmedSide: teamSideValue(confirmedSide), closed: false, winnerOverride: undefined, winnerOverrideReason: undefined },
+            } as any,
+            timestamp: ctx.timestamp,
         }, user.id));
+        ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, { lastActivityAt: ctx.timestamp }, user.id));
 
-        // Transition lobby → AwaitingResult (frees players to join new lobbies)
-        if (lobby && lobby.stage.tag !== 'AwaitingResult' && lobby.stage.tag !== 'Finished') {
-            ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
-                stage: { tag: 'AwaitingResult', value: {} } as any,
-                lastActivityAt: ctx.timestamp,
-            }, user.id));
+        console.log(`[MATCH] Game ${game.gameNumber} of match result #${record.id}: ${confirmedSide} confirmation by user #${user.id}${blueConfirmed && redConfirmed ? ' (tied: open until a staff close)' : ''}`);
+    }
+);
+
+// ─── close_game ───────────────────────────────────────────────────────────────
+// A60(4): the staff close, without both confirmations. Authority (A39 staff set, ensureResultAuthority): any lobby
+// referee (seated or spectator), Moderator+, or in a tournament lobby the organizer or an assistant with
+// canResolveResults. Preconditions (readyGame): Equipping or Scoring, match alive, Pending record, the game open,
+// both lineups arranged, both sides' scores complete, the Auction gate for both teams.
+// winnerOverride: accepted only while the game is a level-4 tie (and required then: closeGame rejects a tie without
+// it); reason trimmed, at most 1000 characters. A39 at the close (replaces S7's Disputed route): in a tournament
+// lobby a referee seated on a Blue/Red slot (player or coach) who is not staff cannot decide a tie; in a casual lobby
+// the same referee's override is accepted and audited. The override becomes the game's winner (tieBreakLevel stays
+// 4) and MatchResultRecord.winnerOverride* (copied to MatchSessionHistory by runFinalization, A60(6)).
+
+const MAX_OVERRIDE_REASON_LENGTH = 1000;
+
+export const close_game = spacetimedb.reducer(
+    {
+        lobbyId: t.u32(),
+        winnerOverride: TeamSide.optional(),
+        winnerOverrideReason: t.string().optional(),
+    },
+    (ctx, { lobbyId, winnerOverride, winnerOverrideReason }) => {
+        const user = getAuthenticatedUser(ctx);
+        const lobby = ctx.db.Lobby.id.find(lobbyId);
+        if (!lobby) throw new SenderError('Lobby not found.');
+
+        const { member, isStaff } = ensureResultAuthority(ctx, lobby, user,
+            'Only a referee, a Moderator or, in a tournament lobby, the organizer or a results assistant can close a game.');
+        const { game, record } = readyGame(ctx, lobby, ['Blue', 'Red'], 'closing', user.id);
+
+        let override: { side: TeamTag; reason?: string } | undefined;
+        if (winnerOverride !== undefined) {
+            const side = ensureTeamTag(winnerOverride);
+            if (!isUnresolvedTie(game)) {
+                throw new SenderError('A winner override is only accepted on an unresolved tie.');
+            }
+            const trimmed = winnerOverrideReason?.trim();
+            if (trimmed && trimmed.length > MAX_OVERRIDE_REASON_LENGTH) {
+                throw new SenderError(`winnerOverrideReason cannot exceed ${MAX_OVERRIDE_REASON_LENGTH} characters.`);
+            }
+            // A39: a referee seated on a team (player or coach) without staff authority cannot decide a tie in a
+            // tournament lobby; in a casual lobby the override is accepted and audited.
+            const seatedReferee = !!member?.isReferee && !slotIsSpectator(member.lobbySlot);
+            if (record.isTournamentControlled && seatedReferee && !isStaff) {
+                throw new SenderError('A referee seated on a team cannot decide a tie in a tournament lobby; staff must close this game.');
+            }
+            override = { side, reason: trimmed ? trimmed : undefined };
         }
 
-        const statusLabel = matchResult.matchType.tag === 'Casual' ? 'Validated (auto)' : 'Submitted';
-        console.log(`[MATCH] Match result #${matchResultId} ${statusLabel} by user #${user.id}, winnerTeamSide: ${winnerTeamSide}${overrideTag ? ' (override)' : ''}`);
-
-        // Auto-finalize casual matches inline (per D-37)
-        if (matchResult.matchType.tag === 'Casual') {
-            const updatedResult = ctx.db.MatchResultRecord.id.find(matchResultId)!;
-            runFinalization(ctx, updatedResult, user.id);
-        }
+        closeGame(ctx, lobby, record, game, { userId: user.id, actorSlot: 'Spectator' }, override);
     }
 );
 

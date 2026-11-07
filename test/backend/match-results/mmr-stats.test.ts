@@ -97,9 +97,11 @@ async function setupScoredMatch(
     await host.sync(1000);
 
     // Confirm both sides
-    await blue.call.confirmMatchScores({ matchResultId: mr.id });
+    // S10: rewrite (confirm_match_scores removed by A60: per-game confirmGame per captain; needs arranged lineups + both scores; the second one closes the game and submits)
+    await blue.call.confirmGame({ lobbyId, teamSide: { tag: 'Blue' } });
     await blue.sync(500);
-    await red.call.confirmMatchScores({ matchResultId: mr.id });
+    // S10: rewrite (confirm_match_scores removed by A60: per-game confirmGame per captain; needs arranged lineups + both scores; the second one closes the game and submits)
+    await red.call.confirmGame({ lobbyId, teamSide: { tag: 'Red' } });
     await red.sync(500);
     await host.sync(1000);
 
@@ -114,7 +116,7 @@ async function submitOverrideFinalize(
     blue: TestHarness, red: TestHarness,
     matchResultId: number, winnerUserId: number, winnerTeamSideTag: string,
 ) {
-    await host.call.submitMatchResult({ matchResultId });
+    // S10: rewrite (submit_match_result removed by A60(6): the close of the deciding game submits the series): await host.call.submitMatchResult({ matchResultId });
     await host.sync(1500);
 
     await admin.call.overrideMatchResult({
@@ -514,9 +516,9 @@ describe.skipIf(!hasServerToken())('MMR + Leaderboard + Stats', () => {
             await banHost.sync(1500);
 
             // Advance to Scoring
-            await banBlue.call.confirmLineup({ lobbyId, teamSide: { tag: 'Blue' } });
+            // S10: rewrite (confirm_lineup removed by A60; lineups need no confirmation, the game is confirmed with confirmGame): await banBlue.call.confirmLineup({ lobbyId, teamSide: { tag: 'Blue' } });
             await banBlue.sync();
-            await banRed.call.confirmLineup({ lobbyId, teamSide: { tag: 'Red' } });
+            // S10: rewrite (confirm_lineup removed by A60; lineups need no confirmation, the game is confirmed with confirmGame): await banRed.call.confirmLineup({ lobbyId, teamSide: { tag: 'Red' } });
             await banRed.sync();
             await banHost.call.advanceStage({ lobbyId });
             await banHost.sync(1500);
@@ -528,14 +530,16 @@ describe.skipIf(!hasServerToken())('MMR + Leaderboard + Stats', () => {
             await banHost.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Blue' }, values: [300, 300], deaths: 0 });
             await banHost.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0 });
             await banHost.sync(1000);
-            await banBlue.call.confirmMatchScores({ matchResultId: mr.id });
+            // S10: rewrite (confirm_match_scores removed by A60: per-game confirmGame per captain; needs arranged lineups + both scores; the second one closes the game and submits)
+            await banBlue.call.confirmGame({ lobbyId, teamSide: { tag: 'Blue' } });
             await banBlue.sync(500);
-            await banRed.call.confirmMatchScores({ matchResultId: mr.id });
+            // S10: rewrite (confirm_match_scores removed by A60: per-game confirmGame per captain; needs arranged lineups + both scores; the second one closes the game and submits)
+            await banRed.call.confirmGame({ lobbyId, teamSide: { tag: 'Red' } });
             await banRed.sync(500);
             await banHost.sync(1000);
 
             // Submit → Casual auto-validates + auto-finalizes
-            await banHost.call.submitMatchResult({ matchResultId: mr.id });
+            // S10: rewrite (submit_match_result removed by A60(6): the close of the deciding game submits the series): await banHost.call.submitMatchResult({ matchResultId: mr.id });
             await banHost.sync(2500);
             await banBlue.sync(2500);
             await banRed.sync(2500);

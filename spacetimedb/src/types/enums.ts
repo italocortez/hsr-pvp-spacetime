@@ -110,7 +110,8 @@ export const ActionType = t.enum('ActionType', {
     Undo: t.unit(),
     EquipLightcone: t.unit(),
     ArrangeLineup: t.unit(),
-    ConfirmLineup: t.unit(),
+    SetEidolon: t.unit(),    // A60 (S7b); ConfirmLineup removed (A60(8))
+    ConfirmGame: t.unit(),   // A60 (S7b)
 });
 
 export const TournamentStage = t.enum('TournamentStage', {

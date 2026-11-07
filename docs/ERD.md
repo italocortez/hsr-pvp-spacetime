@@ -2,6 +2,8 @@
 
 76 tables. Updated 2026-11-06 (S3 backend reset: 27 tables public → private per A37 / ACCESS-SECURITY-OPS Appendix A, 10 new, `group_phase_record` dropped per A23). Visibility: **21 public** (reference data, aggregates, `user`, `tournament`, `bracket_match`, `admin_alert`, the `lobby_cursor_event` event table); every other table is PRIVATE and read through views (S9). Paste into [mermaid.live](https://mermaid.live) to preview.
 
+Phase S7b execution (DECISIONS.md A60): `match_result_game` gains `blueConfirmed`, `redConfirmed` (per-game captain confirmations), `closedAt` (optional, the closed marker) and `closedById` (optional, FK user); `match_result_record` loses `blueConfirmed` / `redConfirmed`; `match_lineup` loses `isConfirmed`.
+
 | Color | Tables (PUBLIC unless marked) |
 |-------|--------|
 | blue | user, user_presence (PRIVATE, new S3 A48), user_identity (PRIVATE), user_private (PRIVATE), ban_record (PRIVATE), link_request (PRIVATE, new S3 A46), deleted_user (PRIVATE), server_identity (PRIVATE), user_deletion_job, identity_gc_job, gc_result (PRIVATE) |
@@ -292,6 +294,10 @@ erDiagram
         u8 gameNumber PK
         u8 teamBlueDeaths "A21"
         u32 validatedByUserId FK
+        bool blueConfirmed "A60 (S7b): per-game captain confirmation"
+        bool redConfirmed "A60 (S7b)"
+        timestamp closedAt "A60 (S7b): closed marker, optional"
+        u32 closedById FK "A60 (S7b): closer, optional"
     }
     match_result_group_score {
         u32 id PK
@@ -540,6 +546,7 @@ erDiagram
     match_result_adjustment }o--|| user : "setById (many-to-one)"
     match_result_game }o--|| match_result_record : "matchResultId (many-to-one)"
     match_result_game }o--o| user : "validatedByUserId (many-to-one, optional)"
+    match_result_game }o--o| user : "closedById (many-to-one, optional; A60 S7b)"
     match_result_participant }o--|| match_result_record : "matchResultId (many-to-many junction)"
     match_result_participant }o--|| user : "userId (many-to-many junction)"
 

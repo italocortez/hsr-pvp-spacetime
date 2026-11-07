@@ -162,9 +162,11 @@ async function runToBetweenGames(
     await host.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0 });
     await host.sync(1000);
 
-    await blue.call.confirmMatchScores({ matchResultId: mr.id });
+    // S10: rewrite (confirm_match_scores removed by A60: per-game confirmGame per captain; needs arranged lineups + both scores; the second one closes the game and submits)
+    await blue.call.confirmGame({ lobbyId, teamSide: { tag: 'Blue' } });
     await blue.sync(500);
-    await red.call.confirmMatchScores({ matchResultId: mr.id });
+    // S10: rewrite (confirm_match_scores removed by A60: per-game confirmGame per captain; needs arranged lineups + both scores; the second one closes the game and submits)
+    await red.call.confirmGame({ lobbyId, teamSide: { tag: 'Red' } });
     await red.sync(500);
     await host.sync(1000);
 
@@ -525,9 +527,11 @@ describe.skipIf(!hasServerToken())('Phase 12.3: BetweenGames monotonic-upward sn
             await toUser.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0 });
             await toUser.sync(1000);
 
-            await player1.call.confirmMatchScores({ matchResultId: mr.id });
+            // S10: rewrite (confirm_match_scores removed by A60: per-game confirmGame per captain; needs arranged lineups + both scores; the second one closes the game and submits)
+            await player1.call.confirmGame({ lobbyId, teamSide: { tag: 'Blue' } });
             await player1.sync(500);
-            await player2.call.confirmMatchScores({ matchResultId: mr.id });
+            // S10: rewrite (confirm_match_scores removed by A60: per-game confirmGame per captain; needs arranged lineups + both scores; the second one closes the game and submits)
+            await player2.call.confirmGame({ lobbyId, teamSide: { tag: 'Red' } });
             await player2.sync(500);
             await toUser.sync(1000);
 

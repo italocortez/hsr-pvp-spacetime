@@ -329,6 +329,11 @@ _Superseded in Phase S6 execution (DECISIONS.md A57, A58): the scheduled reducer
 **When:** An Admin calls `admin_acknowledge_alert(1)`
 **Then:** `isAcknowledged = true`, `acknowledgedAt = now`, `lastModifiedById = 0` (SYSTEM); the admin's id appears only in the module log. Unknown id: "Alert N not found."; a non-admin is rejected.
 
+### Admin Corrects a Closed Game (Phase S7b execution, A60(7))
+**Given:** a Ranked lobby whose deciding game closed; the record is Submitted and waits for force-finalize
+**When:** an Admin corrects a group score, an adjustment, an eidolon, a light cone or the lineup of that game
+**Then:** accepted without a stage check; the game stays closed and confirmed, the series is recomputed (an edit that ties the game or undoes the series result is rejected). A Moderator gets "This game is closed."; after finalization nothing is editable. Details and the staff close (`close_game`): `docs/match-results/contract.md` "Game Confirmation, Close and Series Submission".
+
 ## Edge Cases
 
 | Case | Expected Behavior | Notes |
@@ -368,3 +373,4 @@ _Superseded in Phase S6 execution (DECISIONS.md A57, A58): the scheduled reducer
 | `init` registers the Owner + SYSTEM user; `server_register_delegate` / `server_revoke_delegate` (owner-only); test-only `server_*` reducers default-deny unless module env `STDB_TARGET=test` | Phase M2 execution | 2026-11-06 |
 | Abuse controls: `admin_update_abuse_config`, `admin_set_guest_lobby_creation`, `admin_acknowledge_alert`, scheduled `run_abuse_breaker`; scenarios "Abuse Config Update", "Guest Lobby Kill Switch", "Circuit Breaker Trips", "Acknowledge Alert" added | Phase S5 execution (DECISIONS.md A42, A43) | 2026-11-06 |
 | "Circuit Breaker Trips" restated for the inline breaker: evaluated in `create_lobby` on the 51st guest creation inside the window (default 50 in 10 minutes), the crossing creation succeeds and trips the switch in the same transaction, one alert per trip | Phase S6 execution (DECISIONS.md A57, A58) | 2026-11-06 |
+| Admin edits of a closed game and the staff close listed as admin tools; scenario "Admin Corrects a Closed Game" added | Phase S7b execution (DECISIONS.md A60) | 2026-11-07 |

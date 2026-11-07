@@ -19,6 +19,7 @@ import {
     type Harness,
     type Lobby,
 } from './s4-fixtures';
+import { finishGame as closeCurrentGame } from './s7-fixtures';
 
 const BEST_OF = 'bestOf must be 1 or 3.';
 
@@ -123,9 +124,12 @@ const actorOf = (s: Lobby, userId: number): Actor => Object.values(s.a).find((x)
 const captain = (s: Lobby, team: 'Blue' | 'Red') =>
     actorOf(s, captainOf(s.test, s.lobbyId, team === 'Blue' ? 'BluePlayer' : 'RedPlayer')!.userId);
 
-/** Host moves the lobby Drafting → Equipping → Scoring → BetweenGames (no game scores recorded). */
+/**
+ * T-S7b: a game reaches BetweenGames only through a close (A60(3)). The drafted game is closed by the full-control
+ * host: lineups arranged, Equipping → Scoring, both sides' scores (Blue wins), one confirm_game.
+ */
 function finishGame(s: Lobby) {
-    for (let i = 0; i < 3; i++) tx(s.test, s.host, (ctx) => M.advance_stage(ctx, { lobbyId: s.lobbyId }));
+    closeCurrentGame(s, 'Blue');
 }
 
 /** Drafts a Classic game to completion: every step by the acting team's captain, distinct names per game. */
@@ -152,7 +156,7 @@ function draftAuctionGame(s: Lobby, game: number) {
         const nominator = sess.nextNominatorTeam.tag as 'Blue' | 'Red';
         const other = nominator === 'Blue' ? 'Red' : 'Blue';
         tx(s.test, captain(s, nominator), (ctx) =>
-            M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: `a${game}_${guard}`, eidolon: 0 }));
+            M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: `a${game}_${guard}` }));
         tx(s.test, captain(s, other), (ctx) => M.pass_bid(ctx, { lobbyId: s.lobbyId }));
     }
 }
@@ -163,8 +167,7 @@ describe('F2: game 2 of a Bo3 drafts to completion', () => {
         const s = setupLobby(test, { lobby: { bestOf: 3 } });
         draftClassicGame(s, 1);
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Equipping');
-        tx(test, s.host, (ctx) => M.advance_stage(ctx, { lobbyId: s.lobbyId }));
-        tx(test, s.host, (ctx) => M.advance_stage(ctx, { lobbyId: s.lobbyId }));
+        finishGame(s);
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('BetweenGames');
 
         tx(test, s.host, (ctx) => M.advance_to_next_game(ctx, { lobbyId: s.lobbyId }));
@@ -185,7 +188,8 @@ describe('F2: game 2 of a Bo3 drafts to completion', () => {
         const test = newHarness();
         const s = setupLobby(test, { lobby: { bestOf: 3, draftMode: { tag: 'Auction' } } });
         expect(session(test, s.lobbyId).isAuctionPhase).toBe(true);
-        finishGame(s); // game 1 skipped by the host
+        draftAuctionGame(s, 1);
+        finishGame(s); // game 1 closed by the full-control host
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('BetweenGames');
 
         tx(test, s.host, (ctx) => M.advance_to_next_game(ctx, { lobbyId: s.lobbyId }));
@@ -293,9 +297,11 @@ describe('A27 / backlog #7: bestOfNAdvantage', () => {
         expect(session(test, s.lobbyId).gamesWonBlue).toBe(0);
         expect(session(test, s.lobbyId).gamesWonRed).toBe(1);
 
-        finishGame(s);
+        draftClassicGame(s, 1);
+        finishGame(s); // Blue wins game 1: 1–1 with the head start
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('BetweenGames');
         expect(session(test, s.lobbyId).gamesWonRed).toBe(1);
+        expect(session(test, s.lobbyId).gamesWonBlue).toBe(1);
         tx(test, s.host, (ctx) => M.advance_to_next_game(ctx, { lobbyId: s.lobbyId }));
         expect(session(test, s.lobbyId).gamesWonRed).toBe(1);
     });

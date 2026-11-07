@@ -1,6 +1,6 @@
 import spacetimedb from '../schema';
 import { t, SenderError } from 'spacetimedb/server';
-import { getAuthenticatedUser, isRoleAtLeast } from '../helpers/ensurePermissions';
+import { getAuthenticatedUser } from '../helpers/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { ensureNotConceded } from '../helpers/disconnectHelpers';
 import { TeamSide } from '../types/enums';
@@ -8,18 +8,26 @@ import { groupCount, type LineupFormatTag } from '@shared/scoring';
 import {
     ensureCaptainOrReferee,
     ensureGame,
+    ensureOpenGame,
+    ensureResultAuthority,
     ensureTeamTag,
-    findPendingResult,
+    findEditableResult,
+    findGame,
+    isAdminRole,
     recomputeGame,
     replaceGame,
     resetConfirmations,
     teamSideValue,
 } from '../helpers/scoringHelpers';
+import { recomputeSeriesAfterAdminEdit } from '../helpers/gameClose';
 
 // A21, backlog #11: result entry per lineup group. record_game_scores (one winner picked by hand, fixed
 // boss columns) is gone; the server computes every game's outcome from these inputs through @shared/scoring.
 
-/** The game the scores belong to must be the one being played: tie-breaks 2 and 3 read that game's steps. */
+/**
+ * The game the scores belong to must be the one being played: tie-breaks 2 and 3 read that game's steps. A60(7): the
+ * Admin path has the same limit, so Admin edits reach the current game only (after the deciding close: the last game).
+ */
 function ensureCurrentGame(ctx: any, lobbyId: number, gameNumber: number): void {
     const session = ctx.db.MatchSession.lobbyId.find(lobbyId);
     if (!session) throw new SenderError('Match session not found.');
@@ -35,7 +43,8 @@ const MAX_SCORE_HUNDREDTHS = 100_000_000;
 // One team's raw result per lineup group (cycles or points, hundredths) and its deaths for one game.
 // Caller: the captain of that side, or a referee for either side. Upserts one MatchResultGroupScore row per
 // group index, stores deaths on MatchResultGame.team{Blue,Red}Deaths, recomputes the game and resets both
-// captains' score confirmations.
+// captains' confirmations of the game (A60(2)). No stage check. A60(3): the game must be open; A60(7): an Admin may
+// edit a closed game while the record is Pending or Submitted (no reset; the series is recomputed).
 
 export const record_group_scores = spacetimedb.reducer(
     {
@@ -51,10 +60,13 @@ export const record_group_scores = spacetimedb.reducer(
         const lobby = ctx.db.Lobby.id.find(lobbyId);
         if (!lobby) throw new SenderError('Lobby not found.');
         const side = ensureTeamTag(teamSide);
-        ensureCaptainOrReferee(ctx, lobbyId, user.id, side, 'record scores for that team');
+        const admin = isAdminRole(user);
+        if (!admin) ensureCaptainOrReferee(ctx, lobbyId, user.id, side, 'record scores for that team');
         ensureNotConceded(ctx, lobby); // D-12 / F8: allowed in AwaitingResult, blocked after a concede
-        const record = findPendingResult(ctx, lobbyId);
+        const record = findEditableResult(ctx, lobbyId, admin);
         ensureCurrentGame(ctx, lobbyId, gameNumber);
+        const mode = ensureOpenGame(ctx, lobby, record, gameNumber, user);
+        if (mode === 'open' && admin) ensureCaptainOrReferee(ctx, lobbyId, user.id, side, 'record scores for that team');
 
         const groups = groupCount(lobby.lineupFormat.tag as LineupFormatTag);
         if (values.length !== groups) {
@@ -88,8 +100,12 @@ export const record_group_scores = spacetimedb.reducer(
         replaceGame(ctx, game, side === 'Blue'
             ? { teamBlueDeaths: deaths, ...(screenshot ? { teamBlueScreenshotUrl: screenshot } : {}) }
             : { teamRedDeaths: deaths, ...(screenshot ? { teamRedScreenshotUrl: screenshot } : {}) }, user.id);
-        recomputeGame(ctx, record, lobby, gameNumber, user.id);
-        resetConfirmations(ctx, record, user.id);
+        if (mode === 'admin') {
+            recomputeSeriesAfterAdminEdit(ctx, lobby, record, user.id);
+        } else {
+            recomputeGame(ctx, record, lobby, gameNumber, user.id);
+            resetConfirmations(ctx, findGame(ctx, record.id, gameNumber), user.id);
+        }
 
         console.log(`[MATCH] Game ${gameNumber} ${side} group scores recorded for match result #${record.id} by user #${user.id}`);
     }
@@ -103,24 +119,10 @@ export const record_group_scores = spacetimedb.reducer(
 //   - adjustmentId omitted → a new entry (value 0 is rejected: it would change nothing);
 //   - adjustmentId given, value ≠ 0 → that entry's value, team and reason are replaced;
 //   - adjustmentId given, value = 0 → that entry is deleted.
-// Every change recomputes the game and resets both captains' confirmations.
+// Every change recomputes the game and resets both captains' confirmations of the game (A60(2)); open game only
+// (A60(3)), except an Admin's edit of a closed game (A60(7): no reset, the series is recomputed).
 
 const MAX_REASON_LENGTH = 1000;
-
-// A39 staff, the same set submit_match_result accepts: a lobby referee; Moderator+ anywhere; in a tournament lobby
-// the organizer or an assistant with canResolveResults.
-function ensureAdjustmentAuthority(ctx: any, lobby: any, user: any): void {
-    const member = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobby.id, user.id])][0];
-    if (member?.isReferee) return;
-    if (isRoleAtLeast(user.role, 'Moderator')) return;
-    if (lobby.isTournamentControlled && lobby.tournamentId !== undefined) {
-        const tournament = ctx.db.Tournament.id.find(lobby.tournamentId);
-        if (tournament && tournament.organizerId === user.id) return;
-        const assistant = [...ctx.db.TournamentAssistant.by_tournament_and_user.filter([lobby.tournamentId, user.id])][0];
-        if (assistant?.canResolveResults) return;
-    }
-    throw new SenderError('Only a referee, a Moderator or, in a tournament lobby, the organizer or a results assistant can set score adjustments.');
-}
 
 export const set_score_adjustment = spacetimedb.reducer(
     {
@@ -136,10 +138,12 @@ export const set_score_adjustment = spacetimedb.reducer(
         const lobby = ctx.db.Lobby.id.find(lobbyId);
         if (!lobby) throw new SenderError('Lobby not found.');
         const side = ensureTeamTag(teamSide);
-        ensureAdjustmentAuthority(ctx, lobby, user);
+        // A39 staff set (ensureResultAuthority, shared with close_game)
+        ensureResultAuthority(ctx, lobby, user, 'Only a referee, a Moderator or, in a tournament lobby, the organizer or a results assistant can set score adjustments.');
         ensureNotConceded(ctx, lobby);
-        const record = findPendingResult(ctx, lobbyId);
+        const record = findEditableResult(ctx, lobbyId, isAdminRole(user));
         ensureCurrentGame(ctx, lobbyId, gameNumber);
+        const mode = ensureOpenGame(ctx, lobby, record, gameNumber, user);
 
         if (Math.abs(value) > MAX_SCORE_HUNDREDTHS) {
             throw new SenderError(`An adjustment cannot exceed ${MAX_SCORE_HUNDREDTHS} hundredths either way.`);
@@ -179,8 +183,12 @@ export const set_score_adjustment = spacetimedb.reducer(
         }
 
         ensureGame(ctx, record, lobby, gameNumber, user.id);
-        recomputeGame(ctx, record, lobby, gameNumber, user.id);
-        resetConfirmations(ctx, record, user.id);
+        if (mode === 'admin') {
+            recomputeSeriesAfterAdminEdit(ctx, lobby, record, user.id);
+        } else {
+            recomputeGame(ctx, record, lobby, gameNumber, user.id);
+            resetConfirmations(ctx, findGame(ctx, record.id, gameNumber), user.id);
+        }
 
         console.log(`[MATCH] Adjustment ${value} (hundredths) for ${side}, game ${gameNumber}, match result #${record.id} by user #${user.id}`);
     }

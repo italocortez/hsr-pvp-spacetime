@@ -13,5 +13,4 @@ import {
 export default {
   lobbyId: __t.u32(),
   characterName: __t.string(),
-  eidolon: __t.u8(),
 };

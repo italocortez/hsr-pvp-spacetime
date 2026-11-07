@@ -41,7 +41,7 @@ export const finalize_match_result = spacetimedb.reducer(
         // and `rollback_bracket_match` still works after step 18's cleanup
         // (it filters surviving MRRs and passes vacuously when none exist).
         // In practice, casual tournament matches never reach this reducer
-        // anyway because `submit_match_result` auto-finalizes them inline.
+        // anyway because the deciding game close (`submitSeriesResult`, S7b) auto-finalizes them inline.
         //
         // Pitfall 4 (broken derivation chain): if the bracketMatch or
         // tournament lookup fails, default to rejection. A broken chain

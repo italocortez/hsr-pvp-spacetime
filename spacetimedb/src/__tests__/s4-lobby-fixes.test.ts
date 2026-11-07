@@ -20,6 +20,7 @@ import {
     type Lobby,
 } from './s4-fixtures';
 import { groupCount, type LineupFormatTag } from '@shared/scoring';
+import { H, confirmBoth, gameRow, playToScoring, record, recordScores, setRole } from './s7-fixtures';
 
 const NOT_ELIGIBLE = /Opposing team is not eligible for forfeit/;
 const rejoin = (s: Lobby, who: Actor) =>
@@ -125,7 +126,7 @@ describe('F3 / A22(3): expiry and draft actions are gated', () => {
         advance(test, 31_000);
 
         const cap = blueCaptain(s);
-        expectReject(test, cap, (ctx) => M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: 'Acheron', eidolon: 0 }), 'Draft is paused.');
+        expectReject(test, cap, (ctx) => M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: 'Acheron' }), 'Draft is paused.');
         expectReject(test, cap, (ctx) => M.place_bid(ctx, { lobbyId: s.lobbyId, bidAmount: 5 }), 'Draft is paused.');
         expectReject(test, cap, (ctx) => M.pass_bid(ctx, { lobbyId: s.lobbyId }), 'Draft is paused.');
         expectReject(test, cap, (ctx) => M.timer_expiry_auction(ctx, { lobbyId: s.lobbyId }), 'Draft is paused.');
@@ -172,14 +173,30 @@ describe('F7: claim_forfeit forfeitingTeamSide', () => {
 });
 
 describe('F8 / A22(4): result reducers in AwaitingResult', () => {
-    function toAwaitingResult() {
+    // T-S7b: advance_stage no longer reaches AwaitingResult (A60(8)); a game close does. A Ranked series closes into
+    // Submitted + AwaitingResult, where the result reducers still run for an Admin (A60(7)) instead of failing with
+    // "Match has ended.". Ranked is set on the lobby row in Waiting with one selected account per player (D-08 gate),
+    // because guests cannot create a Ranked lobby (D-23).
+    function rankedToAwaitingResult() {
         const test = newHarness();
-        const s = setupLobby(test);
-        for (let i = 0; i < 3; i++) tx(test, s.host, (ctx) => M.advance_stage(ctx, { lobbyId: s.lobbyId }));
+        const s = playToScoring(test, {
+            beforeStart: (l) => {
+                test.db.Lobby.id.update({ ...lobbyRow(test, l.lobbyId), matchType: { tag: 'Ranked' } as any });
+                let accountId = 700;
+                for (const name of ['b1', 'b2', 'r1', 'r2']) {
+                    test.db.LobbyMemberAccount.insert({ lobbyId: l.lobbyId, userId: l.a[name].userId, hsrAccountId: accountId++ });
+                }
+            },
+        });
+        recordScores(s, blueCaptain(s), 'Blue', [H(5), H(5)]);
+        recordScores(s, redCaptain(s), 'Red', [H(6), H(6)]);
+        const recordId = record(test, s.lobbyId).id;
+        confirmBoth(s);
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('AwaitingResult');
-        const record = [...test.db.MatchResultRecord.lobby_id.filter(s.lobbyId)][0];
-        expect(record.status.tag).toBe('Pending');
-        return { test, s, recordId: record.id };
+        const rec = test.db.MatchResultRecord.id.find(recordId)!;
+        expect(rec.status.tag).toBe('Submitted');
+        expect(rec.winnerTeamSide?.tag).toBe('Blue');
+        return { test, s, recordId };
     }
     // S7 (A21): one call per team side; values are hundredths, one per lineup group of the lobby's format.
     // Built before tx(): the lobby row is read outside the reducer transaction.
@@ -194,22 +211,34 @@ describe('F8 / A22(4): result reducers in AwaitingResult', () => {
         };
     };
 
-    it('record_group_scores, confirm_match_scores, submit_match_result do not fail with "Match has ended."', () => {
-        const { test, s, recordId } = toAwaitingResult();
-        // The host is the spectator referee with refereeFullControl: one caller covers all three.
-        const blueScores = scores(s, 'Blue', 1000);
-        const redScores = scores(s, 'Red', 1200);
-        tx(test, s.host, (ctx) => M.record_group_scores(ctx, blueScores));
-        tx(test, s.host, (ctx) => M.record_group_scores(ctx, redScores));
-        tx(test, s.host, (ctx) => M.confirm_match_scores(ctx, { matchResultId: recordId }));
-        expect(test.db.MatchResultGame.match_result_id.filter(recordId)).toBeDefined();
-        tx(test, s.host, (ctx) => M.submit_match_result(ctx, { matchResultId: recordId }));
-        // Casual: submit validates and finalizes inline, which deletes the record and the lobby.
-        expect(test.db.MatchResultRecord.id.find(recordId)).toBeNull();
-        expect(test.db.Lobby.id.find(s.lobbyId)).toBeNull();
+    it('in AwaitingResult an Admin edits the closed game (scores, adjustment), a Moderator cannot, a participant disputes', () => {
+        const { test, s, recordId } = rankedToAwaitingResult();
+        const admin = guest(test, 'admin');
+        setRole(test, admin.userId, 'Admin');
+        const mod = guest(test, 'mod');
+        setRole(test, mod.userId, 'Moderator');
+
+        const blueScores = scores(s, 'Blue', 400);
+        tx(test, admin, (ctx) => M.record_group_scores(ctx, blueScores));
+        tx(test, admin, (ctx) =>
+            M.set_score_adjustment(ctx, { lobbyId: s.lobbyId, gameNumber: 1, teamSide: { tag: 'Blue' } as any, value: 50 }));
+        const g = gameRow(test, recordId);
+        expect(g.teamBlueCyclesUsed).toBe(800);
+        expect(g.teamBlueAdjustedResult).toBe(850);
+        expect(g.closedAt).toBeDefined(); // the game stays closed, flags untouched (A60(7))
+        expect(g.blueConfirmed && g.redConfirmed).toBe(true);
+        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('AwaitingResult');
+
+        // A Moderator is not an Admin: the Submitted record is not editable for it (findEditableResult: Pending only).
+        expectReject(test, mod, (ctx) =>
+            M.set_score_adjustment(ctx, { lobbyId: s.lobbyId, gameNumber: 1, teamSide: { tag: 'Blue' } as any, value: 50 }),
+            'No pending match result for this lobby.');
+
+        tx(test, redCaptain(s), (ctx) => M.dispute_match_result(ctx, { matchResultId: recordId, reason: 'lag' }));
+        expect(test.db.MatchResultRecord.id.find(recordId)!.status.tag).toBe('Disputed');
     });
 
-    it('after a concede the three fail with "Match has been conceded."', () => {
+    it('after a concede the result reducers fail: scores with "Match has been conceded.", confirm / close on the stage', () => {
         const test = newHarness();
         const s = setupLobby(test);
         const recordId = [...test.db.MatchResultRecord.lobby_id.filter(s.lobbyId)][0].id;
@@ -224,8 +253,10 @@ describe('F8 / A22(4): result reducers in AwaitingResult', () => {
 
         const blueScores = scores(s, 'Blue', 1000);
         expectReject(test, s.host, (ctx) => M.record_group_scores(ctx, blueScores), 'Match has been conceded.');
-        expectReject(test, s.host, (ctx) => M.confirm_match_scores(ctx, { matchResultId: recordId }), 'Match has been conceded.');
-        expectReject(test, s.host, (ctx) => M.submit_match_result(ctx, { matchResultId: recordId }), 'Match has been conceded.');
+        // confirm_game / close_game check the stage (Equipping or Scoring) before liveness: the lobby is AwaitingResult.
+        const STAGE = 'This action is not allowed in the current lobby stage (AwaitingResult).';
+        expectReject(test, s.host, (ctx) => M.confirm_game(ctx, { lobbyId: s.lobbyId, teamSide: { tag: 'Blue' } as any }), STAGE);
+        expectReject(test, s.host, (ctx) => M.close_game(ctx, { lobbyId: s.lobbyId }), STAGE);
     });
 });
 

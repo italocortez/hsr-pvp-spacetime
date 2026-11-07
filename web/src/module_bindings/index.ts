@@ -80,10 +80,10 @@ import BroadcastCursorReducer from "./broadcast_cursor_reducer";
 import CancelTournamentReducer from "./cancel_tournament_reducer";
 import CheckInTournamentReducer from "./check_in_tournament_reducer";
 import ClaimForfeitReducer from "./claim_forfeit_reducer";
+import CloseGameReducer from "./close_game_reducer";
 import CloseLobbyReducer from "./close_lobby_reducer";
 import ConcedeMatchReducer from "./concede_match_reducer";
-import ConfirmLineupReducer from "./confirm_lineup_reducer";
-import ConfirmMatchScoresReducer from "./confirm_match_scores_reducer";
+import ConfirmGameReducer from "./confirm_game_reducer";
 import ConfirmReadyReducer from "./confirm_ready_reducer";
 import CreateAchievementReducer from "./create_achievement_reducer";
 import CreateAvailabilitySlotReducer from "./create_availability_slot_reducer";
@@ -165,13 +165,13 @@ import SetActiveHsrAccountReducer from "./set_active_hsr_account_reducer";
 import SetActiveSeasonReducer from "./set_active_season_reducer";
 import SetCaptainReducer from "./set_captain_reducer";
 import SetDisplayedAchievementReducer from "./set_displayed_achievement_reducer";
+import SetEidolonReducer from "./set_eidolon_reducer";
 import SetScoreAdjustmentReducer from "./set_score_adjustment_reducer";
 import SetTeamSlotReducer from "./set_team_slot_reducer";
 import ShelveSeriesReducer from "./shelve_series_reducer";
 import ShuffleTeamsReducer from "./shuffle_teams_reducer";
 import StartDraftReducer from "./start_draft_reducer";
 import SubmitAndAdvanceBracketReducer from "./submit_and_advance_bracket_reducer";
-import SubmitMatchResultReducer from "./submit_match_result_reducer";
 import SwapSeedsReducer from "./swap_seeds_reducer";
 import TimerExpiryAuctionReducer from "./timer_expiry_auction_reducer";
 import TimerExpiryClassicReducer from "./timer_expiry_classic_reducer";
@@ -888,10 +888,10 @@ const reducersSchema = __reducers(
   __reducerSchema("cancel_tournament", CancelTournamentReducer),
   __reducerSchema("check_in_tournament", CheckInTournamentReducer),
   __reducerSchema("claim_forfeit", ClaimForfeitReducer),
+  __reducerSchema("close_game", CloseGameReducer),
   __reducerSchema("close_lobby", CloseLobbyReducer),
   __reducerSchema("concede_match", ConcedeMatchReducer),
-  __reducerSchema("confirm_lineup", ConfirmLineupReducer),
-  __reducerSchema("confirm_match_scores", ConfirmMatchScoresReducer),
+  __reducerSchema("confirm_game", ConfirmGameReducer),
   __reducerSchema("confirm_ready", ConfirmReadyReducer),
   __reducerSchema("create_achievement", CreateAchievementReducer),
   __reducerSchema("create_availability_slot", CreateAvailabilitySlotReducer),
@@ -973,13 +973,13 @@ const reducersSchema = __reducers(
   __reducerSchema("set_active_season", SetActiveSeasonReducer),
   __reducerSchema("set_captain", SetCaptainReducer),
   __reducerSchema("set_displayed_achievement", SetDisplayedAchievementReducer),
+  __reducerSchema("set_eidolon", SetEidolonReducer),
   __reducerSchema("set_score_adjustment", SetScoreAdjustmentReducer),
   __reducerSchema("set_team_slot", SetTeamSlotReducer),
   __reducerSchema("shelve_series", ShelveSeriesReducer),
   __reducerSchema("shuffle_teams", ShuffleTeamsReducer),
   __reducerSchema("start_draft", StartDraftReducer),
   __reducerSchema("submit_and_advance_bracket", SubmitAndAdvanceBracketReducer),
-  __reducerSchema("submit_match_result", SubmitMatchResultReducer),
   __reducerSchema("swap_seeds", SwapSeedsReducer),
   __reducerSchema("timer_expiry_auction", TimerExpiryAuctionReducer),
   __reducerSchema("timer_expiry_classic", TimerExpiryClassicReducer),

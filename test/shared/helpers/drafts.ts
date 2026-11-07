@@ -114,8 +114,9 @@ export async function completeTournamentDraft(
 }
 
 /**
- * Advance a lobby from Drafting → Equipping → Scoring:
- * both players confirmLineup, host advanceStage, all three sync.
+ * Advance a lobby from Equipping → Scoring: host advanceStage, all three sync.
+ * T-S7b (A60): lineups need no confirmation before advanceStage (confirm_lineup was removed); Equipping → Scoring is a
+ * host signal with no gate. The game itself is confirmed later with confirmGame (needs lineups + both scores).
  */
 export async function advanceToScoring(
     host: TestHarness,
@@ -123,10 +124,6 @@ export async function advanceToScoring(
     red: TestHarness,
     lobbyId: number,
 ): Promise<void> {
-    await blue.call.confirmLineup({ lobbyId, teamSide: { tag: 'Blue' } });
-    await blue.sync();
-    await red.call.confirmLineup({ lobbyId, teamSide: { tag: 'Red' } });
-    await red.sync();
     await host.call.advanceStage({ lobbyId });
     await host.sync(1500);
     await blue.sync(1500);

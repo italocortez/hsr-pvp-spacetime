@@ -1,21 +1,26 @@
 // T-S7(b): in-memory tests for the S7 server-computed scoring (A21, A31, A39, A55, A56; backlog #11): group scores,
 // deaths, adjustments, the computed winner and tie-break chain, the A39 override authority, finalization history and
 // cleanup. In-memory datastore on the TestClock; nothing reaches maincloud.
+// T-S7b (A60): confirmations live on the game row; the second captain's confirm_game closes the game and submits the
+// series; the staff close (close_game) carries the winner override; A39 applies at the close.
 import { describe, expect, it } from 'vitest';
 import { M, expectReject, guest, lobbyRow, newHarness, tx, type Harness } from './s4-fixtures';
 import {
     H,
     captain,
+    closeGame,
     confirmBoth,
+    confirmGame,
     game,
     playToScoring,
     record,
     recordScores,
+    setRole,
     side,
     type ScoringLobbyOpts,
 } from './s7-fixtures';
 
-const TIE_REJECT = /tied after every tie-break: the referee decides with winnerOverride/;
+const TIE_REJECT = /tied after every tie-break: staff closes the game with winnerOverride/;
 
 /** Both captains record identical groups and no deaths: the outcome falls to the tie-break chain. */
 function tiedGame(test: Harness, opts: ScoringLobbyOpts = {}) {
@@ -27,7 +32,7 @@ function tiedGame(test: Harness, opts: ScoringLobbyOpts = {}) {
 }
 
 describe('A21 end to end: a 4v4 + 4v4 Bo1 scored by the server', () => {
-    it('lineups, group scores + deaths per captain, a referee adjustment that resets confirmations, confirm, submit', () => {
+    it('lineups, group scores + deaths per captain, an adjustment that resets the game confirmations, both confirm → close + submit', () => {
         const test = newHarness();
         const s = playToScoring(test, { lobby: { deathPenalty: H(1) } });
         const { lobbyId } = s;
@@ -43,23 +48,26 @@ describe('A21 end to end: a 4v4 + 4v4 Bo1 scored by the server', () => {
         expect(g.winnerTeamSide.tag).toBe('Red');
         expect([...test.db.MatchResultGroupScore.by_result_game.filter([rec0.id, 1])]).toHaveLength(4);
 
-        confirmBoth(s, rec0.id);
-        expect(record(test, lobbyId).blueConfirmed && record(test, lobbyId).redConfirmed).toBe(true);
+        // A60(3): the confirmation lives on the game row.
+        confirmGame(s, captain(s, 'Blue'), 'Blue');
+        g = game(test, rec0.id);
+        expect(g.blueConfirmed).toBe(true);
+        expect(g.redConfirmed).toBe(false);
+        expect(g.closedAt).toBeUndefined();
 
-        // The referee (host) adds a 1-cycle penalty to Red, without a reason (A55): confirmations reset.
+        // The referee (host) adds a 1-cycle penalty to Red, without a reason (A55): both confirmations reset (A60(2)).
         tx(test, s.host, (ctx) =>
             M.set_score_adjustment(ctx, { lobbyId, gameNumber: 1, teamSide: side('Red'), value: H(1) }));
-        expect(record(test, lobbyId).blueConfirmed).toBe(false);
-        expect(record(test, lobbyId).redConfirmed).toBe(false);
         g = game(test, rec0.id);
+        expect(g.blueConfirmed).toBe(false);
+        expect(g.redConfirmed).toBe(false);
         expect(g.teamRedAdjustedResult).toBe(H(23.5));
         expect(g.winnerTeamSide.tag).toBe('Blue');
         expect(g.tieBreakLevel).toBe(0);
         expect([...test.db.MatchResultAdjustment.by_result_game.filter([rec0.id, 1])][0].reason).toBeUndefined();
 
-        expectReject(test, s.host, (ctx) => M.submit_match_result(ctx, { matchResultId: rec0.id }), /must confirm scores/);
-        confirmBoth(s, rec0.id);
-        tx(test, s.host, (ctx) => M.submit_match_result(ctx, { matchResultId: rec0.id }));
+        // The second confirmation closes the game and submits the Bo1 (A60(3)/(6)).
+        confirmBoth(s);
 
         // Casual: validated and finalized inline. History keeps raw vs adjusted, the level, the winner and the lineups.
         const history = [...test.db.MatchSessionHistory.iter()];
@@ -148,36 +156,49 @@ describe('A21 tie-break chain on an engineered tie', () => {
         expect(g.winnerTeamSide.tag).toBe('Red');
     });
 
-    it('level 4: unresolved; submit without an override is rejected', () => {
+    it('level 4: both confirmations leave the game open; close_game needs the override, which then finalizes', () => {
         const test = newHarness();
         const { s, rec, g } = tiedGame(test);
         expect(g.tieBreakLevel).toBe(4);
         expect(g.winnerTeamSide.tag).toBe('Spectator');
-        confirmBoth(s, rec.id);
-        expectReject(test, s.host, (ctx) => M.submit_match_result(ctx, { matchResultId: rec.id }), TIE_REJECT);
+
+        confirmBoth(s); // no error: the tie stays open with both flags set (A60(3), S7b)
+        const open = game(test, rec.id);
+        expect(open.blueConfirmed && open.redConfirmed).toBe(true);
+        expect(open.closedAt).toBeUndefined();
+        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Scoring');
+
+        expectReject(test, s.host, (ctx) => M.close_game(ctx, { lobbyId: s.lobbyId }), TIE_REJECT);
+        closeGame(s, s.host, 'Blue', 'coin toss');
+
+        const history = [...test.db.MatchSessionHistory.iter()];
+        expect(history).toHaveLength(1);
+        const gh = [...test.db.MatchResultGameHistory.by_match_history.filter(history[0].id)][0];
+        expect(gh.tieBreakLevel).toBe(4);
+        expect(gh.winnerTeamSide.tag).toBe('Blue');
+        expect(history[0].winnerOverride?.tag).toBe('Blue');
+        expect(history[0].winnerOverrideById).toBe(s.host.userId);
+        expect(history[0].winnerOverrideReason).toBe('coin toss');
     });
 });
 
-describe('A39 winnerOverride authority', () => {
+describe('A39 winnerOverride authority at the close (A60(4))', () => {
     it('an override off a tie is rejected', () => {
         const test = newHarness();
         const s = playToScoring(test);
         recordScores(s, captain(s, 'Blue'), 'Blue', [H(5), H(5)]);
         recordScores(s, captain(s, 'Red'), 'Red', [H(6), H(6)]);
-        const rec = record(test, s.lobbyId);
-        confirmBoth(s, rec.id);
         expectReject(test, s.host, (ctx) =>
-            M.submit_match_result(ctx, { matchResultId: rec.id, winnerOverride: side('Red') }),
+            M.close_game(ctx, { lobbyId: s.lobbyId, winnerOverride: side('Red') }),
             'A winner override is only accepted on an unresolved tie.');
+        expect(game(test, record(test, s.lobbyId).id).closedAt).toBeUndefined();
     });
 
     it('a spectator referee\'s override on a level-4 tie is accepted in a casual lobby', () => {
         const test = newHarness();
-        const { s, rec } = tiedGame(test);
-        confirmBoth(s, rec.id);
+        const { s } = tiedGame(test);
         const redPlayer = captain(s, 'Red');
-        tx(test, s.host, (ctx) =>
-            M.submit_match_result(ctx, { matchResultId: rec.id, winnerOverride: side('Red'), winnerOverrideReason: 'coin' }));
+        closeGame(s, s.host, 'Red', 'coin');
         const history = [...test.db.MatchSessionHistory.iter()][0];
         const gh = [...test.db.MatchResultGameHistory.by_match_history.filter(history.id)][0];
         expect(gh.tieBreakLevel).toBe(4);
@@ -190,7 +211,7 @@ describe('A39 winnerOverride authority', () => {
         expect(stat.losses).toBe(0);
     });
 
-    it('a seated player-referee\'s override in a tournament lobby leaves the record Disputed', () => {
+    it('a seated player-referee cannot close a tie with an override in a tournament lobby (record Pending, game open)', () => {
         const test = newHarness();
         const { s, rec } = tiedGame(test, {
             hostSlot: 'BluePlayer',
@@ -198,15 +219,14 @@ describe('A39 winnerOverride authority', () => {
         });
         expect([...test.db.LobbyMember.lobby_id.filter(s.lobbyId)].find((m) => m.userId === s.host.userId)!.isReferee).toBe(true);
         test.db.MatchResultRecord.id.update({ ...record(test, s.lobbyId), isTournamentControlled: true });
-        confirmBoth(s, rec.id);
-        tx(test, s.host, (ctx) =>
-            M.submit_match_result(ctx, { matchResultId: rec.id, winnerOverride: side('Blue') }));
+        confirmBoth(s);
+        expectReject(test, s.host, (ctx) => M.close_game(ctx, { lobbyId: s.lobbyId, winnerOverride: side('Blue') }),
+            'A referee seated on a team cannot decide a tie in a tournament lobby; staff must close this game.');
         const after = test.db.MatchResultRecord.id.find(rec.id)!;
-        expect(after.status.tag).toBe('Disputed');
-        expect(after.winnerTeamSide).toBeUndefined();
-        expect(after.winnerOverride?.tag).toBe('Blue');
-        expect(after.winnerOverrideById).toBe(s.host.userId);
-        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('AwaitingResult');
+        expect(after.status.tag).toBe('Pending');
+        expect(after.winnerOverride).toBeUndefined();
+        expect(game(test, rec.id).closedAt).toBeUndefined();
+        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Scoring');
         expect(test.db.MatchSessionHistory.count()).toBe(0n);
     });
 
@@ -216,10 +236,11 @@ describe('A39 winnerOverride authority', () => {
             hostSlot: 'BluePlayer',
             seats: [['b1', 'BluePlayer'], ['r1', 'RedPlayer'], ['r2', 'RedPlayer']],
         });
-        confirmBoth(s, rec.id);
-        tx(test, s.host, (ctx) => M.submit_match_result(ctx, { matchResultId: rec.id, winnerOverride: side('Blue') }));
+        confirmBoth(s);
+        closeGame(s, s.host, 'Blue');
         expect(test.db.MatchResultRecord.id.find(rec.id)).toBeNull();
         expect(test.db.MatchSessionHistory.count()).toBe(1n);
+        expect([...test.db.MatchSessionHistory.iter()][0].winnerOverrideById).toBe(s.host.userId);
     });
 });
 
@@ -240,7 +261,7 @@ describe('review fixes: adjustment authority and input bounds', () => {
         const test = newHarness();
         const s = playToScoring(test);
         const mod = guest(test, 'mod');
-        test.db.User.id.update({ ...test.db.User.id.find(mod.userId)!, role: { tag: 'Moderator' } });
+        setRole(test, mod.userId, 'Moderator');
         tx(test, mod, (ctx) =>
             M.set_score_adjustment(ctx, { lobbyId: s.lobbyId, gameNumber: 1, teamSide: side('Blue'), value: 100 }));
         const recId = record(test, s.lobbyId).id;

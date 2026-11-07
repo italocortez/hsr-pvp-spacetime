@@ -89,12 +89,13 @@ export const AuctionSoldPayload = t.object('AuctionSoldPayload', {
     characterName: t.string(),
     winningAmount: t.f32(),
     winningTeam: TeamSide,    // Who actually got it
-    eidolon: t.u8(),
+    eidolon: t.u8(),          // A61(3): the winning team's default eidolon (highest owned, E0 without ownership)
+    eidolonCost: t.f32(),     // A61(5): the extra charged at the sale, max(0, cost[eidolon] - cost[e0])
 });
 
+// A61(1): nominations are at E0; the eidolon is resolved for the winning team at the sale.
 export const NominatePayload = t.object('NominatePayload', {
     characterName: t.string(),
-    eidolon: t.u8(),
 });
 
 export const UndoPayload = t.object('UndoPayload', {
@@ -117,9 +118,25 @@ export const ArrangeLineupPayload = t.object('ArrangeLineupPayload', {
     positions: t.string(),         // JSON string of position array (order of characters)
 });
 
-export const ConfirmLineupPayload = t.object('ConfirmLineupPayload', {
-    confirmed: t.bool(),           // true = confirmed
-    groups: t.string(),            // (A21, backlog #3): the confirmed groups (JSON string[][]) for replay
+// A60(1): an eidolon edit of a drafted character (S7b; ConfirmLineupPayload was removed, A60(8)).
+// costPaid = the character's roster cost contribution after the edit, in the draft mode's terms: Classic = the
+// cost-set price at the new level; Auction = the eidolon extra at the new level, max(0, cost[e] - cost[e0]) (A61(6)),
+// which the roster cost adds to AuctionSold.winningAmount.
+export const SetEidolonPayload = t.object('SetEidolonPayload', {
+    characterName: t.string(),
+    eidolon: t.u8(),
+    previousEidolon: t.u8(),
+    costPaid: t.f32(),
+});
+
+// A60(3)/(4): a game confirmation or close. confirmedSide = the side whose flag this step set (Spectator when both
+// were set at once: a full-control referee or a staff close); closed = this step closed the game; the override
+// fields carry a staff close's tie decision.
+export const ConfirmGamePayload = t.object('ConfirmGamePayload', {
+    confirmedSide: TeamSide,
+    closed: t.bool(),
+    winnerOverride: TeamSide.optional(),
+    winnerOverrideReason: t.string().optional(),
 });
 
 // The "Polymorphic" Enum containing the specific payloads
@@ -133,7 +150,8 @@ export const StepPayload = t.enum('StepPayload', {
     Pause: PausePayload,
     EquipLightcone: EquipLightconePayload,
     ArrangeLineup: ArrangeLineupPayload,
-    ConfirmLineup: ConfirmLineupPayload,
+    SetEidolon: SetEidolonPayload,     // A60 (S7b)
+    ConfirmGame: ConfirmGamePayload,   // A60 (S7b)
 });
 
 // -------------------- NEW STRUCTS --------------------

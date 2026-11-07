@@ -155,7 +155,7 @@ export const advance_bracket_match = spacetimedb.reducer(
 // ─── submit_and_advance_bracket ───────────────────────────────────────────────
 // Wrapper reducer for tournament bracket matches. Maps winnerTeamSide (Blue/Red) to
 // team1Id/team2Id and auto-advances in one transaction. Frontend calls this for
-// tournament matches instead of submit_match_result directly.
+// tournament matches (non-tournament series submit themselves at the deciding close since S7b, A60(6)).
 // Permission: Authenticated user (referee/TO authority validated inline).
 
 export const submit_and_advance_bracket = spacetimedb.reducer(
@@ -173,7 +173,7 @@ export const submit_and_advance_bracket = spacetimedb.reducer(
 
         // Verify it has bracketMatchId set
         if (matchResult.bracketMatchId === undefined) {
-            throw new SenderError('Not a bracket match -- use submit_match_result for non-tournament matches.');
+            throw new SenderError('Not a bracket match -- non-tournament series submit themselves when the deciding game closes.');
         }
 
         // Verify it has winnerTeamSide set

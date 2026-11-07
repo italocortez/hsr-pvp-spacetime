@@ -1,6 +1,6 @@
 // ─── Finalization Pipeline Helpers ────────────────────────────────────────────
 // Shared 19-step finalization logic callable by both finalize_match_result
-// (ranked/tournament) and submit_match_result (casual auto-finalize per D-37).
+// (ranked/tournament) and submitSeriesResult (casual auto-finalize per D-37; S7b replaced submit_match_result).
 
 import { SenderError } from 'spacetimedb/server';
 import { auditInsert, auditUpdate } from './auditColumns';
@@ -221,7 +221,7 @@ export function runFinalization(
     // Determine match end reason (per D-31/D-32/D-33):
     // winnerTeamSide answers WHO won, matchEndReason answers HOW it ended
     // A31: no draws — MatchEndReason.Draw was removed and every path that reaches finalization sets a winner
-    // (submit_match_result computes it, concede derives it, admin_force_finalize / override_match_result require one).
+    // (submitSeriesResult computes it at the deciding close, concede derives it, admin_force_finalize / override_match_result require one).
     if (matchResult.winnerTeamSide === undefined) {
         throw new SenderError('A result without a winner cannot be finalized (A31: no draws).');
     }
@@ -346,7 +346,7 @@ export function runFinalization(
                 let targetName: string | undefined;
                 if (step.payload) {
                     const tag = step.payload.tag;
-                    if (tag === 'Pick' || tag === 'Ban' || tag === 'AuctionSold' || tag === 'Nominate') {
+                    if (tag === 'Pick' || tag === 'Ban' || tag === 'AuctionSold' || tag === 'Nominate' || tag === 'SetEidolon') {
                         targetName = step.payload.value?.characterName;
                     } else if (tag === 'Bid') {
                         targetName = step.payload.value?.targetCharacter;

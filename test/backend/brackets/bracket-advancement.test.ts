@@ -208,9 +208,9 @@ async function setupTournamentMatch(
     await toUser.sync(1000);
 
     // Confirm lineups + advance to scoring
-    await blue.call.confirmLineup({ lobbyId, teamSide: { tag: 'Blue' } });
+    // S10: rewrite (confirm_lineup removed by A60; lineups need no confirmation, the game is confirmed with confirmGame): await blue.call.confirmLineup({ lobbyId, teamSide: { tag: 'Blue' } });
     await blue.sync();
-    await red.call.confirmLineup({ lobbyId, teamSide: { tag: 'Red' } });
+    // S10: rewrite (confirm_lineup removed by A60; lineups need no confirmation, the game is confirmed with confirmGame): await red.call.confirmLineup({ lobbyId, teamSide: { tag: 'Red' } });
     await red.sync();
     await toUser.call.advanceStage({ lobbyId });
     await toUser.sync(1500);
@@ -227,9 +227,11 @@ async function setupTournamentMatch(
     await toUser.sync(1000);
 
     // Confirm both sides
-    await blue.call.confirmMatchScores({ matchResultId: mr.id });
+    // S10: rewrite (confirm_match_scores removed by A60: per-game confirmGame per captain; needs arranged lineups + both scores; the second one closes the game and submits)
+    await blue.call.confirmGame({ lobbyId, teamSide: { tag: 'Blue' } });
     await blue.sync(500);
-    await red.call.confirmMatchScores({ matchResultId: mr.id });
+    // S10: rewrite (confirm_match_scores removed by A60: per-game confirmGame per captain; needs arranged lineups + both scores; the second one closes the game and submits)
+    await red.call.confirmGame({ lobbyId, teamSide: { tag: 'Red' } });
     await red.sync(500);
     await toUser.sync(1000);
 
@@ -480,9 +482,7 @@ describe('Bracket Advancement', () => {
 
             it('submit → Casual auto-finalize triggers step 17', async () => {
                 // Submit match result (Casual = auto-validate + auto-finalize)
-                await toUser.call.submitMatchResult({
-                    matchResultId,
-                });
+                // S10: rewrite (submit_match_result removed by A60(6): the close of the deciding game submits the series): await toUser.call.submitMatchResult({ matchResultId, });
                 await toUser.sync(3000);
                 await bluePlayer.sync(2000);
                 await redPlayer.sync(2000);
@@ -611,9 +611,7 @@ describe('Bracket Advancement', () => {
             openedLobbyIds.push(lobbyId);
 
             // Submit with winner — Ranked does NOT auto-finalize
-            await toUser.call.submitMatchResult({
-                matchResultId,
-            });
+            // S10: rewrite (submit_match_result removed by A60(6): the close of the deciding game submits the series): await toUser.call.submitMatchResult({ matchResultId, });
             await toUser.sync(2000);
 
             // MatchResultRecord should still exist (Submitted status)

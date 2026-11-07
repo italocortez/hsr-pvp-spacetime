@@ -1,7 +1,11 @@
 // T-S7(b): builders for the S7 scoring / lineup in-memory tests. Not a test file: imported by s7-*.test.ts.
 // Reuses the S4 builders; reference rows (characters, costs, synergies, roster accounts) are inserted straight into
 // the in-memory datastore, outside any reducer, like the S4 tests' direct row edits. Nothing reaches maincloud.
+// T-S7b: confirm_lineup / confirm_match_scores are gone (A60): confirmGame / closeGame / confirmBoth drive the per-game
+// confirmation and close; finishGame closes the current game through the full-control host (S4 / S6 / S7b suites).
 import { expect } from 'vitest';
+import { groupCount, type LineupFormatTag } from '@shared/scoring';
+import { teamDraft } from '../helpers/scoringHelpers';
 import { M, advance, captainOf, lobbyRow, session, setupLobby, tx, type Actor, type Harness, type Lobby, type SetupOpts } from './s4-fixtures';
 
 /** Hundredths of a value (scores, costs and handicaps are fixed-point hundredths). */
@@ -40,15 +44,25 @@ export function insertRoster(test: Harness, names: string[], fourStars: string[]
 }
 
 export function insertCharacterCost(test: Harness, characterName: string, draftMode: 'Classic' | 'Auction', cost: number) {
+    insertCharacterCostLadder(test, characterName, draftMode, [cost, cost, cost, cost, cost, cost, cost]);
+}
+
+/** T-S7b: a cost row with a distinct cost per eidolon level (`ladder[e]` = the cost at E`e`; cost set 0, MoC). */
+export function insertCharacterCostLadder(test: Harness, characterName: string, draftMode: 'Classic' | 'Auction', ladder: number[]) {
+    const [e0, e1, e2, e3, e4, e5, e6] = ladder;
     test.db.HsrCharacterCost.insert({
         characterName,
         gameMode: { tag: 'MemoryOfChaos' },
         draftMode: { tag: draftMode },
-        costs: { e0: cost, e1: cost, e2: cost, e3: cost, e4: cost, e5: cost, e6: cost },
+        costs: { e0, e1, e2, e3, e4, e5, e6 },
         costSetId: 0,
         ...AUDIT(test),
     });
 }
+
+/** T-S7b: an Auction cost ladder (shorthand for insertCharacterCostLadder(..., 'Auction', ladder)). */
+export const insertAuctionCost = (test: Harness, characterName: string, ladder: number[]) =>
+    insertCharacterCostLadder(test, characterName, 'Auction', ladder);
 
 export function insertSynergy(test: Harness, a: string, b: string, costModifier: number, draftMode: 'Classic' | 'Auction') {
     test.db.HsrSynergyCost.insert({
@@ -92,14 +106,14 @@ export function draftClassic(s: Lobby, blue: string[], red: string[], eidolons: 
     expect(lobbyRow(s.test, s.lobbyId).stage.tag).toBe('Equipping');
 }
 
-/** Plays an Auction draft with no bans: the nominator's captain nominates, the other captain passes. */
+/** Plays an Auction draft with no bans: the nominator's captain nominates (A61: no eidolon), the other captain passes. */
 export function draftAuction(s: Lobby, blue: string[], red: string[]) {
     const queue = { Blue: [...blue], Red: [...red] };
     while (lobbyRow(s.test, s.lobbyId).stage.tag === 'Drafting') {
         const team = session(s.test, s.lobbyId).nextNominatorTeam.tag as 'Blue' | 'Red';
         const other = team === 'Blue' ? 'Red' : 'Blue';
         tx(s.test, captain(s, team), (ctx) =>
-            M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: queue[team].shift()!, eidolon: 0 }));
+            M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: queue[team].shift()! }));
         tx(s.test, captain(s, other), (ctx) => M.pass_bid(ctx, { lobbyId: s.lobbyId }));
     }
     expect(lobbyRow(s.test, s.lobbyId).stage.tag).toBe('Equipping');
@@ -109,20 +123,38 @@ export function arrange(s: Lobby, who: Actor, team: 'Blue' | 'Red', groups: stri
     tx(s.test, who, (ctx) => M.arrange_lineup(ctx, { lobbyId: s.lobbyId, teamSide: side(team), groups: JSON.stringify(groups) }));
 }
 
-export function confirm(s: Lobby, who: Actor, team: 'Blue' | 'Red') {
-    tx(s.test, who, (ctx) => M.confirm_lineup(ctx, { lobbyId: s.lobbyId, teamSide: side(team) }));
+/** A60(3): confirm_game for `team` (its captain; the full-control spectator referee sets both sides at once). */
+export function confirmGame(s: Lobby, who: Actor, team: 'Blue' | 'Red') {
+    tx(s.test, who, (ctx) => M.confirm_game(ctx, { lobbyId: s.lobbyId, teamSide: side(team) }));
+}
+
+/** A60(4): the staff close, optionally with a winner override (level-4 tie only). */
+export function closeGame(s: Lobby, who: Actor, override?: 'Blue' | 'Red', reason?: string) {
+    tx(s.test, who, (ctx) => M.close_game(ctx, {
+        lobbyId: s.lobbyId,
+        winnerOverride: override ? side(override) : undefined,
+        winnerOverrideReason: reason,
+    }));
+}
+
+/** Both captains confirm the current game (the second confirmation closes it unless it is a level-4 tie). */
+export function confirmBoth(s: Lobby) {
+    confirmGame(s, captain(s, 'Blue'), 'Blue');
+    confirmGame(s, captain(s, 'Red'), 'Red');
 }
 
 /** Halves groups: the first four names, then the next four. */
 export const halves = (names: string[]) => [names.slice(0, 4), names.slice(4, 8)];
 
-export function lineup(test: Harness, lobbyId: number, team: 'Blue' | 'Red') {
-    return [...test.db.MatchLineup.by_lobby_game.filter([lobbyId, 1])].find((l) => l.teamSide.tag === team)!;
+export function lineup(test: Harness, lobbyId: number, team: 'Blue' | 'Red', gameNumber = 1) {
+    return [...test.db.MatchLineup.by_lobby_game.filter([lobbyId, gameNumber])].find((l) => l.teamSide.tag === team)!;
 }
 
 export const record = (test: Harness, lobbyId: number) => [...test.db.MatchResultRecord.lobby_id.filter(lobbyId)][0];
-export const game = (test: Harness, matchResultId: number) =>
-    [...test.db.MatchResultGame.by_result_and_game.filter([matchResultId, 1])][0];
+/** The game row, re-read (MatchResultGame rows are replaced on every edit: never keep one across reducer calls). */
+export const gameRow = (test: Harness, matchResultId: number, gameNumber = 1) =>
+    [...test.db.MatchResultGame.by_result_and_game.filter([matchResultId, gameNumber])][0];
+export const game = (test: Harness, matchResultId: number) => gameRow(test, matchResultId, 1);
 
 export interface ScoringLobbyOpts extends SetupOpts {
     blue?: string[];
@@ -134,7 +166,8 @@ export interface ScoringLobbyOpts extends SetupOpts {
 
 /**
  * A Classic Memory of Chaos Bo1 (Halves, teamSize 2, host = spectator referee unless overridden) played to Scoring:
- * reference rows inserted, both teams drafted, lineups arranged and confirmed by the captains, host advances.
+ * reference rows inserted, both teams drafted, lineups arranged by the captains (no lineup confirmation since A60),
+ * host advances Equipping → Scoring (a signal, A60(5)).
  */
 export function playToScoring(test: Harness, opts: ScoringLobbyOpts = {}): Lobby {
     const blue = opts.blue ?? blueNames();
@@ -144,23 +177,44 @@ export function playToScoring(test: Harness, opts: ScoringLobbyOpts = {}): Lobby
     const s = setupLobby(test, opts);
     draftClassic(s, blue, red, opts.eidolons);
     arrange(s, captain(s, 'Blue'), 'Blue', halves(blue));
-    confirm(s, captain(s, 'Blue'), 'Blue');
     arrange(s, captain(s, 'Red'), 'Red', halves(red));
-    confirm(s, captain(s, 'Red'), 'Red');
     tx(test, s.host, (ctx) => M.advance_stage(ctx, { lobbyId: s.lobbyId }));
     expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Scoring');
     advance(test, 1_000);
     return s;
 }
 
-export function recordScores(s: Lobby, who: Actor, team: 'Blue' | 'Red', values: number[], deaths = 0) {
+/** record_group_scores for the current game (or `gameNumber`). */
+export function recordScores(s: Lobby, who: Actor, team: 'Blue' | 'Red', values: number[], deaths = 0, gameNumber?: number) {
+    const g = gameNumber ?? session(s.test, s.lobbyId).currentGameNumber;
     tx(s.test, who, (ctx) =>
-        M.record_group_scores(ctx, { lobbyId: s.lobbyId, gameNumber: 1, teamSide: side(team), values, deaths }));
+        M.record_group_scores(ctx, { lobbyId: s.lobbyId, gameNumber: g, teamSide: side(team), values, deaths }));
 }
 
-export function confirmBoth(s: Lobby, matchResultId: number) {
-    tx(s.test, captain(s, 'Blue'), (ctx) => M.confirm_match_scores(ctx, { matchResultId }));
-    tx(s.test, captain(s, 'Red'), (ctx) => M.confirm_match_scores(ctx, { matchResultId }));
+/** Splits drafted names into groups of four (Halves → 2 groups, Thirds → 3). */
+const groupsOf4 = (names: string[]) => Array.from({ length: Math.ceil(names.length / 4) }, (_, i) => names.slice(i * 4, i * 4 + 4));
+
+/**
+ * T-S7b: closes the current game through the host (spectator referee, refereeFullControl): the host arranges any
+ * missing lineup from the game's draft, advances Equipping → Scoring if needed, records both sides' group scores
+ * (distinct: `winner` gets 10 cycles per group, the other 20) and confirms once (full control = both flags → close).
+ * The draft must be complete (stage Equipping or Scoring).
+ */
+export function finishGame(s: Lobby, winner: 'Blue' | 'Red' = 'Blue') {
+    const { test, lobbyId } = s;
+    const gameNumber = session(test, lobbyId).currentGameNumber;
+    for (const team of ['Blue', 'Red'] as const) {
+        if (lineup(test, lobbyId, team, gameNumber)) continue;
+        const names = tx(test, 'internal', (ctx) => teamDraft(ctx, lobbyId, gameNumber, team).characters);
+        advance(test, 300); // lineup throttle (AbuseConfig.lineupMinIntervalMs) on the host
+        arrange(s, s.host, team, groupsOf4(names));
+    }
+    if (lobbyRow(test, lobbyId).stage.tag === 'Equipping') tx(test, s.host, (ctx) => M.advance_stage(ctx, { lobbyId }));
+    const groups = groupCount(lobbyRow(test, lobbyId).lineupFormat.tag as LineupFormatTag);
+    const values = (team: 'Blue' | 'Red') => Array.from({ length: groups }, () => H(team === winner ? 10 : 20));
+    recordScores(s, s.host, 'Blue', values('Blue'));
+    recordScores(s, s.host, 'Red', values('Red'));
+    confirmGame(s, s.host, 'Blue');
 }
 
 /** A light-cone cost row (cost set 0, Memory of Chaos); equip_lightcone reads the Classic row in both draft modes. */
@@ -177,4 +231,14 @@ export function insertLightconeCost(test: Harness, lightconeName: string, cost: 
 
 export function equip(s: Lobby, who: Actor, characterName: string, lightconeName: string) {
     tx(s.test, who, (ctx) => M.equip_lightcone(ctx, { lobbyId: s.lobbyId, characterName, lightconeName, superimposition: 1 }));
+}
+
+/** T-S7b: set_eidolon (A60(1)) by `who` for a character of `team`'s draft of the current game. */
+export function setEidolon(s: Lobby, who: Actor, team: 'Blue' | 'Red', characterName: string, eidolon: number) {
+    tx(s.test, who, (ctx) => M.set_eidolon(ctx, { lobbyId: s.lobbyId, teamSide: side(team), characterName, eidolon }));
+}
+
+/** T-S7b: sets a user's role directly on the row (as the S7 tests set Moderator). */
+export function setRole(test: Harness, userId: number, role: 'Moderator' | 'Admin') {
+    test.db.User.id.update({ ...test.db.User.id.find(userId)!, role: { tag: role } });
 }

@@ -5,9 +5,8 @@ import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { ensureLobbyMember, ensureStageIs, slotTeam, slotIsCoach, slotToTeamSide } from '../helpers/lobbyHelpers';
 import { ensureMatchAlive } from '../helpers/disconnectHelpers';
 import { getNextSequence } from '../helpers/stepSequence';
-import { resolveOwnedEidolon } from '../helpers/ownershipValidation';
+import { teamOwnedEidolons } from '../helpers/ownershipValidation';
 import { charactersPerTeam, type LineupFormatTag } from '@shared/scoring';
-import type { NominatePayload } from '@bindings/types';
 
 // ─── Helper: Get set of characters already won via AuctionSold ──────────────
 // Auction characters are ALWAYS exclusive (D-42).
@@ -42,29 +41,113 @@ function getBannedCharacters(ctx: any, lobbyId: number): Set<string> {
     return bannedSet;
 }
 
-// ─── Helper: Look up base cost from cost table ──────────────────────────────
-// Per D-53: base cost from HsrCharacterCost using (characterName, eidolon, costSetId, gameMode).
-// Returns 0 if not found (0-cost characters per D-54).
+// ─── Helper: Look up costs from the cost table ──────────────────────────────
+// Per D-53, amended by A61(1): the base cost of a nomination is the Auction cost row's e0 (characterName,
+// costSetId, gameMode). Returns 0 if not found (0-cost characters per D-54) and for EMPTY.
 
-function getCharacterBaseCost(
-    ctx: any,
-    characterName: string,
-    eidolon: number,
-    costSetId: number,
-    gameMode: any
-): number {
-    if (characterName === 'EMPTY') return 0;
+function auctionCostRow(ctx: any, characterName: string, costSetId: number, gameMode: any): any {
+    if (characterName === 'EMPTY') return undefined;
     // 15.4 D-10/D-11: filter draftMode='Auction' and read unified costs struct.
-    const costRows = [...ctx.db.HsrCharacterCost.cost_set_id.filter(costSetId)];
-    const costRow = costRows.find(
+    return [...ctx.db.HsrCharacterCost.cost_set_id.filter(costSetId)].find(
         (r: any) =>
             r.characterName === characterName &&
             r.gameMode.tag === gameMode.tag &&
             r.draftMode.tag === 'Auction'
     );
+}
+
+/** The Auction cost of a character at an eidolon level in the lobby's cost set (0 for EMPTY / no row). */
+export function auctionCostAt(ctx: any, lobby: any, characterName: string, eidolon: number): number {
+    const costRow = auctionCostRow(ctx, characterName, lobby.costSetId, lobby.gameMode);
     if (!costRow) return 0;
-    const eidolonKey = `e${eidolon}` as keyof typeof costRow.costs;
-    return costRow.costs[eidolonKey] ?? 0;
+    return costRow.costs[`e${eidolon}`] ?? 0;
+}
+
+function getCharacterBaseCost(ctx: any, characterName: string, costSetId: number, gameMode: any): number {
+    return auctionCostRow(ctx, characterName, costSetId, gameMode)?.costs.e0 ?? 0;
+}
+
+/** A61(3): the eidolon extra = max(0, cost[eidolon] - cost[e0]) from the lobby's cost set (f32 like the budgets). */
+export function auctionEidolonExtra(ctx: any, lobby: any, characterName: string, eidolon: number): number {
+    return Math.max(0, auctionCostAt(ctx, lobby, characterName, eidolon) - auctionCostAt(ctx, lobby, characterName, 0));
+}
+
+/**
+ * A61(3): a team's default eidolon for a character = the highest level its player seats own on their selected
+ * accounts when the lobby requires ownership (0 when none does); always 0 (extra 0) without ownership.
+ */
+export function teamDefaultEidolon(ctx: any, lobby: any, side: string, characterName: string): number {
+    if (!lobby.requireOwnership || characterName === 'EMPTY') return 0;
+    const owned = teamOwnedEidolons(ctx, lobby.id, side, characterName);
+    return owned.length > 0 ? owned[owned.length - 1] : 0;
+}
+
+/**
+ * A61(5)/(6): charges an eidolon extra to a team: the character budget first (floored at 0, so EMPTY nominations at
+ * cost 0 stay possible), the remainder from the light-cone budget. Returns the new budgets. Callers guard
+ * extra ≤ character + light-cone budget first; the light-cone clamp is defensive and logs a warning.
+ */
+export function chargeExtra(session: any, side: string, extra: number): { charBudget: number; lcBudget: number } {
+    const charBudget = side === 'Blue' ? session.teamBlueCharBudget : session.teamRedCharBudget;
+    const lcBudget = side === 'Blue' ? session.teamBlueLcBudget : session.teamRedLcBudget;
+    const fromChar = Math.min(Math.max(charBudget, 0), Math.max(extra, 0));
+    let newLc = lcBudget - (Math.max(extra, 0) - fromChar);
+    if (newLc < 0) {
+        console.log(`[AUCTION] chargeExtra: ${side} light-cone budget would go negative (${newLc}); clamped to 0`);
+        newLc = 0;
+    }
+    return { charBudget: Math.max(0, charBudget - fromChar), lcBudget: newLc };
+}
+
+/** A61(2): under requireOwnership a team may nominate or bid only on a character one of its selected accounts owns (EMPTY exempt). */
+function ensureTeamOwnsCharacter(ctx: any, lobby: any, side: string, characterName: string): void {
+    if (!lobby.requireOwnership || characterName === 'EMPTY') return;
+    if (teamOwnedEidolons(ctx, lobby.id, side, characterName).length === 0) {
+        throw new SenderError('Your team does not own this character on any selected account.');
+    }
+}
+
+/** A61(4): amount + the team's eidolon extra must fit the total remaining budget (character + light cones). */
+function ensureTotalBudgetFits(ctx: any, lobby: any, session: any, side: string, characterName: string, amount: number): void {
+    const extra = auctionEidolonExtra(ctx, lobby, characterName, teamDefaultEidolon(ctx, lobby, side, characterName));
+    const total = side === 'Blue'
+        ? session.teamBlueCharBudget + session.teamBlueLcBudget
+        : session.teamRedCharBudget + session.teamRedLcBudget;
+    if (amount + extra > total) {
+        throw new SenderError('Not enough total budget: the eidolon extra for this character would exceed it.');
+    }
+}
+
+/**
+ * A61(3)(5): the sale. The winning team's default eidolon and its extra are resolved now (never from the Nominate
+ * step); the winning amount comes out of the character budget (bids are capped by it), then the extra through
+ * chargeExtra. Returns the AuctionSold payload values and the winner's new budgets.
+ */
+function resolveSale(ctx: any, lobby: any, session: any, winningSide: string, characterName: string, winningAmount: number) {
+    const eidolon = winningSide === 'Blue' || winningSide === 'Red' ? teamDefaultEidolon(ctx, lobby, winningSide, characterName) : 0;
+    const eidolonCost = auctionEidolonExtra(ctx, lobby, characterName, eidolon);
+    // A61(4)/(5): bids are capped by the character budget, so the winning amount always fits; a winning amount above
+    // it means the budget backing the bid was spent elsewhere: reject instead of clamping.
+    if (winningSide === 'Blue' || winningSide === 'Red') {
+        const charBudget = winningSide === 'Blue' ? session.teamBlueCharBudget : session.teamRedCharBudget;
+        if (winningAmount > charBudget) throw new SenderError(`Winning amount exceeds the ${winningSide} character budget.`);
+    }
+    const afterBid = {
+        ...session,
+        teamBlueCharBudget: winningSide === 'Blue' ? session.teamBlueCharBudget - winningAmount : session.teamBlueCharBudget,
+        teamRedCharBudget: winningSide === 'Red' ? session.teamRedCharBudget - winningAmount : session.teamRedCharBudget,
+    };
+    const budgets = winningSide === 'Blue' || winningSide === 'Red'
+        ? chargeExtra(afterBid, winningSide, eidolonCost)
+        : undefined;
+    return {
+        eidolon,
+        eidolonCost,
+        teamBlueCharBudget: winningSide === 'Blue' ? budgets!.charBudget : afterBid.teamBlueCharBudget,
+        teamRedCharBudget: winningSide === 'Red' ? budgets!.charBudget : afterBid.teamRedCharBudget,
+        teamBlueLcBudget: winningSide === 'Blue' ? budgets!.lcBudget : session.teamBlueLcBudget,
+        teamRedLcBudget: winningSide === 'Red' ? budgets!.lcBudget : session.teamRedLcBudget,
+    };
 }
 
 // ─── Helper: Check auction end condition ────────────────────────────────────
@@ -83,14 +166,15 @@ function isAuctionComplete(session: any, lobby: any): boolean {
 // ─── nominate_character ──────────────────────────────────────────────────────
 // Per D-47/D-48/D-53: Nomination sets the character at base cost from cost table.
 // The nominating team is automatically the first bidder at base cost.
+// A61(1): the base cost is the E0 cost (no eidolon argument); A61(2) under requireOwnership the nominating team
+// must own the character; A61(4) base cost + the team's eidolon extra must fit its total remaining budget.
 
 export const nominate_character = spacetimedb.reducer(
     {
         lobbyId: t.u32(),
         characterName: t.string(),
-        eidolon: t.u8(),
     },
-    (ctx, { lobbyId, characterName, eidolon: requestedEidolon }) => {
+    (ctx, { lobbyId, characterName }) => {
         const user = getAuthenticatedUser(ctx);
 
         const lobby = ctx.db.Lobby.id.find(lobbyId);
@@ -161,15 +245,12 @@ export const nominate_character = spacetimedb.reducer(
             }
         }
 
-        // CH-S6 / D.8.7: under requireOwnership the server resolves the eidolon (max over the nominating
-        // member's selected accounts, E0 when they lack the character) and ignores the argument; otherwise the
-        // argument stands. The AuctionSold payload copies it from this Nominate step.
-        const eidolon = lobby.requireOwnership
-            ? resolveOwnedEidolon(ctx, lobbyId, user.id, characterName)
-            : requestedEidolon;
+        // A61(2): ownership on nominations (the nominating team's selected accounts; EMPTY exempt).
+        const side = slotTeam(member.lobbySlot)!;
+        ensureTeamOwnsCharacter(ctx, lobby, side, characterName);
 
-        // Per D-53: Look up base cost from cost table
-        const baseCost = getCharacterBaseCost(ctx, characterName, eidolon, lobby.costSetId, lobby.gameMode);
+        // Per D-53 / A61(1): base cost = the E0 cost from the cost table
+        const baseCost = getCharacterBaseCost(ctx, characterName, lobby.costSetId, lobby.gameMode);
 
         // Budget check: nominating team must have enough budget for at least the base cost
         // Per D-53: nomination rejected if base cost > remaining budget
@@ -182,6 +263,8 @@ export const nominate_character = spacetimedb.reducer(
                 throw new SenderError('Not enough budget to nominate this character.');
             }
         }
+        // A61(4): base cost + the team's eidolon extra within the total remaining budget.
+        ensureTotalBudgetFits(ctx, lobby, session, side, characterName, baseCost);
 
         const nextSeq = getNextSequence(ctx, lobbyId);
 
@@ -197,7 +280,7 @@ export const nominate_character = spacetimedb.reducer(
             action: { tag: 'Nominate', value: {} } as any,
             payload: {
                 tag: 'Nominate',
-                value: { characterName, eidolon },
+                value: { characterName },
             } as any,
             timestamp: ctx.timestamp,
         }, user.id));
@@ -219,7 +302,7 @@ export const nominate_character = spacetimedb.reducer(
         }, user.id));
 
         console.log(
-            `[AUCTION] nominate_character: User #${user.id} (${slotTeam(member.lobbySlot)}) nominated '${characterName}' (E${eidolon}) at base cost ${baseCost} in lobby #${lobbyId}`
+            `[AUCTION] nominate_character: User #${user.id} (${slotTeam(member.lobbySlot)}) nominated '${characterName}' at base cost ${baseCost} in lobby #${lobbyId}`
         );
     }
 );
@@ -300,6 +383,10 @@ export const place_bid = spacetimedb.reducer(
             );
         }
 
+        // A61(2): ownership on bids (the bidding team's selected accounts; EMPTY exempt).
+        const side = slotTeam(member.lobbySlot)!;
+        ensureTeamOwnsCharacter(ctx, lobby, side, session.currentNomination);
+
         // Budget check: cannot bid more than remaining budget
         if (slotTeam(member.lobbySlot) === 'Blue') {
             if (bidAmount > session.teamBlueCharBudget) {
@@ -310,6 +397,8 @@ export const place_bid = spacetimedb.reducer(
                 throw new SenderError('Bid exceeds your remaining character budget.');
             }
         }
+        // A61(4): bid + the bidding team's eidolon extra within the total remaining budget.
+        ensureTotalBudgetFits(ctx, lobby, session, side, session.currentNomination, bidAmount);
 
         const nextSeq = getNextSequence(ctx, lobbyId);
 
@@ -423,9 +512,9 @@ export const pass_bid = spacetimedb.reducer(
         const winningAmount = session.currentBidAmount ?? 0;
         const nominatedChar = session.currentNomination!;
 
-        // Look up the eidolon from the original Nominate step for this nomination
+        // Find the most recent Nominate step for this character (the active nomination): its team only (A61: the
+        // eidolon is no longer read from it).
         const allSteps = [...ctx.db.MatchSessionStep.lobby_id.filter(lobbyId)];
-        // Find the most recent Nominate step for this character (the active nomination)
         const nominateStep = allSteps
             .filter(
                 (s: any) =>
@@ -435,10 +524,11 @@ export const pass_bid = spacetimedb.reducer(
             )
             .sort((a: any, b: any) => b.sequence - a.sequence)[0];
 
-        const eidolon: number = nominateStep ? (nominateStep.payload.value as NominatePayload).eidolon : 0;
-
         // Find the nominating team from the Nominate step
         const nominatingTeam = nominateStep ? nominateStep.actorSlot : session.nextNominatorTeam;
+
+        // A61(3)(5): the winning team's default eidolon and extra, charged now (character budget first).
+        const sale = resolveSale(ctx, lobby, session, winningTeam.tag, nominatedChar, winningAmount);
 
         const nextSeq = getNextSequence(ctx, lobbyId);
 
@@ -458,23 +548,22 @@ export const pass_bid = spacetimedb.reducer(
                     characterName: nominatedChar,
                     winningAmount,
                     winningTeam,
-                    eidolon,
+                    eidolon: sale.eidolon,
+                    eidolonCost: sale.eidolonCost,
                 },
             } as any,
             timestamp: ctx.timestamp,
         }, user.id));
 
-        // Deduct budget from winning team
-        let newBlueCharBudget = session.teamBlueCharBudget;
-        let newRedCharBudget = session.teamRedCharBudget;
+        // Deduct budget from winning team (winning amount + A61 eidolon extra, see resolveSale)
+        const newBlueCharBudget = sale.teamBlueCharBudget;
+        const newRedCharBudget = sale.teamRedCharBudget;
         let newBlueCharactersWon = session.blueCharactersWon;
         let newRedCharactersWon = session.redCharactersWon;
 
         if (winningTeam.tag === 'Blue') {
-            newBlueCharBudget -= winningAmount;
             newBlueCharactersWon += 1;
         } else {
-            newRedCharBudget -= winningAmount;
             newRedCharactersWon += 1;
         }
 
@@ -514,8 +603,8 @@ export const pass_bid = spacetimedb.reducer(
                 currentBidTeam: { tag: 'Spectator', value: {} } as any,
                 teamBlueCharBudget: 0,
                 teamRedCharBudget: 0,
-                teamBlueLcBudget: session.teamBlueLcBudget + finalBlueCharBudget,
-                teamRedLcBudget: session.teamRedLcBudget + finalRedCharBudget,
+                teamBlueLcBudget: sale.teamBlueLcBudget + finalBlueCharBudget,
+                teamRedLcBudget: sale.teamRedLcBudget + finalRedCharBudget,
                 blueCharactersWon: newBlueCharactersWon,
                 redCharactersWon: newRedCharactersWon,
                 nextNominatorTeam,
@@ -550,6 +639,8 @@ export const pass_bid = spacetimedb.reducer(
                 currentBidTeam: { tag: 'Spectator', value: {} } as any,
                 teamBlueCharBudget: newBlueCharBudget,
                 teamRedCharBudget: newRedCharBudget,
+                teamBlueLcBudget: sale.teamBlueLcBudget,
+                teamRedLcBudget: sale.teamRedLcBudget,
                 blueCharactersWon: newBlueCharactersWon,
                 redCharactersWon: newRedCharactersWon,
                 nextNominatorTeam,
@@ -636,7 +727,7 @@ export const timer_expiry_auction = spacetimedb.reducer(
                 action: { tag: 'Nominate', value: {} } as any,
                 payload: {
                     tag: 'Nominate',
-                    value: { characterName: 'EMPTY', eidolon: 0 },
+                    value: { characterName: 'EMPTY' },
                 } as any,
                 timestamp: ctx.timestamp,
             }));
@@ -668,7 +759,7 @@ export const timer_expiry_auction = spacetimedb.reducer(
             const winningTeam = session.currentBidTeam;
             const winningAmount = session.currentBidAmount ?? 0;
 
-            // Look up eidolon from the Nominate step
+            // The nominating team from the Nominate step (A61: the eidolon is no longer read from it)
             const allSteps = [...ctx.db.MatchSessionStep.lobby_id.filter(lobbyId)];
             const nominateStep = allSteps
                 .filter(
@@ -679,8 +770,10 @@ export const timer_expiry_auction = spacetimedb.reducer(
                 )
                 .sort((a: any, b: any) => b.sequence - a.sequence)[0];
 
-            const eidolon: number = nominateStep ? (nominateStep.payload.value as NominatePayload).eidolon : 0;
             const nominatingTeam = nominateStep ? nominateStep.actorSlot : session.nextNominatorTeam;
+
+            // A61(3)(5): the winning team's default eidolon and extra, charged now (character budget first).
+            const sale = resolveSale(ctx, lobby, session, winningTeam.tag, nominatedChar, winningAmount);
 
             // Insert AuctionSold step (system resolves the auction)
             ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
@@ -698,23 +791,22 @@ export const timer_expiry_auction = spacetimedb.reducer(
                         characterName: nominatedChar,
                         winningAmount,
                         winningTeam,
-                        eidolon,
+                        eidolon: sale.eidolon,
+                        eidolonCost: sale.eidolonCost,
                     },
                 } as any,
                 timestamp: ctx.timestamp,
             }));
 
-            // Deduct budget and increment won count
-            let newBlueCharBudget = session.teamBlueCharBudget;
-            let newRedCharBudget = session.teamRedCharBudget;
+            // Deduct budget (winning amount + A61 eidolon extra, see resolveSale) and increment won count
+            const newBlueCharBudget = sale.teamBlueCharBudget;
+            const newRedCharBudget = sale.teamRedCharBudget;
             let newBlueCharactersWon = session.blueCharactersWon;
             let newRedCharactersWon = session.redCharactersWon;
 
             if (winningTeam.tag === 'Blue') {
-                newBlueCharBudget -= winningAmount;
                 newBlueCharactersWon += 1;
             } else if (winningTeam.tag === 'Red') {
-                newRedCharBudget -= winningAmount;
                 newRedCharactersWon += 1;
             }
 
@@ -747,8 +839,8 @@ export const timer_expiry_auction = spacetimedb.reducer(
                     currentBidTeam: { tag: 'Spectator', value: {} } as any,
                     teamBlueCharBudget: 0,
                     teamRedCharBudget: 0,
-                    teamBlueLcBudget: session.teamBlueLcBudget + finalBlueChar,
-                    teamRedLcBudget: session.teamRedLcBudget + finalRedChar,
+                    teamBlueLcBudget: sale.teamBlueLcBudget + finalBlueChar,
+                    teamRedLcBudget: sale.teamRedLcBudget + finalRedChar,
                     blueCharactersWon: newBlueCharactersWon,
                     redCharactersWon: newRedCharactersWon,
                     nextNominatorTeam,
@@ -774,6 +866,8 @@ export const timer_expiry_auction = spacetimedb.reducer(
                     currentBidTeam: { tag: 'Spectator', value: {} } as any,
                     teamBlueCharBudget: newBlueCharBudget,
                     teamRedCharBudget: newRedCharBudget,
+                    teamBlueLcBudget: sale.teamBlueLcBudget,
+                    teamRedLcBudget: sale.teamRedLcBudget,
                     blueCharactersWon: newBlueCharactersWon,
                     redCharactersWon: newRedCharactersWon,
                     nextNominatorTeam,
