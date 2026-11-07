@@ -543,3 +543,11 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** F8's guard split (A22(4)) removed the blanket AwaitingResult rejection, so the concede check has to actually see the concede; the T-S4 in-memory test was the first to ask it to. Updating the record in S4 would have shifted audit stamps, `playedAt`, the participant roster and BetweenGames game rows (S7/S8 territory).
 - **Supersedes:** nothing (the two-record shape was never decided).
 - **Where implemented:** S4 (guard scan), S8 (consolidation)
+
+### A55 — `MatchResultAdjustment.reason` is optional
+
+- **Date:** 2026-11-06 · **Status:** decided
+- **Decision:** The `MatchResultAdjustment` table stays (A21 asks for itemized, signed modifiers per team per game, each with its own author and audit trail, which columns on `MatchResultGame` cannot hold), but its `reason` column becomes **optional**. The referee may add a bonus or penalty without typing a justification; `set_score_adjustment` (S7) accepts an empty or missing reason.
+- **Why:** user review of the S3 schema (2026-11-06): a mandatory free-text reason is friction at the table, and the itemized rows already carry who set what and when.
+- **Supersedes:** the "each with a required reason" clause of A21.
+- **Where implemented:** S5 follow-up commit (column), S7 (`set_score_adjustment` argument optional)

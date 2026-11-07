@@ -1164,7 +1164,7 @@ export const MatchResultAdjustment = __t.object("MatchResultAdjustment", {
     return TeamSide;
   },
   value: __t.i32(),
-  reason: __t.string(),
+  reason: __t.option(__t.string()),
   setById: __t.u32(),
   createdById: __t.u32(),
   createdDate: __t.timestamp(),
