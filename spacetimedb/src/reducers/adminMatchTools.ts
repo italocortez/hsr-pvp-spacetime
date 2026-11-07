@@ -3,7 +3,6 @@ import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser, isRoleAtLeast } from '../helpers/ensurePermissions';
 import { runFinalization } from '../helpers/finalizationHelpers';
 import { hardDeleteLobby } from './lobbyGc';
-import { advanceBracketMatch } from '../helpers/bracketHelpers';
 import { updateWithAudit } from '../helpers/auditHelpers';
 import { slotTeam, slotIsCoach, slotIsSpectator } from '../helpers/lobbyHelpers';
 
@@ -141,51 +140,5 @@ export const admin_void_match = spacetimedb.reducer(
         hardDeleteLobby(ctx, lobbyId);
 
         console.log(`[ADMIN] Match voided for lobby #${lobbyId} by user #${user.id}`);
-    }
-);
-
-// ─── admin_set_bracket_winner ────────────────────────────────────────────────
-// Directly sets a bracket match winner and advances bracket.
-// Used post-finalization for bracket fixes. Per D-54.
-
-export const admin_set_bracket_winner = spacetimedb.reducer(
-    {
-        bracketMatchId: t.u32(),
-        winnerTeamId: t.u32(),
-    },
-    (ctx, { bracketMatchId, winnerTeamId }) => {
-        const user = getAuthenticatedUser(ctx);
-
-        const bracketMatch = ctx.db.BracketMatch.id.find(bracketMatchId);
-        if (!bracketMatch) {
-            throw new SenderError('Bracket match not found.');
-        }
-
-        // Validate permission: Moderator+ or tournament organizer
-        if (!isRoleAtLeast(user.role, 'Moderator')) {
-            const tournament = ctx.db.Tournament.id.find(bracketMatch.tournamentId);
-            if (!tournament || tournament.organizerId !== user.id) {
-                const assistant = [...ctx.db.TournamentAssistant.by_tournament_and_user
-                    .filter([bracketMatch.tournamentId, user.id])][0];
-                if (!assistant) {
-                    throw new SenderError('Only moderators, admins, or the tournament organizer can set bracket winners.');
-                }
-            }
-        }
-
-        // D-54: Only when no winner set (rollback was called first)
-        if (bracketMatch.winnerTeamId !== undefined && bracketMatch.winnerTeamId !== 0) {
-            throw new SenderError('Bracket match already has a winner. Call rollback_bracket_match first.');
-        }
-
-        // Validate winnerTeamId is one of the match participants
-        if (winnerTeamId !== bracketMatch.team1Id && winnerTeamId !== bracketMatch.team2Id) {
-            throw new SenderError('Winner team must be one of the bracket match participants.');
-        }
-
-        // Set winner and advance bracket
-        advanceBracketMatch(ctx, bracketMatchId, winnerTeamId, user.id);
-
-        console.log(`[ADMIN] Bracket winner set for match #${bracketMatchId}: team ${winnerTeamId} by user #${user.id}`);
     }
 );

@@ -1,6 +1,6 @@
 // T-S8b: in-memory tests for the S8b tournament permission layer (A25), the stage machine (review §5.1, A26, A26a,
-// A27–A29, A32, A36a) and admin_cancel_idle_tournaments (A24(6)). Builders in s8-fixtures.ts. Until S8c the legacy
-// generate_bracket sets neither bracketGeneratedAt nor groupId, so the tests stamp them on the row (S8b addendum).
+// A27–A29, A32, A36a) and admin_cancel_idle_tournaments (A24(6)). Builders in s8-fixtures.ts. T-S8c: the bracket is
+// seeded and generated through seed_bracket + generate_bracket, which stamp bracketGeneratedAt and groupId themselves.
 import { describe, expect, it } from 'vitest';
 import { TOURNAMENT_PERM_MESSAGES } from '../helpers/tournamentPermissions';
 import { BEST_OF_ERROR } from '../helpers/seriesSettings';
@@ -13,7 +13,7 @@ import {
     enrolled,
     enrolledAll,
     fullTeams,
-    generateAndStamp,
+    seedAndGenerate,
     host,
     makeTeam,
     membersOf,
@@ -23,7 +23,6 @@ import {
     register,
     requestsOf,
     stageOf,
-    stampSeedChange,
     tRow,
     teamRow,
     teams,
@@ -46,7 +45,7 @@ function seeded(over: Partial<TournamentArgs> = {}) {
     const id = openTournament(test, org, over);
     const ts = fullTeams(test, id, 4);
     advanceStage(test, org, id, 'Seeding');
-    generateAndStamp(test, org, id);
+    seedAndGenerate(test, org, id);
     return { test, org, id, ts };
 }
 
@@ -116,14 +115,15 @@ describe('A25 permission matrix', () => {
         }
     });
 
-    // S8b owns no `results` reducer; advance_bracket_match had its permission call swapped to `results` in S8b.
-    // In Seeding a caller who passes the permission gets the stage error, one who fails it the permission error.
-    it.each([...ok, 'matching', 'others', 'plain'] as Who[])('advance_bracket_match (results, permission swap only): %s', (who) => {
+    // T-S8c: advance_bracket_match is deleted; resolve_bracket_match is the `results` reducer (full coverage in
+    // s8c-bracket-results.test.ts). In Seeding a caller who passes the permission gets the stage error, one who
+    // fails it the permission error.
+    it.each([...ok, 'matching', 'others', 'plain'] as Who[])('resolve_bracket_match (results) in Seeding: %s', (who) => {
         const { test, org, id } = seeded();
-        const matchId = [...test.db.BracketMatch.tournament_id.filter(id)][0].id;
+        const m = [...test.db.BracketMatch.tournament_id.filter(id)].find((r) => r.state.tag === 'Ready')!;
         const a = actorFor(test, org, id, who, 'results');
-        const msg = who === 'others' || who === 'plain' ? RESULTS : 'Bracket advancement is only allowed during InProgress stage.';
-        expectReject(test, a, (ctx) => M.advance_bracket_match(ctx, { bracketMatchId: matchId }), msg);
+        const msg = who === 'others' || who === 'plain' ? RESULTS : 'Tournament is not in progress.';
+        expectReject(test, a, (ctx) => M.resolve_bracket_match(ctx, { bracketMatchId: m.id, winnerTeamId: m.team1Id!, reason: '' }), msg);
     });
 
     it('organizer-only actions are rejected for an assistant holding every flag', () => {
@@ -406,17 +406,18 @@ describe('stage machine (review §5.1)', () => {
         advanceStage(test, org, id, 'Seeding');
         expectReject(test, org, (ctx) => M.advance_tournament_stage(ctx, { tournamentId: id, nextStage: 'InProgress' }),
             'Generate the bracket first.');
-        // The legacy generate_bracket alone does not stamp bracketGeneratedAt (transitional, S8c).
-        tx(test, org, (ctx) => M.generate_bracket(ctx, { tournamentId: id }));
+        // T-S8c: generation needs every Ready team seeded; a rejected generation stamps nothing.
+        expectReject(test, org, (ctx) => M.generate_bracket(ctx, { tournamentId: id }), 'Seed every Ready team first.');
         expectReject(test, org, (ctx) => M.advance_tournament_stage(ctx, { tournamentId: id, nextStage: 'InProgress' }),
             'Generate the bracket first.');
-        generateAndStamp(test, org, id);
+        seedAndGenerate(test, org, id);
         advance(test, 1_000);
-        stampSeedChange(test, id);
+        // a later seed change through the reducer (reversed order) stamps lastSeedChangeAt after bracketGeneratedAt
+        tx(test, org, (ctx) => M.set_seed_order(ctx, { tournamentId: id, teamIds: ts.map((t) => t.teamId).reverse() }));
         expectReject(test, org, (ctx) => M.advance_tournament_stage(ctx, { tournamentId: id, nextStage: 'InProgress' }),
             'Seeding changed after the bracket was generated; regenerate it.');
         advance(test, 1_000);
-        generateAndStamp(test, org, id);
+        tx(test, org, (ctx) => M.generate_bracket(ctx, { tournamentId: id })); // regenerate on the new seeds
         advanceStage(test, org, id, 'InProgress');
         expect(stageOf(test, id)).toBe('InProgress');
         for (const t of ts) {
@@ -432,10 +433,14 @@ describe('stage machine (review §5.1)', () => {
         const id = openTournament(test, org, { format: 'GroupOnly', groupSize: 2, groupAdvanceCount: 1 });
         const ts = fullTeams(test, id, 4);
         advanceStage(test, org, id, 'Seeding');
-        generateAndStamp(test, org, id);
+        seedAndGenerate(test, org, id);
+        // T-S8c: generate_bracket writes groupId (A32 split); clearing it on the rows shows the guard still holds.
+        ts.forEach((t) => expect(teamRow(test, t.teamId)!.groupId).toBeTypeOf('number'));
+        const written = ts.map((t) => teamRow(test, t.teamId)!.groupId);
+        ts.forEach((t) => test.db.TournamentTeam.id.update({ ...teamRow(test, t.teamId)!, groupId: undefined }));
         expectReject(test, org, (ctx) => M.advance_tournament_stage(ctx, { tournamentId: id, nextStage: 'InProgress' }),
             '4 Ready team(s) have no group; assign groups and regenerate the bracket.');
-        ts.forEach((t, i) => test.db.TournamentTeam.id.update({ ...teamRow(test, t.teamId)!, groupId: i % 2 }));
+        ts.forEach((t, i) => test.db.TournamentTeam.id.update({ ...teamRow(test, t.teamId)!, groupId: written[i] }));
         advanceStage(test, org, id, 'InProgress');
         expect(stageOf(test, id)).toBe('InProgress');
     });

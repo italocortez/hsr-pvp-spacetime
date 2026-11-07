@@ -374,16 +374,17 @@ describe('Bracket Advancement', () => {
 
         // ─── Validation Errors ─────────────────────────────────────────────
 
-        it('advance_bracket_match: no winner → error', async () => {
-            const err = await expectReducerError(
-                toUser.call.advanceBracketMatch({ bracketMatchId: semi1Id })
-            );
-            expect(err).toContain('No winner set');
-        });
+        // S10: rewrite (S8c deleted advance_bracket_match / submit_and_advance_bracket (A23); results reach the bracket via resolve_bracket_match or finalization step 17)
+        // it('advance_bracket_match: no winner → error', async () => {
+        //     const err = await expectReducerError(
+        //         toUser.call.advanceBracketMatch({ bracketMatchId: semi1Id })
+        //     );
+        //     expect(err).toContain('No winner set');
+        // });
 
         it('rollback_bracket_match: no winner → error', async () => {
             const err = await expectReducerError(
-                toUser.call.rollbackBracketMatch({ bracketMatchId: semi1Id })
+                toUser.call.rollbackBracketMatch({ bracketMatchId: semi1Id, reason: '' }) // S10: rewrite (S8c: reason required; Decided only, refused while downstream is Decided)
             );
             expect(err).toContain('No winner to rollback');
         });
@@ -427,7 +428,7 @@ describe('Bracket Advancement', () => {
         // ─── Rollback DQ Advancement ──────────────────────────────────────
 
         it('rollback_bracket_match clears winnerTeamId', async () => {
-            await toUser.call.rollbackBracketMatch({ bracketMatchId: semi2Id });
+            await toUser.call.rollbackBracketMatch({ bracketMatchId: semi2Id, reason: '' }); // S10: rewrite (S8c: reason required; Decided only, refused while downstream is Decided)
             await toUser.sync(1500);
 
             const semi2 = [...toUser.conn.db.BracketMatch.iter()].find(bm => bm.id === semi2Id);
@@ -449,7 +450,7 @@ describe('Bracket Advancement', () => {
 
         it('rollback again with no winner → error', async () => {
             const err = await expectReducerError(
-                toUser.call.rollbackBracketMatch({ bracketMatchId: semi2Id })
+                toUser.call.rollbackBracketMatch({ bracketMatchId: semi2Id, reason: '' }) // S10: rewrite (S8c: reason required; Decided only, refused while downstream is Decided)
             );
             expect(err).toContain('No winner to rollback');
         });
@@ -536,7 +537,7 @@ describe('Bracket Advancement', () => {
             it('rollback after finalization succeeds (no MMR processed)', async () => {
                 // During tournament, MMR is not processed per-match (batched at end)
                 // So rollback should succeed even after finalization
-                await toUser.call.rollbackBracketMatch({ bracketMatchId: semi1Id });
+                await toUser.call.rollbackBracketMatch({ bracketMatchId: semi1Id, reason: '' }); // S10: rewrite (S8c: reason required; Decided only, refused while downstream is Decided)
                 await toUser.sync(1500);
 
                 const semi1 = [...toUser.conn.db.BracketMatch.iter()].find(bm => bm.id === semi1Id);
@@ -632,36 +633,38 @@ describe('Bracket Advancement', () => {
             expect(mr!.status.tag).toBe('Submitted');
         }, 180000);
 
-        it('submit_and_advance_bracket maps userId→teamId and advances', async () => {
-            const mr = [...toUser.conn.db.MatchResultRecord.iter()].find(
-                r => r.bracketMatchId === semi1Id
-            );
-            expect(mr).toBeDefined();
+        // S10: rewrite (S8c deleted advance_bracket_match / submit_and_advance_bracket (A23); results reach the bracket via resolve_bracket_match or finalization step 17)
+        // it('submit_and_advance_bracket maps userId→teamId and advances', async () => {
+        //     const mr = [...toUser.conn.db.MatchResultRecord.iter()].find(
+        //         r => r.bracketMatchId === semi1Id
+        //     );
+        //     expect(mr).toBeDefined();
 
-            await toUser.call.submitAndAdvanceBracket({ matchResultId: mr!.id });
-            await toUser.sync(2000);
+        //     await toUser.call.submitAndAdvanceBracket({ matchResultId: mr!.id });
+        //     await toUser.sync(2000);
 
-            // Check bracket match has winner set
-            const updatedSemi = [...toUser.conn.db.BracketMatch.iter()].find(bm => bm.id === semi1Id);
-            expect(updatedSemi).toBeDefined();
-            const winnerTeamId = getTeamId(toUser, tournamentId, bluePlayer.userId);
-            expect(updatedSemi!.winnerTeamId).toBe(winnerTeamId);
-        }, 60000);
+        //     // Check bracket match has winner set
+        //     const updatedSemi = [...toUser.conn.db.BracketMatch.iter()].find(bm => bm.id === semi1Id);
+        //     expect(updatedSemi).toBeDefined();
+        //     const winnerTeamId = getTeamId(toUser, tournamentId, bluePlayer.userId);
+        //     expect(updatedSemi!.winnerTeamId).toBe(winnerTeamId);
+        // }, 60000);
 
-        it('winner auto-placed in final (auto-advance)', () => {
-            const final_ = [...toUser.conn.db.BracketMatch.iter()].find(bm => bm.id === finalId);
-            expect(final_).toBeDefined();
-            const winnerTeamId = getTeamId(toUser, tournamentId, bluePlayer.userId);
-            const inFinal = final_!.team1Id === winnerTeamId || final_!.team2Id === winnerTeamId;
-            expect(inFinal).toBe(true);
-        });
+        // it('winner auto-placed in final (auto-advance)', () => {
+        //     const final_ = [...toUser.conn.db.BracketMatch.iter()].find(bm => bm.id === finalId);
+        //     expect(final_).toBeDefined();
+        //     const winnerTeamId = getTeamId(toUser, tournamentId, bluePlayer.userId);
+        //     const inFinal = final_!.team1Id === winnerTeamId || final_!.team2Id === winnerTeamId;
+        //     expect(inFinal).toBe(true);
+        // });
 
-        it('submit_and_advance_bracket: invalid match result → error', async () => {
-            const err = await expectReducerError(
-                toUser.call.submitAndAdvanceBracket({ matchResultId: 999999 })
-            );
-            expect(err).toContain('not found');
-        });
+        // S10: rewrite (S8c deleted advance_bracket_match / submit_and_advance_bracket (A23); results reach the bracket via resolve_bracket_match or finalization step 17)
+        // it('submit_and_advance_bracket: invalid match result → error', async () => {
+        //     const err = await expectReducerError(
+        //         toUser.call.submitAndAdvanceBracket({ matchResultId: 999999 })
+        //     );
+        //     expect(err).toContain('not found');
+        // });
     });
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -740,36 +743,37 @@ describe('Bracket Advancement', () => {
             expect(resolvedMatch!.winnerTeamId).toBe(opponentTeam);
         });
 
-        it('advance_bracket_match on resolved group match → updates standings', async () => {
-            // Find the resolved match
-            const resolvedMatch = [...toUser.conn.db.BracketMatch.iter()].find(
-                bm => bm.tournamentId === tournamentId &&
-                      bm.winnerTeamId !== undefined &&
-                      (bm.team1Id === team4 || bm.team2Id === team4)
-            );
-            expect(resolvedMatch).toBeDefined();
+        // S10: rewrite (S8c deleted advance_bracket_match / submit_and_advance_bracket (A23); results reach the bracket via resolve_bracket_match or finalization step 17)
+        // it('advance_bracket_match on resolved group match → updates standings', async () => {
+        //     // Find the resolved match
+        //     const resolvedMatch = [...toUser.conn.db.BracketMatch.iter()].find(
+        //         bm => bm.tournamentId === tournamentId &&
+        //               bm.winnerTeamId !== undefined &&
+        //               (bm.team1Id === team4 || bm.team2Id === team4)
+        //     );
+        //     expect(resolvedMatch).toBeDefined();
 
-            await toUser.call.advanceBracketMatch({ bracketMatchId: resolvedMatch!.id });
-            await toUser.sync(1500);
+        //     await toUser.call.advanceBracketMatch({ bracketMatchId: resolvedMatch!.id });
+        //     await toUser.sync(1500);
 
-            // Check standings updated
-            const standings = [...toUser.conn.db.GroupPhaseRecord.iter()].filter(
-                gs => gs.tournamentId === tournamentId
-            );
+        //     // Check standings updated
+        //     const standings = [...toUser.conn.db.GroupPhaseRecord.iter()].filter(
+        //         gs => gs.tournamentId === tournamentId
+        //     );
 
-            // Winner should have wins=1, points=2 (Win=2pts)
-            const winnerTeamId = resolvedMatch!.winnerTeamId!;
-            const winnerStanding = standings.find(s => s.teamId === winnerTeamId);
-            expect(winnerStanding).toBeDefined();
-            expect(winnerStanding!.wins).toBe(1);
-            expect(winnerStanding!.points).toBe(2);
+        //     // Winner should have wins=1, points=2 (Win=2pts)
+        //     const winnerTeamId = resolvedMatch!.winnerTeamId!;
+        //     const winnerStanding = standings.find(s => s.teamId === winnerTeamId);
+        //     expect(winnerStanding).toBeDefined();
+        //     expect(winnerStanding!.wins).toBe(1);
+        //     expect(winnerStanding!.points).toBe(2);
 
-            // Loser (team4) should have losses=1, points=0 (Loss=0pts)
-            const loserStanding = standings.find(s => s.teamId === team4);
-            expect(loserStanding).toBeDefined();
-            expect(loserStanding!.losses).toBe(1);
-            expect(loserStanding!.points).toBe(0);
-        });
+        //     // Loser (team4) should have losses=1, points=0 (Loss=0pts)
+        //     const loserStanding = standings.find(s => s.teamId === team4);
+        //     expect(loserStanding).toBeDefined();
+        //     expect(loserStanding!.losses).toBe(1);
+        //     expect(loserStanding!.points).toBe(0);
+        // });
 
         it('non-participating teams have unchanged standings', () => {
             const standings = [...toUser.conn.db.GroupPhaseRecord.iter()].filter(
@@ -795,43 +799,44 @@ describe('Bracket Advancement', () => {
 
         // ─── Group Draw Scoring ───────────────────────────────────────────
 
-        it('advance_bracket_match on group draw → updates both teams with Draw=1pt', async () => {
-            // Find an unresolved group match between two non-DQ'd teams
-            const unresolvedMatch = [...toUser.conn.db.BracketMatch.iter()].find(
-                bm => bm.tournamentId === tournamentId &&
-                      bm.resultStatus.tag === 'Pending' &&
-                      bm.team1Id !== team4 && bm.team2Id !== team4 && // not involving DQ'd team
-                      bm.team1Id !== undefined && bm.team2Id !== undefined
-            );
-            expect(unresolvedMatch).toBeDefined();
+        // S10: rewrite (S8c deleted advance_bracket_match / submit_and_advance_bracket (A23); results reach the bracket via resolve_bracket_match or finalization step 17)
+        // it('advance_bracket_match on group draw → updates both teams with Draw=1pt', async () => {
+        //     // Find an unresolved group match between two non-DQ'd teams
+        //     const unresolvedMatch = [...toUser.conn.db.BracketMatch.iter()].find(
+        //         bm => bm.tournamentId === tournamentId &&
+        //               bm.resultStatus.tag === 'Pending' &&
+        //               bm.team1Id !== team4 && bm.team2Id !== team4 && // not involving DQ'd team
+        //               bm.team1Id !== undefined && bm.team2Id !== undefined
+        //     );
+        //     expect(unresolvedMatch).toBeDefined();
 
-            const drawTeamA = unresolvedMatch!.team1Id!;
-            const drawTeamB = unresolvedMatch!.team2Id!;
+        //     const drawTeamA = unresolvedMatch!.team1Id!;
+        //     const drawTeamB = unresolvedMatch!.team2Id!;
 
-            // Get standings before
-            const standingsBefore = [...toUser.conn.db.GroupPhaseRecord.iter()].filter(
-                gs => gs.tournamentId === tournamentId
-            );
-            const aBefore = standingsBefore.find(s => s.teamId === drawTeamA)!;
-            const bBefore = standingsBefore.find(s => s.teamId === drawTeamB)!;
+        //     // Get standings before
+        //     const standingsBefore = [...toUser.conn.db.GroupPhaseRecord.iter()].filter(
+        //         gs => gs.tournamentId === tournamentId
+        //     );
+        //     const aBefore = standingsBefore.find(s => s.teamId === drawTeamA)!;
+        //     const bBefore = standingsBefore.find(s => s.teamId === drawTeamB)!;
 
-            // Call advance_bracket_match on a match with NO winnerTeamId (draw)
-            await toUser.call.advanceBracketMatch({ bracketMatchId: unresolvedMatch!.id });
-            await toUser.sync(1500);
+        //     // Call advance_bracket_match on a match with NO winnerTeamId (draw)
+        //     await toUser.call.advanceBracketMatch({ bracketMatchId: unresolvedMatch!.id });
+        //     await toUser.sync(1500);
 
-            // Both teams should get draws+1 and points+1 (Draw=1pt)
-            const standingsAfter = [...toUser.conn.db.GroupPhaseRecord.iter()].filter(
-                gs => gs.tournamentId === tournamentId
-            );
+        //     // Both teams should get draws+1 and points+1 (Draw=1pt)
+        //     const standingsAfter = [...toUser.conn.db.GroupPhaseRecord.iter()].filter(
+        //         gs => gs.tournamentId === tournamentId
+        //     );
 
-            const aAfter = standingsAfter.find(s => s.teamId === drawTeamA)!;
-            expect(aAfter.draws).toBe(aBefore.draws + 1);
-            expect(aAfter.points).toBe(aBefore.points + 1);
+        //     const aAfter = standingsAfter.find(s => s.teamId === drawTeamA)!;
+        //     expect(aAfter.draws).toBe(aBefore.draws + 1);
+        //     expect(aAfter.points).toBe(aBefore.points + 1);
 
-            const bAfter = standingsAfter.find(s => s.teamId === drawTeamB)!;
-            expect(bAfter.draws).toBe(bBefore.draws + 1);
-            expect(bAfter.points).toBe(bBefore.points + 1);
-        });
+        //     const bAfter = standingsAfter.find(s => s.teamId === drawTeamB)!;
+        //     expect(bAfter.draws).toBe(bBefore.draws + 1);
+        //     expect(bAfter.points).toBe(bBefore.points + 1);
+        // });
 
         it('group draw sets resultStatus to Validated', () => {
             // Find the match we just processed as a draw

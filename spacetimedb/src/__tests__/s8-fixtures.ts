@@ -1,10 +1,12 @@
-// T-S8b: builders for the S8b in-memory tournament tests (permissions, stage machine, registration, teams).
-// Not a test file: imported by s8b-*.test.ts. State is built through the module's reducers; roles, HSR accounts,
-// rating rows and the transitional bracket stamps (bracketGeneratedAt / lastSeedChangeAt, which the legacy
-// generate_bracket does not set until S8c) are written straight into the in-memory datastore, outside any reducer,
-// like the S4 / S7 tests' direct row edits. `test.db` is read only outside `tx` bodies. Nothing reaches maincloud.
+// T-S8b / T-S8c: builders for the S8b / S8c in-memory tournament tests (permissions, stage machine, registration,
+// teams, bracket reducers). Not a test file: imported by s8b-*.test.ts and s8c-*.test.ts. State is built through the
+// module's reducers; roles, HSR accounts and rating rows are written straight into the in-memory datastore, outside
+// any reducer, like the S4 / S7 tests' direct row edits. Since S8c, seed_bracket + generate_bracket stamp
+// lastSeedChangeAt / bracketGeneratedAt themselves (`seedAndGenerate`); `stampGenerated` / `stampSeedChange` stay
+// for the guard tests whose field cannot be generated. `test.db` is read only outside `tx` bodies. Nothing reaches
+// maincloud.
 import { Timestamp } from 'spacetimedb';
-import { M, guest, linkDiscord, tx, type Actor, type Harness } from './s4-fixtures';
+import { M, guest, linkDiscord, newHarness, tx, type Actor, type Harness } from './s4-fixtures';
 
 export const AUDIT = (test: Harness) => {
     const ts = test.clock.now();
@@ -203,13 +205,20 @@ export function assignAssistant(
     }));
 }
 
-/**
- * Transitional (until S8c): generate the bracket through the legacy generate_bracket, then stamp
- * bracketGeneratedAt on the row (the legacy reducer sets neither it nor groupId; see the S8b addendum).
- */
-export function generateAndStamp(test: Harness, who: Actor, tournamentId: number) {
+/** seed_bracket on the Ready teams (default 'mmr': equal ratings → team-id order). */
+export function seedBracket(test: Harness, who: Actor, tournamentId: number, mode: 'mmr' | 'random' = 'mmr') {
+    tx(test, who, (ctx) => M.seed_bracket(ctx, { tournamentId, mode }));
+}
+
+/** generate_bracket (S8c: stamps bracketGeneratedAt and writes groupId itself). */
+export function generateBracket(test: Harness, who: Actor, tournamentId: number) {
     tx(test, who, (ctx) => M.generate_bracket(ctx, { tournamentId }));
-    stampGenerated(test, tournamentId);
+}
+
+/** S8c (replaces the S8b `generateAndStamp`): seed the Ready teams, then generate the bracket through the reducers. */
+export function seedAndGenerate(test: Harness, who: Actor, tournamentId: number, mode: 'mmr' | 'random' = 'mmr') {
+    seedBracket(test, who, tournamentId, mode);
+    generateBracket(test, who, tournamentId);
 }
 
 export function stampGenerated(test: Harness, tournamentId: number) {
@@ -227,4 +236,34 @@ export function stampSeedChange(test: Harness, tournamentId: number, at: Timesta
 export function updateBody(test: Harness, tournamentId: number, over: Partial<TournamentArgs> = {}) {
     const args = updateArgs(test, tournamentId, over);
     return (ctx: any) => M.update_tournament(ctx, args as any);
+}
+
+// ─── T-S8c: bracket builders ──────────────────────────────────────────────────
+
+export const bracketRows = (test: Harness, tournamentId: number) => [...test.db.BracketMatch.tournament_id.filter(tournamentId)];
+export const bracketByKey = (test: Harness, tournamentId: number) =>
+    new Map(bracketRows(test, tournamentId).map((r) => [r.positionKey, r]));
+export const matchRow = (test: Harness, matchId: number) => test.db.BracketMatch.id.find(matchId)!;
+
+/** A tournament in Seeding with `n` full Ready teams of two (team ids ascending in creation order). */
+export function seedingField(n: number, over: Partial<TournamentArgs> = {}) {
+    const test = newHarness();
+    const org = host(test);
+    const id = openTournament(test, org, { maxParticipants: Math.max(8, 2 * n), ...over });
+    const ts = fullTeams(test, id, n);
+    advanceStage(test, org, id, 'Seeding');
+    return { test, org, id, ts };
+}
+
+/** seedingField + seed ('mmr': team-id order) + generate + Seeding → InProgress (Ready teams → Active). */
+export function liveField(n: number, over: Partial<TournamentArgs> = {}) {
+    const s = seedingField(n, over);
+    seedAndGenerate(s.test, s.org, s.id);
+    advanceStage(s.test, s.org, s.id, 'InProgress');
+    return s;
+}
+
+/** resolve_bracket_match as `who`. */
+export function resolveMatch(test: Harness, who: Actor, bracketMatchId: number, winnerTeamId: number, reason = 'staff') {
+    tx(test, who, (ctx) => M.resolve_bracket_match(ctx, { bracketMatchId, winnerTeamId, reason }));
 }

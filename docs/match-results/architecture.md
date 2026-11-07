@@ -4,7 +4,7 @@ Last updated: 2026-04-12
 
 ## Overview
 
-Match results track the outcome of each lobby game, from submission through dispute resolution to finalization. A `MatchResultRecord` is created when a referee or moderator calls `submit_match_result`. Participants confirm scores per-team before submission. Disputes are allowed once per match; admins resolve them via `override_match_result`. Finalization (`run_finalization`) runs an 19-step pipeline: it processes ELO/MMR, updates player stats, awards achievements, and closes the lobby. Tournament matches also advance the bracket. Concede flows (`concede_match`, `request_concede`, `accept_concede`) let teams forfeit at any draft or game stage. Admin tools (`admin_void_match`, `admin_force_finalize`, `admin_set_bracket_winner`) handle edge cases. All finalization state writes are idempotent via `mmrProcessedAt` and `mmrSeason` guards.
+Match results track the outcome of each lobby game, from submission through dispute resolution to finalization. A `MatchResultRecord` is created when a referee or moderator calls `submit_match_result`. Participants confirm scores per-team before submission. Disputes are allowed once per match; admins resolve them via `override_match_result`. Finalization (`run_finalization`) runs an 19-step pipeline: it processes ELO/MMR, updates player stats, awards achievements, and closes the lobby. Tournament matches also advance the bracket. Concede flows (`concede_match`, `request_concede`, `accept_concede`) let teams forfeit at any draft or game stage. Admin tools (`admin_void_match`, `admin_force_finalize`) handle edge cases; tournament bracket corrections go through `resolve_bracket_match` / `rollback_bracket_match` (Phase S8c execution). All finalization state writes are idempotent via `mmrProcessedAt` and `mmrSeason` guards.
 
 ## Table Relationships
 
@@ -70,7 +70,7 @@ MatchResultRecord (id: u32 autoInc PK)  [public: true]
 4. Parse `winnerTeamSideTag` ('Blue' | 'Red' | '' for draw)
 5. Parse optional `gameResultsJson` array into `MatchResultGame` rows
 6. Update `MatchResultRecord`: `status=Submitted`, `winnerTeamSide`, `blueScore`, `redScore`
-7. If tournament-linked and `autoAdvanceBracket=true`: call `submit_and_advance_bracket`
+7. If tournament-linked: the bracket advances through `applyBracketResult` (Phase S8c execution; the legacy wrapper reducer was deleted)
 
 ### dispute_match_result(matchResultId)
 1. `getAuthenticatedUser(ctx)` -- caller must be in `MatchResultParticipant` for this match
@@ -114,7 +114,7 @@ Called after result validation. 19-step pipeline (steps run in order, guarded by
 11. Update `TournamentEnrolled.participantStatus` (Eliminated if final bracket loss)
 12. Update `Leaderboard` entry for each participant
 13. Award achievements: call `runAchievementChecks(ctx, userIds, matchData)`
-14. If tournament: call `advance_bracket_match` (or leave for manual advance if `autoAdvanceBracket=false`)
+14. If tournament: `applyBracketResult` (decidedBy Played / Concede, idempotent; Phase S8c execution, S8d replaces this step with the A24 hand-off)
 15. Close the Lobby: advance stage to Closed; cascade-delete chat messages; delete LobbyGcJob
 16. Create `MatchSessionHistory` snapshot from `MatchSession`
 17. Create `MatchSessionStepHistory` rows from `MatchSessionStep` rows
@@ -133,6 +133,8 @@ Called after result validation. 19-step pipeline (steps run in order, guarded by
 3. Force `status=Validated` with admin-specified winner; trigger `run_finalization`
 
 ### admin_set_bracket_winner(bracketMatchId, winnerTeamSideTag)
+> **Superseded (Phase S8c execution):** removed (A23); staff use `resolve_bracket_match` / `rollback_bracket_match` (`results`), see docs/brackets/architecture.md "Phase S8c execution".
+
 1. TO/Mod/Admin access required
 2. Find `BracketMatch` -- set `winnerTeamId` directly (bypasses match result flow)
 3. Optionally: call `advance_bracket_match` if autoAdvance is set

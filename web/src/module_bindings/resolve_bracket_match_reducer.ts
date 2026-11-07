@@ -11,5 +11,7 @@ import {
 } from "spacetimedb";
 
 export default {
-  matchResultId: __t.u32(),
+  bracketMatchId: __t.u32(),
+  winnerTeamId: __t.u32(),
+  reason: __t.string(),
 };

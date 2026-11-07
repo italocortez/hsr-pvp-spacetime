@@ -5,6 +5,8 @@ import { ensureLobbyMember, slotTeam, slotIsCoach, slotIsSpectator } from '../he
 import { buildConcedeSummary, isForfeitEligible, isThirdPartyReferee } from '../helpers/disconnectHelpers';
 import { runFinalization } from '../helpers/finalizationHelpers';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
+import { SYSTEM_USER_ID } from '../helpers/auditColumns';
+import { applyBracketResult, seriesGames } from '../helpers/bracketResults';
 
 // ─── Shared concede helper ──────────────────────────────────────────────────
 // Used by concede_match, claim_forfeit, and leave_lobby auto-concede.
@@ -49,19 +51,17 @@ export function performConcede(
         settledAt: ctx.timestamp, // A24(1): a concede counts as a settled result
     }, triggerUserId));
 
-    // 5. Set BracketMatch.winnerTeamId if tournament (D-27)
-    // S8 (A38(1)): a concede is a settled result and advances the bracket through applyBracketResult
-    // (decidedBy Concede, SYSTEM_USER_ID as audit actor so the conceding player's id never lands on the public row, A37).
+    // 5. A38(1): a concede is a settled result and advances the bracket through the single writer (decidedBy
+    // Concede, the series score so far, A35 Blue = team1; SYSTEM_USER_ID as audit actor so the conceding player's id
+    // never lands on the public row, A37). Only a Ready match: one already settled by staff or a DQ stays as it is.
     if (lobby.isTournamentControlled && lobby.bracketMatchId) {
         const bracketMatch = ctx.db.BracketMatch.id.find(lobby.bracketMatchId);
-        if (bracketMatch) {
-            // Find the team ID on the winning side
+        if (bracketMatch && bracketMatch.state.tag === 'Ready') {
             const winnerTeamId = winnerTeamSide === 'Blue' ? bracketMatch.team1Id : bracketMatch.team2Id;
-            if (winnerTeamId) {
-                ctx.db.BracketMatch.id.update(updateWithAudit(ctx, bracketMatch, {
-                    winnerTeamId: winnerTeamId,
-                    state: { tag: 'Decided', value: {} } as any,
-                }, triggerUserId));
+            if (winnerTeamId !== undefined) {
+                const session = ctx.db.MatchSession.lobbyId.find(lobby.id);
+                applyBracketResult(ctx, bracketMatch.id, winnerTeamId, 'Concede',
+                    session ? seriesGames(session) : { team1: 0, team2: 0 }, SYSTEM_USER_ID);
             }
         }
     }
@@ -84,7 +84,7 @@ export function performConcede(
     }, triggerUserId));
 
     // 8. Auto-finalize for casual non-tournament concedes
-    // Tournament concedes go to AwaitingResult for TO resolution (D-80: no auto-advance).
+    // Tournament concedes park in AwaitingResult (A24(2)); the bracket already advanced in step 5 (A38(1)).
     // Non-tournament concedes finalize immediately — no reason to wait for admin.
     if (!lobby.isTournamentControlled) {
         const freshResult = ctx.db.MatchResultRecord.id.find(insertedResult.id);

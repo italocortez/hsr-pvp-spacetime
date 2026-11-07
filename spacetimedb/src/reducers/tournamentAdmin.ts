@@ -2,7 +2,9 @@ import spacetimedb from '../schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { ensureModerator } from '../helpers/ensurePermissions';
 import { ensureTournamentPermission } from '../helpers/tournamentPermissions';
-import { transferTournamentCaptain } from '../helpers/tournamentHelpers';
+import { findEnrolled, findMembership, refreshTeamStatus, transferTournamentCaptain, updateEnrolled } from '../helpers/tournamentHelpers';
+import { applyBracketResult } from '../helpers/bracketResults';
+import { setSlotBye, settle } from '../helpers/bracketStore';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { deleteCalendarEventForBracketMatch } from '../helpers/calendarCascade';
 import { performConcede } from './concede';
@@ -15,32 +17,58 @@ const VALID_OVERRIDE_STATUSES = ['Validated', 'Rejected'];
 const ACTIVE_LOBBY_STAGES = new Set(['Drafting', 'Equipping', 'Scoring']);
 
 // ─── dq_participant ───────────────────────────────────────────────────────────
-// Disqualifies a tournament participant.
-// Per D-21, D-22, D-23, D-25, D-26, D-27:
-//   - Updates TournamentEnrolled status to Disqualified.
-//   - Deletes TournamentTeamMember row.
-//   - Captain DQ: transfer captain to lowest-userId remaining member.
-//   - Last member DQ: destroy team, auto-advance opponent.
-//   - DQ during active lobby (Drafting/Equipping/Scoring): kick + force-concede on last member.
-//   - DQ during Shelved/BetweenGames: remove TTM row, hard-delete lobby on last member.
-// Permission: participants (A25). S8c moves the advancement onto applyBracketResult.
+// Disqualifies a tournament participant (A25 `participants`; A26, A26a(2), A23, D-21, D-25, D-26).
+//   - The enrolment becomes Disqualified (row kept: excluded from capacity, blocks re-registration).
+//   - The player leaves the team (captain transferred to the lowest remaining user id, D-21); with
+//     `dqWholeTeam` every member of the player's team is disqualified and leaves it.
+//   - A team left empty becomes Disqualified (the team row stays for the bracket record, TD-18). In Seeding
+//     after generation that stamps lastSeedChangeAt, so the bracket must be regenerated before InProgress.
+//   - InProgress: every open match of the disqualified team is settled through the single writer (A23):
+//     Ready -> applyBracketResult(opponent, decidedBy Dq, 0-0); Pending (opponent not known yet) -> the team's
+//     slot becomes a BYE and `settle` walks the opponent over once it arrives. Repeated until the team holds
+//     no open slot (a double-elimination loss routes it into the losers bracket first).
+//   - Live lobby of the team (unchanged, S8d revisits): Drafting / Equipping / Scoring -> force-concede on the
+//     last member (D-25); Shelved / BetweenGames -> hard-delete (D-26); a member DQ'd from a team that plays on
+//     is kicked from an active lobby.
+
+/** Settles every open bracket slot of a disqualified team (see dq_participant). */
+function settleDisqualifiedTeam(ctx: any, tournamentId: number, teamId: number, actorId: number): void {
+    let changed = true;
+    while (changed) {
+        changed = false;
+        for (const snapshot of [...ctx.db.BracketMatch.tournament_id.filter(tournamentId)]) {
+            const row = ctx.db.BracketMatch.id.find(snapshot.id); // re-read: earlier settlements may have changed it
+            if (!row) continue;
+            const slot = row.team1Id === teamId ? 1 : row.team2Id === teamId ? 2 : 0;
+            if (slot === 0) continue;
+            if (row.state.tag === 'Ready') {
+                const opponent = slot === 1 ? row.team2Id : row.team1Id;
+                deleteCalendarEventForBracketMatch(ctx, row.id); // D-22
+                applyBracketResult(ctx, row.id, opponent, 'Dq', { team1: 0, team2: 0 }, actorId);
+                changed = true;
+            } else if (row.state.tag === 'Pending') {
+                setSlotBye(ctx, row.id, slot, actorId);
+                settle(ctx, tournamentId, actorId);
+                changed = true;
+            }
+        }
+    }
+}
 
 export const dq_participant = spacetimedb.reducer(
     {
         tournamentId: t.u32(),
         userId: t.u32(),
         reason: t.string(),
+        dqWholeTeam: t.bool().optional(),
     },
-    (ctx, { tournamentId, userId, reason }) => {
-        const { user } = ensureTournamentPermission(ctx, tournamentId, 'participants');
+    (ctx, { tournamentId, userId, reason, dqWholeTeam }) => {
+        const { user, tournament } = ensureTournamentPermission(ctx, tournamentId, 'participants');
 
-        // Find the TournamentEnrolled row
-        const enrolled = [...ctx.db.TournamentEnrolled.by_tournament_and_user.filter([tournamentId, userId])][0];
+        const enrolled = findEnrolled(ctx, tournamentId, userId);
         if (!enrolled) {
             throw new SenderError('Participant not found in this tournament.');
         }
-
-        // Validate participant is not already Disqualified or Withdrawn
         if (enrolled.status.tag === 'Disqualified') {
             throw new SenderError('Participant is already disqualified.');
         }
@@ -48,32 +76,21 @@ export const dq_participant = spacetimedb.reducer(
             throw new SenderError('Cannot disqualify a participant who has already withdrawn.');
         }
 
-        // Update status to Disqualified (delete + insert for composite PK)
-        ctx.db.TournamentEnrolled.delete(enrolled);
-        ctx.db.TournamentEnrolled.insert(updateWithAudit(ctx, enrolled, {
-            status: { tag: 'Disqualified', value: {} } as any,
-        }, user.id));
+        updateEnrolled(ctx, enrolled, { status: { tag: 'Disqualified', value: {} } as any }, user.id);
+        console.log(`[TOURNAMENT] Participant #${userId} disqualified from tournament #${tournamentId}${dqWholeTeam ? ' with the whole team' : ''}: ${reason}`);
 
-        console.log(`[TOURNAMENT] Participant #${userId} disqualified from tournament #${tournamentId}: ${reason}`);
-
-        // Find team membership via TournamentTeamMember
-        const ttm = [...ctx.db.TournamentTeamMember.by_tournament_and_user.filter([tournamentId, userId])][0];
-        if (!ttm) {
-            // Player not on a team — nothing more to do
-            return;
-        }
+        const ttm = findMembership(ctx, tournamentId, userId);
+        if (!ttm) return; // not on a team: nothing more to do
 
         const teamId = ttm.teamId;
         const team = ctx.db.TournamentTeam.id.find(teamId);
 
-        // Check for active/shelved lobby involving this team (D-25, D-26)
+        // Live lobby of this team (D-25, D-26)
         let activeLobby: any = undefined;
         if (team) {
-            const bracketMatches = [...ctx.db.BracketMatch.tournament_id.filter(tournamentId)];
-            for (const bm of bracketMatches) {
+            for (const bm of ctx.db.BracketMatch.tournament_id.filter(tournamentId)) {
                 if (bm.team1Id !== teamId && bm.team2Id !== teamId) continue;
-                // Check if there's a lobby for this bracket match in active/shelved stages
-                for (const lobby of ctx.db.Lobby.iter()) {
+                for (const lobby of ctx.db.Lobby.bracket_match_id.filter(bm.id)) {
                     if (lobby.bracketMatchId === bm.id &&
                         (ACTIVE_LOBBY_STAGES.has(lobby.stage.tag) ||
                          lobby.stage.tag === 'BetweenGames' ||
@@ -86,27 +103,41 @@ export const dq_participant = spacetimedb.reducer(
             }
         }
 
-        // Captain DQ: transfer captain first (D-21)
-        if (team && team.captainUserId === userId) {
-            transferTournamentCaptain(ctx, teamId, userId, user.id);
+        // Members leaving the team: the DQ'd player, or every member with dqWholeTeam (their enrolments too)
+        const leaving = dqWholeTeam ? [...ctx.db.TournamentTeamMember.team_id.filter(teamId)] : [ttm];
+        for (const member of leaving) {
+            if (member.userId !== userId) {
+                const other = findEnrolled(ctx, tournamentId, member.userId);
+                if (other && other.status.tag !== 'Disqualified' && other.status.tag !== 'Withdrawn') {
+                    updateEnrolled(ctx, other, { status: { tag: 'Disqualified', value: {} } as any }, user.id);
+                }
+            }
+            if (!dqWholeTeam && team && team.captainUserId === member.userId) {
+                transferTournamentCaptain(ctx, teamId, member.userId, user.id); // D-21
+            }
+            ctx.db.TournamentTeamMember.delete(member);
         }
 
-        // Delete DQ'd user's TournamentTeamMember row
-        ctx.db.TournamentTeamMember.delete(ttm);
+        const isTeamOut = [...ctx.db.TournamentTeamMember.team_id.filter(teamId)].length === 0;
 
-        // Check if team is now empty (last member DQ'd)
-        const remainingMembers = [...ctx.db.TournamentTeamMember.team_id.filter(teamId)];
-        const isLastMember = remainingMembers.length === 0;
+        if (isTeamOut && team) {
+            const current = ctx.db.TournamentTeam.id.find(teamId)!;
+            ctx.db.TournamentTeam.id.update(updateWithAudit(ctx, current, {
+                status: { tag: 'Disqualified', value: {} } as any,
+            }, user.id));
 
-        if (isLastMember && team) {
-            // Destroy the team
-            ctx.db.TournamentTeam.id.delete(teamId);
+            if (tournament.stage.tag === 'Seeding' && tournament.bracketGeneratedAt !== undefined) {
+                ctx.db.Tournament.id.update(updateWithAudit(ctx, tournament, { lastSeedChangeAt: ctx.timestamp }, user.id));
+            }
+            if (tournament.stage.tag === 'InProgress') {
+                settleDisqualifiedTeam(ctx, tournamentId, teamId, user.id);
+            }
 
             if (activeLobby) {
                 const { lobby, bracketMatch } = activeLobby;
                 if (ACTIVE_LOBBY_STAGES.has(lobby.stage.tag)) {
-                    // DQ during active draft/scoring — force-concede (D-25)
-                    // Determine which team side the DQ'd team is
+                    // DQ during active draft/scoring: force-concede (D-25); the bracket is already settled
+                    // above, so the concede's applyBracketResult is skipped (match no longer Ready).
                     const losingTeamSide = bracketMatch.team1Id === teamId ? 'Blue' : 'Red';
                     performConcede(
                         ctx,
@@ -117,64 +148,21 @@ export const dq_participant = spacetimedb.reducer(
                         undefined
                     );
                 } else {
-                    // DQ during Shelved or BetweenGames — hard-delete lobby (D-26)
+                    // DQ during Shelved or BetweenGames: hard-delete lobby (D-26)
                     hardDeleteLobby(ctx, lobby.id);
                 }
-            } else {
-                // Auto-advance opponent in bracket if tournament is InProgress (D-27)
-                // S8 (A23/A24): the inline advancement is deleted; dq_participant settles the match through
-                // applyBracketResult with decidedBy Dq. The auto-advance flag was dropped (A36).
-                const tournament = ctx.db.Tournament.id.find(tournamentId);
-                if (tournament && tournament.stage.tag === 'InProgress') {
-                    const bracketMatches = [...ctx.db.BracketMatch.tournament_id.filter(tournamentId)];
-                    const activeMatch = bracketMatches.find((m: any) =>
-                        !m.winnerTeamId &&
-                        (m.team1Id === teamId || m.team2Id === teamId)
-                    );
-
-                    if (activeMatch) {
-                        // Delete calendar event for the active bracket match being resolved (D-22)
-                        deleteCalendarEventForBracketMatch(ctx, activeMatch.id);
-
-                        // Determine the opponent (the one who isn't DQ'd)
-                        const opponentTeamId = activeMatch.team1Id === teamId
-                            ? activeMatch.team2Id
-                            : activeMatch.team1Id;
-
-                        if (opponentTeamId) {
-                            // Set opponent as winner
-                            ctx.db.BracketMatch.id.update(updateWithAudit(ctx, activeMatch, {
-                                winnerTeamId: opponentTeamId,
-                                state: { tag: 'Decided', value: {} } as any,
-                            }, user.id));
-
-                            // Place opponent in next match
-                            if (activeMatch.nextWinnerMatchId) {
-                                const nextMatch = ctx.db.BracketMatch.id.find(activeMatch.nextWinnerMatchId);
-                                if (nextMatch) {
-                                    if (!nextMatch.team1Id) {
-                                        ctx.db.BracketMatch.id.update(
-                                            updateWithAudit(ctx, nextMatch, { team1Id: opponentTeamId }, user.id),
-                                        );
-                                    } else if (!nextMatch.team2Id) {
-                                        ctx.db.BracketMatch.id.update(
-                                            updateWithAudit(ctx, nextMatch, { team2Id: opponentTeamId }, user.id),
-                                        );
-                                    }
-                                }
-                            }
-
-                            console.log(`[TOURNAMENT] Auto-advanced team #${opponentTeamId} after DQ of team #${teamId} in match #${activeMatch.id}`);
-                        }
-                    }
-                }
             }
-        } else if (activeLobby && ACTIVE_LOBBY_STAGES.has(activeLobby.lobby.stage.tag)) {
-            // Captain DQ during active lobby but team has other members — kick DQ'd player from lobby (D-25)
-            const lobbyMember = [...ctx.db.LobbyMember.lobby_id.filter(activeLobby.lobby.id)]
-                .find((m: any) => m.userId === userId);
-            if (lobbyMember) {
-                ctx.db.LobbyMember.delete(lobbyMember);
+        } else {
+            // A26 / A26a(3): before generation the team may drop below teamSize (Ready -> Forming); once the bracket
+            // is generated a team that still has members keeps its status and plays with stand-ins.
+            if (tournament.bracketGeneratedAt === undefined) refreshTeamStatus(ctx, tournament, teamId, user.id);
+            if (activeLobby && ACTIVE_LOBBY_STAGES.has(activeLobby.lobby.stage.tag)) {
+                // DQ'd player on a team that plays on: kick from the active lobby (D-25)
+                const lobbyMember = [...ctx.db.LobbyMember.lobby_id.filter(activeLobby.lobby.id)]
+                    .find((m: any) => m.userId === userId);
+                if (lobbyMember) {
+                    ctx.db.LobbyMember.delete(lobbyMember);
+                }
             }
         }
     }

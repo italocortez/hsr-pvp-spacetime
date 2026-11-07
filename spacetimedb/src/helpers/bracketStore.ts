@@ -2,8 +2,7 @@
 // Persists the pure shared engine (`@shared/bracket`) as BracketMatch rows and keeps the exact-slot / BYE rules
 // of `BracketEngine` against the rows: every slot has one explicit source, an entrant is written into that slot
 // only (never "the first empty slot"), a one-BYE match is a Walkover and a two-BYE match is Void.
-// S8a: exported, not wired; the legacy `helpers/bracketGeneration.ts` + `reducers/bracketGeneration.ts` keep
-// running until S8c replaces them with these helpers.
+// Since S8c called by generate_bracket, advance_group_stage and dq_participant (the legacy generator is deleted).
 
 import { SenderError } from 'spacetimedb/server';
 import { groupSpec, type BracketSpec, type SlotSource } from '@shared/bracket';
@@ -147,6 +146,18 @@ export function placeEntrant(ctx: any, matchId: number, slot: BracketSlot, teamI
     const other = slotEntrant(row, slot === 1 ? 2 : 1);
     if (row.state.tag === 'Pending' && typeof teamId === 'number' && typeof other === 'number') changes.state = tag('Ready');
     ctx.db.BracketMatch.id.update(updateWithAudit(ctx, row, changes, actorId));
+}
+
+/**
+ * Clears a slot and marks it a BYE (dq_participant: a disqualified team waiting in a Pending match). The caller
+ * runs `settle` afterwards, which turns the match into a Walkover / Void once the other slot is known.
+ */
+export function setSlotBye(ctx: any, matchId: number, slot: BracketSlot, actorId: number): void {
+    const row = ctx.db.BracketMatch.id.find(matchId);
+    if (!row) throw new SenderError(`Bracket match ${matchId} not found.`);
+    ctx.db.BracketMatch.id.update(updateWithAudit(ctx, row, slot === 1
+        ? { team1Id: undefined, team1IsBye: true }
+        : { team2Id: undefined, team2IsBye: true }, actorId));
 }
 
 /**

@@ -101,9 +101,9 @@ Tournament (id: u32 autoInc PK)  [public: true]
 | Reducer | perm |
 |---|---|
 | `update_tournament`, `advance_tournament_stage` (except Seeding → InProgress), `cancel_tournament`, `assign_tournament_assistant`, `remove_tournament_assistant` | `owner` |
-| `advance_tournament_stage` Seeding → InProgress, `assign_team_group`, `clear_team_groups`, `generate_bracket`, `seed_bracket`, `swap_seeds`, `advance_group_to_elimination`, `create_calendar_event` (tournament-linked) | `bracket` |
+| `advance_tournament_stage` Seeding → InProgress, `assign_team_group`, `clear_team_groups`, `generate_bracket`, `seed_bracket`, `set_seed_order`, `advance_group_stage`, `create_calendar_event` (tournament-linked) | `bracket` |
 | `approve_participant`, `reject_participant`, `waitlist_promote`, `add_participant`, `add_team_member`, `dq_participant`, `check_in_tournament` with another team's `teamId` | `participants` |
-| `advance_bracket_match`, `rollback_bracket_match`, `override_match_result`, `finalize_match_result` (tournament authority path), `process_tournament_mmr` | `results` |
+| `resolve_bracket_match`, `rollback_bracket_match`, `override_match_result`, `finalize_match_result` (tournament authority path), `process_tournament_mmr` | `results` |
 | `create_tournament` | `ensureTournamentHost` (D-B1), unchanged |
 | `admin_cancel_idle_tournaments` | `ensureModerator` |
 
@@ -115,7 +115,7 @@ Tournament (id: u32 autoInc PK)  [public: true]
 |---|---|---|
 | Draft → Registration | `canOpenRegistration` (stage, A29); `ensureSelectableCostSet` (R2); group formats: `groupSize ≥ 2`, `groupAdvanceCount ∈ {1, 2}`; `defaultBestOf`, `grandFinalBestOf ∈ {1, 3}` (A28); `winnerAdvantage < ceil(grandFinalBestOf / 2)` (A27) | — |
 | Registration → CheckIn | `checkInEnabled` (`Check-in is disabled for this tournament: move to Seeding.`) | Registration closes (A26a: the transition out of Registration): `closeRegistration` = delete pending team requests, `formRandomTeams` (A36a), refresh every team status; random teams then check in like any team |
-| Registration → Seeding, CheckIn → Seeding | `canCloseRegistration` (from Registration only when check-in is off; ≥ 2 eligible teams after the effects) | `enterSeeding`: from Registration, `closeRegistration` first (all close effects at once); from CheckIn, Forming / Ready teams with no CheckedIn member → Withdrawn (members stay enrolled); then eligible teams → Ready, the others stay Forming with their members (A26a: staff may still promote, add or move players; teams still Forming at generation are Withdrawn by `generate_bracket`, S8c marker) |
+| Registration → Seeding, CheckIn → Seeding | `canCloseRegistration` (from Registration only when check-in is off; ≥ 2 eligible teams after the effects) | `enterSeeding`: from Registration, `closeRegistration` first (all close effects at once); from CheckIn, Forming / Ready teams with no CheckedIn member → Withdrawn (members stay enrolled); then eligible teams → Ready, the others stay Forming with their members (A26a: staff may still promote, add or move players; teams still Forming at generation are Withdrawn by `generate_bracket`, S8c) |
 | Seeding → InProgress (`owner` or `bracket`) | `validateSeedingToInProgress` → `canStartInProgress` (bracket generated, `bracketGeneratedAt ≥ lastSeedChangeAt`, every round-1 Winners / Group match holds a team; GroupInto* formats check the group rows only); group formats: every Ready team has `groupId` | `activateTeams`: Ready → Active; their members' Registered / CheckedIn enrolments → Active |
 | InProgress → Completed | unchanged (S8d) | stage only (S8d adds the `TournamentFinalizeJob`) |
 | any → Cancelled | not terminal | `cancelTournament` (same path as `cancel_tournament`) |
@@ -182,17 +182,16 @@ Enrolled caller; tournament anonymous; Registration or CheckIn; alias 1–32 tri
 8. `rename_tournament_team(teamId, name)`: captain; Registration or CheckIn; not solo; `normalizeTeamName` excluding itself.
 
 ### Manual groups: assign_team_group(tournamentId, teamId, groupIndex) / clear_team_groups(tournamentId) (A36a, A32)
-`bracket`; Seeding; group format; `groupAssignmentMode = Manual`. Assign: a Ready team of the tournament; `groupIndex < groupCount(readyTeams, groupSize)`; writes `TournamentTeam.groupId` (0-based, as `insertGroupBracket`). Clear: unsets every `groupId`. A change stamps `Tournament.lastSeedChangeAt`. Group sizes are validated by `generate_bracket` (S8c).
+`bracket`; Seeding; group format; `groupAssignmentMode = Manual`. Assign: a Ready team of the tournament; `groupIndex < groupCount(readyTeams, groupSize)`; writes `TournamentTeam.groupId` (0-based, as `insertGroupBracket`). Clear: unsets every `groupId`. A change stamps `Tournament.lastSeedChangeAt`. Group sizes are validated by `generate_bracket` (S8c: every Ready team grouped, exactly `groupCount` groups, each ≥ `groupSize`, sizes within one); generation clears and rewrites every `groupId`.
 
 ### assign_tournament_assistant(tournamentId, userId, canManageParticipants, canManageBracket, canResolveResults) / remove_tournament_assistant(tournamentId, userId)
 `owner`. Assign upserts the row with the three A25 flags (existing row updated in place, as before); assigning oneself is rejected (so an organizer cannot list themself; a Moderator may list the organizer, which grants nothing new). Remove deletes the row. `mod_promote_to_host` / `mod_demote_from_host` are unchanged (`ensureModerator`).
 
-### dq_participant(tournamentId, userId, reason)
-`participants` (A25). The rest of the flow is unchanged until S8c (advancement through `applyBracketResult`):
-- Captain DQ: `transferTournamentCaptain()` to next member (D-21); team survives
-- Last member DQ: delete team; auto-advance opponent on any active BracketMatch (D-27)
-- DQ during active lobby (Drafting/Equipping/Scoring): kick player; if last member: force-concede match (D-25)
-- Set `TournamentEnrolled.status=Disqualified`
+### dq_participant(tournamentId, userId, reason, dqWholeTeam?)
+`participants` (A25). **Phase S8c execution:** the enrolment becomes Disqualified (row kept, A26a(2)); the player (with `dqWholeTeam` every member, enrolments Disqualified too) leaves the team, captain transferred (D-21); a team left non-empty gets `refreshTeamStatus` only before generation (after it the team keeps its status and plays with stand-ins, A26a(3)); a team left empty becomes **Disqualified** (no longer deleted). In Seeding after generation `lastSeedChangeAt` is stamped (regenerate). InProgress: every open match of the team is settled through `applyBracketResult` (decidedBy Dq) or, while the opponent is unknown, its slot becomes a BYE; rule and messages in [brackets/architecture.md](../brackets/architecture.md) "Phase S8c execution". Live lobby handling unchanged (D-25 / D-26; S8d).
+
+### Bracket reducers (Phase S8c execution)
+Removed: `swap_seeds`, `advance_bracket_match`, `submit_and_advance_bracket`, `advance_group_to_elimination`, `admin_set_bracket_winner`. Added: `set_seed_order(tournamentId, teamIds)`, `advance_group_stage(tournamentId)`, `resolve_bracket_match(bracketMatchId, winnerTeamId, reason)`. Changed: `seed_bracket` (Ready teams, `ctx.random`), `generate_bracket` (A26a Withdraw, groups, `bracketGeneratedAt`), `rollback_bracket_match(bracketMatchId, reason)`. Reference: [brackets/architecture.md](../brackets/architecture.md).
 
 ### select_match_account(lobbyId, hsrAccountId) / deselect_match_account(lobbyId, hsrAccountId)
 1. `getAuthenticatedUser(ctx)` -- must be active LobbyMember
@@ -262,6 +261,7 @@ the full MMR snapshot lifecycle context.
 | Withdrawal deletes the enrolment (Registration / CheckIn only); capacity excludes waitlisted and Disqualified rows; Disqualified blocks re-registration; waitlist promotion until generation with account locks at promotion; `add_participant`, `reject_participant`, `withdraw_tournament_team` (A26a, D.8.6, C-a11, T23, T24) | Phase S8b execution | 2026-11-07 |
 | `minimumMmr` check (A36b), alias + `rename_tournament_team` + `set_anonymous_alias`, manual groups `assign_team_group` / `clear_team_groups` (A36a) | Phase S8b execution | 2026-11-07 |
 | create / update arguments: the A36 set (`checkInEnabled`, `groupAdvanceCount`, `disconnectForfeitSeconds`, `requireResultValidation`, `grandFinalBestOf`, `groupAssignmentMode`, `lineupFormat`, `allowMirrorPicks`, `minimumMmr?`, `lobbyPresetId?`) with A28 / A29 / A32 validation | Phase S8b execution | 2026-11-07 |
+| Bracket reducers on the shared engine: + `set_seed_order`, `advance_group_stage`, `resolve_bracket_match`; − `swap_seeds`, `advance_bracket_match`, `submit_and_advance_bracket`, `advance_group_to_elimination`, `admin_set_bracket_winner`; `generate_bracket` withdraws still-Forming teams (A26a); `dq_participant` keeps the team (Disqualified) and settles through `applyBracketResult` (A23, A26a(2)) | Phase S8c execution | 2026-11-07 |
 
 ---
 

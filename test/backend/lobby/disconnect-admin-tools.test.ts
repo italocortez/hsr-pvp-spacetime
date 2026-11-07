@@ -179,17 +179,18 @@ describe('Admin Match Tools', () => {
     });
 
     describe('admin_set_bracket_winner', () => {
-        it('non-admin rejected', async () => {
-            const regular = await createVerifiedTestHarness();
+        // S10: rewrite (S8c deleted admin_set_bracket_winner (A23, A24(3)); resolve_bracket_match is the staff tool, results permission)
+        // it('non-admin rejected', async () => {
+        //     const regular = await createVerifiedTestHarness();
 
-            try {
-                const err = await expectReducerError(
-                    regular.call.adminSetBracketWinner({ bracketMatchId: 999, winnerTeamId: 1 })
-                );
-                expect(err).toBeTruthy();
-            } finally {
-                await regular.disconnect();
-            }
-        }, 15000);
+        //     try {
+        //         const err = await expectReducerError(
+        //             regular.call.adminSetBracketWinner({ bracketMatchId: 999, winnerTeamId: 1 })
+        //         );
+        //         expect(err).toBeTruthy();
+        //     } finally {
+        //         await regular.disconnect();
+        //     }
+        // }, 15000);
     });
 });

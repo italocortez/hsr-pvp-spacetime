@@ -1,6 +1,6 @@
 // Group stage (A32 sizing, A23 round robin, review T7 qualifier placement). Pure: no `spacetimedb` / `react`.
 // Ported from the legacy `spacetimedb/src/helpers/bracketGeneration.ts` (`snakeSeedIntoGroups`,
-// `circleSchedule`), with the A32 floor fix; the legacy code keeps running until S8c deletes it.
+// `circleSchedule`), with the A32 floor fix; the legacy helper was deleted in S8c.
 
 import { foldSeeding, groupKey, nextPowerOf2 } from './engine';
 

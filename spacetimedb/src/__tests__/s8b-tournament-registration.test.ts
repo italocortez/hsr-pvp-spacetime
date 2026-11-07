@@ -10,7 +10,7 @@ import {
     enrolled,
     enrolledAll,
     fullTeams,
-    generateAndStamp,
+    seedAndGenerate,
     host,
     insertHsrAccount,
     locks,
@@ -253,7 +253,7 @@ describe('waitlist_promote (D.8.6)', () => {
         dq(test, org, id, ts[1].mate.userId);
         tx(test, org, (ctx) => M.waitlist_promote(ctx, { tournamentId: id, userId: w1.userId }));
         expect(enrolled(test, id, w1.userId).isWaitlisted).toBe(false);
-        stampGenerated(test, id);
+        stampGenerated(test, id); // T-S8c: kept direct: both teams are Forming here, so generate_bracket would reject (< 2 Ready)
         expectReject(test, org, (ctx) => M.waitlist_promote(ctx, { tournamentId: id, userId: w2.userId }), 'Bracket generated; use stand-ins.');
         expect(enrolled(test, id, w2.userId).isWaitlisted).toBe(true);
     });
@@ -297,7 +297,7 @@ describe('add_participant / reject_participant (participants, before generation)
         const p = verified(test, 'p');
         tx(test, org, (ctx) => M.add_participant(ctx, { tournamentId: id, userId: p.userId }));
         expect(enrolled(test, id, p.userId)).toBeDefined();
-        generateAndStamp(test, org, id);
+        seedAndGenerate(test, org, id);
         const q = verified(test, 'q');
         expectReject(test, org, (ctx) => M.add_participant(ctx, { tournamentId: id, userId: q.userId }), 'Bracket generated; use stand-ins.');
         advanceStage(test, org, id, 'InProgress');

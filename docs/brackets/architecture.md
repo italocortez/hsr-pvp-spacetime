@@ -1,6 +1,6 @@
 # Brackets & Group Phase -- Architecture
 
-Last updated: 2026-04-09
+Last updated: 2026-11-07
 
 ## Overview
 
@@ -11,81 +11,31 @@ The brackets feature manages tournament bracket generation, seeding, and match a
 ```
 Tournament (id: u32 autoInc PK)
   +-- [see tournament/architecture.md for full schema]
+  |     lastSeedChangeAt: Timestamp?   (seed_bracket / set_seed_order / manual groups / a DQ after generation)
+  |     bracketGeneratedAt: Timestamp? (generate_bracket; Seeding -> InProgress needs it >= lastSeedChangeAt)
 
-  +-- BracketMatch (id: u32 autoInc PK)
-  |     tournamentId -> Tournament.id
-  |     roundNumber: u32
-  |     matchNumber: u32
-  |     bracketSide: BracketSide (Winners | Losers | GrandFinals | ThirdPlace | Group)
-  |     groupId: u32? (set when bracketSide=Group)
-  |     team1Id: u32? -> TournamentTeam.id
-  |     team2Id: u32? -> TournamentTeam.id
-  |     nextWinnerMatchId: u32? -> BracketMatch.id (self-FK)
-  |     nextLoserMatchId: u32? -> BracketMatch.id (self-FK, double elim)
-  |     winnerTeamId: u32? -> TournamentTeam.id (set when match resolved)
-  |     bestOf: u8 (series length, copied to Lobby.bestOf on lobby creation)
-  |     gameMode: GameMode
-  |     winnerAdvantage: u8 (game head-start for GrandFinals WB winner)
-  |     resultStatus: MatchResultStatus
-  |
-  +-- GroupPhaseRecord (PK: [tournamentId, groupId, teamId])
-        tournamentId -> Tournament.id
-        groupId: u32 (group number)
-        teamId -> TournamentTeam.id
-        wins: u32
-        losses: u32
-        draws: u32
-        points: u32
+  +-- TournamentTeam (status, seedNumber: u32?, groupId: u32?)   [group membership; standings are computed, A23]
+
+  +-- BracketMatch (id: u32 autoInc PK; public, team ids only)
+        tournamentId -> Tournament.id              [btree tournament_id, by_tournament_and_position]
+        positionKey: string  ('W-R1-M1', 'L-R2-M1', 'GF', 'TP', 'G0-R1-M1': the engine's address)
+        bracketSide: BracketSide (Winners | Losers | GrandFinals | ThirdPlace | Group)
+        roundNumber, matchNumber: u32; groupId: u32? (Group rows)
+        team1Id / team2Id: u32? -> TournamentTeam.id; team1IsBye / team2IsBye: bool  (team1 = Blue, team2 = Red, A35)
+        nextWinnerMatchId / nextLoserMatchId: u32? (self-FK) + nextWinnerSlot / nextLoserSlot: u8 (exact slot)
+        bestOf, winnerAdvantage: u8 (GF: WB finalist in slot 1, A27); scheduledAt: Timestamp?
+        state: Pending | Ready | Decided | Walkover | Void
+        winnerTeamId / loserTeamId: u32?; decidedBy: (Played | Concede | Dq | Staff)?; team1Games / team2Games: u8
 
 Lobby (id: u32 autoInc PK)
   +-- bracketMatchId: u32? -> BracketMatch.id  [btree index]
-  (relationship: BracketMatch -> Lobby is navigated via Lobby.bracketMatchId index)
 ```
 
 ## Reducer Flows
 
-### generate_bracket(tournamentId)
-1. Verify caller has tournament host permissions; tournament must be in Seeding stage
-2. Delete existing BracketMatch and GroupPhaseRecord rows (supports regeneration)
-3. Read `Tournament.format` and branch to algorithm:
-   - `SingleElimination`: fold seeding, create winner slots
-   - `DoubleElimination`: winners + losers brackets + GrandFinals match
-   - `GroupPhase`: circle-method round-robin + GroupPhaseRecord rows
-   - `GroupIntoSingleElim` / `GroupIntoDoubleElim`: group matches + empty elimination bracket
-4. **Two-pass FK wiring**: insert all matches with null FKs, build positionKey->insertedId map, then update `nextWinnerMatchId`/`nextLoserMatchId` using the map
-5. Auto-advance BYE matches: pre-set `winnerTeamId` and place in next slot
-
-### seed_bracket(tournamentId, mode)
-1. Verify caller has tournament host permissions; tournament must be in Seeding stage
-2. `mode='mmr'`: sort TournamentTeams by captain's MmrRating for tournament gameMode
-3. `mode='random'`: deterministic shuffle via `(tournamentId * 31 + teamId) % 2147483647` (no Math.random -- reducers must be deterministic)
-4. Assign `seedNumber` to each TournamentTeam row
-
-### swap_seeds(tournamentId, teamId1, teamId2)
-1. Verify caller has tournament host permissions; tournament must be in Seeding stage
-2. Swap `seedNumber` between two TournamentTeam rows
-
-### advance_bracket_match(bracketMatchId)
-1. Verify tournament is InProgress
-2. Read BracketMatch -- reject if `winnerTeamId` not set
-3. Place winner in `nextWinnerMatchId` slot (set `team1Id` or `team2Id` on the next match)
-4. For double elim: route loser to `nextLoserMatchId` slot
-5. For group matches: update `GroupPhaseRecord` via `updateGroupPhaseRecords` (Win=2, Draw=1, Loss=0 points)
-6. Set eliminated status: when a team loses their final match (`setEliminatedStatus` on TournamentEnrolled rows)
-
-### submit_and_advance_bracket(matchResultId)
-1. Wrapper for tournament matches -- reads MatchResultRecord
-2. Map `winnerTeamSide` (Blue/Red TeamSide enum) to `winnerTeamId`:
-   - `Blue` -> `bracketMatch.team1Id`
-   - `Red` -> `bracketMatch.team2Id`
-3. Set `BracketMatch.winnerTeamId`
-4. If `Tournament.autoAdvanceBracket=true`: call `advance_bracket_match`
-
-### rollback_bracket_match(bracketMatchId)
-1. Verify tournament is InProgress; verify `mmrProcessedAt` not set on MatchResultRecord (blocks post-MMR rollback)
-2. Cascade-delete linked CalendarEvent + invites (Phase 8, D-22)
-3. Clear `winnerTeamId` on this match
-4. Remove winner from `nextWinnerMatchId` slot; remove loser from `nextLoserMatchId` slot
+See **Phase S8c execution** below for the reducer reference (seeding, generation, group advancement, staff
+resolve / rollback, DQ). The legacy flows (`swap_seeds`, `advance_bracket_match`, `submit_and_advance_bracket`,
+`advance_group_to_elimination`, the first-empty-slot placement, `GroupPhaseRecord`) were deleted in S8c (A23).
 
 ### advance_to_next_game(lobbyId), shelve_series(lobbyId), resume_series(lobbyId)
 1. Verify series authority: lobby host, TO, TO assistant, admin/mod, or referee if `refereeControlsShelving=true`
@@ -133,7 +83,53 @@ The seat-enforcement core moved to `shared/lobby-rules/allowedSlots.ts` (`allowe
 | `tournamentStandings.ts` | `groupStandings(ctx, tournamentId, groupId): RankedTeam[]`, `qualifiersFor(ctx, tournamentId, groupAdvanceCount): number[]` | rows → `rankGroup` (Decided group matches only; unseeded teams sort last) → `placeQualifiers`; `qualifiersFor` first drops Withdrawn / Disqualified / Eliminated teams (A26: status is the single gate for bracket placement) |
 | `tournamentLobbySides.ts` | `allowedSlotsFor(ctx, lobby, userId): LobbySlotTag[]` | A35 / D.8.5: team1 members + its stand-ins for this match → BluePlayer / BlueCoach, team2 → RedPlayer / RedCoach, everyone else (staff included) Spectator; Spectator always; non-tournament lobby → every slot. S8d wires it into `join_lobby` / `set_team_slot` |
 
-Behaviour scenarios are not in [contract.md](contract.md) yet: S8c / S8d rewrite it once the reducers use these helpers.
+Behaviour scenarios: [contract.md](contract.md), "Phase S8c execution" scenarios.
+
+## Phase S8c execution (DECISIONS.md A23, A24(1)(3), A25, A26, A26a, A29, A30, A32, A36a, A38(1))
+
+The bracket reducers now run on `shared/bracket` and the S8a helpers. Deleted: `swap_seeds`,
+`advance_bracket_match`, `submit_and_advance_bracket`, `advance_group_to_elimination`, `admin_set_bracket_winner`,
+`helpers/bracketGeneration.ts`, `helpers/bracketHelpers.ts` and the inline advancement of `dq_participant`.
+
+**Single writer, enforced.** `BracketMatch.winnerTeamId` is written only by `bracketResults.applyBracketResult`
+(results), `bracketResults.rollbackBracketResult` (clears it) and `bracketStore.settle` (structural BYE walkovers).
+Callers of `applyBracketResult`: `resolve_bracket_match` (Staff), `dq_participant` (Dq), `performConcede`
+(Concede, A38(1); only while the match is Ready; series score from the session; audit actor `SYSTEM_USER_ID`, A37)
+and finalization step 17 (Played / Concede, `SYSTEM_USER_ID`; S8d replaces that step with the A24 hand-off).
+
+### Reducer reference
+
+All rejections are `SenderError`s. Permissions per A25 (`ensureTournamentPermission`).
+
+| Reducer | Permission; stage | Behaviour | Messages |
+|---|---|---|---|
+| `seed_bracket(tournamentId, mode: 'mmr' \| 'random')` | `bracket`; Seeding | Ready teams only (A26). `mmr`: captain's `MmrRating` for `defaultGameMode` (any season; 0 when none), highest first, ties by team id. `random`: `ctx.random.shuffle` of the Ready teams in id order (C-a7). Writes `seedNumber` 1..n, stamps `lastSeedChangeAt` | "Tournament is not in Seeding." · "Seeding mode must be "mmr" or "random"." · "No Ready teams to seed." |
+| `set_seed_order(tournamentId, teamIds: u32[])` | `bracket`; Seeding | `teamIds` = exactly the Ready teams, each once; position i -> seed i + 1; stamps `lastSeedChangeAt`. Replaces `swap_seeds` | "A team appears twice in the seed order." · "The seed order must list every Ready team exactly once." |
+| `generate_bracket(tournamentId)` | `bracket`; Seeding | (1) teams still Forming -> Withdrawn, members stay enrolled (A26a); (2) >= 2 Ready teams, every one seeded, seeds unique; format checks (A29 third place, `groupSize` >= 2, `groupAdvanceCount` 1..2, >= 2 qualifiers) and manual groups read; (3) `deleteBracket` (rows, stand-ins, calendar rows, `groupId`; T20); (4) rows per format (below); (5) stamps `bracketGeneratedAt` | "At least 2 Ready teams are needed." · "Seed every Ready team first." · "Seed numbers must be unique." · "A third-place match exists only in single elimination." · "groupSize must be at least 2." · "groupAdvanceCount must be 1 or 2." · "At least 2 teams must qualify from the groups." · manual: "Team "X" has no group." / "… only N groups exist." / "Every group needs at least N teams." / "Group sizes may differ by one team at most." |
+| `advance_group_stage(tournamentId)` | `bracket`; InProgress | GroupInto* only; every group match Decided / Walkover / Void; no elimination row yet (checked by `bracketSide`, since `GF` also starts with G); qualifiers = `qualifiersFor` (A30 ranking, Withdrawn / Disqualified / Eliminated dropped, T7 placement); `generateSingleElim(n, { thirdPlace })` / `generateDoubleElim(n, { winnerAdvantage })` + `insertBracket`; grouped teams that did not qualify and are still Active -> Eliminated | "Tournament is not in progress." · "A group-only tournament has no elimination stage." · "This tournament has no group stage." · "Generate the bracket first." · "The elimination bracket already exists." · "N group match(es) are not settled." · "At least 2 teams must qualify." |
+| `resolve_bracket_match(bracketMatchId, winnerTeamId, reason)` | `results`; InProgress | match Ready -> calendar event deleted (D-22), `applyBracketResult(…, 'Staff', 0-0)`; Decided with another winner -> `rollbackBracketResult` (refused while anything downstream is Decided) then apply; Decided with the same winner -> no-op. Replaces `admin_set_bracket_winner`; the D.8.3 "force-finalize" tool for a tournament match | "Bracket match not found." · "Tournament is not in progress." · "Reason must be at most 1000 characters." · "<key> is <state>; only a Ready or Decided match can be resolved." · "Team N does not play <key>." · "<key> is decided; roll that back first." |
+| `rollback_bracket_match(bracketMatchId, reason)` | `results`; InProgress | match Decided; `rollbackBracketResult` (refused while a downstream match is Decided); deletes the match's calendar event (D-22). The D.8.3 "void" tool for a tournament match | "<key> is <state>; only a decided match can be rolled back." · "<key> is decided; roll that back first." |
+| `dq_participant(tournamentId, userId, reason, dqWholeTeam?)` | `participants`; any stage | enrolment -> Disqualified (row kept, A26a(2)); the player (with `dqWholeTeam`: every member, their enrolments Disqualified too) leaves the team, captain transferred (D-21); a team left non-empty gets `refreshTeamStatus` only before generation (Ready -> Forming possible); after generation it keeps its status and plays with stand-ins (A26a(3)); a team left empty -> **Disqualified** (row kept). Seeding after generation: stamps `lastSeedChangeAt` (regenerate). InProgress: every open match of the team is settled (rule below). Live lobby handling unchanged (D-25 / D-26) | "Participant not found in this tournament." · "Participant is already disqualified." · "Cannot disqualify a participant who has already withdrawn." |
+
+`reason` (resolve, rollback, dq) has no column: it is written to the module log (resolve / rollback: trimmed, at
+most 1000 characters); the actor lands in the audit columns (`lastModifiedById`). S8d may add an audit table.
+
+**DQ settling rule.** Repeated until the disqualified team holds no open slot: a **Ready** match (opponent known)
+-> `applyBracketResult(opponent, 'Dq', 0-0)` (its calendar event deleted, D-22); a **Pending** match (the other slot
+still empty) -> the team's slot becomes a BYE (`teamNIsBye = true`), so `settle` turns the match into a Walkover for
+the opponent when it arrives (or a Void if a BYE arrives). In double elimination a DQ loss in the winners bracket
+routes the team into the losers bracket first, where the same rule applies. Group matches: every open group match
+is settled for the opponent (review T12). Limit: once a DQ'd team's slot is a BYE, its feeder match can no longer
+be rolled back (the slot no longer holds the team).
+
+### Generation per format
+
+| Format | Rows at generation | Later |
+|---|---|---|
+| `SingleElimination` | `generateSingleElim(n, { thirdPlace: has3rdPlaceMatch })` over the Ready teams by seed; BYE walkovers settled | — |
+| `DoubleElimination` | `generateDoubleElim(n, { winnerAdvantage })`; single grand final, WB finalist in slot 1 (A27) | — |
+| `GroupOnly` | `insertGroupBracket(groups)`; groups = manual `groupId`s (A36a; validated: every Ready team grouped, exactly `groupCount(n, groupSize)` groups, each >= `groupSize` unless there is only one group, sizes within one) or `splitIntoGroups(teamIdsBySeed, groupSize)` (A32 snake); within a group, teams by seed | placements from the standings at Completed (S8d) |
+| `GroupIntoSingleElim` / `GroupIntoDoubleElim` | the group rows only | `advance_group_stage` creates the elimination rows from the standings (T7) |
 
 ## Phase History
 
@@ -155,10 +151,11 @@ Behaviour scenarios are not in [contract.md](contract.md) yet: S8c / S8d rewrite
 | dq_participant auto-advance is inline code, not a reducer call -- keeps it atomic | Phase 04 execution | 2026-02-20 |
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
 | Shared pure `shared/bracket/` + `bracketStore` / `bracketResults` / `tournamentStandings` / `tournamentLobbySides` helpers, not wired yet (A23, A27, A29–A32, A35) | Phase S8a execution | 2026-11-07 |
+| Bracket reducers rebuilt on the shared engine: `seed_bracket` (ctx.random), `set_seed_order`, `generate_bracket` (A26a Withdraw, manual / auto groups, `bracketGeneratedAt`), `advance_group_stage`, `resolve_bracket_match`, `rollback_bracket_match`, `dq_participant` through `applyBracketResult`; legacy generation / advancement and `admin_set_bracket_winner` deleted; single writer enforced (A23, A24, A25, A26a, A29, A30, A32, A36a, A38(1)) | Phase S8c execution | 2026-11-07 |
 
 ---
 
-*Last updated: 2026-04-09*
+*Last updated: 2026-11-07*
 *Feature owner: Phase 04 / Phase 10.1*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

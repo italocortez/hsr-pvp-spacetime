@@ -95,8 +95,8 @@ export { transfer_referee, reclaim_referee } from './reducers/refereeManagement'
 export { confirm_game, close_game, dispute_match_result } from './reducers/matchResultSubmission';
 export { record_group_scores, set_score_adjustment } from './reducers/scoreEntry';
 export { dq_participant, override_match_result, assign_tournament_assistant, remove_tournament_assistant, mod_promote_to_host, mod_demote_from_host } from './reducers/tournamentAdmin';
-export { generate_bracket, seed_bracket, swap_seeds } from './reducers/bracketGeneration';
-export { advance_bracket_match, submit_and_advance_bracket, rollback_bracket_match, advance_group_to_elimination } from './reducers/bracketAdvancement';
+export { generate_bracket, seed_bracket, set_seed_order } from './reducers/bracketGeneration';
+export { advance_group_stage, resolve_bracket_match, rollback_bracket_match } from './reducers/bracketAdvancement';
 export { finalize_match_result, process_tournament_mmr } from './reducers/matchFinalization';
 export { create_season, set_active_season } from './reducers/seasonAdmin';
 export { create_achievement, update_achievement, delete_achievement, add_achievement_criteria, remove_achievement_criteria, manual_award_achievement, set_displayed_achievement } from './reducers/achievementManagement';
@@ -120,7 +120,7 @@ export { nominate_character, place_bid, pass_bid, timer_expiry_auction } from '.
 export { equip_lightcone, arrange_lineup, set_eidolon, advance_stage } from './reducers/postDraft';
 export { concede_match, claim_forfeit, defer_match } from './reducers/concede';
 export { advance_to_next_game, shelve_series, resume_series } from './reducers/seriesManagement';
-export { admin_force_finalize, admin_void_match, admin_set_bracket_winner } from './reducers/adminMatchTools';
+export { admin_force_finalize, admin_void_match } from './reducers/adminMatchTools';
 export { select_match_account, deselect_match_account } from './reducers/accountSelection';
 
 // Lifecycle hooks MUST be exported: the SDK only registers a hook when it walks the

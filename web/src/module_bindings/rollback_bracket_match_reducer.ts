@@ -12,4 +12,5 @@ import {
 
 export default {
   bracketMatchId: __t.u32(),
+  reason: __t.string(),
 };

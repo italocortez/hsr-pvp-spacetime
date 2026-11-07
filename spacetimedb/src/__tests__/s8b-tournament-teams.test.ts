@@ -17,7 +17,7 @@ import {
     openTournament,
     register,
     requestsOf,
-    stampGenerated,
+    seedAndGenerate,
     tRow,
     teamRow,
     verified,
@@ -275,7 +275,7 @@ describe('add_team_member (participants, until generation; A26a)', () => {
         assignAssistant(test, org, id, asst, { participants: true });
         tx(test, asst, (ctx) => M.add_team_member(ctx, { teamId, userId: loose.userId }));
         expect(status(test, teamId)).toBe('Ready');
-        stampGenerated(test, id);
+        seedAndGenerate(test, org, id); // T-S8c: the real seed + generate (3 Ready teams) instead of a direct stamp
         const other = makeShortTeamDirect(test, id, late.userId);
         expectReject(test, org, (ctx) => M.add_team_member(ctx, { teamId: other, userId: late.userId }), 'Bracket generated; use stand-ins.');
     });

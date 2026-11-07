@@ -323,6 +323,8 @@ Note: TournamentEnrolled row does NOT contain hsrAccountId — that column was r
 **Then:** Assistant row deleted
 
 ### DQ Auto-Advance
+> **Superseded (Phase S8c execution):** the open matches of a disqualified team are settled through `applyBracketResult` (decidedBy Dq) or, while the opponent is unknown, the slot becomes a BYE; no autoAdvanceBracket flag. See "DQ Settles the Bracket (Phase S8c execution)" and docs/brackets/contract.md S8c-15 / S8c-16.
+
 **Given:** Tournament InProgress, autoAdvanceBracket=true, A vs B in bracket
 **When:** `dq_participant(tournamentId, playerA)`
 **Then:** A status=Disqualified. B auto-advances to next bracket match
@@ -363,6 +365,8 @@ Note: TournamentEnrolled row does NOT contain hsrAccountId — that column was r
 **Then:** Captain status=Disqualified. Captaincy transfers to lowest-userId remaining TournamentTeamMember.
 
 ### Last Member Leaves Team
+> **Superseded (Phase S8c execution):** a team emptied by DQ is no longer deleted: it becomes Disqualified and stays for the bracket record (A26a(2), TD-18). Withdrawal keeps the S8b rules.
+
 **Given:** Team with single remaining member
 **When:** Last member calls `withdraw_from_tournament` or is DQ'd
 **Then:** Team destroyed (TournamentTeam row + all TournamentTeamMember rows deleted)
@@ -537,6 +541,16 @@ Note: TournamentEnrolled row does NOT contain hsrAccountId — that column was r
 | MatchResultRecord.tournamentId | Tournament.id | Phase 3 writes |
 | MmrRating | Auto-seeding | Phase 4 reads |
 
+### Generation Withdraws Forming Teams (Phase S8c execution, A26a)
+**Given:** A tournament in Seeding with seeded Ready teams and a team still Forming (its members enrolled)
+**When:** Staff with the bracket permission call `generate_bracket`
+**Then:** The Forming team becomes Withdrawn and its members stay enrolled; the bracket is built from the Ready teams; `bracketGeneratedAt` is stamped, which closes the promote / add / move window ("Bracket generated; use stand-ins."). Details: docs/brackets/contract.md S8c-4 to S8c-10.
+
+### DQ Settles the Bracket (Phase S8c execution, A23, A26a(2))
+**Given:** An InProgress tournament; team T in an open bracket match
+**When:** Staff with the participants permission call `dq_participant(tournamentId, userId, reason, dqWholeTeam?)` for T's last member, or for any member with `dqWholeTeam = true`
+**Then:** Every disqualified member's enrolment is Disqualified (rows kept); T becomes Disqualified (row kept); T's open matches are settled for the opponents (decidedBy Dq) or turned into BYE slots while the opponent is unknown. A DQ that leaves members on the team only removes that player (captain transferred; before generation the team status is refreshed, after it the team keeps its status and plays with stand-ins). In Seeding after generation the DQ stamps `lastSeedChangeAt`, so the bracket must be regenerated before InProgress.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -598,6 +612,7 @@ Note: TournamentEnrolled row does NOT contain hsrAccountId — that column was r
 | Registration closes at the move to Seeding: requests deleted, unchecked-in teams Withdrawn, random teams for opted-in solos, eligible teams Ready, others stay Forming until generation (A26a); add_team_member for staff; team-level check-in replaces per-member check-in and the no-show prune | Phase S8b execution (DECISIONS.md A26, A26a, A36a) | 2026-11-07 |
 | Withdrawal deletes the enrolment (Registration / CheckIn only), Disqualified blocks re-registration, capacity excludes waitlisted and Disqualified rows, waitlist promotion until generation with locks at promotion, add_participant, reject_participant, withdraw_tournament_team | Phase S8b execution (DECISIONS.md A26a; ACCESS-SECURITY-OPS D.8.6) | 2026-11-07 |
 | Minimum MMR (guests rejected, row-less players at the initial rating); rename / alias; manual groups; idle-tournament cancel | Phase S8b execution (DECISIONS.md A36b, A36a, A24(6)) | 2026-11-07 |
+| `generate_bracket` withdraws teams still Forming; `dq_participant` keeps the emptied team as Disqualified and settles its open matches through `applyBracketResult` (optional `dqWholeTeam`); scenarios "Generation Withdraws Forming Teams", "DQ Settles the Bracket" | Phase S8c execution (DECISIONS.md A23, A26a) | 2026-11-07 |
 | create / update arguments: grandFinalBestOf, groupAdvanceCount, groupAssignmentMode, checkInEnabled, requireResultValidation, allowMirrorPicks, lineupFormat, disconnectForfeitSeconds, optional minimumMmr and lobbyPresetId; A29 / A32 validation | Phase S8b execution (DECISIONS.md A28, A29, A32, A33, A33a, A36) | 2026-11-07 |
 
 ---

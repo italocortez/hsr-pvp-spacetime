@@ -3,7 +3,7 @@
 // (ranked/tournament) and submitSeriesResult (casual auto-finalize per D-37; S7b replaced submit_match_result).
 
 import { SenderError } from 'spacetimedb/server';
-import { auditInsert, auditUpdate } from './auditColumns';
+import { SYSTEM_USER_ID, auditInsert, auditUpdate } from './auditColumns';
 import { insertWithAudit, updateWithAudit } from './auditHelpers';
 import type { MmrRating } from '@bindings/types';
 import { getKFactor, calculateExpectedScore, calculateRatingChange, calculateTeamEffective, calculateAccountModifier } from './eloCalculation';
@@ -12,7 +12,7 @@ import { incrementPlayerStat, incrementPlayerRelationship } from './statsIncreme
 import { incrementPlayerCharacterStat, incrementBanStat, incrementFacedStat } from './characterStatsIncrement';
 import { incrementGlobalCharacterStat } from './globalCharacterStatsIncrement';
 import { rebuildLeaderboard } from './leaderboardRebuild';
-import { advanceBracketMatch } from './bracketHelpers';
+import { applyBracketResult, seriesGames } from './bracketResults';
 import { checkAndAwardAchievements } from './achievementChecker';
 import { slotIsCoach, slotIsSpectator, slotToTeamSide } from './lobbyHelpers';
 import { resolveUserLabel } from './userLabel';
@@ -563,7 +563,14 @@ export function runFinalization(
                     ? bracketMatch.team1Id
                     : bracketMatch.team2Id;
                 if (winnerTeamId !== undefined) {
-                    advanceBracketMatch(ctx, matchResult.bracketMatchId, winnerTeamId, actingUserId);
+                    // Since S8c the single writer (A23) settles the match (the legacy advanceBracketMatch is gone).
+                    // S8d: replaced by the A24 hand-off (advance on Validated, finalize at Completed).
+                    const tournament = ctx.db.Tournament.id.find(tournamentId);
+                    if (!tournament || tournament.stage.tag !== 'InProgress') {
+                        throw new SenderError('Tournament must be InProgress for bracket advancement.');
+                    }
+                    applyBracketResult(ctx, matchResult.bracketMatchId, winnerTeamId, isConcede ? 'Concede' : 'Played',
+                        session ? seriesGames(session) : { team1: 0, team2: 0 }, SYSTEM_USER_ID); // A37 audit actor
                 }
                 // tournamentId used for logging context only
                 console.log(`[MATCH] Bracket match #${matchResult.bracketMatchId} advanced for tournament #${tournamentId}`);

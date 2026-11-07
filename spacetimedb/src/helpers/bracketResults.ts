@@ -1,6 +1,6 @@
 // ─── Bracket results (A23, A24, A26, A35, review §5.5; S8a) ───────────────────────────────────────────────
-// The single result → bracket hand-off and its inverse. S8a: exported, not wired; the legacy writers
-// (`reducers/bracketAdvancement.ts`, `helpers/bracketHelpers.ts`) keep running until S8c deletes them.
+// The single result → bracket hand-off and its inverse. S8c: the legacy writers are deleted; callers are
+// resolve_bracket_match / rollback_bracket_match, dq_participant, performConcede and the finalization step 17.
 
 import { SenderError } from 'spacetimedb/server';
 import { updateWithAudit } from './auditHelpers';
@@ -26,7 +26,7 @@ function setTeamStatus(ctx: any, teamId: number, from: string, to: string, actor
 
 /**
  * Records a settled result on a bracket match. **This is the only writer of `BracketMatch.winnerTeamId`**
- * (S8c deletes every other writer; `settle` only stamps structural BYE walkovers).
+ * (every other writer was deleted in S8c; `settle` only stamps structural BYE walkovers).
  *
  * - The match must hold two real teams and `winnerTeamId` must be one of them; team1 = Blue, team2 = Red (A35).
  * - Ready → Decided. Decided with the same winner → no-op (idempotent); a different winner → "roll back first"

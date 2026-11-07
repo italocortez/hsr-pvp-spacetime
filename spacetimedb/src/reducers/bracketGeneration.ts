@@ -1,344 +1,192 @@
 import spacetimedb from '../schema';
 import { t, SenderError } from 'spacetimedb/server';
+import { allowsThirdPlace, generateDoubleElim, generateSingleElim, groupCount, splitIntoGroups } from '@shared/bracket';
 import { ensureTournamentPermission } from '../helpers/tournamentPermissions';
-import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
-import {
-    type BracketMatchDescriptor,
-    generateSingleElimBracket,
-    generateDoubleElimBracket,
-    generateGroupPhaseBracket,
-    generateHybridBracket,
-} from '../helpers/bracketGeneration';
+import { updateWithAudit } from '../helpers/auditHelpers';
+import { isGroupFormat } from '../helpers/tournamentHelpers';
+import { deleteBracket, insertBracket, insertGroupBracket } from '../helpers/bracketStore';
 
-// ─── Internal helpers ─────────────────────────────────────────────────────────
+// ─── Seeding and generation (A23, A26, A26a, A29, A32, A36a, review §5.4, C-a7, T20; S8c) ─────────────────
+// Built on the shared pure engine (`@shared/bracket`) and the S8a bracket store. Seeding and generation are
+// separate: seeding writes `TournamentTeam.seedNumber` and stamps `Tournament.lastSeedChangeAt`; generation
+// turns the seeded Ready teams into rows and stamps `Tournament.bracketGeneratedAt` (Seeding → InProgress
+// requires bracketGeneratedAt ≥ lastSeedChangeAt).
 
-/**
- * Two-pass FK wiring helper.
- * Pass 1: Insert all matches with null FKs, build positionKey -> insertedId map.
- * Pass 2: Update FK links using the positionKey -> id map.
- * Pass 3: Auto-advance BYE matches (place winner in next match slot).
- */
-function insertBracketMatches(
-    ctx: any,
-    tournament: any,
-    userId: number,
-    descriptors: BracketMatchDescriptor[],
-): void {
-    // Pass 1: Insert all matches with null FKs, build positionKey -> insertedId map
-    const idMap = new Map<string, number>();
-    for (const desc of descriptors) {
-        // S8 (A23): replaced by the shared bracket engine (shared/bracket/): exact slots, BYE walkovers,
-        // nextWinnerSlot / nextLoserSlot, team1IsBye / team2IsBye. S3 writes the new columns with placeholders.
-        const row = ctx.db.BracketMatch.insert(insertWithAudit(ctx, {
-            id: 0,
-            tournamentId: tournament.id,
-            positionKey: desc.positionKey,
-            bracketSide: { tag: desc.bracketSide, value: {} } as any,
-            roundNumber: desc.roundNumber,
-            matchNumber: desc.matchNumber,
-            groupId: desc.groupId,
-            team1Id: desc.team1Id,
-            team2Id: desc.team2Id,
-            team1IsBye: false,
-            team2IsBye: false,
-            nextWinnerMatchId: undefined,
-            nextWinnerSlot: 0,
-            nextLoserMatchId: undefined,
-            nextLoserSlot: 0,
-            bestOf: desc.bestOf,
-            winnerAdvantage: desc.winnerAdvantage,
-            scheduledAt: undefined,
-            state: desc.winnerTeamId
-                ? { tag: 'Walkover', value: {} } as any
-                : { tag: 'Pending', value: {} } as any,
-            winnerTeamId: desc.winnerTeamId,
-            loserTeamId: undefined,
-            decidedBy: undefined,
-            team1Games: 0,
-            team2Games: 0,
-        }, userId));
-        idMap.set(desc.positionKey, row.id);
-    }
+const unit = (tag: string) => ({ tag, value: {} }) as any;
 
-    // Pass 2: Update FK links using the positionKey -> id map
-    for (const desc of descriptors) {
-        if (desc.nextWinnerRef || desc.nextLoserRef) {
-            const matchId = idMap.get(desc.positionKey);
-            if (!matchId) continue;
-            const row = ctx.db.BracketMatch.id.find(matchId);
-            if (!row) continue;
-
-            const nextWinnerId = desc.nextWinnerRef ? idMap.get(desc.nextWinnerRef) : undefined;
-            const nextLoserId = desc.nextLoserRef ? idMap.get(desc.nextLoserRef) : undefined;
-
-            if (nextWinnerId !== undefined || nextLoserId !== undefined) {
-                ctx.db.BracketMatch.id.update(updateWithAudit(ctx, row, {
-                    nextWinnerMatchId: nextWinnerId ?? row.nextWinnerMatchId,
-                    nextLoserMatchId: nextLoserId ?? row.nextLoserMatchId,
-                }, userId));
-            }
-        }
-    }
-
-    // Pass 3: Auto-advance BYE matches
-    // BYE matches have winnerId set but need to place the winner in the next match
-    for (const desc of descriptors) {
-        if (desc.winnerTeamId && desc.nextWinnerRef) {
-            const matchId = idMap.get(desc.positionKey);
-            const nextMatchId = idMap.get(desc.nextWinnerRef);
-            if (!matchId || !nextMatchId) continue;
-
-            const nextMatch = ctx.db.BracketMatch.id.find(nextMatchId);
-            if (!nextMatch) continue;
-
-            // Place BYE winner in the appropriate slot of the next match
-            if (!nextMatch.team1Id) {
-                ctx.db.BracketMatch.id.update(updateWithAudit(ctx, nextMatch, {
-                    team1Id: desc.winnerTeamId,
-                }, userId));
-            } else if (!nextMatch.team2Id) {
-                ctx.db.BracketMatch.id.update(updateWithAudit(ctx, nextMatch, {
-                    team2Id: desc.winnerTeamId,
-                }, userId));
-            }
-        }
-    }
+function ensureSeedingStage(tournament: any): void {
+    if (tournament.stage.tag !== 'Seeding') throw new SenderError('Tournament is not in Seeding.');
 }
 
-/**
- * S3 stub: group_phase_record was dropped (A23); group membership lives on TournamentTeam.groupId and
- * standings are computed by the shared rankGroup (A30).
- * S8: write TournamentTeam.groupId for each assignment here (manual assignment in Seeding per A36a) and
- * delete this helper with the legacy generation path.
- */
-function insertGroupStandingsStub(
-    _ctx: any,
-    _tournamentId: number,
-    _userId: number,
-    _groupAssignments: Map<number, number[]>,
-): void {
-    // S8: TournamentTeam.groupId assignment.
+function readyTeams(ctx: any, tournamentId: number): any[] {
+    return [...ctx.db.TournamentTeam.tournament_id.filter(tournamentId)]
+        .filter((team: any) => team.status.tag === 'Ready')
+        .sort((a: any, b: any) => a.id - b.id);
 }
 
-// ─── generate_bracket ─────────────────────────────────────────────────────────
-
-export const generate_bracket = spacetimedb.reducer(
-    { tournamentId: t.u32() },
-    (ctx, { tournamentId }) => {
-        const { user, tournament } = ensureTournamentPermission(ctx, tournamentId, 'bracket');
-
-        // Tournament must be in Seeding stage
-        if (tournament.stage.tag !== 'Seeding') {
-            throw new SenderError('generate_bracket can only be called during the Seeding stage.');
+/** Writes seed 1..n in the given order and stamps lastSeedChangeAt. */
+function writeSeeds(ctx: any, tournament: any, ordered: any[], actorId: number): void {
+    ordered.forEach((team, index) => {
+        if (team.seedNumber !== index + 1) {
+            ctx.db.TournamentTeam.id.update(updateWithAudit(ctx, team, { seedNumber: index + 1 }, actorId));
         }
-
-        // Delete all existing BracketMatch rows for this tournament (regeneration)
-        for (const match of [...ctx.db.BracketMatch.tournament_id.filter(tournamentId)]) {
-            ctx.db.BracketMatch.id.delete(match.id);
-        }
-
-        // S8: clear TournamentTeam.groupId for this tournament (group_phase_record dropped, A23)
-        // S8c: withdraw still-Forming teams before generation (A26a)
-
-        // Get all active teams for this tournament (teams with at least one TournamentTeamMember)
-        const teams = [...ctx.db.TournamentTeam.tournament_id.filter(tournamentId)]
-            .filter((team: any) => {
-                // Only include teams that have at least one member
-                const members = [...ctx.db.TournamentTeamMember.team_id.filter(team.id)];
-                return members.length > 0;
-            })
-            .sort((a: any, b: any) => {
-                // Sort by seedNumber (lower = better seed). Unseeded teams go last.
-                const seedA = a.seedNumber ?? 999999;
-                const seedB = b.seedNumber ?? 999999;
-                return seedA - seedB;
-            });
-
-        if (teams.length < 2) {
-            throw new SenderError('At least 2 active teams are required to generate a bracket.');
-        }
-
-        const teamIds = teams.map((team: any) => team.id);
-        const formatTag = tournament.format.tag as string;
-
-        let descriptorCount = 0;
-
-        if (formatTag === 'SingleElimination') {
-            const descriptors = generateSingleElimBracket(
-                teamIds,
-                tournament.defaultBestOf,
-                tournament.has3rdPlaceMatch,
-            );
-            insertBracketMatches(ctx, tournament, user.id, descriptors);
-            descriptorCount = descriptors.length;
-
-        } else if (formatTag === 'DoubleElimination') {
-            const descriptors = generateDoubleElimBracket(
-                teamIds,
-                tournament.defaultBestOf,
-                tournament.winnerAdvantage,
-                tournament.has3rdPlaceMatch,
-            );
-            insertBracketMatches(ctx, tournament, user.id, descriptors);
-            descriptorCount = descriptors.length;
-
-        } else if (formatTag === 'GroupOnly') {
-            const { matches, groupAssignments } = generateGroupPhaseBracket(
-                teamIds,
-                tournament.groupSize,
-                tournament.defaultBestOf,
-                tournament.groupAssignmentMode.tag,
-            );
-            insertBracketMatches(ctx, tournament, user.id, matches);
-            insertGroupStandingsStub(ctx, tournamentId, user.id, groupAssignments);
-            descriptorCount = matches.length;
-
-        } else if (formatTag === 'GroupIntoSingleElim') {
-            const { groupMatches, elimMatches, groupAssignments } = generateHybridBracket(
-                teamIds,
-                tournament.groupSize,
-                tournament.defaultBestOf,
-                tournament.groupAssignmentMode.tag,
-                'single',
-                0,
-                tournament.has3rdPlaceMatch,
-                tournament.groupAdvanceCount,
-            );
-            insertBracketMatches(ctx, tournament, user.id, groupMatches);
-            insertBracketMatches(ctx, tournament, user.id, elimMatches);
-            insertGroupStandingsStub(ctx, tournamentId, user.id, groupAssignments);
-            descriptorCount = groupMatches.length + elimMatches.length;
-
-        } else if (formatTag === 'GroupIntoDoubleElim') {
-            const { groupMatches, elimMatches, groupAssignments } = generateHybridBracket(
-                teamIds,
-                tournament.groupSize,
-                tournament.defaultBestOf,
-                tournament.groupAssignmentMode.tag,
-                'double',
-                tournament.winnerAdvantage,
-                tournament.has3rdPlaceMatch,
-                tournament.groupAdvanceCount,
-            );
-            insertBracketMatches(ctx, tournament, user.id, groupMatches);
-            insertBracketMatches(ctx, tournament, user.id, elimMatches);
-            insertGroupStandingsStub(ctx, tournamentId, user.id, groupAssignments);
-            descriptorCount = groupMatches.length + elimMatches.length;
-
-        } else {
-            throw new SenderError(`Unknown tournament format: ${formatTag}`);
-        }
-
-        console.log(`[BRACKET] Generated bracket for tournament #${tournamentId}: ${descriptorCount} matches`);
-    }
-);
+    });
+    const fresh = ctx.db.Tournament.id.find(tournament.id);
+    ctx.db.Tournament.id.update(updateWithAudit(ctx, fresh, { lastSeedChangeAt: ctx.timestamp }, actorId));
+}
 
 // ─── seed_bracket ─────────────────────────────────────────────────────────────
+// `bracket` (A25); Seeding; Ready teams only (A26). Modes kept from the legacy reducer:
+//   'mmr'    captain's rating for the tournament's default game mode, highest first; ties by team id.
+//   'random' ctx.random shuffle of the Ready teams in team-id order (C-a7: the legacy hash was id order).
 
 export const seed_bracket = spacetimedb.reducer(
     { tournamentId: t.u32(), mode: t.string() },
     (ctx, { tournamentId, mode }) => {
         const { user, tournament } = ensureTournamentPermission(ctx, tournamentId, 'bracket');
+        ensureSeedingStage(tournament);
+        if (mode !== 'mmr' && mode !== 'random') throw new SenderError('Seeding mode must be "mmr" or "random".');
 
-        // Tournament must be in Seeding stage
-        if (tournament.stage.tag !== 'Seeding') {
-            throw new SenderError('seed_bracket can only be called during the Seeding stage.');
-        }
+        const teams = readyTeams(ctx, tournamentId);
+        if (teams.length === 0) throw new SenderError('No Ready teams to seed.');
 
-        // Validate mode
-        if (mode !== 'mmr' && mode !== 'random') {
-            throw new SenderError('Invalid seeding mode. Must be "mmr" or "random".');
-        }
-
-        // Get all active teams (teams with at least one TournamentTeamMember)
-        const teams = [...ctx.db.TournamentTeam.tournament_id.filter(tournamentId)]
-            .filter((team: any) => {
-                const members = [...ctx.db.TournamentTeamMember.team_id.filter(team.id)];
-                return members.length > 0;
-            });
-
-        if (teams.length === 0) {
-            throw new SenderError('No active teams found for this tournament.');
-        }
-
-        let sortedTeams: any[];
-
+        let ordered: any[];
         if (mode === 'mmr') {
-            // Use captain's MMR for the tournament's defaultGameMode as the team's seeding MMR
             const ratings = new Map<number, number>();
             for (const team of teams) {
-                const mmrRows = [...ctx.db.MmrRating.user_id.filter(team.captainUserId)];
-                const modeRating = mmrRows.find((r: any) => r.gameMode.tag === tournament.defaultGameMode.tag);
+                const modeRating = [...ctx.db.MmrRating.user_id.filter(team.captainUserId)]
+                    .find((r: any) => r.gameMode.tag === tournament.defaultGameMode.tag);
                 ratings.set(team.id, modeRating ? modeRating.rating : 0);
             }
-
-            // Sort by rating descending (highest = seed 1). Ties broken by lower team.id (earlier registration = higher seed).
-            sortedTeams = [...teams].sort((a: any, b: any) => {
-                const ratingA = ratings.get(a.id) ?? 0;
-                const ratingB = ratings.get(b.id) ?? 0;
-                if (ratingB !== ratingA) return ratingB - ratingA;
-                return a.id - b.id;
-            });
-
+            ordered = [...teams].sort((a: any, b: any) => (ratings.get(b.id)! - ratings.get(a.id)!) || a.id - b.id);
         } else {
-            // Deterministic "random" based on tournament ID and team ID (reducers must be deterministic -- no Math.random())
-            // Simple hash: (tournamentId * 31 + teamId) % large prime, gives consistent but shuffled ordering
-            const LARGE_PRIME = 2147483647;
-            sortedTeams = [...teams].sort((a: any, b: any) => {
-                const hashA = (tournamentId * 31 + a.id) % LARGE_PRIME;
-                const hashB = (tournamentId * 31 + b.id) % LARGE_PRIME;
-                return hashA - hashB;
-            });
+            ordered = ctx.random.shuffle([...teams]);
         }
 
-        // Assign seedNumber 1..N
-        for (const [index, team] of sortedTeams.entries()) {
-            ctx.db.TournamentTeam.id.update(updateWithAudit(ctx, team, {
-                seedNumber: index + 1,
-            }, user.id));
-        }
-
+        writeSeeds(ctx, tournament, ordered, user.id);
         console.log(`[BRACKET] Seeded ${teams.length} teams for tournament #${tournamentId} (mode: ${mode})`);
     }
 );
 
-// ─── swap_seeds ───────────────────────────────────────────────────────────────
+// ─── set_seed_order ───────────────────────────────────────────────────────────
+// `bracket`; Seeding. `teamIds` must be exactly the Ready teams, each once; position i → seed i + 1.
+// Replaces swap_seeds.
 
-export const swap_seeds = spacetimedb.reducer(
-    { tournamentId: t.u32(), teamId1: t.u32(), teamId2: t.u32() },
-    (ctx, { tournamentId, teamId1, teamId2 }) => {
+export const set_seed_order = spacetimedb.reducer(
+    { tournamentId: t.u32(), teamIds: t.array(t.u32()) },
+    (ctx, { tournamentId, teamIds }) => {
         const { user, tournament } = ensureTournamentPermission(ctx, tournamentId, 'bracket');
+        ensureSeedingStage(tournament);
 
-        // Tournament must be in Seeding stage
-        if (tournament.stage.tag !== 'Seeding') {
-            throw new SenderError('swap_seeds can only be called during the Seeding stage.');
+        const teams = readyTeams(ctx, tournamentId);
+        const byId = new Map<number, any>(teams.map((team: any) => [team.id, team]));
+        if (new Set(teamIds).size !== teamIds.length) throw new SenderError('A team appears twice in the seed order.');
+        if (teamIds.length !== teams.length || teamIds.some((id: number) => !byId.has(id))) {
+            throw new SenderError('The seed order must list every Ready team exactly once.');
         }
 
-        // Find both TournamentTeam rows
-        const team1 = ctx.db.TournamentTeam.id.find(teamId1);
-        if (!team1) throw new SenderError(`Team #${teamId1} not found.`);
-        if (team1.tournamentId !== tournamentId) {
-            throw new SenderError(`Team #${teamId1} does not belong to tournament #${tournamentId}.`);
+        writeSeeds(ctx, tournament, teamIds.map((id: number) => byId.get(id)), user.id);
+        console.log(`[BRACKET] Seed order set for tournament #${tournamentId} (${teamIds.length} teams)`);
+    }
+);
+
+// ─── generate_bracket ─────────────────────────────────────────────────────────
+// `bracket`; Seeding. Withdraws the still-Forming teams (A26a), requires ≥ 2 Ready teams with unique seeds,
+// deletes any previous bracket with its stand-ins and calendar rows (T20), then:
+//   SingleElimination / DoubleElimination: the engine over the Ready teams by seed (A27, A29).
+//   GroupOnly / GroupInto*: round-robin groups, manual (TournamentTeam.groupId, A36a) or snake split (A32);
+//   the elimination part of GroupInto* is created by advance_group_stage from the standings (review T7).
+// Stamps bracketGeneratedAt.
+
+/**
+ * Manual groups (A36a, A32): every Ready team grouped, groupCount groups, each ≥ groupSize, sizes within one.
+ * As in the auto split (shared/bracket/groups.ts), fewer Ready teams than groupSize make one group holding every team.
+ */
+function manualGroups(ready: any[], groupSize: number): number[][] {
+    const count = groupCount(ready.length, groupSize);
+    const groups: number[][] = Array.from({ length: count }, () => []);
+    for (const team of ready) {
+        if (team.groupId === undefined) throw new SenderError(`Team "${team.name}" has no group.`);
+        if (team.groupId >= count) throw new SenderError(`Team "${team.name}" is in group ${team.groupId}; only ${count} groups exist.`);
+        groups[team.groupId].push(team.id);
+    }
+    const sizes = groups.map((g) => g.length);
+    if (count > 1 && sizes.some((s) => s < groupSize)) throw new SenderError(`Every group needs at least ${groupSize} teams.`);
+    if (Math.max(...sizes) - Math.min(...sizes) > 1) throw new SenderError('Group sizes may differ by one team at most.');
+    return groups;
+}
+
+export const generate_bracket = spacetimedb.reducer(
+    { tournamentId: t.u32() },
+    (ctx, { tournamentId }) => {
+        const { user, tournament } = ensureTournamentPermission(ctx, tournamentId, 'bracket');
+        ensureSeedingStage(tournament);
+        const formatTag = tournament.format.tag as string;
+
+        // 1. A26a: teams still Forming at generation are Withdrawn; their members stay enrolled.
+        for (const team of [...ctx.db.TournamentTeam.tournament_id.filter(tournamentId)]) {
+            if (team.status.tag === 'Forming') {
+                ctx.db.TournamentTeam.id.update(updateWithAudit(ctx, team, { status: unit('Withdrawn') }, user.id));
+            }
         }
 
-        const team2 = ctx.db.TournamentTeam.id.find(teamId2);
-        if (!team2) throw new SenderError(`Team #${teamId2} not found.`);
-        if (team2.tournamentId !== tournamentId) {
-            throw new SenderError(`Team #${teamId2} does not belong to tournament #${tournamentId}.`);
+        // 2. ≥ 2 Ready teams, every one seeded once (the pure engine throws plain Errors below 2: check first).
+        const ready = readyTeams(ctx, tournamentId);
+        if (ready.length < 2) throw new SenderError('At least 2 Ready teams are needed.');
+        if (ready.some((team: any) => team.seedNumber === undefined)) throw new SenderError('Seed every Ready team first.');
+        if (new Set(ready.map((team: any) => team.seedNumber)).size !== ready.length) {
+            throw new SenderError('Seed numbers must be unique.');
+        }
+        ready.sort((a: any, b: any) => a.seedNumber - b.seedNumber);
+        const teamIdsBySeed = ready.map((team: any) => team.id as number);
+
+        // Format checks before anything is deleted or written.
+        if (tournament.has3rdPlaceMatch && !allowsThirdPlace(tournament.format)) {
+            throw new SenderError('A third-place match exists only in single elimination.');
+        }
+        let groups: number[][] | undefined;
+        if (isGroupFormat(formatTag)) {
+            if (tournament.groupSize < 2) throw new SenderError('groupSize must be at least 2.');
+            // Manual groups are read before deleteBracket, which clears TournamentTeam.groupId.
+            groups = tournament.groupAssignmentMode.tag === 'Manual'
+                ? manualGroups(ready, tournament.groupSize)
+                : splitIntoGroups(teamIdsBySeed, tournament.groupSize);
+            if (formatTag !== 'GroupOnly') {
+                if (tournament.groupAdvanceCount < 1 || tournament.groupAdvanceCount > 2) {
+                    throw new SenderError('groupAdvanceCount must be 1 or 2.');
+                }
+                if (groups.length * tournament.groupAdvanceCount < 2) {
+                    throw new SenderError('At least 2 teams must qualify from the groups.');
+                }
+            }
+        } else if (formatTag !== 'SingleElimination' && formatTag !== 'DoubleElimination') {
+            throw new SenderError(`Unknown tournament format: ${formatTag}.`);
         }
 
-        // Swap their seedNumber values
-        const seed1 = team1.seedNumber;
-        const seed2 = team2.seedNumber;
+        // 3. T20: regeneration removes the old rows with their stand-ins and calendar rows.
+        deleteBracket(ctx, tournamentId, user.id);
 
-        ctx.db.TournamentTeam.id.update(updateWithAudit(ctx, team1, {
-            seedNumber: seed2,
-        }, user.id));
+        // 4. Rows.
+        let summary: string;
+        if (groups) {
+            for (const g of groups) {
+                const seedOf = new Map<number, number>(ready.map((team: any) => [team.id, team.seedNumber]));
+                g.sort((a, b) => seedOf.get(a)! - seedOf.get(b)!);
+            }
+            const ids = insertGroupBracket(ctx, tournament, groups, user.id);
+            summary = `${groups.length} group(s), ${ids.size} group matches`;
+        } else {
+            const spec = formatTag === 'SingleElimination'
+                ? generateSingleElim(teamIdsBySeed.length, { thirdPlace: tournament.has3rdPlaceMatch })
+                : generateDoubleElim(teamIdsBySeed.length, { winnerAdvantage: tournament.winnerAdvantage });
+            const ids = insertBracket(ctx, tournament, spec, teamIdsBySeed, user.id);
+            summary = `${ids.size} matches`;
+        }
 
-        ctx.db.TournamentTeam.id.update(updateWithAudit(ctx, team2, {
-            seedNumber: seed1,
-        }, user.id));
+        // 5. Seeding → InProgress requires bracketGeneratedAt ≥ lastSeedChangeAt (review §5.1).
+        const fresh = ctx.db.Tournament.id.find(tournamentId)!;
+        ctx.db.Tournament.id.update(updateWithAudit(ctx, fresh, { bracketGeneratedAt: ctx.timestamp }, user.id));
 
-        console.log(`[BRACKET] Swapped seeds for teams #${teamId1} (was ${seed1}) and #${teamId2} (was ${seed2}) in tournament #${tournamentId}`);
+        console.log(`[BRACKET] Generated bracket for tournament #${tournamentId} (${formatTag}): ${summary}`);
     }
 );

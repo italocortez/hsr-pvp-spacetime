@@ -334,6 +334,11 @@ _Superseded in Phase S6 execution (DECISIONS.md A57, A58): the scheduled reducer
 **When:** an Admin corrects a group score, an adjustment, an eidolon, a light cone or the lineup of that game
 **Then:** accepted without a stage check; the game stays closed and confirmed, the series is recomputed (an edit that ties the game or undoes the series result is rejected). A Moderator gets "This game is closed."; after finalization nothing is editable. Details and the staff close (`close_game`): `docs/match-results/contract.md` "Game Confirmation, Close and Series Submission".
 
+### Staff Correct a Tournament Bracket (Phase S8c execution, A24(3), A25)
+**Given:** an InProgress tournament; a bracket match Decided for team A whose next match is not yet Decided; the caller is the organizer, a Moderator+, or an assistant with `canResolveResults`
+**When:** the caller calls `resolve_bracket_match(bracketMatchId, B, reason)`, or `rollback_bracket_match(bracketMatchId, reason)`
+**Then:** resolve: the result is rolled back and re-applied for B (decidedBy Staff, 0-0); rollback: the match returns to Ready. Both are refused while a downstream match is Decided ("roll that back first") and for a caller without `results`. `admin_set_bracket_winner` no longer exists. Details: `docs/brackets/contract.md` S8c-12 to S8c-14.
+
 ## Edge Cases
 
 | Case | Expected Behavior | Notes |
@@ -374,3 +379,4 @@ _Superseded in Phase S6 execution (DECISIONS.md A57, A58): the scheduled reducer
 | Abuse controls: `admin_update_abuse_config`, `admin_set_guest_lobby_creation`, `admin_acknowledge_alert`, scheduled `run_abuse_breaker`; scenarios "Abuse Config Update", "Guest Lobby Kill Switch", "Circuit Breaker Trips", "Acknowledge Alert" added | Phase S5 execution (DECISIONS.md A42, A43) | 2026-11-06 |
 | "Circuit Breaker Trips" restated for the inline breaker: evaluated in `create_lobby` on the 51st guest creation inside the window (default 50 in 10 minutes), the crossing creation succeeds and trips the switch in the same transaction, one alert per trip | Phase S6 execution (DECISIONS.md A57, A58) | 2026-11-06 |
 | Admin edits of a closed game and the staff close listed as admin tools; scenario "Admin Corrects a Closed Game" added | Phase S7b execution (DECISIONS.md A60) | 2026-11-07 |
+| `admin_set_bracket_winner` removed; scenario "Staff Correct a Tournament Bracket" (`resolve_bracket_match` / `rollback_bracket_match`) added | Phase S8c execution (DECISIONS.md A23, A24(3), A25) | 2026-11-07 |

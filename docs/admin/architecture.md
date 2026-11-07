@@ -4,7 +4,7 @@ Last updated: 2026-11-06
 
 ## Overview
 
-The admin feature covers privileged server operations: server identity bootstrapping, user management, ban enforcement, and generic row deletion/bulk upsert for game data tables. Trusted server identities gate all `server_*` reducers: the **Owner** (the publisher, registered by `init`) and the **Delegates** the owner registers with `server_register_delegate` (the bootstrap / auth-function token). Admin match tools (`admin_force_finalize`, `admin_void_match`, `admin_set_bracket_winner`) provide override capabilities for stuck or disputed matches.
+The admin feature covers privileged server operations: server identity bootstrapping, user management, ban enforcement, and generic row deletion/bulk upsert for game data tables. Trusted server identities gate all `server_*` reducers: the **Owner** (the publisher, registered by `init`) and the **Delegates** the owner registers with `server_register_delegate` (the bootstrap / auth-function token). Admin match tools (`admin_force_finalize`, `admin_void_match`) provide override capabilities for stuck or disputed matches; for tournament bracket matches the staff tools are `resolve_bracket_match` and `rollback_bracket_match` (`results` permission, Phase S8c execution, see below).
 
 The SYSTEM user (`username='SYSTEM'`, id from autoInc, usually 1) is created by `init` and serves as the audit trail identity for bootstrap and server-initiated operations. Owner and delegates are linked to it through `UserIdentity`.
 
@@ -129,12 +129,8 @@ BanRecord (id: u32 autoInc PK)  [PRIVATE -- public: false]
 3. Find `MatchResultRecord` -- reject if `mmrProcessedAt` set (D-56)
 4. Call `hardDeleteLobby(ctx, lobbyId)` -- erases match result and lobby without finalization
 
-### admin_set_bracket_winner(bracketMatchId, winnerTeamId)
-1. `getAuthenticatedUser(ctx)` -- Moderator+ or tournament organizer/assistant
-2. Find bracket match -- reject if not found
-3. Reject if bracket match already has `winnerTeamId` set (D-54)
-4. Validate `winnerTeamId` is team1Id or team2Id on the bracket match
-5. Call `advanceBracketMatch(ctx, bracketMatchId, winnerTeamId, userId)`
+### Bracket corrections: resolve_bracket_match / rollback_bracket_match (Phase S8c execution, A24(3), A25, D.8.3)
+`admin_set_bracket_winner` was removed (A23). Staff correct a tournament bracket with `resolve_bracket_match(bracketMatchId, winnerTeamId, reason)` (a Ready match is decided for the team, decidedBy Staff; a Decided match with another winner is rolled back, then decided) and `rollback_bracket_match(bracketMatchId, reason)` (a Decided match returns to Ready). Both need the tournament `results` permission (organizer, Moderator+, or an assistant with `canResolveResults`), an InProgress tournament, and refuse while a downstream match is Decided. They go through the single writer (`helpers/bracketResults.ts`); the parked record / lobby side (D.8.3) is S8d's. Reference: [brackets/architecture.md](../brackets/architecture.md) "Phase S8c execution".
 
 ### run_user_deletion(job) -- scheduled
 1. Scheduled reducer, fires 5 seconds after `UserDeletionJob` inserted
@@ -233,6 +229,7 @@ Previous behavior matched on `(characterName, gameMode)` only, silently overwrit
 | Breaker inline in `create_lobby` on the private `AbuseCounter` fixed window (default 50 in 10 minutes); the S5 scheduled breaker reducer, its job table and its `init` seed deleted; `init` seeds the system lobby preset; `server_nuke_test_data` clears `AbuseCounter` and re-seeds the system preset | Phase S6 execution (DECISIONS.md A57, A58, A33a) | 2026-11-06 |
 | Staff close (`close_game`) and Admin edits of a closed game (role Admin, record Pending or Submitted, current game) as admin tools; cross-reference to match-results "Game package" | Phase S7b execution (DECISIONS.md A60) | 2026-11-07 |
 | Staff close restated for A63: `close_game` is the submit (captains once both are ready, staff at any time); only staff decide a tie | Phase S7b follow-up (DECISIONS.md A63) | 2026-11-07 |
+| `admin_set_bracket_winner` removed; `resolve_bracket_match` / `rollback_bracket_match` (`results`) are the staff bracket tools | Phase S8c execution (DECISIONS.md A23, A24(3), A25) | 2026-11-07 |
 
 ---
 

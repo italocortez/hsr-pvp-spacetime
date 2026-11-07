@@ -281,6 +281,8 @@ Match results manage the full lifecycle of determining a match outcome: per-game
 ---
 
 ### admin_set_bracket_winner
+> **Superseded (Phase S8c execution):** removed (A23); staff use `resolve_bracket_match` / `rollback_bracket_match` (`results`), see docs/brackets/architecture.md "Phase S8c execution".
+
 
 **Purpose:** Directly set a bracket match winner and advance the bracket. Used post-finalization for bracket fixes. Per D-54.
 

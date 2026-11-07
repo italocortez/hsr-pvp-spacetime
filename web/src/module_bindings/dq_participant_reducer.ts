@@ -14,4 +14,5 @@ export default {
   tournamentId: __t.u32(),
   userId: __t.u32(),
   reason: __t.string(),
+  dqWholeTeam: __t.option(__t.bool()),
 };
