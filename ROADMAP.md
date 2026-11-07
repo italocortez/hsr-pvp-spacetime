@@ -6,6 +6,8 @@ Each executed step writes its log to `docs/log/<date>-<step>.md` (goal, decision
 
 **Hard user gates** (never proceed without the user): every `spacetime publish`; the test1 wipe (S11); the first prod publish (S13); every Vercel deploy, previews included; every `git push`; any dependency not already pinned; any deviation from a decision.
 
+**Roles (user rule 2026-11-07):** sub-agents that write code run on Opus, reviewers run on Fable, for every remaining step; the orchestrator is Fable. Earlier rows and decision texts that name other roles are superseded by this line.
+
 | Step | What | Depends on | Status |
 |---|---|---|---|
 | M0 | Import `471a481`, npm-workspace layout, `.gitignore`, CLAUDE.md, skills, DECISIONS.md, `design/` (local only since A53), `data/seed/` | — | done 2026-11-06 (`docs/log/2026-11-06-m0.md`) |
