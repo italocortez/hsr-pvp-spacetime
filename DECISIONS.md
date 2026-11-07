@@ -632,3 +632,16 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** user confirmation 2026-11-07 of the implemented reading of BACKLOG-ISSUES "reject a pair that exists in either order": the rejection is about duplicates inside a key, the re-submit of a key is an edit.
 - **Supersedes:** the literal "reject" wording of that backlog item for the re-submit case.
 - **Where implemented:** S6 / S7 (already in place); no code change
+
+### A63 — Game submission is an explicit click after both captains are ready
+
+- **Date:** 2026-11-07 · **Status:** decided
+- **Decision:**
+  1. `confirm_game(lobbyId, teamSide)` only sets that side's ready flag (`MatchResultGame.blueConfirmed` / `redConfirmed`). It never closes a game, tie or not. Callers: the captain of that side (a referee who is that captain confirms as the captain). Preconditions as in A60(3): the side's lineup arranged, both sides' group scores complete, the Auction pool gate for that team; a side cannot confirm twice; every edit of the game clears both flags (A60(2)).
+  2. `close_game(lobbyId, winnerOverride?, winnerOverrideReason?)` is the **submit** of a game. Once both flags are set, the captain of either team or a lobby referee may call it (the UI shows a "submit result" button to those people at that moment). Without both flags only the A60(4) staff set may call it (lobby referee, Moderator+, tournament organizer or an assistant with `canResolveResults`): that is the staff close. A level-4 tie closes only with `winnerOverride`, from the staff set only (a captain cannot decide a tie); A39's seating rule applies as in A60(4).
+  3. The close of the deciding game still submits the series automatically (A60(6)); there is no further series-level click.
+  4. The full-control spectator referee's shortcut (one confirmation setting both flags) is removed: the referee closes the game directly. `MatchResultRecord.refereeFullControl` stays as a column (set at `start_draft`) for the views; no reducer reads it any more.
+  5. The `ConfirmGame` step keeps its payload: a confirmation logs `closed: false` with `confirmedSide` = the side; a close logs `closed: true`, `actorSlot` / `confirmedSide` = the closer's team side (a captain) or `Spectator` (staff), plus the override fields when used.
+- **Why:** user decision 2026-11-07, on seeing the S7b implementation: an action called "confirm" must not close a game by itself, and the referee must not have two different ways to end a game; two ready flags plus one explicit submit is the model the UI shows (the old `confirm_match_scores` + `submit_match_result` shape, now per game). The server already has both captains' signatures, so the click adds no information, but it makes the moment of closing deliberate.
+- **Supersedes:** A60(3) "the second confirmation closes the game" and "a spectator referee with `refereeFullControl` closes a game alone (both sides at once)"; the design log's rejected alternative "keeping a referee click for the series submission" is partly reinstated (the click is per game and belongs to either captain or the referee, not to the referee alone). A60(4), (6) and the rest of A60 are unchanged.
+- **Where implemented:** S7b follow-up commit (Opus implements, Opus adjusts the T-S7b tests, Fable reviews)
