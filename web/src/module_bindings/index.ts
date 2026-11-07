@@ -36,6 +36,7 @@ import {
 // Import all reducer arg schemas
 import AcceptTeamRequestReducer from "./accept_team_request_reducer";
 import AddAchievementCriteriaReducer from "./add_achievement_criteria_reducer";
+import AdminAcknowledgeAlertReducer from "./admin_acknowledge_alert_reducer";
 import AdminAssignCharacterArchetypesReducer from "./admin_assign_character_archetypes_reducer";
 import AdminBanUserReducer from "./admin_ban_user_reducer";
 import AdminBatchRemoveCharactersReducer from "./admin_batch_remove_characters_reducer";
@@ -53,7 +54,9 @@ import AdminRemoveCharacterArchetypesReducer from "./admin_remove_character_arch
 import AdminSeedEloConfigReducer from "./admin_seed_elo_config_reducer";
 import AdminSeedRatingConfigReducer from "./admin_seed_rating_config_reducer";
 import AdminSetBracketWinnerReducer from "./admin_set_bracket_winner_reducer";
+import AdminSetGuestLobbyCreationReducer from "./admin_set_guest_lobby_creation_reducer";
 import AdminUnbanUserReducer from "./admin_unban_user_reducer";
+import AdminUpdateAbuseConfigReducer from "./admin_update_abuse_config_reducer";
 import AdminUpdateEloConfigReducer from "./admin_update_elo_config_reducer";
 import AdminUpdateHsrAccountReducer from "./admin_update_hsr_account_reducer";
 import AdminUpdateRatingConfigReducer from "./admin_update_rating_config_reducer";
@@ -838,6 +841,7 @@ const tablesSchema = __schema({
 const reducersSchema = __reducers(
   __reducerSchema("accept_team_request", AcceptTeamRequestReducer),
   __reducerSchema("add_achievement_criteria", AddAchievementCriteriaReducer),
+  __reducerSchema("admin_acknowledge_alert", AdminAcknowledgeAlertReducer),
   __reducerSchema("admin_assign_character_archetypes", AdminAssignCharacterArchetypesReducer),
   __reducerSchema("admin_ban_user", AdminBanUserReducer),
   __reducerSchema("admin_batch_remove_characters", AdminBatchRemoveCharactersReducer),
@@ -855,7 +859,9 @@ const reducersSchema = __reducers(
   __reducerSchema("admin_seed_elo_config", AdminSeedEloConfigReducer),
   __reducerSchema("admin_seed_rating_config", AdminSeedRatingConfigReducer),
   __reducerSchema("admin_set_bracket_winner", AdminSetBracketWinnerReducer),
+  __reducerSchema("admin_set_guest_lobby_creation", AdminSetGuestLobbyCreationReducer),
   __reducerSchema("admin_unban_user", AdminUnbanUserReducer),
+  __reducerSchema("admin_update_abuse_config", AdminUpdateAbuseConfigReducer),
   __reducerSchema("admin_update_elo_config", AdminUpdateEloConfigReducer),
   __reducerSchema("admin_update_hsr_account", AdminUpdateHsrAccountReducer),
   __reducerSchema("admin_update_rating_config", AdminUpdateRatingConfigReducer),

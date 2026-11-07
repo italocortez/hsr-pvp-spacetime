@@ -552,9 +552,14 @@ export const server_nuke_test_data = spacetimedb.reducer({
 
     // ── Bracket (group_phase_record dropped in S3, A23)
     ctx.db.BracketMatch.clear();
-    // S5/S7/S8: also clear the remaining S3 tables (LinkRequest, MatchResultGroupScore, MatchResultAdjustment,
-    // MatchLineup, TournamentFinalizeJob, UserRateState, AdminAlert) once their writers exist; AbuseConfig is
-    // seeded by init and must survive the nuke.
+    // S7/S8: also clear the remaining S3 tables (LinkRequest, MatchResultGroupScore, MatchResultAdjustment,
+    // MatchLineup, TournamentFinalizeJob) once their writers exist.
+
+    // ── Abuse controls (A42, B-7): rate windows and alerts. AbuseConfig is seeded by init and survives the nuke,
+    // and so does the AbuseBreakerJob chain (like IdentityGcJob / LobbyGcJob): clearing it would stop the breaker
+    // on the test database until the next wipe.
+    ctx.db.UserRateState.clear();
+    ctx.db.AdminAlert.clear();
 
     // ── Tournaments (children first)
     ctx.db.TournamentStandIn.clear();

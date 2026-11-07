@@ -3,6 +3,7 @@ import { t, SenderError } from 'spacetimedb/server';
 import { DraftMode, BanMode, GameMode, MatchType, RosterVisibility, DisconnectPolicy } from '../types/enums';
 import { getAuthenticatedUser, isRoleAtLeast } from '../helpers/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
+import { readAbuseConfig } from '../helpers/abuseControls';
 
 // ─── Shared permission check for preset edit/delete ──────────────────────────
 // Per D-31b permission hierarchy:
@@ -95,6 +96,12 @@ export const create_lobby_preset = spacetimedb.reducer(
         // D-31b: TournamentHost+ can create presets
         if (!isRoleAtLeast(user.role, 'TournamentHost')) {
             throw new SenderError('Only Tournament Hosts, Moderators, and Admins can create lobby presets.');
+        }
+
+        // B-7: per-user preset cap, AbuseConfig.maxPresetsPerUser (D-B5: 10).
+        const maxPresets = readAbuseConfig(ctx).maxPresetsPerUser;
+        if ([...ctx.db.LobbyPreset.creator_user_id.filter(user.id)].length >= maxPresets) {
+            throw new SenderError(`Preset limit reached: you can own at most ${maxPresets} lobby presets. Delete one first.`);
         }
 
         // Validate name length: 1–50 characters

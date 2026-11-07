@@ -38,6 +38,7 @@ BanRecord (id: u32 autoInc PK)  [PRIVATE -- public: false]
 2. If `ServerIdentity` is empty: insert `ctx.sender` as `kind=Owner`, `label='owner'`
 3. Create SYSTEM user: `username="SYSTEM"`, role=Admin, id from autoInc (audit actor `SYSTEM_USER_ID=0`)
 4. Insert `UserIdentity` linking the owner identity -> SYSTEM user.id
+5. Abuse controls (Phase S5 execution, D-B5 / A42), on every init, each only when absent: `AbuseConfig` id 1 with the defaults (`seedAbuseConfigDefaults`, SYSTEM actor) and the first `AbuseBreakerJob` row 5 minutes out (`seedAbuseBreakerJob`)
 
 ### server_register_delegate(identityHex, label) / server_revoke_delegate(identityHex)
 1. `requireOwner(ctx)` -- only the Owner row may manage delegates
@@ -141,6 +142,16 @@ BanRecord (id: u32 autoInc PK)  [PRIVATE -- public: false]
    - If user has history references: soft-delete (set username='deleted_\<id\>', clear discordId, preserve displayName)
    - If guest with no history references: hard-delete User row
 
+### Abuse controls (reducers/abuse.ts, helpers/abuseControls.ts; Phase S5 execution, DECISIONS.md A42, A43)
+Tables: `AbuseConfig` (private singleton id 1, tunables + `maintenanceMode` + `guestLobbyCreationEnabled`), `UserRateState` (private, one row per user: chat and lobby-create windows), `AdminAlert` (**public**, counts only, no user ids, audit columns always SYSTEM), `AbuseBreakerJob` (private scheduled table, `scheduledId` + `scheduledAt`, no audit columns).
+Defaults (D-B5): cursor 50 ms, chat 700 ms / 30 per minute, lineup 250 ms (no decided value; applied by `arrange_lineup` in S7), 10 lobby creates per hour, 10 presets, 5 cost sets, maintenance off, guest creation on, breaker 20 lobbies in 10 minutes.
+- `admin_update_abuse_config(...every column optional)`: `ensureAdmin`; omitted fields keep their value; at least one field required; `cursorMinIntervalMs`, `chatMinIntervalMs`, `lineupMinIntervalMs`, `guestLobbyBurstWindowMinutes` must be > 0 (a 0 would switch the guard off); `updateWithAudit` with the admin's id. Readers pick the change up on their next call.
+- `admin_set_guest_lobby_creation(enabled)`: `ensureAdmin`; flips `guestLobbyCreationEnabled` (the admin-panel button; also re-enables after a breaker trip).
+- `admin_acknowledge_alert(alertId)`: `ensureAdmin`; "Alert N not found." when absent; no-op when already acknowledged; sets `isAcknowledged=true`, `acknowledgedAt=now` with **SYSTEM** audit columns (public row, no user ids); the admin's id goes only to the module log.
+- `run_abuse_breaker(arg: AbuseBreakerJob)` -- scheduled via `onSchedule`, every 5 minutes: inserts the next job first (F14), then returns if the switch is already off (no duplicate alert). Otherwise counts lobbies whose `createdDate` is inside the last `guestLobbyBurstWindowMinutes` and whose host `User.isGuest`; when the count exceeds `guestLobbyBurstThreshold` it sets `guestLobbyCreationEnabled=false` (SYSTEM actor) and inserts one `AdminAlert { kind: 'guest_lobby_burst', windowStartAt, windowEndAt, count, threshold, isAcknowledged: false }`. Cost per run: one `Lobby` scan (no `createdDate` index; the table holds live lobbies only) + one `User.id.find` per lobby inside the window. Absent from client bindings (scheduled reducer).
+- Cleanup: `performUserDeletion` deletes the user's `UserRateState` row; `server_nuke_test_data` clears `UserRateState` and `AdminAlert` and keeps `AbuseConfig` and the `AbuseBreakerJob` chain (like the GC job chains).
+- Not here: `view_admin_abuse_config` (S9), the GitHub Actions notifier that reads `AdminAlert` (S13 companion).
+
 ## Phase 15 -- Backend pre-work
 
 <!-- Phase 15 D-05, D-05a: Spine + positioning columns on hsr_character -->
@@ -212,6 +223,7 @@ Previous behavior matched on `(characterName, gameMode)` only, silently overwrit
 | admin_bulk_upsert: null-preserve partial-update wire convention across 5 cases; mergeForUpdate + validateEnumIfPresent helpers (D-08, D-10, D-12) | Phase 15 execution | 2026-04-13 |
 | Cost-table existence checks match on full composite tuple including costSetId; fixes silent default-set overwrite (D-09) | Phase 15 execution | 2026-04-13 |
 | `init` registers the Owner + SYSTEM user; owner-only `server_register_delegate` / `server_revoke_delegate`; `server_set_*` test utilities and `server_nuke_test_data` gated by `requireTestDatabase` | Phase M2 execution | 2026-11-06 |
+| Abuse controls: `init` seeds `AbuseConfig` + `AbuseBreakerJob`; `admin_update_abuse_config`, `admin_set_guest_lobby_creation`, `admin_acknowledge_alert`; scheduled `run_abuse_breaker` (5 min) trips the guest kill switch and writes one `AdminAlert`; `performUserDeletion` / `server_nuke_test_data` clean the new tables | Phase S5 execution (DECISIONS.md A42, A43) | 2026-11-06 |
 
 ---
 

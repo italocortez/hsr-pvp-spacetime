@@ -303,6 +303,26 @@ Admin and server operations handle privileged actions: server identity registrat
 **When:** `server_set_mmr(userId=5, gameMode="InvalidMode", rating=1500)`
 **Then:** Throws "Invalid gameMode \"InvalidMode\". Must be one of: MemoryOfChaos, ApocalypticShadow, AnomalyArbitration"
 
+### Abuse Config Update (Phase S5 execution, A43, D-B5)
+**Given:** `AbuseConfig.cursorMinIntervalMs = 50`; an Admin
+**When:** The Admin calls `admin_update_abuse_config({ cursorMinIntervalMs: 200 })`
+**Then:** Only that column changes (lastModifiedById = admin). The next `broadcast_cursor` calls are throttled at 200 ms. `admin_update_abuse_config({ chatMinIntervalMs: 0 })` is rejected: "chatMinIntervalMs must be greater than 0." A non-admin is rejected: "Forbidden: Requires Admin privileges."
+
+### Guest Lobby Kill Switch (Phase S5 execution, A42(1))
+**Given:** An Admin
+**When:** The Admin calls `admin_set_guest_lobby_creation(false)`, later `(true)`
+**Then:** `AbuseConfig.guestLobbyCreationEnabled` follows; while false, guest `create_lobby` calls are rejected (docs/lobby/contract.md "Guest Kill Switch").
+
+### Circuit Breaker Trips (Phase S5 execution, A42(2))
+**Given:** `guestLobbyBurstThreshold = 20`, `guestLobbyBurstWindowMinutes = 10`, the switch on; 21 lobbies hosted by guests were created in the last 10 minutes
+**When:** `run_abuse_breaker` fires
+**Then:** The next `AbuseBreakerJob` row is scheduled 5 minutes out; `guestLobbyCreationEnabled = false`; one `AdminAlert { kind: 'guest_lobby_burst', count: 21, threshold: 20, windowEndAt - windowStartAt = 10 min, isAcknowledged: false }` with SYSTEM audit columns and no user id. The next run inserts no second alert while the switch is off. With exactly 20 lobbies, or with lobbies older than the window, nothing trips.
+
+### Acknowledge Alert (Phase S5 execution, A42(3))
+**Given:** Unacknowledged `AdminAlert` #1
+**When:** An Admin calls `admin_acknowledge_alert(1)`
+**Then:** `isAcknowledged = true`, `acknowledgedAt = now`, `lastModifiedById = 0` (SYSTEM); the admin's id appears only in the module log. Unknown id: "Alert N not found."; a non-admin is rejected.
+
 ## Edge Cases
 
 | Case | Expected Behavior | Notes |
@@ -340,3 +360,4 @@ Admin and server operations handle privileged actions: server identity registrat
 | HsrCharacterCost+HsrLightconeCost upsert branches: delete+insert pattern retained; A2_FALLBACK_ITER (SpacetimeDB 2.1.0 enum-struct btree limitation) extends Phase 15.1 precedent | Phase 15.4 execution | 2026-04-15 |
 | HsrSynergyCost upsert uses `id.update()` (autoInc PK) — tuple match via iter()+predicate follows the Phase 15.4 reducer pattern | Phase 15.4 execution | 2026-04-15 |
 | `init` registers the Owner + SYSTEM user; `server_register_delegate` / `server_revoke_delegate` (owner-only); test-only `server_*` reducers default-deny unless module env `STDB_TARGET=test` | Phase M2 execution | 2026-11-06 |
+| Abuse controls: `admin_update_abuse_config`, `admin_set_guest_lobby_creation`, `admin_acknowledge_alert`, scheduled `run_abuse_breaker`; scenarios "Abuse Config Update", "Guest Lobby Kill Switch", "Circuit Breaker Trips", "Acknowledge Alert" added | Phase S5 execution (DECISIONS.md A42, A43) | 2026-11-06 |

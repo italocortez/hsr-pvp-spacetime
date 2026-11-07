@@ -56,6 +56,8 @@ export function performUserDeletion(ctx: any, userId: number, actorId: number): 
     for (const presence of [...ctx.db.UserPresence.user_id.filter(userId)]) {
         ctx.db.UserPresence.identity.delete(presence.identity);
     }
+    // B-7: the per-user abuse rate windows (UserRateState)
+    if (ctx.db.UserRateState.userId.find(userId)) ctx.db.UserRateState.userId.delete(userId);
     const identities = [...ctx.db.UserIdentity.user_id.filter(userId)];
     for (const ui of identities) {
         ctx.db.UserIdentity.identity.delete(ui.identity);

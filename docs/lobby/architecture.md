@@ -133,6 +133,10 @@ Lobby-owned reducers live in `reducers/lobbyLifecycle.ts`, `lobbySettings.ts`, `
 8. D-24 / D-27: insert host as `LobbyMember` with `lobbySlot=Spectator`, `isReferee=true`, `isConfirmed=false`, `isOnline=true`, `joinSeq=1` (R4, S4).
 9. D-02: if `!isPublic` and password provided, insert `LobbyPassword` row.
 
+Abuse guards (Phase S5 execution; DECISIONS.md A42, A43; ACCESS-SECURITY-OPS B-7), after step 5 and before the insert, values read from `AbuseConfig` (id 1) at call time:
+- A42(1) kill switch: a guest caller is rejected with "Guest lobby creation is temporarily disabled" while `guestLobbyCreationEnabled` is false. `join_lobby` has no such check, so guests already in lobbies are unaffected.
+- B-7 hourly cap (D-B5, guests included per A43): `consumeLobbyCreateAllowance` (`helpers/abuseControls.ts`) keeps a fixed one-hour window in `UserRateState` (`lobbyWindowStart`, `lobbyCreates`; row created on first use) and rejects once `lobbyCreatesPerHour` creates fell in the window. D-22 (one lobby at a time) is unchanged.
+
 ### join_lobby(lobbyId, joinCode, password)
 1. `getAuthenticatedUser(ctx)`.
 2. D-03: resolve lobby by `id` (if `lobbyId>0`) else by `joinCode`; throw "Lobby not found." if neither resolves.
@@ -208,6 +212,7 @@ Lobby-owned reducers live in `reducers/lobbyLifecycle.ts`, `lobbySettings.ts`, `
 2. D-31b permission: `create` requires TournamentHost+ (TO/Mod/Admin). `update`/`delete` use `ensureCanMutatePreset` -- system presets are Admin-only; non-system editable by Admin, the owner, or a Moderator whose target's creator is Moderator+/TournamentHost+.
 3. Validate `name` length 1-50; resolve `disconnectForfeitSeconds` (0 -> undefined).
 4. `create`: insert `LobbyPreset` (`isSystemPreset=false`, `creatorUserId=user.id`). `update`: `updateWithAudit` all config fields. `delete`: delete row.
+5. B-7 (Phase S5 execution): `create` counts the caller's presets on `creator_user_id` and rejects at `AbuseConfig.maxPresetsPerUser` (D-B5: 10). Guests never reach this check (TournamentHost+ guard, A43).
 
 ### transfer_referee(lobbyId, targetUserId) / reclaim_referee(lobbyId)
 - `transfer_referee`: caller must currently be referee (`isReferee=true`); reject self-target; delete+reinsert caller `isReferee=false` and target `isReferee=true`. No stage gate.
@@ -218,6 +223,11 @@ Lobby-owned reducers live in `reducers/lobbyLifecycle.ts`, `lobbySettings.ts`, `
 1. Map `ctx.sender` -> `UserIdentity`; silently return if unregistered. Look up caller's `LobbyMember`; silently return if not a member.
 2. D-34: silently return if caller's slot is Spectator (coaches hold Blue/Red slots, so they still broadcast).
 3. Insert `LobbyCursorEvent` (event table): `senderUserId = isAnonymousPlayers ? 0 : userId`, `anonymousLabel` set when anonymous, plus x/y/timestamp. No SenderErrors -- all failure modes are silent returns.
+
+B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3:
+- Bounds: silently return unless `0 <= x <= 1` and `0 <= y <= 1` (NaN fails the test too).
+- Throttle: silently return when `now - LobbyMember.lastCursorAt < AbuseConfig.cursorMinIntervalMs` (default 50 ms = 20 Hz).
+- Stamp: delete + reinsert the member row with `lastCursorAt = now` and the audit columns untouched (not a user edit). The event insert carries no audit columns (A19).
 
 ### run_lobby_gc / admin_gc_lobbies / seed_lobby_gc_job
 - `run_lobby_gc` (scheduled): `performLobbyGc` scans all lobbies -- D-48 skip AwaitingResult; D-16 casual Shelved hard-deleted after 72h idle (tournament Shelved persists); D-17/D-47 active stages skipped while any member is online, else idle check; D-49 Waiting/Finished hard-deleted after 30 min idle. D-14 writes a `GcResult` audit row if anything was deleted. Requeues itself +15 min.
@@ -285,6 +295,8 @@ Lobby-owned reducers live in `reducers/lobbyLifecycle.ts`, `lobbySettings.ts`, `
 | A22a / A48 / F5: `client_disconnected` only marks the member offline (`disconnectedAt` for Standard/Deferred) and schedules `RefereeTransferCheck` 15 s out, and only when the user has no other live `UserPresence` row; `run_referee_transfer_check` moves referee (A22(5) order by `joinSeq`, SYSTEM actor) / captain / host and auto-pauses for offline team players only; decision core in `shared/lobby-rules/refereeTransfer.ts` (tests `refereeTransfer.test.ts`, T-S4(a)) | Phase S4 execution (DECISIONS.md A22(5), A22a, A48) | 2026-11-06 |
 | F6: `leave_lobby` re-reads the Lobby row after `transferHost` before `performConcede` and the final update | Phase S4 execution (DECISIONS.md A22(2)) | 2026-11-06 |
 | F7: `claim_forfeit(lobbyId, forfeitingTeamSide)`: 0 derives the opposing team, 1 = Blue, 2 = Red; non-zero required for the exclusive referee; `isForfeitEligible` stays the gate | Phase S4 execution (DECISIONS.md A22(2)) | 2026-11-06 |
+| B-4: `broadcast_cursor` drops out-of-range x/y and calls inside `AbuseConfig.cursorMinIntervalMs` (per member, `LobbyMember.lastCursorAt`, no audit bump) | Phase S5 execution (DECISIONS.md A43, D-B5) | 2026-11-06 |
+| B-7 / A42: `create_lobby` rejects guests while `guestLobbyCreationEnabled` is off and caps every user (guests included) at `lobbyCreatesPerHour` through `UserRateState`; `create_lobby_preset` caps at `maxPresetsPerUser` | Phase S5 execution (DECISIONS.md A42, A43) | 2026-11-06 |
 | R4: `LobbyMember.joinSeq` assigned at insert (host = 1, then max + 1) in `create_lobby`, `join_lobby`, `create_tournament_lobby`; `LobbyMember` documented as private (S3, A37) | Phase S4 execution (DECISIONS.md A22(5), A37) | 2026-11-06 |
 
 ---

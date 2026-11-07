@@ -117,6 +117,7 @@ import { LobbyGcJob } from './tables/lobbyGcJob';
 import { IdentityGcJob } from './tables/identityGcJob';
 import { RefereeTransferCheck } from './tables/refereeTransferCheck';
 import { TournamentFinalizeJob } from './tables/tournamentFinalizeJob';
+import { AbuseBreakerJob } from './tables/abuseBreakerJob';
 
 // Abuse controls (S3; §B.5, A42)
 import { AbuseConfig } from './tables/abuseConfig';
@@ -245,6 +246,7 @@ const spacetimedb = schema({
     IdentityGcJob,
     RefereeTransferCheck,
     TournamentFinalizeJob,
+    AbuseBreakerJob,
 
     // Abuse controls
     AbuseConfig,

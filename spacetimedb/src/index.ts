@@ -5,6 +5,7 @@ import { insertWithAudit, updateWithAudit } from './helpers/auditHelpers';
 import { checkProviderBan } from './helpers/banHelper';
 import { handleDisconnectPoolUpdate } from './helpers/disconnectHelpers';
 import { hasLivePresence, markPresenceOnline } from './helpers/presenceHelpers';
+import { seedAbuseBreakerJob, seedAbuseConfigDefaults } from './helpers/abuseControls';
 import { ACTIVE_STAGES, type LobbyStage } from '@shared/lobby-rules';
 
 // A22a: the grace period between a user's last disconnect and the referee / captain / host transfer check.
@@ -111,6 +112,7 @@ export { run_lobby_gc, admin_gc_lobbies, seed_lobby_gc_job } from './reducers/lo
 export { run_identity_gc, admin_gc_identities, seed_identity_gc_job } from './reducers/identityGc';
 export { run_referee_transfer_check } from './reducers/refereeTransfer';
 export { run_tournament_finalize } from './reducers/tournamentFinalize';
+export { admin_update_abuse_config, admin_set_guest_lobby_creation, admin_acknowledge_alert, run_abuse_breaker } from './reducers/abuse';
 export { start_draft, pick_character, ban_character, timer_expiry_classic } from './reducers/draftClassic';
 export { undo_last_step, pause_draft, resume_draft } from './reducers/draftControl';
 export { nominate_character, place_bid, pass_bid, timer_expiry_auction } from './reducers/draftAuction';
@@ -161,9 +163,13 @@ export const init = spacetimedb.init((ctx) => {
     }, SYSTEM_USER_ID));
   }
 
-  // Arrive with their tables in later steps (idempotent, run on every init):
-  //   seedSystemLobbyPreset(ctx);   // S5 (A33a): system lobby preset owned by SYSTEM
-  //   seedAbuseConfigDefaults(ctx); // S6 (D-B5): abuse-config singleton defaults
+  // Abuse controls (D-B5 / A42): the AbuseConfig singleton with its defaults and the first circuit-breaker run,
+  // 5 minutes out. Both idempotent (inserted only when absent), SYSTEM actor.
+  seedAbuseConfigDefaults(ctx);
+  seedAbuseBreakerJob(ctx);
+
+  // Arrives with its table in a later step (idempotent, run on every init):
+  //   seedSystemLobbyPreset(ctx);   // S6 (A33a): system lobby preset owned by SYSTEM
 });
 
 export const client_connected = spacetimedb.clientConnected((ctx) => {
@@ -171,7 +177,7 @@ export const client_connected = spacetimedb.clientConnected((ctx) => {
 
   // B-8 (ACCESS-SECURITY-OPS §B.3 / §B.5): under maintenance mode only registered server identities may connect.
   // Throwing in this hook rejects the socket (skill how-to "Rejecting Client Connections"). The AbuseConfig
-  // singleton (id 1) is seeded in S5; while the row is absent this check is inert.
+  // singleton (id 1) is seeded by init; while the row is absent this check is inert.
   const abuseConfig = ctx.db.AbuseConfig.id.find(1);
   if (abuseConfig?.maintenanceMode && !ctx.db.ServerIdentity.identity.find(ctx.sender)) {
     throw new Error('Maintenance mode: connections are not accepted right now.');

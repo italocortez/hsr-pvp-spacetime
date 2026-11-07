@@ -10,6 +10,12 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
+export const AbuseBreakerJob = __t.object("AbuseBreakerJob", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+});
+export type AbuseBreakerJob = __Infer<typeof AbuseBreakerJob>;
+
 export const AbuseConfig = __t.object("AbuseConfig", {
   id: __t.u32(),
   cursorMinIntervalMs: __t.u32(),

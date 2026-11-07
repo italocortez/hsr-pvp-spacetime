@@ -4,6 +4,7 @@ import { getAuthenticatedUser, isRoleAtLeast } from '../helpers/ensurePermission
 import { ensureLobbyMember } from '../helpers/lobbyHelpers';
 import { computeAnonymousLabel } from '../helpers/anonymousLabels';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
+import { consumeChatAllowance } from '../helpers/abuseControls';
 
 // ---------------------------------------------------------------------------
 // send_chat_message
@@ -48,6 +49,15 @@ export const send_chat_message = spacetimedb.reducer({
         (a: any, b: any) =>
             Number(a.createdDate.microsSinceUnixEpoch - b.createdDate.microsSinceUnixEpoch)
     );
+
+    // B-4 (D-B5): minimum interval since the sender's newest message in this lobby + the fixed one-minute
+    // window in UserRateState, both read from AbuseConfig. Rejection rolls the whole call back.
+    let lastOwnMicros: bigint | undefined;
+    for (const m of messages) {
+        if (m.senderUserId === user.id) lastOwnMicros = m.createdDate.microsSinceUnixEpoch;
+    }
+    consumeChatAllowance(ctx, user.id, lastOwnMicros);
+
     if (messages.length >= 50) {
         ctx.db.ChatMessage.id.delete(messages[0].id);
     }

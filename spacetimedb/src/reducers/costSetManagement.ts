@@ -3,6 +3,7 @@ import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser, ensureTournamentHost, isRoleAtLeast } from '../helpers/ensurePermissions';
 import { auditInsert, auditUpdate } from '../helpers/auditColumns';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
+import { readAbuseConfig } from '../helpers/abuseControls';
 
 // Valid GameMode tags
 const VALID_GAME_MODE_TAGS = ['MemoryOfChaos', 'ApocalypticShadow', 'AnomalyArbitration'];
@@ -22,6 +23,12 @@ export const create_cost_set = spacetimedb.reducer(
     { name: t.string(), sourceSetId: t.u32(), gameModeTag: t.string() },
     (ctx, { name, sourceSetId, gameModeTag }) => {
         const user = ensureTournamentHost(ctx);
+
+        // B-7: per-user cost-set cap, AbuseConfig.maxCostSetsPerUser (D-B5: 5).
+        const maxCostSets = readAbuseConfig(ctx).maxCostSetsPerUser;
+        if ([...ctx.db.CostSet.creator_id.filter(user.id)].length >= maxCostSets) {
+            throw new SenderError(`Cost set limit reached: you can own at most ${maxCostSets} cost sets. Delete one first.`);
+        }
 
         const trimmedName = name.trim();
         if (trimmedName.length < 1 || trimmedName.length > 100) {

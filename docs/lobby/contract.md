@@ -1011,6 +1011,31 @@ The lobby system manages the lifecycle of match rooms where players assemble, co
 **When:** #10 calls `claim_forfeit(lobbyId, forfeitingTeamSide=0)`
 **Then:** Red (the opposing team) forfeits, trigger Disconnect. `isForfeitEligible` stays the gate for every value of `forfeitingTeamSide`.
 
+### Cursor Throttle (Phase S5 execution, B-4, A43)
+**Given:** Lobby #10 in Drafting; user #5 is a Blue player; `AbuseConfig.cursorMinIntervalMs = 50`
+**When:** User #5 calls `broadcast_cursor(10, 0.5, 0.5)` twice 20 ms apart, then again 60 ms later
+**Then:** Two `LobbyCursorEvent` rows are emitted (the first and the third call); the second call returns silently. `LobbyMember(10, 5).lastCursorAt` holds the third call's time; its audit columns are unchanged.
+
+### Cursor Out of Bounds (Phase S5 execution, B-4)
+**Given:** As above
+**When:** User #5 calls `broadcast_cursor` with x = 1.5, y = -0.1 or a NaN coordinate
+**Then:** No event, no error, `lastCursorAt` unchanged.
+
+### Lobby Creation Cap (Phase S5 execution, B-7, A43)
+**Given:** `AbuseConfig.lobbyCreatesPerHour = 10`; guest #7 created and closed 10 lobbies in the last hour
+**When:** Guest #7 calls `create_lobby`
+**Then:** Rejected: "Lobby creation limit reached: at most 10 lobbies per hour." After the hour the next create is accepted and opens a new window (`UserRateState.lobbyCreates = 1`).
+
+### Guest Kill Switch (Phase S5 execution, A42)
+**Given:** An admin called `admin_set_guest_lobby_creation(false)`; guest #7 is in no lobby; guest #8 is a member of lobby #10
+**When:** Guest #7 calls `create_lobby`; a Discord-linked user calls `create_lobby`; guest #8 keeps playing
+**Then:** Guest #7 is rejected: "Guest lobby creation is temporarily disabled". The linked user's lobby is created. Guest #8 and lobby #10 are unaffected (`join_lobby` is not gated). After `admin_set_guest_lobby_creation(true)` guest #7's create is accepted.
+
+### Preset Cap (Phase S5 execution, B-7)
+**Given:** `AbuseConfig.maxPresetsPerUser = 10`; TournamentHost #3 owns 10 presets
+**When:** #3 calls `create_lobby_preset`
+**Then:** Rejected: "Preset limit reached: you can own at most 10 lobby presets. Delete one first."
+
 ## Edge Cases
 
 | Case | Expected Behavior | Notes |
@@ -1045,6 +1070,8 @@ The lobby system manages the lifecycle of match rooms where players assemble, co
 | Disconnect under NoAction in an active stage (Phase S4 execution, A22a) | isOnline=false, disconnectedAt untouched, check scheduled (referee / captain / host may still move after 15 s); never a pause | `decideAutoPause` rejects NoAction |
 | Disconnect in BetweenGames or Shelved under Standard/Deferred (Phase S4 execution, A22a; S4 review #1) | isOnline=false, check scheduled (flags may move after 15 s), **no disconnectedAt**: the D-08 forfeit clock runs only in Drafting, Equipping, Scoring, so a shelved series never drains the pool or becomes forfeit-eligible on resume | `DISCONNECT_CLOCK_STAGES` in `index.ts` |
 | Member leaves or the lobby closes before the 15 s check fires (Phase S4 execution, A22a) | `run_referee_transfer_check` is a no-op | The scheduler consumes the row |
+| Guest already in a lobby when the kill switch goes off (Phase S5 execution, A42) | Stays; can still join other lobbies; only `create_lobby` is gated | `join_lobby` has no switch check |
+| `create_lobby` rejected for another reason (one-lobby rule, Ranked guest) (Phase S5 execution) | The hourly counter is not charged | The rejection rolls the transaction back |
 | Two disconnects of the same (lobby, user) without a reconnect between them (Phase S4 execution) | The stale pending check is replaced; one row per pair | Idempotent scheduling |
 
 ## Integration Points
@@ -1121,6 +1148,8 @@ The lobby system manages the lifecycle of match rooms where players assemble, co
 | F6: `leave_lobby` spreads the re-read Lobby row after `transferHost` | Phase S4 execution (DECISIONS.md A22(2)) | 2026-11-06 |
 | F7: `claim_forfeit(lobbyId, forfeitingTeamSide)`; the exclusive referee must name the team; section added to this contract | Phase S4 execution (DECISIONS.md A22(2)) | 2026-11-06 |
 | R4: `LobbyMember.joinSeq` assigned at insert (host = 1, then max + 1) | Phase S4 execution (DECISIONS.md A22(5), A37) | 2026-11-06 |
+| B-4: cursor bounds + per-member throttle (`cursorMinIntervalMs`); scenarios "Cursor Throttle", "Cursor Out of Bounds" added | Phase S5 execution (DECISIONS.md A43, D-B5) | 2026-11-06 |
+| B-7 / A42: `create_lobby` hourly cap (guests included), guest kill switch, preset cap; scenarios "Lobby Creation Cap", "Guest Kill Switch", "Preset Cap" and two edge cases added | Phase S5 execution (DECISIONS.md A42, A43) | 2026-11-06 |
 
 ---
 

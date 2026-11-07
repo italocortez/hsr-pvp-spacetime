@@ -172,6 +172,16 @@ Lobby chat provides ephemeral, per-lobby messaging for all lobby members. Messag
 **When:** Player A calls `send_chat_message(lobbyId, "hi", "")`
 **Then:** Message stored with metadata=`{"type":"text"}`.
 
+### Chat Too Fast (Phase S5 execution, B-4, D-B5)
+**Given:** `AbuseConfig.chatMinIntervalMs = 700`; user #5 sent a message in lobby #10 300 ms ago
+**When:** User #5 calls `send_chat_message(10, "x", "")`
+**Then:** Rejected: "You are sending messages too quickly. Please wait a moment." No row inserted. 400 ms later the same call is accepted.
+
+### Chat Per-Minute Cap (Phase S5 execution, B-4, D-B5)
+**Given:** `AbuseConfig.chatPerMinute = 30`; user #5 sent 30 messages, 700 ms apart, inside the current one-minute window
+**When:** User #5 sends a 31st message
+**Then:** Rejected: "Chat limit reached: at most 30 messages per minute." Once 60 s have passed since the window opened, the next message is accepted and opens a new window (`UserRateState.chatCount = 1`).
+
 ## Edge Cases
 
 | Case | Expected Behavior | Notes |
@@ -189,6 +199,9 @@ Lobby chat provides ephemeral, per-lobby messaging for all lobby members. Messag
 | Metadata that is not valid JSON | Rejected: invalid metadata JSON error | Parse failure caught |
 | System messages count toward rolling window | Yes, oldest (system or player) deleted at 50 | Uniform rolling window |
 | Lobby close cascade | All ChatMessage rows for lobby hard-deleted | Ephemeral; no history table |
+| Moderator or admin sends faster than the limit (Phase S5 execution) | Rejected like anyone else | This contract defines no exemption |
+| System messages and the interval check (Phase S5 execution) | Not counted: only the caller's own `senderType=Player` rows (system rows carry `senderUserId=0`) | A join message never blocks the first chat line |
+| Message rejected by the rate limit (Phase S5 execution) | Counters unchanged | The rejection rolls the transaction back |
 
 ## Integration Points
 
@@ -220,6 +233,7 @@ Lobby chat provides ephemeral, per-lobby messaging for all lobby members. Messag
 | Chat messages ephemeral, cascade-deleted on lobby close (CHAT-03) | Phase 9 execution | 2026-03-29 |
 | Client reads via view_my_lobby_chat, not raw ChatMessage table (D-92) | Phase 9 execution | 2026-03-29 |
 | Full hydration from codebase | Phase 13 normalization | 2026-04-09 |
+| Rate limit (`chatMinIntervalMs`, `chatPerMinute` from `AbuseConfig`, window in `UserRateState`); scenarios "Chat Too Fast", "Chat Per-Minute Cap" and three edge cases added | Phase S5 execution (DECISIONS.md A43, D-B5) | 2026-11-06 |
 
 ---
 

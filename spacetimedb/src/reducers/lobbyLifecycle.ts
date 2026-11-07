@@ -22,6 +22,7 @@ import { transferCaptain, transferReferee, transferHost } from '../helpers/flagT
 import { resolveUserLabel } from '../helpers/userLabel';
 import { isThirdPartyReferee } from '../helpers/disconnectHelpers';
 import { performConcede } from './concede';
+import { consumeLobbyCreateAllowance, readAbuseConfig } from '../helpers/abuseControls';
 
 // ─── create_lobby ─────────────────────────────────────────────────────────────
 // Creates a new lobby and inserts the creator as the host/referee.
@@ -91,6 +92,15 @@ export const create_lobby = spacetimedb.reducer(
 
         // D-23: guest restrictions
         ensureGuestRestrictions(user, args.matchType);
+
+        // A42(1) kill switch: guests cannot create while AbuseConfig.guestLobbyCreationEnabled is off;
+        // guests already in lobbies are unaffected (join_lobby has no such check).
+        if (user.isGuest && !readAbuseConfig(ctx).guestLobbyCreationEnabled) {
+            throw new SenderError('Guest lobby creation is temporarily disabled');
+        }
+
+        // B-7 (D-B5, A43): AbuseConfig.lobbyCreatesPerHour per user (guests included), UserRateState window.
+        consumeLobbyCreateAllowance(ctx, user.id);
 
         // D-23: force ClosedNoRating for guests
         let rosterVisibility = args.rosterVisibility;

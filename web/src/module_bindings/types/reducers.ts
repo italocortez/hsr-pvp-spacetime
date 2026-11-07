@@ -8,6 +8,7 @@ import { type Infer as __Infer } from "spacetimedb";
 // Import all reducer arg schemas
 import AcceptTeamRequestReducer from "../accept_team_request_reducer";
 import AddAchievementCriteriaReducer from "../add_achievement_criteria_reducer";
+import AdminAcknowledgeAlertReducer from "../admin_acknowledge_alert_reducer";
 import AdminAssignCharacterArchetypesReducer from "../admin_assign_character_archetypes_reducer";
 import AdminBanUserReducer from "../admin_ban_user_reducer";
 import AdminBatchRemoveCharactersReducer from "../admin_batch_remove_characters_reducer";
@@ -25,7 +26,9 @@ import AdminRemoveCharacterArchetypesReducer from "../admin_remove_character_arc
 import AdminSeedEloConfigReducer from "../admin_seed_elo_config_reducer";
 import AdminSeedRatingConfigReducer from "../admin_seed_rating_config_reducer";
 import AdminSetBracketWinnerReducer from "../admin_set_bracket_winner_reducer";
+import AdminSetGuestLobbyCreationReducer from "../admin_set_guest_lobby_creation_reducer";
 import AdminUnbanUserReducer from "../admin_unban_user_reducer";
+import AdminUpdateAbuseConfigReducer from "../admin_update_abuse_config_reducer";
 import AdminUpdateEloConfigReducer from "../admin_update_elo_config_reducer";
 import AdminUpdateHsrAccountReducer from "../admin_update_hsr_account_reducer";
 import AdminUpdateRatingConfigReducer from "../admin_update_rating_config_reducer";
@@ -163,6 +166,7 @@ import WithdrawFromTournamentReducer from "../withdraw_from_tournament_reducer";
 
 export type AcceptTeamRequestParams = __Infer<typeof AcceptTeamRequestReducer>;
 export type AddAchievementCriteriaParams = __Infer<typeof AddAchievementCriteriaReducer>;
+export type AdminAcknowledgeAlertParams = __Infer<typeof AdminAcknowledgeAlertReducer>;
 export type AdminAssignCharacterArchetypesParams = __Infer<typeof AdminAssignCharacterArchetypesReducer>;
 export type AdminBanUserParams = __Infer<typeof AdminBanUserReducer>;
 export type AdminBatchRemoveCharactersParams = __Infer<typeof AdminBatchRemoveCharactersReducer>;
@@ -180,7 +184,9 @@ export type AdminRemoveCharacterArchetypesParams = __Infer<typeof AdminRemoveCha
 export type AdminSeedEloConfigParams = __Infer<typeof AdminSeedEloConfigReducer>;
 export type AdminSeedRatingConfigParams = __Infer<typeof AdminSeedRatingConfigReducer>;
 export type AdminSetBracketWinnerParams = __Infer<typeof AdminSetBracketWinnerReducer>;
+export type AdminSetGuestLobbyCreationParams = __Infer<typeof AdminSetGuestLobbyCreationReducer>;
 export type AdminUnbanUserParams = __Infer<typeof AdminUnbanUserReducer>;
+export type AdminUpdateAbuseConfigParams = __Infer<typeof AdminUpdateAbuseConfigReducer>;
 export type AdminUpdateEloConfigParams = __Infer<typeof AdminUpdateEloConfigReducer>;
 export type AdminUpdateHsrAccountParams = __Infer<typeof AdminUpdateHsrAccountReducer>;
 export type AdminUpdateRatingConfigParams = __Infer<typeof AdminUpdateRatingConfigReducer>;

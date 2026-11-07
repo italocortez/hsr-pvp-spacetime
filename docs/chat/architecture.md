@@ -37,6 +37,10 @@ Lobby (id: u32 autoInc PK)
 6. Otherwise: write `senderUserId=userId`, `anonymousLabel=undefined`
 7. Insert `ChatMessage` row with `senderType=Player`
 
+Rate limit (Phase S5 execution; DECISIONS.md A43, D-B5; ACCESS-SECURITY-OPS B-4), before the rolling-window delete, values read from `AbuseConfig` at call time (`consumeChatAllowance`, `helpers/abuseControls.ts`):
+- Minimum interval: reject when the caller's newest `senderType=Player` message in this lobby is younger than `chatMinIntervalMs` (default 700 ms). A user is in one lobby at a time, so the lobby's messages (already loaded for the window) are the source; no extra column.
+- Per minute: a fixed one-minute window in `UserRateState` (`chatWindowStart`, `chatCount`; row created on first use); reject once `chatPerMinute` (default 30) messages fell in the window. No role is exempt.
+
 ### delete_chat_message(messageId)
 1. `getAuthenticatedUser(ctx)` -- resolve caller
 2. Find `ChatMessage` by id -- reject if not found
@@ -68,6 +72,7 @@ Inserted by: `join_lobby`, `leave_lobby`, `kick_member`, `ban_member`, `advance_
 | delete_chat_message added for host/referee/mod moderation (D-26) | Phase 09 execution | 2026-03-28 |
 | Reply to deleted message: backend stores dangling replyToMessageId; frontend handles gracefully (D-17) | Phase 09 CONTEXT.md | 2026-03-28 |
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
+| Chat rate limit: `chatMinIntervalMs` since the sender's last message + `chatPerMinute` fixed window in `UserRateState`, both from `AbuseConfig` | Phase S5 execution (DECISIONS.md A43, D-B5) | 2026-11-06 |
 
 ---
 

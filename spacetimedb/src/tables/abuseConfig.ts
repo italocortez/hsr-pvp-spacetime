@@ -3,8 +3,8 @@ import { table, t } from 'spacetimedb/server';
 /**
  * Runtime-tunable abuse thresholds (S3; ACCESS-SECURITY-OPS §B.5, A42). Singleton row id = 1, seeded in init
  * with the D-B5 defaults (cursor 50 ms = 20 Hz, chat 700 ms / 30 per minute, 10 lobby creates per hour,
- * 10 presets, 5 cost sets), edited by admin_update_abuse_config (S5), read through view_admin_abuse_config.
- * A42: guestLobbyCreationEnabled is the kill switch; the circuit breaker (scheduled, S5) trips it when more
+ * 10 presets, 5 cost sets), edited by admin_update_abuse_config (reducers/abuse.ts), read through view_admin_abuse_config.
+ * A42: guestLobbyCreationEnabled is the kill switch; the circuit breaker (scheduled run_abuse_breaker) trips it when more
  * than guestLobbyBurstThreshold guest lobbies were created in the last guestLobbyBurstWindowMinutes and writes
  * an AdminAlert row. B-8: maintenanceMode makes client_connected reject every non-server identity.
  */
