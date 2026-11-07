@@ -13,9 +13,7 @@ import {
 export default {
   tournamentId: __t.u32(),
   userId: __t.u32(),
-  canValidateResults: __t.bool(),
-  canOverrideResults: __t.bool(),
-  canDqParticipants: __t.bool(),
+  canManageParticipants: __t.bool(),
   canManageBracket: __t.bool(),
-  canAssignSeeds: __t.bool(),
+  canResolveResults: __t.bool(),
 };

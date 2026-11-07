@@ -82,6 +82,14 @@ const TOURNAMENT_ARGS = {
     scheduledStartAt: '',
     registrationDeadline: '',
     maxAccountsPerPlayer: 1,
+    // T-S8b: the A36 argument set (grandFinalBestOf carries the final's length, A28)
+    grandFinalBestOf: 3,
+    groupAdvanceCount: 2,
+    groupAssignmentMode: 'Auto',
+    checkInEnabled: false,
+    requireResultValidation: false,
+    allowMirrorPicks: false,
+    lineupFormat: 'Halves',
 };
 
 /** update_lobby_settings arguments mirroring the create defaults, with overrides. */
@@ -114,6 +122,17 @@ const updateTournamentArgs = (t: any, over: Record<string, unknown> = {}) => ({
     scheduledStartAt: '',
     registrationDeadline: '',
     maxAccountsPerPlayer: 1,
+    // T-S8b: the A36 update_tournament argument set
+    format: t.format.tag,
+    teamSize: t.teamSize,
+    maxParticipants: t.maxParticipants,
+    grandFinalBestOf: t.grandFinalBestOf,
+    groupAdvanceCount: t.groupAdvanceCount,
+    groupAssignmentMode: t.groupAssignmentMode.tag,
+    checkInEnabled: t.checkInEnabled,
+    requireResultValidation: t.requireResultValidation,
+    allowMirrorPicks: t.allowMirrorPicks,
+    lineupFormat: t.lineupFormat.tag,
     ...over,
 }) as any;
 
@@ -316,9 +335,9 @@ describe('A27 / backlog #7: bestOfNAdvantage', () => {
     it('a Bo1 final with winnerAdvantage 1 is rejected at tournament creation; Bo3 with 1 is accepted, 2 is not', () => {
         const test = newHarness();
         expectReject(test, 'internal', (ctx) =>
-            M.create_tournament(ctx, { ...TOURNAMENT_ARGS, defaultBestOf: 1, winnerAdvantage: 1 } as any), /winnerAdvantage must be less than/);
+            M.create_tournament(ctx, { ...TOURNAMENT_ARGS, defaultBestOf: 1, grandFinalBestOf: 1, winnerAdvantage: 1 } as any), /winnerAdvantage must be less than/);
         expectReject(test, 'internal', (ctx) =>
-            M.create_tournament(ctx, { ...TOURNAMENT_ARGS, defaultBestOf: 3, winnerAdvantage: 2 } as any), /winnerAdvantage must be less than/);
+            M.create_tournament(ctx, { ...TOURNAMENT_ARGS, defaultBestOf: 3, grandFinalBestOf: 3, winnerAdvantage: 2 } as any), /winnerAdvantage must be less than/);
         createTournament(test, { defaultBestOf: 3, winnerAdvantage: 1 });
         const t = tournaments(test)[0];
         expect(t.winnerAdvantage).toBe(1);

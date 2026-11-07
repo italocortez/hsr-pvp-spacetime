@@ -347,6 +347,8 @@ function linkTournament(test: Harness, s: Lobby, organizerId: number): number {
         costSetId: 0, defaultBestOf: 3, groupSize: 4, has3rdPlaceMatch: false, countTowardsMmr: false, winnerAdvantage: 0,
         requireOwnership: false, requireVerified: false, requireRoster: false, minimumMmr: 0, requireApproval: false,
         waitlistEnabled: false, scheduledStartAt: '', registrationDeadline: '', maxAccountsPerPlayer: 1,
+        grandFinalBestOf: 3, groupAdvanceCount: 2, groupAssignmentMode: 'Auto', checkInEnabled: false,
+        requireResultValidation: false, allowMirrorPicks: false, lineupFormat: 'Halves', // T-S8b: the A36 argument set
     } as any));
     const t = [...test.db.Tournament.iter()][0];
     test.db.Tournament.id.update({ ...t, organizerId });

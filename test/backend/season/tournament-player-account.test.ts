@@ -77,6 +77,14 @@ describe.skipIf(!hasServerToken())('TournamentPlayerAccount', () => {
       scheduledStartAt: '',
       registrationDeadline: '',
       maxAccountsPerPlayer: 1,
+      // S10: rewrite (S8b: the A36 create_tournament argument set, added compile-only with neutral defaults)
+      grandFinalBestOf: 3,
+      groupAdvanceCount: 2,
+      groupAssignmentMode: 'Auto',
+      checkInEnabled: false,
+      requireResultValidation: false,
+      allowMirrorPicks: false,
+      lineupFormat: 'Halves',
     });
     await host.sync(1000);
 
@@ -170,6 +178,14 @@ describe.skipIf(!hasServerToken())('TournamentPlayerAccount', () => {
       scheduledStartAt: '',
       registrationDeadline: '',
       maxAccountsPerPlayer: 1,
+      // S10: rewrite (S8b: the A36 create_tournament argument set, added compile-only with neutral defaults)
+      grandFinalBestOf: 3,
+      groupAdvanceCount: 2,
+      groupAssignmentMode: 'Auto',
+      checkInEnabled: false,
+      requireResultValidation: false,
+      allowMirrorPicks: false,
+      lineupFormat: 'Halves',
     });
     await host.sync(1000);
 

@@ -98,11 +98,10 @@ describe.skipIf(!hasServerToken())('Tournament Cancel & Cleanup', () => {
             await toUser.call.assignTournamentAssistant({
                 tournamentId,
                 userId: assistant.userId,
-                canValidateResults: true,
-                canOverrideResults: false,
-                canDqParticipants: false,
+                // S10: rewrite (S8b A25: the five assistant flags became canManageParticipants / canManageBracket / canResolveResults; mapped DQ→participants, bracket|seeds→bracket, validate|override→results)
+                canManageParticipants: false,
                 canManageBracket: false,
-                canAssignSeeds: false,
+                canResolveResults: true,
             });
             await toUser.sync(1500);
         }, 30000);
@@ -320,11 +319,10 @@ describe.skipIf(!hasServerToken())('Tournament Cancel & Cleanup', () => {
             await toUser.call.assignTournamentAssistant({
                 tournamentId,
                 userId: assistant.userId,
-                canValidateResults: true,
-                canOverrideResults: false,
-                canDqParticipants: false,
+                // S10: rewrite (S8b A25: the five assistant flags became canManageParticipants / canManageBracket / canResolveResults; mapped DQ→participants, bracket|seeds→bracket, validate|override→results)
+                canManageParticipants: false,
                 canManageBracket: false,
-                canAssignSeeds: false,
+                canResolveResults: true,
             });
             await toUser.sync(1500);
 
@@ -338,11 +336,10 @@ describe.skipIf(!hasServerToken())('Tournament Cancel & Cleanup', () => {
             await toUser.call.assignTournamentAssistant({
                 tournamentId,
                 userId: assistant.userId,
-                canValidateResults: false,
-                canOverrideResults: true,
-                canDqParticipants: true,
+                // S10: rewrite (S8b A25: the five assistant flags became canManageParticipants / canManageBracket / canResolveResults; mapped DQ→participants, bracket|seeds→bracket, validate|override→results)
+                canManageParticipants: true,
                 canManageBracket: true,
-                canAssignSeeds: true,
+                canResolveResults: true,
             });
             await toUser.sync(1500);
 

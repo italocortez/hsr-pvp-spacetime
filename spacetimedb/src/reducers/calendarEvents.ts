@@ -2,7 +2,7 @@
 // Manages calendar events: personal and tournament-linked.
 //
 // Permission model:
-//   - create: non-guest; tournament-linked events require ensureTournamentAccess (D-20)
+//   - create: non-guest; tournament-linked events require the bracket permission (D-20, A25)
 //   - update/delete/invite/remove_invite: organizer OR Admin (D-08)
 //
 // Caps (D-04, D-06):
@@ -17,7 +17,7 @@ import spacetimedb from '../schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { Timestamp } from 'spacetimedb';
 import { getAuthenticatedUser, isRoleAtLeast } from '../helpers/ensurePermissions';
-import { ensureTournamentAccess } from '../helpers/tournamentHelpers';
+import { ensureTournamentPermission } from '../helpers/tournamentPermissions';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { cleanupOldEvents } from '../helpers/calendarCleanup';
 import { deleteCalendarEventWithInvites } from '../helpers/calendarCascade';
@@ -66,7 +66,7 @@ export const create_calendar_event = spacetimedb.reducer(
             if (!bracketMatch) throw new SenderError('Bracket match not found.');
 
             // Verify TO/Admin/Mod/Assistant access for tournament-linked events (D-20)
-            ensureTournamentAccess(ctx, bracketMatch.tournamentId);
+            ensureTournamentPermission(ctx, bracketMatch.tournamentId, 'bracket');
 
             // Duplicate check (D-19): one event per bracket match
             const existingEvents = [...ctx.db.CalendarEvent.bracket_match_id.filter(bracketMatchId)];

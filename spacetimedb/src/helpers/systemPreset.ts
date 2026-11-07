@@ -1,3 +1,4 @@
+import { SenderError } from 'spacetimedb/server';
 import { SYSTEM_USER_ID } from './auditColumns';
 import { insertWithAudit } from './auditHelpers';
 
@@ -66,6 +67,20 @@ export const SYSTEM_PRESET_VALUES = {
 export function findSystemLobbyPreset(ctx: any): any {
     // creator_user_id index: SYSTEM_USER_ID owns only the system preset.
     return [...ctx.db.LobbyPreset.creator_user_id.filter(SYSTEM_USER_ID)].find((p: any) => p.isSystemPreset);
+}
+
+/**
+ * A33a (S8b): the preset a tournament may point at: the system preset or one the organizer owns. Returns the row.
+ * create_tournament and update_tournament call it when the argument names a preset; a preset deleted later is
+ * a dangling id that create_tournament_lobby resolves to the system preset (S8d).
+ */
+export function ensureTournamentPreset(ctx: any, presetId: number, organizerId: number): any {
+    const preset = ctx.db.LobbyPreset.id.find(presetId);
+    if (!preset) throw new SenderError('Lobby preset not found.');
+    if (!preset.isSystemPreset && preset.creatorUserId !== organizerId) {
+        throw new SenderError("The tournament can only use the system preset or one of the organizer's own presets.");
+    }
+    return preset;
 }
 
 /** Idempotent seed (init, and server_nuke_test_data after it clears LobbyPreset). Returns the row. */

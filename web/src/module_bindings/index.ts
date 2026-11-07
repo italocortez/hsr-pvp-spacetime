@@ -36,12 +36,15 @@ import {
 // Import all reducer arg schemas
 import AcceptTeamRequestReducer from "./accept_team_request_reducer";
 import AddAchievementCriteriaReducer from "./add_achievement_criteria_reducer";
+import AddParticipantReducer from "./add_participant_reducer";
+import AddTeamMemberReducer from "./add_team_member_reducer";
 import AdminAcknowledgeAlertReducer from "./admin_acknowledge_alert_reducer";
 import AdminAssignCharacterArchetypesReducer from "./admin_assign_character_archetypes_reducer";
 import AdminBanUserReducer from "./admin_ban_user_reducer";
 import AdminBatchRemoveCharactersReducer from "./admin_batch_remove_characters_reducer";
 import AdminBatchUpsertCharactersReducer from "./admin_batch_upsert_characters_reducer";
 import AdminBulkUpsertReducer from "./admin_bulk_upsert_reducer";
+import AdminCancelIdleTournamentsReducer from "./admin_cancel_idle_tournaments_reducer";
 import AdminCreateHsrAccountReducer from "./admin_create_hsr_account_reducer";
 import AdminDeleteArchetypeReducer from "./admin_delete_archetype_reducer";
 import AdminDeleteHsrAccountReducer from "./admin_delete_hsr_account_reducer";
@@ -71,6 +74,7 @@ import AdvanceTournamentStageReducer from "./advance_tournament_stage_reducer";
 import ApproveParticipantReducer from "./approve_participant_reducer";
 import ApproveStandInReducer from "./approve_stand_in_reducer";
 import ArrangeLineupReducer from "./arrange_lineup_reducer";
+import AssignTeamGroupReducer from "./assign_team_group_reducer";
 import AssignTournamentAssistantReducer from "./assign_tournament_assistant_reducer";
 import BanCharacterReducer from "./ban_character_reducer";
 import BanMemberReducer from "./ban_member_reducer";
@@ -80,6 +84,7 @@ import BroadcastCursorReducer from "./broadcast_cursor_reducer";
 import CancelTournamentReducer from "./cancel_tournament_reducer";
 import CheckInTournamentReducer from "./check_in_tournament_reducer";
 import ClaimForfeitReducer from "./claim_forfeit_reducer";
+import ClearTeamGroupsReducer from "./clear_team_groups_reducer";
 import CloseGameReducer from "./close_game_reducer";
 import CloseLobbyReducer from "./close_lobby_reducer";
 import ConcedeMatchReducer from "./concede_match_reducer";
@@ -137,10 +142,12 @@ import PublishCostSetReducer from "./publish_cost_set_reducer";
 import ReclaimRefereeReducer from "./reclaim_referee_reducer";
 import RecordGroupScoresReducer from "./record_group_scores_reducer";
 import RegisterForTournamentReducer from "./register_for_tournament_reducer";
+import RejectParticipantReducer from "./reject_participant_reducer";
 import RejectTeamRequestReducer from "./reject_team_request_reducer";
 import RemoveAchievementCriteriaReducer from "./remove_achievement_criteria_reducer";
 import RemoveInviteReducer from "./remove_invite_reducer";
 import RemoveTournamentAssistantReducer from "./remove_tournament_assistant_reducer";
+import RenameTournamentTeamReducer from "./rename_tournament_team_reducer";
 import RequestJoinTeamReducer from "./request_join_team_reducer";
 import RespondToInviteReducer from "./respond_to_invite_reducer";
 import ResumeDraftReducer from "./resume_draft_reducer";
@@ -163,6 +170,7 @@ import ServerSetOnlineReducer from "./server_set_online_reducer";
 import ServerSetRoleReducer from "./server_set_role_reducer";
 import SetActiveHsrAccountReducer from "./set_active_hsr_account_reducer";
 import SetActiveSeasonReducer from "./set_active_season_reducer";
+import SetAnonymousAliasReducer from "./set_anonymous_alias_reducer";
 import SetCaptainReducer from "./set_captain_reducer";
 import SetDisplayedAchievementReducer from "./set_displayed_achievement_reducer";
 import SetEidolonReducer from "./set_eidolon_reducer";
@@ -194,6 +202,7 @@ import UpdateTournamentReducer from "./update_tournament_reducer";
 import UpdateUsernameReducer from "./update_username_reducer";
 import WaitlistPromoteReducer from "./waitlist_promote_reducer";
 import WithdrawFromTournamentReducer from "./withdraw_from_tournament_reducer";
+import WithdrawTournamentTeamReducer from "./withdraw_tournament_team_reducer";
 
 // Import all procedure arg schemas
 
@@ -844,12 +853,15 @@ const tablesSchema = __schema({
 const reducersSchema = __reducers(
   __reducerSchema("accept_team_request", AcceptTeamRequestReducer),
   __reducerSchema("add_achievement_criteria", AddAchievementCriteriaReducer),
+  __reducerSchema("add_participant", AddParticipantReducer),
+  __reducerSchema("add_team_member", AddTeamMemberReducer),
   __reducerSchema("admin_acknowledge_alert", AdminAcknowledgeAlertReducer),
   __reducerSchema("admin_assign_character_archetypes", AdminAssignCharacterArchetypesReducer),
   __reducerSchema("admin_ban_user", AdminBanUserReducer),
   __reducerSchema("admin_batch_remove_characters", AdminBatchRemoveCharactersReducer),
   __reducerSchema("admin_batch_upsert_characters", AdminBatchUpsertCharactersReducer),
   __reducerSchema("admin_bulk_upsert", AdminBulkUpsertReducer),
+  __reducerSchema("admin_cancel_idle_tournaments", AdminCancelIdleTournamentsReducer),
   __reducerSchema("admin_create_hsr_account", AdminCreateHsrAccountReducer),
   __reducerSchema("admin_delete_archetype", AdminDeleteArchetypeReducer),
   __reducerSchema("admin_delete_hsr_account", AdminDeleteHsrAccountReducer),
@@ -879,6 +891,7 @@ const reducersSchema = __reducers(
   __reducerSchema("approve_participant", ApproveParticipantReducer),
   __reducerSchema("approve_stand_in", ApproveStandInReducer),
   __reducerSchema("arrange_lineup", ArrangeLineupReducer),
+  __reducerSchema("assign_team_group", AssignTeamGroupReducer),
   __reducerSchema("assign_tournament_assistant", AssignTournamentAssistantReducer),
   __reducerSchema("ban_character", BanCharacterReducer),
   __reducerSchema("ban_member", BanMemberReducer),
@@ -888,6 +901,7 @@ const reducersSchema = __reducers(
   __reducerSchema("cancel_tournament", CancelTournamentReducer),
   __reducerSchema("check_in_tournament", CheckInTournamentReducer),
   __reducerSchema("claim_forfeit", ClaimForfeitReducer),
+  __reducerSchema("clear_team_groups", ClearTeamGroupsReducer),
   __reducerSchema("close_game", CloseGameReducer),
   __reducerSchema("close_lobby", CloseLobbyReducer),
   __reducerSchema("concede_match", ConcedeMatchReducer),
@@ -945,10 +959,12 @@ const reducersSchema = __reducers(
   __reducerSchema("reclaim_referee", ReclaimRefereeReducer),
   __reducerSchema("record_group_scores", RecordGroupScoresReducer),
   __reducerSchema("register_for_tournament", RegisterForTournamentReducer),
+  __reducerSchema("reject_participant", RejectParticipantReducer),
   __reducerSchema("reject_team_request", RejectTeamRequestReducer),
   __reducerSchema("remove_achievement_criteria", RemoveAchievementCriteriaReducer),
   __reducerSchema("remove_invite", RemoveInviteReducer),
   __reducerSchema("remove_tournament_assistant", RemoveTournamentAssistantReducer),
+  __reducerSchema("rename_tournament_team", RenameTournamentTeamReducer),
   __reducerSchema("request_join_team", RequestJoinTeamReducer),
   __reducerSchema("respond_to_invite", RespondToInviteReducer),
   __reducerSchema("resume_draft", ResumeDraftReducer),
@@ -971,6 +987,7 @@ const reducersSchema = __reducers(
   __reducerSchema("server_set_role", ServerSetRoleReducer),
   __reducerSchema("set_active_hsr_account", SetActiveHsrAccountReducer),
   __reducerSchema("set_active_season", SetActiveSeasonReducer),
+  __reducerSchema("set_anonymous_alias", SetAnonymousAliasReducer),
   __reducerSchema("set_captain", SetCaptainReducer),
   __reducerSchema("set_displayed_achievement", SetDisplayedAchievementReducer),
   __reducerSchema("set_eidolon", SetEidolonReducer),
@@ -1002,6 +1019,7 @@ const reducersSchema = __reducers(
   __reducerSchema("update_username", UpdateUsernameReducer),
   __reducerSchema("waitlist_promote", WaitlistPromoteReducer),
   __reducerSchema("withdraw_from_tournament", WithdrawFromTournamentReducer),
+  __reducerSchema("withdraw_tournament_team", WithdrawTournamentTeamReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */

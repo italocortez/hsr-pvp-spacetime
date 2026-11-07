@@ -1,18 +1,32 @@
 import spacetimedb from '../schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { Timestamp } from 'spacetimedb';
-import { ensureTournamentHost } from '../helpers/ensurePermissions';
-import { ensureTournamentAccess, validateStageTransition, validateRegistrationToSeeding, validateSeedingToInProgress, cleanupTeamRequests, cascadeCleanupTournament, removeUncheckedInParticipants } from '../helpers/tournamentHelpers';
+import { allowsThirdPlace, canCloseRegistration, canOpenRegistration } from '@shared/bracket';
+import { ensureModerator, ensureTournamentHost } from '../helpers/ensurePermissions';
+import { ensureTournamentPermission } from '../helpers/tournamentPermissions';
+import {
+    activateTeams,
+    cancelTournament,
+    capacityCount,
+    closeRegistration,
+    enterSeeding,
+    ensureGuard,
+    isGroupFormat,
+    validateSeedingToInProgress,
+    validateStageTransition,
+} from '../helpers/tournamentHelpers';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { ensureBestOf, ensureWinnerAdvantage } from '../helpers/seriesSettings';
 import { ensureCostSetCovers, ensureCostSetUsable, ensureSelectableCostSet } from '../helpers/costSetGuards';
-import { seedSystemLobbyPreset } from '../helpers/systemPreset';
+import { ensureTournamentPreset, seedSystemLobbyPreset } from '../helpers/systemPreset';
 
 // Valid enum tag lists for runtime validation
 const VALID_TOURNAMENT_FORMATS = ['SingleElimination', 'DoubleElimination', 'GroupOnly', 'GroupIntoSingleElim', 'GroupIntoDoubleElim'];
 const VALID_GAME_MODES = ['MemoryOfChaos', 'ApocalypticShadow', 'AnomalyArbitration'];
 const VALID_ROSTER_VISIBILITIES = ['OpenRoster', 'ClosedWithRating', 'ClosedNoRating'];
 const VALID_DISCONNECT_POLICIES = ['Standard', 'Deferred', 'NoAction'];
+const VALID_GROUP_ASSIGNMENT_MODES = ['Auto', 'Manual'];
+const VALID_LINEUP_FORMATS = ['Halves', 'Thirds'];
 
 function validateEnumTag(value: string, validTags: string[], fieldName: string): void {
     if (!validTags.includes(value)) {
@@ -20,169 +34,188 @@ function validateEnumTag(value: string, validTags: string[], fieldName: string):
     }
 }
 
+const unit = (tag: string) => ({ tag, value: {} }) as any;
+
+/** The decided settings shared by create_tournament and update_tournament (A28, A29, A32, A33, A36). */
+interface SettingsArgs {
+    name: string;
+    description: string;
+    format: string;
+    teamSize: number;
+    rosterVisibility: string;
+    disconnectPolicy: string;
+    defaultBestOf: number;
+    grandFinalBestOf: number;
+    winnerAdvantage: number;
+    groupSize: number;
+    groupAdvanceCount: number;
+    groupAssignmentMode: string;
+    has3rdPlaceMatch: boolean;
+    lineupFormat: string;
+    maxAccountsPerPlayer: number;
+    scheduledStartAt: string;
+    registrationDeadline: string;
+}
+
+/**
+ * Validates the settings and returns the normalized name and timestamps. The pure bracket module throws plain
+ * `Error` on invalid sizes, so `groupSize` / `groupAdvanceCount` are checked here first (S8a review carry-over).
+ */
+function validateSettings(ctx: any, a: SettingsArgs) {
+    const trimmedName = a.name.trim();
+    if (trimmedName.length < 1 || trimmedName.length > 100) {
+        throw new SenderError('Tournament name must be 1-100 characters.');
+    }
+    if (a.description.length > 2000) {
+        throw new SenderError('Description cannot exceed 2000 characters.');
+    }
+    if (a.teamSize !== 1 && a.teamSize !== 2 && a.teamSize !== 3) {
+        throw new SenderError('teamSize must be 1, 2, or 3.');
+    }
+    validateEnumTag(a.format, VALID_TOURNAMENT_FORMATS, 'format');
+    validateEnumTag(a.rosterVisibility, VALID_ROSTER_VISIBILITIES, 'rosterVisibility');
+    validateEnumTag(a.disconnectPolicy, VALID_DISCONNECT_POLICIES, 'disconnectPolicy');
+    validateEnumTag(a.groupAssignmentMode, VALID_GROUP_ASSIGNMENT_MODES, 'groupAssignmentMode');
+    validateEnumTag(a.lineupFormat, VALID_LINEUP_FORMATS, 'lineupFormat');
+
+    // A28 / A38(2): both series lengths ∈ {1, 3}; A27 / CH-T9: winnerAdvantage < ceil(grandFinalBestOf / 2).
+    ensureBestOf(a.defaultBestOf);
+    ensureBestOf(a.grandFinalBestOf);
+    ensureWinnerAdvantage(a.winnerAdvantage, a.grandFinalBestOf);
+
+    // A29: a third-place match exists only in single elimination.
+    if (a.has3rdPlaceMatch && !allowsThirdPlace(unit(a.format))) {
+        throw new SenderError('A third-place match exists only in single elimination.');
+    }
+    // A32: groupSize is a minimum, at least 2 for the group formats. A36: groupAdvanceCount is 1 or 2.
+    if (isGroupFormat(a.format) && a.groupSize < 2) {
+        throw new SenderError('groupSize must be at least 2.');
+    }
+    if (a.groupAdvanceCount !== 1 && a.groupAdvanceCount !== 2) {
+        throw new SenderError('groupAdvanceCount must be 1 or 2.');
+    }
+    // Validate maxAccountsPerPlayer (0 = default 1)
+    if (a.maxAccountsPerPlayer > 10) {
+        throw new SenderError('maxAccountsPerPlayer must be 0-10.');
+    }
+
+    // Parse optional timestamps: non-empty string = BigInt microseconds since epoch
+    const parsedScheduledStartAt = a.scheduledStartAt ? BigInt(a.scheduledStartAt) : undefined;
+    const parsedRegistrationDeadline = a.registrationDeadline ? BigInt(a.registrationDeadline) : undefined;
+    const now = ctx.timestamp.microsSinceUnixEpoch;
+    if (parsedScheduledStartAt !== undefined && parsedScheduledStartAt <= now) {
+        throw new SenderError('scheduledStartAt must be in the future.');
+    }
+    if (parsedRegistrationDeadline !== undefined && parsedRegistrationDeadline <= now) {
+        throw new SenderError('registrationDeadline must be in the future.');
+    }
+    if (parsedScheduledStartAt !== undefined && parsedRegistrationDeadline !== undefined && parsedRegistrationDeadline >= parsedScheduledStartAt) {
+        throw new SenderError('registrationDeadline must be before scheduledStartAt.');
+    }
+    return {
+        trimmedName,
+        scheduledStartAt: parsedScheduledStartAt !== undefined ? new Timestamp(parsedScheduledStartAt) : undefined,
+        registrationDeadline: parsedRegistrationDeadline !== undefined ? new Timestamp(parsedRegistrationDeadline) : undefined,
+    };
+}
+
+// The settings arguments of create_tournament and update_tournament (the A33 integrity set and the bracket set).
+const settingsParams = {
+    name: t.string(),
+    description: t.string(),
+    format: t.string(),
+    teamSize: t.u8(),
+    maxParticipants: t.u32(),
+    rosterVisibility: t.string(),
+    isAnonymousDefault: t.bool(),
+    disconnectPolicy: t.string(),
+    disconnectForfeitSeconds: t.u32().optional(), // A36: one optional forfeit timer; 0 = none
+    costSetId: t.u32(),
+    defaultBestOf: t.u8(),                         // A28: {1, 3}
+    grandFinalBestOf: t.u8(),                      // A28: {1, 3}
+    winnerAdvantage: t.u8(),                       // A27: < ceil(grandFinalBestOf / 2)
+    groupSize: t.u8(),                             // A32: minimum group size, ≥ 2 for group formats
+    groupAdvanceCount: t.u8(),                     // A36: 1 or 2
+    groupAssignmentMode: t.string(),               // A36a: Auto | Manual
+    has3rdPlaceMatch: t.bool(),                    // A29: single elimination only
+    checkInEnabled: t.bool(),                      // A36 / A26: team-level check-in stage
+    requireResultValidation: t.bool(),             // A36: forced true when countTowardsMmr
+    requireOwnership: t.bool(),
+    allowMirrorPicks: t.bool(),                    // A33; Ranked forces false (D-42)
+    lineupFormat: t.string(),                      // A21 / A33
+    lobbyPresetId: t.u32().optional(),             // A33a: system preset by default; an own preset swaps it
+    requireVerified: t.bool(),
+    requireRoster: t.bool(),
+    minimumMmr: t.u32().optional(),                // A36b; 0 = none
+    requireApproval: t.bool(),
+    waitlistEnabled: t.bool(),
+    scheduledStartAt: t.string(),
+    registrationDeadline: t.string(),
+    maxAccountsPerPlayer: t.u8(),
+};
+
 // ─── create_tournament ────────────────────────────────────────────────────────
 // Creates a new tournament in Draft stage.
-// Permission: TournamentHost or higher.
+// Permission: TournamentHost or higher (D-B1).
 
 export const create_tournament = spacetimedb.reducer(
     {
-        name: t.string(),
-        description: t.string(),
-        format: t.string(),
-        teamSize: t.u8(),
+        ...settingsParams,
         defaultGameMode: t.string(),
-        maxParticipants: t.u32(),
-        rosterVisibility: t.string(),
-        isAnonymousDefault: t.bool(),
-        disconnectPolicy: t.string(),
-        costSetId: t.u32(),
-        defaultBestOf: t.u8(),
-        groupSize: t.u8(),
-        has3rdPlaceMatch: t.bool(),
-        // S8: the auto-advance argument was removed with its column (A24/A36); the create/update signatures
-        // gain the A33/A36 integrity-set arguments (lineupFormat, allowMirrorPicks, checkInEnabled, groupAdvanceCount,
-        // disconnectForfeitSeconds, requireResultValidation, grandFinalBestOf) in S8. lobbyPresetId: create_tournament points at
-        // the system preset and update_tournament takes an optional lobbyPresetId (A33a).
         countTowardsMmr: t.bool(),
-        winnerAdvantage: t.u8(),
-        requireOwnership: t.bool(),
-        requireVerified: t.bool(),
-        requireRoster: t.bool(),
-        minimumMmr: t.u32(),
-        requireApproval: t.bool(),
-        waitlistEnabled: t.bool(),
-        scheduledStartAt: t.string(),
-        registrationDeadline: t.string(),
-        maxAccountsPerPlayer: t.u8(),
     },
-    (ctx, {
-        name,
-        description,
-        format,
-        teamSize,
-        defaultGameMode,
-        maxParticipants,
-        rosterVisibility,
-        isAnonymousDefault,
-        disconnectPolicy,
-        costSetId,
-        defaultBestOf,
-        groupSize,
-        has3rdPlaceMatch,
-        countTowardsMmr,
-        winnerAdvantage,
-        requireOwnership,
-        requireVerified,
-        requireRoster,
-        minimumMmr,
-        requireApproval,
-        waitlistEnabled,
-        scheduledStartAt,
-        registrationDeadline,
-        maxAccountsPerPlayer,
-    }) => {
+    (ctx, args) => {
         const user = ensureTournamentHost(ctx);
+        const v = validateSettings(ctx, args);
+        validateEnumTag(args.defaultGameMode, VALID_GAME_MODES, 'defaultGameMode');
 
-        // Validate name
-        const trimmedName = name.trim();
-        if (trimmedName.length < 1 || trimmedName.length > 100) {
-            throw new SenderError('Tournament name must be 1-100 characters.');
-        }
-
-        // Validate description length
-        if (description.length > 2000) {
-            throw new SenderError('Description cannot exceed 2000 characters.');
-        }
-
-        // Validate teamSize
-        if (teamSize !== 1 && teamSize !== 2 && teamSize !== 3) {
-            throw new SenderError('teamSize must be 1, 2, or 3.');
-        }
-
-        // A28 / A38(2): bestOf ∈ {1, 3} (backlog #8). grandFinalBestOf = defaultBestOf until its own argument (A28).
-        ensureBestOf(defaultBestOf);
-        const grandFinalBestOf = defaultBestOf;
-
-        // A27 / review CH-T9: winnerAdvantage < ceil(grandFinalBestOf / 2)
-        ensureWinnerAdvantage(winnerAdvantage, grandFinalBestOf);
-
-        // Validate groupSize
-        if (groupSize < 3) {
-            throw new SenderError('groupSize must be at least 3.');
-        }
-
-        // Validate maxAccountsPerPlayer (0 = default 1)
-        if (maxAccountsPerPlayer > 10) {
-            throw new SenderError('maxAccountsPerPlayer must be 0-10.');
-        }
-
-        // Validate enum tags
-        validateEnumTag(format, VALID_TOURNAMENT_FORMATS, 'format');
-        validateEnumTag(defaultGameMode, VALID_GAME_MODES, 'defaultGameMode');
-        validateEnumTag(rosterVisibility, VALID_ROSTER_VISIBILITIES, 'rosterVisibility');
-        validateEnumTag(disconnectPolicy, VALID_DISCONNECT_POLICIES, 'disconnectPolicy');
-
-        // A33a: the tournament points at the built-in system preset (idempotent seed; init already created it).
-        const lobbyPreset = seedSystemLobbyPreset(ctx);
+        // A33a: the system preset by default (idempotent seed; init already created it), or one of the creator's own.
+        const lobbyPreset = args.lobbyPresetId === undefined
+            ? seedSystemLobbyPreset(ctx)
+            : ensureTournamentPreset(ctx, args.lobbyPresetId, user.id);
 
         // Backlog #2 (R2, D-D6): selectable and covering defaultGameMode × the preset's draft mode.
-        ensureCostSetUsable(ctx, costSetId, defaultGameMode, lobbyPreset.draftMode.tag);
-
-        // Parse optional timestamps: non-empty string = BigInt microseconds since epoch
-        const parsedScheduledStartAt = scheduledStartAt ? BigInt(scheduledStartAt) : undefined;
-        const parsedRegistrationDeadline = registrationDeadline ? BigInt(registrationDeadline) : undefined;
-
-        // Validate timestamps against server time
-        const now = ctx.timestamp.microsSinceUnixEpoch;
-        if (parsedScheduledStartAt !== undefined && parsedScheduledStartAt <= now) {
-            throw new SenderError('scheduledStartAt must be in the future.');
-        }
-        if (parsedRegistrationDeadline !== undefined && parsedRegistrationDeadline <= now) {
-            throw new SenderError('registrationDeadline must be in the future.');
-        }
-        if (parsedScheduledStartAt !== undefined && parsedRegistrationDeadline !== undefined && parsedRegistrationDeadline >= parsedScheduledStartAt) {
-            throw new SenderError('registrationDeadline must be before scheduledStartAt.');
-        }
+        ensureCostSetUsable(ctx, args.costSetId, args.defaultGameMode, lobbyPreset.draftMode.tag);
 
         ctx.db.Tournament.insert(insertWithAudit(ctx, {
             id: 0,
-            name: trimmedName,
-            description,
+            name: v.trimmedName,
+            description: args.description,
             organizerId: user.id,
-            format: { tag: format, value: {} } as any,
-            stage: { tag: 'Draft', value: {} } as any,
-            defaultGameMode: { tag: defaultGameMode, value: {} } as any,
-            maxParticipants,
-            teamSize,
-            isAnonymousDefault,
-            isAnonymousSpectators: isAnonymousDefault,
-            rosterVisibility: { tag: rosterVisibility, value: {} } as any,
-            disconnectPolicy: { tag: disconnectPolicy, value: {} } as any,
-            disconnectForfeitSeconds: undefined, // S8: create/update argument (A36)
-            checkInEnabled: false,               // S8: create/update argument (A36)
-            winnerAdvantage,
-            groupAssignmentMode: { tag: 'Auto', value: {} } as any,
-            groupAdvanceCount: 2,                // S8: create/update argument, 1 or 2 (A36)
-            costSetId,
+            format: unit(args.format),
+            stage: unit('Draft'),
+            defaultGameMode: unit(args.defaultGameMode),
+            maxParticipants: args.maxParticipants,
+            teamSize: args.teamSize,
+            isAnonymousDefault: args.isAnonymousDefault,
+            isAnonymousSpectators: args.isAnonymousDefault,
+            rosterVisibility: unit(args.rosterVisibility),
+            disconnectPolicy: unit(args.disconnectPolicy),
+            disconnectForfeitSeconds: args.disconnectForfeitSeconds ? args.disconnectForfeitSeconds : undefined,
+            checkInEnabled: args.checkInEnabled,
+            winnerAdvantage: args.winnerAdvantage,
+            groupAssignmentMode: unit(args.groupAssignmentMode),
+            groupAdvanceCount: args.groupAdvanceCount,
+            costSetId: args.costSetId,
             seasonId: 0,                         // A36: the active season, 0 for now
-            countTowardsMmr,
-            requireResultValidation: countTowardsMmr, // S8: argument, forced true when countTowardsMmr (A36)
-            defaultBestOf,
-            grandFinalBestOf,                    // S8: its own argument, {1,3}, with winnerAdvantage < ceil(grandFinalBestOf / 2) (A27/A28)
-            groupSize,
-            has3rdPlaceMatch,
-            requireOwnership,
-            allowMirrorPicks: !countTowardsMmr,  // S8: integrity-set argument (A33); Ranked forces false (D-42)
-            lineupFormat: { tag: 'Halves', value: {} } as any, // S8: integrity-set argument (A21/A33)
-            lobbyPresetId: lobbyPreset.id,       // A33a: the system preset; update_tournament may swap it
-            requireVerified,
-            requireRoster,
-            minimumMmr: minimumMmr > 0 ? minimumMmr : undefined,
-            requireApproval,
-            waitlistEnabled,
-            maxAccountsPerPlayer: maxAccountsPerPlayer > 0 ? maxAccountsPerPlayer : 1,
-            scheduledStartAt: parsedScheduledStartAt !== undefined ? new Timestamp(parsedScheduledStartAt) : undefined,
-            registrationDeadline: parsedRegistrationDeadline !== undefined ? new Timestamp(parsedRegistrationDeadline) : undefined,
+            countTowardsMmr: args.countTowardsMmr,
+            requireResultValidation: args.countTowardsMmr || args.requireResultValidation, // A36: forced when ranked
+            defaultBestOf: args.defaultBestOf,
+            grandFinalBestOf: args.grandFinalBestOf,
+            groupSize: args.groupSize,
+            has3rdPlaceMatch: args.has3rdPlaceMatch,
+            requireOwnership: args.requireOwnership,
+            allowMirrorPicks: args.countTowardsMmr ? false : args.allowMirrorPicks, // D-42: Ranked forces false
+            lineupFormat: unit(args.lineupFormat),
+            lobbyPresetId: lobbyPreset.id,
+            requireVerified: args.requireVerified,
+            requireRoster: args.requireRoster,
+            minimumMmr: args.minimumMmr ? args.minimumMmr : undefined,
+            requireApproval: args.requireApproval,
+            waitlistEnabled: args.waitlistEnabled,
+            maxAccountsPerPlayer: args.maxAccountsPerPlayer > 0 ? args.maxAccountsPerPlayer : 1,
+            scheduledStartAt: v.scheduledStartAt,
+            registrationDeadline: v.registrationDeadline,
             lastSeedChangeAt: undefined,
             bracketGeneratedAt: undefined,
             finalizationStartedAt: undefined,
@@ -192,155 +225,84 @@ export const create_tournament = spacetimedb.reducer(
 );
 
 // ─── update_tournament ────────────────────────────────────────────────────────
-// Updates tournament settings.
-// Only allowed in Draft or Registration stages.
+// Updates tournament settings. Permission: owner (A25).
+// format / teamSize change in Draft only; the rest until Seeding (Draft, Registration, CheckIn).
+// defaultGameMode and countTowardsMmr stay fixed after creation (unchanged).
 
 export const update_tournament = spacetimedb.reducer(
     {
         tournamentId: t.u32(),
-        name: t.string(),
-        description: t.string(),
-        rosterVisibility: t.string(),
-        isAnonymousDefault: t.bool(),
-        disconnectPolicy: t.string(),
-        costSetId: t.u32(),
-        defaultBestOf: t.u8(),
-        groupSize: t.u8(),
-        has3rdPlaceMatch: t.bool(),
-        winnerAdvantage: t.u8(),
-        requireOwnership: t.bool(),
-        requireVerified: t.bool(),
-        requireRoster: t.bool(),
-        minimumMmr: t.u32(),
-        requireApproval: t.bool(),
-        waitlistEnabled: t.bool(),
-        scheduledStartAt: t.string(),
-        registrationDeadline: t.string(),
-        maxAccountsPerPlayer: t.u8(),
-        // A33a: swap the lobby preset for one the organizer owns or the system preset (omitted = unchanged).
-        lobbyPresetId: t.u32().optional(),
+        ...settingsParams,
     },
-    (ctx, {
-        tournamentId,
-        name,
-        description,
-        rosterVisibility,
-        isAnonymousDefault,
-        disconnectPolicy,
-        costSetId,
-        defaultBestOf,
-        groupSize,
-        has3rdPlaceMatch,
-        winnerAdvantage,
-        requireOwnership,
-        requireVerified,
-        requireRoster,
-        minimumMmr,
-        requireApproval,
-        waitlistEnabled,
-        scheduledStartAt,
-        registrationDeadline,
-        maxAccountsPerPlayer,
-        lobbyPresetId,
-    }) => {
-        const { user, tournament } = ensureTournamentAccess(ctx, tournamentId);
+    (ctx, args) => {
+        const { user, tournament } = ensureTournamentPermission(ctx, args.tournamentId, 'owner');
+        const stage = tournament.stage.tag;
+        if (stage !== 'Draft' && stage !== 'Registration' && stage !== 'CheckIn') {
+            throw new SenderError('Tournament settings can only change before Seeding.');
+        }
+        if (stage !== 'Draft' && (args.format !== tournament.format.tag || args.teamSize !== tournament.teamSize)) {
+            throw new SenderError('Format and team size can only change in Draft.');
+        }
+        const v = validateSettings(ctx, args);
 
-        // Only allowed in Draft or Registration stages
-        if (tournament.stage.tag !== 'Draft' && tournament.stage.tag !== 'Registration') {
-            throw new SenderError('Tournament can only be updated in Draft or Registration stage.');
+        // maxParticipants never below the current capacity count (non-waitlisted, non-DQ; A26a).
+        const taken = capacityCount(ctx, tournament.id);
+        if (args.maxParticipants < taken) {
+            throw new SenderError(`maxParticipants cannot be below the ${taken} registered participant(s).`);
         }
 
-        // Validate name
-        const trimmedName = name.trim();
-        if (trimmedName.length < 1 || trimmedName.length > 100) {
-            throw new SenderError('Tournament name must be 1-100 characters.');
+        // A33a: preset swap while the tournament is editable (system preset or one of the organizer's own).
+        const nextPresetId = args.lobbyPresetId === undefined ? tournament.lobbyPresetId : args.lobbyPresetId;
+        if (args.lobbyPresetId !== undefined && args.lobbyPresetId !== tournament.lobbyPresetId) {
+            ensureTournamentPreset(ctx, args.lobbyPresetId, tournament.organizerId);
         }
-
-        // Validate description length
-        if (description.length > 2000) {
-            throw new SenderError('Description cannot exceed 2000 characters.');
-        }
-
-        // A28 / A38(2): bestOf ∈ {1, 3} (backlog #8); A27 / CH-T9 against the stored grandFinalBestOf.
-        ensureBestOf(defaultBestOf);
-        ensureWinnerAdvantage(winnerAdvantage, tournament.grandFinalBestOf);
-
-        // A33a: preset swap while the tournament is editable (this reducer already requires Draft or Registration).
-        const nextPresetId = lobbyPresetId === undefined ? tournament.lobbyPresetId : lobbyPresetId;
         const preset = ctx.db.LobbyPreset.id.find(nextPresetId);
-        if (lobbyPresetId !== undefined && lobbyPresetId !== tournament.lobbyPresetId) {
-            if (!preset) {
-                throw new SenderError('Lobby preset not found.');
-            }
-            if (!preset.isSystemPreset && preset.creatorUserId !== tournament.organizerId) {
-                throw new SenderError("The tournament can only use the system preset or one of the organizer's own presets.");
-            }
-        }
-
-        // Validate groupSize
-        if (groupSize < 3) {
-            throw new SenderError('groupSize must be at least 3.');
-        }
-
-        // Validate maxAccountsPerPlayer (0 = default 1)
-        if (maxAccountsPerPlayer > 10) {
-            throw new SenderError('maxAccountsPerPlayer must be 0-10.');
-        }
-
-        // Validate enum tags
-        validateEnumTag(rosterVisibility, VALID_ROSTER_VISIBILITIES, 'rosterVisibility');
-        validateEnumTag(disconnectPolicy, VALID_DISCONNECT_POLICIES, 'disconnectPolicy');
 
         // Backlog #2 (R2, D-D6): selectability when the set changes; coverage of defaultGameMode × the preset's
-        // draft mode (Classic when the pointed preset is gone; S8 falls back to the system preset the same way).
-        if (costSetId !== tournament.costSetId) ensureSelectableCostSet(ctx, costSetId);
-        ensureCostSetCovers(ctx, costSetId, tournament.defaultGameMode.tag, preset ? preset.draftMode.tag : 'Classic');
-
-        // Parse optional timestamps
-        const parsedScheduledStartAt = scheduledStartAt ? BigInt(scheduledStartAt) : undefined;
-        const parsedRegistrationDeadline = registrationDeadline ? BigInt(registrationDeadline) : undefined;
-
-        // Validate timestamps against server time
-        const now = ctx.timestamp.microsSinceUnixEpoch;
-        if (parsedScheduledStartAt !== undefined && parsedScheduledStartAt <= now) {
-            throw new SenderError('scheduledStartAt must be in the future.');
-        }
-        if (parsedRegistrationDeadline !== undefined && parsedRegistrationDeadline <= now) {
-            throw new SenderError('registrationDeadline must be in the future.');
-        }
-        if (parsedScheduledStartAt !== undefined && parsedRegistrationDeadline !== undefined && parsedRegistrationDeadline >= parsedScheduledStartAt) {
-            throw new SenderError('registrationDeadline must be before scheduledStartAt.');
-        }
+        // draft mode (Classic when the pointed preset is gone; S8d falls back to the system preset the same way).
+        if (args.costSetId !== tournament.costSetId) ensureSelectableCostSet(ctx, args.costSetId);
+        ensureCostSetCovers(ctx, args.costSetId, tournament.defaultGameMode.tag, preset ? preset.draftMode.tag : 'Classic');
 
         ctx.db.Tournament.id.update(updateWithAudit(ctx, tournament, {
-            name: trimmedName,
-            description,
-            rosterVisibility: { tag: rosterVisibility, value: {} } as any,
-            isAnonymousDefault,
-            isAnonymousSpectators: isAnonymousDefault,
-            disconnectPolicy: { tag: disconnectPolicy, value: {} } as any,
-            costSetId,
-            defaultBestOf,
-            groupSize,
-            has3rdPlaceMatch,
-            winnerAdvantage,
+            name: v.trimmedName,
+            description: args.description,
+            format: unit(args.format),
+            teamSize: args.teamSize,
+            maxParticipants: args.maxParticipants,
+            rosterVisibility: unit(args.rosterVisibility),
+            isAnonymousDefault: args.isAnonymousDefault,
+            isAnonymousSpectators: args.isAnonymousDefault,
+            disconnectPolicy: unit(args.disconnectPolicy),
+            disconnectForfeitSeconds: args.disconnectForfeitSeconds ? args.disconnectForfeitSeconds : undefined,
+            costSetId: args.costSetId,
+            defaultBestOf: args.defaultBestOf,
+            grandFinalBestOf: args.grandFinalBestOf,
+            winnerAdvantage: args.winnerAdvantage,
+            groupSize: args.groupSize,
+            groupAdvanceCount: args.groupAdvanceCount,
+            groupAssignmentMode: unit(args.groupAssignmentMode),
+            has3rdPlaceMatch: args.has3rdPlaceMatch,
+            checkInEnabled: args.checkInEnabled,
+            requireResultValidation: tournament.countTowardsMmr || args.requireResultValidation, // A36
+            requireOwnership: args.requireOwnership,
+            allowMirrorPicks: tournament.countTowardsMmr ? false : args.allowMirrorPicks,       // D-42
+            lineupFormat: unit(args.lineupFormat),
             lobbyPresetId: nextPresetId,
-            requireOwnership,
-            requireVerified,
-            requireRoster,
-            minimumMmr: minimumMmr > 0 ? minimumMmr : undefined,
-            requireApproval,
-            waitlistEnabled,
-            maxAccountsPerPlayer: maxAccountsPerPlayer > 0 ? maxAccountsPerPlayer : 1,
-            scheduledStartAt: parsedScheduledStartAt !== undefined ? new Timestamp(parsedScheduledStartAt) : undefined,
-            registrationDeadline: parsedRegistrationDeadline !== undefined ? new Timestamp(parsedRegistrationDeadline) : undefined,
+            requireVerified: args.requireVerified,
+            requireRoster: args.requireRoster,
+            minimumMmr: args.minimumMmr ? args.minimumMmr : undefined,
+            requireApproval: args.requireApproval,
+            waitlistEnabled: args.waitlistEnabled,
+            maxAccountsPerPlayer: args.maxAccountsPerPlayer > 0 ? args.maxAccountsPerPlayer : 1,
+            scheduledStartAt: v.scheduledStartAt,
+            registrationDeadline: v.registrationDeadline,
         }, user.id));
     }
 );
 
 // ─── advance_tournament_stage ─────────────────────────────────────────────────
-// Advances the tournament to the next stage (forward-only).
-// Uses validateStageTransition to enforce stage machine rules.
+// Review §5.1 stage machine. Permission: owner (A25), except Seeding → InProgress, which `bracket` may also do.
+// validateStageTransition (the allowed-transitions table) runs first, then the shared guards (S8a).
 
 export const advance_tournament_stage = spacetimedb.reducer(
     {
@@ -348,74 +310,113 @@ export const advance_tournament_stage = spacetimedb.reducer(
         nextStage: t.string(),
     },
     (ctx, { tournamentId, nextStage }) => {
-        const { user, tournament } = ensureTournamentAccess(ctx, tournamentId);
+        const found = ctx.db.Tournament.id.find(tournamentId);
+        if (!found) throw new SenderError('Tournament not found.');
+        const from = found.stage.tag as string;
+        const perm = from === 'Seeding' && nextStage === 'InProgress' ? 'bracket' : 'owner';
+        const { user, tournament } = ensureTournamentPermission(ctx, tournamentId, perm);
 
-        validateStageTransition(tournament.stage.tag, nextStage);
+        validateStageTransition(from, nextStage);
 
-        // D-37: Registration -> CheckIn (only if checkInEnabled)
-        // If checkInEnabled=false, Registration->CheckIn transition is rejected by validateStageTransition
-        // (CheckIn is in STAGE_ORDER only when enabled — validation handled in tournamentHelpers)
-
-        if (tournament.stage.tag === 'Registration' && nextStage === 'Seeding') {
-            validateRegistrationToSeeding(ctx, tournamentId);
-            cleanupTeamRequests(ctx, tournamentId);
+        // The one cancel path (A24(6)); finalization on Cancelled is S8d.
+        if (nextStage === 'Cancelled') {
+            cancelTournament(ctx, tournament, user.id);
+            return;
         }
 
-        // D-37: CheckIn -> Seeding: auto-remove participants who did not check in
-        if (tournament.stage.tag === 'CheckIn' && nextStage === 'Seeding') {
-            removeUncheckedInParticipants(ctx, tournamentId, user.id);
-            cleanupTeamRequests(ctx, tournamentId);
-        }
-
-        if (tournament.stage.tag === 'Seeding' && nextStage === 'InProgress') {
-            validateSeedingToInProgress(ctx, tournamentId);
-        }
-
-        // D-39: Seeding -> InProgress: bulk set Active status on all eligible enrolled
-        if (tournament.stage.tag === 'Seeding' && nextStage === 'InProgress') {
-            const allEnrolled = [...ctx.db.TournamentEnrolled.tournament_id.filter(tournamentId)];
-            for (const e of allEnrolled) {
-                // Set Active for Registered or CheckedIn (non-withdrawn, non-DQ, non-waitlisted)
-                if (
-                    (e.status.tag === 'Registered' || e.status.tag === 'CheckedIn') &&
-                    !e.isWaitlisted
-                ) {
-                    ctx.db.TournamentEnrolled.by_tournament_and_user.delete([tournamentId, e.userId]);
-                    ctx.db.TournamentEnrolled.insert(updateWithAudit(ctx, e, {
-                        status: { tag: 'Active', value: {} } as any,
-                    }, user.id));
+        if (from === 'Draft' && nextStage === 'Registration') {
+            // Review §5.1: canOpenRegistration (stage, A29), plus the ctx-bound checks.
+            ensureGuard(canOpenRegistration(tournament));
+            ensureSelectableCostSet(ctx, tournament.costSetId);         // R2
+            if (isGroupFormat(tournament.format.tag)) {
+                if (tournament.groupSize < 2) throw new SenderError('groupSize must be at least 2.');
+                if (tournament.groupAdvanceCount !== 1 && tournament.groupAdvanceCount !== 2) {
+                    throw new SenderError('groupAdvanceCount must be 1 or 2.');
                 }
             }
+            ensureBestOf(tournament.defaultBestOf);                     // A28
+            ensureBestOf(tournament.grandFinalBestOf);
+            ensureWinnerAdvantage(tournament.winnerAdvantage, tournament.grandFinalBestOf); // A27
+        }
+
+        // Registration closes (A26a): the transition out of Registration. To CheckIn: requests deleted, random
+        // teams formed (they check in like any team).
+        if (from === 'Registration' && nextStage === 'CheckIn') {
+            if (!tournament.checkInEnabled) {
+                throw new SenderError('Check-in is disabled for this tournament: move to Seeding.');
+            }
+            closeRegistration(ctx, tournament, user.id);
+        }
+
+        // Entering Seeding: from Registration (check-in off) all close effects at once; from CheckIn the unchecked
+        // teams are Withdrawn; then eligible teams Ready and at least two of them (canCloseRegistration).
+        if (nextStage === 'Seeding') {
+            const eligible = enterSeeding(ctx, tournament, user.id);
+            ensureGuard(canCloseRegistration(tournament, eligible));
+        }
+
+        if (from === 'Seeding' && nextStage === 'InProgress') {
+            validateSeedingToInProgress(ctx, tournament);
+            activateTeams(ctx, tournament, user.id);
         }
 
         ctx.db.Tournament.id.update(updateWithAudit(ctx, tournament, {
-            stage: { tag: nextStage, value: {} } as any,
+            stage: unit(nextStage),
         }, user.id));
 
-        // S8 (A24): Completed inserts a TournamentFinalizeJob { tournamentId, cursor: 0 } and sets
+        // S8d (A24): Completed inserts a TournamentFinalizeJob { tournamentId, cursor: 0 } and sets
         // finalizationStartedAt; the D-91 reveal is gone (A37: history is never public).
     }
 );
 
 // ─── cancel_tournament ────────────────────────────────────────────────────────
-// Cancels the tournament from any non-terminal state.
-// Uses validateStageTransition to block cancelling Completed/Cancelled.
+// Cancels the tournament from any non-terminal state. Permission: owner (A25).
 
 export const cancel_tournament = spacetimedb.reducer(
     {
         tournamentId: t.u32(),
     },
     (ctx, { tournamentId }) => {
-        const { user, tournament } = ensureTournamentAccess(ctx, tournamentId);
+        const { user, tournament } = ensureTournamentPermission(ctx, tournamentId, 'owner');
+        cancelTournament(ctx, tournament, user.id);
 
-        validateStageTransition(tournament.stage.tag, 'Cancelled');
-        cascadeCleanupTournament(ctx, tournamentId);
-
-        ctx.db.Tournament.id.update(updateWithAudit(ctx, tournament, {
-            stage: { tag: 'Cancelled', value: {} } as any,
-        }, user.id));
-
-        // S8 (A24(5)): Cancelled runs the same chunked finalization with stats counted and MMR skipped;
+        // S8d (A24(5)): Cancelled runs the same chunked finalization with stats counted and MMR skipped;
         // the D-91 reveal is gone (A37).
+    }
+);
+
+// ─── admin_cancel_idle_tournaments ────────────────────────────────────────────
+// A24(6): the admin-panel button for abandoned tournaments. Moderator+ only. Cancels every tournament in
+// Registration / CheckIn / Seeding / InProgress whose lastModifiedDate is older than `idleDays` days, through the
+// cancel_tournament path; for InProgress the newest BracketMatch.lastModifiedDate counts too, so a tournament that is
+// playing matches is never cancelled. Returns nothing; logs the count.
+
+const IDLE_STAGES = ['Registration', 'CheckIn', 'Seeding', 'InProgress'];
+const MICROS_PER_DAY = 86_400_000_000n;
+
+export const admin_cancel_idle_tournaments = spacetimedb.reducer(
+    {
+        idleDays: t.u8(),
+    },
+    (ctx, { idleDays }) => {
+        const moderator = ensureModerator(ctx);
+        if (idleDays < 1) throw new SenderError('idleDays must be at least 1.');
+        const cutoff = ctx.timestamp.microsSinceUnixEpoch - BigInt(idleDays) * MICROS_PER_DAY;
+        let cancelled = 0;
+        for (const stage of IDLE_STAGES) {
+            for (const tournament of [...ctx.db.Tournament.stage.filter(unit(stage))]) {
+                let last = tournament.lastModifiedDate.microsSinceUnixEpoch;
+                if (stage === 'InProgress') {
+                    for (const m of ctx.db.BracketMatch.tournament_id.filter(tournament.id)) {
+                        if (m.lastModifiedDate.microsSinceUnixEpoch > last) last = m.lastModifiedDate.microsSinceUnixEpoch;
+                    }
+                }
+                if (last < cutoff) {
+                    cancelTournament(ctx, tournament, moderator.id);
+                    cancelled++;
+                }
+            }
+        }
+        console.log(`[TOURNAMENT] admin_cancel_idle_tournaments(${idleDays}) by #${moderator.id}: ${cancelled} cancelled`);
     }
 );

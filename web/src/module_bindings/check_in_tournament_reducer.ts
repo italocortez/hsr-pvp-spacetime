@@ -12,4 +12,5 @@ import {
 
 export default {
   tournamentId: __t.u32(),
+  teamId: __t.option(__t.u32()),
 };

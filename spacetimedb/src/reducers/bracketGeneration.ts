@@ -1,6 +1,6 @@
 import spacetimedb from '../schema';
 import { t, SenderError } from 'spacetimedb/server';
-import { ensureTournamentAccess } from '../helpers/tournamentHelpers';
+import { ensureTournamentPermission } from '../helpers/tournamentPermissions';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import {
     type BracketMatchDescriptor,
@@ -125,7 +125,7 @@ function insertGroupStandingsStub(
 export const generate_bracket = spacetimedb.reducer(
     { tournamentId: t.u32() },
     (ctx, { tournamentId }) => {
-        const { user, tournament } = ensureTournamentAccess(ctx, tournamentId);
+        const { user, tournament } = ensureTournamentPermission(ctx, tournamentId, 'bracket');
 
         // Tournament must be in Seeding stage
         if (tournament.stage.tag !== 'Seeding') {
@@ -138,6 +138,7 @@ export const generate_bracket = spacetimedb.reducer(
         }
 
         // S8: clear TournamentTeam.groupId for this tournament (group_phase_record dropped, A23)
+        // S8c: withdraw still-Forming teams before generation (A26a)
 
         // Get all active teams for this tournament (teams with at least one TournamentTeamMember)
         const teams = [...ctx.db.TournamentTeam.tournament_id.filter(tournamentId)]
@@ -237,7 +238,7 @@ export const generate_bracket = spacetimedb.reducer(
 export const seed_bracket = spacetimedb.reducer(
     { tournamentId: t.u32(), mode: t.string() },
     (ctx, { tournamentId, mode }) => {
-        const { user, tournament } = ensureTournamentAccess(ctx, tournamentId);
+        const { user, tournament } = ensureTournamentPermission(ctx, tournamentId, 'bracket');
 
         // Tournament must be in Seeding stage
         if (tournament.stage.tag !== 'Seeding') {
@@ -306,7 +307,7 @@ export const seed_bracket = spacetimedb.reducer(
 export const swap_seeds = spacetimedb.reducer(
     { tournamentId: t.u32(), teamId1: t.u32(), teamId2: t.u32() },
     (ctx, { tournamentId, teamId1, teamId2 }) => {
-        const { user, tournament } = ensureTournamentAccess(ctx, tournamentId);
+        const { user, tournament } = ensureTournamentPermission(ctx, tournamentId, 'bracket');
 
         // Tournament must be in Seeding stage
         if (tournament.stage.tag !== 'Seeding') {

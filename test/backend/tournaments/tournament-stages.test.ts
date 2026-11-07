@@ -52,6 +52,14 @@ describe.skipIf(!hasServerToken())('Tournament Stages', () => {
       scheduledStartAt: '',
       registrationDeadline: '',
       maxAccountsPerPlayer: 1,
+      // S10: rewrite (S8b: the A36 create_tournament argument set, added compile-only with neutral defaults)
+      grandFinalBestOf: 3,
+      groupAdvanceCount: 2,
+      groupAssignmentMode: 'Auto',
+      checkInEnabled: false,
+      requireResultValidation: false,
+      allowMirrorPicks: false,
+      lineupFormat: 'Halves',
     });
     await host.sync();
 
@@ -213,6 +221,14 @@ describe.skipIf(!hasServerToken())('Tournament Stages', () => {
       scheduledStartAt: '',
       registrationDeadline: '',
       maxAccountsPerPlayer: 1,
+      // S10: rewrite (S8b: the A36 create_tournament argument set, added compile-only with neutral defaults)
+      grandFinalBestOf: 3,
+      groupAdvanceCount: 2,
+      groupAssignmentMode: 'Auto',
+      checkInEnabled: false,
+      requireResultValidation: false,
+      allowMirrorPicks: false,
+      lineupFormat: 'Halves',
     });
     await host.sync();
 
@@ -248,11 +264,10 @@ describe.skipIf(!hasServerToken())('Tournament Stages', () => {
     await host.call.assignTournamentAssistant({
       tournamentId: tid,
       userId: player2.userId,
-      canValidateResults: true,
-      canOverrideResults: false,
-      canDqParticipants: false,
+      // S10: rewrite (S8b A25: the five assistant flags became canManageParticipants / canManageBracket / canResolveResults; mapped DQ→participants, bracket|seeds→bracket, validate|override→results)
+      canManageParticipants: false,
       canManageBracket: false,
-      canAssignSeeds: false,
+      canResolveResults: true,
     });
     await host.sync();
 

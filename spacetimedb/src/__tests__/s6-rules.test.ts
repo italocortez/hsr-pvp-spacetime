@@ -95,6 +95,8 @@ describe('Backlog #2: cost-set selectability and coverage', () => {
             costSetId: empty, defaultBestOf: 1, groupSize: 4, has3rdPlaceMatch: false, countTowardsMmr: false,
             winnerAdvantage: 0, requireOwnership: false, requireVerified: false, requireRoster: false, minimumMmr: 0,
             requireApproval: false, waitlistEnabled: false, scheduledStartAt: '', registrationDeadline: '', maxAccountsPerPlayer: 1,
+            grandFinalBestOf: 3, groupAdvanceCount: 2, groupAssignmentMode: 'Auto', checkInEnabled: false,
+            requireResultValidation: false, allowMirrorPicks: false, lineupFormat: 'Halves', // T-S8b: the A36 argument set
         }), NO_COSTS);
     });
 

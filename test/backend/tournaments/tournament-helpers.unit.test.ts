@@ -2,8 +2,6 @@
  * Unit tests: Phase 10.1 tournament helper functions.
  *
  * - transferTournamentCaptain: deterministic captain handoff (D-21, D-22)
- * - validateRegistrationToSeeding: enrollment + team completeness checks
- * - removeUncheckedInParticipants: CheckIn→Seeding prune logic (D-37)
  *
  * Contract: docs/tournament/contract.md
  */
@@ -11,8 +9,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
     transferTournamentCaptain,
-    validateRegistrationToSeeding,
-    removeUncheckedInParticipants,
 } from '../../../spacetimedb/src/helpers/tournamentHelpers';
 
 // ── Mock helpers ─────────────────────────────────────────────────────────────
@@ -167,103 +163,6 @@ describe('transferTournamentCaptain', () => {
     });
 });
 
-// ── validateRegistrationToSeeding ────────────────────────────────────────────
-
-describe('validateRegistrationToSeeding', () => {
-    it('throws when fewer than 2 active enrolled participants', () => {
-        const ctx = mockCtx({
-            tournament: { id: 1, teamSize: 1 },
-            enrolled: [
-                { tournamentId: 1, userId: 1, status: { tag: 'Registered' }, isWaitlisted: false },
-            ],
-        });
-
-        expect(() => validateRegistrationToSeeding(ctx, 1)).toThrow(/at least 2 active/i);
-    });
-
-    it('throws for team tournament with fewer than 2 complete teams', () => {
-        const ctx = mockCtx({
-            tournament: { id: 1, teamSize: 2 },
-            enrolled: [
-                { tournamentId: 1, userId: 1, status: { tag: 'Registered' }, isWaitlisted: false },
-                { tournamentId: 1, userId: 2, status: { tag: 'Registered' }, isWaitlisted: false },
-                { tournamentId: 1, userId: 3, status: { tag: 'Registered' }, isWaitlisted: false },
-            ],
-            teams: [
-                { id: 1, tournamentId: 1, captainUserId: 1 },
-                { id: 2, tournamentId: 1, captainUserId: 3 },
-            ],
-            teamMembers: [
-                { teamId: 1, userId: 1, tournamentId: 1 },
-                { teamId: 1, userId: 2, tournamentId: 1 }, // team 1: 2 members (complete)
-                { teamId: 2, userId: 3, tournamentId: 1 },  // team 2: 1 member (incomplete)
-            ],
-        });
-
-        expect(() => validateRegistrationToSeeding(ctx, 1)).toThrow(/at least 2 complete teams/i);
-    });
-
-    it('passes for solo tournament with 2+ active enrolled', () => {
-        const ctx = mockCtx({
-            tournament: { id: 1, teamSize: 1 },
-            enrolled: [
-                { tournamentId: 1, userId: 1, status: { tag: 'Registered' }, isWaitlisted: false },
-                { tournamentId: 1, userId: 2, status: { tag: 'Registered' }, isWaitlisted: false },
-            ],
-        });
-
-        expect(() => validateRegistrationToSeeding(ctx, 1)).not.toThrow();
-    });
-});
-
-// ── removeUncheckedInParticipants ────────────────────────────────────────────
-
-describe('removeUncheckedInParticipants', () => {
-    it('keeps CheckedIn, removes Registered (D-37)', () => {
-        const ctx = mockCtx({
-            enrolled: [
-                { tournamentId: 1, userId: 10, status: { tag: 'CheckedIn' }, isWaitlisted: false },
-                { tournamentId: 1, userId: 20, status: { tag: 'Registered' }, isWaitlisted: false },
-                { tournamentId: 1, userId: 30, status: { tag: 'CheckedIn' }, isWaitlisted: false },
-            ],
-            teamMembers: [
-                { teamId: 1, userId: 20, tournamentId: 1 },
-            ],
-            teams: [
-                { id: 1, captainUserId: 20, tournamentId: 1 },
-            ],
-        });
-
-        removeUncheckedInParticipants(ctx, 1, 99);
-
-        // User 20 (Registered) should be removed
-        expect(ctx._enrolled.length).toBe(2);
-        expect(ctx._enrolled.find((e: any) => e.userId === 20)).toBeUndefined();
-        // Users 10 and 30 (CheckedIn) should remain
-        expect(ctx._enrolled.find((e: any) => e.userId === 10)).toBeDefined();
-        expect(ctx._enrolled.find((e: any) => e.userId === 30)).toBeDefined();
-    });
-
-    it('handles captain removal with transfer and team cleanup', () => {
-        const ctx = mockCtx({
-            enrolled: [
-                { tournamentId: 1, userId: 10, status: { tag: 'Registered' }, isWaitlisted: false },
-            ],
-            teamMembers: [
-                { teamId: 1, userId: 10, tournamentId: 1 },
-            ],
-            teams: [
-                { id: 1, captainUserId: 10, tournamentId: 1 },
-            ],
-        });
-
-        removeUncheckedInParticipants(ctx, 1, 99);
-
-        // Enrolled row removed
-        expect(ctx._enrolled.length).toBe(0);
-        // Team member removed
-        expect(ctx._teamMembers.length).toBe(0);
-        // Team destroyed (last member removed, transferTournamentCaptain returns false)
-        expect(ctx._deleted.some((d: any) => d.table === 'TournamentTeam' && d.item.id === 1)).toBe(true);
-    });
-});
+// T-S8b: the validateRegistrationToSeeding and removeUncheckedInParticipants blocks were deleted with the helpers
+// (S8b: closeRegistration + canCloseRegistration replace them, team-level check-in replaces the per-member prune).
+// The behaviour is covered in-memory by spacetimedb/src/__tests__/s8b-tournament-lifecycle.test.ts.

@@ -433,6 +433,66 @@ Note: TournamentEnrolled row does NOT contain hsrAccountId — that column was r
 **When:** A TournamentHost+ creates a tournament; later, in Draft or Registration, calls `update_tournament` with `lobbyPresetId` = a preset the organizer owns, then 9999, then the system preset id
 **Then:** The new tournament's `lobbyPresetId` is the system preset; the swap to the organizer's own preset is stored; 9999 is rejected ("Lobby preset not found."); a preset owned by someone else is rejected ("The tournament can only use the system preset or one of the organizer's own presets."); the system preset is accepted again. Outside Draft / Registration `update_tournament` is rejected as before. Omitting `lobbyPresetId` keeps the stored value. The cost set must be selectable and cover `defaultGameMode` × the preset's draft mode (docs/cost-sets/contract.md).
 
+### Permission Matrix (Phase S8b execution, A25)
+**Given:** A tournament with its organizer, a Moderator, and assistants each holding one of `canManageParticipants`, `canManageBracket`, `canResolveResults`
+**When:** Each calls `update_tournament`, `advance_tournament_stage`, `cancel_tournament`, `assign_tournament_assistant`; `approve_participant`, `waitlist_promote`, `add_participant`, `reject_participant`, `dq_participant`; `assign_team_group`, `advance_tournament_stage(Seeding → InProgress)`, `generate_bracket`; `rollback_bracket_match`, `override_match_result`
+**Then:** The organizer and the Moderator may call everything. An assistant may call only the reducers of its flag: participants → approvals, promotion, adding, rejecting, DQ, staff check-in; bracket → groups, seeding, generation, Seeding → InProgress; results → result reducers. Settings, other stage changes, cancel and assistant management are `owner` only: "Only the organizer or a Moderator can change this tournament's settings, stages or staff."; a missing flag answers "This action needs the <participants|bracket|results> permission."
+
+### Registration Closes: Random Teams, Forming Teams Kept (Phase S8b execution, A26, A26a, A36a)
+**Given:** A team tournament (teamSize 2, check-in off) in Registration with one full team, one team of one member, two teamless players who opted in (`allowRandomTeamAssignment`), one teamless player who did not, and a pending join request
+**When:** The organizer advances to Seeding
+**Then:** The request is deleted; the two opted-in players form "Team 1" (captain = the first member after a `ctx.random` shuffle) and it becomes Ready; the full team becomes Ready; the one-member team stays Forming with its member (A26a: staff may still promote, add or move players into it with `add_team_member` until the bracket is generated, when `generate_bracket` withdraws teams still Forming, S8c); the third teamless player stays enrolled without a team. With fewer than 2 eligible teams the advance is rejected ("At least 2 eligible teams are needed (n).") and nothing changes. From Registration with check-in on: "Check-in is enabled: move to CheckIn first." With check-in on, registration closes at Registration → CheckIn instead: the requests are deleted and the random teams are formed then, and those teams must check in like any other team.
+
+### Team-Level Check-In (Phase S8b execution, A26)
+**Given:** A tournament in CheckIn with teams A and B
+**When:** A's captain calls `check_in_tournament(tournamentId)`; A's other member calls it; A's captain calls it again; then the organizer advances to Seeding
+**Then:** Every member of A is CheckedIn; the non-captain is rejected ("Only the team captain can check the team in."); the repeat is rejected ("Team is already checked in."). At Seeding, B (not checked in) becomes Withdrawn with its members still enrolled; nobody is deleted. If the last member of a team withdraws during CheckIn, the team is kept and marked Withdrawn (TD-18); in Registration it is deleted. Staff with the participants permission may pass `teamId` to check a team in. Registration → CheckIn is rejected when `checkInEnabled` is false.
+
+### Staff Fill a Short Team (Phase S8b execution, A26a)
+**Given:** A team tournament (teamSize 2) in Seeding with two Ready teams, a Forming team of one member and a teamless approved player
+**When:** A captain calls `add_team_member(formingTeam, player)`; staff add the player to a Ready (full) team; staff with the participants permission add the player to the Forming team; after generation staff try again
+**Then:** The captain is rejected ("This action needs the participants permission."); the full team is rejected ("Team is already full."); the Forming team gets the player and becomes Ready; after generation: "Bracket generated; use stand-ins." A waitlisted player must be promoted first; a player on a team, awaiting approval or Disqualified is rejected.
+
+### Waitlist Promotion Window (Phase S8b execution, D.8.6, A26a(4))
+**Given:** A full tournament (`maxParticipants` 2, waitlist on) with one waitlisted player
+**When:** Staff call `waitlist_promote` while the tournament is full; a registered player withdraws; staff promote again; later the bracket is generated (`bracketGeneratedAt` set) and staff try to promote or add a player
+**Then:** The first promotion is rejected ("No free spot: the tournament is full."); after the withdrawal (the row is deleted, freeing the spot) the promotion succeeds, implies approval and creates the player's `TournamentPlayerAccount` locks; after generation both calls are rejected ("Bracket generated; use stand-ins."). Waitlisted players have no account locks before promotion. Capacity never counts waitlisted or Disqualified rows.
+
+### Minimum MMR (Phase S8b execution, A36b)
+**Given:** A tournament with `minimumMmr = 1200` on MemoryOfChaos, `EloConfig.initialRating = 1000`
+**When:** A guest registers; a verified player with no `MmrRating` row registers; the organizer lowers `minimumMmr` to 900 and the verified player registers again
+**Then:** The guest is rejected ("Guests cannot join a tournament with a minimum MMR.") even when `requireVerified` is off; the verified player is evaluated at 1000 and rejected ("This tournament needs an MMR of at least 1200 (yours: 1000)."); at 900 the registration succeeds. A player with a row is evaluated at their rating for the tournament's game mode and season.
+
+### Withdrawal and Re-Registration (Phase S8b execution, A26a)
+**Given:** A tournament in Registration
+**When:** A team captain withdraws; the player registers again; staff disqualify another player who then tries to register again; a player tries to withdraw in Seeding
+**Then:** The withdrawal deletes the enrolment, membership (captaincy to the lowest-userId member, the team deleted when empty), account locks, requests and calendar invites; re-registration succeeds. The disqualified player is rejected ("You were disqualified from this tournament.") and cannot withdraw. In Seeding: "Registration is closed; ask staff." A captain may pull the whole team with `withdraw_tournament_team` in Registration or CheckIn: the team becomes Withdrawn, its members stay enrolled.
+
+### Team Status Follows Eligibility (Phase S8b execution, A26)
+**Given:** A team tournament with `requireApproval`
+**When:** A captain's team reaches `teamSize` members, one of whom awaits approval; staff approve that member; a member leaves
+**Then:** The team stays Forming, becomes Ready on the approval, and returns to Forming when the member leaves. Participants never set the status; a team at `teamSize` rejects join requests ("Team is already full."); team edits (create, join, accept, reject, leave, disband) are Registration only; leaving or disbanding a solo team is rejected (withdraw instead).
+
+### Rename and Alias (Phase S8b execution, A36a)
+**Given:** An anonymous solo tournament and a team tournament, both in Registration
+**When:** A player registers in the solo tournament with `anonymousAlias = " Ghost "`; another calls `set_anonymous_alias("Shade")`; a captain renames their team to a name another team already uses (any case), then to a fresh one; a solo player calls `rename_tournament_team`
+**Then:** The solo teams are named "Ghost" and "Shade"; an anonymous solo player without an alias (or added by staff) gets a neutral "Player <n>" until they set one, never their display name (A37); a non-anonymous solo team is named after the display name; auto names that collide get " (2)", " (3)", … (also when an alias collides); the duplicate is rejected ("Another team in this tournament already uses that name."), the fresh name (1–40 characters, trimmed) is stored; the solo rename is rejected ("A solo team is named after its player."). Aliases are 1–32 characters, anonymous tournaments only, before Seeding; renames are allowed in Registration and CheckIn.
+
+### Manual Group Assignment (Phase S8b execution, A36a, A32)
+**Given:** A GroupOnly tournament with `groupSize = 2`, `groupAssignmentMode = Manual`, in Seeding with 4 Ready teams
+**When:** A bracket-permission assistant assigns a team to group 1, then to group 2, then calls `clear_team_groups`; the organizer tries the same with `groupAssignmentMode = Auto`
+**Then:** Group 1 is stored in `TournamentTeam.groupId` and `lastSeedChangeAt` is stamped; group 2 is rejected ("groupIndex must be below 2 …"); clearing unsets every `groupId`; in Auto mode both are rejected ("Group assignment is automatic for this tournament."). The size rules run at `generate_bracket` (S8c).
+
+### Idle Tournaments Cancelled by Moderators (Phase S8b execution, A24(6))
+**Given:** A tournament in Seeding last modified 2 days ago and another modified today
+**When:** A Moderator calls `admin_cancel_idle_tournaments(1)`; a non-Moderator calls it
+**Then:** The idle tournament is cancelled through the `cancel_tournament` path; the fresh one is untouched; an InProgress tournament whose newest bracket match changed within the window counts as active and is untouched; the non-Moderator is rejected. Draft, Completed and Cancelled tournaments are never touched.
+
+### Tournament Settings at Creation (Phase S8b execution, A28, A29, A32, A33, A36)
+**Given:** A TournamentHost+
+**When:** They create a tournament with `format = DoubleElimination`, `has3rdPlaceMatch = true`; with `grandFinalBestOf = 1`, `winnerAdvantage = 1`; with a group format and `groupSize = 1`; with `groupAdvanceCount = 3`; with `countTowardsMmr = true`, `requireResultValidation = false`, `allowMirrorPicks = true`
+**Then:** The first four are rejected (third place only in single elimination; the head-start rule against `grandFinalBestOf`; "groupSize must be at least 2."; "groupAdvanceCount must be 1 or 2."); the ranked one is stored with `requireResultValidation = true` and `allowMirrorPicks = false`. `update_tournament` takes the same set; format and team size change only in Draft, the rest until Seeding, and `maxParticipants` never below the registered count.
+
 ## Edge Cases
 
 | Case | Expected Behavior |
@@ -534,8 +594,13 @@ Note: TournamentEnrolled row does NOT contain hsrAccountId — that column was r
 | view_tournament_registrant_accounts new view: locked accounts per tournament respecting rosterVisibility | Phase 10.4 execution | 2026-04-04 |
 | Full hydration from codebase; Feature Overview and Reducers section added | Phase 13 normalization | 2026-04-09 |
 | Phase 12.3 execution | D-H-01 finalize_match_result ordering guard: tournament-controlled matches blocked until tournament reaches Completed or Cancelled (unconditional — applies to both MMR and casual tournaments); Tournament.requireOwnership column (bool, default false) gates per-pick character ownership checks | 2026-04-12 |
+| Permission matrix: ensureTournamentPermission owner / participants / bracket / results replaces the all-or-nothing assistant check | Phase S8b execution (DECISIONS.md A25) | 2026-11-07 |
+| Registration closes at the move to Seeding: requests deleted, unchecked-in teams Withdrawn, random teams for opted-in solos, eligible teams Ready, others stay Forming until generation (A26a); add_team_member for staff; team-level check-in replaces per-member check-in and the no-show prune | Phase S8b execution (DECISIONS.md A26, A26a, A36a) | 2026-11-07 |
+| Withdrawal deletes the enrolment (Registration / CheckIn only), Disqualified blocks re-registration, capacity excludes waitlisted and Disqualified rows, waitlist promotion until generation with locks at promotion, add_participant, reject_participant, withdraw_tournament_team | Phase S8b execution (DECISIONS.md A26a; ACCESS-SECURITY-OPS D.8.6) | 2026-11-07 |
+| Minimum MMR (guests rejected, row-less players at the initial rating); rename / alias; manual groups; idle-tournament cancel | Phase S8b execution (DECISIONS.md A36b, A36a, A24(6)) | 2026-11-07 |
+| create / update arguments: grandFinalBestOf, groupAdvanceCount, groupAssignmentMode, checkInEnabled, requireResultValidation, allowMirrorPicks, lineupFormat, disconnectForfeitSeconds, optional minimumMmr and lobbyPresetId; A29 / A32 validation | Phase S8b execution (DECISIONS.md A28, A29, A32, A33, A33a, A36) | 2026-11-07 |
 
 ---
 
-*Last updated: 2026-11-06*
+*Last updated: 2026-11-07*
 *Feature owner: Phase 3 / Phase 12.3*

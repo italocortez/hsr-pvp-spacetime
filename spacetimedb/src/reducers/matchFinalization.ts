@@ -1,7 +1,7 @@
 import spacetimedb from '../schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser, isRoleAtLeast } from '../helpers/ensurePermissions';
-import { ensureTournamentAccess } from '../helpers/tournamentHelpers';
+import { ensureTournamentPermission } from '../helpers/tournamentPermissions';
 import { updateWithAudit } from '../helpers/auditHelpers';
 import { runFinalization, processMatchMmr } from '../helpers/finalizationHelpers';
 import { rebuildLeaderboard } from '../helpers/leaderboardRebuild';
@@ -79,7 +79,7 @@ export const finalize_match_result = spacetimedb.reducer(
             const derivedTournamentId = bracketMatch?.tournamentId;
             if (derivedTournamentId) {
                 try {
-                    ensureTournamentAccess(ctx, derivedTournamentId);
+                    ensureTournamentPermission(ctx, derivedTournamentId, 'results');
                     hasAuthority = true;
                 } catch (_e) {
                     // Not authorized via tournament access
@@ -106,7 +106,7 @@ export const process_tournament_mmr = spacetimedb.reducer(
     },
     (ctx, { tournamentId }) => {
         // 1. Verify tournament access
-        const { user, tournament } = ensureTournamentAccess(ctx, tournamentId);
+        const { user, tournament } = ensureTournamentPermission(ctx, tournamentId, 'results');
 
         // 2. Verify tournament is Completed or Cancelled
         if (tournament.stage.tag !== 'Completed' && tournament.stage.tag !== 'Cancelled') {

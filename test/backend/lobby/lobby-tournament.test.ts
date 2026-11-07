@@ -106,6 +106,14 @@ describe('Tournament Lobby & Stand-In', () => {
             scheduledStartAt: '',
             registrationDeadline: '',
             maxAccountsPerPlayer: 1,
+            // S10: rewrite (S8b: the A36 create_tournament argument set, added compile-only with neutral defaults)
+            grandFinalBestOf: 3,
+            groupAdvanceCount: 2,
+            groupAssignmentMode: 'Auto',
+            checkInEnabled: false,
+            requireResultValidation: false,
+            allowMirrorPicks: false,
+            lineupFormat: 'Halves',
         });
         await toUser.sync(1500);
 

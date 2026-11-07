@@ -12,4 +12,7 @@ import {
 
 export default {
   tournamentId: __t.u32(),
+  hsrAccountIds: __t.option(__t.array(__t.u32())),
+  anonymousAlias: __t.option(__t.string()),
+  allowRandomTeamAssignment: __t.option(__t.bool()),
 };

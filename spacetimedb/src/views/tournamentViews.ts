@@ -32,7 +32,7 @@ import { TournamentTeamMember } from '../tables/tournamentTeamMember';
 // Shared helper resolves the calling user's tournament set via two paths:
 //   Path 1: Tournament.organizer_id btree -> tournaments where caller is organizer
 //   Path 2: TournamentAssistant.user_id btree -> tournaments where caller is assistant
-// Same two-path pattern as ensureTournamentAccess in tournamentHelpers.ts.
+// Same two paths as ensureTournamentPermission in tournamentPermissions.ts (flags not read here).
 // ---------------------------------------------------------------------------
 function getMyTournamentIds(ctx: any): { userId: number; tournamentIds: Set<number> } | null {
     const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);

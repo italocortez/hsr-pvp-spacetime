@@ -72,6 +72,14 @@ describe.skipIf(!hasServerToken())('Tournament Management', () => {
       scheduledStartAt: '',
       registrationDeadline: '',
       maxAccountsPerPlayer: 1,
+      // S10: rewrite (S8b: the A36 create_tournament argument set, added compile-only with neutral defaults)
+      grandFinalBestOf: 3,
+      groupAdvanceCount: 2,
+      groupAssignmentMode: 'Auto',
+      checkInEnabled: false,
+      requireResultValidation: false,
+      allowMirrorPicks: false,
+      lineupFormat: 'Halves',
     });
     await h.sync();
 
@@ -112,6 +120,17 @@ describe.skipIf(!hasServerToken())('Tournament Management', () => {
       scheduledStartAt: '',
       registrationDeadline: '',
       maxAccountsPerPlayer: 1,
+      // S10: rewrite (S8b: the A36 update_tournament argument set, added compile-only with neutral defaults)
+      format: 'SingleElimination',
+      teamSize: 1,
+      maxParticipants: 8,
+      grandFinalBestOf: 3,
+      groupAdvanceCount: 2,
+      groupAssignmentMode: 'Auto',
+      checkInEnabled: false,
+      requireResultValidation: false,
+      allowMirrorPicks: false,
+      lineupFormat: 'Halves',
     });
     await h.sync();
 
@@ -150,6 +169,17 @@ describe.skipIf(!hasServerToken())('Tournament Management', () => {
       scheduledStartAt: '',
       registrationDeadline: '',
       maxAccountsPerPlayer: 1,
+      // S10: rewrite (S8b: the A36 update_tournament argument set, added compile-only with neutral defaults)
+      format: 'SingleElimination',
+      teamSize: 1,
+      maxParticipants: 8,
+      grandFinalBestOf: 3,
+      groupAdvanceCount: 2,
+      groupAssignmentMode: 'Auto',
+      checkInEnabled: false,
+      requireResultValidation: false,
+      allowMirrorPicks: false,
+      lineupFormat: 'Halves',
     });
     await h.sync();
 
@@ -189,6 +219,14 @@ describe.skipIf(!hasServerToken())('Tournament Management', () => {
       scheduledStartAt: '',
       registrationDeadline: '',
       maxAccountsPerPlayer: 1,
+      // S10: rewrite (S8b: the A36 create_tournament argument set, added compile-only with neutral defaults)
+      grandFinalBestOf: 3,
+      groupAdvanceCount: 2,
+      groupAssignmentMode: 'Auto',
+      checkInEnabled: false,
+      requireResultValidation: false,
+      allowMirrorPicks: false,
+      lineupFormat: 'Halves',
     });
     await h.sync();
 
@@ -221,6 +259,17 @@ describe.skipIf(!hasServerToken())('Tournament Management', () => {
         scheduledStartAt: '',
         registrationDeadline: '',
         maxAccountsPerPlayer: 1,
+        // S10: rewrite (S8b: the A36 update_tournament argument set, added compile-only with neutral defaults)
+        format: 'SingleElimination',
+        teamSize: 1,
+        maxParticipants: 8,
+        grandFinalBestOf: 3,
+        groupAdvanceCount: 2,
+        groupAssignmentMode: 'Auto',
+        checkInEnabled: false,
+        requireResultValidation: false,
+        allowMirrorPicks: false,
+        lineupFormat: 'Halves',
       })
     );
     expect(err).toContain('Draft or Registration');

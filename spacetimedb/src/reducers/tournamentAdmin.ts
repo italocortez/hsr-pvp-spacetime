@@ -1,7 +1,8 @@
 import spacetimedb from '../schema';
 import { t, SenderError } from 'spacetimedb/server';
-import { getAuthenticatedUser, ensureModerator, isRoleAtLeast } from '../helpers/ensurePermissions';
-import { ensureTournamentAccess, transferTournamentCaptain } from '../helpers/tournamentHelpers';
+import { ensureModerator } from '../helpers/ensurePermissions';
+import { ensureTournamentPermission } from '../helpers/tournamentPermissions';
+import { transferTournamentCaptain } from '../helpers/tournamentHelpers';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { deleteCalendarEventForBracketMatch } from '../helpers/calendarCascade';
 import { performConcede } from './concede';
@@ -22,7 +23,7 @@ const ACTIVE_LOBBY_STAGES = new Set(['Drafting', 'Equipping', 'Scoring']);
 //   - Last member DQ: destroy team, auto-advance opponent.
 //   - DQ during active lobby (Drafting/Equipping/Scoring): kick + force-concede on last member.
 //   - DQ during Shelved/BetweenGames: remove TTM row, hard-delete lobby on last member.
-// Permission: TO/assistant/moderator/admin (ensureTournamentAccess).
+// Permission: participants (A25). S8c moves the advancement onto applyBracketResult.
 
 export const dq_participant = spacetimedb.reducer(
     {
@@ -31,7 +32,7 @@ export const dq_participant = spacetimedb.reducer(
         reason: t.string(),
     },
     (ctx, { tournamentId, userId, reason }) => {
-        const { user } = ensureTournamentAccess(ctx, tournamentId);
+        const { user } = ensureTournamentPermission(ctx, tournamentId, 'participants');
 
         // Find the TournamentEnrolled row
         const enrolled = [...ctx.db.TournamentEnrolled.by_tournament_and_user.filter([tournamentId, userId])][0];
@@ -185,7 +186,7 @@ export const dq_participant = spacetimedb.reducer(
 //   - Uses winnerTeamSide instead of winnerUserId.
 //   - Uses matchEndReason instead of matchOutcome.
 //   - Derives tournamentId from bracketMatch.tournamentId (no tournamentId column on MatchResultRecord).
-// Permission: TO/assistant/mod/admin for tournament matches; Moderator+ for non-tournament matches.
+// Permission: results (A25) for tournament matches; Moderator+ for non-tournament matches. S8d replaces it.
 
 export const override_match_result = spacetimedb.reducer(
     {
@@ -212,7 +213,7 @@ export const override_match_result = spacetimedb.reducer(
             // Derive tournament from bracketMatch (no tournamentId column, per D-42)
             const bracketMatch = ctx.db.BracketMatch.id.find(matchResult.bracketMatchId);
             if (bracketMatch) {
-                const { user } = ensureTournamentAccess(ctx, bracketMatch.tournamentId);
+                const { user } = ensureTournamentPermission(ctx, bracketMatch.tournamentId, 'results');
                 actingUserId = user.id;
             } else {
                 // Bracket match not found — fall back to moderator check
@@ -271,42 +272,22 @@ export const override_match_result = spacetimedb.reducer(
 );
 
 // ─── assign_tournament_assistant ─────────────────────────────────────────────
-// Assigns or updates a tournament assistant with granular permissions.
-// Permission: tournament organizer or Moderator/Admin (existing assistants cannot assign others).
+// Assigns or updates a tournament assistant with the three A25 flags. Permission: owner (A25; assistants never
+// manage assistants). Kept semantics: an existing row for the user is updated in place (upsert, pre-S8b
+// behaviour); the caller cannot assign themself (so an organizer cannot list themself; a Moderator may still list
+// the organizer, whose flags then change nothing because the organizer already holds every permission).
 
 export const assign_tournament_assistant = spacetimedb.reducer(
     {
         tournamentId: t.u32(),
         userId: t.u32(),
-        canValidateResults: t.bool(),
-        canOverrideResults: t.bool(),
-        canDqParticipants: t.bool(),
+        canManageParticipants: t.bool(),
         canManageBracket: t.bool(),
-        canAssignSeeds: t.bool(),
+        canResolveResults: t.bool(),
     },
-    (ctx, { tournamentId, userId, canValidateResults, canOverrideResults, canDqParticipants, canManageBracket, canAssignSeeds }) => {
-        const callerUser = getAuthenticatedUser(ctx);
-
-        // S8 (A25): the reducer takes the three flags directly (canManageParticipants, canManageBracket,
-        // canResolveResults). Until then the five legacy arguments fold into them so the fixtures compile.
-        const flags = {
-            canManageParticipants: canDqParticipants,
-            canManageBracket: canManageBracket || canAssignSeeds,
-            canResolveResults: canValidateResults || canOverrideResults,
-        };
-
-        // Find the tournament
-        const tournament = ctx.db.Tournament.id.find(tournamentId);
-        if (!tournament) {
-            throw new SenderError('Tournament not found.');
-        }
-
-        // Only the organizer or Moderator+ can assign assistants (existing assistants cannot)
-        const isOrganizer = tournament.organizerId === callerUser.id;
-        const isModerator = isRoleAtLeast(callerUser.role, 'Moderator');
-        if (!isOrganizer && !isModerator) {
-            throw new SenderError('Only the tournament organizer or a Moderator/Admin can assign tournament assistants.');
-        }
+    (ctx, { tournamentId, userId, canManageParticipants, canManageBracket, canResolveResults }) => {
+        const { user: callerUser } = ensureTournamentPermission(ctx, tournamentId, 'owner');
+        const flags = { canManageParticipants, canManageBracket, canResolveResults };
 
         // Validate the target user exists
         const targetUser = ctx.db.User.id.find(userId);
@@ -341,8 +322,7 @@ export const assign_tournament_assistant = spacetimedb.reducer(
 );
 
 // ─── remove_tournament_assistant ─────────────────────────────────────────────
-// Removes a tournament assistant.
-// Permission: tournament organizer or Moderator/Admin.
+// Removes a tournament assistant. Permission: owner (A25).
 
 export const remove_tournament_assistant = spacetimedb.reducer(
     {
@@ -350,20 +330,7 @@ export const remove_tournament_assistant = spacetimedb.reducer(
         userId: t.u32(),
     },
     (ctx, { tournamentId, userId }) => {
-        const callerUser = getAuthenticatedUser(ctx);
-
-        // Find the tournament
-        const tournament = ctx.db.Tournament.id.find(tournamentId);
-        if (!tournament) {
-            throw new SenderError('Tournament not found.');
-        }
-
-        // Only the organizer or Moderator+ can remove assistants
-        const isOrganizer = tournament.organizerId === callerUser.id;
-        const isModerator = isRoleAtLeast(callerUser.role, 'Moderator');
-        if (!isOrganizer && !isModerator) {
-            throw new SenderError('Only the tournament organizer or a Moderator/Admin can remove tournament assistants.');
-        }
+        const { user: callerUser } = ensureTournamentPermission(ctx, tournamentId, 'owner');
 
         // Find the assistant row
         const assistant = [...ctx.db.TournamentAssistant.by_tournament_and_user.filter([tournamentId, userId])][0];

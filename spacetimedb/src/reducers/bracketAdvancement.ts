@@ -1,7 +1,7 @@
 import spacetimedb from '../schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser } from '../helpers/ensurePermissions';
-import { ensureTournamentAccess } from '../helpers/tournamentHelpers';
+import { ensureTournamentPermission } from '../helpers/tournamentPermissions';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { placeParticipantInNextMatch, updateGroupStandingsStub, sortGroupStandingsStub } from '../helpers/bracketHelpers';
 import { deleteCalendarEventForBracketMatch } from '../helpers/calendarCascade';
@@ -96,7 +96,7 @@ export const advance_bracket_match = spacetimedb.reducer(
             throw new SenderError('Bracket match not found.');
         }
 
-        const { user, tournament } = ensureTournamentAccess(ctx, bracketMatch.tournamentId);
+        const { user, tournament } = ensureTournamentPermission(ctx, bracketMatch.tournamentId, 'results');
 
         // Verify tournament is InProgress
         if (tournament.stage.tag !== 'InProgress') {
@@ -270,7 +270,7 @@ export const rollback_bracket_match = spacetimedb.reducer(
             throw new SenderError('Bracket match not found.');
         }
 
-        const { user, tournament } = ensureTournamentAccess(ctx, bracketMatch.tournamentId);
+        const { user, tournament } = ensureTournamentPermission(ctx, bracketMatch.tournamentId, 'results');
 
         // Verify tournament is InProgress
         if (tournament.stage.tag !== 'InProgress') {
@@ -341,7 +341,7 @@ export const advance_group_to_elimination = spacetimedb.reducer(
         tournamentId: t.u32(),
     },
     (ctx, { tournamentId }) => {
-        const { user, tournament } = ensureTournamentAccess(ctx, tournamentId);
+        const { user, tournament } = ensureTournamentPermission(ctx, tournamentId, 'bracket');
 
         // Verify tournament is InProgress
         if (tournament.stage.tag !== 'InProgress') {
