@@ -1,5 +1,6 @@
 {
     // TypeScript (Native Preview) extension: use the Go-based language server (tsgo) for this workspace, so the
     // editor checks with the same compiler generation as `npm run typecheck` (typescript 7.1.0-beta, native).
-    "typescript.experimental.useTsgo": true
+    "typescript.experimental.useTsgo": true,
+    "js/ts.tsdk.path": "node_modules\\typescript"
 }
