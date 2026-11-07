@@ -578,3 +578,15 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** user decision 2026-11-06: with the per-guest cap of 10 lobbies an hour, 50 in 10 minutes needs at least five identities acting together, which is script behaviour; a legitimate community evening stays far below it.
 - **Supersedes:** the default value named in A42 and A57 (the mechanism is unchanged).
 - **Where implemented:** S5 follow-up commit (default constant + tests), S6 (inline breaker keeps the value)
+
+### A59 — Classic draft order for Thirds (12 picks per team)
+
+- **Date:** 2026-11-07 · **Status:** decided
+- **Decision:** The Classic draft sequence for `lineupFormat = Thirds` is fixed per ban mode. Notation: Blue/Red per step, a `·` at every colour change, bans in brackets; this notation is the one used in docs and in the UI's draft-order display.
+  - **None (24 steps):** `B · RR · B · R · BB · RR · BB · RR · BB · R · B · R · B · R · BB · RR` — the Halves order, then `B R B R B B R R`.
+  - **Four (28 steps):** `[B] · [R] · B · RR · B · [R] · [B] · R · BB · RR · BB · RR · BB · RR · BB · RR · BB · R` — the Halves order, then two more `R B B R` rounds (today's implementation, unchanged).
+  - **Six (30 steps):** `[B] · [R] · B · RR · B · [R] · [B] · R · BB · R · [B] · [R] · BB · RR · BB · RR · BB · RR · B · R · B · R` — the Halves order with two more `B B R R` rounds inserted after the third ban pair, before the `B R B R` closer.
+  Rules the three orders share: the first eight picks and every ban position are the Halves order of the same ban mode (ban pairs before the first pick, after four picks, and for Six after eight picks); 12 picks per team; no run longer than two; Blue picks first and Red picks last. Thirds adds no bans. Auction is unaffected (ban-only prefix, `charactersPerTeam` counts the sale).
+- **Why:** user decision 2026-11-07. `docs/match-session/draft-order.md` (the user's spec) defines only the 8-pick orders; S7's `THIRDS_EXTRA_PICKS` appended `R B B R R B B R` to every mode as an implementation choice (A21 fixes only the count). The user chose each ending: None closes with a pair each after a short alternation, Four stays a pure snake, Six keeps its alternating closer; a candidate None order with 25 picks (13 Blue) was rejected on the count.
+- **Supersedes:** the S7 implementation choice for `THIRDS_EXTRA_PICKS` (None and Six change; Four is already this order).
+- **Where implemented:** the next step that edits `spacetimedb/src/helpers/draftSequences.ts` (the S7 follow-up proposed for the lineup-lock and tie decisions, otherwise S8): per-mode Thirds sequences, `docs/match-session/draft-order.md` gains the Thirds section in this notation, and a T-task asserts the three sequences step by step.
