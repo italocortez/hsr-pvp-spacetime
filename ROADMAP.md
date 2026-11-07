@@ -43,3 +43,4 @@ Each executed step writes its log to `docs/log/<date>-<step>.md` (goal, decision
 | S14.8 | Port: `calendar` | S14.7 | pending |
 | S14.9 | Port: `adminpanel` | S14.8 | pending |
 | S14.10+ | Missing pages as mockups land: match flow, tournaments + bracket, leaderboard, replay viewer, editors | S14.9 | pending |
+| S15 | Module typing pass (user 2026-11-07, after the migration): replace the `ctx: any` helper signatures (169) and the `as any` enum-literal casts (169) in `spacetimedb/src`, workarounds from the 2.6.1 SDK era, with the 2.14.1 types (typed reducer context, generated enum constructors from `@bindings/types`); drop the non-null assertions the tests prove unnecessary; then the Biome config turns `noExplicitAny` into a hard rule; gated by `npm run typecheck` and the full `npm test` (S10 suites); Opus implements, Fable reviews | S14.10+ | pending |
