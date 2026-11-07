@@ -1036,6 +1036,56 @@ The lobby system manages the lifecycle of match rooms where players assemble, co
 **When:** #3 calls `create_lobby_preset`
 **Then:** Rejected: "Preset limit reached: you can own at most 10 lobby presets. Delete one first."
 
+### Create Lobby With Series Settings (Phase S6 execution, A45(5), D-A8, A27, A40)
+**Given:** A user in no lobby
+**When:** They call `create_lobby` with `bestOf = 3`, `bestOfNAdvantage = Red`, `lineupFormat = Thirds`, `banRestriction = MaxOneDps`, `hideMmr = true`, `name = "  Friday scrim  "`, and `refereeExclusiveConcede` omitted
+**Then:** The lobby stores those values, `name = "Friday scrim"` and `refereeExclusiveConcede = true`. Omitting all six new arguments gives name '', NoRestriction, Halves, hideMmr false, advantage None, exclusive concede true. A name longer than 50 characters is rejected.
+
+### bestOf Capped to 1 or 3 (Phase S6 execution, A28, A38(2))
+**Given:** A user in no lobby
+**When:** They call `create_lobby` with `bestOf = 5` (or a host calls `update_lobby_settings` with `bestOf = 5`)
+**Then:** Rejected: "bestOf must be 1 or 3.". `bestOf = 0` on `create_lobby` keeps the D-11 sentinel and stores 1. With `bestOf = 1` any `bestOfNAdvantage` is stored as None.
+
+### Series Settings Editable in Waiting (Phase S6 execution, backlog #9, A33, A38(4))
+**Given:** A casual lobby in Waiting with `bestOf = 1` and all four players confirmed
+**When:** The host calls `update_lobby_settings` with `bestOf = 3` (and any of `refereeControlsShelving`, `lineupFormat`, `bestOfNAdvantage`, `banRestriction`, `hideMmr`, `name`)
+**Then:** The lobby takes the new values and every member's `isConfirmed` becomes false. Keys left out keep their values. Setting `bestOf` back to 1 forces `bestOfNAdvantage = None`.
+
+### Tournament Lobby Locks bestOf, lineupFormat and bestOfNAdvantage (Phase S6 execution, A33, A27)
+**Given:** A tournament-controlled lobby in Waiting (`bestOf = 1`, Halves)
+**When:** The host calls `update_lobby_settings` with `bestOf = 3`, then with `lineupFormat = Thirds`, then with `bestOfNAdvantage = Blue`, then with `refereeControlsShelving = false` and `banRestriction = MaxOnePerRole`
+**Then:** The first three are rejected ("bestOf is set by the tournament bracket and cannot be changed in a tournament lobby." / "lineupFormat is set by the tournament and cannot be changed in a tournament lobby." / "bestOfNAdvantage is set by the tournament bracket and cannot be changed in a tournament lobby."; the head start comes from the bracket, A27); the fourth is accepted (free set).
+
+### Cost Set Must Be Selectable and Cover the Mode (Phase S6 execution, backlog #2, D-D6)
+**Given:** Published cost set #5 with Classic rows for MemoryOfChaos only; published set #6 with no rows; set #7 locked
+**When:** A user calls `create_lobby` with set #6, with set #5 and `draftMode = Auction`, with set #7, with set #5 Classic, with set 0
+**Then:** #6 and #5 Auction are rejected: "This cost set has no costs for MemoryOfChaos × {Classic|Auction}. Pick another set or ask its owner to extend it."; #7 is rejected ("Cost set 7 is locked and cannot be selected."); #5 Classic and set 0 are accepted. `update_lobby_settings` runs the same checks when `costSetId`, `gameMode` or `draftMode` change; presets and tournaments run them too.
+
+### Preset Stores the Series Fields (Phase S6 execution, backlog #6)
+**Given:** A TournamentHost+
+**When:** They create a preset with `bestOf = 3`, `refereeControlsShelving = false`, `bestOfNAdvantage = Red`, `lineupFormat = Thirds`
+**Then:** All four are stored and read back unchanged; `bestOf = 5` is rejected on create and update ("bestOf must be 1 or 3."); an update that omits the series keys keeps them; an update to `bestOf = 1` stores the advantage as None.
+
+### System Preset (Phase S6 execution, A33a)
+**Given:** A freshly initialized database
+**When:** Anyone lists `LobbyPreset`; an Admin calls `delete_lobby_preset` on the system preset; a non-admin calls `update_lobby_preset` on it
+**Then:** Exactly one row has `isSystemPreset = true` (name "Tournament default", owner SYSTEM_USER_ID 0, the tournament-lobby defaults); a second `init` adds none. The delete is rejected ("The system lobby preset cannot be deleted."); the non-admin update is rejected ("Only admins can modify or delete system presets.").
+
+### Shuffle Teams (Phase S6 execution, A45(3))
+**Given:** A lobby in Waiting: b1, b2 Blue players, r1, r2 Red players, all confirmed; the host is a spectator
+**When:** The host calls `shuffle_teams(lobbyId, TeamSwap)`; later `shuffle_teams(lobbyId, RandomSwap)`
+**Then:** TeamSwap: b1, b2 are Red, r1, r2 are Blue, everyone unconfirmed. RandomSwap: the four players are redistributed two per team at random (`ctx.random`), spectators and coaches stay, captain flags cleared, everyone unconfirmed. A player who is not the host (and not Moderator+) is rejected ("Only the host, moderators, or admins can perform this action."); in Drafting the call is rejected by the stage guard.
+
+### Unban Member (Phase S6 execution, A45(3))
+**Given:** The host banned r2 from lobby #10
+**When:** Player b1 (no referee power) calls `unban_member(10, r2)`; then the host does; then the host repeats it
+**Then:** b1 is rejected ("Only the host, moderators, admins, or an authorized referee can lift a lobby ban."); the host's call deletes the `LobbyBan` row and r2 can join again; the repeat is rejected ("This user is not banned from the lobby."). A referee may unban while `refereeCanKick` is on; Moderator+ may unban without being a member.
+
+### Guest Burst Trips the Kill Switch (Phase S6 execution, A57, A58)
+**Given:** 50 guest lobby creations in the current 10-minute window, switch on
+**When:** A 51st guest calls `create_lobby`; then a 52nd
+**Then:** The 51st lobby is created and the switch turns off in the same transaction with one `AdminAlert` (docs/admin/contract.md "Circuit Breaker Trips"); the 52nd is rejected ("Guest lobby creation is temporarily disabled").
+
 ## Edge Cases
 
 | Case | Expected Behavior | Notes |
@@ -1150,6 +1200,7 @@ The lobby system manages the lifecycle of match rooms where players assemble, co
 | R4: `LobbyMember.joinSeq` assigned at insert (host = 1, then max + 1) | Phase S4 execution (DECISIONS.md A22(5), A37) | 2026-11-06 |
 | B-4: cursor bounds + per-member throttle (`cursorMinIntervalMs`); scenarios "Cursor Throttle", "Cursor Out of Bounds" added | Phase S5 execution (DECISIONS.md A43, D-B5) | 2026-11-06 |
 | B-7 / A42: `create_lobby` hourly cap (guests included), guest kill switch, preset cap; scenarios "Lobby Creation Cap", "Guest Kill Switch", "Preset Cap" and two edge cases added | Phase S5 execution (DECISIONS.md A42, A43) | 2026-11-06 |
+| Scenarios "Create Lobby With Series Settings", "bestOf Capped to 1 or 3", "Series Settings Editable in Waiting", "Tournament Lobby Locks bestOf and lineupFormat", "Cost Set Must Be Selectable and Cover the Mode", "Preset Stores the Series Fields", "System Preset", "Shuffle Teams", "Unban Member", "Guest Burst Trips the Kill Switch" added | Phase S6 execution (DECISIONS.md A27, A28, A33, A33a, A38, A40, A45, A57, A58, D-A8; backlog #2, #6-#9) | 2026-11-06 |
 
 ---
 

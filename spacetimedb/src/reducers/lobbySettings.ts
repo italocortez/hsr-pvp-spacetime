@@ -1,9 +1,11 @@
 import spacetimedb from '../schema';
 import { t, SenderError } from 'spacetimedb/server';
-import { DraftMode, BanMode, GameMode, MatchType, RosterVisibility, DisconnectPolicy, LobbySlot } from '../types/enums';
+import { DraftMode, BanMode, GameMode, MatchType, RosterVisibility, DisconnectPolicy, LobbySlot, BanRestriction, LineupFormat, AdvantageSide, ShuffleMode } from '../types/enums';
 import { getAuthenticatedUser, isRoleAtLeast } from '../helpers/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { ensureLobbyMember, ensureHostOrAbove, ensureStageIs, slotTeam, slotIsCoach, slotIsSpectator, slotToTeamSide } from '../helpers/lobbyHelpers';
+import { ensureBestOf, normalizeLobbyName, resolveAdvantage } from '../helpers/seriesSettings';
+import { ensureCostSetCovers, ensureSelectableCostSet } from '../helpers/costSetGuards';
 
 // ─── update_lobby_settings ────────────────────────────────────────────────────
 // Updates all mutable lobby configuration fields.
@@ -15,7 +17,14 @@ import { ensureLobbyMember, ensureHostOrAbove, ensureStageIs, slotTeam, slotIsCo
 //   budgets, handicaps, referee powers, aliases, pause settings, visibility).
 // Per D-42: Ranked forces allowMirrorPicks=false.
 // Per D-23: guests forced to ClosedNoRating and Casual.
-// Resets all members' isConfirmed to false on settings change.
+// Resets all members' isConfirmed to false on settings change (A38(4)).
+// Backlog #6/#7/#9 (A33 tiering): bestOf, lineupFormat and bestOfNAdvantage join the tournament lock list (bestOf
+//   and the head start are bracket-authoritative, A27/A28); refereeControlsShelving, banRestriction, hideMmr,
+//   refereeExclusiveConcede and name are free-set fields, editable in tournament lobbies too.
+//   The new arguments are optional: an omitted key keeps the lobby's current value.
+//   bestOf keeps the D-11 0 → 1 sentinel and the {1, 3} cap (A28/A38(2)); bestOfNAdvantage is forced None for Bo1.
+// Backlog #2 (R2, D-D6): a changed costSetId must be selectable; a change of costSetId, gameMode or draftMode
+//   must leave the set covering gameMode × draftMode.
 
 export const update_lobby_settings = spacetimedb.reducer(
     {
@@ -55,6 +64,14 @@ export const update_lobby_settings = spacetimedb.reducer(
         teamRedAlias: t.string(),
         isPublic: t.bool(),
         password: t.string(),
+        // Series / free-set additions (optional: omitted = unchanged):
+        bestOf: t.u8().optional(),
+        refereeControlsShelving: t.bool().optional(),
+        lineupFormat: LineupFormat.optional(),
+        bestOfNAdvantage: AdvantageSide.optional(),
+        banRestriction: BanRestriction.optional(),
+        hideMmr: t.bool().optional(),
+        name: t.string().optional(),
     },
     (ctx, args) => {
         const user = getAuthenticatedUser(ctx);
@@ -93,22 +110,57 @@ export const update_lobby_settings = spacetimedb.reducer(
             ? lobby.disconnectForfeitSeconds
             : (args.disconnectForfeitSeconds > 0 ? args.disconnectForfeitSeconds : undefined);
 
+        // Integrity set: locked in tournament lobbies (D-65 + A33: bestOf, lineupFormat). Unlike the D-65 fields,
+        // which silently keep the tournament's value, an explicit change of bestOf / lineupFormat is rejected
+        // (backlog #9 done-when); passing the current value is accepted.
+        if (isTournamentLocked) {
+            if (args.bestOf !== undefined && (args.bestOf > 0 ? args.bestOf : 1) !== lobby.bestOf) {
+                throw new SenderError('bestOf is set by the tournament bracket and cannot be changed in a tournament lobby.');
+            }
+            if (args.lineupFormat !== undefined && args.lineupFormat.tag !== lobby.lineupFormat.tag) {
+                throw new SenderError('lineupFormat is set by the tournament and cannot be changed in a tournament lobby.');
+            }
+            // A27 / backlog #7: the head start comes from the bracket (S8 copies BracketMatch.winnerAdvantage), so it is locked too.
+            if (args.bestOfNAdvantage !== undefined && args.bestOfNAdvantage.tag !== lobby.bestOfNAdvantage.tag) {
+                throw new SenderError('bestOfNAdvantage is set by the tournament bracket and cannot be changed in a tournament lobby.');
+            }
+        }
+        const gameMode = isTournamentLocked ? lobby.gameMode : args.gameMode;
+        const costSetId = isTournamentLocked ? lobby.costSetId : args.costSetId;
+        const bestOf = isTournamentLocked || args.bestOf === undefined
+            ? lobby.bestOf
+            : ensureBestOf(args.bestOf > 0 ? args.bestOf : 1);
+        const lineupFormat = isTournamentLocked || args.lineupFormat === undefined ? lobby.lineupFormat : args.lineupFormat;
+        const bestOfNAdvantage = isTournamentLocked
+            ? lobby.bestOfNAdvantage
+            : resolveAdvantage(bestOf, args.bestOfNAdvantage ?? lobby.bestOfNAdvantage);
+        // Free set
+        const name = args.name === undefined ? lobby.name : normalizeLobbyName(args.name);
+
+        // Backlog #2: cost-set guards on a change of set, game mode or draft mode
+        if (costSetId !== lobby.costSetId) ensureSelectableCostSet(ctx, costSetId);
+        if (costSetId !== lobby.costSetId || gameMode.tag !== lobby.gameMode.tag || args.draftMode.tag !== lobby.draftMode.tag) {
+            ensureCostSetCovers(ctx, costSetId, gameMode.tag, args.draftMode.tag);
+        }
+
         // Update Lobby row
         // Tournament-locked fields use existing lobby values (from tournament)
         // Free fields accept caller input
         ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
             // ── Locked fields (tournament integrity) ──
             teamSize: isTournamentLocked ? lobby.teamSize : args.teamSize,
-            gameMode: isTournamentLocked ? lobby.gameMode : args.gameMode,
+            gameMode,
             matchType,
             isAnonymousPlayers: isTournamentLocked ? lobby.isAnonymousPlayers : args.isAnonymousPlayers,
             isAnonymousSpectators: isTournamentLocked ? lobby.isAnonymousSpectators : args.isAnonymousSpectators,
             rosterVisibility,
             requireOwnership: isTournamentLocked ? lobby.requireOwnership : args.requireOwnership,
-            costSetId: isTournamentLocked ? lobby.costSetId : args.costSetId,
+            costSetId,
             disconnectPolicy: isTournamentLocked ? lobby.disconnectPolicy : args.disconnectPolicy,
             disconnectForfeitSeconds,
             allowMirrorPicks,
+            bestOf,
+            lineupFormat,
             // ── Free fields (referee/match QoL) ──
             draftMode: args.draftMode,
             banMode: args.banMode,
@@ -132,6 +184,11 @@ export const update_lobby_settings = spacetimedb.reducer(
             teamBlueAlias: args.teamBlueAlias,
             teamRedAlias: args.teamRedAlias,
             isPublic: args.isPublic,
+            refereeControlsShelving: args.refereeControlsShelving ?? lobby.refereeControlsShelving,
+            bestOfNAdvantage,
+            banRestriction: args.banRestriction ?? lobby.banRestriction,
+            hideMmr: args.hideMmr ?? lobby.hideMmr,
+            name,
             lastActivityAt: ctx.timestamp,
         }, user.id));
 
@@ -393,5 +450,74 @@ export const set_captain = spacetimedb.reducer(
         }, user.id));
 
         console.log(`[LOBBY] User #${targetUserId} set as ${targetTeam} captain in lobby #${lobbyId} by user #${user.id}`);
+    }
+);
+
+// ─── shuffle_teams ────────────────────────────────────────────────────────────
+// A45(3): the lobby room's Random Swap / Team Swap (lobbyroom.html #randomSwap / #teamSwap) as one reducer, so the
+// client does not fire N set_team_slot calls (racy, N confirmation resets).
+//   TeamSwap:   every Blue seat moves to Red and every Red seat to Blue (players and coaches); captains keep their
+//               flag, since each captain stays with their own team.
+//   RandomSwap: the non-coach Blue + Red players are shuffled with ctx.random (deterministic per transaction) and
+//               dealt alternately Blue, Red, Blue, ... ; coaches and spectators stay; captain flags are cleared
+//               (start_draft assigns one per team, D-30).
+// Host or Moderator+ (ensureHostOrAbove); Waiting only; one confirmation reset for everyone (A38(4)).
+
+export const shuffle_teams = spacetimedb.reducer(
+    {
+        lobbyId: t.u32(),
+        mode: ShuffleMode,
+    },
+    (ctx, { lobbyId, mode }) => {
+        const user = getAuthenticatedUser(ctx);
+
+        const lobby = ctx.db.Lobby.id.find(lobbyId);
+        if (!lobby) {
+            throw new SenderError('Lobby not found.');
+        }
+        ensureHostOrAbove(ctx, lobby, user);
+        ensureStageIs(lobby, 'Waiting');
+
+        const members = [...ctx.db.LobbyMember.lobby_id.filter(lobbyId)];
+        const newSlot = new Map<number, { tag: string }>();
+        let clearCaptains = false;
+
+        if (mode.tag === 'TeamSwap') {
+            const swap: Record<string, string> = {
+                BluePlayer: 'RedPlayer', RedPlayer: 'BluePlayer', BlueCoach: 'RedCoach', RedCoach: 'BlueCoach',
+            };
+            for (const m of members) {
+                const target = swap[m.lobbySlot.tag];
+                if (target) newSlot.set(m.userId, { tag: target });
+            }
+        } else {
+            // Players only, in join order before the shuffle so the result depends on ctx.random alone.
+            const players = members
+                .filter((m: any) => slotTeam(m.lobbySlot) !== null && !slotIsCoach(m.lobbySlot))
+                .sort((a: any, b: any) => a.joinSeq - b.joinSeq);
+            const pool = ctx.random.shuffle(players.map((m: any) => m.userId));
+            pool.forEach((userId: number, i: number) => {
+                newSlot.set(userId, { tag: i % 2 === 0 ? 'BluePlayer' : 'RedPlayer' });
+            });
+            clearCaptains = true;
+        }
+
+        // One pass: new seats and the confirmation reset for every member.
+        for (const m of members) {
+            const slot = newSlot.get(m.userId);
+            const changes: Record<string, unknown> = {};
+            if (slot && slot.tag !== m.lobbySlot.tag) changes.lobbySlot = slot;
+            if (m.isConfirmed) changes.isConfirmed = false;
+            if (clearCaptains && m.isCaptain) changes.isCaptain = false;
+            if (Object.keys(changes).length === 0) continue;
+            ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, m.userId]);
+            ctx.db.LobbyMember.insert(updateWithAudit(ctx, m, changes, user.id));
+        }
+
+        ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
+            lastActivityAt: ctx.timestamp,
+        }, user.id));
+
+        console.log(`[LOBBY] Teams shuffled (${mode.tag}) in lobby #${lobbyId} by user #${user.id}`);
     }
 );

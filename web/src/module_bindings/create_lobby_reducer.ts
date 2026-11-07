@@ -15,8 +15,11 @@ import {
   DraftMode,
   RosterVisibility,
   DisconnectPolicy,
+  LineupFormat,
   MatchType,
   BanMode,
+  BanRestriction,
+  AdvantageSide,
 } from "./types";
 
 export default {
@@ -69,4 +72,16 @@ export default {
   teamRedAlias: __t.string(),
   bestOf: __t.u8(),
   refereeControlsShelving: __t.bool(),
+  name: __t.option(__t.string()),
+  get banRestriction() {
+    return __t.option(BanRestriction);
+  },
+  get lineupFormat() {
+    return __t.option(LineupFormat);
+  },
+  hideMmr: __t.option(__t.bool()),
+  get bestOfNAdvantage() {
+    return __t.option(AdvantageSide);
+  },
+  refereeExclusiveConcede: __t.option(__t.bool()),
 };

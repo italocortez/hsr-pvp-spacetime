@@ -1,4 +1,4 @@
-import { ScheduleAt, Timestamp } from 'spacetimedb';
+import { Timestamp } from 'spacetimedb';
 import { SenderError } from 'spacetimedb/server';
 import { SYSTEM_USER_ID } from './auditColumns';
 import { insertWithAudit, updateWithAudit } from './auditHelpers';
@@ -8,9 +8,6 @@ import { insertWithAudit, updateWithAudit } from './auditHelpers';
 // (admin_update_abuse_config) takes effect on the next call without a redeploy.
 
 export const ABUSE_CONFIG_ID = 1;
-
-/** Breaker cadence (A42 "every few minutes"). */
-export const ABUSE_BREAKER_INTERVAL_MICROS = 5n * 60n * 1_000_000n;
 
 const MINUTE_MICROS = 60_000_000n;
 const HOUR_MICROS = 60n * MINUTE_MICROS;
@@ -47,14 +44,57 @@ export function seedAbuseConfigDefaults(ctx: any) {
     }, SYSTEM_USER_ID));
 }
 
-/** Idempotent seed of the breaker chain: one AbuseBreakerJob row, 5 minutes out, when none exists. */
-export function seedAbuseBreakerJob(ctx: any): void {
-    // iter() required: emptiness check on a table that holds at most one row.
-    if ([...ctx.db.AbuseBreakerJob.iter()].length > 0) return;
-    ctx.db.AbuseBreakerJob.insert({
-        scheduledId: 0n,
-        scheduledAt: ScheduleAt.time(ctx.timestamp.microsSinceUnixEpoch + ABUSE_BREAKER_INTERVAL_MICROS),
-    });
+/** A57: the AbuseCounter key of the guest-lobby circuit breaker, and the AdminAlert kind it writes. */
+export const GUEST_LOBBY_COUNTER_KEY = 'guest_lobby_create';
+export const GUEST_LOBBY_BURST_ALERT = 'guest_lobby_burst';
+
+/**
+ * A57 / A58 inline circuit breaker. create_lobby calls it for a **guest** caller once the kill-switch check has
+ * passed. It bumps the fixed window in AbuseCounter['guest_lobby_create'] (a new window opens when the previous one
+ * is guestLobbyBurstWindowMinutes old). When the new count exceeds guestLobbyBurstThreshold while the switch is on,
+ * this creation still succeeds (a throw would roll the trip back), the switch goes off and one count-only AdminAlert
+ * is written, all in the caller's transaction. Every later guest creation is then rejected by the kill-switch check
+ * until an admin re-enables it, so the alert is written once per trip. SYSTEM audit actor throughout.
+ */
+export function recordGuestLobbyCreation(ctx: any): void {
+    const cfg = seedAbuseConfigDefaults(ctx);
+    const now: bigint = ctx.timestamp.microsSinceUnixEpoch;
+    const windowMicros = BigInt(cfg.guestLobbyBurstWindowMinutes) * MINUTE_MICROS;
+
+    const existing = ctx.db.AbuseCounter.key.find(GUEST_LOBBY_COUNTER_KEY);
+    let counter: any;
+    if (!existing) {
+        counter = ctx.db.AbuseCounter.insert(insertWithAudit(ctx, {
+            key: GUEST_LOBBY_COUNTER_KEY,
+            windowStart: ctx.timestamp,
+            count: 1,
+        }, SYSTEM_USER_ID));
+    } else if (now - existing.windowStart.microsSinceUnixEpoch >= windowMicros) {
+        counter = ctx.db.AbuseCounter.key.update(updateWithAudit(ctx, existing, {
+            windowStart: ctx.timestamp,
+            count: 1,
+        }, SYSTEM_USER_ID));
+    } else {
+        counter = ctx.db.AbuseCounter.key.update(updateWithAudit(ctx, existing, {
+            count: existing.count + 1,
+        }, SYSTEM_USER_ID));
+    }
+
+    if (counter.count <= cfg.guestLobbyBurstThreshold || !cfg.guestLobbyCreationEnabled) return;
+
+    ctx.db.AbuseConfig.id.update(updateWithAudit(ctx, cfg, { guestLobbyCreationEnabled: false }, SYSTEM_USER_ID));
+    ctx.db.AdminAlert.insert(insertWithAudit(ctx, {
+        id: 0,
+        kind: GUEST_LOBBY_BURST_ALERT,
+        windowStartAt: counter.windowStart,
+        windowEndAt: ctx.timestamp,
+        count: counter.count,
+        threshold: cfg.guestLobbyBurstThreshold,
+        isAcknowledged: false,
+        createdAt: ctx.timestamp,
+        acknowledgedAt: undefined,
+    }, SYSTEM_USER_ID));
+    console.warn(`[ABUSE] Breaker tripped: ${counter.count} guest lobby creations in ${cfg.guestLobbyBurstWindowMinutes} min (threshold ${cfg.guestLobbyBurstThreshold}); guest lobby creation disabled`);
 }
 
 const EPOCH = new Timestamp(0n);

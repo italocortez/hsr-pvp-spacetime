@@ -37,8 +37,8 @@ IdentityGcJob (scheduledId: u64 autoInc PK)  [PRIVATE]
 1. If `ServerIdentity` is empty: insert `ctx.sender` (the publisher) as `kind=Owner`, `label='owner'`
 2. Insert the SYSTEM user (`username='SYSTEM'`, role Admin, id from autoInc; audit actor `SYSTEM_USER_ID=0`)
 3. Insert `UserIdentity` linking the owner identity to the SYSTEM row
-4. Seed the `AbuseConfig` singleton (id 1, D-B5 defaults, SYSTEM actor) and the first `AbuseBreakerJob` row (5 minutes out), each only when absent, on every init (Phase S5 execution, A42; docs/admin/architecture.md "Abuse controls")
-5. (S6 adds `seedSystemLobbyPreset` here)
+4. Seed the `AbuseConfig` singleton (id 1, D-B5 defaults, SYSTEM actor), only when absent, on every init (Phase S5 execution, A42; docs/admin/architecture.md "Abuse controls"). Phase S6 execution (A57): no breaker job; the guest-lobby breaker runs inline in `create_lobby`
+5. Seed the system lobby preset "Tournament default" (`isSystemPreset`, owner `SYSTEM_USER_ID`), only when absent, on every init (Phase S6 execution, A33a / CH-S4)
 
 ### Guards (reducers/server.ts)
 - `requireServer(ctx)`: `ctx.sender` has any `ServerIdentity` row (Owner or Delegate). Used by `server_link_provider`, `server_set_role`, `server_delete_user` and the test-only reducers.
@@ -99,6 +99,7 @@ IdentityGcJob (scheduledId: u64 autoInc PK)  [PRIVATE]
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
 | `init` registers the Owner + SYSTEM user; owner-only `server_register_delegate` / `server_revoke_delegate`; module env `STDB_TARGET` gates the test-only reducers; `scripts/stdb/bootstrap.ts` replaces post-publish.ts | Phase M2 execution | 2026-11-06 |
 | `init` seeds `AbuseConfig` and the `AbuseBreakerJob` chain (no bootstrap call needed); `server_nuke_test_data` clears `UserRateState` / `AdminAlert` and keeps the `AbuseBreakerJob` chain and keeps `AbuseConfig` | Phase S5 execution (DECISIONS.md A42, A43) | 2026-11-06 |
+| `init` no longer seeds a breaker job (inline breaker, A57) and seeds the system lobby preset (A33a); `server_nuke_test_data` clears `AbuseCounter` and re-seeds the system preset after clearing `LobbyPreset` | Phase S6 execution (DECISIONS.md A57, A33a) | 2026-11-06 |
 
 ---
 

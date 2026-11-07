@@ -3,6 +3,7 @@ import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser } from '../helpers/ensurePermissions';
 import { slotIsCoach, slotIsSpectator } from '../helpers/lobbyHelpers';
 import { updateWithAudit } from '../helpers/auditHelpers';
+import { computeLobbyMemberRating } from '../helpers/accountRating';
 
 // ─── select_match_account ─────────────────────────────────────────────────────
 // Sets the HSR account a lobby member will use for the current match.
@@ -92,7 +93,9 @@ export const select_match_account = spacetimedb.reducer(
         //   - Waiting stage: no MatchResultRecord yet (created at draftClassic.ts:178 inside
         //     start_draft). The lookup returns empty -> this block is a no-op. Pre-draft
         //     swaps are harmless because MRP rows don't exist yet (D-B-04).
-        //   - BetweenGames stage: MRR exists, MRP exists -> apply max rule.
+        //   - BetweenGames stage: MRR exists, MRP exists -> ratchet: the snapshot becomes
+        //     max(snapshot, merged rating of the CURRENT selection) (backlog #10: the merged rating over the union
+        //     of the selected rosters replaces the per-account MAX rule; the ratchet stays monotonic-upward).
         //   - Stand-ins joining after start_draft: LMA row seeded on join but no MRP row
         //     for them (MRP only inserted at start_draft:204). This block short-circuits
         //     at `if (!existingMrp) return;`. Stand-ins are intentionally excluded from
@@ -103,15 +106,13 @@ export const select_match_account = spacetimedb.reducer(
         if (mr) {
             const existingMrp = [...ctx.db.MatchResultParticipant.by_result_and_user.filter([mr.id, user.id])][0];
             if (existingMrp) {
-                const freshAccount = ctx.db.HsrAccount.id.find(hsrAccountId);
-                if (freshAccount) {
-                    const newSnapshot = Math.max(existingMrp.accountRatingSnapshot, freshAccount.accountRating);
-                    if (newSnapshot !== existingMrp.accountRatingSnapshot) {
-                        ctx.db.MatchResultParticipant.delete(existingMrp);
-                        ctx.db.MatchResultParticipant.insert(
-                            updateWithAudit(ctx, existingMrp, { accountRatingSnapshot: newSnapshot }, user.id),
-                        );
-                    }
+                const merged = computeLobbyMemberRating(ctx, lobbyId, user.id);
+                const newSnapshot = Math.max(existingMrp.accountRatingSnapshot, merged);
+                if (newSnapshot !== existingMrp.accountRatingSnapshot) {
+                    ctx.db.MatchResultParticipant.delete(existingMrp);
+                    ctx.db.MatchResultParticipant.insert(
+                        updateWithAudit(ctx, existingMrp, { accountRatingSnapshot: newSnapshot }, user.id),
+                    );
                 }
             }
         }

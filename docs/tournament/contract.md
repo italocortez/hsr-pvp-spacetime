@@ -418,6 +418,21 @@ Note: TournamentEnrolled row does NOT contain hsrAccountId — that column was r
 **When:** Player tries to pick "Jingliu" (not in their enrolled account's HsrAccountCharacter rows)
 **Then:** Pick rejected with ownership error — character not in player's enrolled HSR account
 
+### Series Length Capped to 1 or 3 (Phase S6 execution, A28, A38(2))
+**Given:** A TournamentHost+
+**When:** They call `create_tournament` or `update_tournament` with `defaultBestOf = 5`
+**Then:** Rejected: "bestOf must be 1 or 3." (replaces the 1/3/5/7 whitelist). `grandFinalBestOf` equals `defaultBestOf` at creation until its own argument lands (S8).
+
+### Grand-Final Head Start Must Not Decide the Final (Phase S6 execution, A27, review CH-T9)
+**Given:** A TournamentHost+
+**When:** They create a tournament with `defaultBestOf = 1`, `winnerAdvantage = 1`; or `defaultBestOf = 3`, `winnerAdvantage = 2`
+**Then:** Both are rejected ("winnerAdvantage must be less than ceil(grandFinalBestOf / 2) ..."); `defaultBestOf = 3`, `winnerAdvantage = 1` is accepted. `update_tournament` validates against the stored `grandFinalBestOf`.
+
+### Lobby Preset Defaults to the System Preset (Phase S6 execution, A33a)
+**Given:** A freshly initialized database
+**When:** A TournamentHost+ creates a tournament; later, in Draft or Registration, calls `update_tournament` with `lobbyPresetId` = a preset the organizer owns, then 9999, then the system preset id
+**Then:** The new tournament's `lobbyPresetId` is the system preset; the swap to the organizer's own preset is stored; 9999 is rejected ("Lobby preset not found."); a preset owned by someone else is rejected ("The tournament can only use the system preset or one of the organizer's own presets."); the system preset is accepted again. Outside Draft / Registration `update_tournament` is rejected as before. Omitting `lobbyPresetId` keeps the stored value. The cost set must be selectable and cover `defaultGameMode` × the preset's draft mode (docs/cost-sets/contract.md).
+
 ## Edge Cases
 
 | Case | Expected Behavior |
@@ -487,6 +502,7 @@ Note: TournamentEnrolled row does NOT contain hsrAccountId — that column was r
 | Tournament assistant assign/remove/self-block | Phase 3 execution | 2026-03-19 |
 | Moderator promote/demote with role guards | Phase 3 execution | 2026-03-19 |
 | Withdraw preserves row (status=Withdrawn), double-withdraw guard | Phase 3 execution | 2026-03-19 |
+| bestOf cap {1, 3} on `defaultBestOf` (grand final follows); `winnerAdvantage < ceil(grandFinalBestOf / 2)` replaces the 0-3 range; `Tournament.lobbyPresetId` = system preset at creation, swappable through the optional `update_tournament` argument while editable; cost-set guards | Phase S6 execution (DECISIONS.md A27, A28, A33a, A38(2); backlog #2, #7, #8) | 2026-11-06 |
 
 | Stage guard: Seeding->InProgress requires bracket rows | Phase 4 execution | 2026-03-18 |
 | server_set_mmr reducer for test seeding | Phase 4 UAT | 2026-03-19 |
@@ -521,5 +537,5 @@ Note: TournamentEnrolled row does NOT contain hsrAccountId — that column was r
 
 ---
 
-*Last updated: 2026-04-12*
+*Last updated: 2026-11-06*
 *Feature owner: Phase 3 / Phase 12.3*

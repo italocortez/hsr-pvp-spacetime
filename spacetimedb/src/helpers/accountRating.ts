@@ -11,8 +11,52 @@ import { updateWithAudit } from './auditHelpers';
  * owning all HsrCharacter rows at E6), scaled to 0–config.scale (default 1000).
  *
  * Replaces the TEMPORARY Phase 5 formula (5 * (1 + eidolonLevel), capped at 1000).
+ *
+ * Backlog #10: the formula takes a character set, so one account (computeAccountRating) and the union of several
+ * selected accounts (computeMergedAccountRating) share it. The maxPossible denominator is unchanged.
  */
+export interface RatedCharacter {
+    characterName: string;
+    eidolonLevel: number;
+}
+
+/** Single-account wrapper: the account's own roster. Unchanged result for every existing caller. */
 export function computeAccountRating(ctx: any, hsrAccountId: number): number {
+    return computeRosterRating(ctx, [...ctx.db.HsrAccountCharacter.hsr_account_id.filter(hsrAccountId)]);
+}
+
+/**
+ * Backlog #10 merged rating: the union of the given accounts' rosters, per character the max eidolon across them,
+ * rated by the same formula. A player who fields several accounts gets one rating for the combined roster instead
+ * of the highest single-account rating (the old MAX rule). No accounts → 0.
+ */
+export function computeMergedAccountRating(ctx: any, hsrAccountIds: number[]): number {
+    const best = new Map<string, number>();
+    for (const accountId of new Set(hsrAccountIds)) {
+        for (const c of ctx.db.HsrAccountCharacter.hsr_account_id.filter(accountId)) {
+            const prev = best.get(c.characterName);
+            if (prev === undefined || c.eidolonLevel > prev) best.set(c.characterName, c.eidolonLevel);
+        }
+    }
+    return computeRosterRating(ctx, [...best].map(([characterName, eidolonLevel]) => ({ characterName, eidolonLevel })));
+}
+
+/**
+ * The member's rating over their selected accounts in a lobby (LobbyMemberAccount rows): with one account its
+ * stored HsrAccount.accountRating (kept current by updateAccountRating, so exactly the pre-merge number), with
+ * several the merged rating of the union; none → 0.
+ */
+export function computeLobbyMemberRating(ctx: any, lobbyId: number, userId: number): number {
+    const accountIds = [...ctx.db.LobbyMemberAccount.by_lobby_and_user.filter([lobbyId, userId])].map((r: any) => r.hsrAccountId);
+    if (accountIds.length === 1) {
+        const account = ctx.db.HsrAccount.id.find(accountIds[0]);
+        return account ? account.accountRating : 0;
+    }
+    return computeMergedAccountRating(ctx, accountIds);
+}
+
+/** The rating formula over an explicit character set (each character at most once). */
+export function computeRosterRating(ctx: any, owned: RatedCharacter[]): number {
     const config = ctx.db.AccountRatingConfig.id.find(1);
     if (!config) return 0;
 
@@ -44,8 +88,7 @@ export function computeAccountRating(ctx: any, hsrAccountId: number): number {
         ageWeightMap.set(c.name, Math.pow(baseWeight, exp));
     }
 
-    // Player's owned characters
-    const owned = [...ctx.db.HsrAccountCharacter.hsr_account_id.filter(hsrAccountId)];
+    // The rated character set (one account's roster, or a merged union)
     if (owned.length === 0) return 0;
 
     // Vertical score (D-17 to D-20): average eidolon depth weighted by character age

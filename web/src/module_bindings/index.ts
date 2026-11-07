@@ -102,9 +102,9 @@ import DeleteAvailabilitySlotReducer from "./delete_availability_slot_reducer";
 import DeleteCalendarEventReducer from "./delete_calendar_event_reducer";
 import DeleteChatMessageReducer from "./delete_chat_message_reducer";
 import DeleteCostSetReducer from "./delete_cost_set_reducer";
-import DeleteGuestAccountReducer from "./delete_guest_account_reducer";
 import DeleteHsrAccountReducer from "./delete_hsr_account_reducer";
 import DeleteLobbyPresetReducer from "./delete_lobby_preset_reducer";
+import DeleteMyAccountReducer from "./delete_my_account_reducer";
 import DeselectMatchAccountReducer from "./deselect_match_account_reducer";
 import DisbandTournamentTeamReducer from "./disband_tournament_team_reducer";
 import DisputeMatchResultReducer from "./dispute_match_result_reducer";
@@ -167,6 +167,7 @@ import SetCaptainReducer from "./set_captain_reducer";
 import SetDisplayedAchievementReducer from "./set_displayed_achievement_reducer";
 import SetTeamSlotReducer from "./set_team_slot_reducer";
 import ShelveSeriesReducer from "./shelve_series_reducer";
+import ShuffleTeamsReducer from "./shuffle_teams_reducer";
 import StartDraftReducer from "./start_draft_reducer";
 import SubmitAndAdvanceBracketReducer from "./submit_and_advance_bracket_reducer";
 import SubmitMatchResultReducer from "./submit_match_result_reducer";
@@ -175,6 +176,7 @@ import TimerExpiryAuctionReducer from "./timer_expiry_auction_reducer";
 import TimerExpiryClassicReducer from "./timer_expiry_classic_reducer";
 import ToggleCalendarVisibilityReducer from "./toggle_calendar_visibility_reducer";
 import TransferRefereeReducer from "./transfer_referee_reducer";
+import UnbanMemberReducer from "./unban_member_reducer";
 import UnconfirmReadyReducer from "./unconfirm_ready_reducer";
 import UndoLastStepReducer from "./undo_last_step_reducer";
 import UnpublishCostSetReducer from "./unpublish_cost_set_reducer";
@@ -907,9 +909,9 @@ const reducersSchema = __reducers(
   __reducerSchema("delete_calendar_event", DeleteCalendarEventReducer),
   __reducerSchema("delete_chat_message", DeleteChatMessageReducer),
   __reducerSchema("delete_cost_set", DeleteCostSetReducer),
-  __reducerSchema("delete_guest_account", DeleteGuestAccountReducer),
   __reducerSchema("delete_hsr_account", DeleteHsrAccountReducer),
   __reducerSchema("delete_lobby_preset", DeleteLobbyPresetReducer),
+  __reducerSchema("delete_my_account", DeleteMyAccountReducer),
   __reducerSchema("deselect_match_account", DeselectMatchAccountReducer),
   __reducerSchema("disband_tournament_team", DisbandTournamentTeamReducer),
   __reducerSchema("dispute_match_result", DisputeMatchResultReducer),
@@ -972,6 +974,7 @@ const reducersSchema = __reducers(
   __reducerSchema("set_displayed_achievement", SetDisplayedAchievementReducer),
   __reducerSchema("set_team_slot", SetTeamSlotReducer),
   __reducerSchema("shelve_series", ShelveSeriesReducer),
+  __reducerSchema("shuffle_teams", ShuffleTeamsReducer),
   __reducerSchema("start_draft", StartDraftReducer),
   __reducerSchema("submit_and_advance_bracket", SubmitAndAdvanceBracketReducer),
   __reducerSchema("submit_match_result", SubmitMatchResultReducer),
@@ -980,6 +983,7 @@ const reducersSchema = __reducers(
   __reducerSchema("timer_expiry_classic", TimerExpiryClassicReducer),
   __reducerSchema("toggle_calendar_visibility", ToggleCalendarVisibilityReducer),
   __reducerSchema("transfer_referee", TransferRefereeReducer),
+  __reducerSchema("unban_member", UnbanMemberReducer),
   __reducerSchema("unconfirm_ready", UnconfirmReadyReducer),
   __reducerSchema("undo_last_step", UndoLastStepReducer),
   __reducerSchema("unpublish_cost_set", UnpublishCostSetReducer),

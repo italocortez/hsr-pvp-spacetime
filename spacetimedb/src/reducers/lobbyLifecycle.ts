@@ -1,7 +1,7 @@
 import spacetimedb from '../schema';
 import { t, SenderError } from 'spacetimedb/server';
-import { DraftMode, BanMode, GameMode, MatchType, RosterVisibility, DisconnectPolicy } from '../types/enums';
-import { getAuthenticatedUser } from '../helpers/ensurePermissions';
+import { DraftMode, BanMode, GameMode, MatchType, RosterVisibility, DisconnectPolicy, BanRestriction, LineupFormat, AdvantageSide } from '../types/enums';
+import { getAuthenticatedUser, isRoleAtLeast } from '../helpers/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import {
     ensureNotInLobby,
@@ -22,7 +22,9 @@ import { transferCaptain, transferReferee, transferHost } from '../helpers/flagT
 import { resolveUserLabel } from '../helpers/userLabel';
 import { isThirdPartyReferee } from '../helpers/disconnectHelpers';
 import { performConcede } from './concede';
-import { consumeLobbyCreateAllowance, readAbuseConfig } from '../helpers/abuseControls';
+import { consumeLobbyCreateAllowance, readAbuseConfig, recordGuestLobbyCreation } from '../helpers/abuseControls';
+import { ensureBestOf, normalizeLobbyName, resolveAdvantage } from '../helpers/seriesSettings';
+import { ensureCostSetUsable } from '../helpers/costSetGuards';
 
 // ─── create_lobby ─────────────────────────────────────────────────────────────
 // Creates a new lobby and inserts the creator as the host/referee.
@@ -72,6 +74,13 @@ export const create_lobby = spacetimedb.reducer(
         teamRedAlias: t.string(),
         bestOf: t.u8(),                  // D-11: best-of-N series. 0 = sentinel for default (1).
         refereeControlsShelving: t.bool(), // D-06: when true + 3rd party referee present, only referee controls shelve/continue.
+        // A45 / D-A8 / A21 / A40 / A27 arguments. Optional so an omitted key takes the documented default:
+        name: t.string().optional(),                   // D-A8: 0-50 chars after trim; default '' (S9's view_lobby_browser labels it)
+        banRestriction: BanRestriction.optional(),     // A45(2): default NoRestriction
+        lineupFormat: LineupFormat.optional(),         // A21: default Halves
+        hideMmr: t.bool().optional(),                  // A40 mitigation (2): default false
+        bestOfNAdvantage: AdvantageSide.optional(),    // A27: default None; forced None when bestOf = 1
+        refereeExclusiveConcede: t.bool().optional(),  // A45(5): default true
     },
     (ctx, args) => {
         const user = getAuthenticatedUser(ctx);
@@ -99,6 +108,10 @@ export const create_lobby = spacetimedb.reducer(
             throw new SenderError('Guest lobby creation is temporarily disabled');
         }
 
+        // A57 / A58: inline circuit breaker. Counts this guest creation; the creation that crosses the threshold
+        // still succeeds and turns the switch off in this transaction (a later throw rolls the count back too).
+        if (user.isGuest) recordGuestLobbyCreation(ctx);
+
         // B-7 (D-B5, A43): AbuseConfig.lobbyCreatesPerHour per user (guests included), UserRateState window.
         consumeLobbyCreateAllowance(ctx, user.id);
 
@@ -111,6 +124,14 @@ export const create_lobby = spacetimedb.reducer(
         // D-42: Ranked forces no mirror picks
         const allowMirrorPicks = args.matchType.tag === 'Ranked' ? false : args.allowMirrorPicks;
 
+        // D-A8 name; A28/A38(2) bestOf cap {1, 3} with the D-11 0 → 1 sentinel; A27 advantage (None for Bo1).
+        const name = normalizeLobbyName(args.name);
+        const bestOf = ensureBestOf(args.bestOf > 0 ? args.bestOf : 1);
+        const bestOfNAdvantage = resolveAdvantage(bestOf, args.bestOfNAdvantage);
+
+        // Backlog #2 (R2, D-D6): the cost set must be selectable and cover gameMode × draftMode.
+        ensureCostSetUsable(ctx, args.costSetId, args.gameMode.tag, args.draftMode.tag);
+
         // Resolve disconnectForfeitSeconds — 0 is sentinel for "not set"
         const disconnectForfeitSeconds = args.disconnectForfeitSeconds > 0
             ? args.disconnectForfeitSeconds
@@ -120,15 +141,15 @@ export const create_lobby = spacetimedb.reducer(
         const lobby = ctx.db.Lobby.insert(insertWithAudit(ctx, {
             id: 0, // autoInc
             joinCode,
-            name: '', // S6: create_lobby argument (D-A8)
+            name,
             hostUserId: user.id,
             teamBlueAlias: args.teamBlueAlias,
             teamRedAlias: args.teamRedAlias,
             teamSize: args.teamSize,
             draftMode: args.draftMode,
             banMode: args.banMode,
-            banRestriction: { tag: 'NoRestriction', value: {} }, // S6: argument (A45(2))
-            lineupFormat: { tag: 'Halves', value: {} },          // S6: argument (A21), Thirds for 12-character lobbies
+            banRestriction: args.banRestriction ?? { tag: 'NoRestriction' },
+            lineupFormat: args.lineupFormat ?? { tag: 'Halves' },
             standardTurnSeconds: args.standardTurnSeconds,
             reserveBankSeconds: args.reserveBankSeconds,
             rosterDiffAdvantage: args.rosterDiffAdvantage,
@@ -148,13 +169,13 @@ export const create_lobby = spacetimedb.reducer(
             refereeCanSetCaptain: args.refereeCanSetCaptain,
             refereeCanKick: args.refereeCanKick,
             allowPlayerPause: args.allowPlayerPause,
-            refereeExclusiveConcede: true,
+            refereeExclusiveConcede: args.refereeExclusiveConcede ?? true,
             tournamentId: undefined,
             bracketMatchId: undefined,
             isTournamentControlled: false,
             isAnonymousPlayers: args.isAnonymousPlayers,
             isAnonymousSpectators: args.isAnonymousSpectators,
-            hideMmr: false, // S6: argument (A40 mitigation 2)
+            hideMmr: args.hideMmr ?? false,
             rosterVisibility,
             requireOwnership: args.requireOwnership,
             costSetId: args.costSetId,
@@ -162,9 +183,8 @@ export const create_lobby = spacetimedb.reducer(
             disconnectPolicy: args.disconnectPolicy,
             disconnectForfeitSeconds,
             gameMode: args.gameMode,
-            // D-11: bestOf 0 is sentinel for default (1). S6: cap to {1, 3} (A28/A38(2))
-            bestOf: args.bestOf > 0 ? args.bestOf : 1,
-            bestOfNAdvantage: { tag: 'None', value: {} }, // S6: argument (A27), forced None when bestOf = 1
+            bestOf,
+            bestOfNAdvantage,
             // D-06: refereeControlsShelving default true per plan
             refereeControlsShelving: args.refereeControlsShelving,
             lastActivityAt: ctx.timestamp,
@@ -749,3 +769,40 @@ export const ban_member = spacetimedb.reducer(
 // ─── Internal helper ──────────────────────────────────────────────────────────
 // Hard-delete consolidated in lobbyGc.ts → hardDeleteLobby(ctx, lobbyId).
 // Used by close_lobby, leave_lobby (empty auto-close), and runFinalization.
+
+// ─── unban_member ─────────────────────────────────────────────────────────────
+// A45(3): lifts a lobby ban (deletes the LobbyBan row) so the user can rejoin. Allowed for the host, a referee
+// while lobby.refereeCanKick is on (the same power that lets a referee ban, D-32), or Moderator+ (who need not be
+// a member). Any stage. The admin In-Cell Edit exposes the same reducer.
+
+export const unban_member = spacetimedb.reducer(
+    {
+        lobbyId: t.u32(),
+        userId: t.u32(),
+    },
+    (ctx, args) => {
+        const user = getAuthenticatedUser(ctx);
+        const lobbyId = args.lobbyId;
+
+        const lobby = ctx.db.Lobby.id.find(lobbyId);
+        if (!lobby) {
+            throw new SenderError('Lobby not found.');
+        }
+
+        const callerMember = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, user.id])][0];
+        const allowed = lobby.hostUserId === user.id
+            || isRoleAtLeast(user.role, 'Moderator')
+            || (callerMember !== undefined && callerMember.isReferee && lobby.refereeCanKick);
+        if (!allowed) {
+            throw new SenderError('Only the host, moderators, admins, or an authorized referee can lift a lobby ban.');
+        }
+
+        const ban = [...ctx.db.LobbyBan.by_lobby_and_user.filter([lobbyId, args.userId])][0];
+        if (!ban) {
+            throw new SenderError('This user is not banned from the lobby.');
+        }
+        ctx.db.LobbyBan.by_lobby_and_user.delete([lobbyId, args.userId]);
+
+        console.log(`[LOBBY] User #${args.userId} unbanned from lobby #${lobbyId} by user #${user.id}`);
+    }
+);

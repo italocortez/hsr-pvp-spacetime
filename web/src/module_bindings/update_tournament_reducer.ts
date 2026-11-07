@@ -31,4 +31,5 @@ export default {
   scheduledStartAt: __t.string(),
   registrationDeadline: __t.string(),
   maxAccountsPerPlayer: __t.u8(),
+  lobbyPresetId: __t.option(__t.u32()),
 };

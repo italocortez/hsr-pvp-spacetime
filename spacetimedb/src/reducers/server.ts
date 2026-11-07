@@ -5,6 +5,7 @@ import { auditUpdate, SYSTEM_USER_ID } from '../helpers/auditColumns';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { performUserDeletion } from '../helpers/userDeletionHelper';
 import { rejectIfBanned, DISCORD_LOGIN_METHOD } from '../helpers/banHelper';
+import { seedSystemLobbyPreset } from '../helpers/systemPreset';
 
 /**
  * Guard: the caller is a registered server identity (Owner or Delegate, §C.4).
@@ -548,6 +549,7 @@ export const server_nuke_test_data = spacetimedb.reducer({
     ctx.db.LobbyBan.clear();
     ctx.db.LobbyPassword.clear();
     ctx.db.LobbyPreset.clear();
+    seedSystemLobbyPreset(ctx); // A33a: the built-in preset must exist for create_tournament (re-seeded, new id)
     ctx.db.Lobby.clear();
 
     // ── Bracket (group_phase_record dropped in S3, A23)
@@ -555,10 +557,10 @@ export const server_nuke_test_data = spacetimedb.reducer({
     // S7/S8: also clear the remaining S3 tables (LinkRequest, MatchResultGroupScore, MatchResultAdjustment,
     // MatchLineup, TournamentFinalizeJob) once their writers exist.
 
-    // ── Abuse controls (A42, B-7): rate windows and alerts. AbuseConfig is seeded by init and survives the nuke,
-    // and so does the AbuseBreakerJob chain (like IdentityGcJob / LobbyGcJob): clearing it would stop the breaker
-    // on the test database until the next wipe.
+    // ── Abuse controls (A42, B-7, A57): rate windows, the inline breaker's counters and alerts. AbuseConfig is
+    // seeded by init and survives the nuke.
     ctx.db.UserRateState.clear();
+    ctx.db.AbuseCounter.clear();
     ctx.db.AdminAlert.clear();
 
     // ── Tournaments (children first)
@@ -648,5 +650,5 @@ export const server_nuke_test_data = spacetimedb.reducer({
     if (users.length > 0) console.log(`[NUKE] User: ${users.length}`);
     totalDeleted += users.length;
 
-    console.log(`[NUKE] server_nuke_test_data complete: ${totalDeleted} rows deleted from filtered blocks; 42 tables fully cleared via Table.clear()`);
+    console.log(`[NUKE] server_nuke_test_data complete: ${totalDeleted} rows deleted from filtered blocks; 43 tables fully cleared via Table.clear()`);
 });

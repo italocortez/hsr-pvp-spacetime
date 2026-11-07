@@ -36,13 +36,7 @@ const hostedLobbyId = (test: Harness, who: Actor) => [...test.db.Lobby.host_user
 const config = (test: Harness) => test.db.AbuseConfig.id.find(1)!;
 const alerts = (test: Harness) => [...test.db.AdminAlert.iter()];
 
-/** Fires the scheduled breaker by hand, as the scheduler would (the pending row is consumed first). */
-function fireBreaker(test: Harness) {
-    const rows = [...test.db.AbuseBreakerJob.iter()];
-    expect(rows).toHaveLength(1);
-    test.db.AbuseBreakerJob.scheduledId.delete(rows[0].scheduledId);
-    tx(test, 'internal', (ctx) => M.run_abuse_breaker(ctx, { arg: rows[0] }));
-}
+const counter = (test: Harness) => test.db.AbuseCounter.key.find('guest_lobby_create');
 
 function guestLobbies(test: Harness, n: number, prefix = 'burst') {
     for (let i = 0; i < n; i++) createLobby(test, guest(test, `${prefix}${i}`));
@@ -83,7 +77,7 @@ const PRESET_ARGS = {
 };
 
 describe('init seeds the abuse controls', () => {
-    it('AbuseConfig holds the D-B5 defaults (SYSTEM actor) and one breaker job is pending', () => {
+    it('AbuseConfig holds the D-B5 defaults (SYSTEM actor); no breaker job (A57: the breaker runs inline)', () => {
         const test = newHarness();
         expect(config(test)).toMatchObject({
             cursorMinIntervalMs: 50,
@@ -99,7 +93,7 @@ describe('init seeds the abuse controls', () => {
             guestLobbyBurstWindowMinutes: 10,
             createdById: 0,
         });
-        expect([...test.db.AbuseBreakerJob.iter()]).toHaveLength(1);
+        expect(counter(test)).toBeNull();
     });
 });
 
@@ -217,46 +211,57 @@ describe('A42: guest kill switch', () => {
     });
 });
 
-describe('A42: circuit breaker', () => {
-    it('trips above the threshold: switch off, one counts-only alert, no duplicate on the next run', () => {
+// T-S6 rewrite (A57 / A58): the breaker is evaluated inside create_lobby for guest callers, on a fixed-window
+// AbuseCounter. The creation that crosses the threshold succeeds and trips the switch in the same transaction.
+describe('A57: inline circuit breaker', () => {
+    it('the 51st guest creation in 10 minutes succeeds, flips the switch and writes one alert; the 52nd is rejected', () => {
         const test = newHarness();
-        // A58: the seeded default is 50; the scenario runs at 20 to keep the fixture small.
-        tx(test, 'internal', (ctx) => M.admin_update_abuse_config(ctx, { guestLobbyBurstThreshold: 20 }));
-        guestLobbies(test, 21);
-        fireBreaker(test);
+        expect(config(test).guestLobbyBurstThreshold).toBe(50); // A58 default
+        guestLobbies(test, 50);
+        expect(config(test).guestLobbyCreationEnabled).toBe(true);
+        expect(alerts(test)).toHaveLength(0);
+        expect(counter(test)!.count).toBe(50);
 
+        const g51 = guest(test, 'burst50');
+        createLobby(test, g51);
+        expect(hostedLobbyId(test, g51)).toBeDefined();
         expect(config(test).guestLobbyCreationEnabled).toBe(false);
+        expect(config(test).lastModifiedById).toBe(0);
         expect(alerts(test)).toHaveLength(1);
         const alert = alerts(test)[0];
         expect(alert).toMatchObject({
             kind: 'guest_lobby_burst',
-            count: 21,
-            threshold: 20,
+            count: 51,
+            threshold: 50,
             isAcknowledged: false,
             acknowledgedAt: undefined,
             createdById: 0,
             lastModifiedById: 0,
         });
-        expect(alert.windowEndAt.microsSinceUnixEpoch - alert.windowStartAt.microsSinceUnixEpoch).toBe(10n * 60_000_000n);
+        expect(alert.windowStartAt).toEqual(counter(test)!.windowStart);
+        expect(alert.windowEndAt.microsSinceUnixEpoch >= alert.windowStartAt.microsSinceUnixEpoch).toBe(true);
 
-        // Rescheduled (one pending row) and no second alert while the switch is off.
-        advance(test, 5 * 60_000);
-        fireBreaker(test);
+        const g52 = guest(test, 'burst51');
+        expectReject(test, g52, (ctx) => M.create_lobby(ctx, { ...DEFAULT_LOBBY_ARGS } as any), 'Guest lobby creation is temporarily disabled');
         expect(alerts(test)).toHaveLength(1);
-        expect([...test.db.AbuseBreakerJob.iter()]).toHaveLength(1);
+        expect(counter(test)!.count).toBe(51); // the rejected creation is not counted (rolled back)
     });
 
-    it('does not trip at exactly the threshold, nor on lobbies older than the window', () => {
+    it('does not trip at exactly the threshold; a new window starts the count again; verified users are not counted', () => {
         const test = newHarness();
-        tx(test, 'internal', (ctx) => M.admin_update_abuse_config(ctx, { guestLobbyBurstThreshold: 20 })); // A58: default 50
+        tx(test, 'internal', (ctx) => M.admin_update_abuse_config(ctx, { guestLobbyBurstThreshold: 20 }));
         guestLobbies(test, 20);
-        fireBreaker(test);
         expect(config(test).guestLobbyCreationEnabled).toBe(true);
         expect(alerts(test)).toHaveLength(0);
 
-        advance(test, 11 * 60_000);
+        const verified = guest(test, 'verified');
+        linkDiscord(test, verified, 'discord-v', 'Verified');
+        createLobby(test, verified);
+        expect(counter(test)!.count).toBe(20);
+
+        advance(test, 10 * 60_000);
         guestLobbies(test, 1, 'fresh');
-        fireBreaker(test);
+        expect(counter(test)!.count).toBe(1);
         expect(config(test).guestLobbyCreationEnabled).toBe(true);
         expect(alerts(test)).toHaveLength(0);
     });
@@ -265,7 +270,6 @@ describe('A42: circuit breaker', () => {
         const test = newHarness();
         tx(test, 'internal', (ctx) => M.admin_update_abuse_config(ctx, { guestLobbyBurstThreshold: 20 })); // A58: default 50
         guestLobbies(test, 21);
-        fireBreaker(test);
         const alertId = alerts(test)[0].id;
 
         const g = guest(test, 'nosy');
@@ -278,6 +282,18 @@ describe('A42: circuit breaker', () => {
         expect(acked.acknowledgedAt).toBeDefined();
         expect(acked.lastModifiedById).toBe(0);
         expectReject(test, 'internal', (ctx) => M.admin_acknowledge_alert(ctx, { alertId: alertId + 999 }), /not found/);
+    });
+
+    it('re-enabling the switch after a trip lets guests create again; the next crossing writes a new alert', () => {
+        const test = newHarness();
+        tx(test, 'internal', (ctx) => M.admin_update_abuse_config(ctx, { guestLobbyBurstThreshold: 2 }));
+        guestLobbies(test, 3);
+        expect(config(test).guestLobbyCreationEnabled).toBe(false);
+        tx(test, 'internal', (ctx) => M.admin_set_guest_lobby_creation(ctx, { enabled: true }));
+        guestLobbies(test, 1, 'after');
+        // Same window, count 4 > 2: the switch was on again, so this creation trips it once more.
+        expect(config(test).guestLobbyCreationEnabled).toBe(false);
+        expect(alerts(test)).toHaveLength(2);
     });
 });
 

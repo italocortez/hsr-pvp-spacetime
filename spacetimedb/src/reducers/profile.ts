@@ -1,6 +1,7 @@
 import spacetimedb from '../schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { updateWithAudit } from '../helpers/auditHelpers';
+import { performUserDeletion } from '../helpers/userDeletionHelper';
 
 /**
  * Helper: resolve ctx.sender → UserIdentity → User.
@@ -15,28 +16,56 @@ function resolveUser(ctx: any) {
 }
 
 /**
- * Delete a guest account permanently.
- * Only works for guest users (no Discord linked).
- * Removes the UserIdentity mapping and the User row.
+ * A45(3): delete the caller's own account. Replaces delete_guest_account.
+ *
+ * Guests keep the old delete_guest_account behaviour: the caller's UserIdentity mapping is removed, and the User row
+ * too once no other identity points at it.
+ *
+ * Verified users: rejected while they sit in a lobby (as ensureNotInLobby counts it), or hold an enrollment in a
+ * tournament that is not Completed / Cancelled (Withdrawn and Disqualified enrollments do not block). Otherwise the
+ * deletion cascades through performUserDeletion at once (UserPrivate, calendars, presence, rate state, identities,
+ * HSR accounts; the User row is archived to DeletedUser when history references it).
  */
-export const delete_guest_account = spacetimedb.reducer((ctx) => {
+export const delete_my_account = spacetimedb.reducer((ctx) => {
     const resolved = resolveUser(ctx);
     if (!resolved) {
         throw new SenderError('No account found for this identity.');
     }
-    if (!resolved.user.isGuest) {
-        throw new SenderError('Only guest accounts can be deleted this way. Verified accounts persist across devices.');
+    const user = resolved.user;
+
+    if (user.isGuest) {
+        // Delete the UserIdentity mapping for this identity and its presence row (A48)
+        ctx.db.UserIdentity.identity.delete(ctx.sender);
+        if (ctx.db.UserPresence.identity.find(ctx.sender)) ctx.db.UserPresence.identity.delete(ctx.sender);
+
+        // No other identity points at this user: run the full cascade (UserPrivate, calendars, remaining presence
+        // rows, UserRateState, HSR accounts, then the User row or its DeletedUser archive when history references it).
+        const remainingLinks = [...ctx.db.UserIdentity.user_id.filter(user.id)];
+        if (remainingLinks.length === 0) {
+            performUserDeletion(ctx, user.id, user.id);
+        }
+        return;
     }
 
-    // Delete the UserIdentity mapping for this identity
-    ctx.db.UserIdentity.identity.delete(ctx.sender);
-
-    // Check if any other identities still point to this user
-    const remainingLinks = [...ctx.db.UserIdentity.user_id.filter(resolved.user.id)];
-    if (remainingLinks.length === 0) {
-        // No more identities linked — safe to delete the User row
-        ctx.db.User.id.delete(resolved.user.id);
+    // Same notion of "in a lobby" as ensureNotInLobby (D-22): AwaitingResult / Finished lobbies and voluntarily
+    // left seats do not count; lobby GC removes those rows.
+    for (const membership of ctx.db.LobbyMember.user_id.filter(user.id)) {
+        if (membership.voluntarilyLeft) continue;
+        const lobby = ctx.db.Lobby.id.find(membership.lobbyId);
+        if (lobby && lobby.stage.tag !== 'AwaitingResult' && lobby.stage.tag !== 'Finished') {
+            throw new SenderError('Leave your lobby before deleting your account.');
+        }
     }
+    for (const enrollment of ctx.db.TournamentEnrolled.user_id.filter(user.id)) {
+        if (enrollment.status.tag === 'Withdrawn' || enrollment.status.tag === 'Disqualified') continue;
+        const tournament = ctx.db.Tournament.id.find(enrollment.tournamentId);
+        if (tournament && tournament.stage.tag !== 'Completed' && tournament.stage.tag !== 'Cancelled') {
+            throw new SenderError('You are enrolled in a tournament that has not finished. Withdraw first, or wait until it ends.');
+        }
+    }
+
+    performUserDeletion(ctx, user.id, user.id);
+    console.log(`[DELETE] User #${user.id} deleted their own account.`);
 });
 
 /**

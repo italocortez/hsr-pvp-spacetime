@@ -276,3 +276,9 @@ export const BanRestriction = t.enum('BanRestriction', {
     MaxTwoDps: t.unit(),
     MaxOnePerRole: t.unit(),
 });
+
+// A45(3): shuffle_teams modes, the lobby room's Random Swap / Team Swap buttons (lobbyroom.html #randomSwap, #teamSwap).
+export const ShuffleMode = t.enum('ShuffleMode', {
+    RandomSwap: t.unit(),
+    TeamSwap: t.unit(),
+});

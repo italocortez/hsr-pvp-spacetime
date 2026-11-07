@@ -4,7 +4,7 @@ import { DraftMode, BanMode, GameMode, DisconnectPolicy, RosterVisibility, Match
 export const lobbyPresetColumns = {
     id: t.u32().primaryKey().autoInc(),
     name: t.string(),
-    isSystemPreset: t.bool(),           // A33a: the built-in default preset, owned by SYSTEM, seeded in init (S6), not deletable
+    isSystemPreset: t.bool(),           // A33a: the built-in default preset, owned by SYSTEM, seeded in init (helpers/systemPreset.ts), not deletable
     creatorUserId: t.u32(),
 
     // Lobby config fields (mirror lobby.ts config columns):

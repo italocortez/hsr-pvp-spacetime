@@ -908,6 +908,21 @@ D-50 applies to ALL Drafting→Equipping transitions: auto (last Classic pick, l
 **When:** #10 disconnects
 **Then:** No Pause step and isPaused unchanged at disconnect time. 15 s later, if #10 is still offline, `run_referee_transfer_check` inserts Pause(actorUserId=0, isAutoPause=true, sequence=max+1) and sets isPaused=true; a spectator's or coach's disconnect never does.
 
+### Bo3 Game 2 Drafts to Completion (Phase S6 execution, BACKEND-BUGS F2)
+**Given:** A Bo3 lobby (Classic, ban mode None) whose game 1 ended in BetweenGames
+**When:** The host calls `advance_to_next_game`, then the captains pick in sequence order
+**Then:** The session has a fresh 16-step sequence, `turnIndex = 0`, `currentGameNumber = 2`; after 16 picks (all `gameNumber = 2`) the lobby is in Equipping. Auction (no bans): game 2 opens with `isAuctionPhase = true`, Blue nominating, budgets reset, and reaches Equipping after 16 sales (8 per team). The won-game counters are carried over.
+
+### Series Head Start (Phase S6 execution, A27, backlog #7)
+**Given:** A casual lobby with `bestOf = 3`, `bestOfNAdvantage = Red`
+**When:** The host starts the draft; game 1 ends with no recorded game
+**Then:** The session starts 0–1 (`gamesWonRed = 1`); after game 1 the recount in `advance_stage` keeps Red at 1. A Bo1 lobby always starts 0–0 (advantage stored as None).
+
+### Ban Restriction (Phase S6 execution, A45(2))
+**Given:** A Classic lobby, ban mode Four, `banRestriction = MaxOneDps`; Blue already banned one DPS character this game
+**When:** Blue's captain bans a second DPS character
+**Then:** Rejected: "Ban restriction: your team may ban at most one DPS character."; a Support ban is accepted; Red's own first DPS ban is unaffected. MaxTwoDps allows two DPS bans per team; MaxOnePerRole rejects a second ban of any role. When Blue's ban timer expires with autoRandomPick on, the auto-ban draws only characters Blue may still ban (SKIP when none).
+
 ## Edge Cases
 
 | Case | Expected Behavior | Notes |
@@ -995,6 +1010,7 @@ D-50 applies to ALL Drafting→Equipping transitions: auto (last Classic pick, l
 | `timer_expiry_classic` / `timer_expiry_auction` require lobby membership (F3) | Phase S4 execution (DECISIONS.md A22(2)) | 2026-11-06 |
 | `undo_last_step` undoes the last Pick/Ban only; rejected while paused and in the auction phase; Pick/Ban/Pause/Undo sequences from `getNextSequence` (F9) | Phase S4 execution (DECISIONS.md A22(2)) | 2026-11-06 |
 | Auto-pause decided by `run_referee_transfer_check` 15 s after the last disconnect, team players only (F5) | Phase S4 execution (DECISIONS.md A22(5), A22a) | 2026-11-06 |
+| Scenarios "Bo3 Game 2 Drafts to Completion", "Series Head Start", "Ban Restriction" added; `advance_to_next_game` rebuilds the draft through `initSessionForGame` | Phase S6 execution (BACKEND-BUGS F2; DECISIONS.md A27, A45(2)) | 2026-11-06 |
 
 ---
 

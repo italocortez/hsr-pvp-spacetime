@@ -122,7 +122,7 @@ TournamentStandIn (PK: [bracketMatchId, userId])  [public: true]
 
 Lobby-owned reducers live in `reducers/lobbyLifecycle.ts`, `lobbySettings.ts`, `lobbyPresets.ts`, `refereeManagement.ts`, `cursor.ts`, `lobbyGc.ts`, `accountSelection.ts`, `concede.ts` (concede / claim_forfeit / defer), `refereeTransfer.ts` (the A22a scheduled check), the lifecycle hooks in `index.ts`, and (tournament-linked) `tournamentLobby.ts`. Draft-stage transitions (`start_draft`, picks/bans) live in the draft feature, not here.
 
-### create_lobby(config fields..., presetId, joinCode, password)
+### create_lobby(config fields..., presetId, joinCode, password, name?, banRestriction?, lineupFormat?, hideMmr?, bestOfNAdvantage?, refereeExclusiveConcede?)
 1. `getAuthenticatedUser(ctx)` -- reject guests.
 2. D-31b: if `presetId > 0`, verify `LobbyPreset` exists (validation only -- preset values are NOT applied server-side).
 3. D-22: `ensureNotInLobby` -- reject if caller has any active LobbyMember row.
@@ -133,8 +133,15 @@ Lobby-owned reducers live in `reducers/lobbyLifecycle.ts`, `lobbySettings.ts`, `
 8. D-24 / D-27: insert host as `LobbyMember` with `lobbySlot=Spectator`, `isReferee=true`, `isConfirmed=false`, `isOnline=true`, `joinSeq=1` (R4, S4).
 9. D-02: if `!isPublic` and password provided, insert `LobbyPassword` row.
 
+Series settings and cost-set guards (Phase S6 execution; DECISIONS.md A27, A28, A38(2), A40, A45(2)/(5), D-A8; backlog #2, #6-#9), before the insert:
+- The six new arguments are optional (an omitted key takes the default): `name` (trimmed, 0-50 chars, default '' — the lobby browser view labels an empty name in S9; no host name is stored, so anonymous lobbies leak nothing), `banRestriction` (NoRestriction), `lineupFormat` (Halves), `hideMmr` (false), `bestOfNAdvantage` (None), `refereeExclusiveConcede` (true, A45(5); it was hardcoded true before).
+- `bestOf`: the D-11 sentinel maps 0 to 1, then `ensureBestOf` (helpers/seriesSettings.ts) rejects anything but 1 or 3 with "bestOf must be 1 or 3.". `bestOfNAdvantage` is forced to None when bestOf = 1 (`resolveAdvantage`).
+- `lineupFormat`: both values are accepted. The A21 rule "8 characters → Halves, 12 → Thirds" has no other source in the schema today (every draft sequence fields 8 characters per team, `teamSize` is players), so the format itself is the character count; the 12-character draft is S7's.
+- `ensureCostSetUsable(costSetId, gameMode, draftMode)` (helpers/costSetGuards.ts): id 0 passes; otherwise the set must exist, be published and not locked, and hold at least one `HsrCharacterCost` and one `HsrLightconeCost` row for the tuple (D-D6 loose coverage; synergies never reject). Error: "This cost set has no costs for {gameMode} × {draftMode}. Pick another set or ask its owner to extend it."
+
 Abuse guards (Phase S5 execution; DECISIONS.md A42, A43; ACCESS-SECURITY-OPS B-7), after step 5 and before the insert, values read from `AbuseConfig` (id 1) at call time:
 - A42(1) kill switch: a guest caller is rejected with "Guest lobby creation is temporarily disabled" while `guestLobbyCreationEnabled` is false. `join_lobby` has no such check, so guests already in lobbies are unaffected.
+- A57 / A58 inline breaker (Phase S6 execution): right after the kill-switch check, a guest creation bumps `AbuseCounter['guest_lobby_create']` (`recordGuestLobbyCreation`); the creation that pushes the window count past `guestLobbyBurstThreshold` (default 50 in 10 minutes) succeeds and turns the switch off with one `AdminAlert` in the same transaction (docs/admin/architecture.md "Abuse controls").
 - B-7 hourly cap (D-B5, guests included per A43): `consumeLobbyCreateAllowance` (`helpers/abuseControls.ts`) keeps a fixed one-hour window in `UserRateState` (`lobbyWindowStart`, `lobbyCreates`; row created on first use) and rejects once `lobbyCreatesPerHour` creates fell in the window. D-22 (one lobby at a time) is unchanged.
 
 ### join_lobby(lobbyId, joinCode, password)
@@ -179,7 +186,12 @@ Abuse guards (Phase S5 execution; DECISIONS.md A42, A43; ACCESS-SECURITY-OPS B-7
 2. Permission `canKickOrBan` (same as kick); reject self or host.
 3. Insert `LobbyBan` row (`bannedUserId`, `bannedByUserId=caller`).
 4. If target is currently a member: delete `LobbyMember`, decrement count.
-5. Insert System `ChatMessage` "{name} was banned from the lobby." (There is no `unban_member` reducer -- removing a ban is an admin data operation.)
+5. Insert System `ChatMessage` "{name} was banned from the lobby." (Phase S6 execution: `unban_member` lifts a ban, below.)
+
+### unban_member(lobbyId, userId) (Phase S6 execution, A45(3))
+1. `getAuthenticatedUser(ctx)`; load lobby (any stage).
+2. Permission: the host, Moderator+ (membership not required), or a member who is referee while `refereeCanKick` is on; else "Only the host, moderators, admins, or an authorized referee can lift a lobby ban."
+3. Reject when no `LobbyBan` row exists ("This user is not banned from the lobby."); delete it (`by_lobby_and_user`). No chat message, no Lobby write (bans are private, so nothing else changes on the wire).
 
 ### update_lobby_settings(lobbyId, config fields..., isPublic, password)
 1. `getAuthenticatedUser(ctx)`; load lobby.
@@ -189,6 +201,13 @@ Abuse guards (Phase S5 execution; DECISIONS.md A42, A43; ACCESS-SECURITY-OPS B-7
 5. Update `Lobby` row (locked fields keep existing values); bump `lastActivityAt`.
 6. Password: upsert `LobbyPassword` if `!isPublic` + password given; delete it if `isPublic`.
 7. Reset readiness: every `isConfirmed=true` member is delete+reinserted with `isConfirmed=false`.
+
+Phase S6 execution (backlog #2, #6, #7, #9; DECISIONS.md A28, A33, A38(2)/(4), A40, A45(2)): new optional arguments `bestOf`, `refereeControlsShelving`, `lineupFormat`, `bestOfNAdvantage`, `banRestriction`, `hideMmr`, `name` (an omitted key keeps the lobby's value; `refereeExclusiveConcede` was already an argument).
+- Integrity set (locked in tournament lobbies): the D-65 list plus `bestOf`, `lineupFormat` and `bestOfNAdvantage` (A27: the head start comes from the bracket, copied by S8). Unlike the D-65 fields, which silently keep the tournament's value, an explicit **change** of any of the three is rejected ("bestOf is set by the tournament bracket and cannot be changed in a tournament lobby." / "lineupFormat is set by the tournament ..."); passing the current value is accepted.
+- Free set (host or Moderator+, Waiting, tournament lobbies included): `refereeControlsShelving`, `banRestriction`, `hideMmr`, `refereeExclusiveConcede`, `name`, plus the existing free fields.
+- `bestOf`: 0 → 1, then `ensureBestOf`; `bestOfNAdvantage` forced None when the resulting bestOf is 1.
+- Cost set: a changed `costSetId` runs `ensureSelectableCostSet`; a change of `costSetId`, `gameMode` or `draftMode` runs `ensureCostSetCovers` on the resulting tuple.
+- Step 7 (confirmation reset) covers every change, the new fields included.
 
 ### set_team_slot(lobbyId, targetUserId, lobbySlot)
 1. `getAuthenticatedUser(ctx)`; load lobby; D-28 `ensureStageIs(Waiting)`.
@@ -213,6 +232,17 @@ Abuse guards (Phase S5 execution; DECISIONS.md A42, A43; ACCESS-SECURITY-OPS B-7
 3. Validate `name` length 1-50; resolve `disconnectForfeitSeconds` (0 -> undefined).
 4. `create`: insert `LobbyPreset` (`isSystemPreset=false`, `creatorUserId=user.id`). `update`: `updateWithAudit` all config fields. `delete`: delete row.
 5. B-7 (Phase S5 execution): `create` counts the caller's presets on `creator_user_id` and rejects at `AbuseConfig.maxPresetsPerUser` (D-B5: 10). Guests never reach this check (TournamentHost+ guard, A43).
+6. Phase S6 execution (backlog #6, #2; A28, A45(2)): optional arguments `bestOf`, `refereeControlsShelving`, `bestOfNAdvantage`, `lineupFormat`, `banRestriction`, `hideMmr` (create: defaults 1 / true / None / Halves / NoRestriction / false; update: omitted keeps the stored value). `ensureBestOf` and the None-for-Bo1 rule as in `create_lobby`. Cost set: `create` runs `ensureCostSetUsable`; `update` runs it when `costSetId` changes, else `ensureCostSetCovers` when gameMode / draftMode change.
+7. Phase S6 execution (A33a): `delete_lobby_preset` rejects the system preset for everyone, Admins included ("The system lobby preset cannot be deleted."); `update_lobby_preset` on it stays Admin-only (`ensureCanMutatePreset`).
+
+### System lobby preset (helpers/systemPreset.ts; Phase S6 execution, A33a / CH-S4)
+`seedSystemLobbyPreset(ctx)` runs in `init` (and after `server_nuke_test_data` clears `LobbyPreset`), idempotent: one row with `isSystemPreset = true`, `creatorUserId = SYSTEM_USER_ID (0)` (so it never counts against a user's preset cap), name "Tournament default". Free-set values = the constants `create_tournament_lobby` hardcodes (reducers/tournamentLobby.ts): Classic, ban mode Four, NoRestriction, turn 60 s, reserve 120 s, handicaps 0, character / light-cone budget 0, minimum raise 20, autoRandomPick false, referee may undo / pause / set captain, not kick, player pause on, exclusive concede on, referee controls shelving on, hideMmr false. Integrity-set columns are placeholders the tournament overrides in a tournament lobby: teamSize 1, MemoryOfChaos, Casual, public, not anonymous, OpenRoster, no ownership, cost set 0, Standard disconnect, no forfeit timer, no mirror picks, Halves, bestOf 1, advantage None. `create_tournament` points `Tournament.lobbyPresetId` at it; S8's `create_tournament_lobby` copies the free set from the pointed preset.
+
+### shuffle_teams(lobbyId, mode: ShuffleMode) (lobbySettings.ts; Phase S6 execution, A45(3))
+1. `getAuthenticatedUser(ctx)`; load lobby; `ensureHostOrAbove`; `ensureStageIs(Waiting)`.
+2. `TeamSwap`: every BluePlayer/BlueCoach becomes RedPlayer/RedCoach and vice versa; captain flags stay (each captain stays with their team).
+3. `RandomSwap`: the non-coach Blue + Red players (ordered by `joinSeq`) are shuffled with `ctx.random.shuffle` and dealt Blue, Red, Blue, ...; coaches and spectators stay; captain flags are cleared (`start_draft` assigns them, D-30).
+4. One pass over the members: new slot, `isConfirmed=false`, cleared captain flag (delete + reinsert only for rows that change); bump `lastActivityAt`.
 
 ### transfer_referee(lobbyId, targetUserId) / reclaim_referee(lobbyId)
 - `transfer_referee`: caller must currently be referee (`isReferee=true`); reject self-target; delete+reinsert caller `isReferee=false` and target `isReferee=true`. No stage gate.
@@ -236,7 +266,7 @@ B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3
 
 ### select_match_account(lobbyId, hsrAccountId) / deselect_match_account(lobbyId, hsrAccountId)
 1. `getAuthenticatedUser(ctx)`; load lobby; `ensureLobbyMember`. D-06: stage must be Waiting or BetweenGames.
-2. `select`: reject Spectator/Coach; validate the `HsrAccount` belongs to caller. Tournament path (D-04) is additive up to `Tournament.maxAccountsPerPlayer` and requires the account be locked in `TournamentPlayerAccount`; non-tournament path (D-07) replaces (max 1). D-B-03: bumps `accountRatingSnapshot` if a MatchResult already exists.
+2. `select`: reject Spectator/Coach; validate the `HsrAccount` belongs to caller. Tournament path (D-04) is additive up to `Tournament.maxAccountsPerPlayer` and requires the account be locked in `TournamentPlayerAccount`; non-tournament path (D-07) replaces (max 1). D-B-03: bumps `accountRatingSnapshot` if a MatchResult already exists. Phase S6 execution (backlog #10): the bump is `max(snapshot, computeLobbyMemberRating(...))`, the merged rating of the member's current selection (one account: its stored rating), instead of the newly selected account's own rating.
 3. `deselect`: find and delete the matching `LobbyMemberAccount` row (throw if not selected). No snapshot hook.
 
 ### create_tournament_lobby(bracketMatchId, joinCode) / approve_stand_in(bracketMatchId, userId)
@@ -298,6 +328,12 @@ B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3
 | B-4: `broadcast_cursor` drops out-of-range x/y and calls inside `AbuseConfig.cursorMinIntervalMs` (per member, `LobbyMember.lastCursorAt`, no audit bump) | Phase S5 execution (DECISIONS.md A43, D-B5) | 2026-11-06 |
 | B-7 / A42: `create_lobby` rejects guests while `guestLobbyCreationEnabled` is off and caps every user (guests included) at `lobbyCreatesPerHour` through `UserRateState`; `create_lobby_preset` caps at `maxPresetsPerUser` | Phase S5 execution (DECISIONS.md A42, A43) | 2026-11-06 |
 | R4: `LobbyMember.joinSeq` assigned at insert (host = 1, then max + 1) in `create_lobby`, `join_lobby`, `create_tournament_lobby`; `LobbyMember` documented as private (S3, A37) | Phase S4 execution (DECISIONS.md A22(5), A37) | 2026-11-06 |
+| `create_lobby` gains optional `name`, `banRestriction`, `lineupFormat`, `hideMmr`, `bestOfNAdvantage`, `refereeExclusiveConcede`; bestOf {1, 3} guard with the 0 → 1 sentinel; advantage None for Bo1; cost-set selectability + loose coverage | Phase S6 execution (DECISIONS.md A27, A28, A38(2), A40, A45(2), A45(5), D-A8; backlog #2, #8) | 2026-11-06 |
+| `update_lobby_settings` series / free-set fields; bestOf + lineupFormat join the tournament lock list (explicit change rejected); free set editable in tournament lobbies; cost-set guards on change | Phase S6 execution (DECISIONS.md A33, A38(4); backlog #2, #9) | 2026-11-06 |
+| Presets store and validate the series fields + banRestriction / lineupFormat / hideMmr; system preset seeded in `init`, never deletable, Admin-only edit | Phase S6 execution (DECISIONS.md A33a, A45(2); backlog #6) | 2026-11-06 |
+| New reducers `shuffle_teams(lobbyId, mode)` and `unban_member(lobbyId, userId)` | Phase S6 execution (DECISIONS.md A45(3)) | 2026-11-06 |
+| Inline guest-lobby breaker in `create_lobby` (AbuseCounter fixed window, default 50 in 10 minutes) | Phase S6 execution (DECISIONS.md A57, A58) | 2026-11-06 |
+| `select_match_account` ratchet uses the merged rating of the current selection | Phase S6 execution (backlog #10) | 2026-11-06 |
 
 ---
 

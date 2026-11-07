@@ -406,6 +406,16 @@ All functions are pure math with zero database access.
 **When:** `computeAccountRating` is called
 **Then:** Returns 1000 (combined/maxPossible = 1.0, scaled by config.scale).
 
+### Merged Account Rating for Multi-Account Players (Phase S6 execution, backlog #10)
+**Given:** A player selected two accounts with disjoint rosters, each rated 700 on its own
+**When:** `start_draft` captures `accountRatingSnapshot`
+**Then:** The snapshot is `computeMergedAccountRating` over the union of both rosters (per character the max eidolon, same formula, unchanged `maxPossible` denominator), which differs from 700 (the old MAX rule would give 700). With one selected account the snapshot is that account's stored `accountRating`, exactly as before.
+
+### Snapshot Ratchet (Phase S6 execution, backlog #10)
+**Given:** The snapshot above, lobby in BetweenGames
+**When:** The player deselects one account, then selects a single account rated lower than the merged value
+**Then:** The snapshot never decreases: deselecting does not touch it, and `select_match_account` stores `max(snapshot, merged rating of the current selection)`.
+
 ## Edge Cases
 
 | Case | Expected Behavior | Notes |
@@ -481,7 +491,8 @@ All functions are pure math with zero database access.
 | Concede finalization matrix: Ranked non-tournament concedes process MMR (D-77/D-78/D-79) | Phase 10 execution | 2026-04-03 |
 | D-42: tournamentId removed from MatchResultRecord; derived via BracketMatch chain | Phase 7 execution | 2026-03-25 |
 | Full hydration from codebase | Phase 13 normalization | 2026-04-09 |
+| MMR snapshot input: MAX of the selected accounts → merged rating over the union of their rosters; ratchet kept; scenarios "Merged Account Rating for Multi-Account Players", "Snapshot Ratchet" added | Phase S6 execution (backlog #10) | 2026-11-06 |
 
 ---
 
-*Last updated: 2026-04-09*
+*Last updated: 2026-11-06*

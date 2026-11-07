@@ -216,6 +216,16 @@ Pre-15.2, path 2 did not exist — archived users were soft-deleted in `User` wi
 **When:** Guest is created, `nextAuthStatus` is "authenticated"
 **Then:** Discord linking does NOT auto-trigger. `hasDiscordIntent` is false (no explicit "Login with Discord" click). User stays as guest.
 
+### Delete My Account (Phase S6 execution, A45(3))
+**Given:** A verified (Discord-linked) user in no lobby and in no live tournament
+**When:** They call `delete_my_account()`
+**Then:** `performUserDeletion` runs at once: UserPrivate, calendars, presence, rate state, every `UserIdentity` and every HSR account are deleted; the `User` row is archived to `DeletedUser` (display name kept for history labels). Rejected while they sit in a lobby (any stage but AwaitingResult / Finished, not voluntarily left): "Leave your lobby before deleting your account."; rejected while enrolled (not Withdrawn / Disqualified) in a tournament that is not Completed / Cancelled: "You are enrolled in a tournament that has not finished. Withdraw first, or wait until it ends."
+
+### Delete My Account as a Guest (Phase S6 execution, A45(3); replaces delete_guest_account)
+**Given:** A guest
+**When:** They call `delete_my_account()`
+**Then:** Same as the old `delete_guest_account`: the caller's `UserIdentity` row is deleted, and the `User` row too once no other identity points at it. `delete_guest_account` no longer exists.
+
 ## Edge Cases
 
 | Case | Expected Behavior | Notes |
@@ -280,3 +290,5 @@ Pre-15.2, path 2 did not exist — archived users were soft-deleted in `User` wi
 | Phase 16 subscription reshuffle behavior contract: Stage 1 (`view_my_profile`) moves to `components/features/auth/components/AuthProvider.tsx` (always-on); Stage 2 (`SELECT * FROM user`) moves to `app/(authed)/layout.tsx` (route-group mount IS the gate). Route-group rename: `(authenticated)` → `(authed)`, `(landing-page)` → `(public)`, `(game)/draft` collapsed into `(authed)/(match)/draft`. Anonymous visitors receive zero User rows because the authed layout never mounts for them (middleware is UX-only redirect, not an auth trust boundary) | Phase 16 execution | 2026-04-18 |
 | Phase 16 useAuth performance pass: collapsed redundant auth-context reads and memoized the `useAuth()` return object so callers re-render only when their used subset changes. Public auth API unchanged (`currentUser`, `isActive`, `profileReady`, `nextAuthStatus`, `hasUser`, etc.) — this is a pure memoization refactor, no behavior change | Phase 16 execution | 2026-04-19 |
 | Phase 16 UAT findings (CSP, SW, image handling) — `next.config.ts` CSP `script-src` requires `'unsafe-eval'` in both dev AND prod because the SpacetimeDB SDK uses `Function()` constructor at runtime for BSATN codec generation; dropping it at build-time breaks auth (and all reducer calls) in CSP-enforcing browsers. `next.config.ts` `connect-src` requires `https://*.ufs.sh` so the Service Worker can re-issue allowlisted CDN fetches without CSP rejection. Neither finding changes the auth API surface — both are infrastructure prerequisites for auth + SDK to work in prod | Phase 16 verify-work | 2026-04-19 |
+
+| `delete_my_account()` for every user (verified: lobby + live-tournament guards, cascades through `performUserDeletion`; guest: the old `delete_guest_account` behaviour); `delete_guest_account` removed | Phase S6 execution (DECISIONS.md A45(3)) | 2026-11-06 |

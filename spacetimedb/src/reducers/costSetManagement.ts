@@ -3,6 +3,7 @@ import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser, ensureTournamentHost, isRoleAtLeast } from '../helpers/ensurePermissions';
 import { auditInsert, auditUpdate } from '../helpers/auditColumns';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
+import { isCostSetInUse } from '../helpers/costSetGuards';
 import { readAbuseConfig } from '../helpers/abuseControls';
 
 // Valid GameMode tags
@@ -568,6 +569,11 @@ export const delete_cost_set = spacetimedb.reducer(
 
         if (costSet.isPublished) {
             throw new SenderError('Cost set must be unpublished before deleting. Call unpublish_cost_set first.');
+        }
+
+        // Backlog #2 (R2): never delete a set a live lobby or tournament still points at.
+        if (isCostSetInUse(ctx, costSetId)) {
+            throw new SenderError('This cost set is used by an active lobby or tournament and cannot be deleted.');
         }
 
         // Delete all live character cost rows with this costSetId

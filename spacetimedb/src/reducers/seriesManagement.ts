@@ -7,7 +7,7 @@ import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser, isRoleAtLeast } from '../helpers/ensurePermissions';
 import { ensureLobbyMember, slotTeam, slotIsCoach, slotIsSpectator } from '../helpers/lobbyHelpers';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
-import type { TimerState } from '@bindings/types';
+import { initSessionForGame } from '../helpers/matchSessionInit';
 
 // ─── D-07 authority check ─────────────────────────────────────────────────────
 // Returns true if caller has authority to control series state.
@@ -42,7 +42,8 @@ function hasSeriesAuthority(ctx: any, lobby: any, user: any): boolean {
 // Transitions a BetweenGames lobby to Drafting for the next game.
 // Per D-02, D-04, D-07, D-14:
 //   1. Deletes all current MatchSessionStep rows (finalization archives final game's steps)
-//   2. Resets MatchSession: turnIndex=0, timerState reset, budgets reset, increments currentGameNumber
+//   2. Resets MatchSession through initSessionForGame (F2): new draft sequence, turnIndex=0, timer, budgets,
+//      auction state and pauses reset; increments currentGameNumber; won-game counters kept
 //   3. Transitions lobby stage: BetweenGames -> Drafting
 
 export const advance_to_next_game = spacetimedb.reducer(
@@ -82,37 +83,10 @@ export const advance_to_next_game = spacetimedb.reducer(
             ctx.db.MatchSessionStep.id.delete(step.id);
         }
 
-        // Step 2: Reset MatchSession for next game
-        // - Reset turnIndex to 0
-        // - Reset draftSequence (clear — start_draft will regenerate)
-        // - Reset budgets from lobby config
-        // - Reset pause state
-        // - Increment currentGameNumber
-        const initialTimerState: TimerState = {
-            turnStartAt: ctx.timestamp,
-            teamBlueReserveMs: lobby.reserveBankSeconds * 1000,
-            teamRedReserveMs: lobby.reserveBankSeconds * 1000,
-            isPaused: false,
-            accumulatedPauseMs: 0,
-        };
-
-        ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
-            turnIndex: 0,
-            draftSequence: [],
-            teamBlueCharBudget: lobby.characterBudget,
-            teamRedCharBudget: lobby.characterBudget,
-            teamBlueLcBudget: lobby.lightconeBudget,
-            teamRedLcBudget: lobby.lightconeBudget,
-            timerState: initialTimerState,
-            pausesUsedBlue: 0,
-            pausesUsedRed: 0,
-            isAuctionPhase: false,
-            currentNomination: undefined,
-            currentBidAmount: undefined,
-            blueCharactersWon: 0,
-            redCharactersWon: 0,
-            currentGameNumber: session.currentGameNumber + 1,
-        }, user.id));
+        // Step 2: F2 (BACKEND-BUGS): rebuild the next game's draft state with the same initializer start_draft uses
+        // (sequence, turnIndex, auction phase, nominator / bid team, budgets, timer, pauses), so game N + 1 can be
+        // drafted in Classic and Auction. Won-game counters are kept; currentGameNumber is incremented.
+        initSessionForGame(ctx, lobby, session, user.id);
 
         // Step 3: Transition lobby stage: BetweenGames -> Drafting
         ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {

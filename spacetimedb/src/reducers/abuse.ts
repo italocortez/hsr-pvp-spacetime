@@ -1,15 +1,13 @@
 import spacetimedb from '../schema';
 import { t, SenderError } from 'spacetimedb/server';
-import { ScheduleAt, Timestamp } from 'spacetimedb';
-import { AbuseBreakerJob } from '../tables/abuseBreakerJob';
 import { SYSTEM_USER_ID } from '../helpers/auditColumns';
-import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
+import { updateWithAudit } from '../helpers/auditHelpers';
 import { ensureAdmin } from '../helpers/ensurePermissions';
-import { ABUSE_BREAKER_INTERVAL_MICROS, seedAbuseConfigDefaults } from '../helpers/abuseControls';
+import { seedAbuseConfigDefaults } from '../helpers/abuseControls';
 
-// ─── Abuse controls: admin reducers + circuit breaker (DECISIONS A42; ACCESS-SECURITY-OPS §B.5) ──────────
-
-const GUEST_LOBBY_BURST_ALERT = 'guest_lobby_burst';
+// ─── Abuse controls: admin reducers (DECISIONS A42; ACCESS-SECURITY-OPS §B.5) ──────────────────────────────
+// The guest-lobby circuit breaker runs inline in create_lobby (A57): helpers/abuseControls.ts
+// recordGuestLobbyCreation. There is no scheduled breaker any more.
 
 // Tunables where 0 would switch a guard off (no throttle interval, an empty breaker window) must stay > 0.
 const POSITIVE_FIELDS = ['cursorMinIntervalMs', 'chatMinIntervalMs', 'lineupMinIntervalMs', 'guestLobbyBurstWindowMinutes'] as const;
@@ -77,50 +75,5 @@ export const admin_acknowledge_alert = spacetimedb.reducer(
             acknowledgedAt: ctx.timestamp,
         }, SYSTEM_USER_ID));
         console.log(`[ABUSE] Alert #${alertId} (${alert.kind}) acknowledged by admin #${admin.id}`);
-    }
-);
-
-// ─── run_abuse_breaker ────────────────────────────────────────────────────────
-// A42(2) circuit breaker, bound to AbuseBreakerJob through `onSchedule`; init seeds the first row. Every 5 minutes:
-// reschedule first (F14: a throw below can never break the chain), then, while the switch is on, count the lobbies
-// created inside the last guestLobbyBurstWindowMinutes whose host is a guest. Above guestLobbyBurstThreshold the
-// switch goes off and one AdminAlert (counts only) is written. While the switch is off nothing is counted, so a
-// tripped breaker never writes a duplicate alert. Cost per run: one Lobby scan (Lobby has no createdDate index;
-// the table holds live lobbies only, GC'd after 30 min idle) plus one User.id.find per lobby inside the window.
-export const run_abuse_breaker = spacetimedb.reducer(
-    { onSchedule: AbuseBreakerJob },
-    { arg: AbuseBreakerJob.rowType },
-    (ctx, _args) => {
-        const now: bigint = ctx.timestamp.microsSinceUnixEpoch;
-        ctx.db.AbuseBreakerJob.insert({
-            scheduledId: 0n,
-            scheduledAt: ScheduleAt.time(now + ABUSE_BREAKER_INTERVAL_MICROS),
-        });
-
-        const cfg = seedAbuseConfigDefaults(ctx);
-        if (!cfg.guestLobbyCreationEnabled) return;
-
-        const windowStart = now - BigInt(cfg.guestLobbyBurstWindowMinutes) * 60_000_000n;
-        let count = 0;
-        // iter() required: no createdDate index on Lobby (see the cost note above).
-        for (const lobby of ctx.db.Lobby.iter()) {
-            if (lobby.createdDate.microsSinceUnixEpoch < windowStart) continue;
-            if (ctx.db.User.id.find(lobby.hostUserId)?.isGuest) count++;
-        }
-        if (count <= cfg.guestLobbyBurstThreshold) return;
-
-        ctx.db.AbuseConfig.id.update(updateWithAudit(ctx, cfg, { guestLobbyCreationEnabled: false }, SYSTEM_USER_ID));
-        ctx.db.AdminAlert.insert(insertWithAudit(ctx, {
-            id: 0,
-            kind: GUEST_LOBBY_BURST_ALERT,
-            windowStartAt: new Timestamp(windowStart),
-            windowEndAt: ctx.timestamp,
-            count,
-            threshold: cfg.guestLobbyBurstThreshold,
-            isAcknowledged: false,
-            createdAt: ctx.timestamp,
-            acknowledgedAt: undefined,
-        }, SYSTEM_USER_ID));
-        console.warn(`[ABUSE] Breaker tripped: ${count} guest lobbies in ${cfg.guestLobbyBurstWindowMinutes} min (threshold ${cfg.guestLobbyBurstThreshold}); guest lobby creation disabled`);
     }
 );

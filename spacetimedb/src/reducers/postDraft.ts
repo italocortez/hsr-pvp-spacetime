@@ -368,8 +368,9 @@ export const advance_stage = spacetimedb.reducer(
                         if (game.winnerTeamSide.tag === 'Blue') blueWins++;
                         else if (game.winnerTeamSide.tag === 'Red') redWins++;
                     }
-                    newGamesWonBlue = blueWins;
-                    newGamesWonRed = redWins;
+                    // A27: the lobby's head start (seeded by start_draft) stays on top of the played games.
+                    newGamesWonBlue = blueWins + (lobby.bestOfNAdvantage?.tag === 'Blue' ? 1 : 0);
+                    newGamesWonRed = redWins + (lobby.bestOfNAdvantage?.tag === 'Red' ? 1 : 0);
 
                     // Persist updated win counts to MatchSession
                     ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {

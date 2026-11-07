@@ -138,6 +138,12 @@ lobby id). The guards exist for UX clarity -- the snapshot from Phase 12.3's D-A
 capture already makes the MMR system correct even if every guard were bypassed
 by an admin reducer.
 
+### Phase S6 execution: rating over a character set (helpers/accountRating.ts, backlog #10)
+- `computeRosterRating(ctx, characters)` holds the Phase 11 formula over an explicit set of `{ characterName, eidolonLevel }` (vertical mean, archetype coverage, cached or on-the-fly `maxPossible` denominator, unchanged).
+- `computeAccountRating(ctx, hsrAccountId)` is the thin single-account wrapper (the account's own `HsrAccountCharacter` rows); every existing caller (`updateAccountRating`, `admin_recalculate_all_ratings`, roster mutations) gets the same number as before.
+- `computeMergedAccountRating(ctx, accountIds)`: union of the accounts' rosters, per character the max eidolon across them, rated by the same formula; no accounts → 0.
+- `computeLobbyMemberRating(ctx, lobbyId, userId)`: the member's `LobbyMemberAccount` selection; one account → its stored `accountRating`; several → merged. Used by `start_draft` (MMR snapshot) and the `select_match_account` ratchet. The display path (`view_my_lobby_members`) is S9.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -153,10 +159,11 @@ by an admin reducer.
 | HsrAccountLightcone cascade not yet implemented -- lightcone reducers descoped from Phase 2 | Phase 02 execution | 2026-02-10 |
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
 | Phase 12.3 | Helper extraction (rosterMutations.ts with applyBatchUpsert / applyBatchRemove), migrate_roster rating-recompute fix (D-D-04 latent bug), four D-G lobby guards on set_active / batch_upsert / batch_remove / migrate_roster |
+| `computeAccountRating` refactored over a character set (`computeRosterRating`) with a single-account wrapper; `computeMergedAccountRating` / `computeLobbyMemberRating` added for multi-account players | Phase S6 execution (backlog #10) | 2026-11-06 |
 
 ---
 
-*Last updated: 2026-04-12*
+*Last updated: 2026-11-06*
 *Feature owner: Phase 02 / Phase 10.4 / Phase 12.3*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

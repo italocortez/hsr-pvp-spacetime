@@ -1,9 +1,11 @@
 import spacetimedb from '../schema';
 import { t, SenderError } from 'spacetimedb/server';
-import { DraftMode, BanMode, GameMode, MatchType, RosterVisibility, DisconnectPolicy } from '../types/enums';
+import { DraftMode, BanMode, GameMode, MatchType, RosterVisibility, DisconnectPolicy, BanRestriction, LineupFormat, AdvantageSide } from '../types/enums';
 import { getAuthenticatedUser, isRoleAtLeast } from '../helpers/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { readAbuseConfig } from '../helpers/abuseControls';
+import { ensureBestOf, resolveAdvantage } from '../helpers/seriesSettings';
+import { ensureCostSetCovers, ensureCostSetUsable } from '../helpers/costSetGuards';
 
 // ─── Shared permission check for preset edit/delete ──────────────────────────
 // Per D-31b permission hierarchy:
@@ -17,7 +19,7 @@ function ensureCanMutatePreset(ctx: any, preset: any, user: any): void {
     const isOwner = preset.creatorUserId === user.id;
 
     if (preset.isSystemPreset) {
-        // Only admins can touch system presets
+        // A33a: the built-in system preset is edited by Admins only (delete_lobby_preset rejects it for everyone).
         if (!isAdmin) {
             throw new SenderError('Only admins can modify or delete system presets.');
         }
@@ -89,6 +91,14 @@ export const create_lobby_preset = spacetimedb.reducer(
         refereeCanKick: t.bool(),
         allowPlayerPause: t.bool(),
         refereeExclusiveConcede: t.bool(),
+        // Backlog #6 series fields + A45(2) / A21 / A40 columns (optional: an omitted key takes the default on
+        // create, keeps the stored value on update). bestOf ∈ {1, 3}; bestOfNAdvantage forced None when bestOf = 1.
+        bestOf: t.u8().optional(),
+        refereeControlsShelving: t.bool().optional(),
+        bestOfNAdvantage: AdvantageSide.optional(),
+        lineupFormat: LineupFormat.optional(),
+        banRestriction: BanRestriction.optional(),
+        hideMmr: t.bool().optional(),
     },
     (ctx, args) => {
         const user = getAuthenticatedUser(ctx);
@@ -114,6 +124,11 @@ export const create_lobby_preset = spacetimedb.reducer(
             ? args.disconnectForfeitSeconds
             : undefined;
 
+        // Backlog #6 / #8: bestOf cap (0 = default 1), advantage None for Bo1; backlog #2: cost-set guards.
+        const bestOf = ensureBestOf(args.bestOf ? args.bestOf : 1);
+        const bestOfNAdvantage = resolveAdvantage(bestOf, args.bestOfNAdvantage);
+        ensureCostSetUsable(ctx, args.costSetId, args.gameMode.tag, args.draftMode.tag);
+
         ctx.db.LobbyPreset.insert(insertWithAudit(ctx, {
             id: 0, // autoInc
             name: args.name,
@@ -122,8 +137,8 @@ export const create_lobby_preset = spacetimedb.reducer(
             teamSize: args.teamSize,
             draftMode: args.draftMode,
             banMode: args.banMode,
-            banRestriction: { tag: 'NoRestriction', value: {} }, // S6: argument (A45(2))
-            lineupFormat: { tag: 'Halves', value: {} },          // S6: argument (A21, backlog #6)
+            banRestriction: args.banRestriction ?? { tag: 'NoRestriction' },
+            lineupFormat: args.lineupFormat ?? { tag: 'Halves' },
             gameMode: args.gameMode,
             matchType: args.matchType,
             standardTurnSeconds: args.standardTurnSeconds,
@@ -139,7 +154,7 @@ export const create_lobby_preset = spacetimedb.reducer(
             isPublic: args.isPublic,
             isAnonymousPlayers: args.isAnonymousPlayers,
             isAnonymousSpectators: args.isAnonymousSpectators,
-            hideMmr: false, // S6: argument (A40)
+            hideMmr: args.hideMmr ?? false,
             rosterVisibility: args.rosterVisibility,
             requireOwnership: args.requireOwnership,
             costSetId: args.costSetId,
@@ -153,10 +168,9 @@ export const create_lobby_preset = spacetimedb.reducer(
             refereeCanKick: args.refereeCanKick,
             allowPlayerPause: args.allowPlayerPause,
             refereeExclusiveConcede: args.refereeExclusiveConcede,
-            // S6: series arguments (backlog #6; A28 cap {1,3}; bestOfNAdvantage None when bestOf = 1)
-            bestOf: 1,
-            bestOfNAdvantage: { tag: 'None', value: {} },
-            refereeControlsShelving: true,
+            bestOf,
+            bestOfNAdvantage,
+            refereeControlsShelving: args.refereeControlsShelving ?? true,
         }, user.id));
 
         console.log(`[PRESET] Lobby preset "${args.name}" created by user #${user.id}`);
@@ -203,6 +217,14 @@ export const update_lobby_preset = spacetimedb.reducer(
         refereeCanKick: t.bool(),
         allowPlayerPause: t.bool(),
         refereeExclusiveConcede: t.bool(),
+        // Backlog #6 series fields + A45(2) / A21 / A40 columns (optional: an omitted key takes the default on
+        // create, keeps the stored value on update). bestOf ∈ {1, 3}; bestOfNAdvantage forced None when bestOf = 1.
+        bestOf: t.u8().optional(),
+        refereeControlsShelving: t.bool().optional(),
+        bestOfNAdvantage: AdvantageSide.optional(),
+        lineupFormat: LineupFormat.optional(),
+        banRestriction: BanRestriction.optional(),
+        hideMmr: t.bool().optional(),
     },
     (ctx, args) => {
         const user = getAuthenticatedUser(ctx);
@@ -224,6 +246,16 @@ export const update_lobby_preset = spacetimedb.reducer(
         const disconnectForfeitSeconds = args.disconnectForfeitSeconds > 0
             ? args.disconnectForfeitSeconds
             : undefined;
+
+        // Backlog #6 / #8: bestOf cap (omitted = stored value, 0 = default 1), advantage None for Bo1;
+        // backlog #2: cost-set guards (selectability only when the set changes).
+        const bestOf = args.bestOf === undefined ? preset.bestOf : ensureBestOf(args.bestOf > 0 ? args.bestOf : 1);
+        const bestOfNAdvantage = resolveAdvantage(bestOf, args.bestOfNAdvantage ?? preset.bestOfNAdvantage);
+        if (args.costSetId !== preset.costSetId) {
+            ensureCostSetUsable(ctx, args.costSetId, args.gameMode.tag, args.draftMode.tag);
+        } else if (args.gameMode.tag !== preset.gameMode.tag || args.draftMode.tag !== preset.draftMode.tag) {
+            ensureCostSetCovers(ctx, args.costSetId, args.gameMode.tag, args.draftMode.tag);
+        }
 
         ctx.db.LobbyPreset.id.update(updateWithAudit(ctx, preset, {
             name: args.name,
@@ -258,6 +290,12 @@ export const update_lobby_preset = spacetimedb.reducer(
             refereeCanKick: args.refereeCanKick,
             allowPlayerPause: args.allowPlayerPause,
             refereeExclusiveConcede: args.refereeExclusiveConcede,
+            bestOf,
+            bestOfNAdvantage,
+            refereeControlsShelving: args.refereeControlsShelving ?? preset.refereeControlsShelving,
+            lineupFormat: args.lineupFormat ?? preset.lineupFormat,
+            banRestriction: args.banRestriction ?? preset.banRestriction,
+            hideMmr: args.hideMmr ?? preset.hideMmr,
         }, user.id));
 
         console.log(`[PRESET] Lobby preset #${args.presetId} updated by user #${user.id}`);
@@ -278,6 +316,11 @@ export const delete_lobby_preset = spacetimedb.reducer(
         const preset = ctx.db.LobbyPreset.id.find(args.presetId);
         if (!preset) {
             throw new SenderError('Lobby preset not found.');
+        }
+
+        // A33a: the built-in system preset is never deletable, not even by an Admin.
+        if (preset.isSystemPreset) {
+            throw new SenderError('The system lobby preset cannot be deleted.');
         }
 
         // D-31b: permission check

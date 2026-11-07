@@ -4,7 +4,9 @@ import { getAuthenticatedUser } from '../helpers/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { ensureLobbyMember, ensureHostOrAbove, ensureStageIs, slotTeam, slotIsCoach, slotToTeamSide } from '../helpers/lobbyHelpers';
 import { validateCharacterOwnership } from '../helpers/ownershipValidation';
-import { buildClassicSequence, buildAuctionBanSequence } from '../helpers/draftSequences';
+import { initSessionForGame } from '../helpers/matchSessionInit';
+import { computeLobbyMemberRating } from '../helpers/accountRating';
+import { banRestrictionError, isBanLegal } from '../helpers/banRestriction';
 import { ensureMatchAlive } from '../helpers/disconnectHelpers';
 import { getNextSequence } from '../helpers/stepSequence';
 
@@ -96,15 +98,6 @@ export const start_draft = spacetimedb.reducer(
             }
         }
 
-        // Build draft sequence
-        let sequence: any[];
-        if (lobby.draftMode.tag === 'Classic') {
-            sequence = buildClassicSequence(lobby.banMode.tag);
-        } else {
-            // Auction mode: ban steps only
-            sequence = buildAuctionBanSequence(lobby.banMode.tag);
-        }
-
         // D-30: Assign captains — for each team, if no player has isCaptain=true,
         // set the first non-coach player on that team as captain.
         const blueHasCaptain = bluePlayers.some((m: any) => m.isCaptain);
@@ -121,38 +114,9 @@ export const start_draft = spacetimedb.reducer(
             ctx.db.LobbyMember.insert(updateWithAudit(ctx, first, { isCaptain: true }, user.id));
         }
 
-        // Create MatchSession
-        const timerState = {
-            turnStartAt: ctx.timestamp,
-            teamBlueReserveMs: lobby.reserveBankSeconds * 1000,
-            teamRedReserveMs: lobby.reserveBankSeconds * 1000,
-            isPaused: false,
-            accumulatedPauseMs: 0,
-        };
-
-        ctx.db.MatchSession.insert(insertWithAudit(ctx, {
-            lobbyId,
-            turnIndex: 0,
-            draftSequence: sequence,
-            timerState,
-            isAuctionPhase: lobby.draftMode.tag === 'Auction' && sequence.length === 0,
-            nextNominatorTeam: { tag: 'Blue', value: {} } as any,
-            blueCharactersWon: 0,
-            redCharactersWon: 0,
-            currentNomination: undefined,
-            currentBidAmount: undefined,
-            currentBidTeam: { tag: 'Spectator', value: {} } as any,
-            teamBlueCharBudget: lobby.characterBudget,
-            teamRedCharBudget: lobby.characterBudget,
-            teamBlueLcBudget: lobby.lightconeBudget,
-            teamRedLcBudget: lobby.lightconeBudget,
-            pausesUsedBlue: 0,
-            pausesUsedRed: 0,
-            currentGameNumber: 1,
-            gamesWonBlue: 0,
-            gamesWonRed: 0,
-            seriesBestOf: lobby.bestOf || 1,
-        }, user.id));
+        // Create MatchSession (F2: initSessionForGame builds the sequence and game state; A27 seeds the head start
+        // from lobby.bestOfNAdvantage)
+        const sequence = initSessionForGame(ctx, lobby, undefined, user.id);
 
         // Determine refereeFullControl from referee's team slot (D-44):
         // spectator referee = full control; player-side referee = false
@@ -199,22 +163,12 @@ export const start_draft = spacetimedb.reducer(
             (m: any) => !slotIsCoach(m.lobbySlot) && slotTeam(m.lobbySlot) !== null
         );
         for (const member of participantMembers) {
-            // D-A-01 / D-B-01 (Phase 12.3): capture max HsrAccount.accountRating across
-            // the member's LobbyMemberAccount rows at the instant the lobby transitions
-            // Waiting -> Drafting. max() is the anti-gaming rule: swapping to a lower
-            // account later cannot reduce the MMR input for this match.
-            // D-B-02: default 0 when no LMA rows exist (only possible for casual matches
-            // — ranked/MMR-tournament matches are rejected at lines 59-73 if any player
-            // has zero LMA rows). Zero matches the pre-phase `?? 0` fallback at
-            // finalizationHelpers.ts:87,91 and produces zero account-modifier contribution.
-            const selectedAccounts = [...ctx.db.LobbyMemberAccount.by_lobby_and_user.filter([lobbyId, member.userId])];
-            let accountRatingSnapshot = 0;
-            for (const lma of selectedAccounts) {
-                const acct = ctx.db.HsrAccount.id.find(lma.hsrAccountId);
-                if (acct && acct.accountRating > accountRatingSnapshot) {
-                    accountRatingSnapshot = acct.accountRating;
-                }
-            }
+            // Backlog #10 (replaces the D-A-01 / D-B-01 MAX rule): the merged account rating over the union of the
+            // member's selected rosters (per character the max eidolon across the accounts, same formula and
+            // maxPossible denominator), captured at Waiting -> Drafting. One account gives that account's own
+            // rating. Later selections only ratchet it upward (select_match_account, D-B-03).
+            // D-B-02: 0 when no LMA rows exist (casual only; ranked/MMR-tournament matches reject that above).
+            const accountRatingSnapshot = computeLobbyMemberRating(ctx, lobbyId, member.userId);
             ctx.db.MatchResultParticipant.insert(insertWithAudit(ctx, {
                 matchResultId: matchResultRow.id,
                 userId: member.userId,
@@ -531,6 +485,12 @@ export const ban_character = spacetimedb.reducer(
             throw new SenderError('Character already picked and cannot be banned.');
         }
 
+        // A45(2): the lobby's Ban Restriction, counted per team over this game's bans
+        const restrictionError = banRestrictionError(ctx, lobby, slotTeam(member.lobbySlot) ?? '', characterName);
+        if (restrictionError) {
+            throw new SenderError(restrictionError);
+        }
+
         // Record the step
         ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
             id: 0,
@@ -749,8 +709,11 @@ export const timer_expiry_classic = spacetimedb.reducer(
                         )
                         .map((r: any) => r.characterName)
                 )];
+                // A45(2): only characters the acting team may still ban under the lobby's Ban Restriction;
+                // none left → the SKIP sentinel, as without autoRandomPick.
                 const availablePool = allChars.filter(
                     (name) => !bannedChars.has(name) && !pickedChars.has(name)
+                        && isBanLegal(ctx, lobby, currentStep.teamTurn.tag, name)
                 );
 
                 if (availablePool.length > 0) {

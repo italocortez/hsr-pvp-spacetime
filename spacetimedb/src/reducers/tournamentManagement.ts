@@ -4,6 +4,9 @@ import { Timestamp } from 'spacetimedb';
 import { ensureTournamentHost } from '../helpers/ensurePermissions';
 import { ensureTournamentAccess, validateStageTransition, validateRegistrationToSeeding, validateSeedingToInProgress, cleanupTeamRequests, cascadeCleanupTournament, removeUncheckedInParticipants } from '../helpers/tournamentHelpers';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
+import { ensureBestOf, ensureWinnerAdvantage } from '../helpers/seriesSettings';
+import { ensureCostSetCovers, ensureCostSetUsable, ensureSelectableCostSet } from '../helpers/costSetGuards';
+import { seedSystemLobbyPreset } from '../helpers/systemPreset';
 
 // Valid enum tag lists for runtime validation
 const VALID_TOURNAMENT_FORMATS = ['SingleElimination', 'DoubleElimination', 'GroupOnly', 'GroupIntoSingleElim', 'GroupIntoDoubleElim'];
@@ -38,7 +41,8 @@ export const create_tournament = spacetimedb.reducer(
         has3rdPlaceMatch: t.bool(),
         // S8: the auto-advance argument was removed with its column (A24/A36); the create/update signatures
         // gain the A33/A36 integrity-set arguments (lineupFormat, allowMirrorPicks, checkInEnabled, groupAdvanceCount,
-        // disconnectForfeitSeconds, requireResultValidation, grandFinalBestOf, lobbyPresetId) in S8.
+        // disconnectForfeitSeconds, requireResultValidation, grandFinalBestOf) in S8. lobbyPresetId: create_tournament points at
+        // the system preset and update_tournament takes an optional lobbyPresetId (A33a).
         countTowardsMmr: t.bool(),
         winnerAdvantage: t.u8(),
         requireOwnership: t.bool(),
@@ -95,15 +99,12 @@ export const create_tournament = spacetimedb.reducer(
             throw new SenderError('teamSize must be 1, 2, or 3.');
         }
 
-        // Validate defaultBestOf
-        if (defaultBestOf !== 1 && defaultBestOf !== 3 && defaultBestOf !== 5 && defaultBestOf !== 7) {
-            throw new SenderError('defaultBestOf must be 1, 3, 5, or 7.');
-        }
+        // A28 / A38(2): bestOf ∈ {1, 3} (backlog #8). grandFinalBestOf = defaultBestOf until its own argument (A28).
+        ensureBestOf(defaultBestOf);
+        const grandFinalBestOf = defaultBestOf;
 
-        // Validate winnerAdvantage
-        if (winnerAdvantage > 3) {
-            throw new SenderError('winnerAdvantage must be 0-3.');
-        }
+        // A27 / review CH-T9: winnerAdvantage < ceil(grandFinalBestOf / 2)
+        ensureWinnerAdvantage(winnerAdvantage, grandFinalBestOf);
 
         // Validate groupSize
         if (groupSize < 3) {
@@ -121,16 +122,11 @@ export const create_tournament = spacetimedb.reducer(
         validateEnumTag(rosterVisibility, VALID_ROSTER_VISIBILITIES, 'rosterVisibility');
         validateEnumTag(disconnectPolicy, VALID_DISCONNECT_POLICIES, 'disconnectPolicy');
 
-        // Validate costSetId if non-zero
-        if (costSetId !== 0) {
-            const costSet = ctx.db.CostSet.id.find(costSetId);
-            if (!costSet) {
-                throw new SenderError(`Cost set ${costSetId} not found.`);
-            }
-            if (!costSet.isPublished) {
-                throw new SenderError(`Cost set ${costSetId} is not published.`);
-            }
-        }
+        // A33a: the tournament points at the built-in system preset (idempotent seed; init already created it).
+        const lobbyPreset = seedSystemLobbyPreset(ctx);
+
+        // Backlog #2 (R2, D-D6): selectable and covering defaultGameMode × the preset's draft mode.
+        ensureCostSetUsable(ctx, costSetId, defaultGameMode, lobbyPreset.draftMode.tag);
 
         // Parse optional timestamps: non-empty string = BigInt microseconds since epoch
         const parsedScheduledStartAt = scheduledStartAt ? BigInt(scheduledStartAt) : undefined;
@@ -172,13 +168,13 @@ export const create_tournament = spacetimedb.reducer(
             countTowardsMmr,
             requireResultValidation: countTowardsMmr, // S8: argument, forced true when countTowardsMmr (A36)
             defaultBestOf,
-            grandFinalBestOf: defaultBestOf,     // S8: argument, {1,3}, with winnerAdvantage < ceil(grandFinalBestOf / 2) (A27/A28)
+            grandFinalBestOf,                    // S8: its own argument, {1,3}, with winnerAdvantage < ceil(grandFinalBestOf / 2) (A27/A28)
             groupSize,
             has3rdPlaceMatch,
             requireOwnership,
             allowMirrorPicks: !countTowardsMmr,  // S8: integrity-set argument (A33); Ranked forces false (D-42)
             lineupFormat: { tag: 'Halves', value: {} } as any, // S8: integrity-set argument (A21/A33)
-            lobbyPresetId: 0,                    // S6/S8: defaults to the system preset id (A33a)
+            lobbyPresetId: lobbyPreset.id,       // A33a: the system preset; update_tournament may swap it
             requireVerified,
             requireRoster,
             minimumMmr: minimumMmr > 0 ? minimumMmr : undefined,
@@ -221,6 +217,8 @@ export const update_tournament = spacetimedb.reducer(
         scheduledStartAt: t.string(),
         registrationDeadline: t.string(),
         maxAccountsPerPlayer: t.u8(),
+        // A33a: swap the lobby preset for one the organizer owns or the system preset (omitted = unchanged).
+        lobbyPresetId: t.u32().optional(),
     },
     (ctx, {
         tournamentId,
@@ -243,6 +241,7 @@ export const update_tournament = spacetimedb.reducer(
         scheduledStartAt,
         registrationDeadline,
         maxAccountsPerPlayer,
+        lobbyPresetId,
     }) => {
         const { user, tournament } = ensureTournamentAccess(ctx, tournamentId);
 
@@ -262,14 +261,20 @@ export const update_tournament = spacetimedb.reducer(
             throw new SenderError('Description cannot exceed 2000 characters.');
         }
 
-        // Validate defaultBestOf
-        if (defaultBestOf !== 1 && defaultBestOf !== 3 && defaultBestOf !== 5 && defaultBestOf !== 7) {
-            throw new SenderError('defaultBestOf must be 1, 3, 5, or 7.');
-        }
+        // A28 / A38(2): bestOf ∈ {1, 3} (backlog #8); A27 / CH-T9 against the stored grandFinalBestOf.
+        ensureBestOf(defaultBestOf);
+        ensureWinnerAdvantage(winnerAdvantage, tournament.grandFinalBestOf);
 
-        // Validate winnerAdvantage
-        if (winnerAdvantage > 3) {
-            throw new SenderError('winnerAdvantage must be 0-3.');
+        // A33a: preset swap while the tournament is editable (this reducer already requires Draft or Registration).
+        const nextPresetId = lobbyPresetId === undefined ? tournament.lobbyPresetId : lobbyPresetId;
+        const preset = ctx.db.LobbyPreset.id.find(nextPresetId);
+        if (lobbyPresetId !== undefined && lobbyPresetId !== tournament.lobbyPresetId) {
+            if (!preset) {
+                throw new SenderError('Lobby preset not found.');
+            }
+            if (!preset.isSystemPreset && preset.creatorUserId !== tournament.organizerId) {
+                throw new SenderError("The tournament can only use the system preset or one of the organizer's own presets.");
+            }
         }
 
         // Validate groupSize
@@ -286,16 +291,10 @@ export const update_tournament = spacetimedb.reducer(
         validateEnumTag(rosterVisibility, VALID_ROSTER_VISIBILITIES, 'rosterVisibility');
         validateEnumTag(disconnectPolicy, VALID_DISCONNECT_POLICIES, 'disconnectPolicy');
 
-        // Validate costSetId if non-zero
-        if (costSetId !== 0) {
-            const costSet = ctx.db.CostSet.id.find(costSetId);
-            if (!costSet) {
-                throw new SenderError(`Cost set ${costSetId} not found.`);
-            }
-            if (!costSet.isPublished) {
-                throw new SenderError(`Cost set ${costSetId} is not published.`);
-            }
-        }
+        // Backlog #2 (R2, D-D6): selectability when the set changes; coverage of defaultGameMode × the preset's
+        // draft mode (Classic when the pointed preset is gone; S8 falls back to the system preset the same way).
+        if (costSetId !== tournament.costSetId) ensureSelectableCostSet(ctx, costSetId);
+        ensureCostSetCovers(ctx, costSetId, tournament.defaultGameMode.tag, preset ? preset.draftMode.tag : 'Classic');
 
         // Parse optional timestamps
         const parsedScheduledStartAt = scheduledStartAt ? BigInt(scheduledStartAt) : undefined;
@@ -325,6 +324,7 @@ export const update_tournament = spacetimedb.reducer(
             groupSize,
             has3rdPlaceMatch,
             winnerAdvantage,
+            lobbyPresetId: nextPresetId,
             requireOwnership,
             requireVerified,
             requireRoster,

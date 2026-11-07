@@ -317,6 +317,12 @@ Admin and server operations handle privileged actions: server identity registrat
 **Given:** `guestLobbyBurstThreshold = 20`, `guestLobbyBurstWindowMinutes = 10`, the switch on; 21 lobbies hosted by guests were created in the last 10 minutes
 **When:** `run_abuse_breaker` fires
 **Then:** The next `AbuseBreakerJob` row is scheduled 5 minutes out; `guestLobbyCreationEnabled = false`; one `AdminAlert { kind: 'guest_lobby_burst', count: 21, threshold: 20, windowEndAt - windowStartAt = 10 min, isAcknowledged: false }` with SYSTEM audit columns and no user id. The next run inserts no second alert while the switch is off. With exactly 20 lobbies, or with lobbies older than the window, nothing trips.
+_Superseded in Phase S6 execution (DECISIONS.md A57, A58): the scheduled reducer, its job table and its `init` seed were removed; the breaker now runs inline, next scenario._
+
+### Circuit Breaker Trips, inline (Phase S6 execution, A57 / A58)
+**Given:** `guestLobbyBurstThreshold = 50` (A58 default), `guestLobbyBurstWindowMinutes = 10`, the switch on; 50 guest `create_lobby` calls succeeded inside the current 10-minute window (`AbuseCounter['guest_lobby_create'].count = 50`)
+**When:** A 51st guest calls `create_lobby` inside the same window
+**Then:** That creation succeeds; in the same transaction `guestLobbyCreationEnabled = false` and one `AdminAlert { kind: 'guest_lobby_burst', count: 51, threshold: 50, windowStartAt = the counter's window start, windowEndAt = now, isAcknowledged: false }` is written with SYSTEM audit columns and no user id. A 52nd guest creation is rejected ("Guest lobby creation is temporarily disabled") and writes no second alert. With exactly 50 creations nothing trips; a creation 10 minutes after the window start opens a new window at count 1; verified users are not counted. (S5 wording: a scheduled breaker counted surviving guest-hosted lobbies every 5 minutes; that reducer and its job table are deleted.)
 
 ### Acknowledge Alert (Phase S5 execution, A42(3))
 **Given:** Unacknowledged `AdminAlert` #1
@@ -361,3 +367,4 @@ Admin and server operations handle privileged actions: server identity registrat
 | HsrSynergyCost upsert uses `id.update()` (autoInc PK) — tuple match via iter()+predicate follows the Phase 15.4 reducer pattern | Phase 15.4 execution | 2026-04-15 |
 | `init` registers the Owner + SYSTEM user; `server_register_delegate` / `server_revoke_delegate` (owner-only); test-only `server_*` reducers default-deny unless module env `STDB_TARGET=test` | Phase M2 execution | 2026-11-06 |
 | Abuse controls: `admin_update_abuse_config`, `admin_set_guest_lobby_creation`, `admin_acknowledge_alert`, scheduled `run_abuse_breaker`; scenarios "Abuse Config Update", "Guest Lobby Kill Switch", "Circuit Breaker Trips", "Acknowledge Alert" added | Phase S5 execution (DECISIONS.md A42, A43) | 2026-11-06 |
+| "Circuit Breaker Trips" restated for the inline breaker: evaluated in `create_lobby` on the 51st guest creation inside the window (default 50 in 10 minutes), the crossing creation succeeds and trips the switch in the same transaction, one alert per trip | Phase S6 execution (DECISIONS.md A57, A58) | 2026-11-06 |

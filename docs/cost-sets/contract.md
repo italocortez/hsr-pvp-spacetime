@@ -324,6 +324,16 @@ Phase 15.4 introduced first-ever synergy auction rows — the default seed set n
 **When:** `lock_cost_set(0)`, `unpublish_cost_set(0)`, or `delete_cost_set(0)`
 **Then:** All three rejected with "The default cost set (id=0) cannot be {locked/unpublished/deleted}"
 
+### Selection Requires a Selectable, Covering Set (Phase S6 execution, backlog #2, R2, D-D6)
+**Given:** Set #5 published with one Classic character row and one Classic light-cone row for MemoryOfChaos; set #6 published with no rows
+**When:** A lobby, preset or tournament selects set #6, or set #5 with Auction
+**Then:** Rejected: "This cost set has no costs for MemoryOfChaos × {Classic|Auction}. Pick another set or ask its owner to extend it." The default set (id 0) always passes; a missing set ("Cost set N not found."), an unpublished set ("... is not published.") and a locked set ("... is locked and cannot be selected.") are rejected. Synergy rows are never required. Sites: `create_lobby`, `update_lobby_settings` (on a change of set, game mode or draft mode), `create/update_lobby_preset`, `create/update_tournament` (tournament: the preset's draft mode).
+
+### Delete a Set in Use (Phase S6 execution, backlog #2, R2)
+**Given:** Set #5 is referenced by a lobby in Waiting; its owner locked and unpublished it
+**When:** The owner calls `delete_cost_set(5)`
+**Then:** Rejected: "This cost set is used by an active lobby or tournament and cannot be deleted." Once the lobby is closed (or Finished) and no non-Completed / non-Cancelled tournament references it, the delete succeeds.
+
 ## Edge Cases
 
 | Case | Expected Behavior | Notes |
@@ -371,8 +381,9 @@ Phase 15.4 introduced first-ever synergy auction rows — the default seed set n
 | `draftMode` column added to all 6 cost tables; PK tuples extended by `draftMode`; reducer tuple match uses A2_FALLBACK_ITER (SpacetimeDB 2.1.0 enum-struct btree limitation) — extends Phase 15.1 precedent | Phase 15.4 execution | 2026-04-15 |
 | First-ever Auction synergy rows seeded (D-13 zero-value default on default seed set) | Phase 15.4 execution | 2026-04-15 |
 | Synergy auction round-trip test coverage added: `test/backend/cost-sets/synergy-auction-round-trip.test.ts` (D-25a) | Phase 15.4 execution | 2026-04-15 |
+| `ensureSelectableCostSet` (exists, published, not locked; id 0 passes) + loose `doesCostSetCover` at every selection site; `delete_cost_set` refuses while a non-Finished lobby or non-terminal tournament references the set; scenarios added | Phase S6 execution (backlog #2, R2, D-D6) | 2026-11-06 |
 
 ---
 
-*Last updated: 2026-04-15*
+*Last updated: 2026-11-06*
 *Feature owner: Phase 3 / Phase 15.4*

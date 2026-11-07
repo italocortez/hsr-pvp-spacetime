@@ -5,7 +5,8 @@ import { insertWithAudit, updateWithAudit } from './helpers/auditHelpers';
 import { checkProviderBan } from './helpers/banHelper';
 import { handleDisconnectPoolUpdate } from './helpers/disconnectHelpers';
 import { hasLivePresence, markPresenceOnline } from './helpers/presenceHelpers';
-import { seedAbuseBreakerJob, seedAbuseConfigDefaults } from './helpers/abuseControls';
+import { seedAbuseConfigDefaults } from './helpers/abuseControls';
+import { seedSystemLobbyPreset } from './helpers/systemPreset';
 import { ACTIVE_STAGES, type LobbyStage } from '@shared/lobby-rules';
 
 // A22a: the grace period between a user's last disconnect and the referee / captain / host transfer check.
@@ -76,7 +77,7 @@ export {
 } from './views/tournamentViews';
 export { broadcast_cursor } from './reducers/cursor';
 export { login_as_guest } from './reducers/auth';
-export { delete_guest_account, update_display_name, update_username, update_avatar } from './reducers/profile';
+export { delete_my_account, update_display_name, update_username, update_avatar } from './reducers/profile';
 export { server_register_delegate, server_revoke_delegate, server_link_provider, server_set_role, server_delete_user, server_set_datetime, server_set_online, server_set_mmr, server_nuke_test_data } from './reducers/server';
 export { admin_ban_user, admin_unban_user } from './reducers/banAdmin';
 export { admin_delete_row, admin_bulk_upsert, admin_update_user } from './reducers/admin';
@@ -103,16 +104,16 @@ export { create_availability_slot, update_availability_slot, delete_availability
 export { save_calendar, unsave_calendar, toggle_calendar_visibility } from './reducers/calendarSaved';
 export { create_calendar_event, update_calendar_event, delete_calendar_event, invite_to_event, remove_invite } from './reducers/calendarEvents';
 export { respond_to_invite } from './reducers/calendarInviteResponse';
-export { create_lobby, join_lobby, leave_lobby, close_lobby, kick_member, ban_member } from './reducers/lobbyLifecycle';
+export { create_lobby, join_lobby, leave_lobby, close_lobby, kick_member, ban_member, unban_member } from './reducers/lobbyLifecycle';
 export { send_chat_message, delete_chat_message } from './reducers/chat';
-export { update_lobby_settings, set_team_slot, confirm_ready, unconfirm_ready, set_captain } from './reducers/lobbySettings';
+export { update_lobby_settings, set_team_slot, confirm_ready, unconfirm_ready, set_captain, shuffle_teams } from './reducers/lobbySettings';
 export { create_lobby_preset, update_lobby_preset, delete_lobby_preset } from './reducers/lobbyPresets';
 export { create_tournament_lobby, approve_stand_in } from './reducers/tournamentLobby';
 export { run_lobby_gc, admin_gc_lobbies, seed_lobby_gc_job } from './reducers/lobbyGc';
 export { run_identity_gc, admin_gc_identities, seed_identity_gc_job } from './reducers/identityGc';
 export { run_referee_transfer_check } from './reducers/refereeTransfer';
 export { run_tournament_finalize } from './reducers/tournamentFinalize';
-export { admin_update_abuse_config, admin_set_guest_lobby_creation, admin_acknowledge_alert, run_abuse_breaker } from './reducers/abuse';
+export { admin_update_abuse_config, admin_set_guest_lobby_creation, admin_acknowledge_alert } from './reducers/abuse';
 export { start_draft, pick_character, ban_character, timer_expiry_classic } from './reducers/draftClassic';
 export { undo_last_step, pause_draft, resume_draft } from './reducers/draftControl';
 export { nominate_character, place_bid, pass_bid, timer_expiry_auction } from './reducers/draftAuction';
@@ -163,13 +164,13 @@ export const init = spacetimedb.init((ctx) => {
     }, SYSTEM_USER_ID));
   }
 
-  // Abuse controls (D-B5 / A42): the AbuseConfig singleton with its defaults and the first circuit-breaker run,
-  // 5 minutes out. Both idempotent (inserted only when absent), SYSTEM actor.
+  // Abuse controls (D-B5 / A42): the AbuseConfig singleton with its defaults. Idempotent (inserted only when absent),
+  // SYSTEM actor. The guest-lobby circuit breaker runs inline in create_lobby (A57), so no job is seeded.
   seedAbuseConfigDefaults(ctx);
-  seedAbuseBreakerJob(ctx);
 
-  // Arrives with its table in a later step (idempotent, run on every init):
-  //   seedSystemLobbyPreset(ctx);   // S6 (A33a): system lobby preset owned by SYSTEM
+  // A33a / CH-S4: the built-in system lobby preset ("Tournament default"), owned by SYSTEM_USER_ID, from
+  // compile-time constants (helpers/systemPreset.ts). Idempotent: inserted only when absent.
+  seedSystemLobbyPreset(ctx);
 });
 
 export const client_connected = spacetimedb.clientConnected((ctx) => {

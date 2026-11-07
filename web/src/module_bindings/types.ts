@@ -10,12 +10,6 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-export const AbuseBreakerJob = __t.object("AbuseBreakerJob", {
-  scheduledId: __t.u64(),
-  scheduledAt: __t.scheduleAt(),
-});
-export type AbuseBreakerJob = __Infer<typeof AbuseBreakerJob>;
-
 export const AbuseConfig = __t.object("AbuseConfig", {
   id: __t.u32(),
   cursorMinIntervalMs: __t.u32(),
@@ -35,6 +29,17 @@ export const AbuseConfig = __t.object("AbuseConfig", {
   lastModifiedDate: __t.timestamp(),
 });
 export type AbuseConfig = __Infer<typeof AbuseConfig>;
+
+export const AbuseCounter = __t.object("AbuseCounter", {
+  key: __t.string(),
+  windowStart: __t.timestamp(),
+  count: __t.u32(),
+  createdById: __t.u32(),
+  createdDate: __t.timestamp(),
+  lastModifiedById: __t.u32(),
+  lastModifiedDate: __t.timestamp(),
+});
+export type AbuseCounter = __Infer<typeof AbuseCounter>;
 
 export const AccountRatingConfig = __t.object("AccountRatingConfig", {
   id: __t.u32(),
@@ -1733,6 +1738,13 @@ export const ServerIdentityKind = __t.enum("ServerIdentityKind", {
   Delegate: __t.unit(),
 });
 export type ServerIdentityKind = __Infer<typeof ServerIdentityKind>;
+
+// The tagged union or sum type for the algebraic type `ShuffleMode`.
+export const ShuffleMode = __t.enum("ShuffleMode", {
+  RandomSwap: __t.unit(),
+  TeamSwap: __t.unit(),
+});
+export type ShuffleMode = __Infer<typeof ShuffleMode>;
 
 // The tagged union or sum type for the algebraic type `StepPayload`.
 export const StepPayload = __t.enum("StepPayload", {

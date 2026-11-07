@@ -117,10 +117,10 @@ import { LobbyGcJob } from './tables/lobbyGcJob';
 import { IdentityGcJob } from './tables/identityGcJob';
 import { RefereeTransferCheck } from './tables/refereeTransferCheck';
 import { TournamentFinalizeJob } from './tables/tournamentFinalizeJob';
-import { AbuseBreakerJob } from './tables/abuseBreakerJob';
 
 // Abuse controls (S3; §B.5, A42)
 import { AbuseConfig } from './tables/abuseConfig';
+import { AbuseCounter } from './tables/abuseCounter';
 import { UserRateState } from './tables/userRateState';
 import { AdminAlert } from './tables/adminAlert';
 
@@ -246,10 +246,10 @@ const spacetimedb = schema({
     IdentityGcJob,
     RefereeTransferCheck,
     TournamentFinalizeJob,
-    AbuseBreakerJob,
 
     // Abuse controls
     AbuseConfig,
+    AbuseCounter,
     UserRateState,
     AdminAlert,
 }, {
