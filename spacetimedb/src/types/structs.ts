@@ -89,7 +89,7 @@ export const AuctionSoldPayload = t.object('AuctionSoldPayload', {
     characterName: t.string(),
     winningAmount: t.f32(),
     winningTeam: TeamSide,    // Who actually got it
-    eidolon: t.u8(),          // A61(3): the winning team's default eidolon (highest owned, E0 without ownership)
+    eidolon: t.u8(),          // A61(3): the winning team's default eidolon (lowest owned, A64; E0 without ownership)
     eidolonCost: t.f32(),     // A61(5): the extra charged at the sale, max(0, cost[eidolon] - cost[e0])
 });
 

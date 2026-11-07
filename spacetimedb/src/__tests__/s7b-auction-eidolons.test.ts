@@ -63,7 +63,7 @@ describe('A61(2): ownership on nominations and bids', () => {
         expectReject(test, captain(s, 'Red'), bid(s, 11), NOT_OWNED);
         tx(test, captain(s, 'Red'), pass(s));
 
-        // Sold to Blue: default eidolon = the team's highest owned level (E2), extra = 15 - 10 = 5 (A61(3)).
+        // Sold to Blue: default eidolon = the team's lowest owned level (A64; here its only one, E2), extra = 15 - 10 = 5.
         const sold = lastSold(test, s.lobbyId);
         expect(sold).toMatchObject({ characterName: 'x', winningAmount: 10, eidolon: 2, eidolonCost: 5 });
         expect(budgets(test, s.lobbyId)).toMatchObject({ blueChar: 85, blueLc: 50 });
@@ -243,5 +243,35 @@ describe('A61(4)/(5) review fix: set_eidolon reserves the bid the team currently
         tx(test, captain(s, 'Red'), pass(s));
         expect(lastSold(test, s.lobbyId)).toMatchObject({ characterName: 'b', winningAmount: 30, eidolonCost: 0 });
         expect(budgets(test, s.lobbyId)).toMatchObject({ blueChar: 0, blueLc: 10 });
+    });
+});
+
+describe('A64: the sale eidolon is the lowest level the winning team owns', () => {
+    it('accounts at E2 and E6: sold at E2 (extra e2 - e0); set_eidolon to E6 pays e6 - e2 (character budget, then light cones after the rollover); E4 not owned', () => {
+        const test = newHarness();
+        insertAuctionCost(test, 'a', [10, 15, 25, 35, 45, 55, 75]); // extras: E2 15, E6 65
+        const s = setupLobby(test, { lobby: { ...AUCTION, requireOwnership: true } });
+        const blueCap = captain(s, 'Blue');
+        selectAccount(test, s.lobbyId, blueCap.userId, 900, { a: 2 });
+        selectAccount(test, s.lobbyId, blueMate(s).userId, 901, { a: 6 });
+        tx(test, blueCap, nominate(s, 'Blue', 'a'));
+        tx(test, captain(s, 'Red'), pass(s));
+        expect(lastSold(test, s.lobbyId)).toMatchObject({ characterName: 'a', winningAmount: 10, eidolon: 2, eidolonCost: 15 });
+        expect(budgets(test, s.lobbyId)).toMatchObject({ blueChar: 75, blueLc: 50 }); // 100 - 10 - 15
+
+        expectReject(test, blueCap, (ctx) =>
+            M.set_eidolon(ctx, { lobbyId: s.lobbyId, teamSide: { tag: 'Blue' }, characterName: 'a', eidolon: 4 }),
+            'Your team does not own that eidolon level on its selected accounts.');
+        setEidolon(s, blueCap, 'Blue', 'a', 6); // +50 from the character budget while drafting
+        expect(budgets(test, s.lobbyId)).toMatchObject({ blueChar: 25, blueLc: 50 });
+
+        advance(test, 300);
+        setEidolon(s, blueCap, 'Blue', 'a', 2); // -50 refunded to the light-cone budget
+        expect(budgets(test, s.lobbyId)).toMatchObject({ blueChar: 25, blueLc: 100 });
+        tx(test, s.host, (ctx) => M.advance_stage(ctx, { lobbyId: s.lobbyId })); // D-50 rollover: 100 + 25
+        expect(budgets(test, s.lobbyId)).toMatchObject({ blueChar: 0, blueLc: 125 });
+        advance(test, 300);
+        setEidolon(s, blueCap, 'Blue', 'a', 6); // +50 from the light cones
+        expect(budgets(test, s.lobbyId)).toMatchObject({ blueChar: 0, blueLc: 75 });
     });
 });

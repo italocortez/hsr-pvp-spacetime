@@ -377,7 +377,7 @@ export const set_eidolon = spacetimedb.reducer(
             const lcBudget = side === 'Blue' ? session.teamBlueLcBudget : session.teamRedLcBudget;
             let next = { charBudget, lcBudget };
             // A61(4)/(5): while the team holds the current bid in Drafting, its commitment (the bid plus the extra it
-            // would owe at the sale) is reserved: the edit may not spend it, and the character budget never drops
+            // would owe at the sale at its default, lowest owned eidolon, A64) is reserved: the edit may not spend it, and the character budget never drops
             // below the committed bid (the sale takes the bid from it).
             const holdsBid = lobby.stage.tag === 'Drafting' && !!session.currentNomination && session.currentBidTeam?.tag === side;
             const reservedBid = holdsBid ? (session.currentBidAmount ?? 0) : 0;

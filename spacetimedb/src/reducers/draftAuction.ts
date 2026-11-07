@@ -73,13 +73,15 @@ export function auctionEidolonExtra(ctx: any, lobby: any, characterName: string,
 }
 
 /**
- * A61(3): a team's default eidolon for a character = the highest level its player seats own on their selected
- * accounts when the lobby requires ownership (0 when none does); always 0 (extra 0) without ownership.
+ * A61(3) as amended by A64(1): a team's default eidolon for a character = the lowest level its player seats own on
+ * their selected accounts when the lobby requires ownership (0 when none does); always 0 (extra 0) without ownership.
+ * Used by the sale (resolveSale), the bid-time guard (ensureTotalBudgetFits) and the set_eidolon bid reservation.
+ * Higher owned levels are bought afterwards through set_eidolon (A64(2)). Classic keeps the highest (resolveOwnedEidolon).
  */
 export function teamDefaultEidolon(ctx: any, lobby: any, side: string, characterName: string): number {
     if (!lobby.requireOwnership || characterName === 'EMPTY') return 0;
     const owned = teamOwnedEidolons(ctx, lobby.id, side, characterName);
-    return owned.length > 0 ? owned[owned.length - 1] : 0;
+    return owned.length > 0 ? owned[0] : 0; // ascending list: the lowest owned level (A64)
 }
 
 /**
@@ -527,7 +529,7 @@ export const pass_bid = spacetimedb.reducer(
         // Find the nominating team from the Nominate step
         const nominatingTeam = nominateStep ? nominateStep.actorSlot : session.nextNominatorTeam;
 
-        // A61(3)(5): the winning team's default eidolon and extra, charged now (character budget first).
+        // A61(3)(5), A64: the winning team's default (lowest owned) eidolon and extra, charged now (character budget first).
         const sale = resolveSale(ctx, lobby, session, winningTeam.tag, nominatedChar, winningAmount);
 
         const nextSeq = getNextSequence(ctx, lobbyId);
@@ -772,7 +774,7 @@ export const timer_expiry_auction = spacetimedb.reducer(
 
             const nominatingTeam = nominateStep ? nominateStep.actorSlot : session.nextNominatorTeam;
 
-            // A61(3)(5): the winning team's default eidolon and extra, charged now (character budget first).
+            // A61(3)(5), A64: the winning team's default (lowest owned) eidolon and extra, charged now (character budget first).
             const sale = resolveSale(ctx, lobby, session, winningTeam.tag, nominatedChar, winningAmount);
 
             // Insert AuctionSold step (system resolves the auction)
