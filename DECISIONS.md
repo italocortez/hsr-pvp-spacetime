@@ -551,3 +551,14 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** user review of the S3 schema (2026-11-06): a mandatory free-text reason is friction at the table, and the itemized rows already carry who set what and when.
 - **Supersedes:** the "each with a required reason" clause of A21.
 - **Where implemented:** S5 follow-up commit (column), S7 (`set_score_adjustment` argument optional)
+
+### A56 — Match replay history: lineups archived, group scores and adjustments not
+
+- **Date:** 2026-11-06 · **Status:** decided
+- **Decision:**
+  1. **`MatchLineup` gets a history copy.** New `MatchLineupHistory` (`matchHistoryId`, `gameNumber`, `teamSide`, `groups`, `synergySurcharge`, `rosterCost`, audit) written by finalization next to the step, game and participant history rows; the replay view includes it. The lineup is how a strategy was played, so it belongs to the replay. This also settles S3 review L4: `rosterCost` survives on the lineup history row, no extra columns on `MatchResultGameHistory`.
+  2. **No history for `MatchResultGroupScore` or `MatchResultAdjustment`.** The replay needs the final results, not the per-group inputs or the itemized modifiers. `MatchResultGameHistory` already carries the adjusted result, deaths and the tie-break level per team; S7 additionally writes the **raw team total** (sum of the group scores before handicaps and modifiers) into the existing per-team `cyclesUsed` / `score` columns of `MatchResultGame`, so the history row shows raw vs adjusted without itemization.
+  3. **Deletion, not GC.** Group scores, adjustments and lineups are deleted with the result record on both exits a match has: the finalization cleanup (`runFinalization`, and the S8 chunked tournament finalization) and the lobby GC hard-delete (`hardDeleteLobby`). They never outlive their match, so no scheduled job of their own.
+- **Why:** user decision 2026-11-06 after reviewing the S3 scoring tables: the itemized adjustment rows stay for the live match (future community modifier presets), but the replay core is picks, bans, lineups, spend and final results.
+- **Supersedes:** nothing; refines A21 storage.
+- **Where implemented:** S7 (`MatchLineupHistory`, deletions on both exits, raw totals), S8 (tournament finalize path), S9 (replay view)
