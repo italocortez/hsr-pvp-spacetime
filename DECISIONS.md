@@ -562,3 +562,11 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** user decision 2026-11-06 after reviewing the S3 scoring tables: the itemized adjustment rows stay for the live match (future community modifier presets), but the replay core is picks, bans, lineups, spend and final results.
 - **Supersedes:** nothing; refines A21 storage.
 - **Where implemented:** S7 (`MatchLineupHistory`, deletions on both exits, raw totals), S8 (tournament finalize path), S9 (replay view)
+
+### A57 — Guest-lobby circuit breaker runs inline, not on a timer
+
+- **Date:** 2026-11-06 · **Status:** decided
+- **Decision:** Amends A42(2). The breaker is evaluated **inside `create_lobby`** when a guest creates a lobby, not by a scheduled reducer. A fixed-window counter in a new private table `AbuseCounter { key: string PK ('guest_lobby_create'), windowStart: timestamp, count: u32, audit (SYSTEM) }` counts guest **creations** (not surviving lobbies, so create-and-close loops are counted too). When a creation pushes the count past `AbuseConfig.guestLobbyBurstThreshold` inside `guestLobbyBurstWindowMinutes`, that creation **succeeds** (a throw would roll back the trip), the switch `guestLobbyCreationEnabled` goes off and one count-only `AdminAlert` is written in the same transaction; every later guest creation is rejected until an admin re-enables the switch. Cap under a burst: threshold + 1 lobbies. Threshold and window stay runtime-editable through `admin_update_abuse_config` (defaults 20 in 10 minutes, A42). `AbuseBreakerJob`, `run_abuse_breaker` and its `init` seed are removed; the T-S5 breaker tests are rewritten for the inline trip.
+- **Why:** user decision 2026-11-06 after comparing the two designs: the timer reacts up to 5 minutes late (a script keeps creating lobbies, each pushed to every lobby-browser subscriber), costs about 8,600 idle reducer calls a month, and counts survivors only; inline reacts on the crossing creation, costs nothing when idle and counts creations. Nothing in the plan needs a periodic check that no user action triggers.
+- **Supersedes:** A42(2) "a scheduled reducer every few minutes".
+- **Where implemented:** S6 (the step that next edits `create_lobby`)
