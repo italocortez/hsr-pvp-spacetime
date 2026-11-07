@@ -38,7 +38,6 @@ import {
 import { promoteToRole } from '../../shared/helpers/promoteUser';
 import { ensureHsrAccount } from '../../shared/helpers/hsrAccounts';
 import { ensureEloConfig } from '../../shared/helpers/seed';
-import { gameScoreArgs } from '../../shared/helpers/scores';
 import { defaultLobbyArgs } from '../../shared/helpers/lobbies';
 import { completeDraft, completeTournamentDraft, advanceToScoring, startDraftAndSync } from '../../shared/helpers/drafts';
 import {
@@ -119,9 +118,9 @@ async function setupValidatedTournamentMatch(
     await toUser.sync(1500);
 
     // Advance Drafting -> Equipping -> Scoring (lineup confirmation + advanceStage)
-    await blue.call.confirmLineup({ lobbyId });
+    await blue.call.confirmLineup({ lobbyId, teamSide: { tag: 'Blue' } });
     await blue.sync();
-    await red.call.confirmLineup({ lobbyId });
+    await red.call.confirmLineup({ lobbyId, teamSide: { tag: 'Red' } });
     await red.sync();
     await toUser.call.advanceStage({ lobbyId });
     await toUser.sync(1500);
@@ -133,15 +132,8 @@ async function setupValidatedTournamentMatch(
     if (!mr) throw new Error(`MatchResultRecord not found for lobby #${lobbyId}`);
 
     // Record scores WITH screenshots (required for Ranked/MMR tournament validation)
-    await toUser.call.recordGameScores(gameScoreArgs({
-        matchResultId: mr.id,
-        gameNumber: 1,
-        winnerTeamSide: 'Blue',
-        teamBlueCyclesUsed: 7,
-        teamRedCyclesUsed: 10,
-        teamBlueScreenshotUrl: 'https://i.imgur.com/test-blue.png',
-        teamRedScreenshotUrl: 'https://i.imgur.com/test-red.png',
-    }));
+    await toUser.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Blue' }, values: [350, 350], deaths: 0, screenshotUrl: 'https://i.imgur.com/test-blue.png' });
+    await toUser.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0, screenshotUrl: 'https://i.imgur.com/test-red.png' });
     await toUser.sync(1000);
 
     // Confirm both sides
@@ -154,7 +146,6 @@ async function setupValidatedTournamentMatch(
     // Submit
     await toUser.call.submitMatchResult({
         matchResultId: mr.id,
-        winnerId: blue.userId,
     });
     await toUser.sync(1500);
 
@@ -216,15 +207,8 @@ async function setupValidatedNonTournamentMatch(
 
     const mr = [...host.conn.db.MatchResultRecord.iter()].find(r => r.lobbyId === lobbyId)!;
 
-    await host.call.recordGameScores(gameScoreArgs({
-        matchResultId: mr.id,
-        gameNumber: 1,
-        winnerTeamSide: 'Blue',
-        teamBlueCyclesUsed: 7,
-        teamRedCyclesUsed: 10,
-        teamBlueScreenshotUrl: 'https://i.imgur.com/test-blue.png',
-        teamRedScreenshotUrl: 'https://i.imgur.com/test-red.png',
-    }));
+    await host.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Blue' }, values: [350, 350], deaths: 0, screenshotUrl: 'https://i.imgur.com/test-blue.png' });
+    await host.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0, screenshotUrl: 'https://i.imgur.com/test-red.png' });
     await host.sync(1000);
 
     await blue.call.confirmMatchScores({ matchResultId: mr.id });
@@ -233,7 +217,7 @@ async function setupValidatedNonTournamentMatch(
     await red.sync(500);
     await host.sync(1000);
 
-    await host.call.submitMatchResult({ matchResultId: mr.id, winnerId: blue.userId });
+    await host.call.submitMatchResult({ matchResultId: mr.id });
     await host.sync(1500);
 
     await admin.call.overrideMatchResult({

@@ -175,6 +175,48 @@ see `docs/tournament/architecture.md`.
 so `accountRatingSnapshot` ships to subscribed clients. One f64 per player per
 live match; bounded by match count × team size. Acceptable within the energy budget.
 
+## Scoring (S7)
+
+Phase S7 execution (A21, A31, A39, A55, A56; backlog #11). Behavior and authority rules: [contract.md](contract.md) "Server-Computed Scoring". The diagram and the `submit_match_result` / `confirm_match_scores` flows above predate S3/S7 and are kept for history; this section is current for scoring.
+
+### Shared module `shared/scoring/` (barrel `index.ts`; the module, `scoringHelpers.ts` included, imports it as `@shared/scoring`)
+
+| Export | Does |
+|---|---|
+| `toHundredths` / `fromHundredths` / `mulHundredths` | f32 boundary ↔ integer hundredths; hundredths × hundredths / 100 truncated toward zero (BigInt) |
+| `unitOf`, `lowerWins`, `advantageToDelta` | cycles (MoC, AA; lower wins) vs points (AS; higher wins); an advantage lowers cycles / raises points |
+| `groupCount`, `charactersPerTeam`, `lineupError` | Halves 2×4 = 8, Thirds 3×4 = 12; lineup validation |
+| `canonicalPair`, `synergySurcharge` | unordered pairs; every pair inside one group adds its `costModifier` once |
+| `rosterCost` | Σ character costs + Σ light-cone costs + surcharge |
+| `thresholdAdvantage`, `applyHandicaps` | roster diff to the cheaper team, threshold (exactly at = neutral, 0 = off), deaths |
+| `sumGroupResults`, `applyModifiers`, `decideWinner`, `scoreGame` | the chain: groups → modifiers → handicaps → tie-break levels 0–4 |
+
+### Tables (all private; columns from S3 unless marked)
+
+| Table | Key / indexes | Written by | Deleted by |
+|---|---|---|---|
+| `MatchResultGroupScore` (`matchResultId`, `gameNumber`, `teamSide`, `groupIndex`, `value` u32 hundredths) | `id` PK; `by_result_game` (matchResultId, gameNumber) | `record_group_scores` (upsert per group index) | `runFinalization`, `hardDeleteLobby` (`deleteScoringRows`) |
+| `MatchResultAdjustment` (`value` i32 hundredths, `reason?`, `setById`) | `id` PK; `by_result_game` | `set_score_adjustment` | same |
+| `MatchResultGame` | decorative PK (matchResultId, gameNumber); `by_result_and_game` | `record_group_scores` creates; `recomputeGame` stores raw totals (`team*CyclesUsed` for cycle modes / `team*Score` for points, hundredths, A56(2)), `team*AdjustedResult`, `tieBreakLevel`, `winnerTeamSide` (Spectator = undecided or level-4 tie until an override) | as before |
+| `MatchResultRecord.winnerOverride / winnerOverrideById / winnerOverrideReason` | — | `submit_match_result` | with the record |
+| `MatchSessionHistory.handicapApplied` (i32 hundredths) | — | `runFinalization`: Σ over games of (Blue's net handicap advantage − Red's); positive favours Blue; modifiers excluded | — |
+| `MatchSessionHistory.winnerOverride` (TeamSide?), `winnerOverrideById` (u32?), `winnerOverrideReason` (string?) — new columns, Phase S7 execution (A21 "kept for audit and replay", A39) | — | `runFinalization` copies them from the record, so a casual override survives the record's deletion | — |
+| **`MatchLineupHistory`** (new, A56(1)): `id` PK autoInc, `matchHistoryId`, `gameNumber`, `teamSide`, `groups`, `synergySurcharge`, `rosterCost`, audit | `by_match_history` | `runFinalization` step 9b, one row per live `MatchLineup` | `server_nuke_test_data` only |
+
+Index note: the (id, gameNumber) indexes are scanned per full key over `lobbyGameNumbers` (1..max(bestOf, current game, highest game row)). A bare-scalar prefix scan is rejected and a prefix + `Range` scan returns nothing in the 2.14.1 in-memory test datastore.
+
+### Reducers
+
+| Reducer | Arguments | Notes |
+|---|---|---|
+| `record_group_scores` | `lobbyId: u32, gameNumber: u8, teamSide: TeamSide, values: u32[] (hundredths, one per group), deaths: u8, screenshotUrl?: string` | captain of that side or any referee; Pending record; `ensureNotConceded`; current game only; resets both confirmations; recomputes the game; each value ≤ 100,000,000 hundredths |
+| `set_score_adjustment` | `lobbyId: u32, gameNumber: u8, teamSide: TeamSide, value: i32, reason?: string, adjustmentId?: u32` | a lobby referee, Moderator+, or in a tournament lobby the organizer or an assistant with `canResolveResults` (the A39 staff set); no id → insert (0 rejected); id + value ≠ 0 → replace value / team / reason; id + 0 → delete; reason trimmed, ≤ 1000 chars; |value| ≤ 100,000,000 hundredths |
+| `confirm_match_scores` | `matchResultId: u32` | unchanged |
+| `submit_match_result` | `matchResultId: u32, winnerOverride?: TeamSide, winnerOverrideReason?: string` | recomputes the current game; every game needs complete scores; override only on a level-4 tie (A39 routing in the contract); series winner = game wins + A27 head start |
+| `advance_stage` (Scoring) | unchanged | recomputes the current game before counting game winners |
+| `equip_lightcone` | unchanged signature | refreshes the side's `MatchLineup.rosterCost` / `synergySurcharge` (confirmation kept); Auction: rejects when the light cone plus a confirmed lineup's surcharge exceeds the LC budget (review fix, Phase S7 execution) |
+| `override_match_result` / `admin_force_finalize` | unchanged signatures | A31: no winner-less Validated result; `runFinalization` throws on a record without a winner |
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -192,6 +234,8 @@ live match; bounded by match count × team size. Acceptable within the energy bu
 | MatchResultRecord.tournamentId removed -- derived from bracketMatch.tournamentId (Phase 10.1) | Phase 10.1 execution | 2026-03-25 |
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
 | Phase 12.3 | Freeze account-rating input to ELO via MRP.accountRatingSnapshot, monotonic-upward hook in select_match_account, read-path swap in processMatchMmr, finalize_match_result tournament-ordering guard, timer_expiry_classic auto-pick LMA migration |
+| "Scoring (S7)" section: `shared/scoring/`, `record_group_scores`, `set_score_adjustment`, `submit_match_result` without `winnerId`, stored computation, `MatchLineupHistory`, `MatchSessionHistory.winnerOverride*`, deletions on both exits (A21, A31, A39, A55, A56) | Phase S7 execution | 2026-11-06 |
+| Review fixes: roster cost always live (light cones after confirm count), `equip_lightcone` refreshes the lineup and reserves a confirmed Auction surcharge, adjustment authority = A39 staff set, input bounds, surcharge clamped before summing, `@shared/scoring` import | Phase S7 execution | 2026-11-06 |
 
 ---
 

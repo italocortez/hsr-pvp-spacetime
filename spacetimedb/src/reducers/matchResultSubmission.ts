@@ -4,6 +4,16 @@ import { getAuthenticatedUser, isRoleAtLeast } from '../helpers/ensurePermission
 import { updateWithAudit } from '../helpers/auditHelpers';
 import { runFinalization } from '../helpers/finalizationHelpers';
 import { ensureNotConceded } from '../helpers/disconnectHelpers';
+import { slotIsSpectator } from '../helpers/lobbyHelpers';
+import {
+    ensureTeamTag,
+    isUnresolvedTie,
+    recomputeGame,
+    replaceGame,
+    teamSideValue,
+    type TeamTag,
+} from '../helpers/scoringHelpers';
+import { TeamSide } from '../types/enums';
 import type { MatchResultRecord } from '@bindings/types';
 
 // ─── confirm_match_scores ─────────────────────────────────────────────────────
@@ -74,17 +84,25 @@ export const confirm_match_scores = spacetimedb.reducer(
 );
 
 // ─── submit_match_result ──────────────────────────────────────────────────────
-// Submits the final match result with a winner.
-// Permission: lobby referee OR Moderator/Admin (for tournament matches also the TO/assistant).
-// Requires: all team captains must have confirmed scores first.
-// winnerId: participant userId, or 0 as sentinel for draw/no winner.
+// Submits the final match result. A21/A31: the server computes the winner; there is no winnerId argument.
+// Permission: lobby referee OR Moderator/Admin (for tournament matches also the TO/assistant with
+// canResolveResults). Requires: both captains confirmed the scores.
+// Per game: the current game is recomputed from its inputs (earlier games of a series keep the outcome computed
+// while they were played: their steps are gone); every game needs complete group scores.
+// winnerOverride (A21 tie-break 4, A39): accepted only while a game is an unresolved tie (level 4); it decides
+// every tied game. From a referee not seated on either team, or from staff (Moderator+, the tournament organizer,
+// an assistant with canResolveResults): accepted. From a referee seated on a team (player or coach seat): in a
+// tournament lobby the record goes to Disputed for staff (no winner, no finalization); in a casual
+// (non-tournament) lobby it is accepted. Both are audited in winnerOverride / winnerOverrideById / winnerOverrideReason.
+// Series winner: game wins plus the A27 head start; the side with more wins.
 
 export const submit_match_result = spacetimedb.reducer(
     {
         matchResultId: t.u32(),
-        winnerId: t.u32(),
+        winnerOverride: TeamSide.optional(),
+        winnerOverrideReason: t.string().optional(),
     },
-    (ctx, { matchResultId, winnerId }) => {
+    (ctx, { matchResultId, winnerOverride, winnerOverrideReason }) => {
         const user = getAuthenticatedUser(ctx);
 
         // Find the MatchResultRecord
@@ -109,53 +127,111 @@ export const submit_match_result = spacetimedb.reducer(
             throw new SenderError('All team captains must confirm scores before submission.');
         }
 
-        // Validate winnerId is a valid participant (or 0 for draw)
-        const participants = [...ctx.db.MatchResultParticipant.match_result_id.filter(matchResultId)];
-        let winnerTeamSide: 'Blue' | 'Red' | undefined;
-        if (winnerId !== 0) {
-            const winnerParticipant = participants.find((p: any) => p.userId === winnerId);
-            if (!winnerParticipant) {
-                throw new SenderError('Invalid winner: must be a match participant or 0 for a draw.');
-            }
-            winnerTeamSide = winnerParticipant.teamSide.tag as 'Blue' | 'Red';
-        }
-
         // Validate caller has referee authority:
-        // 1. Check if caller is the lobby referee
-        let hasAuthority = false;
-
+        // 1. The lobby referee (seated or not)
         const lobbyMember = [...ctx.db.LobbyMember.by_lobby_and_user.filter([matchResult.lobbyId, user.id])][0];
-        if (lobbyMember && lobbyMember.isReferee) {
-            hasAuthority = true;
-        }
+        const isReferee = !!lobbyMember && lobbyMember.isReferee;
 
-        // 2. Moderator or Admin can always submit
-        if (!hasAuthority && isRoleAtLeast(user.role, 'Moderator')) {
-            hasAuthority = true;
-        }
-
-        // 3. For tournament matches, also check tournament access (TO/assistant)
-        // Derive tournamentId from bracketMatch since tournamentId was removed from MatchResultRecord (D-42)
-        if (!hasAuthority && matchResult.isTournamentControlled && matchResult.bracketMatchId !== undefined) {
+        // 2. Staff (A39): Moderator/Admin, and for tournament matches the organizer or an assistant with
+        // canResolveResults. Derive tournamentId from bracketMatch (no tournamentId on MatchResultRecord, D-42).
+        let isStaff = isRoleAtLeast(user.role, 'Moderator');
+        if (!isStaff && matchResult.isTournamentControlled && matchResult.bracketMatchId !== undefined) {
             const bracketMatch = ctx.db.BracketMatch.id.find(matchResult.bracketMatchId);
             const derivedTournamentId = bracketMatch?.tournamentId;
             if (derivedTournamentId) {
                 const tournament = ctx.db.Tournament.id.find(derivedTournamentId);
                 if (tournament && tournament.organizerId === user.id) {
-                    hasAuthority = true;
+                    isStaff = true;
                 }
-                if (!hasAuthority) {
+                if (!isStaff) {
                     const assistant = [...ctx.db.TournamentAssistant.by_tournament_and_user.filter([derivedTournamentId, user.id])][0];
                     if (assistant && assistant.canResolveResults) { // A25
-                        hasAuthority = true;
+                        isStaff = true;
                     }
                 }
             }
         }
 
-        if (!hasAuthority) {
+        if (!isReferee && !isStaff) {
             throw new SenderError('You do not have referee authority to submit this match result.');
         }
+
+        // Recompute the game being played (its steps still exist), then read every game of the record.
+        const lobby = ctx.db.Lobby.id.find(matchResult.lobbyId);
+        const session = ctx.db.MatchSession.lobbyId.find(matchResult.lobbyId);
+        if (lobby && session) {
+            recomputeGame(ctx, matchResult, lobby, session.currentGameNumber, user.id);
+        }
+        const games = [...ctx.db.MatchResultGame.match_result_id.filter(matchResultId)]
+            .sort((a: any, b: any) => a.gameNumber - b.gameNumber);
+        if (games.length === 0) {
+            throw new SenderError('No game scores have been recorded.');
+        }
+        const incomplete = games.find((g: any) => g.tieBreakLevel === undefined);
+        if (incomplete) {
+            throw new SenderError(`Game ${incomplete.gameNumber} does not have complete group scores for both teams.`);
+        }
+
+        const tiedGames = games.filter(isUnresolvedTie);
+        let overrideTag: TeamTag | undefined;
+        if (winnerOverride !== undefined) {
+            overrideTag = ensureTeamTag(winnerOverride);
+            if (tiedGames.length === 0) {
+                throw new SenderError('A winner override is only accepted on an unresolved tie.');
+            }
+        } else if (tiedGames.length > 0) {
+            throw new SenderError(
+                `Game ${tiedGames[0].gameNumber} is tied after every tie-break: the referee decides with winnerOverride.`,
+            );
+        }
+        const trimmedReason = winnerOverrideReason?.trim();
+        if (trimmedReason && trimmedReason.length > 1000) {
+            throw new SenderError('winnerOverrideReason cannot exceed 1000 characters.');
+        }
+        const overrideAudit = overrideTag
+            ? {
+                winnerOverride: teamSideValue(overrideTag),
+                winnerOverrideById: user.id,
+                winnerOverrideReason: trimmedReason ? trimmedReason : undefined,
+            }
+            : {};
+
+        // A39: an override from a referee seated on a team, without staff authority, in a tournament lobby goes to staff.
+        const isSeatedReferee = isReferee && !slotIsSpectator(lobbyMember.lobbySlot);
+        if (overrideTag && !isStaff && isSeatedReferee && matchResult.isTournamentControlled) {
+            ctx.db.MatchResultRecord.id.update(updateWithAudit(ctx, matchResult, {
+                ...overrideAudit,
+                status: { tag: 'Disputed', value: {} } as MatchResultRecord['status'],
+                disputedByUserId: user.id,
+                disputeReason: 'A39: tie override by a referee seated on a team; staff must resolve the result.',
+                refereeUserId: user.id,
+            }, user.id));
+            if (lobby && lobby.stage.tag !== 'AwaitingResult' && lobby.stage.tag !== 'Finished') {
+                ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
+                    stage: { tag: 'AwaitingResult' as const },
+                    lastActivityAt: ctx.timestamp,
+                }, user.id));
+            }
+            console.log(`[MATCH] Match result #${matchResultId} Disputed: seated referee #${user.id} overrode a tie (A39)`);
+            return;
+        }
+
+        // The override decides every tied game; then the series winner from the games (+ the A27 head start).
+        let blueWins = lobby?.bestOfNAdvantage?.tag === 'Blue' ? 1 : 0;
+        let redWins = lobby?.bestOfNAdvantage?.tag === 'Red' ? 1 : 0;
+        for (const game of games) {
+            let winnerTag = game.winnerTeamSide.tag;
+            if (isUnresolvedTie(game) && overrideTag) {
+                winnerTag = overrideTag;
+                replaceGame(ctx, game, { winnerTeamSide: teamSideValue(overrideTag) }, user.id);
+            }
+            if (winnerTag === 'Blue') blueWins++;
+            else if (winnerTag === 'Red') redWins++;
+        }
+        if (blueWins === redWins) {
+            throw new SenderError(`The series is level (${blueWins}-${redWins}): play the deciding game first.`);
+        }
+        const winnerTeamSide: TeamTag = blueWins > redWins ? 'Blue' : 'Red';
 
         // Determine status based on matchType (per D-04, D-05)
         // NOTE: D-04 (locked decision) supersedes MTCH-05's mismatch clause for Casual matches.
@@ -165,19 +241,15 @@ export const submit_match_result = spacetimedb.reducer(
             ? { tag: 'Validated', value: {} }
             : { tag: 'Submitted', value: {} };
 
-        // S7 (A21/A31): the server computes the winner; submit_match_result drops winnerId and a result
-        // without a winner no longer exists, so MatchEndReason.Draw was removed.
-        const matchEndReason: any = { tag: 'Completed', value: {} };
-
         ctx.db.MatchResultRecord.id.update(updateWithAudit(ctx, matchResult, {
+            ...overrideAudit,
             status: newStatus as MatchResultRecord['status'],
-            winnerTeamSide: winnerTeamSide ? { tag: winnerTeamSide, value: {} } as any : undefined,
-            matchEndReason,
+            winnerTeamSide: teamSideValue(winnerTeamSide),
+            matchEndReason: { tag: 'Completed', value: {} } as MatchResultRecord['matchEndReason'],
             refereeUserId: user.id,
         }, user.id));
 
         // Transition lobby → AwaitingResult (frees players to join new lobbies)
-        const lobby = ctx.db.Lobby.id.find(matchResult.lobbyId);
         if (lobby && lobby.stage.tag !== 'AwaitingResult' && lobby.stage.tag !== 'Finished') {
             ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
                 stage: { tag: 'AwaitingResult', value: {} } as any,
@@ -186,7 +258,7 @@ export const submit_match_result = spacetimedb.reducer(
         }
 
         const statusLabel = matchResult.matchType.tag === 'Casual' ? 'Validated (auto)' : 'Submitted';
-        console.log(`[MATCH] Match result #${matchResultId} ${statusLabel} by user #${user.id}, winnerTeamSide: ${winnerTeamSide ?? 'draw'}`);
+        console.log(`[MATCH] Match result #${matchResultId} ${statusLabel} by user #${user.id}, winnerTeamSide: ${winnerTeamSide}${overrideTag ? ' (override)' : ''}`);
 
         // Auto-finalize casual matches inline (per D-37)
         if (matchResult.matchType.tag === 'Casual') {

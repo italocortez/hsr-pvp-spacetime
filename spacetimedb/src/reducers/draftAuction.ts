@@ -5,6 +5,8 @@ import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { ensureLobbyMember, ensureStageIs, slotTeam, slotIsCoach, slotToTeamSide } from '../helpers/lobbyHelpers';
 import { ensureMatchAlive } from '../helpers/disconnectHelpers';
 import { getNextSequence } from '../helpers/stepSequence';
+import { resolveOwnedEidolon } from '../helpers/ownershipValidation';
+import { charactersPerTeam, type LineupFormatTag } from '@shared/scoring';
 import type { NominatePayload } from '@bindings/types';
 
 // ─── Helper: Get set of characters already won via AuctionSold ──────────────
@@ -66,12 +68,12 @@ function getCharacterBaseCost(
 }
 
 // ─── Helper: Check auction end condition ────────────────────────────────────
-// Per D-48: each team drafts 8 characters (fixed). The number of characters
-// is determined by the game mode (2 bosses × 4 chars = 8), not teamSize.
+// Per D-48, as amended by A21: each team drafts charactersPerTeam(lineupFormat) characters, 8 for Halves
+// and 12 for Thirds ("the character count is the format"), not teamSize.
 // teamSize only controls how many human players share the draft.
 
-function isAuctionComplete(session: any): boolean {
-    const targetCount = 8;
+function isAuctionComplete(session: any, lobby: any): boolean {
+    const targetCount = charactersPerTeam(lobby.lineupFormat.tag as LineupFormatTag);
     return (
         session.blueCharactersWon >= targetCount &&
         session.redCharactersWon >= targetCount
@@ -88,7 +90,7 @@ export const nominate_character = spacetimedb.reducer(
         characterName: t.string(),
         eidolon: t.u8(),
     },
-    (ctx, { lobbyId, characterName, eidolon }) => {
+    (ctx, { lobbyId, characterName, eidolon: requestedEidolon }) => {
         const user = getAuthenticatedUser(ctx);
 
         const lobby = ctx.db.Lobby.id.find(lobbyId);
@@ -158,6 +160,13 @@ export const nominate_character = spacetimedb.reducer(
                 throw new SenderError('Character is banned and cannot be nominated.');
             }
         }
+
+        // CH-S6 / D.8.7: under requireOwnership the server resolves the eidolon (max over the nominating
+        // member's selected accounts, E0 when they lack the character) and ignores the argument; otherwise the
+        // argument stands. The AuctionSold payload copies it from this Nominate step.
+        const eidolon = lobby.requireOwnership
+            ? resolveOwnedEidolon(ctx, lobbyId, user.id, characterName)
+            : requestedEidolon;
 
         // Per D-53: Look up base cost from cost table
         const baseCost = getCharacterBaseCost(ctx, characterName, eidolon, lobby.costSetId, lobby.gameMode);
@@ -492,7 +501,7 @@ export const pass_bid = spacetimedb.reducer(
             blueCharactersWon: newBlueCharactersWon,
             redCharactersWon: newRedCharactersWon,
         };
-        const auctionComplete = isAuctionComplete(updatedSessionForCheck);
+        const auctionComplete = isAuctionComplete(updatedSessionForCheck, lobby);
 
         if (auctionComplete) {
             // Clear auction state and transition to Equipping
@@ -726,7 +735,7 @@ export const timer_expiry_auction = spacetimedb.reducer(
                 blueCharactersWon: newBlueCharactersWon,
                 redCharactersWon: newRedCharactersWon,
             };
-            const auctionComplete = isAuctionComplete(updatedSessionForCheck);
+            const auctionComplete = isAuctionComplete(updatedSessionForCheck, lobby);
 
             if (auctionComplete) {
                 // D-50: Budget rollover — carry leftover charBudget into lcBudget

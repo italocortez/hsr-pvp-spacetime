@@ -32,7 +32,6 @@ import {
 } from '../../shared/helpers/tournaments';
 import { completeTournamentDraft } from '../../shared/helpers/drafts';
 import { ensureEloConfig } from '../../shared/helpers/seed';
-import { gameScoreArgs } from '../../shared/helpers/scores';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -90,9 +89,9 @@ async function setupTournamentMatch(
     await toUser.sync(1500);
 
     // Confirm lineups + advance to Equipping → Scoring
-    await blue.call.confirmLineup({ lobbyId });
+    await blue.call.confirmLineup({ lobbyId, teamSide: { tag: 'Blue' } });
     await blue.sync();
-    await red.call.confirmLineup({ lobbyId });
+    await red.call.confirmLineup({ lobbyId, teamSide: { tag: 'Red' } });
     await red.sync();
     await toUser.call.advanceStage({ lobbyId });
     await toUser.sync(1500);
@@ -104,15 +103,8 @@ async function setupTournamentMatch(
     if (!mr) throw new Error(`MatchResultRecord not found for lobby #${lobbyId}`);
 
     // Record scores WITH screenshots (required for Ranked override → Validated)
-    await toUser.call.recordGameScores(gameScoreArgs({
-        matchResultId: mr.id,
-        gameNumber: 1,
-        winnerTeamSide: 'Blue',
-        teamBlueCyclesUsed: 7,
-        teamRedCyclesUsed: 10,
-        teamBlueScreenshotUrl: 'https://i.imgur.com/test-blue.png',
-        teamRedScreenshotUrl: 'https://i.imgur.com/test-red.png',
-    }));
+    await toUser.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Blue' }, values: [350, 350], deaths: 0, screenshotUrl: 'https://i.imgur.com/test-blue.png' });
+    await toUser.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0, screenshotUrl: 'https://i.imgur.com/test-red.png' });
     await toUser.sync(1000);
 
     // Confirm both sides
@@ -258,7 +250,6 @@ describe.skipIf(!hasServerToken())('Tournament MMR — process_tournament_mmr', 
             // Submit match result → Submitted (Ranked)
             await toUser.call.submitMatchResult({
                 matchResultId: result.matchResultId,
-                winnerId: p1.userId,
             });
             await toUser.sync(1500);
 

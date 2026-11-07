@@ -12,6 +12,8 @@ export default defineConfig({
     alias: {
       '@/src/module_bindings': path.resolve(__dirname, '../web/src/module_bindings'),
       '@/': path.resolve(__dirname, '../') + '/',
+      // tsconfig.base.json paths: module helpers reached by the unit suites import the shared barrels (S7).
+      '@shared': path.resolve(__dirname, '../shared'),
       // Mock SpacetimeDB server module for unit tests
       'spacetimedb/server': path.resolve(__dirname, 'shared/mocks/spacetimedb-server.ts'),
     },

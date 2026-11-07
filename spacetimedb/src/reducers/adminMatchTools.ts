@@ -82,12 +82,16 @@ export const admin_force_finalize = spacetimedb.reducer(
             else if (winnerTeamId === 2) winnerTeamSide = 'Red';
         }
 
-        // S7/S8 (A31): no draws; D.8.3: for tournament lobbies this reducer points at resolve_bracket_match instead.
+        // A31: no draws. A concede record keeps its winner; otherwise winnerTeamId must name a side.
+        // S8 (D.8.3): for tournament lobbies this reducer points at resolve_bracket_match instead.
+        if (!winnerTeamSide && matchResult.winnerTeamSide === undefined) {
+            throw new SenderError('winnerTeamId must name the winning team (1 = Blue, 2 = Red, or a bracket team id): no draws.');
+        }
         const matchEndReason: any = { tag: 'Completed', value: {} };
 
         // Update MatchResultRecord with winner and validated status
         ctx.db.MatchResultRecord.id.update(updateWithAudit(ctx, matchResult, {
-            winnerTeamSide: winnerTeamSide ? { tag: winnerTeamSide, value: {} } as any : undefined,
+            winnerTeamSide: winnerTeamSide ? { tag: winnerTeamSide, value: {} } as any : matchResult.winnerTeamSide,
             matchEndReason: matchResult.matchEndReason ?? matchEndReason, // Keep concede outcome if already set
             status: { tag: 'Validated', value: {} } as any,
         }, user.id));

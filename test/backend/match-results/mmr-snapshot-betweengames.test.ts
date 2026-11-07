@@ -39,7 +39,6 @@ import { defaultLobbyArgs as sharedDefaultLobbyArgs } from '../../shared/helpers
 import { createTournamentArgs } from '../../shared/helpers/tournaments';
 import { promoteUser } from '../../shared/helpers/promoteUser';
 import { completeDraft, completeTournamentDraft, advanceToScoring } from '../../shared/helpers/drafts';
-import { gameScoreArgs } from '../../shared/helpers/scores';
 import { characterBatch, KNOWN_CHARACTERS } from '../../shared/fixtures';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -159,13 +158,8 @@ async function runToBetweenGames(
     const mr = [...host.conn.db.MatchResultRecord.iter()].find((r) => r.lobbyId === lobbyId);
     if (!mr) throw new Error(`No MatchResultRecord for lobby ${lobbyId}`);
 
-    await host.call.recordGameScores(gameScoreArgs({
-        matchResultId: mr.id,
-        gameNumber: 1,
-        winnerTeamSide: 'Blue',
-        teamBlueCyclesUsed: 7,
-        teamRedCyclesUsed: 10,
-    }));
+    await host.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Blue' }, values: [350, 350], deaths: 0 });
+    await host.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0 });
     await host.sync(1000);
 
     await blue.call.confirmMatchScores({ matchResultId: mr.id });
@@ -527,13 +521,8 @@ describe.skipIf(!hasServerToken())('Phase 12.3: BetweenGames monotonic-upward sn
             if (!mr) throw new Error('No MatchResultRecord for tournament lobby');
             matchResultId = mr.id;
 
-            await toUser.call.recordGameScores(gameScoreArgs({
-                matchResultId: mr.id,
-                gameNumber: 1,
-                winnerTeamSide: 'Blue',
-                teamBlueCyclesUsed: 7,
-                teamRedCyclesUsed: 10,
-            }));
+            await toUser.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Blue' }, values: [350, 350], deaths: 0 });
+            await toUser.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0 });
             await toUser.sync(1000);
 
             await player1.call.confirmMatchScores({ matchResultId: mr.id });

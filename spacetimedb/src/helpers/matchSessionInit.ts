@@ -15,8 +15,8 @@ import { buildAuctionBanSequence, buildClassicSequence } from './draftSequences'
 
 export function initSessionForGame(ctx: any, lobby: any, session: any | undefined, actorId: number): any[] {
     const sequence = lobby.draftMode.tag === 'Classic'
-        ? buildClassicSequence(lobby.banMode.tag)
-        : buildAuctionBanSequence(lobby.banMode.tag);
+        ? buildClassicSequence(lobby.banMode.tag, lobby.lineupFormat.tag) // A21: Thirds = 12 picks per team
+        : buildAuctionBanSequence(lobby.banMode.tag); // bans only; the Auction count is isAuctionComplete's (draftAuction.ts)
 
     const gameState = {
         turnIndex: 0,

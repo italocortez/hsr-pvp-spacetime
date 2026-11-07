@@ -17,7 +17,6 @@ export function incrementPlayerStat(
     matchType: any,
     teamSize: number,
     isWin: boolean,
-    isDraw: boolean,
     actingUserId: number
 ): void {
     const existing = [...ctx.db.PlayerStat.by_user_mode_draft_season_type_size.filter([userId, gameMode, draftMode, seasonId, matchType, teamSize])][0];
@@ -30,8 +29,8 @@ export function incrementPlayerStat(
             draftMode,
             matchesPlayed: existing.matchesPlayed + 1,
             wins: existing.wins + (isWin ? 1 : 0),
-            losses: existing.losses + (!isWin && !isDraw ? 1 : 0),
-            // S7 (A31): PlayerStat.draws dropped; isDraw is always false once the scoring module decides every match
+            losses: existing.losses + (isWin ? 0 : 1),
+            // A31: no draws; PlayerStat.draws was dropped and every finalized match has a winner
             matchesSpectated: existing.matchesSpectated,
             seasonId,
             matchType,
@@ -45,7 +44,7 @@ export function incrementPlayerStat(
             draftMode,
             matchesPlayed: 1,
             wins: isWin ? 1 : 0,
-            losses: !isWin && !isDraw ? 1 : 0,
+            losses: isWin ? 0 : 1,
             matchesSpectated: 0,
             seasonId,
             matchType,

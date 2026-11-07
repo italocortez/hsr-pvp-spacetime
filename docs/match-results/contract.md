@@ -10,6 +10,8 @@ Match results manage the full lifecycle of determining a match outcome: per-game
 
 ### record_game_scores
 
+> **Superseded (Phase S7 execution, A21):** removed; replaced by `record_group_scores` + `set_score_adjustment` (see "Server-Computed Scoring" below). Kept for history.
+
 **Purpose:** Record or update per-game scores for a match result. Composite PK upsert (delete + insert on existing row).
 
 **Permission:** Participant captain (own side only) OR spectator referee with `refereeFullControl=true` (both sides)
@@ -93,6 +95,8 @@ Match results manage the full lifecycle of determining a match outcome: per-game
 ---
 
 ### submit_match_result
+
+> **Superseded in part (Phase S7 execution, A21/A31/A39):** `winnerId` is gone; the server computes the winner and the optional `winnerOverride` / `winnerOverrideReason` arguments decide an unresolved tie. See "Server-Computed Scoring" below.
 
 **Purpose:** Submit the final match result with a winner (or 0 for draw). Casual matches auto-validate; Ranked matches transition to Submitted status for later validation.
 
@@ -311,6 +315,8 @@ Match results manage the full lifecycle of determining a match outcome: per-game
 
 ### override_match_result
 
+> **Changed (Phase S7 execution, A31):** a Validated override needs `winnerTeamSideTag` "Blue" or "Red"; "" / "Draw" / "Spectator" are rejected (no draws). This is also how staff resolve a record left Disputed by a seated referee's tie override (A39).
+
 **Purpose:** Override a match result status to Validated or Rejected. Per D-30, D-31, D-42.
 
 **Permission:** Tournament TO/assistant (tournament matches) or Moderator+ (non-tournament matches)
@@ -342,15 +348,34 @@ Match results manage the full lifecycle of determining a match outcome: per-game
 | Invalid `winnerTeamSideTag` for Validated | "Invalid winnerTeamSideTag: must be \"Blue\", \"Red\", or \"\" for a draw." |
 | Ranked match missing screenshots | "Cannot validate: no game scores have been recorded." / "Cannot validate Ranked match: game N is missing screenshot(s). All games must have both teamBlueScreenshotUrl and teamRedScreenshotUrl." |
 
+## Server-Computed Scoring (Phase S7 execution, A21, A31, A39, A55, A56)
+
+The server decides every game and the series from the submitted inputs; the formula lives only in `shared/scoring/` (pure TypeScript, integer hundredths), which the web live preview imports too. Reducer signatures and storage: [architecture.md](architecture.md) "Scoring (S7)".
+
+**Per game** (one team's inputs → result):
+1. Raw result = sum of the team's group results (`MatchResultGroupScore`, one per lineup group: 2 for Halves, 3 for Thirds). Unit: cycles in Memory of Chaos / Anomaly Arbitration (lower wins), points in Apocalyptic Shadow (higher wins).
+2. + every `MatchResultAdjustment` entry for that team and game, added as entered in the mode's unit (+2 cycles is a penalty, +500 points a bonus).
+3. Handicaps, as an advantage (fewer cycles / more points): the cheaper team gets `rosterDiffAdvantage × |costBlue − costRed|`; a roster cost below `rosterThreshold` gets `underThresholdAdvantage`, above it `aboveThresholdPenalty`, **exactly at it neither**, and a threshold of 0 disables the pair; `deathPenalty × deaths` is a penalty.
+4. Tie-break chain on equal adjusted results: (1) lower roster cost, (2) more 4★ characters (`HsrCharacter.rarity`), (3) fewer total eidolons on the team's 5★ characters (from the Pick / AuctionSold step payloads), (4) unresolved → the referee's `winnerOverride`.
+
+**Who:** `record_group_scores` — the captain of that side, or any lobby referee for either side. `set_score_adjustment` — a lobby referee, a Moderator+, or in a tournament lobby the organizer or an assistant with `canResolveResults` (the A39 staff set, same as `submit_match_result`); reason optional (A55). Both reset both captains' confirmations. Group values and |adjustments| are capped at 100,000,000 hundredths.
+
+**Override authority (A39):** `winnerOverride` is accepted only while a game's computed outcome is an unresolved tie (level 4) and then decides every tied game. Series rule: one `winnerOverride` per record decides **every** tied game of the series; until submit, a tied game counts for nobody, so `advance_stage` does not move the series on with it. From a referee not seated on either team, or from staff (Moderator+, the tournament organizer, an assistant with `canResolveResults`): accepted. From a referee seated on a team (player or coach seat): in a tournament lobby (`MatchResultRecord.isTournamentControlled`) the record goes to **Disputed** for staff, with the proposal stored in `winnerOverride*`; in a casual (non-tournament) lobby it is accepted. `winnerOverrideById` / `winnerOverrideReason` audit it.
+
+**History (A56):** finalization archives each `MatchLineup` as a `MatchLineupHistory` row and the game row (raw totals, adjusted results, deaths, tie-break level, winner) as before; group scores, adjustments and live lineups are deleted with the result record on both exits (finalization and `hardDeleteLobby`).
+
 ## Phase 12.3: accountRatingSnapshot lifecycle
 
 ### Capture (MMR-RACE-01)
 
 At `start_draft` time, when `MatchResultParticipant` rows are inserted, the reducer
-resolves each player's `LobbyMemberAccount` rows for `(lobbyId, userId)`, reads
-`HsrAccount.accountRating` for each selected account, and writes
-`max(accountRatings)` to `MatchResultParticipant.accountRatingSnapshot`. For casual
-matches with zero `LobbyMemberAccount` rows the snapshot defaults to `0`.
+resolves each player's `LobbyMemberAccount` rows for `(lobbyId, userId)` and writes the
+**merged account rating** to `MatchResultParticipant.accountRatingSnapshot`:
+`computeMergedAccountRating` over the union of the selected accounts' rosters (per character the
+max eidolon across the accounts, same formula and `maxPossible` denominator). One selected account
+gives that account's own `accountRating`. For casual matches with zero `LobbyMemberAccount` rows the
+snapshot defaults to `0`. *(Phase S6/S7 execution, backlog #10: replaces the former
+`max(accountRatings)` MAX rule; see docs/mmr/contract.md "Merged Account Rating".)*
 
 This freeze eliminates three race vectors: (1) `set_active_hsr_account` post-capture,
 (2) `batch_upsert/remove_characters` post-capture, (3) `process_tournament_mmr`
@@ -367,9 +392,10 @@ read-path swap is path-independent.
 
 `select_match_account` carries a post-insert hook: if a `MatchResultRecord` exists for
 the lobby (i.e. the match is in BetweenGames) and the caller has an MRP row,
-`accountRatingSnapshot` is extended to `max(existing, newAccount.accountRating)`.
+`accountRatingSnapshot` becomes `max(existing, merged rating of the current selection)`
+*(Phase S6/S7 execution, backlog #10: the merged rating replaces `newAccount.accountRating`; the ratchet stays)*.
 `deselect_match_account` does NOT run the hook — removing from selection can never
-lower the max. The hook short-circuits when no MRP row exists (stand-ins joining
+lower the snapshot. The hook short-circuits when no MRP row exists (stand-ins joining
 after `start_draft`).
 
 ## Acceptance Scenarios
@@ -427,6 +453,7 @@ after `start_draft`).
 **Given:** A best-of-N series in BetweenGames stage; player has accountRatingSnapshot=100 on their MRP row; player selects a second account with accountRating=150
 **When:** `select_match_account(lobbyId, higherRatedAccountId)`
 **Then:** accountRatingSnapshot updated to 150 (max wins).
+*Superseded in part (Phase S6/S7 execution, backlog #10): the new value is the merged rating of the whole current selection, ratcheted against the old snapshot; the two-account case is in docs/mmr/contract.md "Merged Account Rating".*
 
 **Given:** Same series; player then selects a third account with accountRating=80
 **When:** `select_match_account(lobbyId, lowerRatedAccountId)`
@@ -446,6 +473,37 @@ after `start_draft`).
 **Given:** bestOf=1, scores confirmed, host called `advance_stage` from Scoring, so the lobby is in AwaitingResult and the MatchResultRecord is Pending
 **When:** Captains call `record_game_scores` / `confirm_match_scores`, then the referee calls `submit_match_result`
 **Then:** All three succeed (`ensureNotConceded` allows AwaitingResult). A conceded record still rejects with "Match has been conceded."; a Finished lobby with "Match has ended."
+*Note (Phase S7 execution): `record_game_scores` is now `record_group_scores`; the guard is unchanged.*
+
+### A 4v4 + 4v4 Bo1 Scored by the Server (Phase S7 execution, A21)
+**Given:** a Classic Memory of Chaos Halves lobby (deathPenalty 1 cycle), both lineups arranged and confirmed, stage Scoring
+**When:** the Blue captain calls `record_group_scores(lobbyId, 1, Blue, [10.00, 12.00] in hundredths, deaths 1)` and the Red captain `[11.00, 11.50]`, deaths 0
+**Then:** the game row holds `teamBlueCyclesUsed = 2200`, `teamRedCyclesUsed = 2250` (raw), `teamBlueAdjustedResult = 2300`, `tieBreakLevel = 0`, winner Red
+
+### A Referee Adjustment Resets the Confirmations (Phase S7 execution, A21, A55)
+**Given:** the game above, both captains confirmed
+**When:** the referee calls `set_score_adjustment(lobbyId, 1, Red, +100)` with no reason
+**Then:** `blueConfirmed` and `redConfirmed` are false; Red's adjusted result is 2350 and Blue wins at level 0; after both confirm again, `submit_match_result(matchResultId)` validates the casual result with winner Blue, writes `MatchSessionHistory.handicapApplied = −100` (Blue's death penalty; modifiers are not handicaps), the game history row and two `MatchLineupHistory` rows, and deletes the group scores, the adjustment and the live lineups
+
+### Engineered Ties Resolved by Each Tie-Break Level (Phase S7 execution, A21)
+**Given:** both captains record identical groups and no deaths
+**When:** Blue's roster costs more / Blue has one more 4★ character / Blue picked a 5★ at E2 / nothing differs
+**Then:** Red wins at level 1 / Blue wins at level 2 / Red wins at level 3 / `tieBreakLevel = 4` with no winner, and `submit_match_result` without `winnerOverride` is rejected ("…tied after every tie-break: the referee decides with winnerOverride.")
+
+### Override Off a Tie Is Rejected (Phase S7 execution, A21, A39)
+**Given:** a decided game
+**When:** the referee submits with `winnerOverride`
+**Then:** rejected: "A winner override is only accepted on an unresolved tie."
+
+### Spectator Referee Overrides a Level-4 Tie in a Casual Lobby (Phase S7 execution, A39)
+**Given:** a level-4 tie, the host is the spectator referee
+**When:** the host submits with `winnerOverride = Red`
+**Then:** accepted; the game is Red's (history `tieBreakLevel = 4`, winner Red) and the Red players get the win
+
+### Seated Player-Referee Overrides in a Tournament Lobby (Phase S7 execution, A39)
+**Given:** a level-4 tie, the referee is a Blue player, `MatchResultRecord.isTournamentControlled = true`
+**When:** the referee submits with `winnerOverride = Blue`
+**Then:** the record is **Disputed** with no `winnerTeamSide`, `winnerOverride = Blue`, `winnerOverrideById` = the referee; the lobby goes to AwaitingResult; nothing is finalized. Staff resolve it with `override_match_result`. In a casual lobby the same override is accepted and finalized.
 
 ## Edge Cases
 
@@ -461,6 +519,13 @@ after `start_draft`).
 | Override non-tournament match as non-moderator | Rejected by `ensureModerator` | Tournament vs non-tournament permission split |
 | Ranked override without screenshots | Rejected: "Cannot validate Ranked match: game N is missing screenshot(s)." | All games must have both URLs |
 | Result reducers in AwaitingResult (Phase S4 execution, F8) | Allowed; only a concede or Finished rejects | `ensureMatchAlive` stays on the draft/equip reducers (DECISIONS.md A22(4)) |
+| `winnerId=0` on submit (Phase S7 execution, A31) | Superseded: `winnerId` no longer exists; no draws anywhere | the two rows above about draws / own-side fields describe the removed reducers |
+| Wrong number of group results (Phase S7 execution) | Rejected: "A Halves lineup has 2 group results; got 3." | Halves 2, Thirds 3 |
+| Scores for a game other than the current one (Phase S7 execution) | Rejected: "Scores can only be entered for the current game (N)." | tie-breaks 2/3 read that game's steps, which `advance_to_next_game` deletes |
+| Submit with a game missing a side's groups (Phase S7 execution) | Rejected: "Game N does not have complete group scores for both teams." | |
+| Series level after the override (Phase S7 execution) | Rejected: "The series is level (x-y): play the deciding game first." | Bo3 only |
+| Adjustment value 0 without `adjustmentId` (Phase S7 execution) | Rejected: "An adjustment of 0 changes nothing." | With an id, 0 deletes the entry |
+| `admin_force_finalize` with a `winnerTeamId` that names no side and no concede winner (Phase S7 execution, A31) | Rejected: "winnerTeamId must name the winning team …: no draws." | `runFinalization` also refuses a record without a winner |
 
 ## Integration Points
 
@@ -477,6 +542,10 @@ after `start_draft`).
 | `admin_set_bracket_winner` | `BracketMatch`, `advanceBracketMatch` | Bracket advancement | Writes |
 | `override_match_result` | `BracketMatch.tournamentId` | Permission derivation (D-42) | Reads |
 | `MatchResultRecord.bracketMatchId` | `BracketMatch.id` | FK derivation for tournamentId (D-42) | Reads |
+| `record_group_scores`, `set_score_adjustment`, `submit_match_result` (Phase S7 execution) | `shared/scoring` (`scoreGame`) | The one formula, also imported by the web live preview | Calls |
+| Tie-breaks 2 and 3 (Phase S7 execution) | `HsrCharacter.rarity`, `MatchSessionStep` Pick / AuctionSold payloads | 4★ count, 5★ eidolon total | Reads |
+| Tie-break 1 (Phase S7 execution) | steps + `MatchLineup.groups` (match-session) | Live roster cost (picks / sold characters + light cones + surcharge of the current groups), also after confirmation | Reads |
+| `runFinalization` (Phase S7 execution, A56) | `MatchLineupHistory`; `MatchResultGroupScore`, `MatchResultAdjustment`, `MatchLineup` | Archive lineups; delete the live rows | Writes |
 
 ## Phase History
 
@@ -496,6 +565,9 @@ after `start_draft`).
 | Full hydration from codebase | Phase 13 normalization | 2026-04-09 |
 | Phase 12.3 execution | accountRatingSnapshot capture at MRP insert (MMR-RACE-01); processMatchMmr snapshot read-path (MMR-RACE-02) replacing live HsrAccount lookup; select_match_account monotonic-upward hook in BetweenGames; finalize_match_result D-H-01 tournament ordering guard | 2026-04-12 |
 | Phase S4 execution | Liveness guard split (DECISIONS.md A22(4), F8): `record_game_scores`, `confirm_match_scores`, `submit_match_result` use `ensureNotConceded` (concede or Finished rejected, AwaitingResult allowed); `ensureMatchAlive` unchanged for draft/equip reducers | 2026-11-06 |
+| Phase S6/S7 execution | Snapshot capture wording: MAX of the selected accounts → merged rating over the union of their rosters, ratchet kept (backlog #10) | 2026-11-06 |
+| Phase S7 execution | Server-computed scoring (A21): `record_group_scores` + `set_score_adjustment` replace `record_game_scores`; `submit_match_result` drops `winnerId`; tie-break chain; threshold boundary neutral, hundredths, eidolons from step payloads (backlog #11 settled items); `winnerOverride` authority (A39); no draws in submit / force-finalize / override / finalization (A31); optional adjustment reason (A55); `MatchLineupHistory` + deletions on both exits (A56); scenarios "A 4v4 + 4v4 Bo1 Scored by the Server" … "Seated Player-Referee Overrides in a Tournament Lobby" added | 2026-11-06 |
+| Phase S7 execution | Review fixes: roster cost computed live (light cones equipped after `confirm_lineup` count); `set_score_adjustment` authority widened to the A39 staff set; input caps; series rule for `winnerOverride` stated. Synergy pairs (A21 / backlog #3): canonical storage + update-on-resubmit supersedes the literal "reject a pair that exists in either order" wording, **pending the user's confirmation** (docs/cost-sets/architecture.md) | 2026-11-06 |
 
 ---
 

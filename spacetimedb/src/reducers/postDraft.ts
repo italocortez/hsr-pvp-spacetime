@@ -8,11 +8,27 @@ import { getAuthenticatedUser } from '../helpers/ensurePermissions';
 import { ensureLobbyMember, ensureStageIs, ensureHostOrAbove, slotTeam, slotIsCoach, slotIsSpectator, slotToTeamSide } from '../helpers/lobbyHelpers';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { ensureMatchAlive } from '../helpers/disconnectHelpers';
+import { readAbuseConfig } from '../helpers/abuseControls';
+import { getNextSequence } from '../helpers/stepSequence';
+import {
+    ensureCaptainOrReferee,
+    ensureTeamTag,
+    findLineup,
+    lineupCosts,
+    recomputeGame,
+    refreshLineupCosts,
+    teamDraft,
+    teamSideValue,
+} from '../helpers/scoringHelpers';
+import { TeamSide } from '../types/enums';
+import { fromHundredths, lineupError, toHundredths, type LineupFormatTag } from '@shared/scoring';
 
 // ─── equip_lightcone ─────────────────────────────────────────────────────────
 // Records LC equip as a backend step. Deducts LC cost from team's LC budget.
 // Per D-55: LCs not exclusive, duplicates allowed. Strict budget enforcement.
 // Per D-56: Recorded as backend step for match replay.
+// CH-S6 / D.8.7: the superimposition argument stands even under requireOwnership; light cones have no
+// ownership data yet, so there is nothing to resolve it from. Once they do, resolve it like the pick eidolon.
 
 export const equip_lightcone = spacetimedb.reducer(
     {
@@ -79,6 +95,14 @@ export const equip_lightcone = spacetimedb.reducer(
         if (lcCost > currentLcBudget) {
             throw new SenderError('Not enough LC budget.');
         }
+        // A21 / backlog #3 (Auction): a confirmed lineup's synergy surcharge is reserved out of the LC budget, so
+        // confirming first and then spending everything on light cones cannot defeat confirm_lineup's gate.
+        const side = isBlue ? 'Blue' : 'Red';
+        const lineup = findLineup(ctx, lobbyId, session.currentGameNumber, side);
+        if (lobby.draftMode.tag === 'Auction' && lineup?.isConfirmed
+            && lcCost + fromHundredths(lineup.synergySurcharge) > currentLcBudget) {
+            throw new SenderError('Not enough LC budget: the confirmed lineup\'s synergy surcharge is reserved.');
+        }
 
         // Determine next sequence number
         const existingSteps = [...ctx.db.MatchSessionStep.lobby_id.filter(lobbyId)];
@@ -103,6 +127,9 @@ export const equip_lightcone = spacetimedb.reducer(
             timestamp: ctx.timestamp,
         }, user.id));
 
+        // A21: the side's lineup row (confirmed or not) follows the new light cone: roster cost and surcharge.
+        refreshLineupCosts(ctx, lobby, session.currentGameNumber, side, user.id);
+
         // Deduct LC cost from budget
         if (isBlue) {
             ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
@@ -122,133 +149,154 @@ export const equip_lightcone = spacetimedb.reducer(
 );
 
 // ─── arrange_lineup ───────────────────────────────────────────────────────────
-// Records lineup position order as a backend step for match replay.
-// Per D-56.
+// (A21, backlog #3): places the team's drafted characters into lineup groups (Lobby.lineupFormat: Halves = 2
+// groups of 4, Thirds = 3 groups of 4), every drafted character exactly once. Caller: the captain of that team,
+// or a referee for either team (tightens D-56's any non-coach team member). Upserts the one live MatchLineup row
+// per team per game with the synergy surcharge and the live roster cost (hundredths) and isConfirmed = false, so
+// arranging a confirmed lineup clears its confirmation. A fan-out reducer: throttled per member through
+// AbuseConfig.lineupMinIntervalMs (LobbyMember.lastLineupAt, stamped without an audit bump) and bounded in size.
+// No step is logged here (ArrangeLineupPayload is a position list; the replay keeps only the ConfirmLineup step).
+
+const MAX_GROUPS_JSON_LENGTH = 2000;
+
+function parseGroups(groups: string): string[][] {
+    if (groups.length > MAX_GROUPS_JSON_LENGTH) {
+        throw new SenderError('groups is too long.');
+    }
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(groups);
+    } catch {
+        throw new SenderError('groups must be a JSON array of arrays of character names.');
+    }
+    if (!Array.isArray(parsed) || !parsed.every((g) => Array.isArray(g) && g.every((n) => typeof n === 'string'))) {
+        throw new SenderError('groups must be a JSON array of arrays of character names.');
+    }
+    return parsed as string[][];
+}
 
 export const arrange_lineup = spacetimedb.reducer(
     {
         lobbyId: t.u32(),
-        positions: t.string(),
+        teamSide: TeamSide,
+        groups: t.string(),
     },
-    (ctx, { lobbyId, positions }) => {
+    (ctx, { lobbyId, teamSide, groups }) => {
         const user = getAuthenticatedUser(ctx);
         const lobby = ctx.db.Lobby.id.find(lobbyId);
         if (!lobby) throw new SenderError('Lobby not found.');
 
-        const member = ensureLobbyMember(ctx, lobbyId, user.id);
+        const side = ensureTeamTag(teamSide);
+        const member = ensureCaptainOrReferee(ctx, lobbyId, user.id, side, 'arrange the lineup');
         ensureStageIs(lobby, 'Equipping');
         ensureMatchAlive(ctx, lobby);
 
-        // Coach guard (D-39)
-        if (slotIsCoach(member.lobbySlot)) {
-            throw new SenderError('Coaches cannot arrange lineups.');
+        // B-4 throttle (fan-out): reject a move that comes faster than lineupMinIntervalMs.
+        const minIntervalMicros = BigInt(readAbuseConfig(ctx).lineupMinIntervalMs) * 1000n;
+        const now = ctx.timestamp.microsSinceUnixEpoch;
+        if (member.lastLineupAt && now - member.lastLineupAt.microsSinceUnixEpoch < minIntervalMicros) {
+            throw new SenderError('Lineup changes are too frequent. Please wait a moment.');
         }
 
-        // Member must be on Blue or Red team
-        if (slotIsSpectator(member.lobbySlot)) {
-            throw new SenderError('Spectators cannot arrange lineups.');
-        }
-
-        // Load session for gameNumber stamping (WR-04 Phase 15.4: archival integrity).
         const session = ctx.db.MatchSession.lobbyId.find(lobbyId);
         if (!session) throw new SenderError('Match session not found.');
 
-        // Validate positions is valid JSON array of strings
-        let parsedPositions: string[];
-        try {
-            parsedPositions = JSON.parse(positions);
-            if (!Array.isArray(parsedPositions) || !parsedPositions.every((p: any) => typeof p === 'string')) {
-                throw new Error('Not an array of strings');
-            }
-        } catch {
-            throw new SenderError('positions must be a valid JSON array of strings.');
+        const parsed = parseGroups(groups);
+        const draft = teamDraft(ctx, lobbyId, session.currentGameNumber, side);
+        const problem = lineupError(parsed, draft.characters, lobby.lineupFormat.tag as LineupFormatTag);
+        if (problem) throw new SenderError(problem);
+        const { surcharge, rosterCost } = lineupCosts(ctx, lobby, draft, parsed);
+
+        const existing = findLineup(ctx, lobbyId, session.currentGameNumber, side);
+        if (existing) {
+            ctx.db.MatchLineup.id.update(updateWithAudit(ctx, existing, {
+                groups: JSON.stringify(parsed),
+                synergySurcharge: surcharge,
+                rosterCost,
+                isConfirmed: false,
+            }, user.id));
+        } else {
+            ctx.db.MatchLineup.insert(insertWithAudit(ctx, {
+                id: 0,
+                lobbyId,
+                gameNumber: session.currentGameNumber,
+                teamSide: teamSideValue(side),
+                groups: JSON.stringify(parsed),
+                synergySurcharge: surcharge,
+                rosterCost,
+                isConfirmed: false,
+            }, user.id));
         }
 
-        // Determine next sequence number
-        const existingSteps = [...ctx.db.MatchSessionStep.lobby_id.filter(lobbyId)];
-        const nextSequence = existingSteps.length > 0
-            ? Math.max(...existingSteps.map((s: any) => s.sequence)) + 1
-            : 1;
-
-        // Insert MatchSessionStep
-        ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
-            id: 0, // autoInc
-            lobbyId,
-            gameNumber: session.currentGameNumber,
-            sequence: nextSequence,
-            actorUserId: user.id,
-            anonymousLabel: undefined,
-            actorSlot: slotToTeamSide(member.lobbySlot),
-            action: { tag: 'ArrangeLineup', value: {} } as any,
-            payload: {
-                tag: 'ArrangeLineup',
-                value: { positions },
-            } as any,
-            timestamp: ctx.timestamp,
-        }, user.id));
-
-        // Update lobby lastActivityAt
-        ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
-            lastActivityAt: ctx.timestamp,
-        }, user.id));
+        // Throttle stamp on the private member row: no audit bump (not a user edit, like lastCursorAt).
+        ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, member.userId]);
+        ctx.db.LobbyMember.insert({ ...member, lastLineupAt: ctx.timestamp });
     }
 );
 
 // ─── confirm_lineup ───────────────────────────────────────────────────────────
-// Records lineup confirmation as a backend step.
-// Per D-56.
+// Same callers as arrange_lineup. Recomputes the surcharge and roster cost from the stored groups, fixes the
+// rosterCost on the row (equip_lightcone keeps it current afterwards), sets isConfirmed and logs the ConfirmLineup step with the
+// groups for replay (actorSlot = the lineup's team, so a spectator referee's confirmation replays on the right
+// side). Auction: rejected while the surcharge exceeds the team's remaining light-cone budget (the surcharge comes
+// out of that budget; an over-budget arrangement is allowed while arranging). The budget itself is not debited.
 
 export const confirm_lineup = spacetimedb.reducer(
     {
         lobbyId: t.u32(),
+        teamSide: TeamSide,
     },
-    (ctx, { lobbyId }) => {
+    (ctx, { lobbyId, teamSide }) => {
         const user = getAuthenticatedUser(ctx);
         const lobby = ctx.db.Lobby.id.find(lobbyId);
         if (!lobby) throw new SenderError('Lobby not found.');
 
-        const member = ensureLobbyMember(ctx, lobbyId, user.id);
+        const side = ensureTeamTag(teamSide);
+        ensureCaptainOrReferee(ctx, lobbyId, user.id, side, 'confirm the lineup');
         ensureStageIs(lobby, 'Equipping');
         ensureMatchAlive(ctx, lobby);
 
-        // Coach guard (D-39)
-        if (slotIsCoach(member.lobbySlot)) {
-            throw new SenderError('Coaches cannot confirm lineups.');
-        }
-
-        // Member must be on Blue or Red team
-        if (slotIsSpectator(member.lobbySlot)) {
-            throw new SenderError('Spectators cannot confirm lineups.');
-        }
-
-        // Load session for gameNumber stamping (WR-04 Phase 15.4: archival integrity).
         const session = ctx.db.MatchSession.lobbyId.find(lobbyId);
         if (!session) throw new SenderError('Match session not found.');
 
-        // Determine next sequence number
-        const existingSteps = [...ctx.db.MatchSessionStep.lobby_id.filter(lobbyId)];
-        const nextSequence = existingSteps.length > 0
-            ? Math.max(...existingSteps.map((s: any) => s.sequence)) + 1
-            : 1;
+        const lineup = findLineup(ctx, lobbyId, session.currentGameNumber, side);
+        if (!lineup) throw new SenderError('Arrange the lineup before confirming it.');
 
-        // Insert MatchSessionStep
+        const draft = teamDraft(ctx, lobbyId, session.currentGameNumber, side);
+        const parsed: string[][] = JSON.parse(lineup.groups);
+        const problem = lineupError(parsed, draft.characters, lobby.lineupFormat.tag as LineupFormatTag);
+        if (problem) throw new SenderError(problem);
+        const { surcharge, rosterCost } = lineupCosts(ctx, lobby, draft, parsed);
+
+        if (lobby.draftMode.tag === 'Auction') {
+            const remainingLc = toHundredths(side === 'Blue' ? session.teamBlueLcBudget : session.teamRedLcBudget);
+            if (surcharge > remainingLc) {
+                throw new SenderError('The synergy surcharge exceeds the remaining light-cone budget; rearrange the lineup.');
+            }
+        }
+
+        ctx.db.MatchLineup.id.update(updateWithAudit(ctx, lineup, {
+            synergySurcharge: surcharge,
+            rosterCost,
+            isConfirmed: true,
+        }, user.id));
+
         ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
             id: 0, // autoInc
             lobbyId,
             gameNumber: session.currentGameNumber,
-            sequence: nextSequence,
+            sequence: getNextSequence(ctx, lobbyId),
             actorUserId: user.id,
             anonymousLabel: undefined,
-            actorSlot: slotToTeamSide(member.lobbySlot),
+            actorSlot: teamSideValue(side),
             action: { tag: 'ConfirmLineup', value: {} } as any,
             payload: {
                 tag: 'ConfirmLineup',
-                value: { confirmed: true },
+                value: { confirmed: true, groups: lineup.groups },
             } as any,
             timestamp: ctx.timestamp,
         }, user.id));
 
-        // Update lobby lastActivityAt
         ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
             lastActivityAt: ctx.timestamp,
         }, user.id));
@@ -353,13 +401,15 @@ export const advance_stage = spacetimedb.reducer(
             if (!session) throw new SenderError('Match session not found.');
 
             if (session.seriesBestOf > 1) {
-                // Find the MatchResultRecord for this lobby (created by submit_match_result or record_game_scores flow)
+                // Find the MatchResultRecord for this lobby (created by start_draft; game rows by record_group_scores)
                 const matchResult = [...ctx.db.MatchResultRecord.lobby_id.filter(lobbyId)][0];
 
                 let newGamesWonBlue = session.gamesWonBlue;
                 let newGamesWonRed = session.gamesWonRed;
 
                 if (matchResult) {
+                    // (A21): the current game's winner is server-computed; refresh it from its inputs first.
+                    recomputeGame(ctx, matchResult, lobby, session.currentGameNumber, user.id);
                     // Count wins per side from MatchResultGame rows
                     const games = [...ctx.db.MatchResultGame.match_result_id.filter(matchResult.id)];
                     let blueWins = 0;

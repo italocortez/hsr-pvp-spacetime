@@ -107,6 +107,7 @@ import { TournamentPlayerAccount } from './tables/tournamentPlayerAccount';
 
 // Match Result Game History
 import { MatchResultGameHistory } from './tables/matchResultGameHistory';
+import { MatchLineupHistory } from './tables/matchLineupHistory';
 
 // GC Audit
 import { GcResult } from './tables/gcResult';
@@ -227,6 +228,7 @@ const spacetimedb = schema({
     MatchSessionStepHistory,
     MatchParticipantHistory,
     MatchResultGameHistory,
+    MatchLineupHistory,     // A56: archived lineups, written by runFinalization
 
     // Season
     Season,

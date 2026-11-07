@@ -20,8 +20,22 @@ function step(action: string, team: string): any {
  * BanMode 'None' → 16 steps (all picks, snake order)
  * BanMode 'Four' → 20 steps (2 bans, 4 picks, 2 bans, 12 picks)
  * BanMode 'Six'  → 22 steps (2 bans, 4 picks, 2 bans, 4 picks, 2 bans, 8 picks)
+ *
+ * A21: the lineup format is the character count. Halves = the sequences above (8 picks per team);
+ * Thirds appends THIRDS_EXTRA_PICKS (8 more picks, 4 per team, continuing the Red-Blue-Blue-Red snake) for
+ * 12 picks per team. notes/draft_order.md defines only the 8-pick orders; the extension is this implementation's choice (A21 only fixes the count).
  */
-export function buildClassicSequence(banMode: string): any[] {
+export function buildClassicSequence(banMode: string, lineupFormat: string): any[] {
+    const base = buildHalvesClassicSequence(banMode);
+    return lineupFormat === 'Thirds' ? [...base, ...THIRDS_EXTRA_PICKS()] : base;
+}
+
+const THIRDS_EXTRA_PICKS = () => [
+    step('Pick', 'Red'), step('Pick', 'Blue'), step('Pick', 'Blue'), step('Pick', 'Red'),
+    step('Pick', 'Red'), step('Pick', 'Blue'), step('Pick', 'Blue'), step('Pick', 'Red'),
+];
+
+function buildHalvesClassicSequence(banMode: string): any[] {
     switch (banMode) {
         case 'None':
             return [
@@ -54,7 +68,7 @@ export function buildClassicSequence(banMode: string): any[] {
 
         default:
             // Fallback to 0-ban sequence
-            return buildClassicSequence('None');
+            return buildHalvesClassicSequence('None');
     }
 }
 

@@ -1,3 +1,4 @@
+import { deleteScoringRows, lobbyLineups } from '../helpers/scoringHelpers';
 import spacetimedb from '../schema';
 import { LobbyGcJob, setRunLobbyGcReducer } from '../tables/lobbyGcJob';
 import { SYSTEM_USER_ID } from '../helpers/auditColumns';
@@ -35,9 +36,11 @@ import { SenderError } from 'spacetimedb/server';
 // are admin-only resolution (D-48). No orphaned MatchResultRecord gaps found.
 
 export function hardDeleteLobby(ctx: any, lobbyId: number): void {
-    // 0a. Delete MatchResult* rows (MatchResultParticipant, MatchResultGame, MatchResultRecord)
+    // 0a. Delete MatchResult* rows (MatchResultParticipant, MatchResultGame, MatchResultRecord) and, A56(3),
+    //     the scoring inputs (MatchResultGroupScore, MatchResultAdjustment) and the live MatchLineup rows
     const matchResults = [...ctx.db.MatchResultRecord.lobby_id.filter(lobbyId)];
     for (const mr of matchResults) {
+        deleteScoringRows(ctx, mr.id, lobbyId); // first: the game rows bound its per-game scans
         for (const p of [...ctx.db.MatchResultParticipant.match_result_id.filter(mr.id)]) {
             ctx.db.MatchResultParticipant.delete(p);
         }
@@ -46,6 +49,8 @@ export function hardDeleteLobby(ctx: any, lobbyId: number): void {
         }
         ctx.db.MatchResultRecord.delete(mr);
     }
+    // Lineups are keyed by lobby: also sweep them when no record exists.
+    for (const l of lobbyLineups(ctx, lobbyId)) ctx.db.MatchLineup.id.delete(l.id);
 
     // 1. Delete all ChatMessage rows
     for (const msg of [...ctx.db.ChatMessage.lobby_id.filter(lobbyId)]) {

@@ -135,7 +135,7 @@ import PlaceBidReducer from "./place_bid_reducer";
 import ProcessTournamentMmrReducer from "./process_tournament_mmr_reducer";
 import PublishCostSetReducer from "./publish_cost_set_reducer";
 import ReclaimRefereeReducer from "./reclaim_referee_reducer";
-import RecordGameScoresReducer from "./record_game_scores_reducer";
+import RecordGroupScoresReducer from "./record_group_scores_reducer";
 import RegisterForTournamentReducer from "./register_for_tournament_reducer";
 import RejectTeamRequestReducer from "./reject_team_request_reducer";
 import RemoveAchievementCriteriaReducer from "./remove_achievement_criteria_reducer";
@@ -165,6 +165,7 @@ import SetActiveHsrAccountReducer from "./set_active_hsr_account_reducer";
 import SetActiveSeasonReducer from "./set_active_season_reducer";
 import SetCaptainReducer from "./set_captain_reducer";
 import SetDisplayedAchievementReducer from "./set_displayed_achievement_reducer";
+import SetScoreAdjustmentReducer from "./set_score_adjustment_reducer";
 import SetTeamSlotReducer from "./set_team_slot_reducer";
 import ShelveSeriesReducer from "./shelve_series_reducer";
 import ShuffleTeamsReducer from "./shuffle_teams_reducer";
@@ -942,7 +943,7 @@ const reducersSchema = __reducers(
   __reducerSchema("process_tournament_mmr", ProcessTournamentMmrReducer),
   __reducerSchema("publish_cost_set", PublishCostSetReducer),
   __reducerSchema("reclaim_referee", ReclaimRefereeReducer),
-  __reducerSchema("record_game_scores", RecordGameScoresReducer),
+  __reducerSchema("record_group_scores", RecordGroupScoresReducer),
   __reducerSchema("register_for_tournament", RegisterForTournamentReducer),
   __reducerSchema("reject_team_request", RejectTeamRequestReducer),
   __reducerSchema("remove_achievement_criteria", RemoveAchievementCriteriaReducer),
@@ -972,6 +973,7 @@ const reducersSchema = __reducers(
   __reducerSchema("set_active_season", SetActiveSeasonReducer),
   __reducerSchema("set_captain", SetCaptainReducer),
   __reducerSchema("set_displayed_achievement", SetDisplayedAchievementReducer),
+  __reducerSchema("set_score_adjustment", SetScoreAdjustmentReducer),
   __reducerSchema("set_team_slot", SetTeamSlotReducer),
   __reducerSchema("shelve_series", ShelveSeriesReducer),
   __reducerSchema("shuffle_teams", ShuffleTeamsReducer),

@@ -191,7 +191,7 @@ export const override_match_result = spacetimedb.reducer(
     {
         matchResultId: t.u32(),
         newStatusTag: t.string(),
-        winnerTeamSideTag: t.string(), // 'Blue', 'Red', or '' for draw/no winner
+        winnerTeamSideTag: t.string(), // 'Blue' or 'Red' for Validated (A31: no draws); ignored for Rejected
         reason: t.string(),
     },
     (ctx, { matchResultId, newStatusTag, winnerTeamSideTag, reason }) => {
@@ -225,17 +225,16 @@ export const override_match_result = spacetimedb.reducer(
             actingUserId = user.id;
         }
 
-        // For Validated: winnerTeamSideTag must be 'Blue', 'Red', or '' (draw)
+        // For Validated: winnerTeamSideTag must be 'Blue' or 'Red' (A31: no draws, a Validated result
+        // always has a winner; this is how staff resolve an A39 Disputed tie override).
         let winnerTeamSide: any = undefined;
         if (newStatusTag === 'Validated') {
             if (winnerTeamSideTag === 'Blue') {
                 winnerTeamSide = { tag: 'Blue', value: {} };
             } else if (winnerTeamSideTag === 'Red') {
                 winnerTeamSide = { tag: 'Red', value: {} };
-            } else if (winnerTeamSideTag === '' || winnerTeamSideTag === 'Draw' || winnerTeamSideTag === 'Spectator') {
-                winnerTeamSide = undefined; // Draw: no winner
             } else {
-                throw new SenderError('Invalid winnerTeamSideTag: must be "Blue", "Red", or "" for a draw.');
+                throw new SenderError('Invalid winnerTeamSideTag: a Validated result needs "Blue" or "Red" (no draws).');
             }
         }
 
@@ -259,8 +258,8 @@ export const override_match_result = spacetimedb.reducer(
         ctx.db.MatchResultRecord.id.update(updateWithAudit(ctx, matchResult, {
             status: { tag: newStatusTag, value: {} } as any,
             winnerTeamSide: newStatusTag === 'Validated' ? winnerTeamSide : undefined,
-            // S7/S8 (A31): no draws; a Validated result always has a winner, and override_match_result is
-            // replaced by resolve_bracket_match / rollback_bracket_match through the single writer (A24).
+            // A31: a Validated result always has a winner (checked above). S8 (A24): override_match_result is
+            // replaced by resolve_bracket_match / rollback_bracket_match through the single writer.
             matchEndReason: newStatusTag === 'Validated'
                 ? { tag: 'Completed', value: {} } as any
                 : matchResult.matchEndReason,

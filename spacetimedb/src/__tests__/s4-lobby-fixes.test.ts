@@ -19,6 +19,7 @@ import {
     type Actor,
     type Lobby,
 } from './s4-fixtures';
+import { groupCount, type LineupFormatTag } from '@shared/scoring';
 
 const NOT_ELIGIBLE = /Opposing team is not eligible for forfeit/;
 const rejoin = (s: Lobby, who: Actor) =>
@@ -180,29 +181,29 @@ describe('F8 / A22(4): result reducers in AwaitingResult', () => {
         expect(record.status.tag).toBe('Pending');
         return { test, s, recordId: record.id };
     }
-    const scores = (matchResultId: number) => ({
-        matchResultId,
-        gameNumber: 1,
-        winnerTeamSide: 'Blue',
-        teamBlueCyclesUsed: 10,
-        teamRedCyclesUsed: 12,
-        teamBlueScore: undefined,
-        teamRedScore: undefined,
-        teamBlueBoss1Score: undefined,
-        teamBlueBoss2Score: undefined,
-        teamRedBoss1Score: undefined,
-        teamRedBoss2Score: undefined,
-        teamBlueScreenshotUrl: undefined,
-        teamRedScreenshotUrl: undefined,
-    });
+    // S7 (A21): one call per team side; values are hundredths, one per lineup group of the lobby's format.
+    // Built before tx(): the lobby row is read outside the reducer transaction.
+    const scores = (s: Lobby, side: 'Blue' | 'Red', value: number) => {
+        const groups = groupCount(lobbyRow(s.test, s.lobbyId).lineupFormat.tag as LineupFormatTag);
+        return {
+            lobbyId: s.lobbyId,
+            gameNumber: 1,
+            teamSide: { tag: side } as any,
+            values: Array.from({ length: groups }, () => value),
+            deaths: 0,
+        };
+    };
 
-    it('record_game_scores, confirm_match_scores, submit_match_result do not fail with "Match has ended."', () => {
+    it('record_group_scores, confirm_match_scores, submit_match_result do not fail with "Match has ended."', () => {
         const { test, s, recordId } = toAwaitingResult();
         // The host is the spectator referee with refereeFullControl: one caller covers all three.
-        tx(test, s.host, (ctx) => M.record_game_scores(ctx, scores(recordId)));
+        const blueScores = scores(s, 'Blue', 1000);
+        const redScores = scores(s, 'Red', 1200);
+        tx(test, s.host, (ctx) => M.record_group_scores(ctx, blueScores));
+        tx(test, s.host, (ctx) => M.record_group_scores(ctx, redScores));
         tx(test, s.host, (ctx) => M.confirm_match_scores(ctx, { matchResultId: recordId }));
         expect(test.db.MatchResultGame.match_result_id.filter(recordId)).toBeDefined();
-        tx(test, s.host, (ctx) => M.submit_match_result(ctx, { matchResultId: recordId, winnerId: s.a.b1.userId }));
+        tx(test, s.host, (ctx) => M.submit_match_result(ctx, { matchResultId: recordId }));
         // Casual: submit validates and finalizes inline, which deletes the record and the lobby.
         expect(test.db.MatchResultRecord.id.find(recordId)).toBeNull();
         expect(test.db.Lobby.id.find(s.lobbyId)).toBeNull();
@@ -221,9 +222,10 @@ describe('F8 / A22(4): result reducers in AwaitingResult', () => {
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('AwaitingResult');
         expect(test.db.MatchResultRecord.id.find(recordId)?.status.tag).toBe('Pending');
 
-        expectReject(test, s.host, (ctx) => M.record_game_scores(ctx, scores(recordId)), 'Match has been conceded.');
+        const blueScores = scores(s, 'Blue', 1000);
+        expectReject(test, s.host, (ctx) => M.record_group_scores(ctx, blueScores), 'Match has been conceded.');
         expectReject(test, s.host, (ctx) => M.confirm_match_scores(ctx, { matchResultId: recordId }), 'Match has been conceded.');
-        expectReject(test, s.host, (ctx) => M.submit_match_result(ctx, { matchResultId: recordId, winnerId: s.a.b1.userId }), 'Match has been conceded.');
+        expectReject(test, s.host, (ctx) => M.submit_match_result(ctx, { matchResultId: recordId }), 'Match has been conceded.');
     });
 });
 

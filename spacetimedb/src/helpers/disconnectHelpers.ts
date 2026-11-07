@@ -26,7 +26,7 @@ export function ensureMatchAlive(ctx: any, lobby: any): void {
 }
 
 /**
- * Guard for the result reducers (`record_game_scores`, `confirm_match_scores`, `submit_match_result`):
+ * Guard for the result reducers (`record_group_scores`, `set_score_adjustment`, `confirm_match_scores`, `submit_match_result`):
  * rejects a conceded record or a Finished lobby, but allows AwaitingResult, where `advance_stage` parks the
  * lobby after Scoring (F8, A22(4)).
  */

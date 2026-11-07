@@ -2,7 +2,7 @@ import { table, t } from 'spacetimedb/server';
 import { GameMode, DraftMode } from '../types/enums';
 
 // A21 (S3): synergies are unordered pairs. characterA < characterB in canonical (alphabetical) order;
-// the bulk upsert and the cost-set editor reject a pair that exists in either order (S7).
+// the bulk upsert and the cost-set editor canonicalize, so a pair can never exist in both orders.
 export const hsrSynergyCostColumns = {
     id: t.u32().primaryKey().autoInc(),
     characterA: t.string(),

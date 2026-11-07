@@ -12,6 +12,7 @@ import {
 import {
   GameMode,
   DraftMode,
+  TeamSide,
   MatchEndReason,
   LobbyConfigSnapshot,
 } from "./types";
@@ -41,6 +42,11 @@ export default __t.row({
   tournamentId: __t.option(__t.u32()).name("tournament_id"),
   bracketMatchId: __t.option(__t.u32()).name("bracket_match_id"),
   voidedAt: __t.option(__t.timestamp()).name("voided_at"),
+  get winnerOverride() {
+    return __t.option(TeamSide).name("winner_override");
+  },
+  winnerOverrideById: __t.option(__t.u32()).name("winner_override_by_id"),
+  winnerOverrideReason: __t.option(__t.string()).name("winner_override_reason"),
   createdById: __t.u32().name("created_by_id"),
   createdDate: __t.timestamp().name("created_date"),
   lastModifiedById: __t.u32().name("last_modified_by_id"),

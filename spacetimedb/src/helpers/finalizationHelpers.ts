@@ -17,6 +17,7 @@ import { checkAndAwardAchievements } from './achievementChecker';
 import { slotIsCoach, slotIsSpectator, slotToTeamSide } from './lobbyHelpers';
 import { resolveUserLabel } from './userLabel';
 import { hardDeleteLobby } from '../reducers/lobbyGc';
+import { deleteScoringRows, lobbyLineups, netHandicapApplied } from './scoringHelpers';
 
 // ─── Internal: getOrCreateRating ─────────────────────────────────────────────
 // Returns existing MmrRating row for user+mode+season, or creates a new one.
@@ -200,6 +201,9 @@ export function runFinalization(
     // 3b. Read match session (for budget analysis in step 7, D-88)
     const session = ctx.db.MatchSession.lobbyId.find(matchResult.lobbyId);
 
+    // 3c. A56: the match's lineups (every game; MatchLineup is keyed by lobby)
+    const lineups = lobbyLineups(ctx, matchResult.lobbyId);
+
     // 4. Read steps (sorted by sequence)
     const steps = [...ctx.db.MatchSessionStep.lobby_id.filter(matchResult.lobbyId)]
         .sort((a: any, b: any) => a.sequence - b.sequence);
@@ -216,7 +220,11 @@ export function runFinalization(
 
     // Determine match end reason (per D-31/D-32/D-33):
     // winnerTeamSide answers WHO won, matchEndReason answers HOW it ended
-    // S7 (A31): no draws — MatchEndReason.Draw was removed; the server-computed winner is always set.
+    // A31: no draws — MatchEndReason.Draw was removed and every path that reaches finalization sets a winner
+    // (submit_match_result computes it, concede derives it, admin_force_finalize / override_match_result require one).
+    if (matchResult.winnerTeamSide === undefined) {
+        throw new SenderError('A result without a winner cannot be finalized (A31: no draws).');
+    }
     let matchEndReason: any = { tag: 'Completed', value: {} } as any;
 
     // ── Concede Detection (D-74) ────────────────────────────────────────────
@@ -315,11 +323,16 @@ export function runFinalization(
         // totalSpent = characterBudget + lightconeBudget - remainingLcBudget (correct carryover math)
         teamBlueSpent: session && lobby ? (lobby.characterBudget + lobby.lightconeBudget - session.teamBlueLcBudget) : 0,
         teamRedSpent: session && lobby ? (lobby.characterBudget + lobby.lightconeBudget - session.teamRedLcBudget) : 0,
-        handicapApplied: 0, // S7: the applied handicap in hundredths from the shared scoring module
+        // A21: net handicap advantage Blue received over Red, hundredths, summed over the games (scoringHelpers).
+        handicapApplied: netHandicapApplied(ctx, matchResult.id, games, gameMode.tag),
         // A24/A37: tournament linkage instead of the D-84 public-visibility flag (history is never public)
         tournamentId: lobby?.tournamentId,
         bracketMatchId: lobby?.bracketMatchId,
         voidedAt: undefined,
+        // A21 / A39: the tie override survives finalization for audit and replay.
+        winnerOverride: matchResult.winnerOverride,
+        winnerOverrideById: matchResult.winnerOverrideById,
+        winnerOverrideReason: matchResult.winnerOverrideReason,
     }, actingUserId));
     } // end step 7 concede gate
 
@@ -384,6 +397,23 @@ export function runFinalization(
         }
     }
 
+    // 9b. A56(1): write MatchLineupHistory rows (every lineup of the match, all games), next to the game rows.
+    if (!isConcede || concedeFlags.doArchiveGames) {
+        if (historyRow) {
+            for (const lineup of lineups) {
+                ctx.db.MatchLineupHistory.insert(insertWithAudit(ctx, {
+                    id: 0,
+                    matchHistoryId: historyRow.id,
+                    gameNumber: lineup.gameNumber,
+                    teamSide: lineup.teamSide,
+                    groups: lineup.groups,
+                    synergySurcharge: lineup.synergySurcharge,
+                    rosterCost: lineup.rosterCost,
+                }, actingUserId));
+            }
+        }
+    }
+
     // 10. Write MatchParticipantHistory per participant (per D-53/D-87)
     if (!isConcede || concedeFlags.doArchiveParticipants) {
         if (historyRow) {
@@ -434,9 +464,8 @@ export function runFinalization(
     // 13. Increment PlayerStat per participant (per D-30: compare teamSide tags to winnerTeamSide)
     if (!isConcede || concedeFlags.doWinLoss) {
         for (const p of effectiveParticipants) {
-            const isDraw = matchResult.winnerTeamSide === undefined;
-            const participantWon = !isDraw && matchResult.winnerTeamSide?.tag === p.teamSide.tag;
-            incrementPlayerStat(ctx, p.userId, gameMode, draftMode, seasonId, matchType, teamSize, participantWon, isDraw, actingUserId);
+            const participantWon = matchResult.winnerTeamSide.tag === p.teamSide.tag; // A31: always a winner
+            incrementPlayerStat(ctx, p.userId, gameMode, draftMode, seasonId, matchType, teamSize, participantWon, actingUserId);
         }
     }
 
@@ -465,9 +494,8 @@ export function runFinalization(
                 const a = effectiveParticipants[i];
                 const b = effectiveParticipants[j];
                 const isAlly = a.teamSide.tag === b.teamSide.tag;
-                const isDraw = matchResult.winnerTeamSide === undefined;
-                const aWon = !isDraw && matchResult.winnerTeamSide?.tag === a.teamSide.tag;
-                const bWon = !isDraw && matchResult.winnerTeamSide?.tag === b.teamSide.tag;
+                const aWon = matchResult.winnerTeamSide.tag === a.teamSide.tag;
+                const bWon = matchResult.winnerTeamSide.tag === b.teamSide.tag;
                 incrementPlayerRelationship(ctx, a.userId, b.userId, gameMode, draftMode, seasonId, matchType, teamSize, isAlly, aWon, actingUserId);
                 incrementPlayerRelationship(ctx, b.userId, a.userId, gameMode, draftMode, seasonId, matchType, teamSize, isAlly, bWon, actingUserId);
             }
@@ -544,6 +572,9 @@ export function runFinalization(
     }
 
     // 18. Delete ephemeral records (children first, then steps, then record) — always runs
+    // A56(3): the scoring inputs and the live lineups never outlive their result record (before the game rows,
+    // whose numbers bound the per-game scans).
+    deleteScoringRows(ctx, matchResult.id, matchResult.lobbyId);
     for (const g of games) { ctx.db.MatchResultGame.delete(g); }
     for (const p of participants) { ctx.db.MatchResultParticipant.delete(p); }
     // Delete MatchSessionStep rows (archived to history in step 8)

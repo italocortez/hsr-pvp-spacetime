@@ -3,7 +3,7 @@ import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser } from '../helpers/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { ensureLobbyMember, ensureHostOrAbove, ensureStageIs, slotTeam, slotIsCoach, slotToTeamSide } from '../helpers/lobbyHelpers';
-import { validateCharacterOwnership } from '../helpers/ownershipValidation';
+import { resolveOwnedEidolon, validateCharacterOwnership } from '../helpers/ownershipValidation';
 import { initSessionForGame } from '../helpers/matchSessionInit';
 import { computeLobbyMemberRating } from '../helpers/accountRating';
 import { banRestrictionError, isBanLegal } from '../helpers/banRestriction';
@@ -223,7 +223,7 @@ export const pick_character = spacetimedb.reducer(
         characterName: t.string(),
         eidolon: t.u8(),
     },
-    (ctx, { lobbyId, characterName, eidolon }) => {
+    (ctx, { lobbyId, characterName, eidolon: requestedEidolon }) => {
         const user = getAuthenticatedUser(ctx);
 
         const lobby = ctx.db.Lobby.id.find(lobbyId);
@@ -305,6 +305,12 @@ export const pick_character = spacetimedb.reducer(
                 throw new SenderError(ownershipResult.reason ?? 'You do not own this character.');
             }
         }
+
+        // CH-S6 / D.8.7: under requireOwnership the server resolves the eidolon from the selected accounts
+        // and ignores the argument; otherwise the argument stands. Cost and payload use the resolved value.
+        const eidolon = lobby.requireOwnership
+            ? resolveOwnedEidolon(ctx, lobbyId, user.id, characterName)
+            : requestedEidolon;
 
         // Determine cost from HsrCharacterCost table (15.4 D-10/D-11: filter draftMode='Classic').
         let cost = 0;

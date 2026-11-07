@@ -137,6 +137,7 @@ Series settings and cost-set guards (Phase S6 execution; DECISIONS.md A27, A28, 
 - The six new arguments are optional (an omitted key takes the default): `name` (trimmed, 0-50 chars, default '' — the lobby browser view labels an empty name in S9; no host name is stored, so anonymous lobbies leak nothing), `banRestriction` (NoRestriction), `lineupFormat` (Halves), `hideMmr` (false), `bestOfNAdvantage` (None), `refereeExclusiveConcede` (true, A45(5); it was hardcoded true before).
 - `bestOf`: the D-11 sentinel maps 0 to 1, then `ensureBestOf` (helpers/seriesSettings.ts) rejects anything but 1 or 3 with "bestOf must be 1 or 3.". `bestOfNAdvantage` is forced to None when bestOf = 1 (`resolveAdvantage`).
 - `lineupFormat`: both values are accepted. The A21 rule "8 characters → Halves, 12 → Thirds" has no other source in the schema today (every draft sequence fields 8 characters per team, `teamSize` is players), so the format itself is the character count; the 12-character draft is S7's.
+  - Phase S7 execution (A21): the format drives the draft. Halves = 8 characters per team, Thirds = 12 (`charactersPerTeam` in `shared/scoring`): `initSessionForGame` builds the Classic sequence with `lobby.lineupFormat` and the Auction ends at 8 / 12 won per team; lineups (`arrange_lineup` / `confirm_lineup`) have 2 or 3 groups of 4, arranged and confirmed only by the team captain or a referee. Details: `docs/match-session/architecture.md` "Phase S7 execution".
 - `ensureCostSetUsable(costSetId, gameMode, draftMode)` (helpers/costSetGuards.ts): id 0 passes; otherwise the set must exist, be published and not locked, and hold at least one `HsrCharacterCost` and one `HsrLightconeCost` row for the tuple (D-D6 loose coverage; synergies never reject). Error: "This cost set has no costs for {gameMode} × {draftMode}. Pick another set or ask its owner to extend it."
 
 Abuse guards (Phase S5 execution; DECISIONS.md A42, A43; ACCESS-SECURITY-OPS B-7), after step 5 and before the insert, values read from `AbuseConfig` (id 1) at call time:
@@ -334,6 +335,7 @@ B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3
 | New reducers `shuffle_teams(lobbyId, mode)` and `unban_member(lobbyId, userId)` | Phase S6 execution (DECISIONS.md A45(3)) | 2026-11-06 |
 | Inline guest-lobby breaker in `create_lobby` (AbuseCounter fixed window, default 50 in 10 minutes) | Phase S6 execution (DECISIONS.md A57, A58) | 2026-11-06 |
 | `select_match_account` ratchet uses the merged rating of the current selection | Phase S6 execution (backlog #10) | 2026-11-06 |
+| `lineupFormat` drives the character count (Thirds = 12 per team) and the lineup groups; lineups arranged / confirmed by the captain or a referee only | Phase S7 execution (DECISIONS.md A21; backlog #3) | 2026-11-06 |
 
 ---
 

@@ -12,6 +12,7 @@ import { hsrCharacterCostColumns } from '../tables/hsrCharacterCost';
 import { hsrLightconeCostColumns } from '../tables/hsrLightconeCost';
 import { hsrSynergyCostUpsertKeys } from '../tables/hsrSynergyCost';
 import { archetypeColumns } from '../tables/archetype';
+import { canonicalPair } from '@shared/scoring';
 
 // ─── Strict enum validator ───────────────────────────────────────────────────
 // Enum values must match exactly (case-sensitive). No coercion.
@@ -590,17 +591,28 @@ export const admin_bulk_upsert = spacetimedb.reducer(
             case 'HsrSynergyCost': {
                 // 15.4 D-19: Existence match uses (characterA, characterB, gameMode, draftMode, costSetId).
                 // PK is auto-inc id; the tuple above is the logical unique key.
-                // S7 (A21): canonical (alphabetical) order enforced here and a pair that exists in either order rejected.
+                // A21: synergies are unordered pairs. Each row is stored in canonical (alphabetical) order, an
+                // existing pair matches in either order (so it is updated, never duplicated reversed), and a payload
+                // that lists the same pair twice, in either order, is rejected.
                 const HSR_SYNERGY_COST_FIELDS = ['costModifier'] as const;
-                for (const r of rows) {
+                const seenPairs = new Set<string>();
+                for (const raw of rows) {
+                    const [characterA, characterB] = canonicalPair(raw.characterA, raw.characterB);
+                    const r = { ...raw, characterA, characterB };
                     validateEnumIfPresent('gameMode', r.gameMode, ctx, tableName);
                     validateEnumIfPresent('draftMode', r.draftMode, ctx, tableName);
                     const csId = r.costSetId ?? 0;
+                    const pairKey = `${characterA}|${characterB}|${r.gameMode}|${r.draftMode}|${csId}`;
+                    if (seenPairs.has(pairKey)) {
+                        throw new SenderError(`Synergy pair ${characterA} + ${characterB} is listed twice (pairs are unordered).`);
+                    }
+                    seenPairs.add(pairKey);
 
                     let existing: any = null;
                     for (const e of ctx.db.HsrSynergyCost.iter()) {
-                        if (e.characterA === r.characterA &&
-                            e.characterB === r.characterB &&
+                        const [eA, eB] = canonicalPair(e.characterA, e.characterB);
+                        if (eA === r.characterA &&
+                            eB === r.characterB &&
                             e.gameMode.tag === r.gameMode &&
                             e.draftMode.tag === r.draftMode &&
                             e.costSetId === csId) {

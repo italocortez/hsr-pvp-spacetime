@@ -28,7 +28,6 @@ import { promoteUser } from '../../shared/helpers/promoteUser';
 import { defaultLobbyArgs } from '../../shared/helpers/lobbies';
 import { ensureHsrAccount } from '../../shared/helpers/hsrAccounts';
 import { completeTournamentDraft } from '../../shared/helpers/drafts';
-import { gameScoreArgs } from '../../shared/helpers/scores';
 import { cleanupTournament } from '../../shared/helpers/tournaments';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -209,9 +208,9 @@ async function setupTournamentMatch(
     await toUser.sync(1000);
 
     // Confirm lineups + advance to scoring
-    await blue.call.confirmLineup({ lobbyId });
+    await blue.call.confirmLineup({ lobbyId, teamSide: { tag: 'Blue' } });
     await blue.sync();
-    await red.call.confirmLineup({ lobbyId });
+    await red.call.confirmLineup({ lobbyId, teamSide: { tag: 'Red' } });
     await red.sync();
     await toUser.call.advanceStage({ lobbyId });
     await toUser.sync(1500);
@@ -223,13 +222,8 @@ async function setupTournamentMatch(
     if (!mr) throw new Error(`MatchResultRecord not found for lobby #${lobbyId}`);
 
     // Record scores (referee records both sides)
-    await toUser.call.recordGameScores(gameScoreArgs({
-        matchResultId: mr.id,
-        gameNumber: 1,
-        winnerTeamSide: 'Blue',
-        teamBlueCyclesUsed: 7,
-        teamRedCyclesUsed: 10,
-    }));
+    await toUser.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Blue' }, values: [350, 350], deaths: 0 });
+    await toUser.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0 });
     await toUser.sync(1000);
 
     // Confirm both sides
@@ -488,7 +482,6 @@ describe('Bracket Advancement', () => {
                 // Submit match result (Casual = auto-validate + auto-finalize)
                 await toUser.call.submitMatchResult({
                     matchResultId,
-                    winnerId: bluePlayer.userId,
                 });
                 await toUser.sync(3000);
                 await bluePlayer.sync(2000);
@@ -620,7 +613,6 @@ describe('Bracket Advancement', () => {
             // Submit with winner — Ranked does NOT auto-finalize
             await toUser.call.submitMatchResult({
                 matchResultId,
-                winnerId: bluePlayer.userId,
             });
             await toUser.sync(2000);
 

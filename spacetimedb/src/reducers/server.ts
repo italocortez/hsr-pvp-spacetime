@@ -554,8 +554,13 @@ export const server_nuke_test_data = spacetimedb.reducer({
 
     // ── Bracket (group_phase_record dropped in S3, A23)
     ctx.db.BracketMatch.clear();
-    // S7/S8: also clear the remaining S3 tables (LinkRequest, MatchResultGroupScore, MatchResultAdjustment,
-    // MatchLineup, TournamentFinalizeJob) once their writers exist.
+    // ── Scoring (A21/A56): live group scores, adjustments and lineups, and the archived lineups
+    ctx.db.MatchResultGroupScore.clear();
+    ctx.db.MatchResultAdjustment.clear();
+    ctx.db.MatchLineup.clear();
+    ctx.db.MatchLineupHistory.clear();
+    // S8: also clear the remaining S3 tables (LinkRequest, TournamentFinalizeJob) once their writers exist
+    // (S8 owns the tournament finalize job; LinkRequest's writer lands with the auth function).
 
     // ── Abuse controls (A42, B-7, A57): rate windows, the inline breaker's counters and alerts. AbuseConfig is
     // seeded by init and survives the nuke.

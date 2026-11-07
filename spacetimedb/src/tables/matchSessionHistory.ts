@@ -1,5 +1,5 @@
 import { table, t } from 'spacetimedb/server';
-import { DraftMode, GameMode, MatchEndReason } from '../types/enums';
+import { DraftMode, GameMode, MatchEndReason, TeamSide } from '../types/enums';
 import { LobbyConfigSnapshot } from '../types/structs';
 
 export const matchSessionHistoryColumns = {
@@ -27,6 +27,11 @@ export const matchSessionHistoryColumns = {
     tournamentId: t.u32().optional(),
     bracketMatchId: t.u32().optional(),
     voidedAt: t.timestamp().optional(),  // A24(3): set when a tournament rollback voids the match
+
+    // A21 tie-break 4 / A39: the referee's override of an unresolved tie and who made it, kept for audit and replay.
+    winnerOverride: TeamSide.optional(),
+    winnerOverrideById: t.u32().optional(),
+    winnerOverrideReason: t.string().optional(),
 
     createdById: t.u32(),
     createdDate: t.timestamp(),

@@ -123,9 +123,9 @@ export async function advanceToScoring(
     red: TestHarness,
     lobbyId: number,
 ): Promise<void> {
-    await blue.call.confirmLineup({ lobbyId });
+    await blue.call.confirmLineup({ lobbyId, teamSide: { tag: 'Blue' } });
     await blue.sync();
-    await red.call.confirmLineup({ lobbyId });
+    await red.call.confirmLineup({ lobbyId, teamSide: { tag: 'Red' } });
     await red.sync();
     await host.call.advanceStage({ lobbyId });
     await host.sync(1500);

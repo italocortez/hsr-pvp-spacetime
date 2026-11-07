@@ -35,3 +35,21 @@ export function validateCharacterOwnership(
 
     return { valid: false, reason: 'You do not own this character on any selected account.' };
 }
+
+/**
+ * CH-S6 / ACCESS-SECURITY-OPS D.8.7: the eidolon of a pick when the lobby requires ownership. The server
+ * takes the highest HsrAccountCharacter.eidolonLevel of the character across the member's selected match accounts
+ * (LobbyMemberAccount) and ignores the client's argument, so a player cannot declare E0 to pay less and play E6.
+ * 0 when none of the selected accounts has the character (pick_character rejects that case first through
+ * validateCharacterOwnership; nominate_character, which has no ownership check, records E0).
+ * The value lands in the Pick / AuctionSold payload, which is the scoring input (A21 tie-break 3), so later roster
+ * edits change nothing.
+ */
+export function resolveOwnedEidolon(ctx: any, lobbyId: number, userId: number, characterName: string): number {
+    let eidolon = 0;
+    for (const lma of ctx.db.LobbyMemberAccount.by_lobby_and_user.filter([lobbyId, userId])) {
+        const row = [...ctx.db.HsrAccountCharacter.by_account_and_character.filter([lma.hsrAccountId, characterName])][0];
+        if (row && row.eidolonLevel > eidolon) eidolon = row.eidolonLevel;
+    }
+    return eidolon;
+}

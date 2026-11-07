@@ -21,7 +21,6 @@ import {
 import { defaultLobbyArgs as sharedDefaultLobbyArgs } from '../../shared/helpers/lobbies';
 import { ensureHsrAccount } from '../../shared/helpers/hsrAccounts';
 import { completeDraft, advanceToScoring } from '../../shared/helpers/drafts';
-import { gameScoreArgs } from '../../shared/helpers/scores';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -118,12 +117,8 @@ describe.skipIf(!hasServerToken())('Score Entry + Confirmation', () => {
 
     describe('record_game_scores', () => {
         it('blue captain records Blue-side MoC scores', async () => {
-            await blue.call.recordGameScores(gameScoreArgs({
-                matchResultId,
-                gameNumber: 1,
-                winnerTeamSide: 'Blue',
-                teamBlueCyclesUsed: 8,
-            }));
+            // S10: rewrite (cycles are hundredths and the winner is computed once both sides are in)
+            await blue.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Blue' }, values: [400, 400], deaths: 0 });
             await blue.sync(1000);
             await host.sync(1000);
 
@@ -137,24 +132,15 @@ describe.skipIf(!hasServerToken())('Score Entry + Confirmation', () => {
 
         it('blue captain rejected from providing Red-side fields', async () => {
             const err = await expectReducerError(
-                blue.call.recordGameScores(gameScoreArgs({
-                    matchResultId,
-                    gameNumber: 2,
-                    winnerTeamSide: 'Blue',
-                    teamBlueCyclesUsed: 7,
-                    teamRedCyclesUsed: 10,
-                }))
+                blue.call.recordGroupScores({ lobbyId, gameNumber: 2, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0 })
             );
+            // S10: rewrite (new message: 'Only the Red captain or a referee can record scores for that team.')
             expect(err).toContain('Captains can only enter scores for their own side.');
         });
 
         it('red captain records Red-side scores', async () => {
-            await red.call.recordGameScores(gameScoreArgs({
-                matchResultId,
-                gameNumber: 1,
-                winnerTeamSide: 'Blue',
-                teamRedCyclesUsed: 12,
-            }));
+            // S10: rewrite (cycles are hundredths)
+            await red.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Red' }, values: [600, 600], deaths: 0 });
             await red.sync(1000);
             await host.sync(1000);
 
@@ -168,15 +154,9 @@ describe.skipIf(!hasServerToken())('Score Entry + Confirmation', () => {
         }, 15000);
 
         it('spectator referee records both sides at once', async () => {
-            await host.call.recordGameScores(gameScoreArgs({
-                matchResultId,
-                gameNumber: 2,
-                winnerTeamSide: 'Red',
-                teamBlueCyclesUsed: 9,
-                teamRedCyclesUsed: 6,
-                teamBlueScreenshotUrl: 'https://i.imgur.com/blue2.png',
-                teamRedScreenshotUrl: 'https://i.imgur.com/red2.png',
-            }));
+            // S10: rewrite (cycles are hundredths; game 2 is not the current game)
+            await host.call.recordGroupScores({ lobbyId, gameNumber: 2, teamSide: { tag: 'Blue' }, values: [450, 450], deaths: 0, screenshotUrl: 'https://i.imgur.com/blue2.png' });
+            await host.call.recordGroupScores({ lobbyId, gameNumber: 2, teamSide: { tag: 'Red' }, values: [300, 300], deaths: 0, screenshotUrl: 'https://i.imgur.com/red2.png' });
             await host.sync(1000);
 
             const games = getMatchGames(host, matchResultId);
@@ -191,37 +171,24 @@ describe.skipIf(!hasServerToken())('Score Entry + Confirmation', () => {
 
         it('outsider rejected', async () => {
             const err = await expectReducerError(
-                outsider.call.recordGameScores(gameScoreArgs({
-                    matchResultId,
-                    gameNumber: 3,
-                    winnerTeamSide: 'Blue',
-                    teamBlueCyclesUsed: 5,
-                }))
+                outsider.call.recordGroupScores({ lobbyId, gameNumber: 3, teamSide: { tag: 'Blue' }, values: [250, 250], deaths: 0 })
             );
+            // S10: rewrite (new message: 'Only the Blue captain or a referee can record scores for that team.')
             expect(err).toContain('You are not a participant or authorized referee of this match.');
         });
 
         it('invalid winnerTeamSide rejected', async () => {
             const err = await expectReducerError(
-                blue.call.recordGameScores(gameScoreArgs({
-                    matchResultId,
-                    gameNumber: 3,
-                    winnerTeamSide: 'Green',
-                    teamBlueCyclesUsed: 5,
-                }))
+                blue.call.recordGroupScores({ lobbyId, gameNumber: 3, teamSide: { tag: 'Spectator' }, values: [250, 250], deaths: 0 })
             );
+            // S10: rewrite (winnerTeamSide removed; an invalid teamSide now fails with 'teamSide must be Blue or Red.')
             expect(err).toContain('winnerTeamSide must be "Blue" or "Red".');
         });
 
         it('upsert preserves other sides data', async () => {
             // Blue captain re-records game 1 Blue-side with updated cycles
-            await blue.call.recordGameScores(gameScoreArgs({
-                matchResultId,
-                gameNumber: 1,
-                winnerTeamSide: 'Blue',
-                teamBlueCyclesUsed: 7,
-                teamBlueScreenshotUrl: 'https://i.imgur.com/blue1.png',
-            }));
+            // S10: rewrite (cycles are hundredths)
+            await blue.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Blue' }, values: [350, 350], deaths: 0, screenshotUrl: 'https://i.imgur.com/blue1.png' });
             await blue.sync(1000);
             await host.sync(1000);
 
@@ -305,13 +272,8 @@ describe.skipIf(!hasServerToken())('Score Entry + Confirmation', () => {
             refMatchResultId = mr!.id;
 
             // Record scores so there's something to confirm
-            await refHost.call.recordGameScores(gameScoreArgs({
-                matchResultId: refMatchResultId,
-                gameNumber: 1,
-                winnerTeamSide: 'Blue',
-                teamBlueCyclesUsed: 5,
-                teamRedCyclesUsed: 10,
-            }));
+            await refHost.call.recordGroupScores({ lobbyId: refLobbyId, gameNumber: 1, teamSide: { tag: 'Blue' }, values: [250, 250], deaths: 0 });
+            await refHost.call.recordGroupScores({ lobbyId: refLobbyId, gameNumber: 1, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0 });
             await refHost.sync(1000);
         }, 120000);
 
@@ -415,9 +377,9 @@ describe.skipIf(!hasServerToken())('Score Entry + Confirmation', () => {
             await ncHost.sync(1500);
 
             // Advance to Scoring (captain confirms lineup, not non-captain)
-            await blueCaptainHarness.call.confirmLineup({ lobbyId: ncLobbyId });
+            await blueCaptainHarness.call.confirmLineup({ lobbyId: ncLobbyId, teamSide: { tag: 'Blue' } });
             await blueCaptainHarness.sync();
-            await ncRed.call.confirmLineup({ lobbyId: ncLobbyId });
+            await ncRed.call.confirmLineup({ lobbyId: ncLobbyId, teamSide: { tag: 'Red' } });
             await ncRed.sync();
             await ncHost.call.advanceStage({ lobbyId: ncLobbyId });
             await ncHost.sync(1500);
@@ -454,13 +416,9 @@ describe.skipIf(!hasServerToken())('Score Entry + Confirmation', () => {
             const nonCaptainH = nonCaptain.userId === ncBlue1.userId ? ncBlue1 : ncBlue2;
 
             const err = await expectReducerError(
-                nonCaptainH.call.recordGameScores(gameScoreArgs({
-                    matchResultId: ncMatchResultId,
-                    gameNumber: 1,
-                    winnerTeamSide: 'Blue',
-                    teamBlueCyclesUsed: 5,
-                }))
+                nonCaptainH.call.recordGroupScores({ lobbyId: ncLobbyId, gameNumber: 1, teamSide: { tag: 'Blue' }, values: [250, 250], deaths: 0 })
             );
+            // S10: rewrite (new message: 'Only the Blue captain or a referee can record scores for that team.')
             expect(err).toContain('Only the team captain can record game scores.');
         });
 
@@ -473,12 +431,7 @@ describe.skipIf(!hasServerToken())('Score Entry + Confirmation', () => {
             const nonCaptain = participants.find(p => !p.isCaptain)!;
             const nonCaptainH = nonCaptain.userId === ncBlue1.userId ? ncBlue1 : ncBlue2;
 
-            await captainH.call.recordGameScores(gameScoreArgs({
-                matchResultId: ncMatchResultId,
-                gameNumber: 1,
-                winnerTeamSide: 'Blue',
-                teamBlueCyclesUsed: 5,
-            }));
+            await captainH.call.recordGroupScores({ lobbyId: ncLobbyId, gameNumber: 1, teamSide: { tag: 'Blue' }, values: [250, 250], deaths: 0 });
             await captainH.sync(1000);
 
             const err = await expectReducerError(

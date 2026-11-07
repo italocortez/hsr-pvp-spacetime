@@ -5,6 +5,7 @@ import { auditInsert, auditUpdate } from '../helpers/auditColumns';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { isCostSetInUse } from '../helpers/costSetGuards';
 import { readAbuseConfig } from '../helpers/abuseControls';
+import { canonicalPair } from '@shared/scoring';
 
 // Valid GameMode tags
 const VALID_GAME_MODE_TAGS = ['MemoryOfChaos', 'ApocalypticShadow', 'AnomalyArbitration'];
@@ -279,10 +280,10 @@ export const edit_draft_synergy_cost = spacetimedb.reducer(
     },
     (ctx, { costSetId, sourceName, targetName, gameModeTag, draftModeTag, costModifier }) => {
         const user = getAuthenticatedUser(ctx);
-        // S7 (A21): the arguments become characterA/characterB, stored in canonical (alphabetical) order, and a
-        // pair that already exists in either order is rejected. S3 maps the legacy names so the editor compiles.
-        const characterA = sourceName;
-        const characterB = targetName;
+        // A21: synergies are unordered pairs. The two names are stored in canonical (alphabetical) order, so
+        // editing B + A updates the A + B row instead of creating a reversed duplicate. The argument names stay
+        // sourceName / targetName (renaming them would change the client API; nothing else depends on the order).
+        const [characterA, characterB] = canonicalPair(sourceName, targetName);
 
         const costSet = ctx.db.CostSet.id.find(costSetId);
         if (!costSet) {

@@ -24,7 +24,6 @@ import { ensureHsrAccount } from '../../shared/helpers/hsrAccounts';
 import { completeDraft, advanceToScoring } from '../../shared/helpers/drafts';
 import { promoteToRole } from '../../shared/helpers/promoteUser';
 import { ensureEloConfig } from '../../shared/helpers/seed';
-import { gameScoreArgs } from '../../shared/helpers/scores';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -75,17 +74,8 @@ async function setupScoredMatch(
     const mr = [...host.conn.db.MatchResultRecord.iter()].find(r => r.lobbyId === lobbyId)!;
 
     // Referee records scores (both sides)
-    await host.call.recordGameScores(gameScoreArgs({
-        matchResultId: mr.id,
-        gameNumber: 1,
-        winnerTeamSide: 'Blue',
-        teamBlueCyclesUsed: 7,
-        teamRedCyclesUsed: 10,
-        ...(opts.screenshots ? {
-            teamBlueScreenshotUrl: 'https://i.imgur.com/blue1.png',
-            teamRedScreenshotUrl: 'https://i.imgur.com/red1.png',
-        } : {}),
-    }));
+    await host.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Blue' }, values: [350, 350], deaths: 0, screenshotUrl: opts.screenshots ? 'https://i.imgur.com/blue1.png' : undefined });
+    await host.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0, screenshotUrl: opts.screenshots ? 'https://i.imgur.com/red1.png' : undefined });
     await host.sync(1000);
 
     // Confirm both sides
@@ -167,7 +157,7 @@ describe.skipIf(!hasServerToken())('Match Lifecycle', () => {
         }, 120000);
 
         it('submit → auto-Validated + auto-finalized', async () => {
-            await host.call.submitMatchResult({ matchResultId, winnerId: blue.userId });
+            await host.call.submitMatchResult({ matchResultId });
             await host.sync(2000);
             await blue.sync(2000);
             await red.sync(2000);
@@ -230,7 +220,7 @@ describe.skipIf(!hasServerToken())('Match Lifecycle', () => {
 
         it('submit without authority rejected', async () => {
             const err = await expectReducerError(
-                outsider.call.submitMatchResult({ matchResultId, winnerId: blue.userId })
+                outsider.call.submitMatchResult({ matchResultId })
             );
             expect(err).toMatch(/not a member|referee authority|not found/i);
         });
@@ -238,7 +228,7 @@ describe.skipIf(!hasServerToken())('Match Lifecycle', () => {
         // ── Submit ───────────────────────────────────────────────────
 
         it('submit by referee → Submitted', async () => {
-            await host.call.submitMatchResult({ matchResultId, winnerId: blue.userId });
+            await host.call.submitMatchResult({ matchResultId });
             await host.sync(1500);
             await blue.sync(1500);
 
@@ -257,13 +247,9 @@ describe.skipIf(!hasServerToken())('Match Lifecycle', () => {
 
         it('record scores on non-Pending match rejected', async () => {
             const err = await expectReducerError(
-                blue.call.recordGameScores(gameScoreArgs({
-                    matchResultId,
-                    gameNumber: 2,
-                    winnerTeamSide: 'Blue',
-                    teamBlueCyclesUsed: 5,
-                }))
+                blue.call.recordGroupScores({ lobbyId, gameNumber: 2, teamSide: { tag: 'Blue' }, values: [250, 250], deaths: 0 })
             );
+            // S10: rewrite (record_group_scores rejects a non-Pending record with 'No pending match result for this lobby.')
             expect(err).toContain('Scores can only be recorded when the match is in Pending status.');
         });
 
@@ -384,7 +370,7 @@ describe.skipIf(!hasServerToken())('Match Lifecycle', () => {
             matchResultId = result.matchResultId;
 
             // Submit to move to Submitted
-            await host.call.submitMatchResult({ matchResultId, winnerId: blue.userId });
+            await host.call.submitMatchResult({ matchResultId });
             await host.sync(1500);
         }, 120000);
 
@@ -444,7 +430,8 @@ describe.skipIf(!hasServerToken())('Match Lifecycle', () => {
         }, 120000);
 
         it('submit with winnerId=0 → auto-finalized', async () => {
-            await host.call.submitMatchResult({ matchResultId, winnerId: 0 });
+            // S10: rewrite (winnerId removed by A21/A31; the server computes the winner)
+            await host.call.submitMatchResult({ matchResultId });
             await host.sync(2000);
             await blue.sync(2000);
 

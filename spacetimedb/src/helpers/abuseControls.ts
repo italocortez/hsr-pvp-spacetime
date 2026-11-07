@@ -12,7 +12,7 @@ export const ABUSE_CONFIG_ID = 1;
 const MINUTE_MICROS = 60_000_000n;
 const HOUR_MICROS = 60n * MINUTE_MICROS;
 
-/** D-B5 defaults (A43). lineupMinIntervalMs has no decided value: 250 ms (4 Hz) for a fan-out reducer, S7 applies it. */
+/** D-B5 defaults (A43). lineupMinIntervalMs has no decided value: 250 ms (4 Hz) for a fan-out reducer; arrange_lineup applies it. */
 export const ABUSE_CONFIG_DEFAULTS = {
     cursorMinIntervalMs: 50,          // 20 Hz
     chatMinIntervalMs: 700,

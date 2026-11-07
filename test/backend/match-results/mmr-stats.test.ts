@@ -36,7 +36,6 @@ import { ensureHsrAccount } from '../../shared/helpers/hsrAccounts';
 import { completeDraft, advanceToScoring } from '../../shared/helpers/drafts';
 import { promoteToRole } from '../../shared/helpers/promoteUser';
 import { ensureEloConfig } from '../../shared/helpers/seed';
-import { gameScoreArgs } from '../../shared/helpers/scores';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -93,15 +92,8 @@ async function setupScoredMatch(
     const mr = [...host.conn.db.MatchResultRecord.iter()].find(r => r.lobbyId === lobbyId)!;
 
     // Referee records scores with screenshots (required for Ranked validation)
-    await host.call.recordGameScores(gameScoreArgs({
-        matchResultId: mr.id,
-        gameNumber: 1,
-        winnerTeamSide: 'Blue',
-        teamBlueCyclesUsed: 7,
-        teamRedCyclesUsed: 10,
-        teamBlueScreenshotUrl: 'https://i.imgur.com/blue1.png',
-        teamRedScreenshotUrl: 'https://i.imgur.com/red1.png',
-    }));
+    await host.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Blue' }, values: [350, 350], deaths: 0, screenshotUrl: 'https://i.imgur.com/blue1.png' });
+    await host.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0, screenshotUrl: 'https://i.imgur.com/red1.png' });
     await host.sync(1000);
 
     // Confirm both sides
@@ -122,7 +114,7 @@ async function submitOverrideFinalize(
     blue: TestHarness, red: TestHarness,
     matchResultId: number, winnerUserId: number, winnerTeamSideTag: string,
 ) {
-    await host.call.submitMatchResult({ matchResultId, winnerId: winnerUserId });
+    await host.call.submitMatchResult({ matchResultId });
     await host.sync(1500);
 
     await admin.call.overrideMatchResult({
@@ -522,9 +514,9 @@ describe.skipIf(!hasServerToken())('MMR + Leaderboard + Stats', () => {
             await banHost.sync(1500);
 
             // Advance to Scoring
-            await banBlue.call.confirmLineup({ lobbyId });
+            await banBlue.call.confirmLineup({ lobbyId, teamSide: { tag: 'Blue' } });
             await banBlue.sync();
-            await banRed.call.confirmLineup({ lobbyId });
+            await banRed.call.confirmLineup({ lobbyId, teamSide: { tag: 'Red' } });
             await banRed.sync();
             await banHost.call.advanceStage({ lobbyId });
             await banHost.sync(1500);
@@ -533,13 +525,8 @@ describe.skipIf(!hasServerToken())('MMR + Leaderboard + Stats', () => {
 
             // Record scores + confirm + submit (Casual auto-finalizes)
             const mr = [...banHost.conn.db.MatchResultRecord.iter()].find(r => r.lobbyId === lobbyId)!;
-            await banHost.call.recordGameScores(gameScoreArgs({
-                matchResultId: mr.id,
-                gameNumber: 1,
-                winnerTeamSide: 'Blue',
-                teamBlueCyclesUsed: 6,
-                teamRedCyclesUsed: 10,
-            }));
+            await banHost.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Blue' }, values: [300, 300], deaths: 0 });
+            await banHost.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0 });
             await banHost.sync(1000);
             await banBlue.call.confirmMatchScores({ matchResultId: mr.id });
             await banBlue.sync(500);
@@ -548,7 +535,7 @@ describe.skipIf(!hasServerToken())('MMR + Leaderboard + Stats', () => {
             await banHost.sync(1000);
 
             // Submit → Casual auto-validates + auto-finalizes
-            await banHost.call.submitMatchResult({ matchResultId: mr.id, winnerId: banBlue.userId });
+            await banHost.call.submitMatchResult({ matchResultId: mr.id });
             await banHost.sync(2500);
             await banBlue.sync(2500);
             await banRed.sync(2500);

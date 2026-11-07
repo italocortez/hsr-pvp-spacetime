@@ -105,6 +105,7 @@ One call = one row. Editing both classic and auction for the same character = tw
 1. Same ownership/draft-state checks
 2. No JSON parsing -- `costModifier: f32` is a scalar payload
 3. 5-tuple draft lookup `(sourceName, targetName, gameMode, draftMode, costSetId)`; delete+insert upsert on `CostSetDraftSynergy` (Phase 15.4 D-18). First-ever synergy auction support.
+4. Phase S7 execution (A21, backlog #3): synergies are unordered pairs. The two names are stored as `characterA` / `characterB` in canonical (alphabetical) order (`canonicalPair`, `shared/scoring`), so B + A updates the A + B row instead of creating a reversed duplicate. The arguments keep their names. `admin_bulk_upsert` (HsrSynergyCost) canonicalizes each row the same way, matches an existing pair in either order, and rejects a payload listing the same pair twice in either order. The surcharge itself is computed by `synergySurcharge` (docs/match-session/architecture.md "Phase S7 execution").
 
 ### publish_cost_set(costSetId)
 1. Ownership check -- creator or Moderator+; reject if `!isDraft`
@@ -178,6 +179,7 @@ All 4 views resolve `ctx.sender -> UserIdentity -> User`, then filter by `creato
 | iter() used in per-user draft views -- no cross-table (creatorId, costSetId) index | Phase 03 execution | 2026-02-15 |
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
 | `draftMode: DraftMode` column added to all 6 cost tables; classicCosts+auctionBaseBid collapsed to single `costs` struct; first-ever synergy auction support. PK tuples extended by `draftMode`; 4-col btrees on char/lc; new 5-col `by_tuple` btree on both synergy tables; `source_mode` extended to 3 cols (`[sourceName, gameMode, draftMode]`). Reducer tuple match via iter() + predicate (A2_FALLBACK_ITER). Reducer arg shape: `edit_draft_*_cost` collapses dual JSON inputs to single `costsJson` and adds `draftModeTag`; one call = one row. | Phase 15.4 execution | 2026-04-15 |
+| Synergy pairs canonicalized (alphabetical) in `edit_draft_synergy_cost` and `admin_bulk_upsert`; either-order match; duplicate pair in one bulk payload rejected | Phase S7 execution (DECISIONS.md A21; backlog #3) | 2026-11-06 |
 
 ---
 

@@ -10,7 +10,14 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
+import {
+  TeamSide,
+} from "./types";
+
 export default {
   matchResultId: __t.u32(),
-  winnerId: __t.u32(),
+  get winnerOverride() {
+    return __t.option(TeamSide);
+  },
+  winnerOverrideReason: __t.option(__t.string()),
 };

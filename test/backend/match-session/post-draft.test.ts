@@ -263,9 +263,11 @@ describe('Post-Draft (Equipping + Scoring)', () => {
     describe('arrange_lineup', () => {
         it('rejects invalid JSON string', async () => {
             const err = await expectReducerError(
+                // S10: rewrite (A21: arrange_lineup takes teamSide + groups, a JSON array of 4-name groups; messages changed)
                 blue.call.arrangeLineup({
                     lobbyId,
-                    positions: 'not-valid-json[',
+                    teamSide: { tag: 'Blue' },
+                    groups: 'not-valid-json[',
                 })
             );
             expect(err).toContain('positions must be a valid JSON array of strings.');
@@ -274,9 +276,11 @@ describe('Post-Draft (Equipping + Scoring)', () => {
         it('rejects JSON that is not an array of strings', async () => {
             // Valid JSON but not a string array — object instead
             const err = await expectReducerError(
+                // S10: rewrite (A21: arrange_lineup takes teamSide + groups, a JSON array of 4-name groups; messages changed)
                 blue.call.arrangeLineup({
                     lobbyId,
-                    positions: '{"a": 1}',
+                    teamSide: { tag: 'Blue' },
+                    groups: '{"a": 1}',
                 })
             );
             expect(err).toContain('positions must be a valid JSON array of strings.');
@@ -284,9 +288,11 @@ describe('Post-Draft (Equipping + Scoring)', () => {
 
         it('rejects JSON array containing non-string elements', async () => {
             const err = await expectReducerError(
+                // S10: rewrite (A21: arrange_lineup takes teamSide + groups, a JSON array of 4-name groups; messages changed)
                 blue.call.arrangeLineup({
                     lobbyId,
-                    positions: JSON.stringify(['acheron', 123, 'aglaea']),
+                    teamSide: { tag: 'Blue' },
+                    groups: JSON.stringify(['acheron', 123, 'aglaea']),
                 })
             );
             expect(err).toContain('positions must be a valid JSON array of strings.');
@@ -295,7 +301,8 @@ describe('Post-Draft (Equipping + Scoring)', () => {
         it('records ArrangeLineup step with valid JSON string array', async () => {
             const positions = JSON.stringify(['acheron', 'aglaea', 'anaxa', 'archer']);
 
-            await blue.call.arrangeLineup({ lobbyId, positions });
+            // S10: rewrite (A21: arrange_lineup takes teamSide + groups, a JSON array of 4-name groups; messages changed)
+            await blue.call.arrangeLineup({ lobbyId, teamSide: { tag: 'Blue' }, groups: positions });
             await blue.sync(1500);
             await host.sync(1500);
 
@@ -312,9 +319,11 @@ describe('Post-Draft (Equipping + Scoring)', () => {
 
         it('spectator blocked from arranging lineup', async () => {
             const err = await expectReducerError(
+                // S10: rewrite (A21: arrange_lineup takes teamSide + groups, a JSON array of 4-name groups; messages changed)
                 host.call.arrangeLineup({
                     lobbyId,
-                    positions: JSON.stringify(['acheron']),
+                    teamSide: { tag: 'Blue' },
+                    groups: JSON.stringify(['acheron']),
                 })
             );
             expect(err).toContain('Spectators cannot arrange lineups.');
@@ -326,13 +335,14 @@ describe('Post-Draft (Equipping + Scoring)', () => {
     describe('confirm_lineup', () => {
         it('spectator blocked from confirming lineup', async () => {
             const err = await expectReducerError(
-                host.call.confirmLineup({ lobbyId })
+                // S10: rewrite (confirm_lineup takes teamSide; a referee may confirm for a side)
+                host.call.confirmLineup({ lobbyId, teamSide: { tag: 'Blue' } })
             );
             expect(err).toContain('Spectators cannot confirm lineups.');
         });
 
         it('Blue captain confirms lineup — ConfirmLineup step inserted', async () => {
-            await blue.call.confirmLineup({ lobbyId });
+            await blue.call.confirmLineup({ lobbyId, teamSide: { tag: 'Blue' } });
             await blue.sync(1500);
             await host.sync(1500);
 
@@ -347,7 +357,7 @@ describe('Post-Draft (Equipping + Scoring)', () => {
         }, 15000);
 
         it('Red captain confirms lineup — ConfirmLineup step inserted', async () => {
-            await red.call.confirmLineup({ lobbyId });
+            await red.call.confirmLineup({ lobbyId, teamSide: { tag: 'Red' } });
             await red.sync(1500);
             await host.sync(1500);
 
@@ -570,9 +580,11 @@ describe('Post-Draft (Equipping + Scoring)', () => {
 
         it('coach cannot arrange lineup', async () => {
             const err = await expectReducerError(
+                // S10: rewrite (A21: arrange_lineup takes teamSide + groups, a JSON array of 4-name groups; messages changed)
                 cCoach.call.arrangeLineup({
                     lobbyId: cLobbyId,
-                    positions: JSON.stringify(['acheron']),
+                    teamSide: { tag: 'Blue' },
+                    groups: JSON.stringify(['acheron']),
                 })
             );
             expect(err).toContain('Coaches cannot arrange lineups.');
@@ -580,7 +592,8 @@ describe('Post-Draft (Equipping + Scoring)', () => {
 
         it('coach cannot confirm lineup', async () => {
             const err = await expectReducerError(
-                cCoach.call.confirmLineup({ lobbyId: cLobbyId })
+                // S10: rewrite (confirm_lineup takes teamSide)
+                cCoach.call.confirmLineup({ lobbyId: cLobbyId, teamSide: { tag: 'Blue' } })
             );
             expect(err).toContain('Coaches cannot confirm lineups.');
         });

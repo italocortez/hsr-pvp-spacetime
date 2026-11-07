@@ -10,7 +10,14 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
+import {
+  TeamSide,
+} from "./types";
+
 export default {
   lobbyId: __t.u32(),
-  positions: __t.string(),
+  get teamSide() {
+    return TeamSide;
+  },
+  groups: __t.string(),
 };

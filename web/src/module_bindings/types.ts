@@ -433,6 +433,7 @@ export type ConcedeTrigger = __Infer<typeof ConcedeTrigger>;
 
 export const ConfirmLineupPayload = __t.object("ConfirmLineupPayload", {
   confirmed: __t.bool(),
+  groups: __t.string(),
 });
 export type ConfirmLineupPayload = __Infer<typeof ConfirmLineupPayload>;
 
@@ -1144,6 +1145,23 @@ export const MatchLineup = __t.object("MatchLineup", {
 });
 export type MatchLineup = __Infer<typeof MatchLineup>;
 
+export const MatchLineupHistory = __t.object("MatchLineupHistory", {
+  id: __t.u32(),
+  matchHistoryId: __t.u32(),
+  gameNumber: __t.u8(),
+  get teamSide() {
+    return TeamSide;
+  },
+  groups: __t.string(),
+  synergySurcharge: __t.u32(),
+  rosterCost: __t.u32(),
+  createdById: __t.u32(),
+  createdDate: __t.timestamp(),
+  lastModifiedById: __t.u32(),
+  lastModifiedDate: __t.timestamp(),
+});
+export type MatchLineupHistory = __Infer<typeof MatchLineupHistory>;
+
 export const MatchParticipantHistory = __t.object("MatchParticipantHistory", {
   userId: __t.u32(),
   matchHistoryId: __t.u32(),
@@ -1381,6 +1399,11 @@ export const MatchSessionHistory = __t.object("MatchSessionHistory", {
   tournamentId: __t.option(__t.u32()),
   bracketMatchId: __t.option(__t.u32()),
   voidedAt: __t.option(__t.timestamp()),
+  get winnerOverride() {
+    return __t.option(TeamSide);
+  },
+  winnerOverrideById: __t.option(__t.u32()),
+  winnerOverrideReason: __t.option(__t.string()),
   createdById: __t.u32(),
   createdDate: __t.timestamp(),
   lastModifiedById: __t.u32(),

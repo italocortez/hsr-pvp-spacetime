@@ -1086,6 +1086,16 @@ The lobby system manages the lifecycle of match rooms where players assemble, co
 **When:** A 51st guest calls `create_lobby`; then a 52nd
 **Then:** The 51st lobby is created and the switch turns off in the same transaction with one `AdminAlert` (docs/admin/contract.md "Circuit Breaker Trips"); the 52nd is rejected ("Guest lobby creation is temporarily disabled").
 
+### The Lineup Format Is the Character Count (Phase S7 execution, A21)
+**Given:** A lobby created with `lineupFormat = Thirds` (or Halves)
+**When:** The host starts the draft
+**Then:** Each team drafts 12 characters (Halves: 8), in Classic and in Auction, and arranges them in 3 groups of 4 (Halves: 2 groups of 4). See docs/match-session/contract.md "Thirds Lobbies Draft 12 per Team".
+
+### Only the Captain or a Referee Arranges the Lineup (Phase S7 execution, A21, backlog #3)
+**Given:** Equipping; Blue has a captain and a second player; the host is the referee
+**When:** The second Blue player, or the Red captain, calls `arrange_lineup` for Blue
+**Then:** Rejected: "Only the Blue captain or a referee can arrange the lineup." The Blue captain and the referee (for either team) are accepted. This tightens the earlier rule that let any non-coach team member arrange.
+
 ## Edge Cases
 
 | Case | Expected Behavior | Notes |
@@ -1201,6 +1211,7 @@ The lobby system manages the lifecycle of match rooms where players assemble, co
 | B-4: cursor bounds + per-member throttle (`cursorMinIntervalMs`); scenarios "Cursor Throttle", "Cursor Out of Bounds" added | Phase S5 execution (DECISIONS.md A43, D-B5) | 2026-11-06 |
 | B-7 / A42: `create_lobby` hourly cap (guests included), guest kill switch, preset cap; scenarios "Lobby Creation Cap", "Guest Kill Switch", "Preset Cap" and two edge cases added | Phase S5 execution (DECISIONS.md A42, A43) | 2026-11-06 |
 | Scenarios "Create Lobby With Series Settings", "bestOf Capped to 1 or 3", "Series Settings Editable in Waiting", "Tournament Lobby Locks bestOf and lineupFormat", "Cost Set Must Be Selectable and Cover the Mode", "Preset Stores the Series Fields", "System Preset", "Shuffle Teams", "Unban Member", "Guest Burst Trips the Kill Switch" added | Phase S6 execution (DECISIONS.md A27, A28, A33, A33a, A38, A40, A45, A57, A58, D-A8; backlog #2, #6-#9) | 2026-11-06 |
+| Scenarios "The Lineup Format Is the Character Count", "Only the Captain or a Referee Arranges the Lineup" added | Phase S7 execution (DECISIONS.md A21; backlog #3) | 2026-11-06 |
 
 ---
 

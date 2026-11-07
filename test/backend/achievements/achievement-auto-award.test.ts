@@ -17,7 +17,6 @@ import { promoteUser } from '../../shared/helpers/promoteUser';
 import { defaultLobbyArgs } from '../../shared/helpers/lobbies';
 import { getUsername } from '../../shared/helpers/users';
 import { completeDraft } from '../../shared/helpers/drafts';
-import { gameScoreArgs } from '../../shared/helpers/scores';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -138,9 +137,9 @@ describe.skipIf(!hasServerToken())('Achievement Auto-Award via Finalization', ()
         await host.sync(1500);
 
         // 5. Confirm lineups + advance to scoring
-        await blue.call.confirmLineup({ lobbyId });
+        await blue.call.confirmLineup({ lobbyId, teamSide: { tag: 'Blue' } });
         await blue.sync();
-        await red.call.confirmLineup({ lobbyId });
+        await red.call.confirmLineup({ lobbyId, teamSide: { tag: 'Red' } });
         await red.sync();
         await host.call.advanceStage({ lobbyId });
         await host.sync(1500);
@@ -151,13 +150,8 @@ describe.skipIf(!hasServerToken())('Achievement Auto-Award via Finalization', ()
         const mr = [...host.conn.db.MatchResultRecord.iter()].find(r => r.lobbyId === lobbyId);
         expect(mr).toBeDefined();
 
-        await host.call.recordGameScores(gameScoreArgs({
-            matchResultId: mr!.id,
-            gameNumber: 1,
-            winnerTeamSide: 'Blue',
-            teamBlueCyclesUsed: 7,
-            teamRedCyclesUsed: 10,
-        }));
+        await host.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Blue' }, values: [350, 350], deaths: 0 });
+        await host.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0 });
         await host.sync(1000);
 
         await blue.call.confirmMatchScores({ matchResultId: mr!.id });
@@ -170,7 +164,6 @@ describe.skipIf(!hasServerToken())('Achievement Auto-Award via Finalization', ()
         //    This triggers finalization step 16.5: checkAndAwardAchievements
         await host.call.submitMatchResult({
             matchResultId: mr!.id,
-            winnerId: blue.userId,
         });
         await host.sync(2500);
         await blue.sync(2500);

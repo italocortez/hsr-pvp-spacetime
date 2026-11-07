@@ -3,13 +3,14 @@ import { TeamSide } from '../types/enums';
 
 /**
  * A21 synergy groups (S3): the live lineup of one team for one game, arranged by the captain or a referee
- * (arrange_lineup / confirm_lineup, S7; throttled through AbuseConfig.lineupMinIntervalMs). Visible live to
+ * (arrange_lineup / confirm_lineup; throttled through AbuseConfig.lineupMinIntervalMs). Visible live to
  * everyone in the lobby through view_my_lineups (S9); the confirmed arrangement is also logged as the
  * ConfirmLineup step for replay.
  * `groups` is a JSON string[][] of character names: 2 groups of 4 (halves) or 3 groups of 4 (thirds).
  * `synergySurcharge` = sum of the costModifier of every HsrSynergyCost pair placed in the same group
  * (hundredths); `rosterCost` = the team's roster cost at confirmation (cost-table values in Classic,
- * budget spent in Auction, plus the surcharge), hundredths — the stored computation A21 tie-break 1 reads.
+ * budget spent in Auction, plus the surcharge), hundredths; refreshed by arrange_lineup, confirm_lineup and equip_lightcone (A21 tie-break 1
+ * computes the same value live).
  */
 export const matchLineupColumns = {
     id: t.u32().primaryKey().autoInc(),

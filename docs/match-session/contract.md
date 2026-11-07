@@ -575,6 +575,8 @@ The match session system manages the entire draft lifecycle within a lobby: char
 
 ### arrange_lineup
 
+> **Superseded (Phase S7 execution, A21, backlog #3):** now `arrange_lineup(lobbyId, teamSide, groups)`, captain of that team or a referee only, a live `MatchLineup` row, no step. See "Lineup Groups (Phase S7 execution)" below.
+
 **Purpose:** Records the character position order for a team during the Equipping stage.
 
 **Permission:** Captain (or sole player if no captain). Non-coach, non-spectator.
@@ -608,6 +610,8 @@ The match session system manages the entire draft lifecycle within a lobby: char
 ---
 
 ### confirm_lineup
+
+> **Superseded (Phase S7 execution, A21, backlog #3):** now `confirm_lineup(lobbyId, teamSide)`, same callers as `arrange_lineup`, Auction surcharge gate, the step carries the groups. See "Lineup Groups (Phase S7 execution)" below.
 
 **Purpose:** Records lineup confirmation for a team during the Equipping stage.
 
@@ -845,6 +849,46 @@ Note: The globally-active account (HsrAccount.isActive=true) is NOT consulted. P
 
 **When:** Blue captain calls `confirm_lineup(lobbyId)`
 **Then:** ConfirmLineup step recorded with confirmed=true.
+*Superseded (Phase S7 execution): see the lineup-group scenarios below.*
+
+### Lineup Groups (Phase S7 execution, A21, backlog #3)
+**Given:** Equipping, a Halves lobby, Blue drafted 8 characters
+**When:** the Blue captain calls `arrange_lineup(lobbyId, Blue, '[[4 names],[4 names]]')`
+**Then:** one live `MatchLineup` row for (lobby, game, Blue) holds the groups, the synergy surcharge and the live roster cost (hundredths), `isConfirmed = false`; no step is logged. Every drafted character must appear exactly once, in 2 groups of 4 (Thirds: 3 groups of 4); otherwise rejected with the first problem ("… is not a drafted character of this team, or is placed twice.", "A Thirds lineup has 3 groups.", "Every group has 4 characters.").
+
+**When:** the same captain calls it again within `AbuseConfig.lineupMinIntervalMs` (250 ms)
+**Then:** rejected: "Lineup changes are too frequent. Please wait a moment." (`LobbyMember.lastLineupAt`, stamped without an audit bump)
+
+**When:** a teammate who is not the captain, or the Red captain, arranges Blue
+**Then:** rejected: "Only the Blue captain or a referee can arrange the lineup." A referee (seated or not) may arrange and confirm either team.
+
+**When:** the captain calls `confirm_lineup(lobbyId, Blue)`
+**Then:** `isConfirmed = true`, the final `rosterCost` is stored (tie-break 1 reads it), and a `ConfirmLineup` step is logged with `{ confirmed: true, groups }` and `actorSlot = Blue` (the lineup's team, also when a spectator referee confirms). A later `arrange_lineup` clears the confirmation.
+
+### Synergy Surcharge: The Herta + Argenti + Tribbie (Phase S7 execution, backlog #3)
+**Given:** synergy pairs The Herta–Argenti +4 and The Herta–Tribbie +4 in the lobby's cost set (Classic)
+**When:** all three are placed in one group
+**Then:** `synergySurcharge = 800` (+8; Argenti–Tribbie is not a pair) and the roster cost includes it; splitting Tribbie into the other group gives +4.
+
+### Auction: Over-Budget Lineup Cannot Be Confirmed (Phase S7 execution, backlog #3)
+**Given:** an Auction lobby in Equipping whose lineup puts a +500 pair in one group while the team's remaining light-cone budget is 150
+**When:** the captain arranges it, then confirms
+**Then:** the arrangement is stored (shown red by the client); `confirm_lineup` is rejected: "The synergy surcharge exceeds the remaining light-cone budget; rearrange the lineup." After splitting the pair it confirms. The budget itself is not debited by the surcharge.
+
+### Light Cones Equipped After confirm_lineup (Phase S7 execution, review fix, A21)
+**Given:** both lineups confirmed in Equipping
+**When:** the Blue captain equips a light cone costing 3
+**Then:** Blue's `MatchLineup.rosterCost` rises by 300 hundredths and stays confirmed; the scored game uses the new cost (tie-break 1). In Auction, an equip whose cost plus the confirmed lineup's surcharge exceeds the LC budget is rejected ("Not enough LC budget: the confirmed lineup's synergy surcharge is reserved.").
+
+### Eidolon Snapshot Under requireOwnership (Phase S7 execution, A43 CH-S6, ACCESS-SECURITY-OPS D.8.7)
+**Given:** `requireOwnership = true`; the Blue captain selected two accounts owning Blue-1 at E6 and E3
+**When:** the captain calls `pick_character(lobbyId, 'blue-1', eidolon 0)`
+**Then:** the Pick payload records `eidolon = 6` (max over the selected accounts) and the cost is read at E6; the argument is ignored. With `requireOwnership = false` the argument stands. `nominate_character` resolves the same way (E0 when the nominator's accounts lack the character). `equip_lightcone` keeps its `superimposition` argument: light cones have no ownership data yet.
+
+### Thirds Lobbies Draft 12 per Team (Phase S7 execution, A21)
+**Given:** `lineupFormat = Thirds`
+**When:** the draft starts
+**Then:** Classic: the sequence holds 12 picks per team (the Halves sequence plus 8 picks R-B-B-R-R-B-B-R); Auction: the auction ends when both teams won 12 characters. Halves keeps 8.
 
 ### Budget Rollover on Drafting → Equipping (D-50)
 
@@ -945,6 +989,9 @@ D-50 applies to ALL Drafting→Equipping transitions: auto (last Classic pick, l
 | Timer expiry with paused timer (Phase S4 execution, F3) | Rejected: "Draft is paused." Supersedes the "Not validated" row above | Non-members rejected too |
 | Undo auction phase boundary (Phase S4 execution, F9) | Rejected: "Undo is not available during the auction phase." Supersedes the "isAuctionPhase reverts" row above | No budget / won-count rollback exists |
 | Undo when the highest-sequence row is a Pause or Undo record (Phase S4 execution, F9) | The last Pick/Ban is undone; audit rows are skipped | Audit rows carry their own sequence |
+| arrange_lineup with invalid JSON (Phase S7 execution) | Rejected: "groups must be a JSON array of arrays of character names." Supersedes the `positions` row above | `groups` capped at 2000 characters |
+| confirm_lineup before any arrangement (Phase S7 execution) | Rejected: "Arrange the lineup before confirming it." | |
+| Auction end at 8 characters (Phase S7 execution, A21) | 8 for Halves, 12 for Thirds; supersedes "won count already at 8" above | `charactersPerTeam(lineupFormat)` |
 
 ---
 
@@ -964,6 +1011,9 @@ D-50 applies to ALL Drafting→Equipping transitions: auto (last Classic pick, l
 | LobbyMember.isCaptain | Auto-captain assignment at start_draft | Writes |
 | finalize_match_result | MatchSession, MatchSessionStep | Archives to history tables, deletes session | Reads/Writes |
 | Lobby.bracketMatchId | BracketMatch (Tournament) | Passed to MatchResultRecord | Reads |
+| `arrange_lineup` / `confirm_lineup` (Phase S7 execution) | `MatchLineup`, `HsrSynergyCost`, `shared/scoring` | Live lineup row, surcharge, roster cost | Writes / Reads |
+| `pick_character` / `nominate_character` (Phase S7 execution) | `LobbyMemberAccount` + `HsrAccountCharacter` | Eidolon under requireOwnership (CH-S6) | Reads |
+| `MatchLineup.rosterCost`, Pick / AuctionSold payloads (Phase S7 execution) | match-results tie-breaks 1–3 | Scoring inputs | Read by match-results |
 
 ---
 
@@ -1011,6 +1061,10 @@ D-50 applies to ALL Drafting→Equipping transitions: auto (last Classic pick, l
 | `undo_last_step` undoes the last Pick/Ban only; rejected while paused and in the auction phase; Pick/Ban/Pause/Undo sequences from `getNextSequence` (F9) | Phase S4 execution (DECISIONS.md A22(2)) | 2026-11-06 |
 | Auto-pause decided by `run_referee_transfer_check` 15 s after the last disconnect, team players only (F5) | Phase S4 execution (DECISIONS.md A22(5), A22a) | 2026-11-06 |
 | Scenarios "Bo3 Game 2 Drafts to Completion", "Series Head Start", "Ban Restriction" added; `advance_to_next_game` rebuilds the draft through `initSessionForGame` | Phase S6 execution (BACKEND-BUGS F2; DECISIONS.md A27, A45(2)) | 2026-11-06 |
+| Lineup groups: `arrange_lineup(lobbyId, teamSide, groups)` / `confirm_lineup(lobbyId, teamSide)`, captain or referee only, throttled, live `MatchLineup`, Auction surcharge gate, ConfirmLineup step with groups; scenarios "Lineup Groups", "Synergy Surcharge", "Auction: Over-Budget Lineup" added | Phase S7 execution (DECISIONS.md A21; backlog #3) | 2026-11-06 |
+| Eidolon resolved from the selected accounts under requireOwnership (pick, nominate); light-cone superimposition argument stands; scenario "Eidolon Snapshot Under requireOwnership" | Phase S7 execution (DECISIONS.md A43 CH-S6) | 2026-11-06 |
+| `lineupFormat` drives the character count: Thirds = 12 picks per team (Classic sequence, Auction completion); scenario "Thirds Lobbies Draft 12 per Team" | Phase S7 execution (DECISIONS.md A21) | 2026-11-06 |
+| `equip_lightcone` refreshes the lineup row and reserves a confirmed Auction surcharge; scenario "Light Cones Equipped After confirm_lineup" | Phase S7 execution (review fix; DECISIONS.md A21) | 2026-11-06 |
 
 ---
 

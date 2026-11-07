@@ -119,6 +119,7 @@ export const ArrangeLineupPayload = t.object('ArrangeLineupPayload', {
 
 export const ConfirmLineupPayload = t.object('ConfirmLineupPayload', {
     confirmed: t.bool(),           // true = confirmed
+    groups: t.string(),            // (A21, backlog #3): the confirmed groups (JSON string[][]) for replay
 });
 
 // The "Polymorphic" Enum containing the specific payloads
