@@ -570,3 +570,11 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** user decision 2026-11-06 after comparing the two designs: the timer reacts up to 5 minutes late (a script keeps creating lobbies, each pushed to every lobby-browser subscriber), costs about 8,600 idle reducer calls a month, and counts survivors only; inline reacts on the crossing creation, costs nothing when idle and counts creations. Nothing in the plan needs a periodic check that no user action triggers.
 - **Supersedes:** A42(2) "a scheduled reducer every few minutes".
 - **Where implemented:** S6 (the step that next edits `create_lobby`)
+
+### A58 — Guest-lobby breaker default: 50 creations in 10 minutes
+
+- **Date:** 2026-11-06 · **Status:** decided
+- **Decision:** `AbuseConfig.guestLobbyBurstThreshold` defaults to **50** (was 20, the A42 example); `guestLobbyBurstWindowMinutes` stays 10. Both remain runtime-editable through `admin_update_abuse_config`. The switch the breaker trips (`guestLobbyCreationEnabled`) affects **only guest lobby creation**: verified users create normally, guests already in lobbies keep playing, joining and chat are untouched; an admin re-enables it with `admin_set_guest_lobby_creation(true)`.
+- **Why:** user decision 2026-11-06: with the per-guest cap of 10 lobbies an hour, 50 in 10 minutes needs at least five identities acting together, which is script behaviour; a legitimate community evening stays far below it.
+- **Supersedes:** the default value named in A42 and A57 (the mechanism is unchanged).
+- **Where implemented:** S5 follow-up commit (default constant + tests), S6 (inline breaker keeps the value)

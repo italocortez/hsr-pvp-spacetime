@@ -95,7 +95,7 @@ describe('init seeds the abuse controls', () => {
             maxCostSetsPerUser: 5,
             maintenanceMode: false,
             guestLobbyCreationEnabled: true,
-            guestLobbyBurstThreshold: 20,
+            guestLobbyBurstThreshold: 50,
             guestLobbyBurstWindowMinutes: 10,
             createdById: 0,
         });
@@ -220,6 +220,8 @@ describe('A42: guest kill switch', () => {
 describe('A42: circuit breaker', () => {
     it('trips above the threshold: switch off, one counts-only alert, no duplicate on the next run', () => {
         const test = newHarness();
+        // A58: the seeded default is 50; the scenario runs at 20 to keep the fixture small.
+        tx(test, 'internal', (ctx) => M.admin_update_abuse_config(ctx, { guestLobbyBurstThreshold: 20 }));
         guestLobbies(test, 21);
         fireBreaker(test);
 
@@ -246,6 +248,7 @@ describe('A42: circuit breaker', () => {
 
     it('does not trip at exactly the threshold, nor on lobbies older than the window', () => {
         const test = newHarness();
+        tx(test, 'internal', (ctx) => M.admin_update_abuse_config(ctx, { guestLobbyBurstThreshold: 20 })); // A58: default 50
         guestLobbies(test, 20);
         fireBreaker(test);
         expect(config(test).guestLobbyCreationEnabled).toBe(true);
@@ -260,6 +263,7 @@ describe('A42: circuit breaker', () => {
 
     it('admin_acknowledge_alert marks the alert acknowledged with SYSTEM audit columns', () => {
         const test = newHarness();
+        tx(test, 'internal', (ctx) => M.admin_update_abuse_config(ctx, { guestLobbyBurstThreshold: 20 })); // A58: default 50
         guestLobbies(test, 21);
         fireBreaker(test);
         const alertId = alerts(test)[0].id;

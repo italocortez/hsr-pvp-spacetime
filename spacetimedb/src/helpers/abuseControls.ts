@@ -26,7 +26,7 @@ export const ABUSE_CONFIG_DEFAULTS = {
     maxCostSetsPerUser: 5,
     maintenanceMode: false,
     guestLobbyCreationEnabled: true,
-    guestLobbyBurstThreshold: 20,
+    guestLobbyBurstThreshold: 50,     // A58 (A42 example was 20)
     guestLobbyBurstWindowMinutes: 10,
 };
 
