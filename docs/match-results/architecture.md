@@ -197,22 +197,22 @@ Phase S7 execution (A21, A31, A39, A55, A56; backlog #11). Behavior and authorit
 
 | Table | Key / indexes | Written by | Deleted by |
 |---|---|---|---|
-| `MatchResultGroupScore` (`matchResultId`, `gameNumber`, `teamSide`, `groupIndex`, `value` u32 hundredths) | `id` PK; `by_result_game` (matchResultId, gameNumber) | `record_group_scores` (upsert per group index) | `runFinalization`, `hardDeleteLobby` (`deleteScoringRows`) |
-| `MatchResultAdjustment` (`value` i32 hundredths, `reason?`, `setById`) | `id` PK; `by_result_game` | `set_score_adjustment` | same |
-| `MatchResultGame` | decorative PK (matchResultId, gameNumber); `by_result_and_game` | `record_group_scores` creates; `recomputeGame` stores raw totals (`team*CyclesUsed` for cycle modes / `team*Score` for points, hundredths, A56(2)), `team*AdjustedResult`, `tieBreakLevel`, `winnerTeamSide` (Spectator = undecided or level-4 tie until an override) | as before |
+| `MatchResultGroupScore` (`matchResultId`, `teamSide`, `groupIndex`, `value` u32 hundredths; S8e: no `gameNumber`) | `id` PK; `by_result` (matchResultId) (S8e, A67(3)) | `record_group_scores` (upsert per group index) | `runFinalization`, `hardDeleteLobby` (`deleteScoringRows`) |
+| `MatchResultAdjustment` (`value` i32 hundredths, `reason?`, `setById`; S8e: no `gameNumber`) | `id` PK; `by_result` (S8e) | `set_score_adjustment` | same |
+| `MatchResultGame` (S8e: one row per record, no `gameNumber`) | decorative PK (matchResultId); `match_result_id` (S8e: `by_result_and_game` removed) | `record_group_scores` creates; `recomputeGame` stores raw totals (`team*CyclesUsed` for cycle modes / `team*Score` for points, hundredths, A56(2)), `team*AdjustedResult`, `tieBreakLevel`, `winnerTeamSide` (Spectator = undecided or level-4 tie until an override) | as before |
 | `MatchResultRecord.winnerOverride / winnerOverrideById / winnerOverrideReason` | — | `submit_match_result` | with the record |
 | `MatchSessionHistory.handicapApplied` (i32 hundredths) | — | `runFinalization`: Σ over games of (Blue's net handicap advantage − Red's); positive favours Blue; modifiers excluded | — |
 | `MatchSessionHistory.winnerOverride` (TeamSide?), `winnerOverrideById` (u32?), `winnerOverrideReason` (string?) — new columns, Phase S7 execution (A21 "kept for audit and replay", A39) | — | `runFinalization` copies them from the record, so a casual override survives the record's deletion | — |
-| **`MatchLineupHistory`** (new, A56(1)): `id` PK autoInc, `matchHistoryId`, `gameNumber`, `teamSide`, `groups`, `synergySurcharge`, `rosterCost`, audit | `by_match_history` | `runFinalization` step 9b, one row per live `MatchLineup` | `server_nuke_test_data` only |
+| **`MatchLineupHistory`** (new, A56(1)): `id` PK autoInc, `matchHistoryId`, `teamSide` (S8e: `gameNumber` removed), `groups`, `synergySurcharge`, `rosterCost`, audit | `by_match_history` | `runFinalization` step 9b, one row per live `MatchLineup` | `server_nuke_test_data` only |
 
-Index note: the (id, gameNumber) indexes are scanned per full key over `lobbyGameNumbers` (1..max(bestOf, current game, highest game row)). A bare-scalar prefix scan is rejected and a prefix + `Range` scan returns nothing in the 2.14.1 in-memory test datastore.
+Index note: the (id, gameNumber) indexes are scanned per full key over `lobbyGameNumbers` (1..max(bestOf, current game, highest game row)). A bare-scalar prefix scan is rejected and a prefix + `Range` scan returns nothing in the 2.14.1 in-memory test datastore. **S8e (A67(3)):** the indexes are single-column (`by_result`, `by_lobby`, `match_result_id`) and `lobbyGameNumbers` is deleted.
 
 ### Reducers
 
 | Reducer | Arguments | Notes |
 |---|---|---|
-| `record_group_scores` | `lobbyId: u32, gameNumber: u8, teamSide: TeamSide, values: u32[] (hundredths, one per group), deaths: u8, screenshotUrl?: string` | captain of that side or any referee; Pending record; `ensureNotConceded`; the current game, or an earlier closed game for an Admin (`ensureEditableGame`, A65(4)); resets both confirmations; recomputes the game; each value ≤ 100,000,000 hundredths |
-| `set_score_adjustment` | `lobbyId: u32, gameNumber: u8, teamSide: TeamSide, value: i32, reason?: string, adjustmentId?: u32` | a lobby referee, Moderator+, or in a tournament lobby the organizer or an assistant with `canResolveResults` (the A39 staff set); no id → insert (0 rejected); id + value ≠ 0 → replace value / team / reason; id + 0 → delete; reason trimmed, ≤ 1000 chars; |value| ≤ 100,000,000 hundredths |
+| `record_group_scores` | `lobbyId: u32, teamSide: TeamSide, values: u32[] (hundredths, one per group), deaths: u8, screenshotUrl?: string` (S8e: `gameNumber` removed) | captain of that side or any referee; Pending record; `ensureNotConceded`; the current game, or an earlier closed game for an Admin (`ensureEditableGame`, A65(4)); resets both confirmations; recomputes the game; each value ≤ 100,000,000 hundredths |
+| `set_score_adjustment` | `lobbyId: u32, teamSide: TeamSide, value: i32, reason?: string, adjustmentId?: u32` (S8e: `gameNumber` removed) | a lobby referee, Moderator+, or in a tournament lobby the organizer or an assistant with `canResolveResults` (the A39 staff set); no id → insert (0 rejected); id + value ≠ 0 → replace value / team / reason; id + 0 → delete; reason trimmed, ≤ 1000 chars; |value| ≤ 100,000,000 hundredths |
 | `confirm_match_scores` | `matchResultId: u32` | unchanged |
 | `submit_match_result` | `matchResultId: u32, winnerOverride?: TeamSide, winnerOverrideReason?: string` | recomputes the current game; every game needs complete scores; override only on a level-4 tie (A39 routing in the contract); series winner = game wins + A27 head start |
 | `advance_stage` (Scoring) | unchanged | recomputes the current game before counting game winners |
@@ -233,8 +233,8 @@ Phase S7b follow-up (DECISIONS.md A63, amends A60(3)): `confirm_game` only sets 
 
 | Helper | Does |
 |---|---|
-| `findEditableResult(ctx, lobbyId, allowSubmitted)` | the Pending record, or for an Admin caller a Submitted one |
-| `ensureOpenGame(ctx, lobby, record, gameNumber, user)` | `'open'` (no game row, or `closedAt` unset; Pending record) / `'admin'` (closed game, role Admin exactly, record Pending or Submitted) / throws `'This game is closed.'` (anyone else, Moderators included) or `'This match is finalized.'` |
+| `findEditableResult(ctx, lobbyId, user)` (S8e fix pass 2, A69(2): was `allowSubmitted`) | `ensureEditableRecord(findLobbyResult(…), user)`: the Pending record, or for an Admin caller a Submitted one; otherwise `'No pending match result for this lobby.'` (no record), `'This game is closed.'` (Submitted record, caller not an Admin), `'This game can no longer be edited here; corrections go through override_match_result.'` (Validated, Finalized, Disputed, Rejected, Voided: everyone, Admins included) |
+| `ensureOpenGame(ctx, lobby, record, user)` (S8e: no `gameNumber`; A69(3): runs after the record lookup, its status throws are gone) | `'open'` (no game row, or `closedAt` unset) / `'admin'` (closed game, role Admin exactly) / throws `'This game is closed.'` (anyone else on a closed game, Moderators included; defensive) |
 | `ensureResultAuthority(ctx, lobby, user, message)` | the A39 staff set: lobby referee, Moderator+, tournament organizer, assistant with `canResolveResults`; returns `{ member, isReferee, isStaff }` (shared by `set_score_adjustment` and `close_game`); the non-throwing `resultAuthority(ctx, lobby, user)` is the same lookup (`close_game` also admits captains, A63) |
 | `resetConfirmations(ctx, game, actorId)` | clears both flags on the game row (`replaceGame`), no-op when both are false |
 | `ensureAuctionSurchargeFits(ctx, lobby, session, gameNumber, side)` | Auction gate (A60(4)): `MatchLineup.synergySurcharge` ≤ `toHundredths(charBudget + lcBudget)` |
@@ -251,11 +251,11 @@ Phase S7b follow-up (DECISIONS.md A63, amends A60(3)): `confirm_game` only sets 
 |---|---|---|
 | `confirm_game` | `lobbyId: u32, teamSide: TeamSide` | A63 (amends A60(3)): the captain's ready flag only, never a close. Equipping or Scoring; `ensureMatchAlive`; Pending record; game open; caller = the captain of `teamSide` (live `LobbyMember.isCaptain`, player seat; a referee who is that captain confirms as the captain), anyone else `'Only the team captain can confirm the game.'`, a captain naming the other side `` `Only the team captain can confirm the ${side} side of the game.` ``; the side's lineup; both sides' scores complete (the game is recomputed); Auction gate for the side. A side cannot confirm twice. Sets the flag, logs `ConfirmGame { confirmedSide: side, closed: false }`, bumps `lastActivityAt`. The full-control spectator referee shortcut is removed (A63(4)); `MatchResultRecord.refereeFullControl` is no longer read |
 | `close_game` | `lobbyId: u32, winnerOverride?: TeamSide, winnerOverrideReason?: string` | A63(2): the submit of a game. Authority: the A60(4) staff set at any time (`resultAuthority`: lobby referee seated or spectator, Moderator+, organizer, assistant with `canResolveResults`), or, once `blueConfirmed && redConfirmed`, the captain of either team (player seat). A captain before both flags: `'Both captains must confirm the game before it can be submitted.'`; anyone else: `'Only a captain (once both sides confirmed), a referee, a Moderator or, in a tournament lobby, the organizer or a results assistant can close a game.'`. Equipping or Scoring; `ensureMatchAlive`; Pending record; game open; both lineups; scores complete; Auction gate for both. `winnerOverride` from the staff set only (a captain: `'Only staff may decide a tie.'`), only on a level-4 tie (`'A winner override is only accepted on an unresolved tie.'`), required on one; reason trimmed ≤ 1000. A39: in a tournament lobby a seated referee (player or coach slot) who is not staff cannot override (`'A referee seated on a team cannot decide a tie in a tournament lobby; staff must close this game.'`); casual: accepted and audited. Step `closed: true`; `actorSlot` = `confirmedSide` = the closer's team side for a captain or a seated referee, `Spectator` otherwise (A63(5)) |
-| `record_group_scores`, `set_score_adjustment` | unchanged | the current game, or an earlier closed game for an Admin (`ensureEditableGame`, A65(4); was `ensureCurrentGame`) + `ensureOpenGame` after `findEditableResult`; open game: recompute + `resetConfirmations` on the game row; Admin on a closed game: no reset, `recomputeSeriesAfterAdminEdit`. `record_group_scores` skips the captain/referee check for an Admin's closed-game edit |
+| `record_group_scores`, `set_score_adjustment` | S8e: no `gameNumber` | `ensureOpenGame` after `findEditableResult`: the record's game is open, or the caller is an Admin and the record is Pending or Submitted (not yet validated, A60(7), A69(2)); the status rejections are `findEditableResult`'s (A69(2)); open game: recompute + `resetConfirmations` on the game row; Admin on a closed game: no reset, `recomputeAfterAdminEdit`. `record_group_scores` skips the captain/referee check for an Admin's closed-game edit |
 | `advance_stage` (Scoring) | — | rejected: `'Games close through confirm_game or close_game; the stage moves on the close.'` |
 | `dispute_match_result` | unchanged | still requires Submitted |
 
-**Admin edits reach any closed game of the series** (A65(4), S8d; supersedes the S7 "current game only" limit): `record_group_scores` / `set_score_adjustment` go through `ensureEditableGame(ctx, lobbyId, gameNumber, user, record)` (the current game for everyone; an earlier game whose `MatchResultGame` row exists and is closed for an Admin; otherwise "Scores can only be entered for the current game (N)."); `set_eidolon`, `equip_lightcone`, `unequip_lightcone` and `arrange_lineup` take an optional trailing `gameNumber` (an earlier closed game, Admin only: "Only an Admin may edit an earlier game."). `recomputeSeriesAfterAdminEdit(ctx, lobby, record, actorId, gameNumber)` recomputes the edited game. The steps of every game stay until finalization (A65(1)), so tie-breaks 2/3 can read them. An earlier-game edit does not touch the session budgets (they belong to the current game).
+**Superseded by S8e (A67(3)), see "Phase S8e execution" below.** **Admin edits reach any closed game of the series** (A65(4), S8d; supersedes the S7 "current game only" limit): `record_group_scores` / `set_score_adjustment` go through `ensureEditableGame(ctx, lobbyId, gameNumber, user, record)` (the current game for everyone; an earlier game whose `MatchResultGame` row exists and is closed for an Admin; otherwise "Scores can only be entered for the current game (N)."); `set_eidolon`, `equip_lightcone`, `unequip_lightcone` and `arrange_lineup` take an optional trailing `gameNumber` (an earlier closed game, Admin only: "Only an Admin may edit an earlier game."). `recomputeSeriesAfterAdminEdit(ctx, lobby, record, actorId, gameNumber)` recomputes the edited game. The steps of every game stay until finalization (A65(1)), so tie-breaks 2/3 can read them. An earlier-game edit does not touch the session budgets (they belong to the current game).
 
 ## Phase S8d execution (DECISIONS.md A24, A36, A38(1), A54, A60(6), A63, A65; ACCESS-SECURITY-OPS §D.8.3)
 
@@ -284,6 +284,50 @@ parks in AwaitingResult until the finalize job ([../tournament/architecture.md](
 | `override_match_result` | tournament record (InProgress; status Submitted, Disputed or Validated, else "Only a Submitted, Disputed or Validated tournament result can be overridden (this one is X)."; the lobby still exists, else "The match lobby no longer exists; use resolve_bracket_match."): Validated(winner) → record Validated + `settledAt`, then rollback when the match is Decided for the other team and `applyBracketResult(…, 'Staff')`; Rejected → rollback when the match is Decided for this record's team, lobby voided, status kept Rejected. Standalone unchanged |
 | `runFinalization` | 4th argument `options`; step 4 sorts by (gameNumber, sequence) and step 8 archives every game (A65(3)); step 17 (bracket) removed; leaderboard rebuild (13b) stays standalone-only |
 
+## Phase S8e execution (DECISIONS.md A67(3)(4)(6); supersedes A65 and A60(6)'s series submission)
+
+**One game per record.** `MatchResultGame` keeps one row per record (decorative key `matchResultId`, index
+`match_result_id`); `MatchResultGroupScore` / `MatchResultAdjustment` are keyed by the record (`by_result`);
+`MatchResultGameHistory` is keyed by `matchHistoryId`; `MatchLineupHistory` has no `gameNumber`. `MatchResultGame`
+stays a separate 1:1 table (A67(3), smallest diff).
+
+**Helpers** (`helpers/scoringHelpers.ts`): `findGame(ctx, matchResultId)`, `ensureGame(ctx, record, lobby, actorId)`,
+`recomputeGame(ctx, record, lobby, actorId)`, `ensureOpenGame(ctx, lobby, record, user)`, `teamDraft(ctx, lobbyId,
+side)`, `findLineup(ctx, lobbyId, side)`, `teamRosterCost(ctx, lobby, side, draft)`, `refreshLineupCosts(ctx, lobby,
+side, actorId)`, `ensureAuctionSurchargeFits(ctx, lobby, session, side)`, `equippedLightcones(ctx, lobbyId, side)`,
+`lobbyLineups(ctx, lobbyId)` (index `by_lobby`), `deleteScoringRows(ctx, matchResultId, lobbyId)`. Deleted:
+`lobbyGameNumbers`, `seriesTally`.
+
+**Game close (`helpers/gameClose.ts`).** `closeGame` closes the game (flags, `closedAt` / `closedById`, staff override
+on a level-4 tie, one `ConfirmGame` step) and always calls **`submitGameResult(ctx, record, lobby, actorId)`** (renamed
+from `submitSeriesResult`): the game must be closed with a result; the record's `winnerTeamSide` = the game's winner
+(ties: the A60 / A63 override already on the game row); Casual standalone → Validated + `runFinalization` inline;
+Ranked → Submitted; tournament → Validated + `handOffToBracket` (derived tally, A67(4)) or Submitted under
+`requireResultValidation`; lobby → AwaitingResult + "Match complete. Stage: AwaitingResult". The between-games branch,
+`writeTally` and the tally-based decision are gone. **`recomputeAfterAdminEdit(ctx, lobby, record, actorId)`**
+(renamed from `recomputeSeriesAfterAdminEdit`): recompute the record's game; the tie rule as before; a Submitted
+record's `winnerTeamSide` follows the game's winner. A69(3) (fix pass 2): the Pending branch is gone; the record is
+always Submitted here (the close submits; a Validated record is no longer editable).
+
+**Edit rule.** `ensureEditableGame` is deleted: `record_group_scores` and `set_score_adjustment` use `ensureOpenGame`
+alone (the game is open, or the caller is an Admin and the record is Pending or Submitted, i.e. not yet validated;
+A60(7), A69(2)). **A69(2) (fix pass 2):** the window ends at validation. The status rule lives in one helper,
+`ensureEditableRecord(record, user)` (`findEditableResult(ctx, lobbyId, user)` wraps it; `resolveEditWindow` in
+`reducers/postDraft.ts` calls it in its fall-through, after the unchanged Admin closed-game branch and the stage
+guard): Pending → editable; Submitted → editable by an Admin only; rejections `'No pending match result for this lobby.'` (no record), `'This game is closed.'` (Submitted record, caller not an Admin), `'This game can no longer be edited here; corrections go through override_match_result.'` (Validated, Finalized, Disputed, Rejected, Voided: everyone, Admins included). A Validated tournament
+record has already moved the bracket, so corrections go through `override_match_result` (A24 TD-13 / TD-14), which
+reverts and recomputes the tally (A67(4)). `ensureOpenGame` then only decides open / Admin closed-game edit. The four edit reducers of the session lose their trailing `gameNumber` (`docs/match-session/architecture.md`).
+
+**Concede (A67(6)).** `performConcede` settles the lobby's record (A54 / A66 unchanged) and hands it to the bracket
+through `handOffToBracket` → `recordGameSettled` (the game counts toward the tally; the match ends only when a side
+reaches ceil(bestOf / 2) or staff resolve it). Stage list: Drafting, Equipping, Scoring.
+
+**Finalization.** `runFinalization` sorts the steps by `sequence`, writes one `MatchResultGameHistory` row per game row
+(one), the lineups and the steps without `gameNumber`. Per-record MMR is unchanged (step 11).
+
+| Reducer | S8e change |
+|---|---|
+| `override_match_result` | tournament record: a Decided bracket match is first reverted without voiding any game (`rollbackBracketResult(…, false, false)`, refused while a downstream match is Decided); Validated → record Validated, then `recordGameSettled(…, 'Staff')`; Rejected → lobby voided, status kept Rejected, then the tally is recomputed. Details: [../admin/architecture.md](../admin/architecture.md). The Ranked screenshot message names "the game" (no number) |
 
 ## Phase History
 
@@ -307,10 +351,12 @@ parks in AwaitingResult until the finalize job ([../tournament/architecture.md](
 | "Game package" section: per-game `blueConfirmed` / `redConfirmed` / `closedAt` / `closedById` on `MatchResultGame`; `confirm_game`, `close_game` (A39 seating rule at the close), automatic series submission (`submitSeriesResult`), closed-game rule (`ensureOpenGame`), Admin edit path (`recomputeSeriesAfterAdminEdit`); `confirm_match_scores`, `submit_match_result`, `MatchResultRecord.blueConfirmed/redConfirmed` removed; `advance_stage` Scoring branch removed | Phase S7b execution (DECISIONS.md A60) | 2026-11-07 |
 | `confirm_game` = ready flag only (captain of the side; full-control referee shortcut removed); `close_game` = the submit (either captain once both flags are set, or the staff set; only staff may override); close step `actorSlot` = the closer's team side or Spectator; `resultAuthority` split from `ensureResultAuthority` | Phase S7b follow-up (DECISIONS.md A63) | 2026-11-07 |
 | One record per lobby (concede / defer update it; readers explicit); tournament routing at the deciding close (Validated + hand-off, or Submitted for staff); `validate_match_result` added; `process_tournament_mmr` deleted; `finalize_match_result` and the admin tools reject tournament records / lobbies; Admin edits reach earlier closed games (A24, A36, A54, A65(4), D.8.3) | Phase S8d execution | 2026-11-07 |
+| One game per record: `gameNumber` and the per-game keys removed from the result tables; the close submits the game (`submitGameResult`); `recomputeAfterAdminEdit`; `ensureEditableGame` removed; override recomputes the derived bracket tally (A67(3)(4)(6)) | Phase S8e execution | 2026-11-08 |
+| Admin edit window ends at validation (`ensureEditableRecord` / `findEditableResult(ctx, lobbyId, user)`, three rejections); `ensureOpenGame` loses its status throws; `recomputeAfterAdminEdit` loses its Pending branch | Phase S8e execution (DECISIONS.md A69(2)(3)) | 2026-11-08 |
 
 ---
 
-*Last updated: 2026-04-12*
+*Last updated: 2026-11-08*
 *Feature owner: Phase 06 / Phase 07 / Phase 10.1 / Phase 12.3*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

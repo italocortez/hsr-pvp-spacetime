@@ -6,6 +6,9 @@ import { ensureNotInLobby, generateJoinCode, nextJoinSeq } from '../helpers/lobb
 import { ensureTournamentPermission, hasTournamentPermission } from '../helpers/tournamentPermissions';
 import { findSystemLobbyPreset, SYSTEM_PRESET_VALUES } from '../helpers/systemPreset';
 import { autoSeatSlot } from '../helpers/tournamentLobbySides';
+import { findLobbyResult } from '../helpers/scoringHelpers';
+import { matchGames } from '../helpers/bracketResults';
+import { winsNeededFor } from '../helpers/seriesSettings';
 import type { Lobby } from '@bindings/types';
 
 const LOBBY_NAME_MAX = 50; // D-A8 (helpers/seriesSettings.ts normalizeLobbyName)
@@ -20,14 +23,16 @@ function isMatchParticipant(ctx: any, bracketMatch: any, userId: number): boolea
 }
 
 // ─── create_tournament_lobby ─────────────────────────────────────────────────
-// A27, A33, A33a, A34, A35, D-45 (S8d). Creates the lobby of a bracket match.
+// A33, A33a, A34, A35, D-45, A67(5) (S8d, S8e). Creates the lobby of one game of a bracket match.
 // Caller (A34): a member of team1 / team2 of the match or an approved stand-in of either, or staff with the `bracket`
-// permission (organizer, Moderator+, assistant with canManageBracket, A25). The match must be Ready, the tournament
-// InProgress, and no lobby of the match may exist except a Finished one (Lobby.bracket_match_id, D-45).
+// permission (organizer, Moderator+, assistant with canManageBracket, A25). The match must be Ready (not decided), the
+// tournament InProgress; D-45 (A67(5)): every lobby of the match (Lobby.bracket_match_id) must be settled (its record
+// Validated, parked in AwaitingResult), so one game is in play at a time; and the Validated games of the match must
+// not already reach BracketMatch.bestOf (the game cap).
 // Settings: the integrity set (A33) from the tournament, locked by update_lobby_settings (D-65): teamSize, gameMode,
 // matchType (countTowardsMmr), both anonymity flags, rosterVisibility, requireOwnership, costSetId, disconnectPolicy +
-// disconnectForfeitSeconds, allowMirrorPicks (false when ranked, D-42), lineupFormat, bestOf = BracketMatch.bestOf,
-// bestOfNAdvantage = Blue when BracketMatch.winnerAdvantage > 0 (A27: the WB finalist is slot 1 = Blue). The free set
+// disconnectForfeitSeconds, allowMirrorPicks (false when ranked, D-42), lineupFormat. A67(2): no series settings on
+// the lobby (the bracket match carries bestOf and the A27 head start). The free set
 // from the preset at Tournament.lobbyPresetId, the system preset when that row is gone (A33a). name = the tournament
 // name + the match key (D-A8, truncated to 50 characters).
 // The creator is host and referee (A34): a participant is seated as a player on its team's side (A26 / A35); staff
@@ -65,11 +70,27 @@ export const create_tournament_lobby = spacetimedb.reducer(
             throw new SenderError(`${bracketMatch.positionKey} is ${bracketMatch.state.tag}; a lobby needs a Ready match.`);
         }
 
-        // D-45: one live lobby per bracket match (a parked AwaitingResult lobby counts until finalization or rollback)
+        // D-45, A67(5): one game in play per bracket match. A lobby is settled when its record is Validated (it then
+        // parks in AwaitingResult until the finalize job, A24(2)); any other lobby (Waiting, playing, or parked with a
+        // Pending / Submitted / Disputed record) blocks a new one.
+        let validatedGames = 0;
         for (const existingLobby of ctx.db.Lobby.bracket_match_id.filter(args.bracketMatchId)) {
-            if (existingLobby.stage.tag !== 'Finished') {
-                throw new SenderError('A lobby already exists for this bracket match.');
+            if (findLobbyResult(ctx, existingLobby.id)?.status.tag !== 'Validated') {
+                throw new SenderError('A lobby for this bracket match is still in play.');
             }
+        }
+        // A67(5): the game cap (Validated records of the match; the head start is not a game played).
+        for (const record of ctx.db.MatchResultRecord.bracket_match_id.filter(args.bracketMatchId)) {
+            if (record.status.tag === 'Validated') validatedGames++;
+        }
+        if (validatedGames >= bracketMatch.bestOf) {
+            throw new SenderError(`This bracket match has no games left (best of ${bracketMatch.bestOf}).`);
+        }
+        // A67(4) (S8e review): a Ready match whose derived tally already gives a side ceil(bestOf / 2) games takes no
+        // further game (defensive: rollbackBracketResult re-decides such a match).
+        const tally = matchGames(ctx, bracketMatch);
+        if (Math.max(tally.team1, tally.team2) >= winsNeededFor(bracketMatch.bestOf)) {
+            throw new SenderError('This bracket match is decided by its games.');
         }
 
         // D-22: one lobby at a time per user (staff creators included, A34)
@@ -107,9 +128,6 @@ export const create_tournament_lobby = spacetimedb.reducer(
             disconnectPolicy: tournament.disconnectPolicy,
             disconnectForfeitSeconds: tournament.disconnectForfeitSeconds, // A36: one optional timer
             gameMode: tournament.defaultGameMode,
-            bestOf: bracketMatch.bestOf > 0 ? bracketMatch.bestOf : 1, // D-11 / A28
-            // A27: the WB finalist (slot 1 = Blue) starts the grand final one game up
-            bestOfNAdvantage: (bracketMatch.winnerAdvantage > 0 ? { tag: 'Blue', value: {} } : { tag: 'None', value: {} }) as any,
 
             // ── Free set (A33, A33a), from the preset ──
             draftMode: preset.draftMode,
@@ -133,7 +151,6 @@ export const create_tournament_lobby = spacetimedb.reducer(
             allowPlayerPause: preset.allowPlayerPause,
             refereeExclusiveConcede: preset.refereeExclusiveConcede,
             hideMmr: preset.hideMmr, // A40
-            refereeControlsShelving: preset.refereeControlsShelving,
 
             // Player count (just the creator for now)
             currentPlayerCount: 1,

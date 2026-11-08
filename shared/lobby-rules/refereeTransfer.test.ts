@@ -61,8 +61,9 @@ describe('decideRefereeTransfer (A22a grace check)', () => {
         expect(decideRefereeTransfer({ ...base, subject: { ...host, isReferee: false } })).toEqual({ action: 'none', reason: 'not-referee' });
         expect(decideRefereeTransfer({ ...base, subject: undefined })).toEqual({ action: 'none', reason: 'left-lobby' });
     });
-    it('does nothing in Waiting / AwaitingResult / Finished', () => {
-        for (const stage of ['Waiting', 'AwaitingResult', 'Finished'] as const) {
+    // T-S8e (A67(1)): Finished is gone from LobbyStage; the inactive stages are Waiting and AwaitingResult.
+    it('does nothing in Waiting / AwaitingResult', () => {
+        for (const stage of ['Waiting', 'AwaitingResult'] as const) {
             expect(decideRefereeTransfer({ ...base, stage, subject: host })).toEqual({ action: 'none', reason: 'inactive-stage' });
         }
     });

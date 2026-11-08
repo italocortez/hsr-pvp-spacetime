@@ -4,6 +4,9 @@
 // lobby parks in AwaitingResult with no history and no MMR; validate_match_result; the casual-only admin tools and
 // finalize_match_result; the record / lobby side effects of resolve_bracket_match, rollback_bracket_match and
 // override_match_result. Builders in s8d-fixtures.ts. Nothing reaches maincloud.
+// T-S8e (A67): one lobby per game; the bracket match is the series. The Bo3 hand-off plays two lobbies; resolve keeps
+// every Validated game (A67(8)); an override of a record of a Decided match reverts the decision (no game or lobby
+// voided), updates the record and re-decides from the new tally (A67(4), S8e review addendum).
 import { describe, expect, it } from 'vitest';
 import { TOURNAMENT_PERM_MESSAGES } from '../helpers/tournamentPermissions';
 import { M, expectReject, lobbyRow, newHarness, session, setupLobby, tx, type Harness, type Lobby } from './s4-fixtures';
@@ -13,6 +16,7 @@ import {
     captainActor,
     lobbiesOf,
     openMatchLobby,
+    playBracketMatch,
     playMatch,
     recordsOfLobby,
     recordsOfMatch,
@@ -121,15 +125,22 @@ describe('hand-off: a Casual tournament Bo1 played to the deciding close', () =>
         nothingDerived(f.test);
     });
 
-    it('a Bo3 played 2-0 hands off the series score', () => {
+    it('a Bo3 played 2-0 over two lobbies hands off each game; the second decides (A67(4))', () => {
         const f = liveField(2, { defaultBestOf: 3, grandFinalBestOf: 3 });
         const m = byKey(f.test, f.id, 'W-R1-M1');
         expect(m.bestOf).toBe(3);
-        const s = playMatch(f, m.id, 'Red');
+        const [g1] = playBracketMatch(f, m.id, ['Red']);
+        const mid = matchRow(f.test, m.id);
+        expect(mid.state.tag).toBe('Ready');
+        expect([mid.team1Games, mid.team2Games]).toEqual([0, 1]);
+        const [g2] = playBracketMatch(f, m.id, ['Red']);
         const after = matchRow(f.test, m.id);
+        expect(after.state.tag).toBe('Decided');
+        expect(after.decidedBy?.tag).toBe('Played');
         expect(after.winnerTeamId).toBe(m.team2Id);
         expect([after.team1Games, after.team2Games]).toEqual([0, 2]);
-        expect(lobbyRow(f.test, s.lobbyId).stage.tag).toBe('AwaitingResult');
+        for (const s of [g1, g2]) expect(lobbyRow(f.test, s.lobbyId).stage.tag).toBe('AwaitingResult');
+        expect(recordsOfMatch(f.test, m.id).map((r) => r.status.tag)).toEqual(['Validated', 'Validated']);
         nothingDerived(f.test);
     });
 });
@@ -258,7 +269,8 @@ describe('resolve_bracket_match / rollback_bracket_match: the record and the lob
         expect(matchRow(f.test, m.id).winnerTeamId).toBe(m.team2Id);
     });
 
-    it('resolve for the same winner as a Validated record leaves it parked; another winner voids it', () => {
+    // T-S8e (A67(8)): resolve keeps every Validated game record; only unsettled lobbies are voided.
+    it('resolve for the same winner as a Validated record leaves it parked; another winner keeps it Validated and parked too', () => {
         const f = liveField(2, BO1);
         const m = byKey(f.test, f.id, 'W-R1-M1');
         const s = playMatch(f, m.id, 'Blue');
@@ -268,11 +280,13 @@ describe('resolve_bracket_match / rollback_bracket_match: the record and the lob
         expect(f.test.db.MatchResultRecord.id.find(r.id)!.status.tag).toBe('Validated');
         expect(matchRow(f.test, m.id).decidedBy?.tag).toBe('Played');
 
-        resolveMatch(f.test, f.org, m.id, m.team2Id!); // staff overrule: rollback + re-apply, the lobby follows
-        expect(lobbyOrUndefined(f.test, s.lobbyId)).toBeFalsy();
-        expect(f.test.db.MatchResultRecord.id.find(r.id)!.status.tag).toBe('Voided');
-        expect(matchRow(f.test, m.id).winnerTeamId).toBe(m.team2Id);
-        expect(matchRow(f.test, m.id).decidedBy?.tag).toBe('Staff');
+        resolveMatch(f.test, f.org, m.id, m.team2Id!); // staff overrule: rollback (keeping the game) + re-apply
+        expect(lobbyRow(f.test, s.lobbyId).stage.tag).toBe('AwaitingResult');
+        expect(f.test.db.MatchResultRecord.id.find(r.id)!.status.tag).toBe('Validated');
+        const after = matchRow(f.test, m.id);
+        expect(after.winnerTeamId).toBe(m.team2Id);
+        expect(after.decidedBy?.tag).toBe('Staff');
+        expect([after.team1Games, after.team2Games]).toEqual([1, 0]); // the derived tally: the kept Blue game
     });
 
     it('rollback voids the record (kept), hard-deletes the parked lobby, and a replay lobby can be created', () => {
@@ -296,8 +310,8 @@ describe('resolve_bracket_match / rollback_bracket_match: the record and the lob
     });
 });
 
-describe('override_match_result on a tournament record (A24(1)(3): rollback + re-apply through the single writer)', () => {
-    it('Validated for the other side: downstream slot cleared and rebuilt with the new winner (decidedBy Staff)', () => {
+describe('override_match_result on a tournament record (A24(1)(3), A67(4): through the single writer)', () => {
+    it('Validated for the other side on a Decided Bo1: the winner flips, the downstream slot is rebuilt (decidedBy Staff); a Submitted record of a Ready match decides it too', () => {
         const f = liveField(4, BO1);
         const m1 = byKey(f.test, f.id, 'W-R1-M1');
         const final = byKey(f.test, f.id, 'W-R2-M1');
@@ -308,40 +322,68 @@ describe('override_match_result on a tournament record (A24(1)(3): rollback + re
         };
         expect(slotOfM1()).toBe(m1.team1Id);
         const [r] = recordsOfLobby(f.test, s.lobbyId);
-
         expectReject(f.test, s.a.b1, (ctx) => M.override_match_result(ctx, { matchResultId: r.id, newStatusTag: 'Validated', winnerTeamSideTag: 'Red', reason: 'x' }), RESULTS);
         override(f.test, f.org, r.id, 'Validated', 'Red');
-        const after = matchRow(f.test, m1.id);
-        expect(after.state.tag).toBe('Decided');
-        expect(after.winnerTeamId).toBe(m1.team2Id);
-        expect(after.decidedBy?.tag).toBe('Staff');
+        const flipped = matchRow(f.test, m1.id);
+        expect(flipped.state.tag).toBe('Decided');
+        expect(flipped.winnerTeamId).toBe(m1.team2Id);
+        expect(flipped.decidedBy?.tag).toBe('Staff');
+        expect([flipped.team1Games, flipped.team2Games]).toEqual([0, 1]);
         expect(slotOfM1()).toBe(m1.team2Id);
-        const rec = f.test.db.MatchResultRecord.id.find(r.id)!;
+        expect(f.test.db.MatchResultRecord.id.find(r.id)!.winnerTeamSide?.tag).toBe('Red');
+        expect(lobbyRow(f.test, s.lobbyId).stage.tag).toBe('AwaitingResult'); // parked, not voided
+
+        const g = liveField(4, { ...BO1, requireResultValidation: true });
+        const n1 = byKey(g.test, g.id, 'W-R1-M1');
+        const finalG = byKey(g.test, g.id, 'W-R2-M1');
+        const slotOfN1 = () => {
+            const row = matchRow(g.test, finalG.id);
+            return n1.nextWinnerSlot === 1 ? row.team1Id : row.team2Id;
+        };
+        const t = playMatch(g, n1.id, 'Blue');
+        const [sub] = recordsOfLobby(g.test, t.lobbyId);
+        expect(sub.status.tag).toBe('Submitted');
+        expect(slotOfN1()).toBeUndefined();
+        override(g.test, g.org, sub.id, 'Validated', 'Red');
+        const after = matchRow(g.test, n1.id);
+        expect(after.state.tag).toBe('Decided');
+        expect(after.winnerTeamId).toBe(n1.team2Id);
+        expect(after.decidedBy?.tag).toBe('Staff');
+        expect([after.team1Games, after.team2Games]).toEqual([0, 1]);
+        expect(slotOfN1()).toBe(n1.team2Id);
+        const rec = g.test.db.MatchResultRecord.id.find(sub.id)!;
         expect(rec.status.tag).toBe('Validated');
         expect(rec.winnerTeamSide?.tag).toBe('Red');
-        expect(lobbyRow(f.test, s.lobbyId).stage.tag).toBe('AwaitingResult'); // parked
-        nothingDerived(f.test);
+        expect(lobbyRow(g.test, t.lobbyId).stage.tag).toBe('AwaitingResult'); // parked
+        nothingDerived(g.test);
     });
 
-    it('refused while a downstream match is Decided; Rejected rolls back and voids the lobby (record kept as Rejected)', () => {
-        const f = liveField(4, BO1);
+    it('refused while a downstream match is Decided; Rejected on a Submitted record voids the lobby (record kept as Rejected), the match stays Ready', () => {
+        const f = liveField(4, { ...BO1, requireResultValidation: true });
         const m1 = byKey(f.test, f.id, 'W-R1-M1');
         const m2 = byKey(f.test, f.id, 'W-R1-M2');
         const final = byKey(f.test, f.id, 'W-R2-M1');
         const s = playMatch(f, m1.id, 'Blue');
+        validate(f.test, f.org, s.lobbyId); // Decided for team1
         const [r] = recordsOfLobby(f.test, s.lobbyId);
         resolveMatch(f.test, f.org, m2.id, m2.team1Id!);
         resolveMatch(f.test, f.org, final.id, matchRow(f.test, final.id).team1Id!);
         expectReject(f.test, f.org, (ctx) => M.override_match_result(ctx, { matchResultId: r.id, newStatusTag: 'Validated', winnerTeamSideTag: 'Red', reason: 'x' }), /roll/i);
+        expectReject(f.test, f.org, (ctx) => M.rollback_bracket_match(ctx, { bracketMatchId: m1.id, reason: 'x' }), /roll that back first/);
         expect(matchRow(f.test, m1.id).winnerTeamId).toBe(m1.team1Id);
 
         rollback(f.test, f.org, final.id);
-        override(f.test, f.org, r.id, 'Rejected');
+        rollback(f.test, f.org, m1.id); // voids the deciding record and its lobby (A67(4))
+        expect(f.test.db.MatchResultRecord.id.find(r.id)!.status.tag).toBe('Voided');
+        const again = playMatch(f, m1.id, 'Blue'); // Submitted (validation on)
+        const [sub] = recordsOfLobby(f.test, again.lobbyId);
+        override(f.test, f.org, sub.id, 'Rejected');
         expect(matchRow(f.test, m1.id).state.tag).toBe('Ready');
-        expect(lobbyOrUndefined(f.test, s.lobbyId)).toBeFalsy();
-        expect(f.test.db.MatchResultRecord.id.find(r.id)!.status.tag).toBe('Rejected');
+        expect(lobbyOrUndefined(f.test, again.lobbyId)).toBeFalsy();
+        expect(f.test.db.MatchResultRecord.id.find(sub.id)!.status.tag).toBe('Rejected');
         // A Voided record cannot be overridden.
         const replay = playMatch(f, m1.id, 'Red');
+        validate(f.test, f.org, replay.lobbyId);
         const [r2] = recordsOfLobby(f.test, replay.lobbyId);
         rollback(f.test, f.org, m1.id);
         expectReject(f.test, f.org, (ctx) => M.override_match_result(ctx, { matchResultId: r2.id, newStatusTag: 'Validated', winnerTeamSideTag: 'Blue', reason: 'x' }),

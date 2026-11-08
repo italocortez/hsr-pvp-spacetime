@@ -522,6 +522,16 @@ Phase 15.5 retired `view_user_directory` (was dead code with zero client subscri
 | `view_tournament_registrant_accounts` | TournamentEnrolled.user_id, TournamentPlayerAccount.by_tournament_and_user, getMyTournamentIds | Locked account access | Reads |
 | `view_my_roster_visibility` | LobbyMemberAccount.by_lobby_and_user (Phase 10.4) | Selected-account filtering | Reads |
 
+## Acceptance Scenarios (Phase S8e execution)
+
+### S8e-V1 Step view without game numbers (A67(3))
+**When** a member reads `view_my_match_steps`
+**Then** each `AnonymousMatchStepRow` has `id, lobbyId, sequence, actorUserId, anonymousLabel, actorSlot, action, payload, timestamp` (no `gameNumber`); the step and game history views return rows without `gameNumber`
+
+### S8e-V2 Lobby browser stages (A67(1))
+**When** anyone reads `view_lobby_browser`
+**Then** only Waiting, Drafting, Equipping and Scoring lobbies are listed (AwaitingResult excluded; no other stage exists)
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -552,6 +562,7 @@ Phase 15.5 retired `view_user_directory` (was dead code with zero client subscri
 | `view_user_directory` retired and `UserDirectoryRow` row type removed — fully delivers on Phase 15.2's deletion-scheduling note. Behavior contract change: any code referencing `view_user_directory` is now incorrect — User directory data comes from a `SELECT * FROM user` subscription gated behind the frontend Stage 2 condition in `useAuth.ts` (see `docs/auth/architecture.md` Subscription Lifecycle) | Phase 15.5 execution | 2026-04-16 |
 | `view_public_accounts` renamed to `view_public_hsr_accounts` (D-04) — keeps the `public` prefix marking anonymous intent, adds `hsr_` to make the projected source table (`HsrAccount`) explicit. `PublicAccountRow` row type renamed to `PublicHsrAccountRow`. Anonymous registration + projection body unchanged from Phase 10.4 — pure identifier rename. Stays anonymous per Phase 15.5 D-05: the projection body is the privacy gate (filters by `isRosterPublic` / `isRatingPublic` flags), not subscription timing. Naming-Convention table, Integration Surface table, and the "Unauthenticated caller sees anonymous views" security scenario all updated | Phase 15.5 execution | 2026-04-16 |
 | Phase 15.5 verify-work sweep: `### view_user_directory` subsection removed from Views section; `view_public_accounts` references swept to `view_public_hsr_accounts` in the Naming-Convention table, the security scenario, and the Integration Surface table. Historical Phase 9, 10.4, 15.2 Phase History rows left untouched (CLAUDE.md rule — no rewriting historical entries) | Phase 15.5 verify-work | 2026-04-17 |
+| Scenarios S8e-V1..V2: step / history views without `gameNumber`; lobby browser over the live stages | Phase S8e execution (DECISIONS.md A67(1)(3)) | 2026-11-08 |
 
 ---
 

@@ -121,6 +121,13 @@ apply in play order. Cancelled tournaments: no MMR (A24(5)). The leaderboard is 
 has one caller, `runFinalization` step 11.
 
 
+## Phase S8e execution (DECISIONS.md A67(7))
+
+Every lobby is a match: `runFinalization` step 11 and `processMatchMmr` run per record, as before. A tournament Bo3
+played over three lobbies produces three records, each finalized by the job in bracket order (records of a match by
+creation time), so MMR moves up to three times in an MMR tournament (user confirmed 2026-11-08). Nothing aggregates
+across games; the job's `{ tournamentMmr }` option is unchanged. No table change.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -138,10 +145,11 @@ has one caller, `runFinalization` step 11.
 | Season: per-gameMode rating periods; deactivate old season on create_season | Phase 05 execution | 2026-02-25 |
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
 | Tournament MMR moved into the finalize job (Completed only, bracket order, real matchHistoryId, one leaderboard rebuild); `process_tournament_mmr` deleted (A24) | Phase S8d execution | 2026-11-07 |
+| MMR per game: one record per lobby, each finalized on its own; nothing aggregates across the games of a bracket match (A67(7)) | Phase S8e execution | 2026-11-08 |
 
 ---
 
-*Last updated: 2026-04-09*
+*Last updated: 2026-11-08*
 *Feature owner: Phase 05 / Phase 11*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

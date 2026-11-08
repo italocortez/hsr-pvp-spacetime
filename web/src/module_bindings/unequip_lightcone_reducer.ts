@@ -13,5 +13,4 @@ import {
 export default {
   lobbyId: __t.u32(),
   characterName: __t.string(),
-  gameNumber: __t.option(__t.u8()),
 };

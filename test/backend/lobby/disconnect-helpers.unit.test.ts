@@ -65,11 +65,7 @@ describe('ensureMatchAlive', () => {
         expect(() => ensureMatchAlive(ctx, lobby)).toThrow('Match has ended.');
     });
 
-    it('throws when lobby is Finished', () => {
-        const ctx = mockCtx({});
-        const lobby = { id: 1, stage: { tag: 'Finished' } };
-        expect(() => ensureMatchAlive(ctx, lobby)).toThrow('Match has ended.');
-    });
+    // T-S8e: 'throws when lobby is Finished' deleted: LobbyStage has no Finished variant any more (A67(1)).
 
     it('passes when Drafting with no concede record', () => {
         const ctx = mockCtx({ matchResults: [] });

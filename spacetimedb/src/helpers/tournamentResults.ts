@@ -5,7 +5,7 @@
 
 import { SYSTEM_USER_ID } from './auditColumns';
 import { updateWithAudit } from './auditHelpers';
-import { applyBracketResult, seriesGames } from './bracketResults';
+import { recordGameSettled } from './bracketResults';
 import { findLobbyResult } from './scoringHelpers';
 import { hardDeleteLobby } from '../reducers/lobbyGc';
 
@@ -18,12 +18,13 @@ export function recordWinnerTeamId(match: any, record: any): number | undefined 
 }
 
 /**
- * A24(1), A38(1): the settled-result hand-off, called when a tournament lobby's record becomes Validated (the deciding
- * close of a tournament without requireResultValidation, validate_match_result, override_match_result) or settles by
- * concede. Applies the record's winner to its bracket match through the single writer (decidedBy Played / Concede,
- * the series score of the session, A35 Blue = team1). Idempotent and quiet: only a Ready match of an InProgress
- * tournament is decided; a match already settled (staff resolve, DQ) is left as it is. Audit actor SYSTEM_USER_ID
- * (A37: the public BracketMatch row never carries a player's id). Nothing derived runs here (A24(4)).
+ * A24(1), A38(1), A67(4): the settled-result hand-off, called when a tournament lobby's record becomes Validated (the
+ * close of the game in a tournament without requireResultValidation, validate_match_result) or settles by concede.
+ * Hands the game to its bracket match through the single writer (recordGameSettled: the derived tally is rewritten
+ * and the match is decided, decidedBy Played / Concede, when a side reaches ceil(bestOf / 2); A35 Blue = team1).
+ * Idempotent and quiet: only a Ready match of an InProgress tournament counts the game; a match already settled
+ * (staff resolve, DQ) is left as it is. Audit actor SYSTEM_USER_ID (A37: the public BracketMatch row never carries a
+ * player's id). Nothing derived runs here (A24(4)).
  */
 export function handOffToBracket(ctx: any, record: any, decidedBy: 'Played' | 'Concede'): void {
     if (!record.isTournamentControlled || record.bracketMatchId === undefined) return;
@@ -31,11 +32,8 @@ export function handOffToBracket(ctx: any, record: any, decidedBy: 'Played' | 'C
     if (!match || match.state.tag !== 'Ready') return;
     const tournament = ctx.db.Tournament.id.find(match.tournamentId);
     if (!tournament || tournament.stage.tag !== 'InProgress') return;
-    const winnerTeamId = recordWinnerTeamId(match, record);
-    if (winnerTeamId === undefined) return;
-    const session = ctx.db.MatchSession.lobbyId.find(record.lobbyId);
-    applyBracketResult(ctx, match.id, winnerTeamId, decidedBy,
-        session ? seriesGames(session) : { team1: 0, team2: 0 }, SYSTEM_USER_ID);
+    if (recordWinnerTeamId(match, record) === undefined) return;
+    recordGameSettled(ctx, record, decidedBy, SYSTEM_USER_ID);
 }
 
 /**
@@ -52,17 +50,15 @@ export function voidTournamentLobby(ctx: any, lobbyId: number, actorId: number):
 }
 
 /**
- * Voids every lobby of a bracket match (Lobby.bracket_match_id), except a lobby whose record is Validated for
- * `keepWinnerTeamId` (a staff decision that agrees with the played result keeps it). Used by rollback_bracket_match
- * (keep nothing), resolve_bracket_match (keep the agreeing record) and the Cancelled transition.
+ * A67(4)(8): voids every lobby of a bracket match (Lobby.bracket_match_id) that is not settled: a lobby without a
+ * record or whose record is not Validated (Waiting or playing, or parked with a Pending / Submitted / Disputed
+ * record). Settled lobbies (Validated record, parked in AwaitingResult) stay for the finalize job: every played game
+ * of the match is kept. Used by resolve_bracket_match and rollback_bracket_match.
  */
-export function voidMatchLobbies(ctx: any, bracketMatchId: number, actorId: number, keepWinnerTeamId?: number): void {
-    const match = ctx.db.BracketMatch.id.find(bracketMatchId);
+export function voidMatchLobbies(ctx: any, bracketMatchId: number, actorId: number): void {
     for (const lobby of [...ctx.db.Lobby.bracket_match_id.filter(bracketMatchId)]) {
         const record = findLobbyResult(ctx, lobby.id);
-        const agrees = keepWinnerTeamId !== undefined && !!match && !!record
-            && record.status.tag === 'Validated' && recordWinnerTeamId(match, record) === keepWinnerTeamId;
-        if (!agrees) voidTournamentLobby(ctx, lobby.id, actorId);
+        if (record?.status.tag !== 'Validated') voidTournamentLobby(ctx, lobby.id, actorId);
     }
 }
 
@@ -72,7 +68,9 @@ const SIDE_ORDER: Record<string, number> = { Group: 0, Winners: 1, Losers: 2, Th
  * D.8.1: the tournament's surviving result records in bracket order: group matches first, then Winners, Losers,
  * third place, grand final, each by roundNumber then matchNumber (then id). Side before round keeps every team's own
  * matches in the order they were played (a team never returns from the losers bracket to the winners bracket, and
- * the grand final, numbered round 1, comes last), which is what the sequential MMR updates need.
+ * the grand final, numbered round 1, comes last), which is what the sequential MMR updates need. A67(8): a bracket
+ * match has one record per game (one lobby per game), ordered within the match by the record's creation time
+ * (start_draft), id only as a tie-break (ids are not an ordering, CLAUDE.md §3.4).
  */
 export function tournamentRecordsInBracketOrder(ctx: any, tournamentId: number): any[] {
     const matches = [...ctx.db.BracketMatch.tournament_id.filter(tournamentId)].sort((a: any, b: any) =>
@@ -80,6 +78,8 @@ export function tournamentRecordsInBracketOrder(ctx: any, tournamentId: number):
         || a.roundNumber - b.roundNumber
         || a.matchNumber - b.matchNumber
         || a.id - b.id);
+    const created = (r: any) => r.createdDate.microsSinceUnixEpoch;
     return matches.flatMap((m: any) =>
-        [...ctx.db.MatchResultRecord.bracket_match_id.filter(m.id)].sort((a: any, b: any) => a.id - b.id));
+        [...ctx.db.MatchResultRecord.bracket_match_id.filter(m.id)].sort((a: any, b: any) =>
+            created(a) === created(b) ? a.id - b.id : created(a) < created(b) ? -1 : 1));
 }

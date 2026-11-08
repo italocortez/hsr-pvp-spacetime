@@ -22,12 +22,12 @@ import {
 } from '../helpers/scoringHelpers';
 import { TeamSide } from '../types/enums';
 
-// A60 (S7b): games are confirmed and closed one at a time. confirm_match_scores (series-level flags) and
-// submit_match_result (the referee's submission click) were removed: the close of the deciding game submits the
-// series itself (submitSeriesResult in helpers/gameClose.ts, A60(6)).
+// A60 (S7b): the game is confirmed and closed by its captains. confirm_match_scores (series-level flags) and
+// submit_match_result (the referee's submission click) were removed: A67(3), the close of the game submits it
+// (submitGameResult in helpers/gameClose.ts).
 
 /**
- * Shared preconditions of confirm_game and close_game for the current game: Equipping or Scoring, match alive, the
+ * Shared preconditions of confirm_game and close_game for the lobby's game: Equipping or Scoring, match alive, the
  * lobby's Pending record, the game not closed, the given sides' lineups arranged, both sides' group scores complete
  * (the game is recomputed from its inputs) and the A60(4) Auction gate for the given sides. Returns the fresh game
  * row, the record and the session.
@@ -38,18 +38,17 @@ function readyGame(ctx: any, lobby: any, sides: TeamTag[], verb: 'confirming' | 
     const record = findPendingResult(ctx, lobby.id);
     const session = ctx.db.MatchSession.lobbyId.find(lobby.id);
     if (!session) throw new SenderError('Match session not found.');
-    const gameNumber = session.currentGameNumber;
-    if (isClosedGame(findGame(ctx, record.id, gameNumber))) throw new SenderError('This game is closed.');
+    if (isClosedGame(findGame(ctx, record.id))) throw new SenderError('This game is closed.');
     for (const side of sides) {
-        if (!findLineup(ctx, lobby.id, gameNumber, side)) {
+        if (!findLineup(ctx, lobby.id, side)) {
             throw new SenderError(`Arrange the lineup before ${verb} the game.`);
         }
     }
-    if (!recomputeGame(ctx, record, lobby, gameNumber, actorId)) {
+    if (!recomputeGame(ctx, record, lobby, actorId)) {
         throw new SenderError(`Both teams' group scores are needed before ${verb}.`);
     }
-    for (const side of sides) ensureAuctionSurchargeFits(ctx, lobby, session, gameNumber, side);
-    return { game: findGame(ctx, record.id, gameNumber), record, session };
+    for (const side of sides) ensureAuctionSurchargeFits(ctx, lobby, session, side);
+    return { game: findGame(ctx, record.id), record, session };
 }
 
 // ─── confirm_game ─────────────────────────────────────────────────────────────
@@ -90,7 +89,6 @@ export const confirm_game = spacetimedb.reducer(
         ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
             id: 0, // autoInc
             lobbyId,
-            gameNumber: game.gameNumber,
             sequence: getNextSequence(ctx, lobbyId),
             actorUserId: user.id,
             anonymousLabel: undefined,
@@ -104,7 +102,7 @@ export const confirm_game = spacetimedb.reducer(
         }, user.id));
         ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, { lastActivityAt: ctx.timestamp }, user.id));
 
-        console.log(`[MATCH] Game ${game.gameNumber} of match result #${record.id}: ${side} ready (confirm_game) by user #${user.id}`);
+        console.log(`[MATCH] Game of match result #${record.id}: ${side} ready (confirm_game) by user #${user.id}`);
     }
 );
 
@@ -144,8 +142,7 @@ export const close_game = spacetimedb.reducer(
                 throw new SenderError('Only a captain (once both sides confirmed), a referee, a Moderator or, in a tournament lobby, the organizer or a results assistant can close a game.');
             }
             const pending = findPendingResult(ctx, lobbyId); // no Pending record → 'No pending match result for this lobby.'
-            const session = ctx.db.MatchSession.lobbyId.find(lobbyId);
-            const current = session ? findGame(ctx, pending.id, session.currentGameNumber) : undefined;
+            const current = findGame(ctx, pending.id);
             if (!current || !current.blueConfirmed || !current.redConfirmed) {
                 throw new SenderError('Both captains must confirm the game before it can be submitted.');
             }

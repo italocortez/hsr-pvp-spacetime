@@ -156,15 +156,19 @@ export function confirmAndClose(s: Lobby) {
 /** Halves groups: the first four names, then the next four. */
 export const halves = (names: string[]) => [names.slice(0, 4), names.slice(4, 8)];
 
-export function lineup(test: Harness, lobbyId: number, team: 'Blue' | 'Red', gameNumber = 1) {
-    return [...test.db.MatchLineup.by_lobby_game.filter([lobbyId, gameNumber])].find((l) => l.teamSide.tag === team)!;
+/** T-S8e (A67(3)): the lobby's lineup row of `team` (one game per lobby, index by_lobby). */
+export function lineup(test: Harness, lobbyId: number, team: 'Blue' | 'Red') {
+    return [...test.db.MatchLineup.by_lobby.filter(lobbyId)].find((l) => l.teamSide.tag === team)!;
 }
 
 export const record = (test: Harness, lobbyId: number) => [...test.db.MatchResultRecord.lobby_id.filter(lobbyId)][0];
-/** The game row, re-read (MatchResultGame rows are replaced on every edit: never keep one across reducer calls). */
-export const gameRow = (test: Harness, matchResultId: number, gameNumber = 1) =>
-    [...test.db.MatchResultGame.by_result_and_game.filter([matchResultId, gameNumber])][0];
-export const game = (test: Harness, matchResultId: number) => gameRow(test, matchResultId, 1);
+/**
+ * The game row, re-read (MatchResultGame rows are replaced on every edit: never keep one across reducer calls).
+ * T-S8e (A67(3)): one row per record, keyed by matchResultId.
+ */
+export const gameRow = (test: Harness, matchResultId: number) =>
+    [...test.db.MatchResultGame.match_result_id.filter(matchResultId)][0];
+export const game = (test: Harness, matchResultId: number) => gameRow(test, matchResultId);
 
 export interface ScoringLobbyOpts extends SetupOpts {
     blue?: string[];
@@ -194,28 +198,26 @@ export function playToScoring(test: Harness, opts: ScoringLobbyOpts = {}): Lobby
     return s;
 }
 
-/** record_group_scores for the current game (or `gameNumber`). */
-export function recordScores(s: Lobby, who: Actor, team: 'Blue' | 'Red', values: number[], deaths = 0, gameNumber?: number) {
-    const g = gameNumber ?? session(s.test, s.lobbyId).currentGameNumber;
+/** record_group_scores for the lobby's game (T-S8e, A67(3): no game number). */
+export function recordScores(s: Lobby, who: Actor, team: 'Blue' | 'Red', values: number[], deaths = 0) {
     tx(s.test, who, (ctx) =>
-        M.record_group_scores(ctx, { lobbyId: s.lobbyId, gameNumber: g, teamSide: side(team), values, deaths }));
+        M.record_group_scores(ctx, { lobbyId: s.lobbyId, teamSide: side(team), values, deaths }));
 }
 
 /** Splits drafted names into groups of four (Halves → 2 groups, Thirds → 3). */
 const groupsOf4 = (names: string[]) => Array.from({ length: Math.ceil(names.length / 4) }, (_, i) => names.slice(i * 4, i * 4 + 4));
 
 /**
- * T-S7b: closes the current game through the host (a lobby referee): the host arranges any missing lineup from the
+ * T-S7b / T-S8e: closes the lobby's game through the host (a lobby referee): the host arranges any missing lineup from the
  * game's draft, advances Equipping → Scoring if needed, records both sides' group scores (distinct: `winner` gets
  * 10 cycles per group, the other 20) and closes the game directly (A63: staff close, no ready flags needed).
  * The draft must be complete (stage Equipping or Scoring).
  */
 export function finishGame(s: Lobby, winner: 'Blue' | 'Red' = 'Blue') {
     const { test, lobbyId } = s;
-    const gameNumber = session(test, lobbyId).currentGameNumber;
     for (const team of ['Blue', 'Red'] as const) {
-        if (lineup(test, lobbyId, team, gameNumber)) continue;
-        const names = tx(test, 'internal', (ctx) => teamDraft(ctx, lobbyId, gameNumber, team).characters);
+        if (lineup(test, lobbyId, team)) continue;
+        const names = tx(test, 'internal', (ctx) => teamDraft(ctx, lobbyId, team).characters);
         advance(test, 300); // lineup throttle (AbuseConfig.lineupMinIntervalMs) on the host
         arrange(s, s.host, team, groupsOf4(names));
     }

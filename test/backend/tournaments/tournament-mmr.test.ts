@@ -103,8 +103,8 @@ async function setupTournamentMatch(
     if (!mr) throw new Error(`MatchResultRecord not found for lobby #${lobbyId}`);
 
     // Record scores WITH screenshots (required for Ranked override → Validated)
-    await toUser.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Blue' }, values: [350, 350], deaths: 0, screenshotUrl: 'https://i.imgur.com/test-blue.png' });
-    await toUser.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0, screenshotUrl: 'https://i.imgur.com/test-red.png' });
+    await toUser.call.recordGroupScores({ lobbyId, teamSide: { tag: 'Blue' }, values: [350, 350], deaths: 0, screenshotUrl: 'https://i.imgur.com/test-blue.png' }); // S10: rewrite (A67(3): gameNumber argument removed; one game per lobby)
+    await toUser.call.recordGroupScores({ lobbyId, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0, screenshotUrl: 'https://i.imgur.com/test-red.png' }); // S10: rewrite (A67(3): gameNumber argument removed; one game per lobby)
     await toUser.sync(1000);
 
     // Confirm both sides

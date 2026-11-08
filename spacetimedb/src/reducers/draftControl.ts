@@ -4,7 +4,7 @@ import { getAuthenticatedUser } from '../helpers/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { ensureLobbyMember, ensureStageIs, slotToTeamSide } from '../helpers/lobbyHelpers';
 import { ensureMatchAlive } from '../helpers/disconnectHelpers';
-import { currentGameSteps, getNextSequence } from '../helpers/stepSequence';
+import { lobbySteps, getNextSequence } from '../helpers/stepSequence';
 
 // ─── undo_last_step ───────────────────────────────────────────────────────────
 // Undoes the last draft step.
@@ -54,8 +54,8 @@ export const undo_last_step = spacetimedb.reducer(
         }
 
         // F9: the last *draft action* = the highest-sequence Pick or Ban; Pause / Undo audit rows are skipped.
-        // A65(2): the current game only; the undo never crosses into an earlier game of the series.
-        const allSteps = currentGameSteps(ctx, lobbyId, session.currentGameNumber);
+        // A67(3): the lobby's one game.
+        const allSteps = lobbySteps(ctx, lobbyId);
         const lastStep = allSteps
             .filter((s) => s.action.tag === 'Pick' || s.action.tag === 'Ban')
             .sort((a, b) => b.sequence - a.sequence)[0];
@@ -70,7 +70,6 @@ export const undo_last_step = spacetimedb.reducer(
         ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
             id: 0,
             lobbyId,
-            gameNumber: session.currentGameNumber,
             sequence: getNextSequence(ctx, lobbyId),
             actorUserId: user.id,
             anonymousLabel: undefined,
@@ -179,7 +178,6 @@ export const pause_draft = spacetimedb.reducer(
         ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
             id: 0,
             lobbyId,
-            gameNumber: session.currentGameNumber,
             sequence: getNextSequence(ctx, lobbyId),
             actorUserId: user.id,
             anonymousLabel: undefined,
@@ -252,8 +250,8 @@ export const resume_draft = spacetimedb.reducer(
 
         const member = ensureLobbyMember(ctx, lobbyId, user.id);
 
-        // Find the most recent Pause step to determine who paused and what timeRemaining was (A65(2): current game)
-        const allSteps = currentGameSteps(ctx, lobbyId, session.currentGameNumber);
+        // Find the most recent Pause step to determine who paused and what timeRemaining was
+        const allSteps = lobbySteps(ctx, lobbyId);
         const pauseSteps = allSteps
             .filter((s: any) => s.action.tag === 'Pause')
             .sort((a: any, b: any) => b.sequence - a.sequence);

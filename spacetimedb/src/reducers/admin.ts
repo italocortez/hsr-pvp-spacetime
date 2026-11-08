@@ -302,10 +302,10 @@ export const admin_delete_row = spacetimedb.reducer(
                 break;
             }
             case 'MatchSessionStepHistory': {
-                // Composite PK [matchHistoryId, gameNumber, sequence] — parse JSON 3-tuple
+                // Composite PK [matchHistoryId, sequence] (A67(3)) — parse JSON 2-tuple
                 const stepPK = JSON.parse(primaryKeyJson);
                 const stepRow = [...ctx.db.MatchSessionStepHistory.by_match_history.filter(stepPK[0])]
-                    .find((r: any) => r.gameNumber === stepPK[1] && r.sequence === stepPK[2]);
+                    .find((r: any) => r.sequence === stepPK[1]);
                 if (!stepRow) throw new SenderError('Row not found');
                 ctx.db.MatchSessionStepHistory.delete(stepRow);
                 break;

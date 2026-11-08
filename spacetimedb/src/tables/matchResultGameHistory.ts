@@ -4,7 +4,6 @@ import { GameMode, TeamSide } from '../types/enums';
 // Archived copy of MatchResultGame (same A21 shape: deaths + stored computation, no boss columns).
 export const matchResultGameHistoryColumns = {
     matchHistoryId: t.u32(),
-    gameNumber: t.u8(),
     gameMode: GameMode,
     teamBlueScreenshotUrl: t.string().optional(),
     teamRedScreenshotUrl: t.string().optional(),
@@ -28,7 +27,7 @@ export const matchResultGameHistoryColumns = {
 export const MatchResultGameHistory = table({
     name: 'match_result_game_history',
     public: false,
-    primaryKey: ['matchHistoryId', 'gameNumber'],
+    primaryKey: ['matchHistoryId'], // A67(3): one game per match
     indexes: [
         { accessor: 'by_match_history', algorithm: 'btree', columns: ['matchHistoryId'] },
     ],

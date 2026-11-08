@@ -18,7 +18,6 @@ import {
   MatchType,
   BanMode,
   BanRestriction,
-  AdvantageSide,
   LobbyStage,
 } from "./types";
 
@@ -77,11 +76,6 @@ export default __t.row({
   requireOwnership: __t.bool().name("require_ownership"),
   costSetId: __t.u32().name("cost_set_id"),
   isPublic: __t.bool().name("is_public"),
-  bestOf: __t.u8().name("best_of"),
-  get bestOfNAdvantage() {
-    return AdvantageSide.name("best_of_n_advantage");
-  },
-  refereeControlsShelving: __t.bool().name("referee_controls_shelving"),
   get disconnectPolicy() {
     return DisconnectPolicy.name("disconnect_policy");
   },

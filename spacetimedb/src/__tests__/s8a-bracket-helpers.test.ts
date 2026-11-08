@@ -12,7 +12,7 @@ import {
     type BracketSpec,
 } from '@shared/bracket';
 import { deleteBracket, insertBracket, insertGroupBracket } from '../helpers/bracketStore';
-import { applyBracketResult, rollbackBracketResult, seriesGames } from '../helpers/bracketResults';
+import { applyBracketResult, rollbackBracketResult, matchGames } from '../helpers/bracketResults';
 import { groupStandings, qualifiersFor } from '../helpers/tournamentStandings';
 import { allowedSlotsFor } from '../helpers/tournamentLobbySides';
 import { DEFAULT_LOBBY_ARGS, M, expectReject, guest, lobbyRow, newHarness, tx, type Harness } from './s4-fixtures';
@@ -166,7 +166,10 @@ function checkInserted({ test, t, spec, ids }: ReturnType<typeof setup>) {
         } else {
             expect(SETTLED).not.toContain(row.state.tag);
         }
-        expect(row.team1Games).toBe(0);
+        // A69(1): the A27 head start sits on the row from generation (team1Games = winnerAdvantage; 0 for every
+        // match without a head start, i.e. everything but the double-elimination grand final).
+        expect(row.team1Games).toBe(row.winnerAdvantage);
+        if (m.side !== 'GrandFinals') expect(row.team1Games).toBe(0);
         expect(row.team2Games).toBe(0);
     }
 }
@@ -294,8 +297,14 @@ describe('insertBracket + applyBracketResult: brackets played to the end', () =>
         expect(matchRow(s.test, m).state.tag).toBe('Ready');
     });
 
-    it('seriesGames maps Blue to team1 and Red to team2 (A35)', () => {
-        expect(seriesGames({ gamesWonBlue: 2, gamesWonRed: 1 })).toEqual({ team1: 2, team2: 1 });
+    // T-S8e (A67(4)): seriesGames (a lobby series tally) is gone; matchGames derives the tally from the match's
+    // Validated records (Blue → team1, Red → team2, A35; covered with real records in s8e-bracket-series). With no
+    // record of the match the tally is the head start alone (team1 = winnerAdvantage, A27).
+    it('matchGames with no records is the head start alone (A27, A67(4))', () => {
+        const s = setup(4, 'double');
+        const m = matchRow(s.test, s.ids.get('W-R1-M1')!);
+        expect(tx(s.test, 'internal', (ctx) => matchGames(ctx, m))).toEqual({ team1: m.winnerAdvantage, team2: 0 });
+        expect(tx(s.test, 'internal', (ctx) => matchGames(ctx, { ...m, winnerAdvantage: 1 }))).toEqual({ team1: 1, team2: 0 });
     });
 });
 

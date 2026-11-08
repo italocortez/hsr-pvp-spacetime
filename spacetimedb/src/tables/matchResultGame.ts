@@ -6,7 +6,6 @@ import { GameMode, ValidationStatus, TeamSide } from '../types/enums';
 // The fixed boss1/boss2 columns are gone (they could not hold thirds).
 export const matchResultGameColumns = {
     matchResultId: t.u32(),
-    gameNumber: t.u8(),
     gameMode: GameMode,
     teamBlueScreenshotUrl: t.string().optional(),
     teamRedScreenshotUrl: t.string().optional(),
@@ -38,13 +37,13 @@ export const matchResultGameColumns = {
     lastModifiedDate: t.timestamp(),
 };
 
-// S3 (A37): private; participants read view_my_match_result_games (S9).
+// S3 (A37): private; participants read view_my_match_result_games (S9). A67(3): one row per record (the lobby's one game);
+// the key is the record id (decorative table-level key, as before; rows are read through match_result_id).
 export const MatchResultGame = table({
     name: 'match_result_game',
     public: false,
-    primaryKey: ['matchResultId', 'gameNumber'],
+    primaryKey: ['matchResultId'],
     indexes: [
         { accessor: 'match_result_id', algorithm: 'btree', columns: ['matchResultId'] },
-        { accessor: 'by_result_and_game', algorithm: 'btree', columns: ['matchResultId', 'gameNumber'] },
     ],
 }, matchResultGameColumns);

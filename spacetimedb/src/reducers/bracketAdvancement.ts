@@ -5,7 +5,7 @@ import { ensureTournamentPermission } from '../helpers/tournamentPermissions';
 import { updateWithAudit } from '../helpers/auditHelpers';
 import { deleteCalendarEventForBracketMatch } from '../helpers/calendarCascade';
 import { insertBracket } from '../helpers/bracketStore';
-import { applyBracketResult, rollbackBracketResult } from '../helpers/bracketResults';
+import { applyBracketResult, matchGames, rollbackBracketResult } from '../helpers/bracketResults';
 import { qualifiersFor } from '../helpers/tournamentStandings';
 import { voidMatchLobbies } from '../helpers/tournamentResults';
 
@@ -88,12 +88,12 @@ export const advance_group_stage = spacetimedb.reducer(
 // ─── resolve_bracket_match ────────────────────────────────────────────────────
 // `results`; InProgress. Staff walkover or correction (A24(3), TD-13): a Ready match is decided for
 // `winnerTeamId`; a Decided match with another winner is rolled back first (refused while anything downstream
-// is Decided) and then decided again; the same winner again is a no-op. decidedBy Staff, series score 0-0. `reason` has no column: it goes to the
+// is Decided) and then decided again; the same winner again is a no-op. decidedBy Staff. `reason` has no column: it goes to the
 // log and the actor to the audit columns (lastModifiedById). Replaces admin_set_bracket_winner.
-// A24(3), D.8.3: the match's lobbies follow the staff decision (voidMatchLobbies): a lobby whose record is
-// Validated for the same winner stays parked (its result is finalized at Completed); any other lobby of the match
-// (Waiting or playing, a Pending / Submitted / Disputed record, or a Validated record for the other team) has its
-// record marked Voided and is hard-deleted, because staff decided the match.
+// A67(4)(8), A24(3), D.8.3: every Validated game record of the match is kept (its lobby stays parked and is finalized
+// at Completed), the rollback of a Decided match voids nothing; only the unsettled lobbies of the match (Waiting or
+// playing, or a Pending / Submitted / Disputed record) are voided (voidMatchLobbies). The staff result is applied
+// with the current derived tally (matchGames: head start + Validated games).
 
 export const resolve_bracket_match = spacetimedb.reducer(
     { bracketMatchId: t.u32(), winnerTeamId: t.u32(), reason: t.string() },
@@ -111,10 +111,11 @@ export const resolve_bracket_match = spacetimedb.reducer(
             return;
         }
 
-        if (match.state.tag === 'Decided') rollbackBracketResult(ctx, bracketMatchId, user.id);
+        if (match.state.tag === 'Decided') rollbackBracketResult(ctx, bracketMatchId, user.id, false, false); // A67(8): keep every game; staff decide below
         else deleteCalendarEventForBracketMatch(ctx, bracketMatchId); // D-22: a Ready match settled by staff
-        voidMatchLobbies(ctx, bracketMatchId, user.id, winnerTeamId); // A24(3), D.8.3
-        applyBracketResult(ctx, bracketMatchId, winnerTeamId, 'Staff', { team1: 0, team2: 0 }, user.id);
+        voidMatchLobbies(ctx, bracketMatchId, user.id); // A67(8): unsettled lobbies only
+        applyBracketResult(ctx, bracketMatchId, winnerTeamId, 'Staff',
+            matchGames(ctx, ctx.db.BracketMatch.id.find(bracketMatchId)), user.id);
 
         console.log(`[BRACKET] resolve_bracket_match: ${match.positionKey} (#${bracketMatchId}) → team #${winnerTeamId} by user #${user.id}. Reason: ${why}`);
     }
@@ -122,10 +123,11 @@ export const resolve_bracket_match = spacetimedb.reducer(
 
 // ─── rollback_bracket_match ───────────────────────────────────────────────────
 // `results`; InProgress; the match Decided. Reverts it through rollbackBracketResult (A24(3)): refused while a
-// downstream match is Decided ("roll that back first"); the match returns to Ready, games 0-0, the loser is
-// un-eliminated. The match's calendar event is deleted as before (D-22). `reason`: log only (no column).
-// A24(3), D.8.3: every lobby of the match (the parked one with its record) is voided: the record is marked
-// Voided and kept for audit until the finalize job deletes it, the lobby is hard-deleted so a replay lobby can be made.
+// downstream match is Decided ("roll that back first"); the match returns to Ready, the loser is un-eliminated.
+// The match's calendar event is deleted as before (D-22). `reason`: log only (no column).
+// A67(4), A24(3), D.8.3: a match decided by play voids its deciding record only (marked Voided and kept for audit
+// until the finalize job deletes it; its lobby hard-deleted so a replay lobby can be made); earlier Validated games
+// stay and the tally is recomputed from them. Any unsettled lobby of the match is voided too (voidMatchLobbies).
 
 export const rollback_bracket_match = spacetimedb.reducer(
     { bracketMatchId: t.u32(), reason: t.string() },
@@ -138,7 +140,7 @@ export const rollback_bracket_match = spacetimedb.reducer(
 
         rollbackBracketResult(ctx, bracketMatchId, user.id);
         deleteCalendarEventForBracketMatch(ctx, bracketMatchId);
-        voidMatchLobbies(ctx, bracketMatchId, user.id); // A24(3)
+        voidMatchLobbies(ctx, bracketMatchId, user.id); // A24(3); A67(8): unsettled lobbies only
 
         console.log(`[BRACKET] rollback_bracket_match: ${match.positionKey} (#${bracketMatchId}) rolled back by user #${user.id}. Reason: ${why}`);
     }

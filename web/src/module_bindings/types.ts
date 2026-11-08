@@ -136,14 +136,6 @@ export const AdminAlert = __t.object("AdminAlert", {
 });
 export type AdminAlert = __Infer<typeof AdminAlert>;
 
-// The tagged union or sum type for the algebraic type `AdvantageSide`.
-export const AdvantageSide = __t.enum("AdvantageSide", {
-  None: __t.unit(),
-  Blue: __t.unit(),
-  Red: __t.unit(),
-});
-export type AdvantageSide = __Infer<typeof AdvantageSide>;
-
 export const AnonymousChatRow = __t.object("AnonymousChatRow", {
   id: __t.u32(),
   lobbyId: __t.u32(),
@@ -187,7 +179,6 @@ export type AnonymousMatchParticipantRow = __Infer<typeof AnonymousMatchParticip
 export const AnonymousMatchStepRow = __t.object("AnonymousMatchStepRow", {
   id: __t.u32(),
   lobbyId: __t.u32(),
-  gameNumber: __t.u8(),
   sequence: __t.u32(),
   actorUserId: __t.u32(),
   anonymousLabel: __t.option(__t.string()),
@@ -902,11 +893,6 @@ export const Lobby = __t.object("Lobby", {
   requireOwnership: __t.bool(),
   costSetId: __t.u32(),
   isPublic: __t.bool(),
-  bestOf: __t.u8(),
-  get bestOfNAdvantage() {
-    return AdvantageSide;
-  },
-  refereeControlsShelving: __t.bool(),
   get disconnectPolicy() {
     return DisconnectPolicy;
   },
@@ -1095,11 +1081,6 @@ export const LobbyPreset = __t.object("LobbyPreset", {
   refereeCanKick: __t.bool(),
   allowPlayerPause: __t.bool(),
   refereeExclusiveConcede: __t.bool(),
-  bestOf: __t.u8(),
-  get bestOfNAdvantage() {
-    return AdvantageSide;
-  },
-  refereeControlsShelving: __t.bool(),
   createdById: __t.u32(),
   createdDate: __t.timestamp(),
   lastModifiedById: __t.u32(),
@@ -1123,10 +1104,7 @@ export const LobbyStage = __t.enum("LobbyStage", {
   Drafting: __t.unit(),
   Equipping: __t.unit(),
   Scoring: __t.unit(),
-  BetweenGames: __t.unit(),
-  Shelved: __t.unit(),
   AwaitingResult: __t.unit(),
-  Finished: __t.unit(),
 });
 export type LobbyStage = __Infer<typeof LobbyStage>;
 
@@ -1140,7 +1118,6 @@ export type MatchEndReason = __Infer<typeof MatchEndReason>;
 export const MatchLineup = __t.object("MatchLineup", {
   id: __t.u32(),
   lobbyId: __t.u32(),
-  gameNumber: __t.u8(),
   get teamSide() {
     return TeamSide;
   },
@@ -1157,7 +1134,6 @@ export type MatchLineup = __Infer<typeof MatchLineup>;
 export const MatchLineupHistory = __t.object("MatchLineupHistory", {
   id: __t.u32(),
   matchHistoryId: __t.u32(),
-  gameNumber: __t.u8(),
   get teamSide() {
     return TeamSide;
   },
@@ -1191,7 +1167,6 @@ export type MatchParticipantHistory = __Infer<typeof MatchParticipantHistory>;
 export const MatchResultAdjustment = __t.object("MatchResultAdjustment", {
   id: __t.u32(),
   matchResultId: __t.u32(),
-  gameNumber: __t.u8(),
   get teamSide() {
     return TeamSide;
   },
@@ -1207,7 +1182,6 @@ export type MatchResultAdjustment = __Infer<typeof MatchResultAdjustment>;
 
 export const MatchResultGame = __t.object("MatchResultGame", {
   matchResultId: __t.u32(),
-  gameNumber: __t.u8(),
   get gameMode() {
     return GameMode;
   },
@@ -1242,7 +1216,6 @@ export type MatchResultGame = __Infer<typeof MatchResultGame>;
 
 export const MatchResultGameHistory = __t.object("MatchResultGameHistory", {
   matchHistoryId: __t.u32(),
-  gameNumber: __t.u8(),
   get gameMode() {
     return GameMode;
   },
@@ -1270,7 +1243,6 @@ export type MatchResultGameHistory = __Infer<typeof MatchResultGameHistory>;
 export const MatchResultGroupScore = __t.object("MatchResultGroupScore", {
   id: __t.u32(),
   matchResultId: __t.u32(),
-  gameNumber: __t.u8(),
   get teamSide() {
     return TeamSide;
   },
@@ -1375,10 +1347,6 @@ export const MatchSession = __t.object("MatchSession", {
   teamRedLcBudget: __t.f32(),
   pausesUsedBlue: __t.u8(),
   pausesUsedRed: __t.u8(),
-  currentGameNumber: __t.u8(),
-  gamesWonBlue: __t.u8(),
-  gamesWonRed: __t.u8(),
-  seriesBestOf: __t.u8(),
   createdById: __t.u32(),
   createdDate: __t.timestamp(),
   lastModifiedById: __t.u32(),
@@ -1425,7 +1393,6 @@ export type MatchSessionHistory = __Infer<typeof MatchSessionHistory>;
 export const MatchSessionStep = __t.object("MatchSessionStep", {
   id: __t.u32(),
   lobbyId: __t.u32(),
-  gameNumber: __t.u8(),
   sequence: __t.u32(),
   actorUserId: __t.u32(),
   anonymousLabel: __t.option(__t.string()),
@@ -1448,7 +1415,6 @@ export type MatchSessionStep = __Infer<typeof MatchSessionStep>;
 
 export const MatchSessionStepHistory = __t.object("MatchSessionStepHistory", {
   matchHistoryId: __t.u32(),
-  gameNumber: __t.u8(),
   sequence: __t.u32(),
   actorUserId: __t.u32(),
   actorDisplayName: __t.string(),

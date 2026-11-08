@@ -2,7 +2,7 @@ import { table, t } from 'spacetimedb/server';
 import { TeamSide } from '../types/enums';
 
 /**
- * A21 synergy groups (S3): the live lineup of one team for one game, arranged by the captain or a referee
+ * A21 synergy groups (S3): the live lineup of one team for the lobby's one game (A67(3)), arranged by the captain or a referee
  * (arrange_lineup; throttled through AbuseConfig.lineupMinIntervalMs). Visible live to everyone in the lobby
  * through view_my_lineups (S9). A60 (S7b): there is no lineup confirmation any more (confirm_lineup, the flag column
  * and the ConfirmLineup step were removed); the captains confirm the whole game package with confirm_game
@@ -16,7 +16,6 @@ import { TeamSide } from '../types/enums';
 export const matchLineupColumns = {
     id: t.u32().primaryKey().autoInc(),
     lobbyId: t.u32(),
-    gameNumber: t.u8(),
     teamSide: TeamSide,
     groups: t.string(),
     synergySurcharge: t.u32(),
@@ -31,6 +30,6 @@ export const MatchLineup = table({
     name: 'match_lineup',
     public: false,
     indexes: [
-        { accessor: 'by_lobby_game', algorithm: 'btree', columns: ['lobbyId', 'gameNumber'] },
+        { accessor: 'by_lobby', algorithm: 'btree', columns: ['lobbyId'] }, // A67(3): one game per lobby
     ],
 }, matchLineupColumns);

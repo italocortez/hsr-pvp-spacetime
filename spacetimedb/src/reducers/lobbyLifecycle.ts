@@ -1,6 +1,6 @@
 import spacetimedb from '../schema';
 import { t, SenderError } from 'spacetimedb/server';
-import { DraftMode, BanMode, GameMode, MatchType, RosterVisibility, DisconnectPolicy, BanRestriction, LineupFormat, AdvantageSide } from '../types/enums';
+import { DraftMode, BanMode, GameMode, MatchType, RosterVisibility, DisconnectPolicy, BanRestriction, LineupFormat } from '../types/enums';
 import { getAuthenticatedUser, isRoleAtLeast } from '../helpers/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import {
@@ -23,9 +23,9 @@ import { resolveUserLabel } from '../helpers/userLabel';
 import { isThirdPartyReferee } from '../helpers/disconnectHelpers';
 import { performConcede } from './concede';
 import { consumeLobbyCreateAllowance, readAbuseConfig, recordGuestLobbyCreation } from '../helpers/abuseControls';
-import { ensureBestOf, normalizeLobbyName, resolveAdvantage } from '../helpers/seriesSettings';
+import { normalizeLobbyName } from '../helpers/seriesSettings';
 import { ensureCostSetUsable } from '../helpers/costSetGuards';
-import { currentGameSteps } from '../helpers/stepSequence';
+import { lobbySteps } from '../helpers/stepSequence';
 import { autoSeatSlot } from '../helpers/tournamentLobbySides';
 
 // ─── create_lobby ─────────────────────────────────────────────────────────────
@@ -74,14 +74,12 @@ export const create_lobby = spacetimedb.reducer(
         allowPlayerPause: t.bool(),
         teamBlueAlias: t.string(),
         teamRedAlias: t.string(),
-        bestOf: t.u8(),                  // D-11: best-of-N series. 0 = sentinel for default (1).
-        refereeControlsShelving: t.bool(), // D-06: when true + 3rd party referee present, only referee controls shelve/continue.
-        // A45 / D-A8 / A21 / A40 / A27 arguments. Optional so an omitted key takes the documented default:
+        // A67(2): the series arguments are removed (one game per lobby).
+        // A45 / D-A8 / A21 / A40 arguments. Optional so an omitted key takes the documented default:
         name: t.string().optional(),                   // D-A8: 0-50 chars after trim; default '' (S9's view_lobby_browser labels it)
         banRestriction: BanRestriction.optional(),     // A45(2): default NoRestriction
         lineupFormat: LineupFormat.optional(),         // A21: default Halves
         hideMmr: t.bool().optional(),                  // A40 mitigation (2): default false
-        bestOfNAdvantage: AdvantageSide.optional(),    // A27: default None; forced None when bestOf = 1
         refereeExclusiveConcede: t.bool().optional(),  // A45(5): default true
     },
     (ctx, args) => {
@@ -126,10 +124,8 @@ export const create_lobby = spacetimedb.reducer(
         // D-42: Ranked forces no mirror picks
         const allowMirrorPicks = args.matchType.tag === 'Ranked' ? false : args.allowMirrorPicks;
 
-        // D-A8 name; A28/A38(2) bestOf cap {1, 3} with the D-11 0 → 1 sentinel; A27 advantage (None for Bo1).
+        // D-A8 name.
         const name = normalizeLobbyName(args.name);
-        const bestOf = ensureBestOf(args.bestOf > 0 ? args.bestOf : 1);
-        const bestOfNAdvantage = resolveAdvantage(bestOf, args.bestOfNAdvantage);
 
         // Backlog #2 (R2, D-D6): the cost set must be selectable and cover gameMode × draftMode.
         ensureCostSetUsable(ctx, args.costSetId, args.gameMode.tag, args.draftMode.tag);
@@ -185,10 +181,6 @@ export const create_lobby = spacetimedb.reducer(
             disconnectPolicy: args.disconnectPolicy,
             disconnectForfeitSeconds,
             gameMode: args.gameMode,
-            bestOf,
-            bestOfNAdvantage,
-            // D-06: refereeControlsShelving default true per plan
-            refereeControlsShelving: args.refereeControlsShelving,
             lastActivityAt: ctx.timestamp,
             stage: { tag: 'Waiting', value: {} },
         }, user.id));
@@ -261,7 +253,7 @@ export const join_lobby = spacetimedb.reducer(
         const existingMember = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, user.id])][0];
         if (existingMember) {
             // F1: Waiting included — a refresh in the waiting room is a reconnect too.
-            const reconnectStages = ['Waiting', 'Drafting', 'Equipping', 'Scoring', 'BetweenGames', 'Shelved', 'AwaitingResult'];
+            const reconnectStages = ['Waiting', 'Drafting', 'Equipping', 'Scoring', 'AwaitingResult']; // A67(1)
             if (!reconnectStages.includes(lobby.stage.tag)) {
                 throw new SenderError('Cannot rejoin this lobby in its current stage.');
             }
@@ -287,9 +279,9 @@ export const join_lobby = spacetimedb.reducer(
             if (lobby.stage.tag === 'Drafting') {
                 const session = ctx.db.MatchSession.lobbyId.find(lobbyId);
                 if (session && session.timerState.isPaused) {
-                    // Check if the latest Pause step of the current game was an auto-pause (S7b hand-off: a
-                    // SetEidolon or other step logged after the pause no longer hides it; A65(2): current game only)
-                    const lastStep = currentGameSteps(ctx, lobbyId, session.currentGameNumber)
+                    // Check if the latest Pause step was an auto-pause (S7b hand-off: a SetEidolon or other step
+                    // logged after the pause no longer hides it)
+                    const lastStep = lobbySteps(ctx, lobbyId)
                         .filter((s: any) => s.payload?.tag === 'Pause')
                         .sort((a: any, b: any) => b.sequence - a.sequence)[0];
                     if (lastStep?.payload?.tag === 'Pause' && lastStep.payload.value?.isAutoPause) {
@@ -457,8 +449,8 @@ export const leave_lobby = spacetimedb.reducer(
         }
 
         // D-29, D-30, D-31, D-32, D-33: Active match leave handling
-        // D-10: BetweenGames treated as active (leaving between games triggers same logic)
-        const activeStages = ['Drafting', 'Equipping', 'Scoring', 'BetweenGames'];
+        // A67(1): the live stages of the lobby's one game
+        const activeStages = ['Drafting', 'Equipping', 'Scoring'];
         if (activeStages.includes(lobby.stage.tag)) {
             // D-29: Spectators/Coaches get clean deletion even during active stages
             if (slotIsSpectator(member.lobbySlot) || slotIsCoach(member.lobbySlot)) {
@@ -539,7 +531,7 @@ export const leave_lobby = spacetimedb.reducer(
             return;
         }
 
-        // Waiting/AwaitingResult/Finished: normal leave path
+        // Waiting/AwaitingResult: normal leave path
         // D-29: Delete LobbyMemberAccount rows for departing member
         for (const lma of [...ctx.db.LobbyMemberAccount.by_lobby_and_user.filter([lobbyId, user.id])]) {
             ctx.db.LobbyMemberAccount.delete(lma);
@@ -556,17 +548,6 @@ export const leave_lobby = spacetimedb.reducer(
             return;
         }
 
-        // D-19: Shelved lobby exemption — do NOT auto-close even if all members leave.
-        // Players are expected to return. GC handles 72h TTL for casual Shelved lobbies.
-        if (newCount === 0 && lobby.stage.tag === 'Shelved') {
-            // Update count but do NOT delete
-            ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
-                currentPlayerCount: 0,
-                lastActivityAt: ctx.timestamp,
-            }, user.id));
-            console.log(`[LOBBY] Shelved lobby #${lobbyId} now empty — preserved for player return`);
-            return;
-        }
 
         // Update player count and activity
         ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
@@ -593,7 +574,7 @@ export const leave_lobby = spacetimedb.reducer(
 // Hard-deletes a lobby and all associated data.
 // Per D-19: cascades ChatMessage, LobbyMember, LobbyBan, LobbyPassword,
 //            LobbyCursorEvent, MatchSession, MatchSessionStep, Lobby.
-// Per D-20: allowed only in Waiting or Finished stage.
+// Per D-20: allowed only in Waiting stage (A67(1)).
 // Permission: host, moderator, or admin (D-21).
 
 export const close_lobby = spacetimedb.reducer(
@@ -612,8 +593,8 @@ export const close_lobby = spacetimedb.reducer(
         // D-21: permission check
         ensureHostOrAbove(ctx, lobby, user);
 
-        // D-20: only Waiting or Finished
-        ensureStageIs(lobby, 'Waiting', 'Finished');
+        // D-20: only Waiting (A67(1))
+        ensureStageIs(lobby, 'Waiting');
 
         // D-19: hard delete cascade
         hardDeleteLobby(ctx, lobby.id);

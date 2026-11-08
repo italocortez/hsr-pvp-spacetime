@@ -219,6 +219,21 @@ New Moderator+ reducer: `admin_restart_tournament_finalize(tournamentId)` re-ins
 that threw); rules in [../tournament/architecture.md](../tournament/architecture.md).
 
 
+## Phase S8e execution (DECISIONS.md A67(3)(4))
+
+- **override_match_result on a tournament record** (rule as implemented). Preconditions as in S8d (tournament
+  InProgress; record Submitted, Disputed or Validated; its lobby present). A Decided bracket match is first reverted by
+  `rollbackBracketResult(…, voidDeciding = false, redecide = false)` (every Validated game record and its lobby stay;
+  refused while a downstream match is Decided: "<key> is decided; roll that back first."). Then the record is updated as
+  before (Validated(winner): status, `winnerTeamSide`, `matchEndReason = Completed`, `settledAt`; Rejected: lobby voided,
+  status kept Rejected) and `recordGameSettled(ctx, record, 'Staff', actor)` recomputes the derived tally and re-runs
+  the decide check: a Ready match is decided (decidedBy Staff) when a side reaches ceil(bestOf / 2); otherwise only
+  the tally changes (TD-13/14: override = revert + re-apply through the single writer). Standalone records unchanged. The Ranked screenshot
+  check names "the game" (one game per record).
+- **admin_delete_row(MatchSessionStepHistory)**: the key is the JSON pair `[matchHistoryId, sequence]` (A67(3)).
+- **Admin edits of a closed game (A60(7))**: the edit reducers take no game number; the record's one game is edited
+  while the record is Pending or Submitted ([../match-results/architecture.md](../match-results/architecture.md)).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -242,10 +257,11 @@ that threw); rules in [../tournament/architecture.md](../tournament/architecture
 | Staff close restated for A63: `close_game` is the submit (captains once both are ready, staff at any time); only staff decide a tie | Phase S7b follow-up (DECISIONS.md A63) | 2026-11-07 |
 | `admin_set_bracket_winner` removed; `resolve_bracket_match` / `rollback_bracket_match` (`results`) are the staff bracket tools | Phase S8c execution (DECISIONS.md A23, A24(3), A25) | 2026-11-07 |
 | `admin_force_finalize` / `admin_void_match` reject tournament lobbies with a pointer; `process_tournament_mmr` deleted; `validate_match_result` added (D.8.3, A24) | Phase S8d execution | 2026-11-07 |
+| `override_match_result` on a tournament record: Decided match rejected ("roll back first"), then `recordGameSettled` recomputes the derived tally (decidedBy Staff); `admin_delete_row` step-history key `[matchHistoryId, sequence]` (A67(3)(4)) | Phase S8e execution | 2026-11-08 |
 
 ---
 
-*Last updated: 2026-04-13*
+*Last updated: 2026-11-08*
 *Feature owner: Phase 01 / Phase 09 / Phase 12 / Phase 15*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

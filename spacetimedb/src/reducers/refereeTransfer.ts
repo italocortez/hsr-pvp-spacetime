@@ -102,7 +102,6 @@ export const run_referee_transfer_check = spacetimedb.reducer(
         ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
             id: 0,
             lobbyId,
-            gameNumber: session.currentGameNumber,
             sequence: getNextSequence(ctx, lobbyId), // F9: audit rows never share a sequence with a draft step
             actorUserId: SYSTEM_USER_ID,
             anonymousLabel: undefined,

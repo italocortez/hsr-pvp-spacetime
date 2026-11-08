@@ -17,7 +17,6 @@ import {
 
 export default __t.row({
   matchHistoryId: __t.u32().name("match_history_id"),
-  gameNumber: __t.u8().name("game_number"),
   get gameMode() {
     return GameMode.name("game_mode");
   },

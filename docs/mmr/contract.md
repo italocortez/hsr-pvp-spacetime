@@ -416,6 +416,8 @@ All functions are pure math with zero database access.
 **When:** The player deselects one account, then selects a single account rated lower than the merged value
 **Then:** The snapshot never decreases: deselecting does not touch it, and `select_match_account` stores `max(snapshot, merged rating of the current selection)`.
 
+_Superseded in Phase S8e execution (DECISIONS.md A69(3))._ The ratchet is removed: the snapshot is taken once at `start_draft` (A66); `select_match_account` is Waiting-only and never touches it.
+
 ## Edge Cases
 
 | Case | Expected Behavior | Notes |
@@ -477,6 +479,13 @@ All functions are pure math with zero database access.
 **Then** stats and history are written for the settled matches, no `MmrHistory` row and no rating change
 
 
+## Acceptance Scenarios (Phase S8e execution)
+
+### S8e-M1 MMR per game (A67(7))
+**Given** an MMR tournament whose Bo3 match was played over three lobbies
+**When** the tournament is Completed
+**Then** MMR moves once per Validated record, in bracket order; nothing aggregates across games; a casual best-of-3 is three unrelated lobbies
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -505,6 +514,8 @@ All functions are pure math with zero database access.
 | Full hydration from codebase | Phase 13 normalization | 2026-04-09 |
 | MMR snapshot input: MAX of the selected accounts → merged rating over the union of their rosters; ratchet kept; scenarios "Merged Account Rating for Multi-Account Players", "Snapshot Ratchet" added | Phase S6 execution (backlog #10) | 2026-11-06 |
 | Scenarios S8d-M1, S8d-M2: tournament MMR in the finalize job, none on Cancelled | Phase S8d execution (DECISIONS.md A24(4)(5)) | 2026-11-07 |
+| Scenario S8e-M1: every lobby is a match for MMR; an MMR-tournament Bo3 moves MMR up to three times (user confirmed 2026-11-08) | Phase S8e execution (DECISIONS.md A67(7)) | 2026-11-08 |
+| Scenario "Snapshot Ratchet" superseded: the ratchet is removed, the snapshot is taken once at `start_draft` (A66) | Phase S8e execution (DECISIONS.md A69(3)) | 2026-11-08 |
 
 ---
 

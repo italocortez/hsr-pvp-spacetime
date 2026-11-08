@@ -1,5 +1,5 @@
 import { table, t } from 'spacetimedb/server';
-import { DraftMode, BanMode, GameMode, DisconnectPolicy, RosterVisibility, MatchType, LineupFormat, AdvantageSide, BanRestriction } from '../types/enums';
+import { DraftMode, BanMode, GameMode, DisconnectPolicy, RosterVisibility, MatchType, LineupFormat, BanRestriction } from '../types/enums';
 
 export const lobbyPresetColumns = {
     id: t.u32().primaryKey().autoInc(),
@@ -43,10 +43,7 @@ export const lobbyPresetColumns = {
     refereeCanKick: t.bool(),
     allowPlayerPause: t.bool(),
     refereeExclusiveConcede: t.bool(),  // A45(5)
-    // Series fields (backlog #6, A28 cap {1,3}, A27 advantage):
-    bestOf: t.u8(),
-    bestOfNAdvantage: AdvantageSide,
-    refereeControlsShelving: t.bool(),
+    // A67(2): the series fields are gone (one game per lobby).
 
     // Audit:
     createdById: t.u32(),

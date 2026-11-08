@@ -15,10 +15,10 @@ export interface MemberLite {
 }
 
 export type LobbyStage =
-    | 'Waiting' | 'Drafting' | 'Equipping' | 'Scoring' | 'BetweenGames' | 'Shelved' | 'AwaitingResult' | 'Finished';
+    | 'Waiting' | 'Drafting' | 'Equipping' | 'Scoring' | 'AwaitingResult';
 
-/** Stages where a referee is needed and a disconnect matters (D-08 scope + series stages). */
-export const ACTIVE_STAGES: readonly LobbyStage[] = ['Drafting', 'Equipping', 'Scoring', 'BetweenGames', 'Shelved'];
+/** Stages where a referee is needed and a disconnect matters (D-08 scope; A67(1): the three live-game stages). */
+export const ACTIVE_STAGES: readonly LobbyStage[] = ['Drafting', 'Equipping', 'Scoring']; // A67(1)
 
 export const isPlayer = (s: Slot): boolean => s === 'BluePlayer' || s === 'RedPlayer';
 export const isCoach = (s: Slot): boolean => s === 'BlueCoach' || s === 'RedCoach';

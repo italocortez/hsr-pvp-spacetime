@@ -19,7 +19,6 @@ import {
   MatchType,
   BanMode,
   BanRestriction,
-  AdvantageSide,
 } from "./types";
 
 export default {
@@ -68,11 +67,6 @@ export default {
   refereeCanKick: __t.bool(),
   allowPlayerPause: __t.bool(),
   refereeExclusiveConcede: __t.bool(),
-  bestOf: __t.option(__t.u8()),
-  refereeControlsShelving: __t.option(__t.bool()),
-  get bestOfNAdvantage() {
-    return __t.option(AdvantageSide);
-  },
   get lineupFormat() {
     return __t.option(LineupFormat);
   },

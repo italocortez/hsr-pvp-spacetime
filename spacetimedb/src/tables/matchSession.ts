@@ -33,11 +33,7 @@ export const matchSessionColumns = {
     pausesUsedBlue: t.u8(),
     pausesUsedRed: t.u8(),
 
-    // Best-of-N series tracking (per D-12):
-    currentGameNumber: t.u8(),   // 1-indexed; game 1 = 1, game 2 = 2
-    gamesWonBlue: t.u8(),        // Running win total for Blue side
-    gamesWonRed: t.u8(),         // Running win total for Red side
-    seriesBestOf: t.u8(),        // Copied from Lobby.bestOf or BracketMatch.bestOf at match start
+    // A67(3): the series columns are removed; one game per lobby.
 
     // Audit:
     createdById: t.u32(),

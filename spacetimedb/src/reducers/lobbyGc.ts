@@ -42,7 +42,7 @@ export function hardDeleteLobby(ctx: any, lobbyId: number, keepResultRecord = fa
     //     Voided for audit); its children are deleted as usual. The finalize job deletes it later.
     const matchResults = [...ctx.db.MatchResultRecord.lobby_id.filter(lobbyId)];
     for (const mr of matchResults) {
-        deleteScoringRows(ctx, mr.id, lobbyId); // first: the game rows bound its per-game scans
+        deleteScoringRows(ctx, mr.id, lobbyId);
         for (const p of [...ctx.db.MatchResultParticipant.match_result_id.filter(mr.id)]) {
             ctx.db.MatchResultParticipant.delete(p);
         }
@@ -106,42 +106,18 @@ export function hardDeleteLobby(ctx: any, lobbyId: number, keepResultRecord = fa
 function performLobbyGc(ctx: any): { lobbiesScanned: number; lobbiesDeleted: number; deletedByStage: Record<string, number> } {
     const now = ctx.timestamp;
     const THIRTY_MINUTES_MICROS = BigInt(30 * 60 * 1_000_000);
-    const SEVENTY_TWO_HOURS_MICROS = BigInt(72 * 60 * 60 * 1_000_000);
 
     let lobbiesScanned = 0;
     let lobbiesDeleted = 0;
     const deletedByStage: Record<string, number> = {};
 
-    // Iterate all lobbies — GC handles Waiting, Finished, and abandoned active stages
+    // Iterate all lobbies — GC handles Waiting and abandoned active stages (A67(1): no other stage)
     for (const lobby of ctx.db.Lobby.iter()) {
         lobbiesScanned++;
 
         // D-48: AwaitingResult NEVER GC'd (admin-only resolution)
         if (lobby.stage.tag === 'AwaitingResult') continue;
 
-        // D-16: Shelved lobby handling
-        if (lobby.stage.tag === 'Shelved') {
-            // Tournament Shelved lobbies persist until cancel_tournament cascade — skip them
-            if (lobby.isTournamentControlled) continue;
-
-            // Casual Shelved lobbies: 72h TTL based on lastActivityAt (used as shelvedAt proxy)
-            const shelvedIdle = now.microsSinceUnixEpoch - lobby.lastActivityAt.microsSinceUnixEpoch;
-            if (shelvedIdle >= SEVENTY_TWO_HOURS_MICROS) {
-                console.log(`[LOBBY_GC] Auto-cleaning shelved casual lobby #${lobby.id} (idle: ${shelvedIdle} µs >= 72h)`);
-                lobbiesDeleted++;
-                deletedByStage[lobby.stage.tag] = (deletedByStage[lobby.stage.tag] ?? 0) + 1;
-                hardDeleteLobby(ctx, lobby.id);
-            }
-            continue; // Skip normal 30-min logic for Shelved lobbies
-        }
-
-        // D-17: BetweenGames treated like active stages — apply same "all offline + 30 min" rule
-        if (lobby.stage.tag === 'BetweenGames') {
-            const members = [...ctx.db.LobbyMember.lobby_id.filter(lobby.id)];
-            const anyOnline = members.some((m: any) => m.isOnline && !m.voluntarilyLeft);
-            if (anyOnline) continue; // At least one active member — skip
-            // Fall through to idle time check below
-        }
 
         // D-47: Drafting/Equipping/Scoring: ALL members offline + 30 min idle -> hard delete (void, no winner)
         if (lobby.stage.tag === 'Drafting' || lobby.stage.tag === 'Equipping' || lobby.stage.tag === 'Scoring') {
@@ -152,7 +128,7 @@ function performLobbyGc(ctx: any): { lobbiesScanned: number; lobbiesDeleted: num
             // Fall through to idle time check below
         }
 
-        // D-49: Waiting + Finished: same 30-min idle rule
+        // D-49: Waiting: same 30-min idle rule
         // Check idle time based on lastActivityAt
         const idleTime = now.microsSinceUnixEpoch - lobby.lastActivityAt.microsSinceUnixEpoch;
         if (idleTime < THIRTY_MINUTES_MICROS) {

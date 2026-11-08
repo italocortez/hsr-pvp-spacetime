@@ -4,21 +4,17 @@ import { getAuthenticatedUser } from '../helpers/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { ensureLobbyMember, ensureStageIs, slotTeam, slotIsCoach, slotToTeamSide } from '../helpers/lobbyHelpers';
 import { ensureMatchAlive } from '../helpers/disconnectHelpers';
-import { currentGameSteps, getNextSequence } from '../helpers/stepSequence';
+import { lobbySteps, getNextSequence } from '../helpers/stepSequence';
 import { teamOwnedEidolons } from '../helpers/ownershipValidation';
 import { charactersPerTeam, type LineupFormatTag } from '@shared/scoring';
 
-/** A65(2): the steps of the lobby's current game (the earlier games' steps stay until finalization). */
-function gameSteps(ctx: any, lobbyId: number): any[] {
-    return currentGameSteps(ctx, lobbyId, ctx.db.MatchSession.lobbyId.find(lobbyId)?.currentGameNumber ?? 1);
-}
 
 // ─── Helper: Get set of characters already won via AuctionSold ──────────────
 // Auction characters are ALWAYS exclusive (D-42).
 // Returns a Set of characterNames that have already been awarded via AuctionSold.
 
 function getAuctionWonCharacters(ctx: any, lobbyId: number): Set<string> {
-    const steps = gameSteps(ctx, lobbyId);
+    const steps = lobbySteps(ctx, lobbyId);
     const wonSet = new Set<string>();
     for (const step of steps) {
         if (
@@ -33,7 +29,7 @@ function getAuctionWonCharacters(ctx: any, lobbyId: number): Set<string> {
 
 // ─── Helper: Get set of banned characters ───────────────────────────────────
 function getBannedCharacters(ctx: any, lobbyId: number): Set<string> {
-    const steps = gameSteps(ctx, lobbyId);
+    const steps = lobbySteps(ctx, lobbyId);
     const bannedSet = new Set<string>();
     for (const step of steps) {
         if (
@@ -279,7 +275,6 @@ export const nominate_character = spacetimedb.reducer(
         ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
             id: 0,
             lobbyId,
-            gameNumber: session.currentGameNumber,
             sequence: nextSeq,
             actorUserId: user.id,
             anonymousLabel: undefined,
@@ -413,7 +408,6 @@ export const place_bid = spacetimedb.reducer(
         ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
             id: 0,
             lobbyId,
-            gameNumber: session.currentGameNumber,
             sequence: nextSeq,
             actorUserId: user.id,
             anonymousLabel: undefined,
@@ -521,7 +515,7 @@ export const pass_bid = spacetimedb.reducer(
 
         // Find the most recent Nominate step for this character (the active nomination): its team only (A61: the
         // eidolon is no longer read from it).
-        const allSteps = gameSteps(ctx, lobbyId);
+        const allSteps = lobbySteps(ctx, lobbyId);
         const nominateStep = allSteps
             .filter(
                 (s: any) =>
@@ -543,7 +537,6 @@ export const pass_bid = spacetimedb.reducer(
         ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
             id: 0,
             lobbyId,
-            gameNumber: session.currentGameNumber,
             sequence: nextSeq,
             actorUserId: user.id,
             anonymousLabel: undefined,
@@ -726,7 +719,6 @@ export const timer_expiry_auction = spacetimedb.reducer(
             ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
                 id: 0,
                 lobbyId,
-                gameNumber: session.currentGameNumber,
                 sequence: nextSeq,
                 actorUserId: 0, // System actor
                 anonymousLabel: undefined,
@@ -767,7 +759,7 @@ export const timer_expiry_auction = spacetimedb.reducer(
             const winningAmount = session.currentBidAmount ?? 0;
 
             // The nominating team from the Nominate step (A61: the eidolon is no longer read from it)
-            const allSteps = gameSteps(ctx, lobbyId);
+            const allSteps = lobbySteps(ctx, lobbyId);
             const nominateStep = allSteps
                 .filter(
                     (s: any) =>
@@ -786,7 +778,6 @@ export const timer_expiry_auction = spacetimedb.reducer(
             ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
                 id: 0,
                 lobbyId,
-                gameNumber: session.currentGameNumber,
                 sequence: nextSeq,
                 actorUserId: 0, // System actor
                 anonymousLabel: undefined,

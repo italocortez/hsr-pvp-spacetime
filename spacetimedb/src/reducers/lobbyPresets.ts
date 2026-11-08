@@ -1,10 +1,10 @@
 import spacetimedb from '../schema';
 import { t, SenderError } from 'spacetimedb/server';
-import { DraftMode, BanMode, GameMode, MatchType, RosterVisibility, DisconnectPolicy, BanRestriction, LineupFormat, AdvantageSide } from '../types/enums';
+import { DraftMode, BanMode, GameMode, MatchType, RosterVisibility, DisconnectPolicy, BanRestriction, LineupFormat } from '../types/enums';
 import { getAuthenticatedUser, isRoleAtLeast } from '../helpers/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { readAbuseConfig } from '../helpers/abuseControls';
-import { ensureBestOf, resolveAdvantage } from '../helpers/seriesSettings';
+
 import { ensureCostSetCovers, ensureCostSetUsable } from '../helpers/costSetGuards';
 
 // ─── Shared permission check for preset edit/delete ──────────────────────────
@@ -91,11 +91,8 @@ export const create_lobby_preset = spacetimedb.reducer(
         refereeCanKick: t.bool(),
         allowPlayerPause: t.bool(),
         refereeExclusiveConcede: t.bool(),
-        // Backlog #6 series fields + A45(2) / A21 / A40 columns (optional: an omitted key takes the default on
-        // create, keeps the stored value on update). bestOf ∈ {1, 3}; bestOfNAdvantage forced None when bestOf = 1.
-        bestOf: t.u8().optional(),
-        refereeControlsShelving: t.bool().optional(),
-        bestOfNAdvantage: AdvantageSide.optional(),
+        // A45(2) / A21 / A40 columns (optional: an omitted key takes the default on create, keeps the stored value
+        // on update). A67(2): the backlog #6 series fields are removed.
         lineupFormat: LineupFormat.optional(),
         banRestriction: BanRestriction.optional(),
         hideMmr: t.bool().optional(),
@@ -124,9 +121,7 @@ export const create_lobby_preset = spacetimedb.reducer(
             ? args.disconnectForfeitSeconds
             : undefined;
 
-        // Backlog #6 / #8: bestOf cap (0 = default 1), advantage None for Bo1; backlog #2: cost-set guards.
-        const bestOf = ensureBestOf(args.bestOf ? args.bestOf : 1);
-        const bestOfNAdvantage = resolveAdvantage(bestOf, args.bestOfNAdvantage);
+        // Backlog #2: cost-set guards.
         ensureCostSetUsable(ctx, args.costSetId, args.gameMode.tag, args.draftMode.tag);
 
         ctx.db.LobbyPreset.insert(insertWithAudit(ctx, {
@@ -168,9 +163,6 @@ export const create_lobby_preset = spacetimedb.reducer(
             refereeCanKick: args.refereeCanKick,
             allowPlayerPause: args.allowPlayerPause,
             refereeExclusiveConcede: args.refereeExclusiveConcede,
-            bestOf,
-            bestOfNAdvantage,
-            refereeControlsShelving: args.refereeControlsShelving ?? true,
         }, user.id));
 
         console.log(`[PRESET] Lobby preset "${args.name}" created by user #${user.id}`);
@@ -217,11 +209,8 @@ export const update_lobby_preset = spacetimedb.reducer(
         refereeCanKick: t.bool(),
         allowPlayerPause: t.bool(),
         refereeExclusiveConcede: t.bool(),
-        // Backlog #6 series fields + A45(2) / A21 / A40 columns (optional: an omitted key takes the default on
-        // create, keeps the stored value on update). bestOf ∈ {1, 3}; bestOfNAdvantage forced None when bestOf = 1.
-        bestOf: t.u8().optional(),
-        refereeControlsShelving: t.bool().optional(),
-        bestOfNAdvantage: AdvantageSide.optional(),
+        // A45(2) / A21 / A40 columns (optional: an omitted key takes the default on create, keeps the stored value
+        // on update). A67(2): the backlog #6 series fields are removed.
         lineupFormat: LineupFormat.optional(),
         banRestriction: BanRestriction.optional(),
         hideMmr: t.bool().optional(),
@@ -247,10 +236,7 @@ export const update_lobby_preset = spacetimedb.reducer(
             ? args.disconnectForfeitSeconds
             : undefined;
 
-        // Backlog #6 / #8: bestOf cap (omitted = stored value, 0 = default 1), advantage None for Bo1;
-        // backlog #2: cost-set guards (selectability only when the set changes).
-        const bestOf = args.bestOf === undefined ? preset.bestOf : ensureBestOf(args.bestOf > 0 ? args.bestOf : 1);
-        const bestOfNAdvantage = resolveAdvantage(bestOf, args.bestOfNAdvantage ?? preset.bestOfNAdvantage);
+        // Backlog #2: cost-set guards (selectability only when the set changes).
         if (args.costSetId !== preset.costSetId) {
             ensureCostSetUsable(ctx, args.costSetId, args.gameMode.tag, args.draftMode.tag);
         } else if (args.gameMode.tag !== preset.gameMode.tag || args.draftMode.tag !== preset.draftMode.tag) {
@@ -290,9 +276,6 @@ export const update_lobby_preset = spacetimedb.reducer(
             refereeCanKick: args.refereeCanKick,
             allowPlayerPause: args.allowPlayerPause,
             refereeExclusiveConcede: args.refereeExclusiveConcede,
-            bestOf,
-            bestOfNAdvantage,
-            refereeControlsShelving: args.refereeControlsShelving ?? preset.refereeControlsShelving,
             lineupFormat: args.lineupFormat ?? preset.lineupFormat,
             banRestriction: args.banRestriction ?? preset.banRestriction,
             hideMmr: args.hideMmr ?? preset.hideMmr,

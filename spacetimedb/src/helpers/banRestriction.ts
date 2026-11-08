@@ -2,12 +2,11 @@
 // Lobby.banRestriction limits which characters ONE team may ban in the current game, by HsrCharacter.role:
 //   NoRestriction — anything; MaxOneDps — at most one Dps ban; MaxTwoDps — at most two Dps bans;
 //   MaxOnePerRole — at most one ban per role (Dps, Sustain, Support).
-// Counted over the team's Ban steps of the current game (A65: the earlier games' steps stay for the series, so the read
-// filters by MatchSession.currentGameNumber).
+// Counted over the team's Ban steps of the lobby's one game (A67(3)).
 // The SKIP / EMPTY sentinels and names without an HsrCharacter row carry no role and never count or violate.
 // Enforced by ban_character and respected by the timer-expiry auto-ban (timer_expiry_classic, both draft modes).
 
-import { currentGameSteps } from './stepSequence';
+import { lobbySteps } from './stepSequence';
 
 const SENTINELS = new Set(['SKIP', 'EMPTY']);
 
@@ -19,8 +18,7 @@ function roleOf(ctx: any, characterName: string): string | undefined {
 /** Roles of the characters `teamTag` ('Blue' | 'Red') has banned so far in the lobby's current game. */
 function teamBanRoles(ctx: any, lobbyId: number, teamTag: string): string[] {
     const roles: string[] = [];
-    const gameNumber = ctx.db.MatchSession.lobbyId.find(lobbyId)?.currentGameNumber ?? 1;
-    for (const s of currentGameSteps(ctx, lobbyId, gameNumber)) { // A65(2)
+    for (const s of lobbySteps(ctx, lobbyId)) { // A67(3): the lobby's one game
         if (s.action.tag !== 'Ban' || s.payload.tag !== 'Ban' || s.actorSlot.tag !== teamTag) continue;
         const role = roleOf(ctx, s.payload.value.characterName);
         if (role) roles.push(role);

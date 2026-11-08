@@ -12,8 +12,7 @@ import { ACTIVE_STAGES, type LobbyStage } from '@shared/lobby-rules';
 // A22a: the grace period between a user's last disconnect and the referee / captain / host transfer check.
 const REFEREE_TRANSFER_GRACE_MICROS = 15_000_000n;
 // D-08: the forfeit clock (disconnectedAt -> pool decrement, isForfeitEligible) runs only in the three live-match
-// stages. BetweenGames and Shelved still schedule the grace check (ACTIVE_STAGES) but never start that clock: a
-// shelved series expects its players offline for days (review finding 1, 2026-11-06).
+// stages. A67(1): those are also every ACTIVE_STAGES entry (the between-games stages are gone).
 const DISCONNECT_CLOCK_STAGES: readonly LobbyStage[] = ['Drafting', 'Equipping', 'Scoring'];
 
 // Private auth tables — imported for schema registration
@@ -119,7 +118,7 @@ export { undo_last_step, pause_draft, resume_draft } from './reducers/draftContr
 export { nominate_character, place_bid, pass_bid, timer_expiry_auction } from './reducers/draftAuction';
 export { equip_lightcone, unequip_lightcone, arrange_lineup, set_eidolon, advance_stage } from './reducers/postDraft';
 export { concede_match, claim_forfeit, defer_match } from './reducers/concede';
-export { advance_to_next_game, shelve_series, resume_series } from './reducers/seriesManagement';
+
 export { admin_force_finalize, admin_void_match } from './reducers/adminMatchTools';
 export { select_match_account, deselect_match_account } from './reducers/accountSelection';
 

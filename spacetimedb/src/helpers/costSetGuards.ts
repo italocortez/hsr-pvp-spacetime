@@ -43,12 +43,12 @@ export function ensureCostSetCovers(ctx: any, costSetId: number, gameModeTag: st
     }
 }
 
-/** delete_cost_set guard: a non-Finished Lobby or a non-terminal Tournament still references the set. */
+/** delete_cost_set guard: any Lobby (A67(1): every lobby stage is live) or a non-terminal Tournament still references the set. */
 export function isCostSetInUse(ctx: any, costSetId: number): boolean {
     // iter() required: neither Lobby nor Tournament has a costSetId index; Lobby holds live lobbies only (GC'd)
     // and Tournament is small, and this runs only on an explicit delete.
     for (const lobby of ctx.db.Lobby.iter()) {
-        if (lobby.costSetId === costSetId && lobby.stage.tag !== 'Finished') return true;
+        if (lobby.costSetId === costSetId) return true;
     }
     for (const tournament of ctx.db.Tournament.iter()) {
         if (tournament.costSetId === costSetId

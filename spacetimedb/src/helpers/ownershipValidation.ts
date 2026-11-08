@@ -60,7 +60,7 @@ export function resolveOwnedEidolon(ctx: any, lobbyId: number, userId: number, c
  * A60(1) / A61(2)(3): the eidolon levels a team owns for a character: the distinct HsrAccountCharacter.eidolonLevel
  * values across the selected match accounts (LobbyMemberAccount) of the team's player seats (coaches and spectators
  * excluded), ascending. Empty when no selected account of the team has the character. Account selection is allowed
- * only in Waiting and BetweenGames, so the set is frozen during a game.
+ * only in Waiting (A67(1)), so the set is frozen during the game.
  */
 export function teamOwnedEidolons(ctx: any, lobbyId: number, side: string, characterName: string): number[] {
     const levels = new Set<number>();

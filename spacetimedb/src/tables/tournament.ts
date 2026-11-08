@@ -3,7 +3,8 @@ import { TournamentFormat, TournamentStage, GameMode, DisconnectPolicy, GroupAss
 
 // A33: the integrity set (teamSize, defaultGameMode, countTowardsMmr -> matchType, both anonymity flags,
 // rosterVisibility, requireOwnership, costSetId, disconnectPolicy + disconnectForfeitSeconds, allowMirrorPicks,
-// lineupFormat; bestOf through the bracket) lives here and is copied into every tournament lobby and locked.
+// lineupFormat) lives here and is copied into every tournament lobby and locked; bestOf goes to the bracket match
+// (A28 chain; A67(2): not to the lobby).
 // The free set comes from the preset pointed to by lobbyPresetId (A33a).
 export const tournamentColumns = {
     id: t.u32().primaryKey().autoInc(),

@@ -74,8 +74,8 @@ async function setupScoredMatch(
     const mr = [...host.conn.db.MatchResultRecord.iter()].find(r => r.lobbyId === lobbyId)!;
 
     // Referee records scores (both sides)
-    await host.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Blue' }, values: [350, 350], deaths: 0, screenshotUrl: opts.screenshots ? 'https://i.imgur.com/blue1.png' : undefined });
-    await host.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0, screenshotUrl: opts.screenshots ? 'https://i.imgur.com/red1.png' : undefined });
+    await host.call.recordGroupScores({ lobbyId, teamSide: { tag: 'Blue' }, values: [350, 350], deaths: 0, screenshotUrl: opts.screenshots ? 'https://i.imgur.com/blue1.png' : undefined }); // S10: rewrite (A67(3): gameNumber argument removed; one game per lobby)
+    await host.call.recordGroupScores({ lobbyId, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0, screenshotUrl: opts.screenshots ? 'https://i.imgur.com/red1.png' : undefined }); // S10: rewrite (A67(3): gameNumber argument removed; one game per lobby)
     await host.sync(1000);
 
     // Confirm both sides
@@ -252,7 +252,7 @@ describe.skipIf(!hasServerToken())('Match Lifecycle', () => {
 
         it('record scores on non-Pending match rejected', async () => {
             const err = await expectReducerError(
-                blue.call.recordGroupScores({ lobbyId, gameNumber: 2, teamSide: { tag: 'Blue' }, values: [250, 250], deaths: 0 })
+                blue.call.recordGroupScores({ lobbyId, teamSide: { tag: 'Blue' }, values: [250, 250], deaths: 0 }) // S10: rewrite (A67(3): gameNumber argument removed; one game per lobby)
             );
             // S10: rewrite (record_group_scores rejects a non-Pending record with 'No pending match result for this lobby.')
             expect(err).toContain('Scores can only be recorded when the match is in Pending status.');

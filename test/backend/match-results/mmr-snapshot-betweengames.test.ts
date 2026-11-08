@@ -158,8 +158,8 @@ async function runToBetweenGames(
     const mr = [...host.conn.db.MatchResultRecord.iter()].find((r) => r.lobbyId === lobbyId);
     if (!mr) throw new Error(`No MatchResultRecord for lobby ${lobbyId}`);
 
-    await host.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Blue' }, values: [350, 350], deaths: 0 });
-    await host.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0 });
+    await host.call.recordGroupScores({ lobbyId, teamSide: { tag: 'Blue' }, values: [350, 350], deaths: 0 }); // S10: rewrite (A67(3): gameNumber argument removed; one game per lobby)
+    await host.call.recordGroupScores({ lobbyId, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0 }); // S10: rewrite (A67(3): gameNumber argument removed; one game per lobby)
     await host.sync(1000);
 
     // S10: rewrite (confirm_match_scores removed by A60: per-game confirmGame per captain; needs arranged lineups + both scores; the second one closes the game and submits)
@@ -525,8 +525,8 @@ describe.skipIf(!hasServerToken())('Phase 12.3: BetweenGames monotonic-upward sn
             if (!mr) throw new Error('No MatchResultRecord for tournament lobby');
             matchResultId = mr.id;
 
-            await toUser.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Blue' }, values: [350, 350], deaths: 0 });
-            await toUser.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0 });
+            await toUser.call.recordGroupScores({ lobbyId, teamSide: { tag: 'Blue' }, values: [350, 350], deaths: 0 }); // S10: rewrite (A67(3): gameNumber argument removed; one game per lobby)
+            await toUser.call.recordGroupScores({ lobbyId, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0 }); // S10: rewrite (A67(3): gameNumber argument removed; one game per lobby)
             await toUser.sync(1000);
 
             // S10: rewrite (confirm_match_scores removed by A60: per-game confirmGame per captain; needs arranged lineups + both scores; the second one closes the game and submits)

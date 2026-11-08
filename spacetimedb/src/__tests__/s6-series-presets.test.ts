@@ -1,4 +1,4 @@
-// T-S6: in-memory tests for the series settings, presets and tournaments (backlog #6, #7, #8, #9; BACKEND-BUGS F2;
+// T-S6 / T-S8e: in-memory tests for the lobby free set, presets and the tournament series settings (A67: no lobby series) (backlog #6, #7, #8, #9; BACKEND-BUGS F2;
 // DECISIONS A27, A28, A33, A33a, A38). Reuses the S4 builders; in-memory datastore on the TestClock, no maincloud.
 // Admin / TournamentHost calls run as the owner identity (TestAuth.internal()), which init links to SYSTEM (Admin).
 import { describe, expect, it } from 'vitest';
@@ -94,7 +94,7 @@ const TOURNAMENT_ARGS = {
 
 /** update_lobby_settings arguments mirroring the create defaults, with overrides. */
 const settingsArgs = (lobbyId: number, over: Record<string, unknown> = {}) => {
-    const { joinCode: _j, presetId: _p, bestOf: _b, refereeControlsShelving: _r, ...rest } = DEFAULT_LOBBY_ARGS;
+    const { joinCode: _j, presetId: _p, ...rest } = DEFAULT_LOBBY_ARGS;
     return { lobbyId, ...rest, refereeExclusiveConcede: true, ...over } as any;
 };
 
@@ -144,8 +144,7 @@ const captain = (s: Lobby, team: 'Blue' | 'Red') =>
     actorOf(s, captainOf(s.test, s.lobbyId, team === 'Blue' ? 'BluePlayer' : 'RedPlayer')!.userId);
 
 /**
- * T-S7b: a game reaches BetweenGames only through a close (A60(3)). The drafted game is closed by the full-control
- * host: lineups arranged, Equipping → Scoring, both sides' scores (Blue wins), close_game (A63 staff close).
+ * T-S7b / T-S8e: the lobby's one game is closed by the full-control host (A67: the close submits it): lineups arranged, Equipping → Scoring, both sides' scores (Blue wins), close_game (A63 staff close).
  */
 function finishGame(s: Lobby) {
     closeCurrentGame(s, 'Blue');
@@ -180,163 +179,106 @@ function draftAuctionGame(s: Lobby, game: number) {
     }
 }
 
-describe('F2: game 2 of a Bo3 drafts to completion', () => {
-    it('Classic: advance_to_next_game rebuilds the sequence; game 2 reaches Equipping with 16 picks', () => {
+// T-S8e (A67(1)(2)): the series tests of S6 lost their subject (BetweenGames, advance_to_next_game, the lobby / preset
+// bestOf, bestOfNAdvantage, refereeControlsShelving, the start_draft head start). Deleted: "F2: game 2 of a Bo3
+// drafts to completion" (Classic + Auction), "bestOf 0 on create_lobby keeps the D-11 sentinel", the casual
+// bestOfNAdvantage tests (Red head start through game 1; Bo1 forces None). Kept and rewritten: one game drafts to
+// completion (the F2 assertions that still have a subject), the tournament bestOf cap, the free-set edits in Waiting,
+// the tournament-lobby lock, the tournament head-start validation, presets and the system preset without series fields.
+
+describe("F2 (T-S8e): the lobby's one game drafts to completion", () => {
+    it('Classic: 16 picks reach Equipping; the close of the game submits it (no next game)', () => {
         const test = newHarness();
-        const s = setupLobby(test, { lobby: { bestOf: 3 } });
+        const s = setupLobby(test);
+        expect(session(test, s.lobbyId).draftSequence).toHaveLength(16);
         draftClassicGame(s, 1);
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Equipping');
-        finishGame(s);
-        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('BetweenGames');
-
-        tx(test, s.host, (ctx) => M.advance_to_next_game(ctx, { lobbyId: s.lobbyId }));
-        const g2 = session(test, s.lobbyId);
-        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Drafting');
-        expect(g2.currentGameNumber).toBe(2);
-        expect(g2.turnIndex).toBe(0);
-        expect(g2.draftSequence).toHaveLength(16);
-
-        draftClassicGame(s, 2);
-        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Equipping');
-        // T-S8d (A65): game 1's steps stay for the series (advance_to_next_game no longer deletes them): 16 picks per game.
         const picks = steps(test, s.lobbyId).filter((x) => x.action.tag === 'Pick');
-        expect(picks).toHaveLength(32);
-        expect(picks.filter((x) => x.gameNumber === 1)).toHaveLength(16);
-        expect(picks.filter((x) => x.gameNumber === 2)).toHaveLength(16);
+        expect(picks).toHaveLength(16);
+        expect('gameNumber' in picks[0]).toBe(false);
+        expect('advance_to_next_game' in M).toBe(false);
+        finishGame(s);
+        // A67(1), A60(6): the close of the only game submits it; a casual Bo1 validates and finalizes inline.
+        expect(test.db.Lobby.id.find(s.lobbyId)).toBeFalsy();
     });
 
-    it('Auction: game 2 opens the auction phase and reaches Equipping after 16 sales; won counters kept', () => {
+    it('Auction: 16 sales reach Equipping with 8 characters won per side', () => {
         const test = newHarness();
-        const s = setupLobby(test, { lobby: { bestOf: 3, draftMode: { tag: 'Auction' } } });
+        const s = setupLobby(test, { lobby: { draftMode: { tag: 'Auction' } } });
         expect(session(test, s.lobbyId).isAuctionPhase).toBe(true);
         draftAuctionGame(s, 1);
-        finishGame(s); // game 1 closed by the full-control host
-        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('BetweenGames');
-
-        tx(test, s.host, (ctx) => M.advance_to_next_game(ctx, { lobbyId: s.lobbyId }));
-        const g2 = session(test, s.lobbyId);
-        expect(g2.isAuctionPhase).toBe(true);
-        expect(g2.nextNominatorTeam.tag).toBe('Blue');
-        expect(g2.teamBlueCharBudget).toBe(100);
-
-        draftAuctionGame(s, 2);
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Equipping');
         const done = session(test, s.lobbyId);
         expect(done.blueCharactersWon).toBe(8);
         expect(done.redCharactersWon).toBe(8);
-        expect(done.currentGameNumber).toBe(2);
-        // T-S8d (A65): game 1's sales stay for the series; game 2 sold 16 of its own.
-        const sold = steps(test, s.lobbyId).filter((x) => x.action.tag === 'AuctionSold');
-        expect(sold).toHaveLength(32);
-        expect(sold.filter((x) => x.gameNumber === 2)).toHaveLength(16);
+        expect(steps(test, s.lobbyId).filter((x) => x.action.tag === 'AuctionSold')).toHaveLength(16);
     });
 });
 
-describe('A28 / A38(2): bestOf capped to {1, 3} everywhere', () => {
-    it('bestOf 5 is rejected on create_lobby, update_lobby_settings, presets and tournaments', () => {
+describe('A28 / A38(2) (T-S8e): bestOf capped to {1, 3} on tournaments; lobbies and presets carry no bestOf (A67(2))', () => {
+    it('bestOf 5 is rejected on create_tournament / update_tournament; a stray bestOf on a lobby or preset is not stored', () => {
         const test = newHarness();
-        const s = setupLobby(test, { noStart: true });
-        expectReject(test, s.host, (ctx) => M.update_lobby_settings(ctx, settingsArgs(s.lobbyId, { bestOf: 5 })), BEST_OF);
-
-        const solo = guest(test, 'solo');
-        expectReject(test, solo, (ctx) => M.create_lobby(ctx, { ...DEFAULT_LOBBY_ARGS, bestOf: 5 } as any), BEST_OF);
-
-        expectReject(test, 'internal', (ctx) => M.create_lobby_preset(ctx, { ...PRESET_ARGS, name: 'p', bestOf: 5 } as any), BEST_OF);
-        tx(test, 'internal', (ctx) => M.create_lobby_preset(ctx, { ...PRESET_ARGS, name: 'ok' } as any));
-        const presetId = presetNamed(test, 'ok').id;
-        expectReject(test, 'internal', (ctx) =>
-            M.update_lobby_preset(ctx, { ...PRESET_ARGS, presetId, name: 'ok', bestOf: 5 } as any), BEST_OF);
-
         expectReject(test, 'internal', (ctx) => M.create_tournament(ctx, { ...TOURNAMENT_ARGS, defaultBestOf: 5 } as any), BEST_OF);
         createTournament(test);
         const t = tournaments(test)[0];
         expectReject(test, 'internal', (ctx) => M.update_tournament(ctx, updateTournamentArgs(t, { defaultBestOf: 5 })), BEST_OF);
-    });
 
-    it('bestOf 0 on create_lobby keeps the D-11 sentinel (1)', () => {
-        const test = newHarness();
-        const s = setupLobby(test, { noStart: true, lobby: { bestOf: 0 } });
-        expect(lobbyRow(test, s.lobbyId).bestOf).toBe(1);
+        // The reducers no longer declare the arguments; a client-built extra key has no column to land in.
+        const solo = guest(test, 'solo');
+        tx(test, solo, (ctx) => M.create_lobby(ctx, { ...DEFAULT_LOBBY_ARGS, bestOf: 5, refereeControlsShelving: false } as any));
+        const l = [...test.db.Lobby.iter()].find((x) => x.hostUserId === solo.userId)!;
+        for (const k of ['bestOf', 'refereeControlsShelving', 'bestOfNAdvantage']) expect(k in l).toBe(false);
+        tx(test, 'internal', (ctx) => M.create_lobby_preset(ctx, { ...PRESET_ARGS, name: 'p', bestOf: 5 } as any));
+        expect('bestOf' in presetNamed(test, 'p')).toBe(false);
     });
 });
 
-describe('Backlog #9: series settings editable in Waiting', () => {
-    it('a casual host changes bestOf 1 → 3 in Waiting and every confirmation resets', () => {
+describe('Backlog #9 (T-S8e): the free set is editable in Waiting', () => {
+    it('a casual host changes lineupFormat / banRestriction / hideMmr / name in Waiting and every confirmation resets', () => {
         const test = newHarness();
         const s = setupLobby(test, { noStart: true });
         expect(member(test, s.lobbyId, s.a.b1.userId).isConfirmed).toBe(true);
 
         tx(test, s.host, (ctx) => M.update_lobby_settings(ctx, settingsArgs(s.lobbyId, {
-            bestOf: 3, bestOfNAdvantage: { tag: 'Blue' }, lineupFormat: { tag: 'Thirds' },
-            banRestriction: { tag: 'MaxTwoDps' }, hideMmr: true, refereeControlsShelving: false, name: '  Friday scrim  ',
+            lineupFormat: { tag: 'Thirds' }, banRestriction: { tag: 'MaxTwoDps' }, hideMmr: true, name: '  Friday scrim  ',
         })));
         const l = lobbyRow(test, s.lobbyId);
-        expect(l.bestOf).toBe(3);
-        expect(l.bestOfNAdvantage.tag).toBe('Blue');
         expect(l.lineupFormat.tag).toBe('Thirds');
         expect(l.banRestriction.tag).toBe('MaxTwoDps');
         expect(l.hideMmr).toBe(true);
-        expect(l.refereeControlsShelving).toBe(false);
         expect(l.name).toBe('Friday scrim');
         for (const name of ['b1', 'b2', 'r1', 'r2']) {
             expect(member(test, s.lobbyId, s.a[name].userId).isConfirmed).toBe(false);
         }
 
-        // Omitted keys keep their values; bestOf back to 1 forces the advantage to None.
-        tx(test, s.host, (ctx) => M.update_lobby_settings(ctx, settingsArgs(s.lobbyId, { bestOf: 1 })));
+        // Omitted keys keep their values.
+        tx(test, s.host, (ctx) => M.update_lobby_settings(ctx, settingsArgs(s.lobbyId)));
         const back = lobbyRow(test, s.lobbyId);
-        expect(back.bestOfNAdvantage.tag).toBe('None');
         expect(back.lineupFormat.tag).toBe('Thirds');
+        expect(back.banRestriction.tag).toBe('MaxTwoDps');
         expect(back.name).toBe('Friday scrim');
     });
 
-    it('a tournament lobby rejects bestOf / lineupFormat / bestOfNAdvantage edits and accepts refereeControlsShelving', () => {
+    it('a tournament lobby rejects a lineupFormat change and accepts free-set edits', () => {
         const test = newHarness();
         const s = setupLobby(test, { noStart: true });
         const row = lobbyRow(test, s.lobbyId);
         test.db.Lobby.id.update({ ...row, isTournamentControlled: true });
 
-        expectReject(test, s.host, (ctx) => M.update_lobby_settings(ctx, settingsArgs(s.lobbyId, { bestOf: 3 })), /bestOf is set by the tournament/);
         expectReject(test, s.host, (ctx) =>
             M.update_lobby_settings(ctx, settingsArgs(s.lobbyId, { lineupFormat: { tag: 'Thirds' } })), /lineupFormat is set by the tournament/);
-        // A27 / backlog #7: the head start is bracket-authoritative in a tournament lobby (orchestrator fix, S6 review).
-        expectReject(test, s.host, (ctx) =>
-            M.update_lobby_settings(ctx, settingsArgs(s.lobbyId, { bestOfNAdvantage: { tag: 'Blue' } })), /bestOfNAdvantage is set by the tournament/);
 
         tx(test, s.host, (ctx) => M.update_lobby_settings(ctx, settingsArgs(s.lobbyId, {
-            bestOf: 1, refereeControlsShelving: false, banRestriction: { tag: 'MaxOnePerRole' },
+            lineupFormat: row.lineupFormat, banRestriction: { tag: 'MaxOnePerRole' }, hideMmr: true,
         })));
         const l = lobbyRow(test, s.lobbyId);
-        expect(l.refereeControlsShelving).toBe(false);
         expect(l.banRestriction.tag).toBe('MaxOnePerRole');
-        expect(l.bestOf).toBe(1);
+        expect(l.hideMmr).toBe(true);
+        expect(l.lineupFormat.tag).toBe(row.lineupFormat.tag);
     });
 });
 
-describe('A27 / backlog #7: bestOfNAdvantage', () => {
-    it('a casual Bo3 lobby with bestOfNAdvantage = Red starts 0–1 and keeps it through game 1', () => {
-        const test = newHarness();
-        const s = setupLobby(test, { lobby: { bestOf: 3, bestOfNAdvantage: { tag: 'Red' } } });
-        expect(lobbyRow(test, s.lobbyId).bestOfNAdvantage.tag).toBe('Red');
-        expect(session(test, s.lobbyId).gamesWonBlue).toBe(0);
-        expect(session(test, s.lobbyId).gamesWonRed).toBe(1);
-
-        draftClassicGame(s, 1);
-        finishGame(s); // Blue wins game 1: 1–1 with the head start
-        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('BetweenGames');
-        expect(session(test, s.lobbyId).gamesWonRed).toBe(1);
-        expect(session(test, s.lobbyId).gamesWonBlue).toBe(1);
-        tx(test, s.host, (ctx) => M.advance_to_next_game(ctx, { lobbyId: s.lobbyId }));
-        expect(session(test, s.lobbyId).gamesWonRed).toBe(1);
-    });
-
-    it('a Bo1 lobby forces the advantage to None (0–0)', () => {
-        const test = newHarness();
-        const s = setupLobby(test, { lobby: { bestOf: 1, bestOfNAdvantage: { tag: 'Blue' } } });
-        expect(lobbyRow(test, s.lobbyId).bestOfNAdvantage.tag).toBe('None');
-        expect(session(test, s.lobbyId).gamesWonBlue).toBe(0);
-    });
-
+describe('A27 (T-S8e): the head start is a tournament setting only', () => {
     it('a Bo1 final with winnerAdvantage 1 is rejected at tournament creation; Bo3 with 1 is accepted, 2 is not', () => {
         const test = newHarness();
         expectReject(test, 'internal', (ctx) =>
@@ -348,34 +290,35 @@ describe('A27 / backlog #7: bestOfNAdvantage', () => {
         expect(t.winnerAdvantage).toBe(1);
         expect(t.grandFinalBestOf).toBe(3);
     });
+
+    it('start_draft seeds no head start: the session has no series tally (A67(3))', () => {
+        const test = newHarness();
+        const s = setupLobby(test);
+        const sess = session(test, s.lobbyId);
+        for (const k of ['seriesBestOf', 'gamesWonBlue', 'gamesWonRed', 'currentGameNumber']) expect(k in sess).toBe(false);
+    });
 });
 
-describe('Backlog #6: presets store the series fields', () => {
-    it('a Bo3 preset round-trips bestOf, refereeControlsShelving, bestOfNAdvantage and lineupFormat', () => {
+describe('Backlog #6 (T-S8e): presets store the free set, no series fields (A67(2))', () => {
+    it('a preset round-trips lineupFormat, banRestriction and hideMmr; an update without them keeps them', () => {
         const test = newHarness();
         tx(test, 'internal', (ctx) => M.create_lobby_preset(ctx, {
-            ...PRESET_ARGS, name: 'bo3', bestOf: 3, refereeControlsShelving: false,
-            bestOfNAdvantage: { tag: 'Red' }, lineupFormat: { tag: 'Thirds' },
-            banRestriction: { tag: 'MaxOneDps' }, hideMmr: true,
+            ...PRESET_ARGS, name: 'thirds', lineupFormat: { tag: 'Thirds' }, banRestriction: { tag: 'MaxOneDps' }, hideMmr: true,
         } as any));
-        const p = presetNamed(test, 'bo3');
-        expect(p.bestOf).toBe(3);
-        expect(p.refereeControlsShelving).toBe(false);
-        expect(p.bestOfNAdvantage.tag).toBe('Red');
+        const p = presetNamed(test, 'thirds');
         expect(p.lineupFormat.tag).toBe('Thirds');
         expect(p.banRestriction.tag).toBe('MaxOneDps');
         expect(p.hideMmr).toBe(true);
+        for (const k of ['bestOf', 'refereeControlsShelving', 'bestOfNAdvantage']) expect(k in p).toBe(false);
 
-        // update without the series keys keeps them; bestOf 1 forces None
-        tx(test, 'internal', (ctx) => M.update_lobby_preset(ctx, { ...PRESET_ARGS, presetId: p.id, name: 'bo3' } as any));
-        expect(presetNamed(test, 'bo3').lineupFormat.tag).toBe('Thirds');
-        tx(test, 'internal', (ctx) => M.update_lobby_preset(ctx, { ...PRESET_ARGS, presetId: p.id, name: 'bo3', bestOf: 1 } as any));
-        expect(presetNamed(test, 'bo3').bestOfNAdvantage.tag).toBe('None');
+        tx(test, 'internal', (ctx) => M.update_lobby_preset(ctx, { ...PRESET_ARGS, presetId: p.id, name: 'thirds' } as any));
+        expect(presetNamed(test, 'thirds').lineupFormat.tag).toBe('Thirds');
+        expect(presetNamed(test, 'thirds').banRestriction.tag).toBe('MaxOneDps');
     });
 });
 
 describe('A33a: the system preset', () => {
-    it('exists after init (one row, SYSTEM-owned, tournament-lobby values) and init is idempotent', () => {
+    it('exists after init (one row, SYSTEM-owned, tournament-lobby values, no series fields) and init is idempotent', () => {
         const test = newHarness();
         expect(systemPresets(test)).toHaveLength(1);
         const p = systemPresets(test)[0];
@@ -388,9 +331,8 @@ describe('A33a: the system preset', () => {
             minimumBidRaise: 20,
             refereeCanKick: false,
             refereeExclusiveConcede: true,
-            refereeControlsShelving: true,
-            bestOf: 1,
         });
+        for (const k of ['bestOf', 'refereeControlsShelving', 'bestOfNAdvantage']) expect(k in p).toBe(false);
         expect(p.draftMode.tag).toBe('Classic');
         expect(p.banMode.tag).toBe('Four');
 

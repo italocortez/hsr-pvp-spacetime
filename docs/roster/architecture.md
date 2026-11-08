@@ -142,7 +142,7 @@ by an admin reducer.
 - `computeRosterRating(ctx, characters)` holds the Phase 11 formula over an explicit set of `{ characterName, eidolonLevel }` (vertical mean, archetype coverage, cached or on-the-fly `maxPossible` denominator, unchanged).
 - `computeAccountRating(ctx, hsrAccountId)` is the thin single-account wrapper (the account's own `HsrAccountCharacter` rows); every existing caller (`updateAccountRating`, `admin_recalculate_all_ratings`, roster mutations) gets the same number as before.
 - `computeMergedAccountRating(ctx, accountIds)`: union of the accounts' rosters, per character the max eidolon across them, rated by the same formula; no accounts → 0.
-- `computeLobbyMemberRating(ctx, lobbyId, userId)`: the member's `LobbyMemberAccount` selection; one account → its stored `accountRating`; several → merged. Used by `start_draft` (MMR snapshot) and the `select_match_account` ratchet. The display path (`view_my_lobby_members`) is S9.
+- `computeLobbyMemberRating(ctx, lobbyId, userId)`: the member's `LobbyMemberAccount` selection; one account → its stored `accountRating`; several → merged. Used by `start_draft` (MMR snapshot, taken once; the `select_match_account` ratchet is gone, A69(3)). The display path (`view_my_lobby_members`) is S9.
 
 ## Phase History
 

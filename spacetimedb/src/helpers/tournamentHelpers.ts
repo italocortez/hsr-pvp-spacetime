@@ -91,7 +91,7 @@ export function transferTournamentCaptain(ctx: any, teamId: number, leavingUserI
  *            TournamentAssistant (display, and the bracket order the finalize job reads), and every settled match:
  *            a lobby parked in AwaitingResult with a Validated record stays for the job, which counts its stats
  *            without MMR (A24(5)).
- * Voids:     every other tournament lobby (Waiting, playing, Shelved, BetweenGames, or parked with a Pending /
+ * Voids:     every other tournament lobby (Waiting, playing, or parked with a Pending /
  *            Submitted / Disputed record): the record (if any) is marked Voided and the lobby hard-deleted
  *            (voidTournamentLobby); the job deletes the Voided records without effect.
  * Deletes:   TournamentTeamRequest, the calendar events of the bracket matches (D-21), TournamentPlayerAccount.

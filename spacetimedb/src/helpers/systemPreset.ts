@@ -11,10 +11,10 @@ import { insertWithAudit } from './auditHelpers';
 //
 // The free-set values are the tournament-lobby constants of reducers/tournamentLobby.ts (create_tournament_lobby):
 // Classic, ban mode Four, NoRestriction, 60 s turns, 120 s reserve, handicaps 0, budgets 0 / 0 / minimum raise 20,
-// autoRandomPick false, referee may undo / pause / set captain but not kick, player pause on, exclusive concede on,
-// referee controls shelving on. Integrity-set columns (teamSize, gameMode, matchType, anonymity, rosterVisibility,
-// requireOwnership, costSetId, disconnect policy, allowMirrorPicks, bestOf, lineupFormat) come from the tournament
-// and the bracket in a tournament lobby; the values below only fill the columns.
+// autoRandomPick false, referee may undo / pause / set captain but not kick, player pause on, exclusive concede on.
+// Integrity-set columns (teamSize, gameMode, matchType, anonymity, rosterVisibility, requireOwnership, costSetId,
+// disconnect policy, allowMirrorPicks, lineupFormat) come from the tournament in a tournament lobby; the values below
+// only fill the columns. A67(2): no series fields.
 
 export const SYSTEM_PRESET_NAME = 'Tournament default';
 
@@ -36,8 +36,6 @@ export const SYSTEM_PRESET_VALUES = {
     disconnectForfeitSeconds: undefined,
     allowMirrorPicks: false,
     lineupFormat: { tag: 'Halves' as const },
-    bestOf: 1,
-    bestOfNAdvantage: { tag: 'None' as const },
     // Free set: tournamentLobby.ts create_tournament_lobby constants.
     draftMode: { tag: 'Classic' as const },
     banMode: { tag: 'Four' as const },
@@ -60,7 +58,6 @@ export const SYSTEM_PRESET_VALUES = {
     allowPlayerPause: true,
     refereeExclusiveConcede: true,
     hideMmr: false,
-    refereeControlsShelving: true,
 };
 
 /** The system preset row, or undefined while it is absent. */

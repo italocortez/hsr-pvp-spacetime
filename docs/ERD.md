@@ -2,6 +2,8 @@
 
 76 tables. Updated 2026-11-06 (S3 backend reset: 27 tables public → private per A37 / ACCESS-SECURITY-OPS Appendix A, 10 new, `group_phase_record` dropped per A23). Visibility: **21 public** (reference data, aggregates, `user`, `tournament`, `bracket_match`, `admin_alert`, the `lobby_cursor_event` event table); every other table is PRIVATE and read through views (S9). Paste into [mermaid.live](https://mermaid.live) to preview.
 
+Phase S8e execution (DECISIONS.md A67): one game per lobby. `lobby` / `lobby_preset` lose `bestOf`, `bestOfNAdvantage`, `refereeControlsShelving` (the `AdvantageSide` enum is gone); `match_session` loses `currentGameNumber`, `gamesWonBlue`, `gamesWonRed`, `seriesBestOf`; `gameNumber` leaves `match_session_step`, `match_session_step_history` (PK `[matchHistoryId, sequence]`), `match_lineup` (index `by_lobby`), `match_lineup_history`, `match_result_group_score` / `match_result_adjustment` (index `by_result`), `match_result_game` (PK `matchResultId`, one row per record) and `match_result_game_history` (PK `matchHistoryId`); `LobbyStage` = Waiting | Drafting | Equipping | Scoring | AwaitingResult. `bracket_match.team1Games` / `team2Games` are the derived series tally (A67(4)).
+
 Phase S7b execution (DECISIONS.md A60): `match_result_game` gains `blueConfirmed`, `redConfirmed` (per-game captain confirmations), `closedAt` (optional, the closed marker) and `closedById` (optional, FK user); `match_result_record` loses `blueConfirmed` / `redConfirmed`; `match_lineup` loses `isConfirmed`.
 
 | Color | Tables (PUBLIC unless marked) |
@@ -201,6 +203,8 @@ erDiagram
         u32 winnerTeamId FK
         u32 loserTeamId FK
         string state "Pending|Ready|Walkover|Void|Decided"
+        u8 team1Games "A67(4), A69(1): derived tally (head start, stored from generation + Validated games)"
+        u8 team2Games "A67(4): derived tally (Validated games)"
     }
     tournament_finalize_job {
         u64 scheduledId PK
@@ -218,7 +222,6 @@ erDiagram
         u32 bracketMatchId FK
         u32 costSetId FK
         string lineupFormat "A21 Halves|Thirds"
-        string bestOfNAdvantage "A27 None|Blue|Red"
         string banRestriction "A45"
         bool hideMmr "A40"
     }
@@ -240,7 +243,6 @@ erDiagram
     match_lineup {
         u32 id PK
         u32 lobbyId FK
-        u8 gameNumber
         string groups "A21: JSON string[][] of 4-character groups"
     }
     lobby_ban {
@@ -290,8 +292,7 @@ erDiagram
         u32 winnerOverrideById FK "A21/A39 tie-break override"
     }
     match_result_game {
-        u32 matchResultId PK_FK
-        u8 gameNumber PK
+        u32 matchResultId PK_FK "A67: one row per record"
         u8 teamBlueDeaths "A21"
         u32 validatedByUserId FK
         bool blueConfirmed "A60 (S7b): per-game captain confirmation"
@@ -302,14 +303,12 @@ erDiagram
     match_result_group_score {
         u32 id PK
         u32 matchResultId FK
-        u8 gameNumber
         u8 groupIndex "A21: per half/third"
         u32 value "hundredths"
     }
     match_result_adjustment {
         u32 id PK
         u32 matchResultId FK
-        u8 gameNumber
         i32 value "A21: signed hundredths, required reason"
         u32 setById FK
     }
@@ -327,7 +326,6 @@ erDiagram
     }
     match_session_step_history {
         u32 matchHistoryId PK_FK
-        u8 gameNumber PK
         u32 sequence PK
     }
     match_participant_history {
@@ -335,8 +333,7 @@ erDiagram
         u32 matchHistoryId PK_FK
     }
     match_result_game_history {
-        u32 matchHistoryId PK_FK
-        u8 gameNumber PK
+        u32 matchHistoryId PK_FK "A67: one game per match"
     }
 
     %% pink

@@ -6,8 +6,7 @@ export const matchSessionStepColumns = {
     id: t.u32().primaryKey().autoInc(),
 
     lobbyId: t.u32(),      // FK to Lobby/MatchSession
-    gameNumber: t.u8(),    // 1-indexed game number within the series (per D-13); game 1 = 1
-    sequence: t.u32(),     // 1, 2, 3... (Strict ordering within the game)
+    sequence: t.u32(),     // 1, 2, 3... (strict ordering within the lobby's one game, A67(3))
 
     actorUserId: t.u32(), // Who performed the action (persistent User ID)
     anonymousLabel: t.string().optional(),

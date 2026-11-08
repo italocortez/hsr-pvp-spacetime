@@ -17,7 +17,6 @@ import {
 
 export default __t.row({
   matchHistoryId: __t.u32().name("match_history_id"),
-  gameNumber: __t.u8().name("game_number"),
   sequence: __t.u32(),
   actorUserId: __t.u32().name("actor_user_id"),
   actorDisplayName: __t.string().name("actor_display_name"),

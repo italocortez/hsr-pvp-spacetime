@@ -29,7 +29,7 @@ export const bracketMatchColumns = {
     winnerTeamId: t.u32().optional(),
     loserTeamId: t.u32().optional(),
     decidedBy: BracketDecision.optional(),
-    team1Games: t.u8(),                   // series score: A30 game differential + display
+    team1Games: t.u8(),                   // A67(4): derived tally (head start + Validated games), written only by helpers/bracketResults.ts (bracketStore inserts the head start, A69(1)); A30 game differential + display
     team2Games: t.u8(),
     createdById: t.u32(),
     createdDate: t.timestamp(),

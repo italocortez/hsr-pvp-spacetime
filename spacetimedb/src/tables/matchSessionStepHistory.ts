@@ -3,8 +3,7 @@ import { TeamSide, ActionType } from '../types/enums';
 
 export const matchSessionStepHistoryColumns = {
     matchHistoryId: t.u32(),     // FK to MatchSessionHistory.id
-    gameNumber: t.u8(),          // 1-indexed game number within the series (per D-13); prevents PK conflicts between games
-    sequence: t.u32(),           // Step number within the game (1, 2, 3...)
+    sequence: t.u32(),           // Step number within the game (1, 2, 3...); A67(3): one game per match
     actorUserId: t.u32(),        // Who performed the action
     actorDisplayName: t.string(), // Denormalized for replay (per D-53/D-64)
     teamSide: TeamSide,         // Blue/Red/Spectator
@@ -20,7 +19,7 @@ export const matchSessionStepHistoryColumns = {
 export const MatchSessionStepHistory = table({
     name: 'match_session_step_history',
     public: false, // S3 (A37): private, read through views (S9)
-    primaryKey: ['matchHistoryId', 'gameNumber', 'sequence'],
+    primaryKey: ['matchHistoryId', 'sequence'],
     indexes: [
         { accessor: 'by_match_history', algorithm: 'btree', columns: ['matchHistoryId'] },
     ],

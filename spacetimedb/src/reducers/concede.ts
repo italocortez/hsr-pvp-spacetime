@@ -43,9 +43,10 @@ export function performConcede(
     }, triggerUserId));
     const settledResult = ctx.db.MatchResultRecord.id.find(existingResult.id);
 
-    // 5. A38(1): a concede is a settled result and advances the bracket through the single writer (decidedBy
-    // Concede, the series score so far, A35 Blue = team1, SYSTEM_USER_ID as audit actor, A37). Only a Ready match:
-    // one already settled by staff or a DQ stays as it is. No finalization for tournament records (A24(4)).
+    // 5. A38(1), A67(6): a concede settles this game and hands it to the bracket through the single writer, which
+    // recomputes the derived tally and decides the match only when a side reaches ceil(bestOf / 2) (decidedBy
+    // Concede, A35 Blue = team1, SYSTEM_USER_ID as audit actor, A37). Only a Ready match: one already settled by
+    // staff or a DQ stays as it is. No finalization for tournament records (A24(4)).
     handOffToBracket(ctx, settledResult, 'Concede');
 
     // 6. Transition lobby to AwaitingResult (D-28)
@@ -96,10 +97,10 @@ export const concede_match = spacetimedb.reducer(
             throw new SenderError('Lobby not found.');
         }
 
-        // D-26, D-93: Only active stages (D-10: BetweenGames allows concede — surrenders entire series)
-        const activeStages = ['Drafting', 'Equipping', 'Scoring', 'BetweenGames'];
+        // D-26: Only active stages (A67(1)(6): the concede settles this game; no series-level concede)
+        const activeStages = ['Drafting', 'Equipping', 'Scoring'];
         if (!activeStages.includes(lobby.stage.tag)) {
-            throw new SenderError('Concede is only available during Drafting, Equipping, Scoring, or BetweenGames.');
+            throw new SenderError('Concede is only available during Drafting, Equipping, or Scoring.');
         }
 
         // D-81: 3rd party referee exclusive concede (checked BEFORE spectator/coach guards
@@ -170,10 +171,10 @@ export const claim_forfeit = spacetimedb.reducer(
             throw new SenderError('Lobby not found.');
         }
 
-        // Only active stages (D-10: BetweenGames included)
-        const activeStages = ['Drafting', 'Equipping', 'Scoring', 'BetweenGames'];
+        // Only active stages (A67(1))
+        const activeStages = ['Drafting', 'Equipping', 'Scoring'];
         if (!activeStages.includes(lobby.stage.tag)) {
-            throw new SenderError('Forfeit claim is only available during Drafting, Equipping, Scoring, or BetweenGames.');
+            throw new SenderError('Forfeit claim is only available during Drafting, Equipping, or Scoring.');
         }
 
         // D-81: 3rd party referee exclusive concede (before spectator/coach guards)
@@ -243,7 +244,7 @@ export const claim_forfeit = spacetimedb.reducer(
 );
 
 // ─── defer_match ─────────────────────────────────────────────────────────────
-// Shelve match to AwaitingResult for TO/admin resolution.
+// Defer the match to AwaitingResult for TO / admin resolution (Deferred, A22a).
 // Deferred policy only. Per D-18, D-19, D-20, D-63.
 
 export const defer_match = spacetimedb.reducer(
@@ -259,10 +260,10 @@ export const defer_match = spacetimedb.reducer(
             throw new SenderError('Lobby not found.');
         }
 
-        // Only active stages (D-10: BetweenGames included)
-        const activeStages = ['Drafting', 'Equipping', 'Scoring', 'BetweenGames'];
+        // Only active stages (A67(1))
+        const activeStages = ['Drafting', 'Equipping', 'Scoring'];
         if (!activeStages.includes(lobby.stage.tag)) {
-            throw new SenderError('Defer is only available during Drafting, Equipping, Scoring, or BetweenGames.');
+            throw new SenderError('Defer is only available during Drafting, Equipping, or Scoring.');
         }
 
         // D-81: 3rd party referee exclusive concede (before spectator/coach guards)

@@ -4,16 +4,11 @@ import { getAuthenticatedUser } from '../helpers/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { ensureLobbyMember, ensureHostOrAbove, ensureStageIs, slotTeam, slotIsCoach, slotToTeamSide } from '../helpers/lobbyHelpers';
 import { resolveOwnedEidolon, validateCharacterOwnership } from '../helpers/ownershipValidation';
-import { initSessionForGame } from '../helpers/matchSessionInit';
+import { buildAuctionBanSequence, buildClassicSequence } from '../helpers/draftSequences';
 import { computeLobbyMemberRating } from '../helpers/accountRating';
 import { banRestrictionError, isBanLegal } from '../helpers/banRestriction';
 import { ensureMatchAlive } from '../helpers/disconnectHelpers';
-import { currentGameSteps, getNextSequence } from '../helpers/stepSequence';
-
-/** A65(2): the steps of the lobby's current game (the earlier games' steps stay until finalization). */
-function gameSteps(ctx: any, lobbyId: number): any[] {
-    return currentGameSteps(ctx, lobbyId, ctx.db.MatchSession.lobbyId.find(lobbyId)?.currentGameNumber ?? 1);
-}
+import { lobbySteps, getNextSequence } from '../helpers/stepSequence';
 
 // ─── start_draft ──────────────────────────────────────────────────────────────
 // Initializes the draft for a lobby.
@@ -119,9 +114,39 @@ export const start_draft = spacetimedb.reducer(
             ctx.db.LobbyMember.insert(updateWithAudit(ctx, first, { isCaptain: true }, user.id));
         }
 
-        // Create MatchSession (F2: initSessionForGame builds the sequence and game state; A27 seeds the head start
-        // from lobby.bestOfNAdvantage)
-        const sequence = initSessionForGame(ctx, lobby, undefined, user.id);
+        // Create MatchSession: the draft sequence (Classic picks + bans, or the Auction ban-only prefix, D-48), timer,
+        // auction state, budgets and pause counters. A67(3): one session per lobby, created once (the S6 per-game
+        // initializer is folded in here; no series columns, no A27 head-start seeding: the head start lives on the
+        // bracket match).
+        const sequence = lobby.draftMode.tag === 'Classic'
+            ? buildClassicSequence(lobby.banMode.tag, lobby.lineupFormat.tag) // A21: Thirds = 12 picks per team
+            : buildAuctionBanSequence(lobby.banMode.tag); // bans only; the Auction count is isAuctionComplete's (draftAuction.ts)
+        ctx.db.MatchSession.insert(insertWithAudit(ctx, {
+            lobbyId: lobby.id,
+            turnIndex: 0,
+            draftSequence: sequence,
+            timerState: {
+                turnStartAt: ctx.timestamp,
+                teamBlueReserveMs: lobby.reserveBankSeconds * 1000,
+                teamRedReserveMs: lobby.reserveBankSeconds * 1000,
+                isPaused: false,
+                accumulatedPauseMs: 0,
+            },
+            // Auction with no bans opens the auction phase immediately (D-48).
+            isAuctionPhase: lobby.draftMode.tag === 'Auction' && sequence.length === 0,
+            nextNominatorTeam: { tag: 'Blue' },
+            blueCharactersWon: 0,
+            redCharactersWon: 0,
+            currentNomination: undefined,
+            currentBidAmount: undefined,
+            currentBidTeam: { tag: 'Spectator' },
+            teamBlueCharBudget: lobby.characterBudget,
+            teamRedCharBudget: lobby.characterBudget,
+            teamBlueLcBudget: lobby.lightconeBudget,
+            teamRedLcBudget: lobby.lightconeBudget,
+            pausesUsedBlue: 0,
+            pausesUsedRed: 0,
+        } as any, user.id));
 
         // Determine refereeFullControl from referee's team slot (D-44):
         // spectator referee = full control; player-side referee = false
@@ -169,7 +194,7 @@ export const start_draft = spacetimedb.reducer(
             // Backlog #10 (replaces the D-A-01 / D-B-01 MAX rule): the merged account rating over the union of the
             // member's selected rosters (per character the max eidolon across the accounts, same formula and
             // maxPossible denominator), captured at Waiting -> Drafting. One account gives that account's own
-            // rating. Later selections only ratchet it upward (select_match_account, D-B-03).
+            // rating. A66, A69(3): taken once here; selection is Waiting-only, so nothing moves it later.
             // D-B-02: 0 when no LMA rows exist (casual only; ranked/MMR-tournament matches reject that above).
             const accountRatingSnapshot = computeLobbyMemberRating(ctx, lobbyId, member.userId);
             ctx.db.MatchResultParticipant.insert(insertWithAudit(ctx, {
@@ -278,7 +303,7 @@ export const pick_character = spacetimedb.reducer(
         }
 
         // Character availability: check not already picked or banned (unless allowMirrorPicks)
-        const existingSteps = gameSteps(ctx, lobbyId); // A65(2): current game only
+        const existingSteps = lobbySteps(ctx, lobbyId); // A67(3): the lobby's one game
         if (!lobby.allowMirrorPicks) {
             const alreadyPicked = existingSteps.some(
                 (s: any) =>
@@ -336,7 +361,6 @@ export const pick_character = spacetimedb.reducer(
         ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
             id: 0,
             lobbyId,
-            gameNumber: session.currentGameNumber,
             sequence: getNextSequence(ctx, lobbyId), // F9: never collides with Pause/Undo audit rows
             actorUserId: user.id,
             anonymousLabel: undefined,
@@ -474,7 +498,7 @@ export const ban_character = spacetimedb.reducer(
         }
 
         // Character availability: not already banned or picked
-        const existingSteps = gameSteps(ctx, lobbyId); // A65(2): current game only
+        const existingSteps = lobbySteps(ctx, lobbyId); // A67(3): the lobby's one game
         const alreadyBanned = existingSteps.some(
             (s: any) =>
                 s.action.tag === 'Ban' &&
@@ -504,7 +528,6 @@ export const ban_character = spacetimedb.reducer(
         ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
             id: 0,
             lobbyId,
-            gameNumber: session.currentGameNumber,
             sequence: getNextSequence(ctx, lobbyId), // F9: never collides with Pause/Undo audit rows
             actorUserId: user.id,
             anonymousLabel: undefined,
@@ -607,7 +630,7 @@ export const timer_expiry_classic = spacetimedb.reducer(
 
             // D-43b: autoRandomPick — deterministic selection from available pool
             if (lobby.autoRandomPick) {
-                const existingSteps = gameSteps(ctx, lobbyId); // A65(2): current game only
+                const existingSteps = lobbySteps(ctx, lobbyId); // A67(3): the lobby's one game
                 const bannedChars = new Set(
                     existingSteps
                         .filter((s: any) => s.action.tag === 'Ban' && s.payload.tag === 'Ban')
@@ -677,7 +700,6 @@ export const timer_expiry_classic = spacetimedb.reducer(
             ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
                 id: 0,
                 lobbyId,
-                gameNumber: session.currentGameNumber,
                 sequence: getNextSequence(ctx, lobbyId), // F9: never collides with Pause/Undo audit rows
                 actorUserId: 0,  // System actor
                 anonymousLabel: undefined,
@@ -695,7 +717,7 @@ export const timer_expiry_classic = spacetimedb.reducer(
 
             // D-43b: autoRandomPick — deterministic selection from unban/unpicked pool
             if (lobby.autoRandomPick) {
-                const existingSteps = gameSteps(ctx, lobbyId); // A65(2): current game only
+                const existingSteps = lobbySteps(ctx, lobbyId); // A67(3): the lobby's one game
                 const bannedChars = new Set(
                     existingSteps
                         .filter((s: any) => s.action.tag === 'Ban' && s.payload.tag === 'Ban')
@@ -735,7 +757,6 @@ export const timer_expiry_classic = spacetimedb.reducer(
             ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
                 id: 0,
                 lobbyId,
-                gameNumber: session.currentGameNumber,
                 sequence: getNextSequence(ctx, lobbyId), // F9: never collides with Pause/Undo audit rows
                 actorUserId: 0,  // System actor
                 anonymousLabel: undefined,

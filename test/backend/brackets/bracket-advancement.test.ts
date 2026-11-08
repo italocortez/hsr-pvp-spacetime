@@ -230,8 +230,8 @@ async function setupTournamentMatch(
     if (!mr) throw new Error(`MatchResultRecord not found for lobby #${lobbyId}`);
 
     // Record scores (referee records both sides)
-    await toUser.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Blue' }, values: [350, 350], deaths: 0 });
-    await toUser.call.recordGroupScores({ lobbyId, gameNumber: 1, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0 });
+    await toUser.call.recordGroupScores({ lobbyId, teamSide: { tag: 'Blue' }, values: [350, 350], deaths: 0 }); // S10: rewrite (A67(3): gameNumber argument removed; one game per lobby)
+    await toUser.call.recordGroupScores({ lobbyId, teamSide: { tag: 'Red' }, values: [500, 500], deaths: 0 }); // S10: rewrite (A67(3): gameNumber argument removed; one game per lobby)
     await toUser.sync(1000);
 
     // Confirm both sides

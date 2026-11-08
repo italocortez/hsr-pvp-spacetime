@@ -159,7 +159,7 @@ describe('A56(3): hardDeleteLobby deletes the scoring rows', () => {
         const s = playToScoring(test);
         recordScores(s, captain(s, 'Blue'), 'Blue', [H(5), H(5)]);
         tx(test, s.host, (ctx) =>
-            M.set_score_adjustment(ctx, { lobbyId: s.lobbyId, gameNumber: 1, teamSide: { tag: 'Red' }, value: 100 }));
+            M.set_score_adjustment(ctx, { lobbyId: s.lobbyId, teamSide: { tag: 'Red' }, value: 100 }));
         const recId = record(test, s.lobbyId).id;
         expect(test.db.MatchLineup.count()).toBe(2n);
         expect(test.db.MatchResultGroupScore.count()).toBe(2n);

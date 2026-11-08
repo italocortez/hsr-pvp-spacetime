@@ -1,5 +1,5 @@
 // T-S8d: builders for the S8d in-memory tests (tournament lobbies, the one record per lobby, the result → bracket
-// hand-off, finalization at Completed / Cancelled, whole-series steps). Not a test file: imported by s8d-*.test.ts.
+// hand-off, finalization at Completed / Cancelled; T-S8e: one game per lobby, A67). Not a test file: imported by s8d-*.test.ts.
 // Reuses the S4 / S7 / S8 builders. Tournament lobbies are created and played through the module's reducers; HSR
 // accounts, roles and the EloConfig row are written straight into the in-memory datastore (or through the internal
 // owner), like the earlier suites. `test.db` is read only outside `tx` bodies. Nothing reaches maincloud.
@@ -28,12 +28,13 @@ export function sidesOf(f: Field, bracketMatchId: number): { blue: TeamEntry; re
     };
 }
 
-/** create_tournament_lobby as `who`; returns the new lobby's id. */
+/** create_tournament_lobby as `who`; returns the new lobby's id (T-S8e: earlier lobbies of the match may be parked). */
 export function createTournamentLobby(test: Harness, who: Actor, bracketMatchId: number): number {
+    const before = new Set(lobbiesOf(test, bracketMatchId).map((l) => l.id));
     tx(test, who, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId, joinCode: '' }));
-    const live = lobbiesOf(test, bracketMatchId);
-    expect(live).toHaveLength(1);
-    return live[0].id;
+    const created = lobbiesOf(test, bracketMatchId).filter((l) => !before.has(l.id));
+    expect(created).toHaveLength(1);
+    return created[0].id;
 }
 
 export const join = (test: Harness, who: Actor, lobbyId: number) =>
@@ -80,9 +81,9 @@ export function captainActor(s: Lobby, team: 'Blue' | 'Red'): Actor {
     return actorOf(s, row.userId);
 }
 
-/** Drafts the current Classic game to Equipping: each step by the acting team's captain, names unique per game. */
+/** Drafts the lobby's Classic game to Equipping: each step by the acting team's captain (T-S8e: one game per lobby). */
 export function draftGame(s: Lobby, prefix = 'c') {
-    const game = session(s.test, s.lobbyId).currentGameNumber;
+    const game = 1; // T-S8e (A67(3)): no game number; the name shape of S8d is kept
     let guard = 0;
     while (lobbyRow(s.test, s.lobbyId).stage.tag === 'Drafting' && guard++ < 60) {
         const sess = session(s.test, s.lobbyId);
@@ -98,24 +99,26 @@ export function draftGame(s: Lobby, prefix = 'c') {
     expect(lobbyRow(s.test, s.lobbyId).stage.tag).toBe('Equipping');
 }
 
-/** Plays the series until the deciding close: every game drafted and closed by the host referee for `winner`. */
-export function playSeries(s: Lobby, winner: 'Blue' | 'Red') {
-    let guard = 0;
-    while (guard++ < 5) {
-        const stage = lobbyRow(s.test, s.lobbyId).stage.tag;
-        if (stage === 'AwaitingResult') return;
-        if (stage === 'BetweenGames') tx(s.test, s.host, (ctx) => M.advance_to_next_game(ctx, { lobbyId: s.lobbyId }));
-        if (lobbyRow(s.test, s.lobbyId).stage.tag === 'Drafting') draftGame(s);
-        finishGame(s, winner);
-    }
+/** T-S8e (A67(1)): plays the lobby's one game: drafted, then closed by the host referee for `winner` (→ AwaitingResult). */
+export function playLobbyGame(s: Lobby, winner: 'Blue' | 'Red') {
+    if (lobbyRow(s.test, s.lobbyId).stage.tag === 'Drafting') draftGame(s);
+    finishGame(s, winner);
     expect(lobbyRow(s.test, s.lobbyId).stage.tag).toBe('AwaitingResult');
 }
 
-/** Opens, plays and parks a bracket match's lobby; team1 (Blue) or team2 (Red) wins. */
+/**
+ * Opens, plays and parks one lobby (one game, A67) of a bracket match; team1 (Blue) or team2 (Red) wins it. In a Bo1
+ * that game decides the match; in a Bo3 it moves the derived tally only (playBracketMatch plays several lobbies).
+ */
 export function playMatch(f: Field, bracketMatchId: number, winner: 'Blue' | 'Red', opts: OpenOpts = {}): Lobby {
     const s = openMatchLobby(f, bracketMatchId, opts);
-    playSeries(s, winner);
+    playLobbyGame(s, winner);
     return s;
+}
+
+/** T-S8e: one lobby per game, in order (each parks before the next is created, D-45 / A67(5)). */
+export function playBracketMatch(f: Field, bracketMatchId: number, winners: Array<'Blue' | 'Red'>, opts: OpenOpts = {}): Lobby[] {
+    return winners.map((w) => playMatch(f, bracketMatchId, w, opts));
 }
 
 /** validate_match_result as `who` on the lobby's one record. */

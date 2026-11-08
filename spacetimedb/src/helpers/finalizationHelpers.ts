@@ -1,6 +1,6 @@
 // ─── Finalization Pipeline Helpers ────────────────────────────────────────────
 // Shared 19-step finalization logic callable by finalize_match_result and admin_force_finalize (standalone ranked),
-// submitSeriesResult and performConcede (casual auto-finalize per D-37; S7b replaced submit_match_result) and, for
+// submitGameResult and performConcede (casual auto-finalize per D-37; S7b replaced submit_match_result) and, for
 // tournament records, only the run_tournament_finalize job (A24(4)(7), S8d).
 
 import { SenderError } from 'spacetimedb/server';
@@ -200,7 +200,7 @@ export function runFinalization(
     // 1. Read participants
     const participants = [...ctx.db.MatchResultParticipant.match_result_id.filter(matchResult.id)];
 
-    // 2. Read games
+    // 2. Read games (A67(3): at most one row, the record's game)
     const games = [...ctx.db.MatchResultGame.match_result_id.filter(matchResult.id)];
 
     // 3. Read lobby
@@ -209,12 +209,12 @@ export function runFinalization(
     // 3b. Read match session (for budget analysis in step 7, D-88)
     const session = ctx.db.MatchSession.lobbyId.find(matchResult.lobbyId);
 
-    // 3c. A56: the match's lineups (every game; MatchLineup is keyed by lobby)
+    // 3c. A56: the match's lineups (MatchLineup is keyed by lobby; A67(3): one game)
     const lineups = lobbyLineups(ctx, matchResult.lobbyId);
 
-    // 4. Read steps, every game of the series (A65(3)), sorted by (gameNumber, sequence)
+    // 4. Read steps (A67(3): the lobby's one game), sorted by sequence
     const steps = [...ctx.db.MatchSessionStep.lobby_id.filter(matchResult.lobbyId)]
-        .sort((a: any, b: any) => (a.gameNumber - b.gameNumber) || (a.sequence - b.sequence));
+        .sort((a: any, b: any) => a.sequence - b.sequence);
 
     // 5. Read active season
     const activeSeason = [...ctx.db.Season.is_active.filter(true)][0];
@@ -229,7 +229,7 @@ export function runFinalization(
     // Determine match end reason (per D-31/D-32/D-33):
     // winnerTeamSide answers WHO won, matchEndReason answers HOW it ended
     // A31: no draws — MatchEndReason.Draw was removed and every path that reaches finalization sets a winner
-    // (submitSeriesResult computes it at the deciding close, concede derives it, admin_force_finalize / override_match_result require one).
+    // (submitGameResult computes it at the close of the game, concede derives it, admin_force_finalize / override_match_result require one).
     if (matchResult.winnerTeamSide === undefined) {
         throw new SenderError('A result without a winner cannot be finalized (A31: no draws).');
     }
@@ -363,9 +363,7 @@ export function runFinalization(
                 }
                 ctx.db.MatchSessionStepHistory.insert(insertWithAudit(ctx, {
                     matchHistoryId: historyRow.id,
-                    // PK is [matchHistoryId, gameNumber, sequence] — gameNumber required (D-13); A65(3): every game
-                    gameNumber: step.gameNumber,
-                    sequence: step.sequence,
+                    sequence: step.sequence, // PK [matchHistoryId, sequence] (A67(3))
                     actorUserId: step.actorUserId,
                     actorDisplayName: resolveUserLabel(ctx, step.actorUserId).displayName,
                     teamSide: step.actorSlot,
@@ -382,8 +380,7 @@ export function runFinalization(
         if (historyRow) {
             for (const game of games) {
                 ctx.db.MatchResultGameHistory.insert(insertWithAudit(ctx, {
-                    matchHistoryId: historyRow.id,
-                    gameNumber: game.gameNumber,
+                    matchHistoryId: historyRow.id, // PK (A67(3): one game per match)
                     gameMode: game.gameMode,
                     teamBlueScreenshotUrl: game.teamBlueScreenshotUrl,
                     teamRedScreenshotUrl: game.teamRedScreenshotUrl,
@@ -402,14 +399,13 @@ export function runFinalization(
         }
     }
 
-    // 9b. A56(1): write MatchLineupHistory rows (every lineup of the match, all games), next to the game rows.
+    // 9b. A56(1): write MatchLineupHistory rows (every lineup of the match), next to the game row.
     if (!isConcede || concedeFlags.doArchiveGames) {
         if (historyRow) {
             for (const lineup of lineups) {
                 ctx.db.MatchLineupHistory.insert(insertWithAudit(ctx, {
                     id: 0,
                     matchHistoryId: historyRow.id,
-                    gameNumber: lineup.gameNumber,
                     teamSide: lineup.teamSide,
                     groups: lineup.groups,
                     synergySurcharge: lineup.synergySurcharge,

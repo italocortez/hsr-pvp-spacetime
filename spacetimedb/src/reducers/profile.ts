@@ -47,12 +47,12 @@ export const delete_my_account = spacetimedb.reducer((ctx) => {
         return;
     }
 
-    // Same notion of "in a lobby" as ensureNotInLobby (D-22): AwaitingResult / Finished lobbies and voluntarily
+    // Same notion of "in a lobby" as ensureNotInLobby (D-22): AwaitingResult lobbies and voluntarily
     // left seats do not count; lobby GC removes those rows.
     for (const membership of ctx.db.LobbyMember.user_id.filter(user.id)) {
         if (membership.voluntarilyLeft) continue;
         const lobby = ctx.db.Lobby.id.find(membership.lobbyId);
-        if (lobby && lobby.stage.tag !== 'AwaitingResult' && lobby.stage.tag !== 'Finished') {
+        if (lobby && lobby.stage.tag !== 'AwaitingResult') {
             throw new SenderError('Leave your lobby before deleting your account.');
         }
     }

@@ -601,6 +601,26 @@ Note: TournamentEnrolled row does NOT contain hsrAccountId — that column was r
 | A second start of the job | no second job row | `finalizationStartedAt` re-stamped |
 
 
+## Acceptance Scenarios (Phase S8e execution)
+
+### S8e-T1 One game in play per bracket match (A67(5), D-45)
+**Given** a Ready bracket match with a lobby that is not settled (Waiting, playing, or AwaitingResult with a Submitted / Disputed record)
+**When** anyone calls `create_tournament_lobby` for the match
+**Then** rejected: "A lobby for this bracket match is still in play."; once that lobby's record is Validated (the lobby parks) the next lobby can be created
+
+### S8e-T2 Decided and capped matches take no lobby (A67(5))
+**When** `create_tournament_lobby` is called for a decided match, or for a match whose Validated games reach `bestOf`
+**Then** rejected: "<position> is Decided; a lobby needs a Ready match." / "This bracket match has no games left (best of N)."
+
+### S8e-T3 The lobby carries no series settings (A67(2))
+**When** the lobby is created
+**Then** it has the integrity and free sets as before, and no `bestOf`, head start or shelving setting
+
+### S8e-T4 Several records per match in the finalize job (A67(8))
+**Given** a Bo3 match played over three lobbies, each parked with a Validated record
+**When** the tournament is Completed
+**Then** the job finalizes the three records in bracket order, within the match by creation time; MMR moves once per game in an MMR tournament (A67(7))
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -665,6 +685,7 @@ Note: TournamentEnrolled row does NOT contain hsrAccountId — that column was r
 | Minimum MMR (guests rejected, row-less players at the initial rating); rename / alias; manual groups; idle-tournament cancel | Phase S8b execution (DECISIONS.md A36b, A36a, A24(6)) | 2026-11-07 |
 | `generate_bracket` withdraws teams still Forming; `dq_participant` keeps the emptied team as Disqualified and settles its open matches through `applyBracketResult` (optional `dqWholeTeam`); scenarios "Generation Withdraws Forming Teams", "DQ Settles the Bracket" | Phase S8c execution (DECISIONS.md A23, A26a) | 2026-11-07 |
 | create / update arguments: grandFinalBestOf, groupAdvanceCount, groupAssignmentMode, checkInEnabled, requireResultValidation, allowMirrorPicks, lineupFormat, disconnectForfeitSeconds, optional minimumMmr and lobbyPresetId; A29 / A32 validation | Phase S8b execution (DECISIONS.md A28, A29, A32, A33, A33a, A36) | 2026-11-07 |
+| Scenarios S8e-T1..T4: D-45 = one unsettled lobby per bracket match, decided / capped rejections, no series settings on the lobby, several records per match in the job; supersedes S8d-T1 (`bestOf` / `bestOfNAdvantage` copied) and the S8d-T2 duplicate-lobby message | Phase S8e execution (DECISIONS.md A67(2)(5)(7)(8)) | 2026-11-08 |
 
 ---
 

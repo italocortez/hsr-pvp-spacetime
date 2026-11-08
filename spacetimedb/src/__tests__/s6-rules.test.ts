@@ -80,7 +80,7 @@ describe('Backlog #2: cost-set selectability and coverage', () => {
         const classic = publishedCostSet(test, 'classic', 'Classic');
         const s = setupLobby(test, { noStart: true });
         const base = (() => {
-            const { joinCode: _j, presetId: _p, bestOf: _b, refereeControlsShelving: _r, ...rest } = DEFAULT_LOBBY_ARGS;
+            const { joinCode: _j, presetId: _p, ...rest } = DEFAULT_LOBBY_ARGS;
             return { lobbyId: s.lobbyId, ...rest, refereeExclusiveConcede: true };
         })();
         expectReject(test, s.host, (ctx) => M.update_lobby_settings(ctx, { ...base, costSetId: empty } as any), NO_COSTS);
@@ -179,7 +179,7 @@ describe('Backlog #10: merged account rating', () => {
         expect(single).toEqual([r1, r1]);
     });
 
-    it('start_draft snapshots the merged rating; deselecting never lowers it; a single-account snapshot is the stored rating', () => {
+    it('start_draft snapshots the merged rating; selection is Waiting-only after A67, so the snapshot holds; a single-account snapshot is the stored rating', () => {
         const test = newHarness();
         seedRatingData(test);
         const { who, acct1, acct2 } = twoAccountPlayer(test);
@@ -188,7 +188,6 @@ describe('Backlog #10: merged account rating', () => {
 
         const s = setupLobby(test, {
             actors: { b1: who },
-            lobby: { bestOf: 3 },
             // Two selected accounts, as the tournament path (D-05, additive) allows.
             beforeStart: (l) => tx(test, 'internal', (ctx) => {
                 ctx.db.LobbyMemberAccount.insert({ lobbyId: l.lobbyId, userId: who.userId, hsrAccountId: acct1 });
@@ -197,18 +196,13 @@ describe('Backlog #10: merged account rating', () => {
         });
         expect(snapshotOf(test, s.lobbyId, who.userId)).toBe(merged);
 
-        // T-S7b: BetweenGames is reached through a game close (A60(3)): draft game 1, then the full-control host closes it.
-        for (let guard = 0; lobbyRow(test, s.lobbyId).stage.tag === 'Drafting' && guard < 40; guard++) {
-            const sess = session(test, s.lobbyId);
-            const team = sess.draftSequence[sess.turnIndex].teamTurn.tag as 'Blue' | 'Red';
-            pick(s, team, `m${sess.turnIndex}`);
-        }
-        finishGame(s);
-        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('BetweenGames');
-        tx(test, who, (ctx) => M.deselect_match_account(ctx, { lobbyId: s.lobbyId, hsrAccountId: acct2 }));
-        expect(snapshotOf(test, s.lobbyId, who.userId)).toBe(merged);
-        // Re-selecting a single account (casual replace path) rates r1 < merged: the ratchet keeps the snapshot.
-        tx(test, who, (ctx) => M.select_match_account(ctx, { lobbyId: s.lobbyId, hsrAccountId: acct1 }));
+        // T-S8e (A67(1)): the between-games account swap is gone (D-06: selection in Waiting only). After start_draft
+        // a deselect / reselect is rejected and the snapshot stays the merged rating.
+        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Drafting');
+        expectReject(test, who, (ctx) => M.deselect_match_account(ctx, { lobbyId: s.lobbyId, hsrAccountId: acct2 }),
+            'Account deselection is only allowed during the Waiting stage.');
+        expectReject(test, who, (ctx) => M.select_match_account(ctx, { lobbyId: s.lobbyId, hsrAccountId: acct1 }),
+            'Account selection is only allowed during the Waiting stage.');
         expect(snapshotOf(test, s.lobbyId, who.userId)).toBe(merged);
         expect(r1).toBeLessThan(merged);
 

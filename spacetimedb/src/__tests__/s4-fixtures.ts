@@ -131,8 +131,7 @@ export const DEFAULT_LOBBY_ARGS = {
     allowPlayerPause: true,
     teamBlueAlias: 'Blue',
     teamRedAlias: 'Red',
-    bestOf: 1,
-    refereeControlsShelving: true,
+    // T-S8e (A67(2)): bestOf / refereeControlsShelving / bestOfNAdvantage are no longer create_lobby arguments.
 };
 
 export type SlotTag = 'BluePlayer' | 'BlueCoach' | 'RedPlayer' | 'RedCoach' | 'Spectator';

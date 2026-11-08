@@ -1,5 +1,5 @@
 import { table, t } from 'spacetimedb/server';
-import { DraftMode, BanMode, LobbyStage, DisconnectPolicy, GameMode, RosterVisibility, MatchType, LineupFormat, AdvantageSide, BanRestriction } from '../types/enums';
+import { DraftMode, BanMode, LobbyStage, DisconnectPolicy, GameMode, RosterVisibility, MatchType, LineupFormat, BanRestriction } from '../types/enums';
 
 export const lobbyColumns = {
     id: t.u32().primaryKey().autoInc(),
@@ -71,10 +71,7 @@ export const lobbyColumns = {
     isPublic: t.bool(),
     // passwordHash moved to LobbyPassword (private table) — never broadcast to clients
 
-    // Best-of-N series (per D-11; A28/A38(2): capped to {1, 3}, helpers/seriesSettings.ts ensureBestOf):
-    bestOf: t.u8(),                    // Default 1 (set in reducer). 1 = single game, 3 = series.
-    bestOfNAdvantage: AdvantageSide,   // A27/A28: side that starts a Bo3 one game up; None when bestOf = 1
-    refereeControlsShelving: t.bool(), // Default true (set in reducer). When true + 3rd party referee present, only referee controls shelve/continue in BetweenGames.
+    // A67(2): the series settings are removed; a lobby hosts exactly one game.
 
     // Disconnect behavior:
     disconnectPolicy: DisconnectPolicy,

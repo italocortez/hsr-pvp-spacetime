@@ -22,26 +22,13 @@ import { auditUpdate } from './auditColumns';
 import { insertWithAudit, updateWithAudit } from './auditHelpers';
 import { isRoleAtLeast } from './ensurePermissions';
 import { slotIsCoach, slotTeam } from './lobbyHelpers';
-import { currentGameSteps } from './stepSequence';
+import { lobbySteps } from './stepSequence';
 
 export type TeamTag = 'Blue' | 'Red';
 
-/**
- * Every game number a lobby's match can have rows for: 1 .. max(Lobby.bestOf, MatchSession.currentGameNumber,
- * highest MatchResultGame of its records). The (id, gameNumber) indexes are scanned per full key because the
- * 2.14.1 in-memory test datastore rejects a bare-scalar prefix scan and returns nothing for a prefix + Range scan.
- */
-export function lobbyGameNumbers(ctx: any, lobbyId: number): number[] {
-    let max = Math.max(ctx.db.Lobby.id.find(lobbyId)?.bestOf ?? 1, ctx.db.MatchSession.lobbyId.find(lobbyId)?.currentGameNumber ?? 1);
-    for (const r of ctx.db.MatchResultRecord.lobby_id.filter(lobbyId)) {
-        for (const g of ctx.db.MatchResultGame.match_result_id.filter(r.id)) max = Math.max(max, g.gameNumber);
-    }
-    return Array.from({ length: max }, (_, i) => i + 1);
-}
-
-/** MatchLineup rows of every game of the lobby. */
+/** MatchLineup rows of the lobby (A67(3): one game per lobby, at most one row per team). */
 export function lobbyLineups(ctx: any, lobbyId: number): any[] {
-    return lobbyGameNumbers(ctx, lobbyId).flatMap((g) => [...ctx.db.MatchLineup.by_lobby_game.filter([lobbyId, g])]);
+    return [...ctx.db.MatchLineup.by_lobby.filter(lobbyId)];
 }
 
 export const teamSideValue = <T extends 'Blue' | 'Red' | 'Spectator'>(tag: T) => ({ tag });
@@ -94,36 +81,44 @@ export function findPendingResult(ctx: any, lobbyId: number): any {
 }
 
 /**
- * A60(7): the record an edit reducer works on (A54: the lobby's one record). Pending always; with allowSubmitted (the
- * caller is an Admin) a Submitted record too, so an Admin can still correct a closed game of a ranked series awaiting
- * force-finalize.
+ * A60(7), A69(2): the record an edit reducer works on (A54: the lobby's one record), and the one place the edit
+ * window's status rejections live. No record → 'No pending match result for this lobby.'; Pending → the record;
+ * Submitted (the game is closed, A67(3): the close submits) → the record for an Admin, otherwise 'This game is
+ * closed.'; any other status (Validated, Finalized, Disputed, Rejected, Voided) → rejected for everyone, Admins
+ * included: corrections go through override_match_result (A24 TD-13 / TD-14).
  */
-export function findEditableResult(ctx: any, lobbyId: number, allowSubmitted: boolean): any {
-    const record = findLobbyResult(ctx, lobbyId);
-    const editable = record && (record.status.tag === 'Pending' || (allowSubmitted && record.status.tag === 'Submitted'));
-    if (!editable) throw new SenderError('No pending match result for this lobby.');
-    return record;
+export function ensureEditableRecord(record: any, user: any): any {
+    if (!record) throw new SenderError('No pending match result for this lobby.');
+    const status = record.status.tag;
+    if (status === 'Pending') return record;
+    if (status === 'Submitted') {
+        if (isAdminRole(user)) return record;
+        throw new SenderError('This game is closed.');
+    }
+    throw new SenderError('This game can no longer be edited here; corrections go through override_match_result.');
+}
+
+/** A60(7), A69(2): the lobby's record, through ensureEditableRecord's status rule. */
+export function findEditableResult(ctx: any, lobbyId: number, user: any): any {
+    return ensureEditableRecord(findLobbyResult(ctx, lobbyId), user);
 }
 
 /** A60(7): role Admin exactly (not Moderator). */
 export const isAdminRole = (user: any) => user?.role?.tag === 'Admin';
 
 /**
- * A60(3)/(7): the open-game rule shared by every edit reducer. 'open' when the game row does not exist yet or is
- * not closed (closedAt unset); 'admin' when the game is closed, the caller's role is Admin and the record is
- * Pending or Submitted (the edit then keeps the game closed, does not reset confirmations and ends with
- * recomputeSeriesAfterAdminEdit). Anyone else is rejected on a closed game, Moderators included.
+ * A60(3)/(7), A69(2)/(3): the open-game rule shared by every edit reducer, applied after findEditableResult /
+ * ensureEditableRecord (the record is Pending, or Submitted for an Admin). 'open' when the game row does not exist yet
+ * or is not closed (closedAt unset); 'admin' when the game is closed and the caller's role is Admin (the edit then
+ * keeps the game closed, does not reset confirmations and ends with recomputeAfterAdminEdit). Anyone else is rejected
+ * on a closed game, Moderators included (defensive: a closed game's record is never Pending, the close submits it).
+ * A67(3): the record's one game.
  */
-export function ensureOpenGame(ctx: any, lobby: any, record: any, gameNumber: number, user: any): 'open' | 'admin' {
-    const game = findGame(ctx, record.id, gameNumber);
-    const editable = record.status.tag === 'Pending' || record.status.tag === 'Submitted';
-    if (!game || game.closedAt === undefined) {
-        if (record.status.tag !== 'Pending') throw new SenderError('No pending match result for this lobby.');
-        return 'open';
-    }
-    if (editable && isAdminRole(user)) return 'admin';
-    if (editable) throw new SenderError('This game is closed.');
-    throw new SenderError('This match is finalized.');
+export function ensureOpenGame(ctx: any, lobby: any, record: any, user: any): 'open' | 'admin' {
+    const game = findGame(ctx, record.id);
+    if (!game || game.closedAt === undefined) return 'open';
+    if (isAdminRole(user)) return 'admin';
+    throw new SenderError('This game is closed.');
 }
 
 /**
@@ -191,20 +186,20 @@ function equippedFromSteps(steps: any[], side: TeamTag): EquippedLightcone[] {
     return equipped;
 }
 
-/** The light cones `side` still has equipped in game `gameNumber` of the lobby (unequip_lightcone's input). */
-export function equippedLightcones(ctx: any, lobbyId: number, gameNumber: number, side: TeamTag): EquippedLightcone[] {
-    const steps = currentGameSteps(ctx, lobbyId, gameNumber).sort((a: any, b: any) => a.sequence - b.sequence);
+/** The light cones `side` still has equipped in the lobby's game (unequip_lightcone's input). */
+export function equippedLightcones(ctx: any, lobbyId: number, side: TeamTag): EquippedLightcone[] {
+    const steps = lobbySteps(ctx, lobbyId).sort((a: any, b: any) => a.sequence - b.sequence);
     return equippedFromSteps(steps, side);
 }
 
 /**
- * The team's draft for one game, read from that game's steps (the step payloads are the snapshot, D.8.7). A60:
+ * The team's draft for the lobby's game, read from its steps (the step payloads are the snapshot, D.8.7). A60:
  * eidolon edits are SetEidolon steps (actorSlot = the team); the latest one per character wins (highest sequence).
- * A65(2): the read filters by gameNumber (every game's steps stay until finalization).
+ * A67(3): one game per lobby, so every live step of the lobby belongs to it.
  */
-export function teamDraft(ctx: any, lobbyId: number, gameNumber: number, side: TeamTag): TeamDraft {
+export function teamDraft(ctx: any, lobbyId: number, side: TeamTag): TeamDraft {
     const draft: TeamDraft = { characters: [], characterCosts: [], lightconeCosts: [], eidolons: [] };
-    const steps = currentGameSteps(ctx, lobbyId, gameNumber)
+    const steps = lobbySteps(ctx, lobbyId)
         .sort((a: any, b: any) => a.sequence - b.sequence);
     const latestEdit = new Map<string, { eidolon: number; costPaid: number; sequence: number }>();
     for (const step of steps) {
@@ -253,16 +248,16 @@ export function lineupCosts(ctx: any, lobby: any, draft: TeamDraft, groups: stri
     return { surcharge, rosterCost: Math.max(0, cost) };
 }
 
-export function findLineup(ctx: any, lobbyId: number, gameNumber: number, side: TeamTag): any {
-    return [...ctx.db.MatchLineup.by_lobby_game.filter([lobbyId, gameNumber])].find((l: any) => l.teamSide.tag === side);
+export function findLineup(ctx: any, lobbyId: number, side: TeamTag): any {
+    return [...ctx.db.MatchLineup.by_lobby.filter(lobbyId)].find((l: any) => l.teamSide.tag === side);
 }
 
 /**
  * Tie-break 1 / handicap input: always live, from the game's steps (picks, sold characters, eidolon edits, equipped
  * light cones) plus the surcharge of the current arrangement (none without a lineup row).
  */
-export function teamRosterCost(ctx: any, lobby: any, gameNumber: number, side: TeamTag, draft: TeamDraft): number {
-    const lineup = findLineup(ctx, lobby.id, gameNumber, side);
+export function teamRosterCost(ctx: any, lobby: any, side: TeamTag, draft: TeamDraft): number {
+    const lineup = findLineup(ctx, lobby.id, side);
     return lineupCosts(ctx, lobby, draft, lineup ? JSON.parse(lineup.groups) : null).rosterCost;
 }
 
@@ -270,10 +265,10 @@ export function teamRosterCost(ctx: any, lobby: any, gameNumber: number, side: T
  * equip_lightcone / set_eidolon hook: after a light cone or an eidolon changes, the side's lineup row (if any) gets
  * the new roster cost and surcharge.
  */
-export function refreshLineupCosts(ctx: any, lobby: any, gameNumber: number, side: TeamTag, actorId: number): void {
-    const lineup = findLineup(ctx, lobby.id, gameNumber, side);
+export function refreshLineupCosts(ctx: any, lobby: any, side: TeamTag, actorId: number): void {
+    const lineup = findLineup(ctx, lobby.id, side);
     if (!lineup) return;
-    const { surcharge, rosterCost: cost } = lineupCosts(ctx, lobby, teamDraft(ctx, lobby.id, gameNumber, side), JSON.parse(lineup.groups));
+    const { surcharge, rosterCost: cost } = lineupCosts(ctx, lobby, teamDraft(ctx, lobby.id, side), JSON.parse(lineup.groups));
     ctx.db.MatchLineup.id.update(updateWithAudit(ctx, lineup, { synergySurcharge: surcharge, rosterCost: cost }, actorId));
 }
 
@@ -289,23 +284,23 @@ export function rarityInputs(ctx: any, draft: TeamDraft): { fourStarCount: numbe
     return { fourStarCount, fiveStarEidolons };
 }
 
-export function findGame(ctx: any, matchResultId: number, gameNumber: number): any {
-    return [...ctx.db.MatchResultGame.by_result_and_game.filter([matchResultId, gameNumber])][0];
+/** A67(3): the record's one MatchResultGame row (keyed by the record id), or undefined before the first score. */
+export function findGame(ctx: any, matchResultId: number): any {
+    return [...ctx.db.MatchResultGame.match_result_id.filter(matchResultId)][0];
 }
 
-/** MatchResultGame has a decorative composite key: replace the row (delete + insert), keeping its audit. */
+/** MatchResultGame has a decorative table-level key: replace the row (delete + insert), keeping its audit. */
 export function replaceGame(ctx: any, existing: any, changes: Record<string, unknown>, actorId: number): void {
     ctx.db.MatchResultGame.delete(existing);
     ctx.db.MatchResultGame.insert({ ...existing, ...changes, ...auditUpdate(ctx, existing, actorId) });
 }
 
 /** Creates the game row (no scores, winner undecided = Spectator) when it does not exist yet. */
-export function ensureGame(ctx: any, record: any, lobby: any, gameNumber: number, actorId: number): any {
-    const existing = findGame(ctx, record.id, gameNumber);
+export function ensureGame(ctx: any, record: any, lobby: any, actorId: number): any {
+    const existing = findGame(ctx, record.id);
     if (existing) return existing;
     return ctx.db.MatchResultGame.insert(insertWithAudit(ctx, {
         matchResultId: record.id,
-        gameNumber,
         gameMode: lobby.gameMode,
         teamBlueScreenshotUrl: undefined,
         teamRedScreenshotUrl: undefined,
@@ -340,16 +335,16 @@ function sideValues(rows: any[], side: TeamTag, groups: number): number[] | null
  * computation"): the raw team totals in the mode's per-team column (cycles → team*CyclesUsed, points →
  * team*Score, hundredths; A56(2)), the adjusted results, the tie-break level and the winner. A side whose groups
  * are incomplete keeps undefined totals; until both are complete the outcome stays undecided (Spectator).
- * Needs the game's steps (tie-breaks 2 and 3), so callers only recompute the game being played.
- * Returns the shared module's result, or null while the scores are incomplete.
+ * Needs the game's steps (tie-breaks 2 and 3), so it runs while the lobby's steps exist (before finalization).
+ * Returns the shared module's result, or null while the scores are incomplete. A67(3): the record's one game.
  */
-export function recomputeGame(ctx: any, record: any, lobby: any, gameNumber: number, actorId: number) {
-    const game = findGame(ctx, record.id, gameNumber);
+export function recomputeGame(ctx: any, record: any, lobby: any, actorId: number) {
+    const game = findGame(ctx, record.id);
     if (!game) return null;
     const mode = lobby.gameMode.tag as GameModeTag;
     const groups = groupCount(lobby.lineupFormat.tag as LineupFormatTag);
-    const rows = [...ctx.db.MatchResultGroupScore.by_result_game.filter([record.id, gameNumber])];
-    const adjustments = [...ctx.db.MatchResultAdjustment.by_result_game.filter([record.id, gameNumber])];
+    const rows = [...ctx.db.MatchResultGroupScore.by_result.filter(record.id)];
+    const adjustments = [...ctx.db.MatchResultAdjustment.by_result.filter(record.id)];
     const blueValues = sideValues(rows, 'Blue', groups);
     const redValues = sideValues(rows, 'Red', groups);
     const total = (v: number[] | null) => (v ? v.reduce((a, b) => a + b, 0) : undefined);
@@ -364,12 +359,12 @@ export function recomputeGame(ctx: any, record: any, lobby: any, gameNumber: num
     let result: ReturnType<typeof scoreGame> | null = null;
     if (blueValues && redValues) {
         const team = (side: TeamTag, values: number[], deaths: number) => {
-            const draft = teamDraft(ctx, lobby.id, gameNumber, side);
+            const draft = teamDraft(ctx, lobby.id, side);
             return {
                 groupValues: values,
                 modifiers: adjustments.filter((a: any) => a.teamSide.tag === side).map((a: any) => a.value),
                 deaths,
-                rosterCost: teamRosterCost(ctx, lobby, gameNumber, side, draft),
+                rosterCost: teamRosterCost(ctx, lobby, side, draft),
                 ...rarityInputs(ctx, draft),
             };
         };
@@ -410,9 +405,9 @@ export const isClosedGame = (game: any) => game?.closedAt !== undefined;
  * (character + light-cone budget; after the D-50 rollover the character budget is 0). Replaces the S7 surcharge
  * reservation in equip_lightcone. No-op in Classic.
  */
-export function ensureAuctionSurchargeFits(ctx: any, lobby: any, session: any, gameNumber: number, side: TeamTag): void {
+export function ensureAuctionSurchargeFits(ctx: any, lobby: any, session: any, side: TeamTag): void {
     if (lobby.draftMode.tag !== 'Auction') return;
-    const lineup = findLineup(ctx, lobby.id, gameNumber, side);
+    const lineup = findLineup(ctx, lobby.id, side);
     const remaining = side === 'Blue'
         ? session.teamBlueCharBudget + session.teamBlueLcBudget
         : session.teamRedCharBudget + session.teamRedLcBudget;
@@ -439,21 +434,6 @@ export function postSystemChat(ctx: any, lobbyId: number, content: string, actor
     }, actorId));
 }
 
-/**
- * A60(3)/(6), A27: the series tally = wins over the record's **closed** games plus the lobby's head start
- * (Lobby.bestOfNAdvantage). decided = a side reached ceil(seriesBestOf / 2).
- */
-export function seriesTally(ctx: any, record: any, lobby: any, seriesBestOf: number): { blue: number; red: number; decided: boolean } {
-    let blue = lobby.bestOfNAdvantage?.tag === 'Blue' ? 1 : 0;
-    let red = lobby.bestOfNAdvantage?.tag === 'Red' ? 1 : 0;
-    for (const g of ctx.db.MatchResultGame.match_result_id.filter(record.id)) {
-        if (!isClosedGame(g)) continue;
-        if (g.winnerTeamSide.tag === 'Blue') blue++;
-        else if (g.winnerTeamSide.tag === 'Red') red++;
-    }
-    const winsNeeded = Math.ceil(seriesBestOf / 2);
-    return { blue, red, decided: blue >= winsNeeded || red >= winsNeeded };
-}
 
 /**
  * MatchSessionHistory.handicapApplied (A21, hundredths): the net handicap advantage Blue received over Red,
@@ -464,7 +444,7 @@ export function netHandicapApplied(ctx: any, matchResultId: number, games: any[]
     let net = 0;
     for (const g of games) {
         if (g.teamBlueAdjustedResult === undefined || g.teamRedAdjustedResult === undefined) continue;
-        const adjustments = [...ctx.db.MatchResultAdjustment.by_result_game.filter([matchResultId, g.gameNumber])];
+        const adjustments = [...ctx.db.MatchResultAdjustment.by_result.filter(matchResultId)]; // A67(3): one game per record
         const mods = (side: TeamTag) => adjustments.filter((a: any) => a.teamSide.tag === side).reduce((s: number, a: any) => s + a.value, 0);
         const raw = (side: TeamTag) => Number(lowerWins(mode)
             ? (side === 'Blue' ? g.teamBlueCyclesUsed : g.teamRedCyclesUsed) ?? 0
@@ -478,13 +458,11 @@ export function netHandicapApplied(ctx: any, matchResultId: number, games: any[]
 
 /**
  * A56(3): deletes the scoring inputs of a result record (MatchResultGroupScore, MatchResultAdjustment) and the
- * lobby's live lineups (MatchLineup, every game). Called on both exits of a match: runFinalization's cleanup and
+ * lobby's live lineups (MatchLineup). Called on both exits of a match: runFinalization's cleanup and
  * hardDeleteLobby (lobby GC / close).
  */
 export function deleteScoringRows(ctx: any, matchResultId: number, lobbyId: number): void {
-    for (const g of lobbyGameNumbers(ctx, lobbyId)) {
-        for (const r of [...ctx.db.MatchResultGroupScore.by_result_game.filter([matchResultId, g])]) ctx.db.MatchResultGroupScore.id.delete(r.id);
-        for (const a of [...ctx.db.MatchResultAdjustment.by_result_game.filter([matchResultId, g])]) ctx.db.MatchResultAdjustment.id.delete(a.id);
-        for (const l of [...ctx.db.MatchLineup.by_lobby_game.filter([lobbyId, g])]) ctx.db.MatchLineup.id.delete(l.id);
-    }
+    for (const r of [...ctx.db.MatchResultGroupScore.by_result.filter(matchResultId)]) ctx.db.MatchResultGroupScore.id.delete(r.id);
+    for (const a of [...ctx.db.MatchResultAdjustment.by_result.filter(matchResultId)]) ctx.db.MatchResultAdjustment.id.delete(a.id);
+    for (const l of lobbyLineups(ctx, lobbyId)) ctx.db.MatchLineup.id.delete(l.id);
 }

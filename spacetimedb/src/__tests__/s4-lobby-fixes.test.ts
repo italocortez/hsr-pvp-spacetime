@@ -204,14 +204,13 @@ describe('F8 / A22(4): result reducers in AwaitingResult', () => {
         const groups = groupCount(lobbyRow(s.test, s.lobbyId).lineupFormat.tag as LineupFormatTag);
         return {
             lobbyId: s.lobbyId,
-            gameNumber: 1,
             teamSide: { tag: side } as any,
             values: Array.from({ length: groups }, () => value),
             deaths: 0,
         };
     };
 
-    it('in AwaitingResult an Admin edits the closed game (scores, adjustment), a Moderator cannot, a participant disputes', () => {
+    it('in AwaitingResult an Admin edits the closed game (scores, adjustment), a Moderator gets "This game is closed.", a participant disputes', () => {
         const { test, s, recordId } = rankedToAwaitingResult();
         const admin = guest(test, 'admin');
         setRole(test, admin.userId, 'Admin');
@@ -221,7 +220,7 @@ describe('F8 / A22(4): result reducers in AwaitingResult', () => {
         const blueScores = scores(s, 'Blue', 400);
         tx(test, admin, (ctx) => M.record_group_scores(ctx, blueScores));
         tx(test, admin, (ctx) =>
-            M.set_score_adjustment(ctx, { lobbyId: s.lobbyId, gameNumber: 1, teamSide: { tag: 'Blue' } as any, value: 50 }));
+            M.set_score_adjustment(ctx, { lobbyId: s.lobbyId, teamSide: { tag: 'Blue' } as any, value: 50 }));
         const g = gameRow(test, recordId);
         expect(g.teamBlueCyclesUsed).toBe(800);
         expect(g.teamBlueAdjustedResult).toBe(850);
@@ -229,10 +228,11 @@ describe('F8 / A22(4): result reducers in AwaitingResult', () => {
         expect(g.blueConfirmed && g.redConfirmed).toBe(true);
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('AwaitingResult');
 
-        // A Moderator is not an Admin: the Submitted record is not editable for it (findEditableResult: Pending only).
+        // A Moderator is not an Admin: the Submitted record is not editable for it (A60(7), A69(2):
+        // ensureEditableRecord rejects a non-Admin on a Submitted record with the closed-game message).
         expectReject(test, mod, (ctx) =>
-            M.set_score_adjustment(ctx, { lobbyId: s.lobbyId, gameNumber: 1, teamSide: { tag: 'Blue' } as any, value: 50 }),
-            'No pending match result for this lobby.');
+            M.set_score_adjustment(ctx, { lobbyId: s.lobbyId, teamSide: { tag: 'Blue' } as any, value: 50 }),
+            'This game is closed.');
 
         tx(test, redCaptain(s), (ctx) => M.dispute_match_result(ctx, { matchResultId: recordId, reason: 'lag' }));
         expect(test.db.MatchResultRecord.id.find(recordId)!.status.tag).toBe('Disputed');

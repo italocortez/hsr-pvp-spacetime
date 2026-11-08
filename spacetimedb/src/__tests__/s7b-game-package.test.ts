@@ -1,6 +1,14 @@
 // T-S7b: in-memory tests for the A60 game package: edit windows (set_eidolon, equip_lightcone, arrange_lineup), the
 // per-game confirmation (confirm_game) and staff close (close_game), the automatic series submission, the Admin edit
 // path of a closed game, and the ConfirmGame / SetEidolon step log. In-memory datastore on the TestClock; no maincloud.
+// T-S8e (A67): a lobby hosts one game and the close submits it. The S7b tests kept a closed game alive in
+// BetweenGames through a casual Bo3; they now keep it alive in AwaitingResult through a Ranked lobby (the close
+// submits: Submitted, staff backlog). Deleted (subject gone): "Bo3: game 1 close → BetweenGames …", "A27 head start:
+// Blue advantage + Blue wins game 1 = 2-0", "an Admin edit that decides a Pending series between games submits it",
+// the Bo3 half of "an edit that undoes the result is rejected" (no series result to undo). For a player, a closed
+// game is now behind the stage gate (AwaitingResult) or the record gate (Submitted).
+// T-S8e follow-up (A69(2)): the record gate's message is the precise one: 'This game is closed.' for a non-Admin
+// (player, referee, Moderator) on a Submitted record; past validation the override message, Admins included.
 import { describe, expect, it } from 'vitest';
 import {
     M,
@@ -10,7 +18,6 @@ import {
     joinAsSpectator,
     lobbyRow,
     newHarness,
-    session,
     setupLobby,
     steps,
     tx,
@@ -46,12 +53,12 @@ import {
     setRole,
     side,
 } from './s7-fixtures';
+import { ensureEditableRecord } from '../helpers/scoringHelpers';
 
-const CLOSED = 'This game is closed.';
 const NOT_READY = 'Both captains must confirm the game before it can be submitted.';
+const OVERRIDE = 'This game can no longer be edited here; corrections go through override_match_result.';
+const CLOSED = 'This game is closed.'; // A69(2): ensureEditableRecord, non-Admin on a Submitted record
 const stageMsg = (stage: string) => `This action is not allowed in the current lobby stage (${stage}).`;
-const g2Blue = blueNames().map((n) => `g2-${n}`);
-const g2Red = redNames().map((n) => `g2-${n}`);
 
 /** beforeStart hook: the lobby becomes Ranked (guests cannot create one, D-23) with one selected account per player (D-08). */
 const makeRanked = (test: Harness) => (l: Lobby) => {
@@ -76,9 +83,9 @@ describe('A60(1): set_eidolon edit window', () => {
             M.set_eidolon(ctx, { lobbyId: s.lobbyId, teamSide: side('Blue'), characterName: 'blue-1', eidolon: 1 }), stageMsg('Waiting'));
     });
 
-    it('accepted in Drafting once picked, in Equipping and in Scoring; rejected in BetweenGames (closed game)', () => {
+    it('accepted in Drafting once picked, in Equipping and in Scoring; rejected after the close (AwaitingResult)', () => {
         const test = newHarness();
-        const s = setupLobby(test, { lobby: { bestOf: 3 } });
+        const s = setupLobby(test, { beforeStart: makeRanked(test) });
         const blueCap = captain(s, 'Blue');
         expectReject(test, blueCap, (ctx) =>
             M.set_eidolon(ctx, { lobbyId: s.lobbyId, teamSide: side('Blue'), characterName: 'blue-1', eidolon: 1 }),
@@ -98,10 +105,10 @@ describe('A60(1): set_eidolon edit window', () => {
         expect(steps(test, s.lobbyId).filter((st) => st.action.tag === 'SetEidolon')).toHaveLength(3);
 
         finishGame(s);
-        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('BetweenGames');
+        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('AwaitingResult');
         advance(test, 300);
         expectReject(test, blueCap, (ctx) =>
-            M.set_eidolon(ctx, { lobbyId: s.lobbyId, teamSide: side('Blue'), characterName: 'blue-1', eidolon: 4 }), CLOSED);
+            M.set_eidolon(ctx, { lobbyId: s.lobbyId, teamSide: side('Blue'), characterName: 'blue-1', eidolon: 4 }), stageMsg('AwaitingResult'));
     });
 
     it('rejected while the draft is paused (A22(3); pending review fix)', () => {
@@ -246,7 +253,7 @@ describe('A60(3): confirm_game', () => {
 
     it('A63(4): the spectator referee cannot confirm; its close_game closes without ready flags (one ConfirmGame step)', () => {
         const test = newHarness();
-        const s = scoredBo3(test);
+        const s = scoredRanked(test);
         expectReject(test, s.host, (ctx) => M.confirm_game(ctx, { lobbyId: s.lobbyId, teamSide: side('Blue') }),
             'Only the team captain can confirm the game.');
         expect(confirmSteps(test, s.lobbyId)).toHaveLength(0);
@@ -260,65 +267,73 @@ describe('A60(3): confirm_game', () => {
         expect(cs[0].payload.value as ConfirmPayload).toMatchObject({ confirmedSide: { tag: 'Spectator' }, closed: true });
     });
 
-    it('a closed game rejects every edit; advance_stage from Scoring is rejected', () => {
+    it('a closed game rejects every non-Admin edit; advance_stage from Scoring is rejected', () => {
         const test = newHarness();
         insertLightconeCost(test, 'lc-1', 1);
-        const s = playToScoring(test, { lobby: { bestOf: 3 } });
+        const s = playToScoring(test, { beforeStart: makeRanked(test) });
         expectReject(test, s.host, (ctx) => M.advance_stage(ctx, { lobbyId: s.lobbyId }),
             'Games close through confirm_game or close_game; the stage moves on the close.');
         finishGame(s);
-        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('BetweenGames');
+        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('AwaitingResult');
+        expect(record(test, s.lobbyId).status.tag).toBe('Submitted');
         advance(test, 300);
         const blueCap = captain(s, 'Blue');
         const { lobbyId } = s;
+        // T-S8e: the close submits, so a player meets the stage gate (post-draft edits) or the record gate (scores;
+        // A69(2): 'This game is closed.' for the captain and for the referee).
         expectReject(test, blueCap, (ctx) =>
-            M.equip_lightcone(ctx, { lobbyId, characterName: 'blue-1', lightconeName: 'lc-1', superimposition: 1 }), CLOSED);
+            M.equip_lightcone(ctx, { lobbyId, characterName: 'blue-1', lightconeName: 'lc-1', superimposition: 1 }), stageMsg('AwaitingResult'));
         expectReject(test, blueCap, (ctx) =>
-            M.arrange_lineup(ctx, { lobbyId, teamSide: side('Blue'), groups: JSON.stringify(halves(blueNames())) }), CLOSED);
+            M.arrange_lineup(ctx, { lobbyId, teamSide: side('Blue'), groups: JSON.stringify(halves(blueNames())) }), stageMsg('AwaitingResult'));
         expectReject(test, blueCap, (ctx) =>
-            M.set_eidolon(ctx, { lobbyId, teamSide: side('Blue'), characterName: 'blue-1', eidolon: 1 }), CLOSED);
+            M.set_eidolon(ctx, { lobbyId, teamSide: side('Blue'), characterName: 'blue-1', eidolon: 1 }), stageMsg('AwaitingResult'));
         expectReject(test, blueCap, (ctx) =>
-            M.record_group_scores(ctx, { lobbyId, gameNumber: 1, teamSide: side('Blue'), values: [1, 2], deaths: 0 }), CLOSED);
+            M.record_group_scores(ctx, { lobbyId, teamSide: side('Blue'), values: [1, 2], deaths: 0 }), CLOSED);
+        // s.host is the spectator referee (A63(4) above).
         expectReject(test, s.host, (ctx) =>
-            M.set_score_adjustment(ctx, { lobbyId, gameNumber: 1, teamSide: side('Blue'), value: 100 }), CLOSED);
+            M.record_group_scores(ctx, { lobbyId, teamSide: side('Red'), values: [1, 2], deaths: 0 }), CLOSED);
+        expectReject(test, s.host, (ctx) =>
+            M.set_score_adjustment(ctx, { lobbyId, teamSide: side('Blue'), value: 100 }), CLOSED);
+        expect(record(test, lobbyId).status.tag).toBe('Submitted');
+    });
+
+    it('A60(7) / A69(2): a Moderator (Admin exactly) gets "This game is closed." from record_group_scores on a Submitted record', () => {
+        const test = newHarness();
+        const s = playToScoring(test, { beforeStart: makeRanked(test) });
+        finishGame(s, 'Blue');
+        expect(record(test, s.lobbyId).status.tag).toBe('Submitted');
+        const { lobbyId } = s;
+        const before = gameRow(test, record(test, lobbyId).id).teamBlueCyclesUsed;
+        // The referee (s.host) holding the Moderator role: past ensureCaptainOrReferee, rejected by the record gate.
+        setRole(test, s.host.userId, 'Moderator');
+        expectReject(test, s.host, (ctx) =>
+            M.record_group_scores(ctx, { lobbyId, teamSide: side('Blue'), values: [1, 2], deaths: 0 }), CLOSED);
+        // A Moderator outside the lobby is not a captain or referee: the authority guard fires first (code order).
+        const mod = guest(test, 'mod');
+        setRole(test, mod.userId, 'Moderator');
+        expectReject(test, mod, (ctx) =>
+            M.record_group_scores(ctx, { lobbyId, teamSide: side('Blue'), values: [1, 2], deaths: 0 }),
+            'Only the Blue captain or a referee can record scores for that team.');
+        expect(gameRow(test, record(test, lobbyId).id).teamBlueCyclesUsed).toBe(before);
     });
 });
 
 // ─── A60(3)/(6): series ──────────────────────────────────────────────────────────────────────────────────
 
-describe('A60(3)/(6): series tally and automatic submission', () => {
-    it('Bo3: game 1 close → BetweenGames and the tally; game 2 after advance_to_next_game; the deciding close finalizes (Casual)', () => {
+describe('A60(6) / A67(3): the close of the game submits it', () => {
+    it('Casual: the close validates and finalizes inline (one history row, one archived game)', () => {
         const test = newHarness();
-        const s = setupLobby(test, { lobby: { bestOf: 3 } });
+        const s = setupLobby(test);
         draftClassic(s, blueNames(), redNames());
-        finishGame(s, 'Blue');
-        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('BetweenGames');
-        expect([session(test, s.lobbyId).gamesWonBlue, session(test, s.lobbyId).gamesWonRed]).toEqual([1, 0]);
-        expect(record(test, s.lobbyId).status.tag).toBe('Pending');
-
-        tx(test, s.host, (ctx) => M.advance_to_next_game(ctx, { lobbyId: s.lobbyId }));
-        expect(session(test, s.lobbyId).currentGameNumber).toBe(2);
         const recId = record(test, s.lobbyId).id;
-        expect(gameRow(test, recId, 1).closedAt).toBeDefined(); // nothing in a closed game changes (A60(3))
-        draftClassic(s, g2Blue, g2Red);
         finishGame(s, 'Blue');
 
         const history = [...test.db.MatchSessionHistory.iter()];
         expect(history).toHaveLength(1);
         const games = [...test.db.MatchResultGameHistory.by_match_history.filter(history[0].id)];
-        expect(games.map((g) => g.winnerTeamSide.tag)).toEqual(['Blue', 'Blue']);
+        expect(games.map((g) => g.winnerTeamSide.tag)).toEqual(['Blue']);
         expect(test.db.MatchResultRecord.id.find(recId)).toBeNull();
-    });
-
-    it('A27 head start: Blue advantage + Blue wins game 1 = 2-0, decided at once and finalized', () => {
-        const test = newHarness();
-        const s = setupLobby(test, { lobby: { bestOf: 3, bestOfNAdvantage: { tag: 'Blue' } } });
-        expect(session(test, s.lobbyId).gamesWonBlue).toBe(1);
-        draftClassic(s, blueNames(), redNames());
-        finishGame(s, 'Blue');
-        const history = [...test.db.MatchSessionHistory.iter()];
-        expect(history).toHaveLength(1);
-        expect([...test.db.MatchResultGameHistory.by_match_history.filter(history[0].id)]).toHaveLength(1);
+        expect(test.db.Lobby.id.find(s.lobbyId)).toBeNull();
     });
 
     it('Ranked: the deciding close submits (Submitted, AwaitingResult); a participant can dispute', () => {
@@ -356,8 +371,9 @@ function linkTournament(test: Harness, s: Lobby, organizerId: number): number {
     return t.id;
 }
 
-function scoredBo3(test: Harness, opts: SetupOpts = {}) {
-    const s = playToScoring(test, { ...opts, lobby: { bestOf: 3, ...(opts.lobby ?? {}) } });
+/** T-S8e (was scoredBo3): a Ranked game scored in Scoring (Blue wins); its close submits and parks it (AwaitingResult). */
+function scoredRanked(test: Harness, opts: SetupOpts = {}) {
+    const s = playToScoring(test, { beforeStart: makeRanked(test), ...opts });
     recordScores(s, captain(s, 'Blue'), 'Blue', [H(5), H(5)]);
     recordScores(s, captain(s, 'Red'), 'Red', [H(6), H(6)]);
     return s;
@@ -366,30 +382,30 @@ function scoredBo3(test: Harness, opts: SetupOpts = {}) {
 describe('A60(4): staff close without confirmations', () => {
     it('a Moderator who is not in the lobby closes the game', () => {
         const test = newHarness();
-        const s = scoredBo3(test);
+        const s = scoredRanked(test);
         const mod = guest(test, 'mod');
         setRole(test, mod.userId, 'Moderator');
         closeGame(s, mod);
         const g = gameRow(test, record(test, s.lobbyId).id);
         expect(g.closedById).toBe(mod.userId);
         expect(g.winnerTeamSide.tag).toBe('Blue');
-        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('BetweenGames');
+        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('AwaitingResult');
     });
 
     it('in a tournament lobby the organizer and a canResolveResults assistant may close; a plain player and a plain assistant may not', () => {
         const STAFF_ONLY = 'Only a captain (once both sides confirmed), a referee, a Moderator or, in a tournament lobby, the organizer or a results assistant can close a game.';
         // Organizer.
         let test = newHarness();
-        let s = scoredBo3(test);
+        let s = scoredRanked(test);
         const organizer = guest(test, 'org');
         linkTournament(test, s, organizer.userId);
         expectReject(test, captain(s, 'Blue'), (ctx) => M.close_game(ctx, { lobbyId: s.lobbyId }), NOT_READY); // A63(2)
         closeGame(s, organizer);
-        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('BetweenGames');
+        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('AwaitingResult');
 
         // Assistants: canResolveResults closes, without it rejected.
         test = newHarness();
-        s = scoredBo3(test);
+        s = scoredRanked(test);
         const tournamentId = linkTournament(test, s, guest(test, 'org').userId);
         const helper = guest(test, 'helper');
         const resolver = guest(test, 'resolver');
@@ -405,11 +421,12 @@ describe('A60(4): staff close without confirmations', () => {
 // ─── A60(7): Admin edits of a closed game ────────────────────────────────────────────────────────────────
 
 describe('A60(7): Admin edits a closed game', () => {
-    it('between games: scores / adjustment / eidolon / lineup / light cone edit the closed game, which stays closed; the tally follows', () => {
+    it('after the close (Submitted): scores / adjustment / eidolon / lineup / light cone edit the closed game, which stays closed; the record winner and the budget follow', () => {
         const test = newHarness();
         insertLightconeCost(test, 'lc-1', 1);
-        const s = playToScoring(test, { lobby: { bestOf: 3 } });
+        const s = playToScoring(test, { beforeStart: makeRanked(test) });
         finishGame(s, 'Blue');
+        expect(record(test, s.lobbyId).status.tag).toBe('Submitted');
         const recId = record(test, s.lobbyId).id;
         const admin = guest(test, 'admin');
         setRole(test, admin.userId, 'Admin');
@@ -419,72 +436,90 @@ describe('A60(7): Admin edits a closed game', () => {
 
         // Flip game 1 to Red: Blue's cycles 30 per group > Red's 20.
         tx(test, admin, (ctx) =>
-            M.record_group_scores(ctx, { lobbyId, gameNumber: 1, teamSide: side('Blue'), values: [H(30), H(30)], deaths: 0 }));
+            M.record_group_scores(ctx, { lobbyId, teamSide: side('Blue'), values: [H(30), H(30)], deaths: 0 }));
         let g = gameRow(test, recId);
         expect(g.winnerTeamSide.tag).toBe('Red');
         expect(g.closedAt).toBeDefined();
         expect(g.blueConfirmed && g.redConfirmed).toBe(true); // not reset
-        expect([session(test, lobbyId).gamesWonBlue, session(test, lobbyId).gamesWonRed]).toEqual([0, 1]);
-        expect(lobbyRow(test, lobbyId).stage.tag).toBe('BetweenGames');
+        expect(record(test, lobbyId).winnerTeamSide?.tag).toBe('Red'); // A67(3): the record's winner = the game's
+        expect(record(test, lobbyId).status.tag).toBe('Submitted');
+        expect(lobbyRow(test, lobbyId).stage.tag).toBe('AwaitingResult');
 
-        tx(test, admin, (ctx) => M.set_score_adjustment(ctx, { lobbyId, gameNumber: 1, teamSide: side('Blue'), value: -H(25) }));
+        tx(test, admin, (ctx) => M.set_score_adjustment(ctx, { lobbyId, teamSide: side('Blue'), value: -H(25) }));
         expect(gameRow(test, recId).winnerTeamSide.tag).toBe('Blue');
-        expect([session(test, lobbyId).gamesWonBlue, session(test, lobbyId).gamesWonRed]).toEqual([1, 0]);
+        expect(record(test, lobbyId).winnerTeamSide?.tag).toBe('Blue');
 
         // An edit that leaves the game tied (40 = 40, equal rosters; no override) is rejected.
         expectReject(test, admin, (ctx) =>
-            M.set_score_adjustment(ctx, { lobbyId, gameNumber: 1, teamSide: side('Blue'), value: H(5) }),
+            M.set_score_adjustment(ctx, { lobbyId, teamSide: side('Blue'), value: H(5) }),
             'The edit would leave the game tied; add an adjustment that decides it.');
-        // A Moderator is not an Admin: the closed game is not editable for it.
-        expectReject(test, mod, (ctx) => M.set_score_adjustment(ctx, { lobbyId, gameNumber: 1, teamSide: side('Blue'), value: 100 }), CLOSED);
+        // A Moderator is not an Admin: the Submitted record is not editable for it (A69(2)).
+        expectReject(test, mod, (ctx) => M.set_score_adjustment(ctx, { lobbyId, teamSide: side('Blue'), value: 100 }), CLOSED);
 
         setEidolon(s, admin, 'Blue', 'blue-1', 3);
         tx(test, admin, (ctx) =>
             M.arrange_lineup(ctx, { lobbyId, teamSide: side('Blue'), groups: JSON.stringify([blueNames().slice(4), blueNames().slice(0, 4)]) }));
+        // T-S8e (A67(3)): the session budgets are the lobby's one game's, so an Admin's light-cone edit after the
+        // close moves them (equip deducts costPaid, unequip refunds it), and the D-55 budget check applies.
+        const redBudget = () => test.db.MatchSession.lobbyId.find(lobbyId)!.teamRedLcBudget;
+        const before = redBudget();
         tx(test, admin, (ctx) => M.equip_lightcone(ctx, { lobbyId, characterName: 'red-1', lightconeName: 'lc-1', superimposition: 1 }));
         expect(lineup(test, lobbyId, 'Red').rosterCost).toBe(H(1)); // the team is the character's owner
+        expect(redBudget()).toBe(before - 1);
+        tx(test, admin, (ctx) => M.unequip_lightcone(ctx, { lobbyId, characterName: 'red-1' }));
+        expect(redBudget()).toBe(before);
         g = gameRow(test, recId);
         expect(g.closedAt).toBeDefined();
         expect(g.blueConfirmed && g.redConfirmed).toBe(true);
         expect(steps(test, lobbyId).filter((st) => st.action.tag === 'SetEidolon')).toHaveLength(1);
     });
 
-    it('an Admin edit that decides a Pending series between games submits it (S7b)', () => {
+    it('Submitted ranked game: the winner follows an Admin edit', () => {
         const test = newHarness();
-        const s = playToScoring(test, { lobby: { bestOf: 3, bestOfNAdvantage: { tag: 'Blue' } } });
-        finishGame(s, 'Red'); // 1-1 with the head start
-        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('BetweenGames');
-        const admin = guest(test, 'admin');
-        setRole(test, admin.userId, 'Admin');
-        tx(test, admin, (ctx) =>
-            M.record_group_scores(ctx, { lobbyId: s.lobbyId, gameNumber: 1, teamSide: side('Blue'), values: [H(5), H(5)], deaths: 0 }));
-        const history = [...test.db.MatchSessionHistory.iter()];
-        expect(history).toHaveLength(1); // 2-0 → Casual finalized inline
-    });
-
-    it('Submitted ranked series: the winner follows an Admin edit; an edit that undoes the result is rejected', () => {
-        // Bo1: flipping the only game keeps the series decided, the record's winner follows.
-        let test = newHarness();
-        let s = playToScoring(test, { beforeStart: makeRanked(test) });
+        const s = playToScoring(test, { beforeStart: makeRanked(test) });
         finishGame(s, 'Blue');
         const admin = guest(test, 'admin');
         setRole(test, admin.userId, 'Admin');
         tx(test, admin, (ctx) =>
-            M.set_score_adjustment(ctx, { lobbyId: s.lobbyId, gameNumber: 1, teamSide: side('Blue'), value: H(50) }));
+            M.set_score_adjustment(ctx, { lobbyId: s.lobbyId, teamSide: side('Blue'), value: H(50) }));
         expect(record(test, s.lobbyId).status.tag).toBe('Submitted');
         expect(record(test, s.lobbyId).winnerTeamSide?.tag).toBe('Red');
+    });
 
-        // Bo3 with the Blue head start: 2-0 after game 1; flipping game 1 would make it 1-1.
-        test = newHarness();
-        s = playToScoring(test, { lobby: { bestOf: 3, bestOfNAdvantage: { tag: 'Blue' } }, beforeStart: makeRanked(test) });
+    it('A69(2): a casual game after the close (Finalized inline, lobby and record gone): every Admin edit is rejected with "Lobby not found."', () => {
+        const test = newHarness();
+        insertLightconeCost(test, 'lc-1', 1);
+        const s = setupLobby(test);
+        draftClassic(s, blueNames(), redNames());
         finishGame(s, 'Blue');
-        expect(record(test, s.lobbyId).status.tag).toBe('Submitted');
-        const admin2 = guest(test, 'admin');
-        setRole(test, admin2.userId, 'Admin');
-        expectReject(test, admin2, (ctx) =>
-            M.set_score_adjustment(ctx, { lobbyId: s.lobbyId, gameNumber: 1, teamSide: side('Blue'), value: H(50) }),
-            'The edit would undo the series result; void or force-finalize the match instead.');
-        expect(record(test, s.lobbyId).winnerTeamSide?.tag).toBe('Blue');
+        const { lobbyId } = s;
+        // The casual close validates and finalizes inline (A60(6)): no live record or lobby is left to edit, so the
+        // override message is never reached on a casual lobby; the lobby lookup rejects first (code order).
+        expect(test.db.Lobby.id.find(lobbyId)).toBeNull();
+        expect([...test.db.MatchResultRecord.lobby_id.filter(lobbyId)]).toHaveLength(0);
+        const admin = guest(test, 'admin');
+        setRole(test, admin.userId, 'Admin');
+        const GONE = 'Lobby not found.';
+        expectReject(test, admin, (ctx) =>
+            M.record_group_scores(ctx, { lobbyId, teamSide: side('Blue'), values: [1, 2], deaths: 0 }), GONE);
+        expectReject(test, admin, (ctx) => M.set_score_adjustment(ctx, { lobbyId, teamSide: side('Blue'), value: 100 }), GONE);
+        expectReject(test, admin, (ctx) =>
+            M.set_eidolon(ctx, { lobbyId, teamSide: side('Blue'), characterName: 'blue-1', eidolon: 1 }), GONE);
+        expectReject(test, admin, (ctx) =>
+            M.arrange_lineup(ctx, { lobbyId, teamSide: side('Blue'), groups: JSON.stringify(halves(blueNames())) }), GONE);
+        expectReject(test, admin, (ctx) =>
+            M.equip_lightcone(ctx, { lobbyId, characterName: 'blue-1', lightconeName: 'lc-1', superimposition: 1 }), GONE);
+        expect([...test.db.MatchSessionHistory.iter()]).toHaveLength(1);
+    });
+
+    it('A69(2): ensureEditableRecord: a Finalized (or Validated) record rejects an Admin with the override message', () => {
+        const admin = { role: { tag: 'Admin' } };
+        for (const tag of ['Finalized', 'Validated', 'Disputed', 'Rejected', 'Voided']) {
+            expect(() => ensureEditableRecord({ status: { tag } }, admin)).toThrow(OVERRIDE);
+        }
+        expect(() => ensureEditableRecord(undefined, admin)).toThrow('No pending match result for this lobby.');
+        expect(ensureEditableRecord({ status: { tag: 'Submitted' } }, admin)).toBeTruthy();
+        expect(() => ensureEditableRecord({ status: { tag: 'Submitted' } }, { role: { tag: 'Moderator' } })).toThrow(CLOSED);
     });
 });
 
@@ -520,7 +555,7 @@ describe('A60(8): ConfirmGame and SetEidolon steps', () => {
 
     it('a tie: both confirmations stay open (closed: false); the override close logs Spectator, closed, winnerOverride and reason', () => {
         const test = newHarness();
-        const s = playToScoring(test, { lobby: { bestOf: 3 } });
+        const s = playToScoring(test, { beforeStart: makeRanked(test) });
         recordScores(s, captain(s, 'Blue'), 'Blue', [H(5), H(5)]);
         recordScores(s, captain(s, 'Red'), 'Red', [H(5), H(5)]);
         confirmBoth(s);
@@ -531,16 +566,16 @@ describe('A60(8): ConfirmGame and SetEidolon steps', () => {
         expect(last.payload.value as ConfirmPayload).toMatchObject({
             confirmedSide: { tag: 'Spectator' }, closed: true, winnerOverride: { tag: 'Red' }, winnerOverrideReason: 'coin',
         });
-        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('BetweenGames');
-        expect(session(test, s.lobbyId).gamesWonRed).toBe(1);
+        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('AwaitingResult');
+        expect(record(test, s.lobbyId).winnerTeamSide?.tag).toBe('Red');
         expect(record(test, s.lobbyId).winnerOverride?.tag).toBe('Red');
     });
 });
 
 describe('A60(7) review fix: a stale winner override is cleared', () => {
-    /** A Bo3 tie closed by the host with winnerOverride Red. */
-    function overriddenTie(test: Harness, lobby: Record<string, unknown> = {}) {
-        const s = playToScoring(test, { lobby: { bestOf: 3, ...lobby } });
+    /** A Ranked tie closed by the host with winnerOverride Red (Submitted, parked in AwaitingResult). */
+    function overriddenTie(test: Harness) {
+        const s = playToScoring(test, { beforeStart: makeRanked(test) });
         recordScores(s, captain(s, 'Blue'), 'Blue', [H(5), H(5)]);
         recordScores(s, captain(s, 'Red'), 'Red', [H(5), H(5)]);
         closeGame(s, s.host, 'Red', 'coin');
@@ -556,12 +591,12 @@ describe('A60(7) review fix: a stale winner override is cleared', () => {
         expect(record(test, s.lobbyId).winnerOverride?.tag).toBe('Red');
 
         tx(test, admin, (ctx) =>
-            M.record_group_scores(ctx, { lobbyId: s.lobbyId, gameNumber: 1, teamSide: side('Blue'), values: [H(5), H(5)], deaths: 0 }));
+            M.record_group_scores(ctx, { lobbyId: s.lobbyId, teamSide: side('Blue'), values: [H(5), H(5)], deaths: 0 }));
         expect(gameRow(test, recId).winnerTeamSide.tag).toBe('Red');
         expect(record(test, s.lobbyId).winnerOverride?.tag).toBe('Red');
         expect(record(test, s.lobbyId).winnerOverrideById).toBe(s.host.userId);
 
-        tx(test, admin, (ctx) => M.set_score_adjustment(ctx, { lobbyId: s.lobbyId, gameNumber: 1, teamSide: side('Blue'), value: H(1) }));
+        tx(test, admin, (ctx) => M.set_score_adjustment(ctx, { lobbyId: s.lobbyId, teamSide: side('Blue'), value: H(1) }));
         const g = gameRow(test, recId);
         expect(g.tieBreakLevel).toBe(0);
         expect(g.winnerTeamSide.tag).toBe('Red');
@@ -573,11 +608,15 @@ describe('A60(7) review fix: a stale winner override is cleared', () => {
 
     it('the finalized history carries no override after the edit decided the game', () => {
         const test = newHarness();
-        const { s, admin } = overriddenTie(test, { bestOfNAdvantage: { tag: 'Blue' } }); // 1-1 after the override
-        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('BetweenGames');
-        tx(test, admin, (ctx) => M.set_score_adjustment(ctx, { lobbyId: s.lobbyId, gameNumber: 1, teamSide: side('Red'), value: H(1) }));
+        const { s, admin } = overriddenTie(test);
+        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('AwaitingResult');
+        tx(test, admin, (ctx) => M.set_score_adjustment(ctx, { lobbyId: s.lobbyId, teamSide: side('Red'), value: H(1) }));
+        expect(record(test, s.lobbyId).winnerTeamSide?.tag).toBe('Blue');
+        // T-S8e: the Submitted game is finalized by staff (winnerTeamId 0 keeps the record's winner).
+        tx(test, 'internal', (ctx) => M.admin_seed_elo_config(ctx, {}));
+        tx(test, admin, (ctx) => M.admin_force_finalize(ctx, { lobbyId: s.lobbyId, winnerTeamId: 0 }));
         const history = [...test.db.MatchSessionHistory.iter()];
-        expect(history).toHaveLength(1); // Blue 2-0 → submitted and finalized inline
+        expect(history).toHaveLength(1);
         expect(history[0].winnerOverride).toBeUndefined();
         expect(history[0].winnerOverrideById).toBeUndefined();
         expect(history[0].winnerOverrideReason).toBeUndefined();
@@ -592,7 +631,7 @@ describe('A60(7) review fix: a stale winner override is cleared', () => {
 describe('A63: confirm_game sets a ready flag; close_game is the submit', () => {
     it('a captain cannot submit before both are ready; both ready leaves the game open; an edit clears both flags', () => {
         const test = newHarness();
-        const s = scoredBo3(test);
+        const s = scoredRanked(test);
         const recId = record(test, s.lobbyId).id;
         expectReject(test, captain(s, 'Blue'), (ctx) => M.close_game(ctx, { lobbyId: s.lobbyId }), NOT_READY);
         confirmGame(s, captain(s, 'Blue'), 'Blue');
@@ -604,7 +643,7 @@ describe('A63: confirm_game sets a ready flag; close_game is the submit', () => 
         expect(g.closedAt).toBeUndefined();
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Scoring');
 
-        tx(test, s.host, (ctx) => M.set_score_adjustment(ctx, { lobbyId: s.lobbyId, gameNumber: 1, teamSide: side('Blue'), value: 1 }));
+        tx(test, s.host, (ctx) => M.set_score_adjustment(ctx, { lobbyId: s.lobbyId, teamSide: side('Blue'), value: 1 }));
         g = gameRow(test, recId);
         expect([g.blueConfirmed, g.redConfirmed]).toEqual([false, false]);
         expectReject(test, captain(s, 'Blue'), (ctx) => M.close_game(ctx, { lobbyId: s.lobbyId }), NOT_READY);
@@ -613,7 +652,7 @@ describe('A63: confirm_game sets a ready flag; close_game is the submit', () => 
     for (const closer of ['Blue', 'Red'] as const) {
         it(`the ${closer} captain submits once both are ready (actorSlot = confirmedSide = ${closer}, closed: true)`, () => {
             const test = newHarness();
-            const s = scoredBo3(test);
+            const s = scoredRanked(test);
             confirmBoth(s);
             closeGame(s, captain(s, closer));
             const g = gameRow(test, record(test, s.lobbyId).id);
@@ -622,14 +661,14 @@ describe('A63: confirm_game sets a ready flag; close_game is the submit', () => 
             const last = confirmSteps(test, s.lobbyId)[2];
             expect(last.actorSlot.tag).toBe(closer);
             expect(last.payload.value as ConfirmPayload).toMatchObject({ confirmedSide: { tag: closer }, closed: true });
-            expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('BetweenGames');
-            expect(session(test, s.lobbyId).gamesWonBlue).toBe(1);
+            expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('AwaitingResult');
+            expect(record(test, s.lobbyId).winnerTeamSide?.tag).toBe('Blue');
         });
     }
 
     it('a non-captain player cannot submit even when both are ready', () => {
         const test = newHarness();
-        const s = scoredBo3(test);
+        const s = scoredRanked(test);
         confirmBoth(s);
         const blueNonCaptain = [s.a.b1, s.a.b2].find((a) => a.userId !== captain(s, 'Blue').userId)!;
         expectReject(test, blueNonCaptain, (ctx) => M.close_game(ctx, { lobbyId: s.lobbyId }),
@@ -639,7 +678,7 @@ describe('A63: confirm_game sets a ready flag; close_game is the submit', () => 
 
     it('a tie with both flags stays open; a captain cannot decide it; the staff override close does', () => {
         const test = newHarness();
-        const s = playToScoring(test, { lobby: { bestOf: 3 } });
+        const s = playToScoring(test, { beforeStart: makeRanked(test) });
         recordScores(s, captain(s, 'Blue'), 'Blue', [H(5), H(5)]);
         recordScores(s, captain(s, 'Red'), 'Red', [H(5), H(5)]);
         confirmBoth(s);
@@ -649,6 +688,6 @@ describe('A63: confirm_game sets a ready flag; close_game is the submit', () => 
         expectReject(test, captain(s, 'Blue'), (ctx) => M.close_game(ctx, { lobbyId: s.lobbyId }), /tied after every tie-break/);
         closeGame(s, s.host, 'Red', 'coin');
         expect(gameRow(test, record(test, s.lobbyId).id).winnerTeamSide.tag).toBe('Red');
-        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('BetweenGames');
+        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('AwaitingResult');
     });
 });

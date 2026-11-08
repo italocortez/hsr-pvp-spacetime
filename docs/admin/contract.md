@@ -373,6 +373,23 @@ _Superseded in Phase S6 execution (DECISIONS.md A57, A58): the scheduled reducer
 **Then** one job row is scheduled now and finalization resumes at the first surviving record; a non-Moderator, an InProgress tournament, a finalized one or one with a scheduled job is rejected
 
 
+## Acceptance Scenarios (Phase S8e execution)
+
+### S8e-A1 Override of a tournament game (A67(4))
+**Given** a Submitted, Disputed or Validated record of a Ready bracket match, its lobby parked
+**When** `results` staff call `override_match_result` with Validated(winner) or Rejected
+**Then** Validated: the record is Validated for that side, the tally is recomputed and the match is decided when a side reaches ceil(bestOf / 2) (decidedBy Staff); Rejected: the record stays Rejected, its lobby is hard-deleted, the tally is recomputed without it
+
+### S8e-A2 A decided match is rolled back first (A67(4))
+**Given** a Decided bracket match
+**When** staff override one of its records
+**Then** rejected: "<position> is already decided; roll back first."
+_Superseded in Phase S8e execution (S8e review, DECISIONS.md A67(4), TD-13/14): the override reverts the decision itself (no game record voided; refused only while a downstream match is Decided) and re-decides the match from the new tally (decidedBy Staff)._
+
+### S8e-A3 Step-history row key (A67(3))
+**When** an Admin deletes a `MatchSessionStepHistory` row through the admin row tool
+**Then** the key is the JSON pair `[matchHistoryId, sequence]`
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -394,3 +411,4 @@ _Superseded in Phase S6 execution (DECISIONS.md A57, A58): the scheduled reducer
 | Admin edits of a closed game and the staff close listed as admin tools; scenario "Admin Corrects a Closed Game" added | Phase S7b execution (DECISIONS.md A60) | 2026-11-07 |
 | `admin_set_bracket_winner` removed; scenario "Staff Correct a Tournament Bracket" (`resolve_bracket_match` / `rollback_bracket_match`) added | Phase S8c execution (DECISIONS.md A23, A24(3), A25) | 2026-11-07 |
 | Scenario S8d-A1: admin tools redirect tournament lobbies to the bracket reducers | Phase S8d execution (D.8.3) | 2026-11-07 |
+| Scenarios S8e-A1..A3: override recomputes the derived tally, decided matches must be rolled back first, step-history key without a game number; supersedes the S8d override rule "rollback + re-apply" | Phase S8e execution (DECISIONS.md A67(3)(4)) | 2026-11-08 |

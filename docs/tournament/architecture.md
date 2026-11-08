@@ -195,11 +195,11 @@ Removed: `swap_seeds`, `advance_bracket_match`, `submit_and_advance_bracket`, `a
 
 ### select_match_account(lobbyId, hsrAccountId) / deselect_match_account(lobbyId, hsrAccountId)
 1. `getAuthenticatedUser(ctx)` -- must be active LobbyMember
-2. Lobby must be in Waiting or BetweenGames stage
+2. Lobby must be in Waiting (A67(1), S8e)
 3. Tournament path (additive, D-07): validate account against `TournamentPlayerAccount`; check `maxAccountsPerPlayer` cap; insert `LobbyMemberAccount`
 4. Non-tournament path (replace, D-07): delete existing `LobbyMemberAccount` for user; insert new one (always exactly 1)
 5. `deselect_match_account`: tournament path only; delete specific `LobbyMemberAccount` row
-6. Phase 12.3 D-B-03: `select_match_account` carries a monotonic-upward post-insert hook that extends `MatchResultParticipant.accountRatingSnapshot` to `max(existing, newAccount.accountRating)` when an MRP row already exists (BetweenGames stage). `deselect_match_account` does NOT run the hook -- removing from selection cannot lower the max.
+6. Phase 12.3 D-B-03: `select_match_account` carries a monotonic-upward post-insert hook that extends `MatchResultParticipant.accountRatingSnapshot` to `max(existing, newAccount.accountRating)` when an MRP row already exists (no longer reachable after S8e: selection is Waiting-only). `deselect_match_account` does NOT run the hook -- removing from selection cannot lower the max.
 
 ### Phase 12.3: finalize_match_result tournament-ordering guard
 
@@ -242,7 +242,7 @@ execution"; bracket side effects: [../brackets/architecture.md](../brackets/arch
 
 | Reducer | Permission; stage | Behaviour |
 |---|---|---|
-| `create_tournament_lobby(bracketMatchId, joinCode)` | a member of team1 / team2 of the match or an approved stand-in of either (A34), or `bracket`; InProgress; match Ready; no lobby of the match except a Finished one (`Lobby.bracket_match_id`) | Integrity set from the tournament (A33: teamSize, gameMode, matchType from countTowardsMmr, both anonymity flags, rosterVisibility, requireOwnership, costSetId, disconnectPolicy + disconnectForfeitSeconds, allowMirrorPicks (false when ranked, D-42), lineupFormat); bestOf = `BracketMatch.bestOf`; bestOfNAdvantage = Blue when `winnerAdvantage > 0` (A27). Free set from the preset at `lobbyPresetId`, the system preset when that row is gone (A33a). name = tournament name + position key (≤ 50). Creator = host and referee (A34): a participant on its team's player seat (`autoSeatSlot`), staff on Spectator; `ensureNotInLobby` for both; `isCaptain` false (start_draft assigns). `joinCode` is ignored (server-generated, as before) |
+| `create_tournament_lobby(bracketMatchId, joinCode)` | a member of team1 / team2 of the match or an approved stand-in of either (A34), or `bracket`; InProgress; match Ready; S8e (A67(5)): every lobby of the match settled (record Validated) and the Validated games below `bestOf` (`Lobby.bracket_match_id`) | Integrity set from the tournament (A33: teamSize, gameMode, matchType from countTowardsMmr, both anonymity flags, rosterVisibility, requireOwnership, costSetId, disconnectPolicy + disconnectForfeitSeconds, allowMirrorPicks (false when ranked, D-42), lineupFormat). Free set from the preset at `lobbyPresetId`, the system preset when that row is gone (A33a). name = tournament name + position key (≤ 50). Creator = host and referee (A34): a participant on its team's player seat (`autoSeatSlot`), staff on Spectator; `ensureNotInLobby` for both; `isCaptain` false (start_draft assigns). `joinCode` is ignored (server-generated, as before) |
 | `approve_stand_in(bracketMatchId, teamId, userId)` | `participants` | `teamId` ∈ {team1Id, team2Id}; the user exists, is not a guest, and is not a member of the other team; one approval per (match, user); the row carries `teamId` (A35) |
 | `revoke_stand_in(bracketMatchId, userId)` | `participants` | deletes the approval; a seat already held is not changed |
 | `advance_tournament_stage(…, Completed)` | `owner`; InProgress | `ensureCanComplete`: format check (GroupInto*: elimination rows exist; GroupOnly: group rows only), then `canComplete` (every row Decided / Walkover / Void, no tournament lobby outside AwaitingResult); `assignFinalPlacements`; stage Completed; `startTournamentFinalization` |
@@ -287,6 +287,25 @@ finalize job of this tournament is still scheduled." Placements also count a wal
 (`eliminationKeys` reads Decided and Walkover rows).
 
 
+## Phase S8e execution (DECISIONS.md A67(2)(5)(7)(8))
+
+- **create_tournament_lobby (A67(5)).** Caller rule (A34) and D-22 unchanged. Rejections, in order after the caller
+  check: tournament not InProgress; match not Ready ("<position> is <state>; a lobby needs a Ready match."); D-45: a
+  lobby of the match (`Lobby.bracket_match_id`) whose record is not Validated (Waiting, playing, or parked with a
+  Pending / Submitted / Disputed record): "A lobby for this bracket match is still in play."; the cap: the Validated
+  records of the match (`MatchResultRecord.bracket_match_id`) reach `BracketMatch.bestOf`: "This bracket match has no
+  games left (best of N)." A parked lobby with a Validated record does not block. The lobby copies no `bestOf`,
+  head start or shelving setting (A67(2)); the integrity set (A33) is the tournament's, `lineupFormat` included.
+- **Bracket tally.** Each settled game is handed to the bracket match (`recordGameSettled`, derived tally, decided at
+  ceil(bestOf / 2)): [../brackets/architecture.md](../brackets/architecture.md) "Phase S8e execution".
+- **Finalize job (A67(8)).** Unchanged in shape; a bracket match now has one record per game, so
+  `tournamentRecordsInBracketOrder` orders the records of a match by creation time (`createdDate`, the start_draft
+  insert), id only as a tie-break. Each Validated record is finalized on its own: history, stats and, in a Completed
+  MMR tournament, MMR per game (A67(7): a Bo3 can move MMR three times). Placements and Cancelled semantics unchanged.
+- **Cancel cleanup.** Unchanged: every lobby except one parked with a Validated record is voided.
+- **dq_participant.** The live-lobby lookup covers Drafting / Equipping / Scoring only; the D-26 hard-delete branch of
+  the removed stages is gone; a Ready match is settled with the derived tally (`matchGames`).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -316,10 +335,11 @@ finalize job of this tournament is still scheduled." Placements also count a wal
 | create / update arguments: the A36 set (`checkInEnabled`, `groupAdvanceCount`, `disconnectForfeitSeconds`, `requireResultValidation`, `grandFinalBestOf`, `groupAssignmentMode`, `lineupFormat`, `allowMirrorPicks`, `minimumMmr?`, `lobbyPresetId?`) with A28 / A29 / A32 validation | Phase S8b execution | 2026-11-07 |
 | Bracket reducers on the shared engine: + `set_seed_order`, `advance_group_stage`, `resolve_bracket_match`; − `swap_seeds`, `advance_bracket_match`, `submit_and_advance_bracket`, `advance_group_to_elimination`, `admin_set_bracket_winner`; `generate_bracket` withdraws still-Forming teams (A26a); `dq_participant` keeps the team (Disqualified) and settles through `applyBracketResult` (A23, A26a(2)) | Phase S8c execution | 2026-11-07 |
 | `create_tournament_lobby` on the A33 / A33a / A34 / A27 rules, `approve_stand_in` with `teamId`, `revoke_stand_in`; Completed: format check + `canComplete` + placements + the chunked finalize job (K = 4, reschedule first, bracket order); Cancelled keeps bracket / teams, voids live lobbies, runs the same job without MMR (A24, A27, A33, A33a, A34, A35, A56) | Phase S8d execution | 2026-11-07 |
+| `create_tournament_lobby`: D-45 = no unsettled lobby of the match, decided / capped matches rejected, no series settings copied; several records per bracket match in the finalize job, ordered by creation time; DQ settles with the derived tally (A67(2)(5)(7)(8)) | Phase S8e execution | 2026-11-08 |
 
 ---
 
-*Last updated: 2026-04-12*
+*Last updated: 2026-11-08*
 *Feature owner: Phase 04 / Phase 06 / Phase 08 / Phase 10.1 / Phase 10.4 / Phase 12.3*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

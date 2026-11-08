@@ -37,11 +37,11 @@ Lobby (id: u32 autoInc PK)  [public: true]
   +-- isAnonymousPlayers: bool / isAnonymousSpectators: bool
   +-- rosterVisibility: RosterVisibility / requireOwnership: bool / costSetId: u32 (0=default sentinel)
   +-- isPublic: bool   (password stored in LobbyPassword, never broadcast)
-  +-- bestOf: u8 (1 = single game; 3/5/7 = series) / refereeControlsShelving: bool
+  +-- (A67(2), S8e: no series settings; bestOf / bestOfNAdvantage / refereeControlsShelving removed)
   +-- disconnectPolicy: DisconnectPolicy / disconnectForfeitSeconds: u32?
   +-- gameMode: GameMode
   +-- lastActivityAt: Timestamp  (drives GC idle checks)
-  +-- stage: LobbyStage (Waiting | Drafting | Equipping | Scoring | BetweenGames | Shelved | AwaitingResult | Finished)
+  +-- stage: LobbyStage (Waiting | Drafting | Equipping | Scoring | AwaitingResult)  (A67(1): one game per lobby)
   +-- audit columns
   Indexes: host_user_id (btree), stage (btree), tournament_id (btree), bracket_match_id (btree)
 
@@ -122,20 +122,20 @@ TournamentStandIn (PK: [bracketMatchId, userId])  [public: true]
 
 Lobby-owned reducers live in `reducers/lobbyLifecycle.ts`, `lobbySettings.ts`, `lobbyPresets.ts`, `refereeManagement.ts`, `cursor.ts`, `lobbyGc.ts`, `accountSelection.ts`, `concede.ts` (concede / claim_forfeit / defer), `refereeTransfer.ts` (the A22a scheduled check), the lifecycle hooks in `index.ts`, and (tournament-linked) `tournamentLobby.ts`. Draft-stage transitions (`start_draft`, picks/bans) live in the draft feature, not here.
 
-### create_lobby(config fields..., presetId, joinCode, password, name?, banRestriction?, lineupFormat?, hideMmr?, bestOfNAdvantage?, refereeExclusiveConcede?)
+### create_lobby(config fields..., presetId, joinCode, password, name?, banRestriction?, lineupFormat?, hideMmr?, refereeExclusiveConcede?)
 1. `getAuthenticatedUser(ctx)` -- reject guests.
 2. D-31b: if `presetId > 0`, verify `LobbyPreset` exists (validation only -- preset values are NOT applied server-side).
 3. D-22: `ensureNotInLobby` -- reject if caller has any active LobbyMember row.
 4. Generate a server-side `joinCode` (`generateJoinCode`, 6 uppercase alnum, up to 10 retries; the arg is ignored for storage).
 5. D-23: reject guest + `matchType=Ranked`; force `rosterVisibility=ClosedNoRating` for guests.
 6. D-42: if `matchType=Ranked`, force `allowMirrorPicks=false`. Resolve `disconnectForfeitSeconds` (0 sentinel -> undefined).
-7. Insert `Lobby` (`insertWithAudit`) with `stage=Waiting`, `currentPlayerCount=1`, `hostUserId`, `isTournamentControlled=false`, `bestOf` (0 -> 1), `lastActivityAt=now`.
+7. Insert `Lobby` (`insertWithAudit`) with `stage=Waiting`, `currentPlayerCount=1`, `hostUserId`, `isTournamentControlled=false`, `lastActivityAt=now`.
 8. D-24 / D-27: insert host as `LobbyMember` with `lobbySlot=Spectator`, `isReferee=true`, `isConfirmed=false`, `isOnline=true`, `joinSeq=1` (R4, S4).
 9. D-02: if `!isPublic` and password provided, insert `LobbyPassword` row.
 
 Series settings and cost-set guards (Phase S6 execution; DECISIONS.md A27, A28, A38(2), A40, A45(2)/(5), D-A8; backlog #2, #6-#9), before the insert:
 - The six new arguments are optional (an omitted key takes the default): `name` (trimmed, 0-50 chars, default '' — the lobby browser view labels an empty name in S9; no host name is stored, so anonymous lobbies leak nothing), `banRestriction` (NoRestriction), `lineupFormat` (Halves), `hideMmr` (false), `bestOfNAdvantage` (None), `refereeExclusiveConcede` (true, A45(5); it was hardcoded true before).
-- `bestOf`: the D-11 sentinel maps 0 to 1, then `ensureBestOf` (helpers/seriesSettings.ts) rejects anything but 1 or 3 with "bestOf must be 1 or 3.". `bestOfNAdvantage` is forced to None when bestOf = 1 (`resolveAdvantage`).
+- `bestOf`: the D-11 sentinel maps 0 to 1, then `ensureBestOf` (helpers/seriesSettings.ts) rejects anything but 1 or 3 with "bestOf must be 1 or 3.". `bestOfNAdvantage` is forced to None when bestOf = 1 (`resolveAdvantage`). **Superseded (S8e, A67(2)):** `bestOf`, `refereeControlsShelving` and `bestOfNAdvantage` are no longer arguments or columns; `resolveAdvantage` is deleted.
 - `lineupFormat`: both values are accepted. The A21 rule "8 characters → Halves, 12 → Thirds" has no other source in the schema today (every draft sequence fields 8 characters per team, `teamSize` is players), so the format itself is the character count; the 12-character draft is S7's.
   - Phase S7 execution (A21): the format drives the draft. Halves = 8 characters per team, Thirds = 12 (`charactersPerTeam` in `shared/scoring`): `initSessionForGame` builds the Classic sequence with `lobby.lineupFormat` and the Auction ends at 8 / 12 won per team; lineups (`arrange_lineup` / `confirm_lineup`) have 2 or 3 groups of 4, arranged and confirmed only by the team captain or a referee. Details: `docs/match-session/architecture.md` "Phase S7 execution".
   - Phase S7b execution (DECISIONS.md A59, A60): `confirm_lineup` was removed (no lineup confirmation; captains confirm the whole game with `confirm_game`, see `docs/match-results/architecture.md` "Game package"); lineups stay editable in Equipping and Scoring until the game closes. Classic Thirds uses the A59 orders (`docs/match-session/draft-order.md`).
@@ -149,7 +149,7 @@ Abuse guards (Phase S5 execution; DECISIONS.md A42, A43; ACCESS-SECURITY-OPS B-7
 ### join_lobby(lobbyId, joinCode, password)
 1. `getAuthenticatedUser(ctx)`.
 2. D-03: resolve lobby by `id` (if `lobbyId>0`) else by `joinCode`; throw "Lobby not found." if neither resolves.
-3. **Reconnect path** (existing LobbyMember row; F1 / Phase S4 execution: evaluated BEFORE the one-lobby check, which counts the row being rejoined and used to reject every reconnect): require a reconnect stage (Waiting, Drafting, Equipping, Scoring, BetweenGames, Shelved, AwaitingResult); D-38 reject if `voluntarilyLeft`; D-39 recompute `disconnectPoolRemainingMs`; delete+reinsert member `isOnline=true`, clear `disconnectedAt`; auto-resume the MatchSession timer if it was auto-paused; bump activity; return (no count change, no chat).
+3. **Reconnect path** (existing LobbyMember row; F1 / Phase S4 execution: evaluated BEFORE the one-lobby check, which counts the row being rejoined and used to reject every reconnect): require a reconnect stage (Waiting, Drafting, Equipping, Scoring, AwaitingResult; A67(1)); D-38 reject if `voluntarilyLeft`; D-39 recompute `disconnectPoolRemainingMs`; delete+reinsert member `isOnline=true`, clear `disconnectedAt`; auto-resume the MatchSession timer if it was auto-paused; bump activity; return (no count change, no chat).
 4. **New-join path** only: D-22 `ensureNotInLobby`; D-23 guest restrictions; D-21 `ensureNotBanned` (reject if a `LobbyBan` row exists).
 5. Require stage Waiting or Drafting; D-02 verify password against `LobbyPassword` if `!isPublic`.
 6. Cap enforcement: reject if total members >= 20 ("Lobby is full (max 20 members)."); reject if spectators >= 12 ("Spectator slots are full (max 12)."). Hardcoded -- no config knob.
@@ -159,21 +159,21 @@ Abuse guards (Phase S5 execution; DECISIONS.md A42, A43; ACCESS-SECURITY-OPS B-7
 
 ### leave_lobby(lobbyId)
 1. `getAuthenticatedUser(ctx)`; `ensureLobbyMember`; load lobby.
-2. **Active stage** (Drafting/Equipping/Scoring/BetweenGames):
+2. **Active stage** (Drafting/Equipping/Scoring; A67(1)):
    - D-29 spectators/coaches: delete their `LobbyMemberAccount` rows, delete `LobbyMember`, decrement count, return.
    - D-31 players: delete `LobbyMemberAccount` rows; delete+reinsert member with `voluntarilyLeft=true`, `isOnline=false` (row KEPT for finalization; count unchanged).
    - D-34/35/36: `transferCaptain`, `transferReferee`, `transferHost` to the next eligible online team member (see flag-transfer priority below). F6 (Phase S4 execution): the `Lobby` row is re-read after the transfers; `performConcede` and the final `lastActivityAt` update spread the fresh row, so a transferred host is not handed back to the leaver.
    - D-31/D-82: if the leaver's team has no remaining non-left members, `performConcede` (their team loses, reason `VoluntaryLeave`) -- UNLESS `refereeExclusiveConcede` + a third-party referee is present (then blocked; referee decides).
    - Insert System `ChatMessage` "{name} left the match."; return.
-3. **Normal** (Waiting/AwaitingResult/Finished): delete `LobbyMemberAccount` rows; delete `LobbyMember`; compute new count.
+3. **Normal** (Waiting/AwaitingResult): delete `LobbyMemberAccount` rows; delete `LobbyMember`; compute new count.
 4. If count==0 and stage Waiting: `hardDeleteLobby` (auto-close) and return.
-5. D-19: if count==0 and stage Shelved: set count 0, do NOT delete (preserved for return).
+5. (A67(1), S8e: the D-19 count-0 exemption of the removed long-pause stage is gone.)
 6. Else update `currentPlayerCount`; insert System `ChatMessage` "{name} left the lobby."
 
 ### close_lobby(lobbyId)
 1. `getAuthenticatedUser(ctx)`; load lobby.
 2. D-21: `ensureHostOrAbove` (host or Moderator+).
-3. D-20: `ensureStageIs(Waiting | Finished)`.
+3. D-20: `ensureStageIs(Waiting)` (A67(1): the unused terminal stage is gone).
 4. D-19: `hardDeleteLobby` -- cascade delete (order): MatchResultParticipant -> MatchResultGame -> MatchResultRecord -> ChatMessage -> LobbyMemberAccount -> LobbyMember -> LobbyBan -> LobbyPassword -> MatchSessionStep -> MatchSession -> Lobby (LobbyCursorEvent auto-expires).
 
 ### kick_member(lobbyId, targetUserId)
@@ -204,7 +204,7 @@ Abuse guards (Phase S5 execution; DECISIONS.md A42, A43; ACCESS-SECURITY-OPS B-7
 6. Password: upsert `LobbyPassword` if `!isPublic` + password given; delete it if `isPublic`.
 7. Reset readiness: every `isConfirmed=true` member is delete+reinserted with `isConfirmed=false`.
 
-Phase S6 execution (backlog #2, #6, #7, #9; DECISIONS.md A28, A33, A38(2)/(4), A40, A45(2)): new optional arguments `bestOf`, `refereeControlsShelving`, `lineupFormat`, `bestOfNAdvantage`, `banRestriction`, `hideMmr`, `name` (an omitted key keeps the lobby's value; `refereeExclusiveConcede` was already an argument).
+Phase S6 execution (backlog #2, #6, #7, #9; DECISIONS.md A28, A33, A38(2)/(4), A40, A45(2)) — **S8e (A67(2)): `bestOf`, `refereeControlsShelving` and `bestOfNAdvantage` are removed from the arguments and from the lock list; the integrity set adds only `lineupFormat` to D-65**: new optional arguments `bestOf`, `refereeControlsShelving`, `lineupFormat`, `bestOfNAdvantage`, `banRestriction`, `hideMmr`, `name` (an omitted key keeps the lobby's value; `refereeExclusiveConcede` was already an argument).
 - Integrity set (locked in tournament lobbies): the D-65 list plus `bestOf`, `lineupFormat` and `bestOfNAdvantage` (A27: the head start comes from the bracket, copied by S8). Unlike the D-65 fields, which silently keep the tournament's value, an explicit **change** of any of the three is rejected ("bestOf is set by the tournament bracket and cannot be changed in a tournament lobby." / "lineupFormat is set by the tournament ..."); passing the current value is accepted.
 - Free set (host or Moderator+, Waiting, tournament lobbies included): `refereeControlsShelving`, `banRestriction`, `hideMmr`, `refereeExclusiveConcede`, `name`, plus the existing free fields.
 - `bestOf`: 0 → 1, then `ensureBestOf`; `bestOfNAdvantage` forced None when the resulting bestOf is 1.
@@ -234,7 +234,7 @@ Phase S6 execution (backlog #2, #6, #7, #9; DECISIONS.md A28, A33, A38(2)/(4), A
 3. Validate `name` length 1-50; resolve `disconnectForfeitSeconds` (0 -> undefined).
 4. `create`: insert `LobbyPreset` (`isSystemPreset=false`, `creatorUserId=user.id`). `update`: `updateWithAudit` all config fields. `delete`: delete row.
 5. B-7 (Phase S5 execution): `create` counts the caller's presets on `creator_user_id` and rejects at `AbuseConfig.maxPresetsPerUser` (D-B5: 10). Guests never reach this check (TournamentHost+ guard, A43).
-6. Phase S6 execution (backlog #6, #2; A28, A45(2)): optional arguments `bestOf`, `refereeControlsShelving`, `bestOfNAdvantage`, `lineupFormat`, `banRestriction`, `hideMmr` (create: defaults 1 / true / None / Halves / NoRestriction / false; update: omitted keeps the stored value). `ensureBestOf` and the None-for-Bo1 rule as in `create_lobby`. Cost set: `create` runs `ensureCostSetUsable`; `update` runs it when `costSetId` changes, else `ensureCostSetCovers` when gameMode / draftMode change.
+6. Phase S6 execution (backlog #6, #2; A28, A45(2)) — the three series arguments are removed in S8e (A67(2)): optional arguments `bestOf`, `refereeControlsShelving`, `bestOfNAdvantage`, `lineupFormat`, `banRestriction`, `hideMmr` (create: defaults 1 / true / None / Halves / NoRestriction / false; update: omitted keeps the stored value). `ensureBestOf` and the None-for-Bo1 rule as in `create_lobby`. Cost set: `create` runs `ensureCostSetUsable`; `update` runs it when `costSetId` changes, else `ensureCostSetCovers` when gameMode / draftMode change.
 7. Phase S6 execution (A33a): `delete_lobby_preset` rejects the system preset for everyone, Admins included ("The system lobby preset cannot be deleted."); `update_lobby_preset` on it stays Admin-only (`ensureCanMutatePreset`).
 
 ### System lobby preset (helpers/systemPreset.ts; Phase S6 execution, A33a / CH-S4)
@@ -262,13 +262,13 @@ B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3
 - Stamp: delete + reinsert the member row with `lastCursorAt = now` and the audit columns untouched (not a user edit). The event insert carries no audit columns (A19).
 
 ### run_lobby_gc / admin_gc_lobbies / seed_lobby_gc_job
-- `run_lobby_gc` (scheduled): `performLobbyGc` scans all lobbies -- D-48 skip AwaitingResult; D-16 casual Shelved hard-deleted after 72h idle (tournament Shelved persists); D-17/D-47 active stages skipped while any member is online, else idle check; D-49 Waiting/Finished hard-deleted after 30 min idle. D-14 writes a `GcResult` audit row if anything was deleted. Requeues itself +15 min.
+- `run_lobby_gc` (scheduled): `performLobbyGc` scans all lobbies -- D-48 skip AwaitingResult; D-47 active stages (Drafting, Equipping, Scoring) skipped while any member is online, else idle check; D-49 Waiting hard-deleted after 30 min idle (A67(1), S8e: the D-16 72 h rule and the D-17 between-games rule are gone with their stages). D-14 writes a `GcResult` audit row if anything was deleted. Requeues itself +15 min.
 - `admin_gc_lobbies`: Moderator+ manual one-shot; same sweep, no self-requeue.
 - `seed_lobby_gc_job`: server-identity-only (called from `scripts/stdb/bootstrap.ts`); idempotent; inserts the first `LobbyGcJob` row to bootstrap the chain.
 
 ### select_match_account(lobbyId, hsrAccountId) / deselect_match_account(lobbyId, hsrAccountId)
-1. `getAuthenticatedUser(ctx)`; load lobby; `ensureLobbyMember`. D-06: stage must be Waiting or BetweenGames.
-2. `select`: reject Spectator/Coach; validate the `HsrAccount` belongs to caller. Tournament path (D-04) is additive up to `Tournament.maxAccountsPerPlayer` and requires the account be locked in `TournamentPlayerAccount`; non-tournament path (D-07) replaces (max 1). D-B-03: bumps `accountRatingSnapshot` if a MatchResult already exists. Phase S6 execution (backlog #10): the bump is `max(snapshot, computeLobbyMemberRating(...))`, the merged rating of the member's current selection (one account: its stored rating), instead of the newly selected account's own rating.
+1. `getAuthenticatedUser(ctx)`; load lobby; `ensureLobbyMember`. D-06: stage must be Waiting (A67(1); "Account selection is only allowed during the Waiting stage." / "Account deselection …"). A69(3) (S8e fix pass 2): the D-B-03 snapshot ratchet is gone; the snapshot is taken once at `start_draft` (A66) and selection changes nothing after it (selection is Waiting-only, before any `MatchResultParticipant` exists).
+2. `select`: reject Spectator/Coach; validate the `HsrAccount` belongs to caller. Tournament path (D-04) is additive up to `Tournament.maxAccountsPerPlayer` and requires the account be locked in `TournamentPlayerAccount`; non-tournament path (D-07) replaces (max 1). ~~D-B-03: bumps `accountRatingSnapshot` if a MatchResult already exists. Phase S6 execution (backlog #10): the bump is `max(snapshot, computeLobbyMemberRating(...))`, the merged rating of the member's current selection (one account: its stored rating), instead of the newly selected account's own rating.~~ (removed, A69(3); see step 1).
 3. `deselect`: find and delete the matching `LobbyMemberAccount` row (throw if not selected). No snapshot hook.
 
 ### create_tournament_lobby(bracketMatchId, joinCode) / approve_stand_in(bracketMatchId, userId)
@@ -276,14 +276,14 @@ B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3
 - `approve_stand_in`: resolve BracketMatch + Tournament; D-68 authorize (Moderator+, organizer, or assistant); validate target user; reject duplicate; insert `TournamentStandIn` (PK `[bracketMatchId, userId]`, `approvedByUserId=caller`). There is no `remove_stand_in` reducer.
 
 ### claim_forfeit(lobbyId, forfeitingTeamSide) (concede.ts; F7, Phase S4 execution)
-1. `getAuthenticatedUser(ctx)`; `ensureLobbyMember`; load lobby; stage must be Drafting / Equipping / Scoring / BetweenGames.
+1. `getAuthenticatedUser(ctx)`; `ensureLobbyMember`; load lobby; stage must be Drafting / Equipping / Scoring (A67(1)).
 2. D-81: with `refereeExclusiveConcede` and a third-party (Spectator) referee present, only that referee may call; otherwise spectators and coaches are rejected. D-15: `disconnectPolicy` must be Standard.
 3. F7: `forfeitingTeamSide` 0 = the team opposing the caller's slot (rejected for the exclusive referee, who has no team: "Referee must specify forfeitingTeamSide: 1=Blue, 2=Red."), 1 = Blue, 2 = Red; any other value is rejected.
 4. D-16: `isForfeitEligible(targetTeam)` stays the gate (every non-coach player of that team offline with `disconnectedAt` set and pool depleted or `disconnectForfeitSeconds` elapsed); then `performConcede` (trigger RefereeDecision for a referee, Disconnect otherwise). `concede_match` and `defer_match` are unchanged.
 
 ### client_connected / client_disconnected (index.ts; lobby side, Phase S4 execution)
 - `client_connected`: after the presence upsert (`docs/auth/architecture.md`), for every `LobbyMember` of the user: delete pending `RefereeTransferCheck` rows (`by_lobby_and_user`); if the row is offline, delete+reinsert with `isOnline=true`, `disconnectedAt` cleared and `disconnectPoolRemainingMs` decremented by the offline time (`handleDisconnectPoolUpdate`, D-10/D-11). Idempotent (F1). `join_lobby`'s reconnect branch does the same explicitly and additionally auto-resumes an auto-paused draft.
-- `client_disconnected`: marks the identity's presence row offline; if the user still has another live `UserPresence` row, stops (A48). Otherwise for every membership: `isOnline=false`; in an active stage (Drafting, Equipping, Scoring, BetweenGames, Shelved) one `RefereeTransferCheck { lobbyId, userId, scheduledAt: now + 15 s }` (a stale pending row for the pair is replaced); `disconnectedAt=now` only in Drafting, Equipping, Scoring (the D-08 forfeit clock; never in BetweenGames or Shelved, never under NoAction). No flag transfer, no pause (A22a, F5).
+- `client_disconnected`: marks the identity's presence row offline; if the user still has another live `UserPresence` row, stops (A48). Otherwise for every membership: `isOnline=false`; in an active stage (Drafting, Equipping, Scoring; A67(1) `ACTIVE_STAGES`) one `RefereeTransferCheck { lobbyId, userId, scheduledAt: now + 15 s }` (a stale pending row for the pair is replaced); `disconnectedAt=now` in every live stage (Drafting, Equipping, Scoring: the D-08 forfeit clock; never under NoAction). No flag transfer, no pause (A22a, F5).
 
 ### run_referee_transfer_check(arg: RefereeTransferCheck) (refereeTransfer.ts; scheduled, A22a)
 1. Re-read `Lobby` and the `LobbyMember`; no-op if either is gone (the scheduler consumed the row).
@@ -321,7 +321,33 @@ B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3
   **Pause** step of the current game is an auto-pause (a later SetEidolon or other step no longer hides it).
 - **Tournament lobby settings.** `update_lobby_settings` keeps the integrity set locked (verified: `bestOf`,
   `lineupFormat`, `bestOfNAdvantage` rejected on change; the D-65 fields silently kept); the free set stays editable
-  by the host or Moderator+ in Waiting (A38(4)).
+  by the host or Moderator+ in Waiting (A38(4)). S8e: only `lineupFormat` remains of the three (A67(2)).
+
+## Phase S8e execution (DECISIONS.md A67(1)(2)(5))
+
+- **Stages.** `LobbyStage` = Waiting → Drafting → Equipping → Scoring → AwaitingResult. The between-games stage, the
+  long-pause stage and the writerless terminal stage are removed with every branch that named them:
+  `leave_lobby` (active stages = Drafting, Equipping, Scoring; the D-19 count-0 branch is gone), `join_lobby`
+  reconnect stages (Waiting, Drafting, Equipping, Scoring, AwaitingResult), `close_lobby` (Waiting only),
+  `concede_match` / `claim_forfeit` / `defer_match` ("… only available during Drafting, Equipping, or Scoring."),
+  `select_match_account` / `deselect_match_account` (Waiting only), `ensureMatchAlive` / `ensureNotConceded`,
+  `isCostSetInUse` (every lobby counts), `delete_my_account`'s lobby guard, `dq_participant` (live stages only; the
+  D-26 hard-delete branch is gone), `ACTIVE_STAGES` (`shared/lobby-rules`) and `DISCONNECT_CLOCK_STAGES` (`index.ts`),
+  both Drafting, Equipping, Scoring. The membership semantics (D-31, D-38, kick, transfers, GC presence) are
+  unchanged here; S8f (A68) revisits them.
+- **GC.** `performLobbyGc`: D-48 AwaitingResult skipped; D-47 live stages need everyone offline + 30 min idle; D-49
+  Waiting 30 min idle. The D-16 72 h rule and the D-17 rule are deleted.
+- **Series reducers deleted.** `advance_to_next_game`, `shelve_series`, `resume_series` (`reducers/seriesManagement.ts`
+  is gone) and their bindings.
+- **No series settings.** `Lobby` / `LobbyPreset` lose `bestOf`, `bestOfNAdvantage`, `refereeControlsShelving`;
+  `create_lobby`, `update_lobby_settings`, `create_lobby_preset`, `update_lobby_preset` lose the three arguments; the
+  system preset loses the three values; the tournament-lobby lock list keeps `lineupFormat` only. `AdvantageSide` and
+  `resolveAdvantage` are deleted; `ensureBestOf` / `ensureWinnerAdvantage` stay for the tournament (A28 chain).
+- **Tournament lobby (A67(5)).** `create_tournament_lobby(bracketMatchId, joinCode)`: caller rule (A34) and D-22
+  unchanged; the match must be Ready; D-45 rejects while any lobby of the match is not settled (its record not
+  Validated) with "A lobby for this bracket match is still in play."; a parked lobby with a Validated record does not
+  block; the cap rejects when the Validated records of the match reach `BracketMatch.bestOf`: "This bracket match has
+  no games left (best of N).". The lobby copies no `bestOf` / head start. Details: `docs/tournament/architecture.md`.
 - `hardDeleteLobby(ctx, lobbyId, keepResultRecord = false)`: with `keepResultRecord` the record row survives (the
   caller marked it Voided, A24(3)); its children are deleted as usual.
 
@@ -361,10 +387,12 @@ B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3
 | `select_match_account` ratchet uses the merged rating of the current selection | Phase S6 execution (backlog #10) | 2026-11-06 |
 | `lineupFormat` drives the character count (Thirds = 12 per team) and the lineup groups; lineups arranged / confirmed by the captain or a referee only | Phase S7 execution (DECISIONS.md A21; backlog #3) | 2026-11-06 |
 | Seat enforcement in `set_team_slot`, auto-seat in `join_lobby` (tournament lobbies), `reclaim_referee` for seated `results` staff, auto-resume reads the latest Pause step of the current game, `hardDeleteLobby` keepResultRecord flag | Phase S8d execution (DECISIONS.md A24(3), A26, A35; D.8.4, D.8.5) | 2026-11-07 |
+| One game per lobby: series stages, series reducers and series settings removed; stage lists shrink to the live stages; GC D-16 / D-17 gone; D-45 = one unsettled lobby per bracket match + decided / cap rejections | Phase S8e execution (DECISIONS.md A67(1)(2)(5)) | 2026-11-08 |
+| `select_match_account` loses the D-B-03 snapshot ratchet (dead since selection is Waiting-only); the snapshot is taken once at `start_draft` | Phase S8e execution (DECISIONS.md A69(3)) | 2026-11-08 |
 
 ---
 
-*Last updated: 2026-11-06*
+*Last updated: 2026-11-08*
 *Feature owner: Phase 05 / Phase 09 / Phase 10.1 / Phase 10.4 / Phase 12.1 / Phase 16*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

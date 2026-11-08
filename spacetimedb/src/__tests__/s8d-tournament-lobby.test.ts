@@ -1,9 +1,9 @@
 // T-S8d: in-memory tests for tournament lobbies (A27, A33, A33a, A34, A35, D-22, D-45, D-65, ACCESS-SECURITY-OPS
 // §D.8.4 / §D.8.5): create_tournament_lobby (callers, guards, the integrity set from the tournament, the free set from
-// the preset / system preset, bestOf / bestOfNAdvantage from the bracket match, the creator as host + referee),
+// the preset / system preset, no series field on the lobby (T-S8e, A67(2)), the creator as host + referee),
 // approve_stand_in / revoke_stand_in, the A35 seat rule on join_lobby (auto-seat) and set_team_slot, reclaim_referee
 // by seated staff, and the locked integrity set of update_lobby_settings. Builders in s8d-fixtures.ts. Nothing
-// reaches maincloud.
+// reaches maincloud. The A67(5) D-45 rule and the game cap are tested in s8e-bracket-series.test.ts.
 import { describe, expect, it } from 'vitest';
 import { TOURNAMENT_PERM_MESSAGES } from '../helpers/tournamentPermissions';
 import { M, expectReject, guest, lobbyRow, member, newHarness, setupLobby, tx, type Actor, type Harness } from './s4-fixtures';
@@ -131,7 +131,7 @@ describe('create_tournament_lobby: callers (A34)', () => {
         const { blue, red } = sidesOf(f, m.id);
         createTournamentLobby(f.test, blue.captain, m.id);
         expectReject(f.test, red.captain, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: m.id, joinCode: '' }),
-            'A lobby already exists for this bracket match.');
+            'A lobby for this bracket match is still in play.'); // T-S8e: D-45 as reworded by A67(5)
         expect(lobbiesOf(f.test, m.id)).toHaveLength(1);
 
         // Seeding (bracket generated, matches Ready): not in progress.
@@ -150,7 +150,7 @@ describe('create_tournament_lobby: callers (A34)', () => {
 // ─── create_tournament_lobby: settings (A33, A33a, A27) ───────────────────────
 
 describe('create_tournament_lobby: the integrity set, the free set, the series (A33, A33a, A27)', () => {
-    it('the integrity set is copied from the tournament; bestOf from the bracket match; Casual from countTowardsMmr false', () => {
+    it('the integrity set is copied from the tournament; no series fields on the lobby (A67(2)); Casual from countTowardsMmr false', () => {
         const f = liveField(2, {
             lineupFormat: 'Thirds', rosterVisibility: 'ClosedWithRating', isAnonymousDefault: true,
             disconnectPolicy: 'Deferred', disconnectForfeitSeconds: 45, requireOwnership: true, allowMirrorPicks: true,
@@ -174,8 +174,10 @@ describe('create_tournament_lobby: the integrity set, the free set, the series (
         expect(l.disconnectForfeitSeconds).toBe(45);
         expect(l.allowMirrorPicks).toBe(true);
         expect(l.lineupFormat.tag).toBe('Thirds');
-        expect(l.bestOf).toBe(matchRow(f.test, m.id).bestOf);
-        expect(l.bestOfNAdvantage.tag).toBe('None');
+        // T-S8e (A67(2)): the lobby no longer carries bestOf / bestOfNAdvantage; the bracket match does.
+        expect('bestOf' in l).toBe(false);
+        expect('bestOfNAdvantage' in l).toBe(false);
+        expect(matchRow(f.test, m.id).bestOf).toBeGreaterThanOrEqual(1);
         expect(l.name).toContain(t.name);
         expect(l.name).toContain(m.positionKey);
     });
@@ -188,15 +190,16 @@ describe('create_tournament_lobby: the integrity set, the free set, the series (
         expect(l.allowMirrorPicks).toBe(false);
     });
 
-    it('bestOfNAdvantage Blue iff the bracket match has winnerAdvantage > 0 (A27: the WB finalist is team1 = Blue)', () => {
+    // T-S8e (A67(2)(4)): the head start lives on the bracket match only (pre-credited to team1 by the derived tally);
+    // the grand-final lobby has no advantage field and no bestOf.
+    it('the head start stays on the bracket match (A27, A67(4)); the grand-final lobby carries no series field', () => {
         const f = liveField(4, { format: 'DoubleElimination', grandFinalBestOf: 3, winnerAdvantage: 1 });
         const rows = [...f.test.db.BracketMatch.tournament_id.filter(f.id)];
         const gf = rows.find((r) => r.bracketSide.tag === 'GrandFinals')!;
         expect(gf.winnerAdvantage).toBeGreaterThan(0);
         const first = rows.find((r) => r.state.tag === 'Ready' && r.bracketSide.tag === 'Winners')!;
         expect(first.winnerAdvantage).toBe(0);
-        const firstLobby = createTournamentLobby(f.test, sidesOf(f, first.id).blue.captain, first.id);
-        expect(lobbyRow(f.test, firstLobby).bestOfNAdvantage.tag).toBe('None');
+        createTournamentLobby(f.test, sidesOf(f, first.id).blue.captain, first.id);
         // Staff settle every other match (the resolve voids the waiting lobby of the first one, A24(3)) until the
         // grand final is Ready.
         let guard = 0;
@@ -205,8 +208,11 @@ describe('create_tournament_lobby: the integrity set, the free set, the series (
             tx(f.test, f.org, (ctx) => M.resolve_bracket_match(ctx, { bracketMatchId: ready.id, winnerTeamId: ready.team1Id!, reason: 't' }));
         }
         const l = lobbyRow(f.test, createTournamentLobby(f.test, f.org, gf.id));
-        expect(l.bestOfNAdvantage.tag).toBe('Blue');
-        expect(l.bestOf).toBe(3);
+        expect('bestOfNAdvantage' in l).toBe(false);
+        expect('bestOf' in l).toBe(false);
+        const g = matchRow(f.test, gf.id);
+        expect(g.bestOf).toBe(3);
+        expect(g.winnerAdvantage).toBe(1); // the stored-tally expectation lives in s8e-bracket-series
     });
 
     it('the free set comes from the tournament preset, and from the system preset once that row is gone (A33a)', () => {
@@ -394,7 +400,7 @@ describe('reclaim_referee in a tournament lobby (D.8.4)', () => {
 // ─── update_lobby_settings (D-65, A33, A38(4)) ────────────────────────────────
 
 describe('update_lobby_settings in a tournament lobby (D-65, A33)', () => {
-    it('bestOf / lineupFormat / bestOfNAdvantage changes rejected; other integrity fields keep the tournament values; the free set is editable', () => {
+    it('lineupFormat changes rejected; other integrity fields keep the tournament values; the free set is editable (T-S8e: no bestOf / advantage argument)', () => {
         const f = liveField(2);
         const m = byKey(f.test, f.id, 'W-R1-M1');
         const lobbyId = createTournamentLobby(f.test, f.org, m.id);
@@ -403,15 +409,13 @@ describe('update_lobby_settings in a tournament lobby (D-65, A33)', () => {
             const args = settingsFrom(f.test, lobbyId, over);
             return (ctx: any) => M.update_lobby_settings(ctx, args);
         };
-        expectReject(f.test, f.org, call({ bestOf: before.bestOf === 1 ? 3 : 1 }), /bestOf is set by the tournament/);
         expectReject(f.test, f.org, call({ lineupFormat: { tag: 'Thirds' } }), /lineupFormat is set by the tournament/);
-        expectReject(f.test, f.org, call({ bestOfNAdvantage: { tag: 'Red' } }), /bestOfNAdvantage is set by the tournament/);
 
         tx(f.test, f.org, call({
             gameMode: { tag: 'AnomalyArbitration' }, matchType: { tag: 'Ranked' }, rosterVisibility: { tag: 'ClosedNoRating' },
             costSetId: 7, allowMirrorPicks: !before.allowMirrorPicks, disconnectForfeitSeconds: 99,
             standardTurnSeconds: 91, characterBudget: 222, banMode: { tag: 'None' }, refereeCanKick: !before.refereeCanKick,
-            bestOf: before.bestOf, lineupFormat: before.lineupFormat,
+            lineupFormat: before.lineupFormat,
         }));
         const after = lobbyRow(f.test, lobbyId);
         expect(after.gameMode.tag).toBe(before.gameMode.tag);

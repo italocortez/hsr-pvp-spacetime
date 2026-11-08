@@ -19,7 +19,6 @@ import {
 export default __t.row({
   id: __t.u32(),
   lobbyId: __t.u32().name("lobby_id"),
-  gameNumber: __t.u8().name("game_number"),
   sequence: __t.u32(),
   actorUserId: __t.u32().name("actor_user_id"),
   anonymousLabel: __t.option(__t.string()).name("anonymous_label"),

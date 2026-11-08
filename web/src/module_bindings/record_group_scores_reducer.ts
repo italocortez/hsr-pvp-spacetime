@@ -16,7 +16,6 @@ import {
 
 export default {
   lobbyId: __t.u32(),
-  gameNumber: __t.u8(),
   get teamSide() {
     return TeamSide;
   },

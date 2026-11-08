@@ -11,7 +11,6 @@ import { TeamSide } from '../types/enums';
 export const matchResultAdjustmentColumns = {
     id: t.u32().primaryKey().autoInc(),
     matchResultId: t.u32(),
-    gameNumber: t.u8(),
     teamSide: TeamSide,
     value: t.i32(),           // hundredths, signed
     reason: t.string().optional(),   // A55: optional (A21 said required)
@@ -26,6 +25,6 @@ export const MatchResultAdjustment = table({
     name: 'match_result_adjustment',
     public: false,
     indexes: [
-        { accessor: 'by_result_game', algorithm: 'btree', columns: ['matchResultId', 'gameNumber'] },
+        { accessor: 'by_result', algorithm: 'btree', columns: ['matchResultId'] }, // A67(3): one game per record
     ],
 }, matchResultAdjustmentColumns);

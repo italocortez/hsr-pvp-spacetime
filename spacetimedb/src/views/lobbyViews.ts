@@ -20,7 +20,7 @@ import { resolveUserLabel } from '../helpers/userLabel';
 // 1. Lobby Browser (anonymous view) — projected subset of lobby columns
 //    D-05: Excludes config details (timers, budgets, penalties, disconnect, audit).
 //    D-06: Tournament name and cost set name resolved via PK lookup server-side.
-//    D-08: Finished lobbies excluded — only Waiting, Drafting, Equipping, Scoring shown.
+//    D-08: only Waiting, Drafting, Equipping, Scoring shown (AwaitingResult excluded; A67(1): no other stage).
 // ---------------------------------------------------------------------------
 const LobbyBrowserRow = t.object('LobbyBrowserRow', {
     id: t.u32(),
@@ -45,8 +45,8 @@ export const view_lobby_browser = spacetimedb.anonymousView(
     (ctx) => {
         const lobbies: any[] = [];
 
-        // D-08: Only Waiting, Drafting, Equipping, Scoring — exclude Finished.
-        // Use the stage btree index to avoid scanning Finished lobbies.
+        // D-08: Only Waiting, Drafting, Equipping, Scoring — exclude AwaitingResult.
+        // Use the stage btree index to avoid scanning parked lobbies.
         const activeStages: any[] = [
             { tag: 'Waiting', value: {} },
             { tag: 'Drafting', value: {} },

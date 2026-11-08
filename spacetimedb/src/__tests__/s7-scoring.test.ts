@@ -47,7 +47,7 @@ describe('A21 end to end: a 4v4 + 4v4 Bo1 scored by the server', () => {
         expect(g.teamRedCyclesUsed).toBe(H(22.5));
         expect(g.teamBlueAdjustedResult).toBe(H(23));
         expect(g.winnerTeamSide.tag).toBe('Red');
-        expect([...test.db.MatchResultGroupScore.by_result_game.filter([rec0.id, 1])]).toHaveLength(4);
+        expect([...test.db.MatchResultGroupScore.by_result.filter(rec0.id)]).toHaveLength(4);
 
         // A60(3): the confirmation lives on the game row.
         confirmGame(s, captain(s, 'Blue'), 'Blue');
@@ -58,14 +58,14 @@ describe('A21 end to end: a 4v4 + 4v4 Bo1 scored by the server', () => {
 
         // The referee (host) adds a 1-cycle penalty to Red, without a reason (A55): both confirmations reset (A60(2)).
         tx(test, s.host, (ctx) =>
-            M.set_score_adjustment(ctx, { lobbyId, gameNumber: 1, teamSide: side('Red'), value: H(1) }));
+            M.set_score_adjustment(ctx, { lobbyId, teamSide: side('Red'), value: H(1) }));
         g = game(test, rec0.id);
         expect(g.blueConfirmed).toBe(false);
         expect(g.redConfirmed).toBe(false);
         expect(g.teamRedAdjustedResult).toBe(H(23.5));
         expect(g.winnerTeamSide.tag).toBe('Blue');
         expect(g.tieBreakLevel).toBe(0);
-        expect([...test.db.MatchResultAdjustment.by_result_game.filter([rec0.id, 1])][0].reason).toBeUndefined();
+        expect([...test.db.MatchResultAdjustment.by_result.filter(rec0.id)][0].reason).toBeUndefined();
 
         // A63: both ready flags leave the game open; a captain's close_game submits the Bo1 (A60(6)).
         confirmBoth(s);
@@ -98,20 +98,20 @@ describe('A21 end to end: a 4v4 + 4v4 Bo1 scored by the server', () => {
         const s = playToScoring(test);
         const { lobbyId } = s;
         expectReject(test, captain(s, 'Blue'), (ctx) =>
-            M.record_group_scores(ctx, { lobbyId, gameNumber: 1, teamSide: side('Blue'), values: [1, 2, 3], deaths: 0 }),
+            M.record_group_scores(ctx, { lobbyId, teamSide: side('Blue'), values: [1, 2, 3], deaths: 0 }),
             /Halves lineup has 2 group results; got 3/);
         expectReject(test, captain(s, 'Red'), (ctx) =>
-            M.record_group_scores(ctx, { lobbyId, gameNumber: 1, teamSide: side('Blue'), values: [1, 2], deaths: 0 }),
+            M.record_group_scores(ctx, { lobbyId, teamSide: side('Blue'), values: [1, 2], deaths: 0 }),
             'Only the Blue captain or a referee can record scores for that team.');
         expectReject(test, s.a.b2.userId === captain(s, 'Blue').userId ? s.a.b1 : s.a.b2, (ctx) =>
-            M.record_group_scores(ctx, { lobbyId, gameNumber: 1, teamSide: side('Blue'), values: [1, 2], deaths: 0 }),
+            M.record_group_scores(ctx, { lobbyId, teamSide: side('Blue'), values: [1, 2], deaths: 0 }),
             'Only the Blue captain or a referee can record scores for that team.');
         expectReject(test, captain(s, 'Red'), (ctx) =>
-            M.set_score_adjustment(ctx, { lobbyId, gameNumber: 1, teamSide: side('Blue'), value: 100 }),
+            M.set_score_adjustment(ctx, { lobbyId, teamSide: side('Blue'), value: 100 }),
             /Only a referee/);
         // The referee may record either side.
         tx(test, s.host, (ctx) =>
-            M.record_group_scores(ctx, { lobbyId, gameNumber: 1, teamSide: side('Red'), values: [100, 200], deaths: 2 }));
+            M.record_group_scores(ctx, { lobbyId, teamSide: side('Red'), values: [100, 200], deaths: 2 }));
         expect(game(test, record(test, lobbyId).id).teamRedDeaths).toBe(2);
     });
 
@@ -120,21 +120,21 @@ describe('A21 end to end: a 4v4 + 4v4 Bo1 scored by the server', () => {
         const s = playToScoring(test);
         const { lobbyId } = s;
         tx(test, s.host, (ctx) =>
-            M.set_score_adjustment(ctx, { lobbyId, gameNumber: 1, teamSide: side('Blue'), value: 300, reason: ' late ' }));
+            M.set_score_adjustment(ctx, { lobbyId, teamSide: side('Blue'), value: 300, reason: ' late ' }));
         const recId = record(test, lobbyId).id;
-        const adj = [...test.db.MatchResultAdjustment.by_result_game.filter([recId, 1])][0];
+        const adj = [...test.db.MatchResultAdjustment.by_result.filter(recId)][0];
         expect(adj.reason).toBe('late');
         tx(test, s.host, (ctx) =>
-            M.set_score_adjustment(ctx, { lobbyId, gameNumber: 1, teamSide: side('Red'), value: -50, adjustmentId: adj.id }));
+            M.set_score_adjustment(ctx, { lobbyId, teamSide: side('Red'), value: -50, adjustmentId: adj.id }));
         const edited = test.db.MatchResultAdjustment.id.find(adj.id)!;
         expect(edited.value).toBe(-50);
         expect(edited.teamSide.tag).toBe('Red');
         expect(edited.reason).toBeUndefined();
         tx(test, s.host, (ctx) =>
-            M.set_score_adjustment(ctx, { lobbyId, gameNumber: 1, teamSide: side('Red'), value: 0, adjustmentId: adj.id }));
+            M.set_score_adjustment(ctx, { lobbyId, teamSide: side('Red'), value: 0, adjustmentId: adj.id }));
         expect(test.db.MatchResultAdjustment.id.find(adj.id)).toBeNull();
         expectReject(test, s.host, (ctx) =>
-            M.set_score_adjustment(ctx, { lobbyId, gameNumber: 1, teamSide: side('Red'), value: 0 }), /changes nothing/);
+            M.set_score_adjustment(ctx, { lobbyId, teamSide: side('Red'), value: 0 }), /changes nothing/);
     });
 });
 
@@ -267,19 +267,19 @@ describe('review fixes: adjustment authority and input bounds', () => {
         const mod = guest(test, 'mod');
         setRole(test, mod.userId, 'Moderator');
         tx(test, mod, (ctx) =>
-            M.set_score_adjustment(ctx, { lobbyId: s.lobbyId, gameNumber: 1, teamSide: side('Blue'), value: 100 }));
+            M.set_score_adjustment(ctx, { lobbyId: s.lobbyId, teamSide: side('Blue'), value: 100 }));
         const recId = record(test, s.lobbyId).id;
-        expect([...test.db.MatchResultAdjustment.by_result_game.filter([recId, 1])][0].setById).toBe(mod.userId);
+        expect([...test.db.MatchResultAdjustment.by_result.filter(recId)][0].setById).toBe(mod.userId);
     });
 
     it('rejects a group value or an adjustment above 100,000,000 hundredths', () => {
         const test = newHarness();
         const s = playToScoring(test);
         expectReject(test, captain(s, 'Blue'), (ctx) =>
-            M.record_group_scores(ctx, { lobbyId: s.lobbyId, gameNumber: 1, teamSide: side('Blue'), values: [100_000_001, 0], deaths: 0 }),
+            M.record_group_scores(ctx, { lobbyId: s.lobbyId, teamSide: side('Blue'), values: [100_000_001, 0], deaths: 0 }),
             /A group result cannot exceed 100000000 hundredths/);
         expectReject(test, s.host, (ctx) =>
-            M.set_score_adjustment(ctx, { lobbyId: s.lobbyId, gameNumber: 1, teamSide: side('Red'), value: -100_000_001 }),
+            M.set_score_adjustment(ctx, { lobbyId: s.lobbyId, teamSide: side('Red'), value: -100_000_001 }),
             /An adjustment cannot exceed 100000000 hundredths/);
     });
 });

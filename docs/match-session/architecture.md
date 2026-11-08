@@ -12,7 +12,8 @@ Match sessions manage the real-time draft and game flow within a lobby. A `Match
 Lobby (id: u32 autoInc PK)
   +-- MatchSession (lobbyId: u32 PK -- same as Lobby.id)  [public: true]
   |     lobbyId -> Lobby.id
-  |     stage: MatchSessionStage (Waiting | Drafting | Equipping | Scoring | BetweenGames | AwaitingResult)
+  |     stage: lives on Lobby.stage (Waiting | Drafting | Equipping | Scoring | AwaitingResult; A67(1): one game per lobby)
+  |     (A67(3), S8e: no series columns: seriesBestOf / gamesWonBlue / gamesWonRed / currentGameNumber removed)
   |     currentTurnUserId: u32? -> User.id
   |     timerStartedAt: Timestamp?
   |     timerDurationSeconds: u32
@@ -124,23 +125,9 @@ Lobby (id: u32 autoInc PK)
 3. Insert system `MatchSessionStep` with `stepType=SystemEvent`, payload indicating stage change
 4. Update `MatchSession.stage` and `Lobby.stage`
 
-### advance_to_next_game(lobbyId)
-(A65(1), S8d: the finished game's `MatchSessionStep` rows are no longer deleted here; they stay until finalization.)
-1. Permission: host OR TO/Assistant/Mod+; referee if `refereeControlsShelving=true`
-2. Lobby must be in BetweenGames stage
-3. Increment `MatchSession.currentGame`; reset draft state (`draftPhase=0`, `draftTurnIndex=0`)
-4. Transition `MatchSession.stage=Drafting`; transition `Lobby.stage=Drafting`
-5. Restart timer: `timerStartedAt=ctx.timestamp`, clear `timerPausedAt`, reset `timerResumedOffset=0`
-
-### shelve_series(lobbyId)
-1. Permission: host OR TO/Mod+; referee if `refereeControlsShelving=true`
-2. Lobby must be in BetweenGames or active stage (not Closed/AwaitingResult)
-3. Transition `Lobby.stage=Shelved`; update `MatchSession.stage=Shelved`
-
-### resume_series(lobbyId)
-1. Same permission as shelve_series
-2. Lobby must be in Shelved stage
-3. Transition back to BetweenGames; restart timer
+### Series reducers (removed in S8e, A67(1))
+`advance_to_next_game`, `shelve_series` and `resume_series` are deleted with `reducers/seriesManagement.ts`: a lobby
+hosts one game, the bracket match is the only series (`docs/brackets/architecture.md`).
 
 ### Finalization snapshot (called from run_finalization)
 1. Insert `MatchSessionHistory` row from `MatchSession` fields
@@ -231,7 +218,7 @@ Decisions: DECISIONS.md A22(3), A22(4), A22a; bug review F3, F5, F8, F9.
 - **F2 (BACKEND-BUGS):** `initSessionForGame(ctx, lobby, session?, actorId)` (helpers/matchSessionInit.ts) is the one writer of a game's draft state: the sequence (`buildClassicSequence` / `buildAuctionBanSequence` from `lobby.banMode`), `turnIndex = 0`, `isAuctionPhase` (Auction with an empty ban sequence), `nextNominatorTeam = Blue`, `currentBidTeam = Spectator`, no nomination / bid, characters won 0, both budgets from the lobby, a fresh `timerState` (reserve banks from `reserveBankSeconds`, not paused), pause counters 0. `start_draft` calls it without a session (inserts the row with `currentGameNumber = 1`, `seriesBestOf = lobby.bestOf`); `advance_to_next_game` calls it with the session (keeps `gamesWonBlue` / `gamesWonRed` and `seriesBestOf`, `currentGameNumber + 1`) after deleting the previous game's steps, so game 2 of a Bo3 can be drafted in Classic and Auction.
 - **A27 head start:** on insert, `gamesWonBlue = 1` when `lobby.bestOfNAdvantage = Blue`, `gamesWonRed = 1` when Red (0 or 1 under the {1, 3} cap). `advance_stage` (Scoring → BetweenGames / AwaitingResult) recounts wins from `MatchResultGame` and now adds the head start back, so it survives the recount. Tournament lobbies get their side from the bracket in S8.
 - **A45(2) Ban Restriction:** `banRestrictionError(ctx, lobby, team, characterName)` (helpers/banRestriction.ts) counts the team's Ban steps of the current game by `HsrCharacter.role` (SKIP / EMPTY / unknown names carry no role). `ban_character` rejects with the rule's message; the `timer_expiry_classic` auto-ban pool (autoRandomPick) keeps only characters the acting team may still ban and records SKIP when none is left (unchanged sentinel). Applies to both draft modes (Auction bans go through the same reducers).
-- **Backlog #10 merged snapshot:** `start_draft` sets `MatchResultParticipant.accountRatingSnapshot = computeLobbyMemberRating(lobbyId, userId)`: one selected account → its stored `HsrAccount.accountRating`; several → `computeMergedAccountRating` over the union of their rosters (per character the max eidolon). Replaces the MAX rule. The `select_match_account` ratchet stays monotonic-upward.
+- **Backlog #10 merged snapshot:** `start_draft` sets `MatchResultParticipant.accountRatingSnapshot = computeLobbyMemberRating(lobbyId, userId)`: one selected account → its stored `HsrAccount.accountRating`; several → `computeMergedAccountRating` over the union of their rosters (per character the max eidolon). Replaces the MAX rule. The `select_match_account` ratchet stays monotonic-upward (**superseded, A69(3):** the ratchet is gone; the snapshot is taken once at `start_draft`).
 
 ### Phase S7 execution: lineup groups, eidolon snapshot, format-driven count
 Behavior: [contract.md](contract.md) "Lineup Groups (Phase S7 execution)" and following. Formula and scoring tables: `docs/match-results/architecture.md` "Scoring (S7)".
@@ -244,7 +231,7 @@ Behavior: [contract.md](contract.md) "Lineup Groups (Phase S7 execution)" and fo
 ### Phase S7b execution: game package edits, Auction eidolon economics, Thirds orders (A59, A60, A61)
 Behavior: [contract.md](contract.md) scenarios tagged "Phase S7b execution". Confirmation, close and series submission: `docs/match-results/architecture.md` "Phase S7b execution".
 - **Removed (A60(8)):** `confirm_lineup`, `MatchLineup.isConfirmed`, the `ConfirmLineup` step kind (`ActionType` / `StepPayload` / `ConfirmLineupPayload`), the S7 surcharge reservation in `equip_lightcone`, the Scoring branch of `advance_stage`. Replaced by the per-game confirmation on `MatchResultGame` (`confirm_game`, `close_game`).
-- **Edit window (`resolveEditWindow`, `reducers/postDraft.ts`):** reads the session and the lobby's record (Pending; for role Admin also Submitted). If the current game's `MatchResultGame` row is closed, `ensureOpenGame` (`helpers/scoringHelpers.ts`) rejects everyone but an Admin (`'This game is closed.'`) and the Admin path runs with `ensureNotConceded` only (no stage check, no throttle, confirmations untouched, `recomputeSeriesAfterAdminEdit` at the end, A60(7)). Otherwise `ensureStageIs(stages)` + `ensureMatchAlive` + a Pending record; after the edit the game is recomputed (if its row exists) and `resetConfirmations(ctx, game, actorId)` clears both flags (A60(2)).
+- **Edit window (`resolveEditWindow`, `reducers/postDraft.ts`):** (S8e fix pass 2, A69(2): the window ends at validation; the fall-through's status rejections come from `ensureEditableRecord`: `'No pending match result for this lobby.'` (no record), `'This game is closed.'` (Submitted record, caller not an Admin), `'This game can no longer be edited here; corrections go through override_match_result.'` (Validated, Finalized, Disputed, Rejected, Voided: everyone, Admins included); see `docs/match-results/architecture.md` "Phase S8e execution".) reads the session and the lobby's record (Pending; for role Admin also Submitted). If the current game's `MatchResultGame` row is closed, `ensureOpenGame` (`helpers/scoringHelpers.ts`) rejects everyone but an Admin (`'This game is closed.'`) and the Admin path runs with `ensureNotConceded` only (no stage check, no throttle, confirmations untouched, `recomputeSeriesAfterAdminEdit` at the end, A60(7)). Otherwise `ensureStageIs(stages)` + `ensureMatchAlive` + a Pending record; after the edit the game is recomputed (if its row exists) and `resetConfirmations(ctx, game, actorId)` clears both flags (A60(2)).
 - **`equip_lightcone(lobbyId, characterName, lightconeName, superimposition)`:** stages Equipping, Scoring. Callers unchanged (non-coach team member). Strict `lcCost > currentLcBudget` reject kept; the step, `refreshLineupCosts`, the budget debit, then recompute + reset. Admin path: the team is the one whose draft of the current game holds `characterName`.
 - **`arrange_lineup(lobbyId, teamSide, groups)`:** stages Equipping, Scoring; callers unchanged (captain of that side or any referee); throttled (open path only); upsert without a confirmation column; recompute + reset.
 - **`set_eidolon(lobbyId: u32, teamSide: TeamSide, characterName: string, eidolon: u8)`** (new): stages Drafting, Equipping, Scoring; `ensureMatchAlive`; callers: a player seat of that team (not coach, not spectator) or any lobby referee (`ensureEidolonEditor`); throttled through `AbuseConfig.lineupMinIntervalMs` / `LobbyMember.lastLineupAt` like `arrange_lineup`. The character must be in that team's draft of the current game (`teamDraft`: Classic Pick by that side, Auction AuctionSold to that side); `EMPTY` rejected; 0..6; the same level as the current one is rejected. Under `requireOwnership` the level must be in `teamOwnedEidolons(ctx, lobbyId, side, characterName)` (`helpers/ownershipValidation.ts`: distinct `HsrAccountCharacter.eidolonLevel` over the `LobbyMemberAccount` rows of the team's player seats). Classic: `costPaid` = the Classic cost row at the new level (0 without a row), no budget. Auction: `costPaid` = `auctionEidolonExtra(new)`; `delta = extra(new) − extra(current)`; `delta > 0` → `chargeExtra` (character budget first, rest from the light-cone budget; rejected `'Not enough budget for that eidolon.'` when `delta > char + lc`); `delta < 0` → refunded to the light-cone budget in every stage (S7b orchestrator rule: a refund never restores bidding power). Logs a `SetEidolon` step (`actorSlot` = the team), `refreshLineupCosts`, recompute + reset (open) or the Admin series recompute.
@@ -284,6 +271,31 @@ confirmations (A60(2)). `teamDraft.lightconeCosts` = the light cones still equip
 take an optional trailing `gameNumber`; `resolveEditWindow` applies it (Admin only, an earlier closed game;
 "Only an Admin may edit an earlier game." / "Only a closed earlier game of the series can be edited."). Such an edit
 records its step (or lineup row) on that game and recomputes it; it does not charge or refund a session budget.
+**Superseded by S8e (A67(3)):** see below.
+
+## Phase S8e execution (DECISIONS.md A67(1)(3); supersedes A65)
+
+- **One session per lobby.** `start_draft` inserts the `MatchSession` once with the draft sequence
+  (`buildClassicSequence(banMode, lineupFormat)` / `buildAuctionBanSequence(banMode)`), turn index 0, timers, auction
+  state, both budgets and pause counters (the S6 `initSessionForGame` helper and `helpers/matchSessionInit.ts` are
+  folded in and deleted). No series columns, no A27 head-start seeding (the head start lives on the bracket match).
+- **Steps without game numbers.** `MatchSessionStep` and `MatchSessionStepHistory` lose `gameNumber`; the history key
+  is `[matchHistoryId, sequence]`. `helpers/stepSequence.ts`: `getNextSequence(ctx, lobbyId)` unchanged;
+  `currentGameSteps` is replaced by `lobbySteps(ctx, lobbyId)` (every live step of the lobby), read by the ban
+  restriction, Classic / Auction draft state, `undo_last_step`, `resume_draft`, the join auto-resume, `teamDraft`,
+  `equippedLightcones`. Finalization sorts the steps by `sequence` and archives them. `view_my_match_steps` rows have
+  no `gameNumber`.
+- **Edit reducers.** `set_eidolon(lobbyId, teamSide, characterName, eidolon)`, `equip_lightcone(lobbyId,
+  characterName, lightconeName, superimposition)`, `unequip_lightcone(lobbyId, characterName)`,
+  `arrange_lineup(lobbyId, teamSide, groups)`: the optional trailing `gameNumber` is gone. `resolveEditWindow` returns
+  `{ mode, session, record }`: 'admin' when the record's game is closed and the caller is an Admin (record Pending or
+  Submitted, A60(7)); otherwise the open-game rules. A69(2) (fix pass 2): a record past Submitted (Validated and
+  beyond) is not editable by anyone, Admins included (`'This game can no longer be edited here; corrections go through
+  override_match_result.'`); a player on a Submitted record gets `'This game is closed.'`. Every edit, the Admin one included, charges / refunds the
+  session budgets as before (the S8d earlier-game budget asymmetry is gone).
+- **MatchLineup** loses `gameNumber`; index `by_lobby` (lobbyId) replaces `by_lobby_game`.
+- **Removed:** the series reducers (above), `MatchSession.seriesBestOf` / `gamesWonBlue` / `gamesWonRed` /
+  `currentGameNumber`, `initSessionForGame`, `currentGameSteps`.
 
 
 ## Phase History
@@ -315,10 +327,12 @@ records its step (or lineup row) on that game and recomputes it; it does not cha
 | Classic Thirds orders per ban mode (`THIRDS_ORDERS`), `THIRDS_EXTRA_PICKS` removed; `draft-order.md` gains the Thirds section | Phase S7b execution (DECISIONS.md A59) | 2026-11-07 |
 | Auction default eidolon at the sale, the bid-time guard and the bid reservation = the **lowest** owned level (`teamDefaultEidolon` returns the first of the ascending owned list); Classic keeps the highest (`resolveOwnedEidolon`) | Phase S7b follow-up (DECISIONS.md A64) | 2026-11-07 |
 | Steps kept for the whole series (A65): game-scoped readers filter by gameNumber (`currentGameSteps`), finalization archives every game, `view_my_match_steps` carries `gameNumber`; `unequip_lightcone` + `UnequipLightcone` step; `equip_lightcone` checks the caller's team draft; auto-resume reads the latest Pause; optional `gameNumber` on the edit reducers (A65(4)) | Phase S8d execution | 2026-11-07 |
+| One game per lobby: session created once by `start_draft` (initializer folded in), no series columns, steps / lineups without `gameNumber`, `lobbySteps` replaces `currentGameSteps`, edit reducers lose the trailing `gameNumber`, series reducers deleted | Phase S8e execution (DECISIONS.md A67(1)(3)) | 2026-11-08 |
+| Edit window ends at validation (`ensureEditableRecord`: three precise rejections); `select_match_account` ratchet removed | Phase S8e execution (DECISIONS.md A69(2)(3)) | 2026-11-08 |
 
 ---
 
-*Last updated: 2026-11-06*
+*Last updated: 2026-11-08*
 *Feature owner: Phase 07 / Phase 09 / Phase 12.3 / Phase 15.4 / Phase 15.3*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

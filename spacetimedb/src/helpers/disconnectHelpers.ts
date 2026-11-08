@@ -16,7 +16,7 @@ function hasConcededRecord(ctx: any, lobbyId: number): boolean {
  * instead (F8, A22(4)): they legitimately run in AwaitingResult.
  */
 export function ensureMatchAlive(ctx: any, lobby: any): void {
-    if (lobby.stage.tag === 'AwaitingResult' || lobby.stage.tag === 'Finished') {
+    if (lobby.stage.tag === 'AwaitingResult') {
         throw new SenderError('Match has ended.');
     }
     if (hasConcededRecord(ctx, lobby.id)) {
@@ -27,15 +27,11 @@ export function ensureMatchAlive(ctx: any, lobby: any): void {
 /**
  * Guard for the result reducers (`record_group_scores`, `set_score_adjustment`) and the A60(7) Admin edit path of a
  * closed game (`equip_lightcone`, `arrange_lineup`, `set_eidolon`; S7b removed `confirm_match_scores` / `submit_match_result`):
- * rejects a conceded record or a Finished lobby, but allows AwaitingResult and BetweenGames, where the game close parks the
- * lobby (F8, A22(4), A60).
+ * rejects a conceded record, but allows AwaitingResult, where the game close parks the lobby (F8, A22(4), A60, A67(1)).
  */
 export function ensureNotConceded(ctx: any, lobby: any): void {
     if (hasConcededRecord(ctx, lobby.id)) {
         throw new SenderError('Match has been conceded.');
-    }
-    if (lobby.stage.tag === 'Finished') {
-        throw new SenderError('Match has ended.');
     }
 }
 

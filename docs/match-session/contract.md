@@ -953,11 +953,13 @@ D-50 applies to ALL Drafting→Equipping transitions: auto (last Classic pick, l
 **Then:** No Pause step and isPaused unchanged at disconnect time. 15 s later, if #10 is still offline, `run_referee_transfer_check` inserts Pause(actorUserId=0, isAutoPause=true, sequence=max+1) and sets isPaused=true; a spectator's or coach's disconnect never does.
 
 ### Bo3 Game 2 Drafts to Completion (Phase S6 execution, BACKEND-BUGS F2)
+_Superseded in Phase S8e execution (DECISIONS.md A67(1))._
 **Given:** A Bo3 lobby (Classic, ban mode None) whose game 1 ended in BetweenGames
 **When:** The host calls `advance_to_next_game`, then the captains pick in sequence order
 **Then:** The session has a fresh 16-step sequence, `turnIndex = 0`, `currentGameNumber = 2`; after 16 picks (all `gameNumber = 2`) the lobby is in Equipping. Auction (no bans): game 2 opens with `isAuctionPhase = true`, Blue nominating, budgets reset, and reaches Equipping after 16 sales (8 per team). The won-game counters are carried over.
 
 ### Series Head Start (Phase S6 execution, A27, backlog #7)
+_Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 **Given:** A casual lobby with `bestOf = 3`, `bestOfNAdvantage = Red`
 **When:** The host starts the draft; game 1 ends with no recorded game
 **Then:** The session starts 0–1 (`gamesWonRed = 1`); after game 1 the recount in `advance_stage` keeps Red at 1. A Bo1 lobby always starts 0–0 (advantage stored as None).
@@ -1076,16 +1078,19 @@ D-50 applies to ALL Drafting→Equipping transitions: auto (last Classic pick, l
 ## Acceptance Scenarios (Phase S8d execution)
 
 ### S8d-S1 Game 1 steps survive the next game (A65(1))
+_Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 **Given** a Bo3 whose game 1 is closed
 **When** the host calls `advance_to_next_game`
 **Then** game 1's steps are still in `MatchSessionStep`; game 2's draft state (availability, ban restriction, undo) reads game 2's steps only
 
 ### S8d-S2 Undo stays in the current game (A65(2))
+_Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 **Given** game 2 has no Pick or Ban yet
 **When** the referee calls `undo_last_step`
 **Then** rejected ("No steps to undo." at turnIndex 0, "Nothing to undo in this game." otherwise); game 1's steps are untouched
 
 ### S8d-S3 The archive holds every game (A65(3))
+_Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 **When** the series is finalized
 **Then** `MatchSessionStepHistory` holds the steps of games 1 and 2 with their `gameNumber`
 
@@ -1098,6 +1103,24 @@ D-50 applies to ALL Drafting→Equipping transitions: auto (last Classic pick, l
 **When** a player equips a light cone on a character the other team drafted
 **Then** rejected: "X is not in your team's draft of this game."
 
+
+## Acceptance Scenarios (Phase S8e execution)
+
+### S8e-S1 One session per lobby (A67(3))
+**When** `start_draft` runs
+**Then** one `MatchSession` is created with the draft sequence, timers, budgets and pause counters; it has no `seriesBestOf`, `gamesWonBlue`, `gamesWonRed` or `currentGameNumber`; no head start is seeded (the bracket match carries it, A27 / A67(4))
+
+### S8e-S2 Steps without game numbers (A67(3); supersedes A65)
+**When** any draft, edit, pause or confirmation step is logged
+**Then** the `MatchSessionStep` row has no `gameNumber`; every reader (draft state, undo, ban restriction, eidolon and light-cone edits, auto-resume, tie-breaks) reads the lobby's steps; finalization archives them into `MatchSessionStepHistory` keyed `[matchHistoryId, sequence]`
+
+### S8e-S3 Edits take no game number (A67(3))
+**When** a client calls `set_eidolon`, `equip_lightcone`, `unequip_lightcone` or `arrange_lineup`
+**Then** the reducer takes no `gameNumber` argument; an Admin still edits the closed game until the record is finalized (A60(7)); the edit charges or refunds the session budgets like an open-game edit
+
+### S8e-S4 The step view has no game number (A67(3))
+**When** a member subscribes to `view_my_match_steps`
+**Then** the rows carry no `gameNumber`
 
 ## Phase History
 
@@ -1152,6 +1175,7 @@ D-50 applies to ALL Drafting→Equipping transitions: auto (last Classic pick, l
 | Thirds Classic orders per ban mode; scenario "A Thirds Draft Follows the A59 Order" added (supersedes the S7 extra-picks order in "Thirds Lobbies Draft 12 per Team") | Phase S7b execution (DECISIONS.md A59) | 2026-11-07 |
 | Auction default eidolon at the sale = the lowest owned level (was the highest, A61(3)); higher levels bought through `set_eidolon`; scenario "Auction Sale Resolves the Lowest Owned Eidolon" added and "Auction Sale Charges the Eidolon Extra Across Both Budgets" marked superseded | Phase S7b follow-up (DECISIONS.md A64) | 2026-11-07 |
 | Scenarios S8d-S1..S5: steps kept for the series, undo within the game, archive of every game, `unequip_lightcone`, own-draft equip | Phase S8d execution (DECISIONS.md A65) | 2026-11-07 |
+| Scenarios S8e-S1..S4: one session per lobby, steps and edits without game numbers, step view without `gameNumber`; supersedes the A65 whole-series step rules and the S8d-S scenarios | Phase S8e execution (DECISIONS.md A67(3)) | 2026-11-08 |
 
 ---
 

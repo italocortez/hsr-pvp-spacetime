@@ -1,10 +1,10 @@
 import spacetimedb from '../schema';
 import { t, SenderError } from 'spacetimedb/server';
-import { DraftMode, BanMode, GameMode, MatchType, RosterVisibility, DisconnectPolicy, LobbySlot, BanRestriction, LineupFormat, AdvantageSide, ShuffleMode } from '../types/enums';
+import { DraftMode, BanMode, GameMode, MatchType, RosterVisibility, DisconnectPolicy, LobbySlot, BanRestriction, LineupFormat, ShuffleMode } from '../types/enums';
 import { getAuthenticatedUser, isRoleAtLeast } from '../helpers/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { ensureLobbyMember, ensureHostOrAbove, ensureStageIs, slotTeam, slotIsCoach, slotIsSpectator, slotToTeamSide } from '../helpers/lobbyHelpers';
-import { ensureBestOf, normalizeLobbyName, resolveAdvantage } from '../helpers/seriesSettings';
+import { normalizeLobbyName } from '../helpers/seriesSettings';
 import { ensureCostSetCovers, ensureSelectableCostSet } from '../helpers/costSetGuards';
 import { ensureSeatAllowed } from '../helpers/tournamentLobbySides';
 
@@ -19,11 +19,10 @@ import { ensureSeatAllowed } from '../helpers/tournamentLobbySides';
 // Per D-42: Ranked forces allowMirrorPicks=false.
 // Per D-23: guests forced to ClosedNoRating and Casual.
 // Resets all members' isConfirmed to false on settings change (A38(4)).
-// Backlog #6/#7/#9 (A33 tiering): bestOf, lineupFormat and bestOfNAdvantage join the tournament lock list (bestOf
-//   and the head start are bracket-authoritative, A27/A28); refereeControlsShelving, banRestriction, hideMmr,
+// Backlog #9 (A33 tiering): lineupFormat joins the tournament lock list; banRestriction, hideMmr,
 //   refereeExclusiveConcede and name are free-set fields, editable in tournament lobbies too.
 //   The new arguments are optional: an omitted key keeps the lobby's current value.
-//   bestOf keeps the D-11 0 → 1 sentinel and the {1, 3} cap (A28/A38(2)); bestOfNAdvantage is forced None for Bo1.
+//   A67(2): the series settings are gone (one game per lobby; the bracket match carries bestOf and the head start).
 // Backlog #2 (R2, D-D6): a changed costSetId must be selectable; a change of costSetId, gameMode or draftMode
 //   must leave the set covering gameMode × draftMode.
 
@@ -65,11 +64,8 @@ export const update_lobby_settings = spacetimedb.reducer(
         teamRedAlias: t.string(),
         isPublic: t.bool(),
         password: t.string(),
-        // Series / free-set additions (optional: omitted = unchanged):
-        bestOf: t.u8().optional(),
-        refereeControlsShelving: t.bool().optional(),
+        // Free-set / integrity additions (optional: omitted = unchanged):
         lineupFormat: LineupFormat.optional(),
-        bestOfNAdvantage: AdvantageSide.optional(),
         banRestriction: BanRestriction.optional(),
         hideMmr: t.bool().optional(),
         name: t.string().optional(),
@@ -111,30 +107,17 @@ export const update_lobby_settings = spacetimedb.reducer(
             ? lobby.disconnectForfeitSeconds
             : (args.disconnectForfeitSeconds > 0 ? args.disconnectForfeitSeconds : undefined);
 
-        // Integrity set: locked in tournament lobbies (D-65 + A33: bestOf, lineupFormat). Unlike the D-65 fields,
-        // which silently keep the tournament's value, an explicit change of bestOf / lineupFormat is rejected
+        // Integrity set: locked in tournament lobbies (D-65 + A33: lineupFormat). Unlike the D-65 fields,
+        // which silently keep the tournament's value, an explicit change of lineupFormat is rejected
         // (backlog #9 done-when); passing the current value is accepted.
         if (isTournamentLocked) {
-            if (args.bestOf !== undefined && (args.bestOf > 0 ? args.bestOf : 1) !== lobby.bestOf) {
-                throw new SenderError('bestOf is set by the tournament bracket and cannot be changed in a tournament lobby.');
-            }
             if (args.lineupFormat !== undefined && args.lineupFormat.tag !== lobby.lineupFormat.tag) {
                 throw new SenderError('lineupFormat is set by the tournament and cannot be changed in a tournament lobby.');
-            }
-            // A27 / backlog #7: the head start comes from the bracket (S8 copies BracketMatch.winnerAdvantage), so it is locked too.
-            if (args.bestOfNAdvantage !== undefined && args.bestOfNAdvantage.tag !== lobby.bestOfNAdvantage.tag) {
-                throw new SenderError('bestOfNAdvantage is set by the tournament bracket and cannot be changed in a tournament lobby.');
             }
         }
         const gameMode = isTournamentLocked ? lobby.gameMode : args.gameMode;
         const costSetId = isTournamentLocked ? lobby.costSetId : args.costSetId;
-        const bestOf = isTournamentLocked || args.bestOf === undefined
-            ? lobby.bestOf
-            : ensureBestOf(args.bestOf > 0 ? args.bestOf : 1);
         const lineupFormat = isTournamentLocked || args.lineupFormat === undefined ? lobby.lineupFormat : args.lineupFormat;
-        const bestOfNAdvantage = isTournamentLocked
-            ? lobby.bestOfNAdvantage
-            : resolveAdvantage(bestOf, args.bestOfNAdvantage ?? lobby.bestOfNAdvantage);
         // Free set
         const name = args.name === undefined ? lobby.name : normalizeLobbyName(args.name);
 
@@ -160,7 +143,6 @@ export const update_lobby_settings = spacetimedb.reducer(
             disconnectPolicy: isTournamentLocked ? lobby.disconnectPolicy : args.disconnectPolicy,
             disconnectForfeitSeconds,
             allowMirrorPicks,
-            bestOf,
             lineupFormat,
             // ── Free fields (referee/match QoL) ──
             draftMode: args.draftMode,
@@ -185,8 +167,6 @@ export const update_lobby_settings = spacetimedb.reducer(
             teamBlueAlias: args.teamBlueAlias,
             teamRedAlias: args.teamRedAlias,
             isPublic: args.isPublic,
-            refereeControlsShelving: args.refereeControlsShelving ?? lobby.refereeControlsShelving,
-            bestOfNAdvantage,
             banRestriction: args.banRestriction ?? lobby.banRestriction,
             hideMmr: args.hideMmr ?? lobby.hideMmr,
             name,

@@ -164,6 +164,16 @@ Two patterns cover every `view_my_*` view that filters on `ctx.sender`:
 
 Added to `matchHistoryViews.ts`, bindings at `src/module_bindings/view_my_*_history_table.ts`. All use `public: true` with server-side `ctx.sender` gating (matches the 23 existing `view_my_*` entries). See `docs/match/architecture.md` for per-view detail.
 
+## Phase S8e execution (DECISIONS.md A67(1)(3))
+
+- `view_my_match_steps`: `AnonymousMatchStepRow` loses `gameNumber` (`id, lobbyId, sequence, actorUserId,
+  anonymousLabel, actorSlot, action, payload, timestamp`).
+- The history views over `MatchSessionStepHistory` / `MatchResultGameHistory` return the table rows, which lose
+  `gameNumber` (keys `[matchHistoryId, sequence]` / `matchHistoryId`).
+- `view_lobby_browser`: unchanged list (Waiting, Drafting, Equipping, Scoring); the removed stages no longer exist.
+- Views returning `Lobby` rows (`view_my_lobbies`, `view_my_tournament_lobbies`) lose `bestOf`, `bestOfNAdvantage`,
+  `refereeControlsShelving` through the row type. S9 decides the subscription shapes.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -183,10 +193,11 @@ Added to `matchHistoryViews.ts`, bindings at `src/module_bindings/view_my_*_hist
 | UAT (Test 4) revealed D-06's `spacetimedb.view()` flip does NOT reject anonymous subscribers at the framework level — per SpacetimeDB docs (https://spacetimedb.com/docs/functions/views/), `view` vs `anonymousView` differs only in whether `ctx.sender()` is exposed to the body, not in who can subscribe. The implementation comment at `identityViews.ts:47-49` overstated the behavior. `view_user_directory` has zero frontend subscribers; the actual pre-auth bandwidth leak is `useAuth.ts:38`'s unconditional `SELECT * FROM user` subscription. Phase 15.5 retires `view_user_directory` entirely and gates `useAuth.ts:38` behind auth state (seed: `.planning/seeds/phase-15.5-auth-gated-user-subscription.md`) | Phase 15.2 execution | 2026-04-16 |
 | Phase 15.5: `view_user_directory` retired (dead code, zero client subscribers); `view_public_accounts` renamed to `view_public_hsr_accounts` (D-04) — `hsr_` names the source table. Both bindings dirs regenerated via single-shot `spacetime generate` after publish. Frontend subscription lifecycle codified in `docs/auth/architecture.md` Subscription Lifecycle section (D-05): Stage 1 `view_my_profile` always; Stage 2 raw User subscription gated on `currentUser != null \|\| hadUserIdOnMount.current \|\| hadSessionCookie.current` (gate signal swapped from `hadTokenOnMount` per Plan 02 D-01 deviation `790a39c` — SDK auto-persists anonymous identity tokens, so token presence is not proof of prior auth; `spacetimedb_user_id` is the correct post-auth signal). `view_lobby_browser` + `view_public_hsr_accounts` named as intentional anonymous exceptions (projection-based privacy) | Phase 15.5 execution | 2026-04-16 |
 | Phase 15.5 verify-work: harmonized doc wording with shipped `useAuth.ts` identifier `hadUserIdOnMount`; `docs/views/contract.md` swept of stale `view_user_directory` subsection + `view_public_accounts` references | Phase 15.5 verify-work | 2026-04-17 |
+| `view_my_match_steps` and the step / game history views without `gameNumber`; lobby rows without the series settings (A67(1)(3)) | Phase S8e execution | 2026-11-08 |
 
 ---
 
-*Last updated: 2026-04-17*
+*Last updated: 2026-11-08*
 *Feature owner: Phase 03 / Phase 06 / Phase 08 / Phase 09 / Phase 10.4 / Phase 15*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

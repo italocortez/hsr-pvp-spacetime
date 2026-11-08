@@ -57,10 +57,8 @@ export const LobbyStage = t.enum('LobbyStage', {
     Drafting: t.unit(),
     Equipping: t.unit(),
     Scoring: t.unit(),
-    BetweenGames: t.unit(),   // Brief post-game transition (series not won yet); bestOf=1 skips this
-    Shelved: t.unit(),        // Long-term pause between games; casual=72h TTL, tournament persists until cancel
     AwaitingResult: t.unit(), // Match submitted, players freed — lobby alive for finalization
-    Finished: t.unit(),       // Lobby closed/abandoned — GC cleans up after 30 min
+    // A67(1): the series and terminal stages are removed; a lobby hosts exactly one game.
 });
 
 // LobbySlot — unified team + role for lobby members.
@@ -236,12 +234,7 @@ export const LineupFormat = t.enum('LineupFormat', {
     Thirds: t.unit(),
 });
 
-// A27/A28 (todo 2026-07-06): which side starts a best-of-3 series one game up. None when bestOf = 1.
-export const AdvantageSide = t.enum('AdvantageSide', {
-    None: t.unit(),
-    Blue: t.unit(),
-    Red: t.unit(),
-});
+// A67(2): the lobby head-start side enum is removed; the head start is BracketMatch.winnerAdvantage (A27).
 
 // A26: the single gate for seeding, team edits, lobby seats and bracket placement. Participants never set it.
 export const TeamStatus = t.enum('TeamStatus', {

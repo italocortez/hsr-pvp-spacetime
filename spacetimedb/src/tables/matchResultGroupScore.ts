@@ -11,7 +11,6 @@ import { TeamSide } from '../types/enums';
 export const matchResultGroupScoreColumns = {
     id: t.u32().primaryKey().autoInc(),
     matchResultId: t.u32(),
-    gameNumber: t.u8(),
     teamSide: TeamSide,
     groupIndex: t.u8(),       // 0..1 for halves, 0..2 for thirds
     value: t.u32(),           // cycles or points, fixed-point hundredths
@@ -25,6 +24,6 @@ export const MatchResultGroupScore = table({
     name: 'match_result_group_score',
     public: false,
     indexes: [
-        { accessor: 'by_result_game', algorithm: 'btree', columns: ['matchResultId', 'gameNumber'] },
+        { accessor: 'by_result', algorithm: 'btree', columns: ['matchResultId'] }, // A67(3): one game per record
     ],
 }, matchResultGroupScoreColumns);

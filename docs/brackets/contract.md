@@ -541,6 +541,33 @@ Reducers on the shared engine and the single writer (A23); every scenario tagged
 **Then** the record is Validated with `settledAt`, the match Decided (Played) for the record's team, the lobby stays in AwaitingResult
 
 
+## Acceptance Scenarios (Phase S8e execution)
+
+### S8e-B1 The tally is derived (A67(4), A27, A35)
+**Given** a Ready bracket match
+**When** a game record of the match becomes Validated (close, `validate_match_result`, override, concede)
+**Then** `team1Games = winnerAdvantage + Validated records won by Blue`, `team2Games = Validated records won by Red`; Pending, Submitted, Disputed, Rejected and Voided records do not count
+
+### S8e-B2 Decided at ceil(bestOf / 2) (A67(4))
+**Given** a Bo3 match
+**When** a side's tally reaches 2
+**Then** the match is Decided for that side (decidedBy Played, or Concede for a concede), with the tally as the stored score (A30); a non-deciding game only updates the tally; a grand final with `winnerAdvantage = 1` is decided by team1's first win
+
+### S8e-B3 Rollback undoes the deciding game only (A67(4), A24(3))
+**Given** a match decided by play 2-1
+**When** staff call `rollback_bracket_match`
+**Then** the match is Ready, the deciding record (latest `settledAt`) is Voided and its lobby hard-deleted; the two earlier records stay Validated and the tally is 1-1; a match decided by staff or a DQ voids no record
+
+### S8e-B4 Resolve keeps every played game (A67(8))
+**Given** a Ready match with one Validated game and a live lobby
+**When** staff call `resolve_bracket_match`
+**Then** the live lobby is voided, the Validated game's lobby stays parked, and the match is Decided (Staff) with the current tally
+
+### S8e-B5 The head start is on the bracket row from generation (A69(1), A27)
+**Given** a tournament whose grand final has `winnerAdvantage = 1`
+**When** `generate_bracket` runs
+**Then** the grand final row reads `team1Games = 1`, `team2Games = 0` before any game is played (stored = derived); no result record represents the head start; group-stage rows read 0 / 0
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -588,6 +615,8 @@ Reducers on the shared engine and the single writer (A23); every scenario tagged
 | `dq_participant` settles open matches with decidedBy Dq; a Pending slot becomes a BYE; empty team → Disqualified (row kept); optional `dqWholeTeam` (A23, A26a(2)) | Phase S8c execution | 2026-11-07 |
 | A concede advances the bracket through the single writer, decidedBy Concede (A38(1)) | Phase S8c execution | 2026-11-07 |
 | Scenarios S8d-B1..B4: rollback / resolve side effects on records and lobbies, validation hand-off | Phase S8d execution (DECISIONS.md A24(1)(3)) | 2026-11-07 |
+| Scenarios S8e-B1..B4: derived tally, decide at ceil(bestOf / 2), rollback of the deciding record only, resolve keeps Validated games; supersedes the S8d-B1 "every lobby voided" and S8d-B2/B3 voiding of a Validated record for the other team | Phase S8e execution (DECISIONS.md A67(4)(8)) | 2026-11-08 |
+| Scenario S8e-B5: the A27 head start is stored on the bracket row at generation (`team1Games = winnerAdvantage`), so the public row and the derived tally agree before the first game | Phase S8e execution (DECISIONS.md A69(1)) | 2026-11-08 |
 
 ---
 

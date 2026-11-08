@@ -68,7 +68,6 @@ import AdminUpsertArchetypeReducer from "./admin_upsert_archetype_reducer";
 import AdminVoidMatchReducer from "./admin_void_match_reducer";
 import AdvanceGroupStageReducer from "./advance_group_stage_reducer";
 import AdvanceStageReducer from "./advance_stage_reducer";
-import AdvanceToNextGameReducer from "./advance_to_next_game_reducer";
 import AdvanceTournamentStageReducer from "./advance_tournament_stage_reducer";
 import ApproveParticipantReducer from "./approve_participant_reducer";
 import ApproveStandInReducer from "./approve_stand_in_reducer";
@@ -150,7 +149,6 @@ import RequestJoinTeamReducer from "./request_join_team_reducer";
 import ResolveBracketMatchReducer from "./resolve_bracket_match_reducer";
 import RespondToInviteReducer from "./respond_to_invite_reducer";
 import ResumeDraftReducer from "./resume_draft_reducer";
-import ResumeSeriesReducer from "./resume_series_reducer";
 import RevokeStandInReducer from "./revoke_stand_in_reducer";
 import RollbackBracketMatchReducer from "./rollback_bracket_match_reducer";
 import SaveCalendarReducer from "./save_calendar_reducer";
@@ -177,7 +175,6 @@ import SetEidolonReducer from "./set_eidolon_reducer";
 import SetScoreAdjustmentReducer from "./set_score_adjustment_reducer";
 import SetSeedOrderReducer from "./set_seed_order_reducer";
 import SetTeamSlotReducer from "./set_team_slot_reducer";
-import ShelveSeriesReducer from "./shelve_series_reducer";
 import ShuffleTeamsReducer from "./shuffle_teams_reducer";
 import StartDraftReducer from "./start_draft_reducer";
 import TimerExpiryAuctionReducer from "./timer_expiry_auction_reducer";
@@ -886,7 +883,6 @@ const reducersSchema = __reducers(
   __reducerSchema("admin_void_match", AdminVoidMatchReducer),
   __reducerSchema("advance_group_stage", AdvanceGroupStageReducer),
   __reducerSchema("advance_stage", AdvanceStageReducer),
-  __reducerSchema("advance_to_next_game", AdvanceToNextGameReducer),
   __reducerSchema("advance_tournament_stage", AdvanceTournamentStageReducer),
   __reducerSchema("approve_participant", ApproveParticipantReducer),
   __reducerSchema("approve_stand_in", ApproveStandInReducer),
@@ -968,7 +964,6 @@ const reducersSchema = __reducers(
   __reducerSchema("resolve_bracket_match", ResolveBracketMatchReducer),
   __reducerSchema("respond_to_invite", RespondToInviteReducer),
   __reducerSchema("resume_draft", ResumeDraftReducer),
-  __reducerSchema("resume_series", ResumeSeriesReducer),
   __reducerSchema("revoke_stand_in", RevokeStandInReducer),
   __reducerSchema("rollback_bracket_match", RollbackBracketMatchReducer),
   __reducerSchema("save_calendar", SaveCalendarReducer),
@@ -995,7 +990,6 @@ const reducersSchema = __reducers(
   __reducerSchema("set_score_adjustment", SetScoreAdjustmentReducer),
   __reducerSchema("set_seed_order", SetSeedOrderReducer),
   __reducerSchema("set_team_slot", SetTeamSlotReducer),
-  __reducerSchema("shelve_series", ShelveSeriesReducer),
   __reducerSchema("shuffle_teams", ShuffleTeamsReducer),
   __reducerSchema("start_draft", StartDraftReducer),
   __reducerSchema("timer_expiry_auction", TimerExpiryAuctionReducer),

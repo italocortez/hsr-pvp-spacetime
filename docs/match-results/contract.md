@@ -414,6 +414,8 @@ the lobby (i.e. the match is in BetweenGames) and the caller has an MRP row,
 lower the snapshot. The hook short-circuits when no MRP row exists (stand-ins joining
 after `start_draft`).
 
+_Superseded in Phase S8e execution (DECISIONS.md A69(3))._ The ratchet is removed: the snapshot is taken once at `start_draft` (A66); `select_match_account` is Waiting-only and never touches it.
+
 ## Acceptance Scenarios
 
 ### Happy Path: Captain Records and Confirms Scores, Referee Submits
@@ -474,6 +476,8 @@ after `start_draft`).
 **Given:** Same series; player then selects a third account with accountRating=80
 **When:** `select_match_account(lobbyId, lowerRatedAccountId)`
 **Then:** accountRatingSnapshot remains 150 (monotonic-upward; lower value does not replace).
+
+_Superseded in Phase S8e execution (DECISIONS.md A69(3))._ The ratchet is removed: the snapshot is taken once at `start_draft` (A66); `select_match_account` is Waiting-only and never touches it.
 
 ### Phase 12.3: Tournament Ordering Guard (D-H-01)
 
@@ -665,6 +669,33 @@ after `start_draft`).
 **Then** game 1 is recomputed (still closed, confirmations untouched) and the series tally follows; a non-Admin is rejected
 
 
+## Acceptance Scenarios (Phase S8e execution)
+
+### S8e-R1 The close of the game submits the game (A67(3), A60(6))
+**Given** both captains confirmed the game (or staff close it)
+**When** `close_game` runs
+**Then** the record's `winnerTeamSide` is the game's winner (a level-4 tie needs the staff override, A60 / A63); Casual standalone → Validated and finalized inline; Ranked → Submitted; a tournament record → Validated (and handed to the bracket) or Submitted per `requireResultValidation`; the lobby moves to AwaitingResult
+
+### S8e-R2 One game row per record (A67(3))
+**When** scores, adjustments or deaths are entered
+**Then** `record_group_scores(lobbyId, teamSide, values, deaths, screenshotUrl?)` and `set_score_adjustment(lobbyId, teamSide, value, reason?, adjustmentId?)` take no game number; `MatchResultGame` holds one row per record (key `matchResultId`), group scores and adjustments are keyed by the record; finalization writes one `MatchResultGameHistory` row (key `matchHistoryId`) and the lineups without a game number
+
+### S8e-R3 Admin edits until finalization (A60(7))
+**Given** a Submitted record whose game is closed
+**When** an Admin edits a score, an adjustment, an eidolon, a light cone or the lineup
+**Then** the game is recomputed, stays closed, confirmations are not reset, and the record's `winnerTeamSide` follows the game's winner; a Moderator or a player is rejected ("This game is closed.")
+_Superseded in part in Phase S8e execution (DECISIONS.md A69(2)): the window ends at validation, not finalization; a Validated or Finalized record is rejected for everyone (S8e-R4)._
+
+### S8e-R4 Admin edits stop at validation (A69(2), A24 TD-13 / TD-14)
+**Given** a tournament record whose game is closed and whose result is Validated (the bracket has counted it), or any Finalized record
+**When** an Admin calls `record_group_scores`, `set_score_adjustment`, `set_eidolon`, `equip_lightcone`, `unequip_lightcone` or `arrange_lineup` on the lobby
+**Then** rejected: "This game can no longer be edited here; corrections go through override_match_result."; nothing changes. The same message for any caller on a Disputed, Rejected or Voided record
+
+### S8e-R5 A player cannot edit a submitted game (A69(2))
+**Given** a Ranked record that is Submitted (its game closed), lobby AwaitingResult
+**When** a captain calls `record_group_scores` for their side
+**Then** rejected: "This game is closed." (the game-package reducers with a stage list reject on the stage first, as before); with no record at all: "No pending match result for this lobby."
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -689,6 +720,9 @@ after `start_draft`).
 | Phase S7b execution | Game package (DECISIONS.md A60): per-game confirmation `confirm_game` (second confirmation closes the game; a level-4 tie stays open), staff close `close_game` with `winnerOverride` (A39 seating rule at the close replaces the Disputed route), automatic series submission at the deciding close (Casual finalizes inline, Ranked → Submitted), closed-game rule for every edit reducer, Admin edits of a closed game; `confirm_match_scores`, `submit_match_result` and `MatchResultRecord.blueConfirmed/redConfirmed` removed. Rules section "Game Confirmation, Close and Series Submission" and scenarios "Both Captains Confirm a Bo1" … "An Admin Edit That Would Undo the Series Is Rejected" added; the `confirm_match_scores` / `submit_match_result` reducer sections and the S7 override scenarios describe the removed path | 2026-11-07 |
 | Phase S7b follow-up (DECISIONS.md A63) | `confirm_game` sets only the captain's ready flag (never closes; full-control referee shortcut removed); `close_game` is the explicit submit: either captain once both flags are set, or the staff set at any time; only staff may pass `winnerOverride`. Scenario "Both Captains Ready, a Captain Submits the Game" added; "Both Captains Confirm a Bo1", "A Bo3 Game 1 Close Moves to BetweenGames" and "A Tie Stays Open Until a Staff Close" marked superseded | 2026-11-07 |
 | One record per lobby (A54); tournament routing at the deciding close, `validate_match_result`, `finalize_match_result` rejects tournament records, admin tools redirect (D.8.3); Admin edits of earlier closed games (A65(4)); scenarios S8d-R1..R4 and edge-case rows | Phase S8d execution (DECISIONS.md A24, A36, A54, A65) | 2026-11-07 |
+| Scenarios S8e-R1..R3: the close submits the game, one game row per record, Admin edits without game numbers; supersedes A60(6) "the deciding close submits the series" and the A65(4) earlier-game edits | Phase S8e execution (DECISIONS.md A67(3)) | 2026-11-08 |
+| Scenarios S8e-R4, S8e-R5: the Admin edit window of a closed game ends at validation (Pending or Submitted only); precise rejections "This game is closed." (player on a Submitted game) and "This game can no longer be edited here; corrections go through override_match_result." (Validated and beyond, Admins included); S8e-R3 superseded in part | Phase S8e execution (DECISIONS.md A69(2)) | 2026-11-08 |
+| `select_match_account` snapshot ratchet removed (dead since selection is Waiting-only); the BetweenGames ratchet section and scenario superseded | Phase S8e execution (DECISIONS.md A69(3)) | 2026-11-08 |
 
 ---
 

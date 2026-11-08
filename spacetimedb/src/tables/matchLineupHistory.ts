@@ -3,7 +3,7 @@ import { TeamSide } from '../types/enums';
 
 /**
  * A56(1): archived copy of a MatchLineup, written by finalization (runFinalization) next to the step, game
- * and participant history rows; the replay view (S9) reads it. One row per team per game of the match.
+ * and participant history rows; the replay view (S9) reads it. One row per team (A67(3): one game per match).
  * `groups` is the JSON string[][] of the lineup, `synergySurcharge` and `rosterCost` are hundredths (A21); the
  * roster cost lives here, not on MatchResultGameHistory (S3 review L4, settled by A56).
  * Private, like the other history tables (A37): participants and Moderator+ read it through views (S9).
@@ -11,7 +11,6 @@ import { TeamSide } from '../types/enums';
 export const matchLineupHistoryColumns = {
     id: t.u32().primaryKey().autoInc(),
     matchHistoryId: t.u32(),
-    gameNumber: t.u8(),
     teamSide: TeamSide,
     groups: t.string(),
     synergySurcharge: t.u32(),

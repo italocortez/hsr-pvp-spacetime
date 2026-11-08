@@ -37,9 +37,8 @@ See **Phase S8c execution** below for the reducer reference (seeding, generation
 resolve / rollback, DQ). The legacy flows (`swap_seeds`, `advance_bracket_match`, `submit_and_advance_bracket`,
 `advance_group_to_elimination`, the first-empty-slot placement, `GroupPhaseRecord`) were deleted in S8c (A23).
 
-### advance_to_next_game(lobbyId), shelve_series(lobbyId), resume_series(lobbyId)
-1. Verify series authority: lobby host, TO, TO assistant, admin/mod, or referee if `refereeControlsShelving=true`
-2. Advance/shelve/resume the best-of-N series state on the Lobby
+### Lobby series reducers (removed in S8e, A67(1))
+The lobby-level series reducers are deleted; the bracket match is the only series (see "Phase S8e execution").
 
 ## Phase S8a execution (DECISIONS.md A23, A27, A29–A32, A35)
 
@@ -72,14 +71,14 @@ The seat-enforcement core moved to `shared/lobby-rules/allowedSlots.ts` (`allowe
 
 | Helper | Signature | Behaviour |
 |---|---|---|
-| `bracketStore.ts` | `insertBracket(ctx, tournament, spec, teamIdsBySeed, actorId): Map<string, number>` | one row per `MatchSpec` (BYE flags from seeds above `teamCount`, `bestOf` = `defaultBestOf`, the GF `grandFinalBestOf`), second pass wires `nextWinnerMatchId` / `nextLoserMatchId` through the positionKey → id map, then `settle` |
+| `bracketStore.ts` | `insertBracket(ctx, tournament, spec, teamIdsBySeed, actorId): Map<string, number>` | one row per `MatchSpec` (BYE flags from seeds above `teamCount`, `bestOf` = `defaultBestOf`, the GF `grandFinalBestOf`), `team1Games = winnerAdvantage` (the A27 head start, A69(1)), second pass wires `nextWinnerMatchId` / `nextLoserMatchId` through the positionKey → id map, then `settle` |
 | | `insertGroupBracket(ctx, tournament, groups, actorId): Map<string, number>` | `Group` rows from `groupSpec`, `groupId` = group index (0-based), state Ready; writes `TournamentTeam.groupId` |
 | | `placeEntrant(ctx, matchId, slot, teamId \| 'BYE', actorId)` | exact slot; same entrant → no-op; another entrant → `SenderError`; Pending → Ready when both slots hold teams |
 | | `settle(ctx, tournamentId, actorId)` | until stable: one BYE → `Walkover` (winner = the team, routed; BYE down the loser route), two BYEs → `Void` (BYE down both routes); settled matches untouched |
 | | `deleteBracket(ctx, tournamentId, actorId?)` | every match with its `TournamentStandIn` rows and `CalendarEvent` rows (+ invites, `calendarCascade`); clears `TournamentTeam.groupId`, keeps `seedNumber` |
 | `bracketResults.ts` | `applyBracketResult(ctx, bracketMatchId, winnerTeamId, decidedBy, games, actorId)` | **the only writer of a result's `BracketMatch.winnerTeamId`** (`settle` stamps structural walkovers): two real teams, winner one of them; Ready → Decided, same winner on a Decided match → no-op, another winner → "roll back first" (A24(3)); sets loser, `decidedBy`, series games; routes winner / loser to their exact slots; no loser route → loser `Active → Eliminated` (A26; never for group matches); then `settle` |
-| | `rollbackBracketResult(ctx, bracketMatchId, actorId)` | inverse; refuses when a destination is Decided (also through a walkover chain); removes the entrants downstream (destinations back to Pending, walkovers they settled unwound), clears winner / loser / `decidedBy`, games 0-0, state Ready, loser `Eliminated → Active`; leaves `MatchResultRecord` and lobbies to the reducers |
-| | `seriesGames(session): { team1, team2 }` | `gamesWonBlue` / `gamesWonRed` (A35: Blue = team1, Red = team2) |
+| | `rollbackBracketResult(ctx, bracketMatchId, actorId)` (**superseded by S8e**: now `rollbackBracketResult(ctx, bracketMatchId, actorId, voidDeciding = true, redecide = true)`; voids the deciding record of a match decided by play, writes the derived tally instead of 0-0, re-decides as Played when the tally decides; see "Phase S8e execution") | inverse; refuses when a destination is Decided (also through a walkover chain); removes the entrants downstream (destinations back to Pending, walkovers they settled unwound), clears winner / loser / `decidedBy`, games 0-0, state Ready, loser `Eliminated → Active`; leaves `MatchResultRecord` and lobbies to the reducers |
+| | `seriesGames(session): { team1, team2 }` | `gamesWonBlue` / `gamesWonRed` (A35: Blue = team1, Red = team2). **Deleted in S8e**: replaced by `matchGames(ctx, match)` (A67(4)) |
 | `tournamentStandings.ts` | `groupStandings(ctx, tournamentId, groupId): RankedTeam[]`, `qualifiersFor(ctx, tournamentId, groupAdvanceCount): number[]` | rows → `rankGroup` (Decided group matches only; unseeded teams sort last) → `placeQualifiers`; `qualifiersFor` first drops Withdrawn / Disqualified / Eliminated teams (A26: status is the single gate for bracket placement) |
 | `tournamentLobbySides.ts` | `allowedSlotsFor(ctx, lobby, userId): LobbySlotTag[]` | A35 / D.8.5: team1 members + its stand-ins for this match → BluePlayer / BlueCoach, team2 → RedPlayer / RedCoach, everyone else (staff included) Spectator; Spectator always; non-tournament lobby → every slot. S8d wires it into `join_lobby` / `set_team_slot` |
 
@@ -141,13 +140,41 @@ Callers: `performConcede` (Concede, A38(1)), `submitSeriesResult` (Played, a tou
 uses `rollbackBracketResult` + `applyBracketResult` (Staff) directly. Callers of `applyBracketResult` now:
 `handOffToBracket`, `resolve_bracket_match`, `dq_participant`, `override_match_result`.
 
-**Resolve / rollback side effects (`voidMatchLobbies`).**
+**Resolve / rollback side effects (`voidMatchLobbies`).** **Superseded by S8e (A67(4)(8)): see "Phase S8e execution" below.**
 
 | Reducer | Records and lobbies of the match |
 |---|---|
 | `rollback_bracket_match` | every lobby of the match (`Lobby.bracket_match_id`) is voided: its record is marked **Voided** and kept (audit; the finalize job deletes it without effect), the lobby is hard-deleted with every other row of the match (`hardDeleteLobby(…, keepResultRecord = true)`), so a replay lobby can be created (A24(3)) |
 | `resolve_bracket_match` | a lobby whose record is **Validated for the resolved winner** stays parked (finalized at Completed); every other lobby of the match (Waiting or playing, a Pending / Submitted / Disputed record, or a Validated record for the other team) is voided as above: staff decided the match |
 
+
+## Phase S8e execution (DECISIONS.md A67(4)(5)(8), A27, A30, A35)
+
+**The bracket match is the series.** `BracketMatch.bestOf` (A28 chain: `Tournament.defaultBestOf` /
+`grandFinalBestOf` → `BracketMatch.bestOf`) caps the games; a lobby hosts one game. `team1Games` / `team2Games` are
+the running tally, written only by `helpers/bracketResults.ts` (`bracketStore.insertBracket` inserts the head start, `team1Games = winnerAdvantage`, `team2Games = 0`, A69(1); `insertGroupBracket` inserts 0 / 0):
+
+| Helper (`bracketResults.ts`) | Does |
+|---|---|
+| `matchGames(ctx, match): { team1, team2 }` | **derives** the tally: `team1 = match.winnerAdvantage +` the Validated records of the match (`MatchResultRecord.bracket_match_id`) with `winnerTeamSide` Blue; `team2 =` those with Red (A35). Only `status = Validated` counts (a concede is Validated, A24(1)); Pending, Submitted, Disputed, Rejected, Voided do not. The head start is on the row from generation (A69(1)), so stored = derived from the insert on; no lobby or result record seeds it |
+| `recordGameSettled(ctx, record, decidedBy, actorId)` | a game of the match settled. Not Ready → return (a match staff already settled stays as it is). Writes the derived tally; when a side reaches `winsNeededFor(bestOf) = ceil(bestOf / 2)` → `applyBracketResult(ctx, match.id, team, decidedBy, tally, actorId)` (routing, A30, A37 actor); otherwise only the tally changes |
+| `rollbackBracketResult(ctx, id, actorId, voidDeciding = true, redecide = true)` | the S8c revert (downstream unplaced, loser un-eliminated, Ready), then: when `voidDeciding` and the match was decided by play (`decidedBy` Played / Concede) the **deciding record** = the latest Validated record of the match by `settledAt` (id only as a tie-break) is marked Voided and its lobby hard-deleted (`keepResultRecord`); a Staff / Dq decision voids no record. The tally is recomputed from the remaining Validated records and written with the Ready state; with `redecide` (rollback_bracket_match only) a side that already has ceil(bestOf / 2) games is decided again as **Played** through `applyBracketResult` (e.g. 2-0 by play, resolved by staff for the other team, then rolled back). `resolve_bracket_match` and `override_match_result` pass `redecide = false` (they decide right after) |
+
+`handOffToBracket(ctx, record, decidedBy)` (`tournamentResults.ts`, signature and callers unchanged: `submitGameResult`,
+`validate_match_result`, `performConcede`) keeps its guards (tournament record, Ready match, InProgress tournament, a
+winner side mapped to a team) and calls `recordGameSettled(…, SYSTEM_USER_ID)`. `seriesGames` is deleted.
+
+| Reducer | S8e rule |
+|---|---|
+| `rollback_bracket_match` | `rollbackBracketResult(…, voidDeciding = true)`: the deciding game only is voided; earlier games stay Validated and the tally is recomputed (e.g. 2-1 → 1-1); then `voidMatchLobbies` sweeps any unsettled lobby |
+| `resolve_bracket_match` | every Validated game record is kept (their lobbies stay parked for the job); a Decided match is rolled back with `voidDeciding = false`; `voidMatchLobbies` voids only unsettled lobbies; `applyBracketResult(…, 'Staff', matchGames(…))` with the current tally |
+| `dq_participant` | a Ready match → `applyBracketResult(opponent, 'Dq', matchGames(…))` (the derived tally, not 0-0); after the force-concede of the team's live lobby, `writeMatchGames` rewrites the tally so the concede's Validated record counts (decidedBy stays Dq) |
+| `create_tournament_lobby` | also rejects a Ready match whose derived tally already gives a side ceil(bestOf / 2) games: "This bracket match is decided by its games." (defensive) |
+| `override_match_result` | a Decided match is reverted without voiding (`voidDeciding = false, redecide = false`), the record overridden, then `recordGameSettled(…, 'Staff')` re-decides from the new tally; see [../admin/architecture.md](../admin/architecture.md) "Phase S8e execution" |
+
+`voidMatchLobbies(ctx, bracketMatchId, actorId)` (the `keepWinnerTeamId` parameter is gone): voids every lobby of the
+match whose record is not Validated (no record, Pending, Submitted, Disputed); settled lobbies stay (A67(8)).
+A30 game differential reads the stored tally, head start included.
 
 ## Phase History
 
@@ -171,10 +198,11 @@ uses `rollbackBracketResult` + `applyBracketResult` (Staff) directly. Callers of
 | Shared pure `shared/bracket/` + `bracketStore` / `bracketResults` / `tournamentStandings` / `tournamentLobbySides` helpers, not wired yet (A23, A27, A29–A32, A35) | Phase S8a execution | 2026-11-07 |
 | Bracket reducers rebuilt on the shared engine: `seed_bracket` (ctx.random), `set_seed_order`, `generate_bracket` (A26a Withdraw, manual / auto groups, `bracketGeneratedAt`), `advance_group_stage`, `resolve_bracket_match`, `rollback_bracket_match`, `dq_participant` through `applyBracketResult`; legacy generation / advancement and `admin_set_bracket_winner` deleted; single writer enforced (A23, A24, A25, A26a, A29, A30, A32, A36a, A38(1)) | Phase S8c execution | 2026-11-07 |
 | Result hand-off `handOffToBracket` (validation, concede; finalization step 17 removed); rollback voids the match's lobbies (record Voided and kept, lobby hard-deleted); resolve keeps a parked record that agrees with the staff winner and voids the rest (A24(1)(3), A38(1), D.8.3) | Phase S8d execution | 2026-11-07 |
+| The bracket match is the series: derived tally (`matchGames`: head start + Validated records), `recordGameSettled` decides at ceil(bestOf / 2), rollback voids the deciding record only, resolve keeps every Validated game, DQ applies the tally; `seriesGames` deleted (A67(4)(8)) | Phase S8e execution | 2026-11-08 |
 
 ---
 
-*Last updated: 2026-11-07*
+*Last updated: 2026-11-08*
 *Feature owner: Phase 04 / Phase 10.1*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

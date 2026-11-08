@@ -63,7 +63,7 @@ export function insertBracket(ctx: any, tournament: any, spec: BracketSpec, team
             winnerTeamId: undefined,
             loserTeamId: undefined,
             decidedBy: undefined,
-            team1Games: 0,
+            team1Games: m.winnerAdvantage, // A69(1): the A27 head start sits on the row from generation
             team2Games: 0,
         }, actorId));
         ids.set(m.key, row.id);
