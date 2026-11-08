@@ -518,6 +518,29 @@ Reducers on the shared engine and the single writer (A23); every scenario tagged
 | DQ of one member of a team that plays on | member leaves; before the bracket the team may drop Ready → Forming | `refreshTeamStatus` (A26) |
 | Feeder rollback after a DQ turned a slot into a BYE | refused ("… does not hold …"): the slot no longer holds the team | known limit |
 
+## Acceptance Scenarios (Phase S8d execution)
+
+### S8d-B1 Rollback voids the parked record (A24(3))
+**Given** a Decided match whose lobby is parked in AwaitingResult with a Validated record
+**When** `results` staff call `rollback_bracket_match`
+**Then** the match is Ready, the record is `Voided` and still exists, the lobby and its participants, games, steps and session are gone; a new lobby can be created for the match
+
+### S8d-B2 Resolve of a match with a live lobby
+**Given** a Ready match whose lobby is in Scoring (Pending record)
+**When** staff resolve it for team2
+**Then** the match is Decided (Staff); the record is Voided and the lobby hard-deleted
+
+### S8d-B3 Resolve that agrees with the played result
+**Given** a match Decided by a Validated record for team1 (lobby parked)
+**When** staff resolve it for team1
+**Then** no change (same winner); resolving it for team2 rolls the match back, voids the record and lobby, and decides for team2
+
+### S8d-B4 Validation advances the bracket (A24(1))
+**Given** a tournament with `requireResultValidation` and a Submitted record
+**When** `results` staff call `validate_match_result`
+**Then** the record is Validated with `settledAt`, the match Decided (Played) for the record's team, the lobby stays in AwaitingResult
+
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -564,6 +587,7 @@ Reducers on the shared engine and the single writer (A23); every scenario tagged
 | `resolve_bracket_match` replaces `admin_set_bracket_winner`; `rollback_bracket_match` takes a reason and refuses while downstream is Decided (A24(3), A25) | Phase S8c execution | 2026-11-07 |
 | `dq_participant` settles open matches with decidedBy Dq; a Pending slot becomes a BYE; empty team → Disqualified (row kept); optional `dqWholeTeam` (A23, A26a(2)) | Phase S8c execution | 2026-11-07 |
 | A concede advances the bracket through the single writer, decidedBy Concede (A38(1)) | Phase S8c execution | 2026-11-07 |
+| Scenarios S8d-B1..B4: rollback / resolve side effects on records and lobbies, validation hand-off | Phase S8d execution (DECISIONS.md A24(1)(3)) | 2026-11-07 |
 
 ---
 

@@ -115,6 +115,7 @@ export const ActionType = __t.enum("ActionType", {
   ArrangeLineup: __t.unit(),
   SetEidolon: __t.unit(),
   ConfirmGame: __t.unit(),
+  UnequipLightcone: __t.unit(),
 });
 export type ActionType = __Infer<typeof ActionType>;
 
@@ -186,6 +187,7 @@ export type AnonymousMatchParticipantRow = __Infer<typeof AnonymousMatchParticip
 export const AnonymousMatchStepRow = __t.object("AnonymousMatchStepRow", {
   id: __t.u32(),
   lobbyId: __t.u32(),
+  gameNumber: __t.u8(),
   sequence: __t.u32(),
   actorUserId: __t.u32(),
   anonymousLabel: __t.option(__t.string()),
@@ -1820,6 +1822,9 @@ export const StepPayload = __t.enum("StepPayload", {
   get ConfirmGame() {
     return ConfirmGamePayload;
   },
+  get UnequipLightcone() {
+    return UnequipLightconePayload;
+  },
 });
 export type StepPayload = __Infer<typeof StepPayload>;
 
@@ -2063,6 +2068,13 @@ export const UndoPayload = __t.object("UndoPayload", {
   originalSequenceId: __t.u32(),
 });
 export type UndoPayload = __Infer<typeof UndoPayload>;
+
+export const UnequipLightconePayload = __t.object("UnequipLightconePayload", {
+  characterName: __t.string(),
+  lightconeName: __t.string(),
+  refunded: __t.f32(),
+});
+export type UnequipLightconePayload = __Infer<typeof UnequipLightconePayload>;
 
 export const User = __t.object("User", {
   id: __t.u32(),

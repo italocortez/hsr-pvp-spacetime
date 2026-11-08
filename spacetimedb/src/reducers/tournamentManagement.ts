@@ -19,6 +19,7 @@ import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { ensureBestOf, ensureWinnerAdvantage } from '../helpers/seriesSettings';
 import { ensureCostSetCovers, ensureCostSetUsable, ensureSelectableCostSet } from '../helpers/costSetGuards';
 import { ensureTournamentPreset, seedSystemLobbyPreset } from '../helpers/systemPreset';
+import { assignFinalPlacements, ensureCanComplete, restartTournamentFinalization, startTournamentFinalization } from '../helpers/tournamentFinalization';
 
 // Valid enum tag lists for runtime validation
 const VALID_TOURNAMENT_FORMATS = ['SingleElimination', 'DoubleElimination', 'GroupOnly', 'GroupIntoSingleElim', 'GroupIntoDoubleElim'];
@@ -318,7 +319,7 @@ export const advance_tournament_stage = spacetimedb.reducer(
 
         validateStageTransition(from, nextStage);
 
-        // The one cancel path (A24(6)); finalization on Cancelled is S8d.
+        // The one cancel path (A24(6)); it starts the A24(5) finalization (stats counted, MMR skipped).
         if (nextStage === 'Cancelled') {
             cancelTournament(ctx, tournament, user.id);
             return;
@@ -360,12 +361,20 @@ export const advance_tournament_stage = spacetimedb.reducer(
             activateTeams(ctx, tournament, user.id);
         }
 
-        ctx.db.Tournament.id.update(updateWithAudit(ctx, tournament, {
+        // A24(4) / D.8.1 (S8d): InProgress → Completed: format check + canComplete (every match settled, no tournament
+        // lobby outside AwaitingResult), then the placements.
+        if (nextStage === 'Completed') {
+            ensureCanComplete(ctx, tournament);
+            assignFinalPlacements(ctx, tournament, user.id);
+        }
+
+        ctx.db.Tournament.id.update(updateWithAudit(ctx, ctx.db.Tournament.id.find(tournamentId)!, {
             stage: unit(nextStage),
         }, user.id));
 
-        // S8d (A24): Completed inserts a TournamentFinalizeJob { tournamentId, cursor: 0 } and sets
-        // finalizationStartedAt; the D-91 reveal is gone (A37: history is never public).
+        // A24(4)(7): Completed starts the chunked finalization (finalizationStartedAt, TournamentFinalizeJob
+        // { tournamentId, cursor: 0 } scheduled now); the D-91 reveal is gone (A37: history is never public).
+        if (nextStage === 'Completed') startTournamentFinalization(ctx, tournamentId, user.id);
     }
 );
 
@@ -378,10 +387,9 @@ export const cancel_tournament = spacetimedb.reducer(
     },
     (ctx, { tournamentId }) => {
         const { user, tournament } = ensureTournamentPermission(ctx, tournamentId, 'owner');
+        // A24(5): voids the live lobbies and starts the same chunked finalization as Completed, with stats counted
+        // and MMR skipped (cancelTournament); the D-91 reveal is gone (A37).
         cancelTournament(ctx, tournament, user.id);
-
-        // S8d (A24(5)): Cancelled runs the same chunked finalization with stats counted and MMR skipped;
-        // the D-91 reveal is gone (A37).
     }
 );
 
@@ -418,5 +426,32 @@ export const admin_cancel_idle_tournaments = spacetimedb.reducer(
             }
         }
         console.log(`[TOURNAMENT] admin_cancel_idle_tournaments(${idleDays}) by #${moderator.id}: ${cancelled} cancelled`);
+    }
+);
+
+// ─── admin_restart_tournament_finalize ────────────────────────────────────────
+// S8d review (A24(7), D.8.1): Moderator+ only. A finalize tick that throws rolls back with its reschedule row, so the
+// job stops for good. This re-inserts the job for a Completed or Cancelled tournament whose finalizedAt is unset and
+// which has no TournamentFinalizeJob row. The new row starts at cursor 0: the stopped job's cursor lived on its row
+// and is gone, and the cursor is a progress counter only; the next tick reads the first surviving record in bracket
+// order, which is correct because every record an earlier tick processed was finalized (and deleted) or deleted.
+
+export const admin_restart_tournament_finalize = spacetimedb.reducer(
+    {
+        tournamentId: t.u32(),
+    },
+    (ctx, { tournamentId }) => {
+        const moderator = ensureModerator(ctx);
+        const tournament = ctx.db.Tournament.id.find(tournamentId);
+        if (!tournament) throw new SenderError('Tournament not found.');
+        if (tournament.stage.tag !== 'Completed' && tournament.stage.tag !== 'Cancelled') {
+            throw new SenderError('Only a Completed or Cancelled tournament is finalized.');
+        }
+        if (tournament.finalizedAt !== undefined) throw new SenderError('This tournament is already finalized.');
+        if ([...ctx.db.TournamentFinalizeJob.tournament_id.filter(tournamentId)].length > 0) {
+            throw new SenderError('The finalize job of this tournament is still scheduled.');
+        }
+        restartTournamentFinalization(ctx, tournamentId, 0);
+        console.log(`[TOURNAMENT_FINALIZE] Job of tournament #${tournamentId} restarted by #${moderator.id}`);
     }
 );

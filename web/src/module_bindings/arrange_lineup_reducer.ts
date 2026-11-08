@@ -20,4 +20,5 @@ export default {
     return TeamSide;
   },
   groups: __t.string(),
+  gameNumber: __t.option(__t.u8()),
 };

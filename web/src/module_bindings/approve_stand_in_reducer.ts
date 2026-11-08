@@ -12,5 +12,6 @@ import {
 
 export default {
   bracketMatchId: __t.u32(),
+  teamId: __t.u32(),
   userId: __t.u32(),
 };

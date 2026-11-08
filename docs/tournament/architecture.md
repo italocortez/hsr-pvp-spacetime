@@ -234,6 +234,59 @@ is rejected with the same error message (Pitfall 4 resolution).
 Cross-reference: see `docs/match-results/architecture.md` Phase 12.3 section for
 the full MMR snapshot lifecycle context.
 
+## Phase S8d execution (DECISIONS.md A24, A27, A33, A33a, A34, A35, A54, A56, A65)
+
+Lobbies, the result hand-off and finalization at the terminal stage. Scenarios: [contract.md](contract.md) "Phase S8d
+execution"; bracket side effects: [../brackets/architecture.md](../brackets/architecture.md); records:
+[../match-results/architecture.md](../match-results/architecture.md).
+
+| Reducer | Permission; stage | Behaviour |
+|---|---|---|
+| `create_tournament_lobby(bracketMatchId, joinCode)` | a member of team1 / team2 of the match or an approved stand-in of either (A34), or `bracket`; InProgress; match Ready; no lobby of the match except a Finished one (`Lobby.bracket_match_id`) | Integrity set from the tournament (A33: teamSize, gameMode, matchType from countTowardsMmr, both anonymity flags, rosterVisibility, requireOwnership, costSetId, disconnectPolicy + disconnectForfeitSeconds, allowMirrorPicks (false when ranked, D-42), lineupFormat); bestOf = `BracketMatch.bestOf`; bestOfNAdvantage = Blue when `winnerAdvantage > 0` (A27). Free set from the preset at `lobbyPresetId`, the system preset when that row is gone (A33a). name = tournament name + position key (≤ 50). Creator = host and referee (A34): a participant on its team's player seat (`autoSeatSlot`), staff on Spectator; `ensureNotInLobby` for both; `isCaptain` false (start_draft assigns). `joinCode` is ignored (server-generated, as before) |
+| `approve_stand_in(bracketMatchId, teamId, userId)` | `participants` | `teamId` ∈ {team1Id, team2Id}; the user exists, is not a guest, and is not a member of the other team; one approval per (match, user); the row carries `teamId` (A35) |
+| `revoke_stand_in(bracketMatchId, userId)` | `participants` | deletes the approval; a seat already held is not changed |
+| `advance_tournament_stage(…, Completed)` | `owner`; InProgress | `ensureCanComplete`: format check (GroupInto*: elimination rows exist; GroupOnly: group rows only), then `canComplete` (every row Decided / Walkover / Void, no tournament lobby outside AwaitingResult); `assignFinalPlacements`; stage Completed; `startTournamentFinalization` |
+| `advance_tournament_stage(…, Cancelled)` / `cancel_tournament` / `admin_cancel_idle_tournaments` | `owner` / Moderator+ | `cancelTournament`: `cascadeCleanupTournament` (below), stage Cancelled, `startTournamentFinalization` |
+| `run_tournament_finalize` (scheduled, `TournamentFinalizeJob`) | internal | `runTournamentFinalizeTick` (below) |
+
+**Placements (`helpers/tournamentFinalization.ts` `assignFinalPlacements`).** Competition ranking: placement = 1 +
+the number of ranked teams strictly better. Elimination standing: champion (winner of the grand final, or of the last
+Winners round in single elimination), then the final's loser, then the third-place match winner and loser, then the
+match that eliminated the team (lost with no loser route): Losers rounds above Winners rounds, a later round above an
+earlier one, so the losers-bracket final loser is third in double elimination (A29) and teams knocked out in the same
+round share a placement. GroupOnly: the A30 group position (`groupStandings`); equal positions in different groups
+share a placement. GroupInto*: elimination teams first, then the teams that did not qualify by group position.
+Withdrawn and Disqualified teams get no placement. Team statuses are left as they are (A26 names no end state).
+
+**Cancel cleanup (`cascadeCleanupTournament`, A24(5), review §5.1).** Deletes team requests, the bracket matches'
+calendar events and `TournamentPlayerAccount`; **keeps** bracket matches, teams, team members and assistants (display
+and the job's bracket order). Every tournament lobby except one parked in AwaitingResult with a Validated record is
+voided (`voidTournamentLobby`: record Voided, lobby hard-deleted). The settled ones are finalized by the job, stats
+counted, MMR skipped.
+
+**Finalize job (`runTournamentFinalizeTick`, D.8.1).** `startTournamentFinalization` stamps
+`finalizationStartedAt` and inserts `TournamentFinalizeJob { tournamentId, cursor: 0 }` scheduled now (none while a row
+exists). A tick reads the tournament's surviving records in bracket order (`tournamentRecordsInBracketOrder`: group
+matches, Winners, Losers, third place, grand final, each by roundNumber, matchNumber, id: every team's own matches stay
+in play order) and takes the first K = 4. Empty batch: `rebuildLeaderboard` once when `countTowardsMmr` (SYSTEM actor),
+`finalizedAt = now`, job rows deleted. Otherwise it **reschedules first** (next row, `cursor + batch`), then per record:
+Validated → `runFinalization(ctx, record, SYSTEM_USER_ID, { tournamentMmr: countTowardsMmr && stage === Completed })`
+(history with `tournamentId` / `bracketMatchId`, private (A37); MMR in step 11 with the real history id; stats;
+achievements; `MatchLineupHistory` and the A56 deletes; `hardDeleteLobby`); any other status → deleted without effect
+(`hardDeleteLobby` when its lobby still exists, else the row). `cursor` counts processed records; finalized records
+are deleted, so each tick reads the first K survivors. A tick that throws rolls back whole; earlier ticks stay done.
+`server_nuke_test_data` clears `TournamentFinalizeJob`. The final-tick leaderboard rebuild runs only for a Completed
+MMR tournament (A24(5): no MMR on Cancelled).
+
+**Restart (`admin_restart_tournament_finalize(tournamentId)`, Moderator+).** A tick that throws rolls back with its own
+reschedule row, so the job stops. The reducer re-inserts a job row scheduled now (cursor 0, a progress counter only)
+for a Completed or Cancelled tournament with `finalizedAt` unset and no job row; the next tick starts at the first
+surviving record, since every record an earlier tick processed was finalized or deleted. Rejections: "Tournament not
+found." · "Only a Completed or Cancelled tournament is finalized." · "This tournament is already finalized." · "The
+finalize job of this tournament is still scheduled." Placements also count a walkover final / third-place match
+(`eliminationKeys` reads Decided and Walkover rows).
+
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -262,6 +315,7 @@ the full MMR snapshot lifecycle context.
 | `minimumMmr` check (A36b), alias + `rename_tournament_team` + `set_anonymous_alias`, manual groups `assign_team_group` / `clear_team_groups` (A36a) | Phase S8b execution | 2026-11-07 |
 | create / update arguments: the A36 set (`checkInEnabled`, `groupAdvanceCount`, `disconnectForfeitSeconds`, `requireResultValidation`, `grandFinalBestOf`, `groupAssignmentMode`, `lineupFormat`, `allowMirrorPicks`, `minimumMmr?`, `lobbyPresetId?`) with A28 / A29 / A32 validation | Phase S8b execution | 2026-11-07 |
 | Bracket reducers on the shared engine: + `set_seed_order`, `advance_group_stage`, `resolve_bracket_match`; − `swap_seeds`, `advance_bracket_match`, `submit_and_advance_bracket`, `advance_group_to_elimination`, `admin_set_bracket_winner`; `generate_bracket` withdraws still-Forming teams (A26a); `dq_participant` keeps the team (Disqualified) and settles through `applyBracketResult` (A23, A26a(2)) | Phase S8c execution | 2026-11-07 |
+| `create_tournament_lobby` on the A33 / A33a / A34 / A27 rules, `approve_stand_in` with `teamId`, `revoke_stand_in`; Completed: format check + `canComplete` + placements + the chunked finalize job (K = 4, reschedule first, bracket order); Cancelled keeps bracket / teams, voids live lobbies, runs the same job without MMR (A24, A27, A33, A33a, A34, A35, A56) | Phase S8d execution | 2026-11-07 |
 
 ---
 

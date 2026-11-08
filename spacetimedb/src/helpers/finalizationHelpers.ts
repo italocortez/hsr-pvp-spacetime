@@ -1,9 +1,10 @@
 // ─── Finalization Pipeline Helpers ────────────────────────────────────────────
-// Shared 19-step finalization logic callable by both finalize_match_result
-// (ranked/tournament) and submitSeriesResult (casual auto-finalize per D-37; S7b replaced submit_match_result).
+// Shared 19-step finalization logic callable by finalize_match_result and admin_force_finalize (standalone ranked),
+// submitSeriesResult and performConcede (casual auto-finalize per D-37; S7b replaced submit_match_result) and, for
+// tournament records, only the run_tournament_finalize job (A24(4)(7), S8d).
 
 import { SenderError } from 'spacetimedb/server';
-import { SYSTEM_USER_ID, auditInsert, auditUpdate } from './auditColumns';
+import { auditInsert, auditUpdate } from './auditColumns';
 import { insertWithAudit, updateWithAudit } from './auditHelpers';
 import type { MmrRating } from '@bindings/types';
 import { getKFactor, calculateExpectedScore, calculateRatingChange, calculateTeamEffective, calculateAccountModifier } from './eloCalculation';
@@ -12,7 +13,6 @@ import { incrementPlayerStat, incrementPlayerRelationship } from './statsIncreme
 import { incrementPlayerCharacterStat, incrementBanStat, incrementFacedStat } from './characterStatsIncrement';
 import { incrementGlobalCharacterStat } from './globalCharacterStatsIncrement';
 import { rebuildLeaderboard } from './leaderboardRebuild';
-import { applyBracketResult, seriesGames } from './bracketResults';
 import { checkAndAwardAchievements } from './achievementChecker';
 import { slotIsCoach, slotIsSpectator, slotToTeamSide } from './lobbyHelpers';
 import { resolveUserLabel } from './userLabel';
@@ -89,9 +89,8 @@ export function processMatchMmr(
     // re-querying HsrAccount.isActive. The snapshot was captured at start_draft
     // (draftClassic.ts line ~204) with the max-across-LMA rule, so post-capture
     // mutations to isActive or accountRating cannot affect the ELO delta here.
-    // D-readpath-02: both runFinalization step 11 (standalone-ranked) and
-    // process_tournament_mmr (tournament batch) call this helper — one edit fixes
-    // both paths by construction.
+    // D-readpath-02: runFinalization step 11 is the only caller, for standalone Ranked matches and (S8d) for
+    // tournament records inside the run_tournament_finalize job.
     const blueAccountRatings = blueParticipants.map((p: any) => p.accountRatingSnapshot);
     const redAccountRatings = redParticipants.map((p: any) => p.accountRatingSnapshot);
 
@@ -180,12 +179,21 @@ export function processMatchMmr(
 
 // ─── runFinalization ─────────────────────────────────────────────────────────
 // 18-step pipeline: reads ephemeral data, archives to history, increments all
-// stats, processes MMR (if applicable), advances bracket, deletes ephemeral.
+// stats, processes MMR (if applicable), deletes ephemeral.
+// A24 (S8d): a tournament record reaches this only through run_tournament_finalize, which passes
+// options.tournamentMmr (true when the tournament counts toward MMR and is Completed, false when Cancelled, A24(5)).
+// The bracket was settled when the record was validated or conceded (A24(1)); nothing here touches it.
+
+export interface FinalizationOptions {
+    /** S8d job: process MMR for this tournament record (Ranked record of a Completed countTowardsMmr tournament). */
+    tournamentMmr?: boolean;
+}
 
 export function runFinalization(
     ctx: any,
     matchResult: any,
-    actingUserId: number
+    actingUserId: number,
+    options: FinalizationOptions = {},
 ): void {
     // ── Reads (1-6) ──────────────────────────────────────────────────────────
 
@@ -204,9 +212,9 @@ export function runFinalization(
     // 3c. A56: the match's lineups (every game; MatchLineup is keyed by lobby)
     const lineups = lobbyLineups(ctx, matchResult.lobbyId);
 
-    // 4. Read steps (sorted by sequence)
+    // 4. Read steps, every game of the series (A65(3)), sorted by (gameNumber, sequence)
     const steps = [...ctx.db.MatchSessionStep.lobby_id.filter(matchResult.lobbyId)]
-        .sort((a: any, b: any) => a.sequence - b.sequence);
+        .sort((a: any, b: any) => (a.gameNumber - b.gameNumber) || (a.sequence - b.sequence));
 
     // 5. Read active season
     const activeSeason = [...ctx.db.Season.is_active.filter(true)][0];
@@ -255,11 +263,10 @@ export function runFinalization(
             doRelationships: !isCasualNonTournament,           // T2/T3: always
             doCharStats: isRanked && !isDrafting,              // T3: equipping+ only
             doGlobalCharStats: isRanked && !isDrafting,        // T3: equipping+ only
-            doMmr: isRanked && !isTournament,                 // T3 non-tournament only (tournament defers to batch)
+            doMmr: isRanked && (!isTournament || options.tournamentMmr === true), // T3; tournament: the S8d job at Completed
             doLeaderboard: isRanked && !isTournament,          // T3 non-tournament only
             doSpectated: isRanked,                             // T3 only
             doAchievements: false,                             // D-76: ALWAYS skipped for concede
-            doBracketAdvance: false,                           // D-80: NEVER auto-advance for concede
         };
     }
 
@@ -350,16 +357,14 @@ export function runFinalization(
                         targetName = step.payload.value?.characterName;
                     } else if (tag === 'Bid') {
                         targetName = step.payload.value?.targetCharacter;
-                    } else if (tag === 'EquipLightcone') {
+                    } else if (tag === 'EquipLightcone' || tag === 'UnequipLightcone') {
                         targetName = step.payload.value?.lightconeName;
                     }
                 }
                 ctx.db.MatchSessionStepHistory.insert(insertWithAudit(ctx, {
                     matchHistoryId: historyRow.id,
-                    // PK is [matchHistoryId, gameNumber, sequence] — gameNumber required (D-13)
-                    // By finalization time only the last game's steps remain (advance_to_next_game deletes
-                    // inter-game steps). For bestOf=1 all steps have gameNumber=1.
-                    gameNumber: step.gameNumber ?? 1,
+                    // PK is [matchHistoryId, gameNumber, sequence] — gameNumber required (D-13); A65(3): every game
+                    gameNumber: step.gameNumber,
                     sequence: step.sequence,
                     actorUserId: step.actorUserId,
                     actorDisplayName: resolveUserLabel(ctx, step.actorUserId).displayName,
@@ -432,9 +437,10 @@ export function runFinalization(
         }
     }
 
-    // 11. Process MMR — standalone Ranked only (not tournament-controlled)
+    // 11. Process MMR — standalone Ranked, or a tournament record when the S8d job asks for it (A24(4)(5)); the
+    //     history row exists by now, so MmrHistory gets the real matchHistoryId (the old sentinel back-fill is gone)
     if (!isConcede || concedeFlags.doMmr) {
-        if (matchResult.matchType.tag === 'Ranked' && !matchResult.isTournamentControlled) {
+        if (matchResult.matchType.tag === 'Ranked' && (!matchResult.isTournamentControlled || options.tournamentMmr === true)) {
             processMatchMmr(ctx, matchResult, effectiveParticipants, gameMode, seasonId, historyRow ? historyRow.id : 0, actingUserId);
             // Stamp mmrProcessedAt
             const freshResult = ctx.db.MatchResultRecord.id.find(matchResult.id)!;
@@ -444,22 +450,8 @@ export function runFinalization(
         }
     }
 
-    // 12. Tournament batch back-fill MmrHistory sentinel matchHistoryId
-    if (!isConcede || concedeFlags.doMmr) {
-        if (matchResult.isTournamentControlled && matchResult.mmrProcessedAt !== undefined && historyRow) {
-            const participantUserIds = new Set(effectiveParticipants.map((p: any) => p.userId));
-            for (const uid of participantUserIds) {
-                const mmrRows = [...ctx.db.MmrHistory.user_id.filter(uid)]
-                    .filter((h: any) => h.matchHistoryId === 0);
-                if (mmrRows.length > 0) {
-                    const latest = mmrRows.sort((a: any, b: any) => b.id - a.id)[0];
-                    ctx.db.MmrHistory.id.update(
-                        updateWithAudit(ctx, latest, { matchHistoryId: historyRow.id }, actingUserId),
-                    );
-                }
-            }
-        }
-    }
+    // 12. (removed in S8d: the tournament MMR batch and its matchHistoryId = 0 sentinel back-fill are gone; step 11
+    //     runs inside the job with the history row in hand)
 
     // 13. Increment PlayerStat per participant (per D-30: compare teamSide tags to winnerTeamSide)
     if (!isConcede || concedeFlags.doWinLoss) {
@@ -471,7 +463,8 @@ export function runFinalization(
 
     // S9 (R2(3), A37): write SYSTEM_USER_ID as the audit actor of the public Leaderboard rows; actingUserId
     // may be a player in an anonymous lobby.
-    // 13b. Rebuild leaderboard after PlayerStat increments (reads PlayerStat.wins)
+    // 13b. Rebuild leaderboard after PlayerStat increments (reads PlayerStat.wins); tournament records: the S8d job
+    //      rebuilds it once when the tournament is done
     if (!isConcede || concedeFlags.doLeaderboard) {
         if (matchResult.matchType.tag === 'Ranked' && !matchResult.isTournamentControlled) {
             rebuildLeaderboard(ctx, actingUserId, seasonId);
@@ -551,32 +544,9 @@ export function runFinalization(
         }
     }
 
-    // 17. Bracket advancement (D-80: NEVER auto-advance for concede; D-42: derive tournamentId from bracketMatch)
-    if (!isConcede || concedeFlags.doBracketAdvance) {
-        if (matchResult.isTournamentControlled && matchResult.bracketMatchId !== undefined && matchResult.winnerTeamSide !== undefined) {
-            const bracketMatch = ctx.db.BracketMatch.id.find(matchResult.bracketMatchId);
-            if (bracketMatch && bracketMatch.winnerTeamId === undefined) {
-                // D-42: derive tournamentId from bracketMatch (not from matchResult.tournamentId which was removed)
-                const tournamentId = bracketMatch.tournamentId;
-                // D-30: map winnerTeamSide directly to team1Id/team2Id — no participant lookup needed
-                const winnerTeamId = matchResult.winnerTeamSide.tag === 'Blue'
-                    ? bracketMatch.team1Id
-                    : bracketMatch.team2Id;
-                if (winnerTeamId !== undefined) {
-                    // Since S8c the single writer (A23) settles the match (the legacy advanceBracketMatch is gone).
-                    // S8d: replaced by the A24 hand-off (advance on Validated, finalize at Completed).
-                    const tournament = ctx.db.Tournament.id.find(tournamentId);
-                    if (!tournament || tournament.stage.tag !== 'InProgress') {
-                        throw new SenderError('Tournament must be InProgress for bracket advancement.');
-                    }
-                    applyBracketResult(ctx, matchResult.bracketMatchId, winnerTeamId, isConcede ? 'Concede' : 'Played',
-                        session ? seriesGames(session) : { team1: 0, team2: 0 }, SYSTEM_USER_ID); // A37 audit actor
-                }
-                // tournamentId used for logging context only
-                console.log(`[MATCH] Bracket match #${matchResult.bracketMatchId} advanced for tournament #${tournamentId}`);
-            }
-        }
-    }
+    // 17. (removed in S8d) Bracket advancement: a tournament record advanced its bracket match when it was validated
+    //     or conceded (handOffToBracket, A24(1), A38(1)); finalization of tournament records runs only in the
+    //     Completed / Cancelled job, after the bracket is final.
 
     // 18. Delete ephemeral records (children first, then steps, then record) — always runs
     // A56(3): the scoring inputs and the live lineups never outlive their result record (before the game rows,

@@ -41,7 +41,7 @@ function hasSeriesAuthority(ctx: any, lobby: any, user: any): boolean {
 // ─── advance_to_next_game ─────────────────────────────────────────────────────
 // Transitions a BetweenGames lobby to Drafting for the next game.
 // Per D-02, D-04, D-07, D-14:
-//   1. Deletes all current MatchSessionStep rows (finalization archives final game's steps)
+//   (A65: the finished game's MatchSessionStep rows stay for the whole series; finalization archives every game)
 //   2. Resets MatchSession through initSessionForGame (F2): new draft sequence, turnIndex=0, timer, budgets,
 //      auction state and pauses reset; increments currentGameNumber; won-game counters kept
 //   3. Transitions lobby stage: BetweenGames -> Drafting
@@ -75,13 +75,7 @@ export const advance_to_next_game = spacetimedb.reducer(
             throw new SenderError('Series is already won. Cannot advance to next game.');
         }
 
-        // Step 1: Delete all current MatchSessionStep rows for this lobby.
-        // These are the inter-game steps. Finalization at end-of-series will archive the final game's steps.
-        // Important: do NOT archive here — there is no MatchSessionHistory row yet.
-        const currentSteps = [...ctx.db.MatchSessionStep.lobby_id.filter(lobbyId)];
-        for (const step of currentSteps) {
-            ctx.db.MatchSessionStep.id.delete(step.id);
-        }
+        // Step 1 (removed, A65(1)): the finished game's steps are kept; game-scoped readers filter by gameNumber.
 
         // Step 2: F2 (BACKEND-BUGS): rebuild the next game's draft state with the same initializer start_draft uses
         // (sequence, turnIndex, auction phase, nominator / bid team, budgets, timer, pauses), so game N + 1 can be

@@ -110,6 +110,17 @@ Called from `run_finalization`. Per-participant:
 4. Delete existing `Leaderboard` rows for `[gameMode, seasonId]`
 5. Insert new `Leaderboard` rows with `rank` 1..N
 
+## Phase S8d execution (DECISIONS.md A24(4)(5), A36b)
+
+Tournament MMR is computed only by the `run_tournament_finalize` job of a **Completed** `countTowardsMmr` tournament:
+`runFinalization(…, { tournamentMmr: true })` runs step 11 (`processMatchMmr` with the participants' stored
+`accountRatingSnapshot`) after the history row exists, so `MmrHistory.matchHistoryId` is the real history id. Records
+are processed in bracket order (group matches, Winners, Losers, third place, grand final), so every player's matches
+apply in play order. Cancelled tournaments: no MMR (A24(5)). The leaderboard is rebuilt once at the end of the job
+(MMR tournaments only). `process_tournament_mmr` and the `matchHistoryId = 0` sentinel are gone; `processMatchMmr`
+has one caller, `runFinalization` step 11.
+
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -126,6 +137,7 @@ Called from `run_finalization`. Per-participant:
 | mmrProcessedAt on MatchResultRecord guards against double finalization | Phase 06 execution | 2026-02-28 |
 | Season: per-gameMode rating periods; deactivate old season on create_season | Phase 05 execution | 2026-02-25 |
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
+| Tournament MMR moved into the finalize job (Completed only, bracket order, real matchHistoryId, one leaderboard rebuild); `process_tournament_mmr` deleted (A24) | Phase S8d execution | 2026-11-07 |
 
 ---
 

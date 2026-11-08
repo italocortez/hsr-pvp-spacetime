@@ -54,6 +54,7 @@ import AdminGcIdentitiesReducer from "./admin_gc_identities_reducer";
 import AdminGcLobbiesReducer from "./admin_gc_lobbies_reducer";
 import AdminRecalculateAllRatingsReducer from "./admin_recalculate_all_ratings_reducer";
 import AdminRemoveCharacterArchetypesReducer from "./admin_remove_character_archetypes_reducer";
+import AdminRestartTournamentFinalizeReducer from "./admin_restart_tournament_finalize_reducer";
 import AdminSeedEloConfigReducer from "./admin_seed_elo_config_reducer";
 import AdminSeedRatingConfigReducer from "./admin_seed_rating_config_reducer";
 import AdminSetGuestLobbyCreationReducer from "./admin_set_guest_lobby_creation_reducer";
@@ -135,7 +136,6 @@ import PassBidReducer from "./pass_bid_reducer";
 import PauseDraftReducer from "./pause_draft_reducer";
 import PickCharacterReducer from "./pick_character_reducer";
 import PlaceBidReducer from "./place_bid_reducer";
-import ProcessTournamentMmrReducer from "./process_tournament_mmr_reducer";
 import PublishCostSetReducer from "./publish_cost_set_reducer";
 import ReclaimRefereeReducer from "./reclaim_referee_reducer";
 import RecordGroupScoresReducer from "./record_group_scores_reducer";
@@ -151,6 +151,7 @@ import ResolveBracketMatchReducer from "./resolve_bracket_match_reducer";
 import RespondToInviteReducer from "./respond_to_invite_reducer";
 import ResumeDraftReducer from "./resume_draft_reducer";
 import ResumeSeriesReducer from "./resume_series_reducer";
+import RevokeStandInReducer from "./revoke_stand_in_reducer";
 import RollbackBracketMatchReducer from "./rollback_bracket_match_reducer";
 import SaveCalendarReducer from "./save_calendar_reducer";
 import SeedBracketReducer from "./seed_bracket_reducer";
@@ -186,6 +187,7 @@ import TransferRefereeReducer from "./transfer_referee_reducer";
 import UnbanMemberReducer from "./unban_member_reducer";
 import UnconfirmReadyReducer from "./unconfirm_ready_reducer";
 import UndoLastStepReducer from "./undo_last_step_reducer";
+import UnequipLightconeReducer from "./unequip_lightcone_reducer";
 import UnpublishCostSetReducer from "./unpublish_cost_set_reducer";
 import UnsaveCalendarReducer from "./unsave_calendar_reducer";
 import UpdateAchievementReducer from "./update_achievement_reducer";
@@ -198,6 +200,7 @@ import UpdateLobbyPresetReducer from "./update_lobby_preset_reducer";
 import UpdateLobbySettingsReducer from "./update_lobby_settings_reducer";
 import UpdateTournamentReducer from "./update_tournament_reducer";
 import UpdateUsernameReducer from "./update_username_reducer";
+import ValidateMatchResultReducer from "./validate_match_result_reducer";
 import WaitlistPromoteReducer from "./waitlist_promote_reducer";
 import WithdrawFromTournamentReducer from "./withdraw_from_tournament_reducer";
 import WithdrawTournamentTeamReducer from "./withdraw_tournament_team_reducer";
@@ -869,6 +872,7 @@ const reducersSchema = __reducers(
   __reducerSchema("admin_gc_lobbies", AdminGcLobbiesReducer),
   __reducerSchema("admin_recalculate_all_ratings", AdminRecalculateAllRatingsReducer),
   __reducerSchema("admin_remove_character_archetypes", AdminRemoveCharacterArchetypesReducer),
+  __reducerSchema("admin_restart_tournament_finalize", AdminRestartTournamentFinalizeReducer),
   __reducerSchema("admin_seed_elo_config", AdminSeedEloConfigReducer),
   __reducerSchema("admin_seed_rating_config", AdminSeedRatingConfigReducer),
   __reducerSchema("admin_set_guest_lobby_creation", AdminSetGuestLobbyCreationReducer),
@@ -950,7 +954,6 @@ const reducersSchema = __reducers(
   __reducerSchema("pause_draft", PauseDraftReducer),
   __reducerSchema("pick_character", PickCharacterReducer),
   __reducerSchema("place_bid", PlaceBidReducer),
-  __reducerSchema("process_tournament_mmr", ProcessTournamentMmrReducer),
   __reducerSchema("publish_cost_set", PublishCostSetReducer),
   __reducerSchema("reclaim_referee", ReclaimRefereeReducer),
   __reducerSchema("record_group_scores", RecordGroupScoresReducer),
@@ -966,6 +969,7 @@ const reducersSchema = __reducers(
   __reducerSchema("respond_to_invite", RespondToInviteReducer),
   __reducerSchema("resume_draft", ResumeDraftReducer),
   __reducerSchema("resume_series", ResumeSeriesReducer),
+  __reducerSchema("revoke_stand_in", RevokeStandInReducer),
   __reducerSchema("rollback_bracket_match", RollbackBracketMatchReducer),
   __reducerSchema("save_calendar", SaveCalendarReducer),
   __reducerSchema("seed_bracket", SeedBracketReducer),
@@ -1001,6 +1005,7 @@ const reducersSchema = __reducers(
   __reducerSchema("unban_member", UnbanMemberReducer),
   __reducerSchema("unconfirm_ready", UnconfirmReadyReducer),
   __reducerSchema("undo_last_step", UndoLastStepReducer),
+  __reducerSchema("unequip_lightcone", UnequipLightconeReducer),
   __reducerSchema("unpublish_cost_set", UnpublishCostSetReducer),
   __reducerSchema("unsave_calendar", UnsaveCalendarReducer),
   __reducerSchema("update_achievement", UpdateAchievementReducer),
@@ -1013,6 +1018,7 @@ const reducersSchema = __reducers(
   __reducerSchema("update_lobby_settings", UpdateLobbySettingsReducer),
   __reducerSchema("update_tournament", UpdateTournamentReducer),
   __reducerSchema("update_username", UpdateUsernameReducer),
+  __reducerSchema("validate_match_result", ValidateMatchResultReducer),
   __reducerSchema("waitlist_promote", WaitlistPromoteReducer),
   __reducerSchema("withdraw_from_tournament", WithdrawFromTournamentReducer),
   __reducerSchema("withdraw_tournament_team", WithdrawTournamentTeamReducer),

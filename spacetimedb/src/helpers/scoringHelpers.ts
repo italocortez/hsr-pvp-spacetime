@@ -22,6 +22,7 @@ import { auditUpdate } from './auditColumns';
 import { insertWithAudit, updateWithAudit } from './auditHelpers';
 import { isRoleAtLeast } from './ensurePermissions';
 import { slotIsCoach, slotTeam } from './lobbyHelpers';
+import { currentGameSteps } from './stepSequence';
 
 export type TeamTag = 'Blue' | 'Red';
 
@@ -76,22 +77,31 @@ export function ensureCaptainOrReferee(ctx: any, lobbyId: number, userId: number
     return member;
 }
 
-/** The lobby's result record that still takes scores (Pending). S8 (A54) consolidates to one record per lobby. */
+/**
+ * A54 (S8d): a lobby has one MatchResultRecord, created by start_draft; concede and defer update it in place. Returns
+ * that record, or undefined before start_draft. (A rolled-back tournament record is Voided and its lobby deleted, so
+ * it never shares a lobby id with a live record.)
+ */
+export function findLobbyResult(ctx: any, lobbyId: number): any {
+    return [...ctx.db.MatchResultRecord.lobby_id.filter(lobbyId)][0];
+}
+
+/** The lobby's result record when it still takes scores (Pending; A54: the one record of the lobby). */
 export function findPendingResult(ctx: any, lobbyId: number): any {
-    const record = [...ctx.db.MatchResultRecord.lobby_id.filter(lobbyId)].find((r: any) => r.status.tag === 'Pending');
-    if (!record) throw new SenderError('No pending match result for this lobby.');
+    const record = findLobbyResult(ctx, lobbyId);
+    if (!record || record.status.tag !== 'Pending') throw new SenderError('No pending match result for this lobby.');
     return record;
 }
 
 /**
- * A60(7): the record an edit reducer works on. Pending always; with allowSubmitted (the caller is an Admin) a
- * Submitted record too, so an Admin can still correct a closed game of a ranked series awaiting force-finalize.
+ * A60(7): the record an edit reducer works on (A54: the lobby's one record). Pending always; with allowSubmitted (the
+ * caller is an Admin) a Submitted record too, so an Admin can still correct a closed game of a ranked series awaiting
+ * force-finalize.
  */
 export function findEditableResult(ctx: any, lobbyId: number, allowSubmitted: boolean): any {
-    const records = [...ctx.db.MatchResultRecord.lobby_id.filter(lobbyId)];
-    const record = records.find((r: any) => r.status.tag === 'Pending')
-        ?? (allowSubmitted ? records.find((r: any) => r.status.tag === 'Submitted') : undefined);
-    if (!record) throw new SenderError('No pending match result for this lobby.');
+    const record = findLobbyResult(ctx, lobbyId);
+    const editable = record && (record.status.tag === 'Pending' || (allowSubmitted && record.status.tag === 'Submitted'));
+    if (!editable) throw new SenderError('No pending match result for this lobby.');
     return record;
 }
 
@@ -150,6 +160,7 @@ export interface TeamDraft {
      * extra (the latest SetEidolon.costPaid, else AuctionSold.eidolonCost).
      */
     characterCosts: number[];
+    /** Hundredths, the light cones still equipped (A60; S8d: an UnequipLightcone step removes the latest one of its character). */
     lightconeCosts: number[];
     /**
      * CH-S6 / D.8.7, A60(1): the eidolon the scoring uses (tie-break 3): the latest SetEidolon step of the character
@@ -158,14 +169,42 @@ export interface TeamDraft {
     eidolons: Array<{ name: string; eidolon: number }>;
 }
 
+export interface EquippedLightcone { characterName: string; lightconeName: string; costPaid: number; sequence: number }
+
+/**
+ * The light cones a side still has equipped in a game, in equip order, from sorted steps: every EquipLightcone step of
+ * the side, minus, per UnequipLightcone step, the latest earlier equip of that character (S7b hand-off, S8d).
+ */
+function equippedFromSteps(steps: any[], side: TeamTag): EquippedLightcone[] {
+    const equipped: EquippedLightcone[] = [];
+    for (const step of steps) {
+        if (step.actorSlot.tag !== side) continue;
+        if (step.payload.tag === 'EquipLightcone') {
+            const v = step.payload.value;
+            equipped.push({ characterName: v.characterName, lightconeName: v.lightconeName, costPaid: v.costPaid, sequence: step.sequence });
+        } else if (step.payload.tag === 'UnequipLightcone') {
+            for (let i = equipped.length - 1; i >= 0; i--) {
+                if (equipped[i].characterName === step.payload.value.characterName) { equipped.splice(i, 1); break; }
+            }
+        }
+    }
+    return equipped;
+}
+
+/** The light cones `side` still has equipped in game `gameNumber` of the lobby (unequip_lightcone's input). */
+export function equippedLightcones(ctx: any, lobbyId: number, gameNumber: number, side: TeamTag): EquippedLightcone[] {
+    const steps = currentGameSteps(ctx, lobbyId, gameNumber).sort((a: any, b: any) => a.sequence - b.sequence);
+    return equippedFromSteps(steps, side);
+}
+
 /**
  * The team's draft for one game, read from that game's steps (the step payloads are the snapshot, D.8.7). A60:
  * eidolon edits are SetEidolon steps (actorSlot = the team); the latest one per character wins (highest sequence).
+ * A65(2): the read filters by gameNumber (every game's steps stay until finalization).
  */
 export function teamDraft(ctx: any, lobbyId: number, gameNumber: number, side: TeamTag): TeamDraft {
     const draft: TeamDraft = { characters: [], characterCosts: [], lightconeCosts: [], eidolons: [] };
-    const steps = [...ctx.db.MatchSessionStep.lobby_id.filter(lobbyId)]
-        .filter((s: any) => s.gameNumber === gameNumber)
+    const steps = currentGameSteps(ctx, lobbyId, gameNumber)
         .sort((a: any, b: any) => a.sequence - b.sequence);
     const latestEdit = new Map<string, { eidolon: number; costPaid: number; sequence: number }>();
     for (const step of steps) {
@@ -187,10 +226,9 @@ export function teamDraft(ctx: any, lobbyId: number, gameNumber: number, side: T
             draft.characters.push(p.value.characterName);
             draft.characterCosts.push(toHundredths(p.value.winningAmount) + toHundredths(edit ? edit.costPaid : p.value.eidolonCost));
             draft.eidolons.push({ name: p.value.characterName, eidolon: edit ? edit.eidolon : p.value.eidolon });
-        } else if (p.tag === 'EquipLightcone' && step.actorSlot.tag === side) {
-            draft.lightconeCosts.push(toHundredths(p.value.costPaid));
         }
     }
+    draft.lightconeCosts = equippedFromSteps(steps, side).map((e) => toHundredths(e.costPaid));
     return draft;
 }
 

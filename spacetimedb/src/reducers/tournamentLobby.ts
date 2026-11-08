@@ -1,17 +1,39 @@
 import spacetimedb from '../schema';
 import { t, SenderError } from 'spacetimedb/server';
-import { getAuthenticatedUser, isRoleAtLeast } from '../helpers/ensurePermissions';
+import { getAuthenticatedUser } from '../helpers/ensurePermissions';
 import { insertWithAudit } from '../helpers/auditHelpers';
 import { ensureNotInLobby, generateJoinCode, nextJoinSeq } from '../helpers/lobbyHelpers';
+import { ensureTournamentPermission, hasTournamentPermission } from '../helpers/tournamentPermissions';
+import { findSystemLobbyPreset, SYSTEM_PRESET_VALUES } from '../helpers/systemPreset';
+import { autoSeatSlot } from '../helpers/tournamentLobbySides';
 import type { Lobby } from '@bindings/types';
 
+const LOBBY_NAME_MAX = 50; // D-A8 (helpers/seriesSettings.ts normalizeLobbyName)
+
+/** A34 / A35: the creator is a member of team1 / team2 of the match or one of its approved stand-ins. */
+function isMatchParticipant(ctx: any, bracketMatch: any, userId: number): boolean {
+    const teams = [bracketMatch.team1Id, bracketMatch.team2Id].filter((id) => id !== undefined);
+    const membership = [...ctx.db.TournamentTeamMember.by_tournament_and_user.filter([bracketMatch.tournamentId, userId])][0];
+    if (membership && teams.includes(membership.teamId)) return true;
+    const standIn = [...ctx.db.TournamentStandIn.by_match_and_user.filter([bracketMatch.id, userId])][0];
+    return !!standIn && teams.includes(standIn.teamId);
+}
+
 // ─── create_tournament_lobby ─────────────────────────────────────────────────
-// Creates a lobby linked to a bracket match.
-// Per D-64: authorized callers — match participants (via TournamentTeam), TO, assistant, admin, moderator.
-// Per D-65: ALL settings inherited from Tournament and locked (isTournamentControlled=true).
-// Per D-45: duplicate prevention — no non-Finished lobby may exist for the same bracketMatchId.
-// Per D-22: enforces one lobby per user.
-// Per D-67: matchType derived from tournament.countTowardsMmr.
+// A27, A33, A33a, A34, A35, D-45 (S8d). Creates the lobby of a bracket match.
+// Caller (A34): a member of team1 / team2 of the match or an approved stand-in of either, or staff with the `bracket`
+// permission (organizer, Moderator+, assistant with canManageBracket, A25). The match must be Ready, the tournament
+// InProgress, and no lobby of the match may exist except a Finished one (Lobby.bracket_match_id, D-45).
+// Settings: the integrity set (A33) from the tournament, locked by update_lobby_settings (D-65): teamSize, gameMode,
+// matchType (countTowardsMmr), both anonymity flags, rosterVisibility, requireOwnership, costSetId, disconnectPolicy +
+// disconnectForfeitSeconds, allowMirrorPicks (false when ranked, D-42), lineupFormat, bestOf = BracketMatch.bestOf,
+// bestOfNAdvantage = Blue when BracketMatch.winnerAdvantage > 0 (A27: the WB finalist is slot 1 = Blue). The free set
+// from the preset at Tournament.lobbyPresetId, the system preset when that row is gone (A33a). name = the tournament
+// name + the match key (D-A8, truncated to 50 characters).
+// The creator is host and referee (A34): a participant is seated as a player on its team's side (A26 / A35); staff
+// are seated as a spectator referee and become a member like anyone else (the one-lobby-at-a-time rule applies, D-22).
+// isCaptain stays false, as in create_lobby (start_draft assigns captains, D-30). `joinCode` is ignored (the server
+// generates the code, as before).
 
 export const create_tournament_lobby = spacetimedb.reducer(
     {
@@ -21,187 +43,122 @@ export const create_tournament_lobby = spacetimedb.reducer(
     (ctx, args) => {
         const user = getAuthenticatedUser(ctx);
 
-        // Resolve bracket match
         const bracketMatch = ctx.db.BracketMatch.id.find(args.bracketMatchId);
         if (!bracketMatch) {
             throw new SenderError('Bracket match not found.');
         }
-
-        // Resolve tournament
         const tournament = ctx.db.Tournament.id.find(bracketMatch.tournamentId);
         if (!tournament) {
             throw new SenderError('Tournament not found.');
         }
 
-        // D-64: Authorization check — one of:
-        //   a. Match participant (team member in team1 or team2)
-        //   b. Tournament organizer
-        //   c. Tournament assistant
-        //   d. Admin or Moderator
-        let isAuthorized = false;
-
-        if (isRoleAtLeast(user.role, 'Moderator')) {
-            // Admin/Moderator always authorized
-            isAuthorized = true;
-        } else if (tournament.organizerId === user.id) {
-            // Tournament organizer
-            isAuthorized = true;
-        } else {
-            // Check tournament assistant
-            const assistant = [...ctx.db.TournamentAssistant.by_tournament_and_user.filter([bracketMatch.tournamentId, user.id])][0];
-            if (assistant) {
-                isAuthorized = true;
-            }
-        }
-
-        if (!isAuthorized) {
-            // Check if user is a member of one of the bracket match's teams via TournamentTeamMember (D-20)
-            const team1Id = bracketMatch.team1Id;
-            const team2Id = bracketMatch.team2Id;
-
-            const userTtm = [...ctx.db.TournamentTeamMember.by_tournament_and_user.filter([bracketMatch.tournamentId, user.id])][0];
-            if (userTtm) {
-                if ((team1Id !== undefined && team1Id !== null && userTtm.teamId === team1Id) ||
-                    (team2Id !== undefined && team2Id !== null && userTtm.teamId === team2Id)) {
-                    isAuthorized = true;
-                }
-            }
-        }
-
-        if (!isAuthorized) {
+        // A34: a participant of the match or `bracket` staff (A25)
+        const isParticipant = isMatchParticipant(ctx, bracketMatch, user.id);
+        if (!isParticipant && !hasTournamentPermission(ctx, user, tournament, 'bracket')) {
             throw new SenderError('You are not authorized to create a lobby for this bracket match.');
         }
 
-        // D-45: Duplicate prevention — check no non-Finished lobby exists for this bracketMatchId
-        for (const existingLobby of ctx.db.Lobby.iter()) {
-            if (
-                existingLobby.bracketMatchId !== undefined &&
-                existingLobby.bracketMatchId !== null &&
-                existingLobby.bracketMatchId === args.bracketMatchId &&
-                existingLobby.stage.tag !== 'Finished'
-            ) {
+        if (tournament.stage.tag !== 'InProgress') {
+            throw new SenderError('Tournament is not in progress.');
+        }
+        if (bracketMatch.state.tag !== 'Ready') {
+            throw new SenderError(`${bracketMatch.positionKey} is ${bracketMatch.state.tag}; a lobby needs a Ready match.`);
+        }
+
+        // D-45: one live lobby per bracket match (a parked AwaitingResult lobby counts until finalization or rollback)
+        for (const existingLobby of ctx.db.Lobby.bracket_match_id.filter(args.bracketMatchId)) {
+            if (existingLobby.stage.tag !== 'Finished') {
                 throw new SenderError('A lobby already exists for this bracket match.');
             }
         }
 
-        // D-22: one lobby at a time per user
+        // D-22: one lobby at a time per user (staff creators included, A34)
         ensureNotInLobby(ctx, user.id);
 
-        // D-67: Derive matchType from tournament.countTowardsMmr
-        const matchType = tournament.countTowardsMmr
-            ? { tag: 'Ranked', value: {} }
-            : { tag: 'Casual', value: {} };
+        // D-67: matchType from tournament.countTowardsMmr
+        const isRanked = tournament.countTowardsMmr;
+        const matchType = isRanked ? { tag: 'Ranked', value: {} } : { tag: 'Casual', value: {} };
 
-        // D-65: Inherit ALL settings from Tournament, locked.
-        // For fields not present on Tournament (draftMode, banMode, timers, budgets),
-        // use sensible tournament defaults.
+        // A33a: the free set from the tournament's preset, or the system preset when that row no longer exists
+        const preset = ctx.db.LobbyPreset.id.find(tournament.lobbyPresetId) ?? findSystemLobbyPreset(ctx) ?? SYSTEM_PRESET_VALUES;
+
+        const key = bracketMatch.positionKey;
+        const name = `${tournament.name.slice(0, Math.max(0, LOBBY_NAME_MAX - key.length - 1))} ${key}`.trim();
+
         const joinCode = generateJoinCode(ctx, user.id);
         const lobby = ctx.db.Lobby.insert(insertWithAudit(ctx, {
             id: 0, // autoInc
             joinCode,
-            name: tournament.name, // S8: lobby name for tournament lobbies (D-A8)
+            name, // D-A8
             hostUserId: user.id,
             teamBlueAlias: 'Blue',
             teamRedAlias: 'Red',
 
-            // Team size inherited from tournament
+            // ── Integrity set (A33), from the tournament and the bracket ──
             teamSize: tournament.teamSize,
-
-            // S8 (A33a): the free set below is copied from the preset at tournament.lobbyPresetId
-            // (falling back to the system preset) instead of these constants.
-            // Draft/ban mode — tournament defaults (Standard Classic with 4 bans)
-            draftMode: { tag: 'Classic', value: {} } as any,
-            banMode: { tag: 'Four', value: {} } as any,
-            banRestriction: { tag: 'NoRestriction', value: {} } as any,
-            // Integrity set (A33): lineup format comes from the tournament
             lineupFormat: tournament.lineupFormat,
-
-            // Timers — tournament standard defaults
-            standardTurnSeconds: 60,
-            reserveBankSeconds: 120,
-
-            // Handicap/scoring — tournament standard defaults
-            rosterDiffAdvantage: 0,
-            rosterThreshold: 0,
-            underThresholdAdvantage: 0,
-            aboveThresholdPenalty: 0,
-            deathPenalty: 0,
-
-            // Match type derived from tournament
             matchType: matchType as Lobby['matchType'],
+            allowMirrorPicks: isRanked ? false : tournament.allowMirrorPicks, // D-42: Ranked forces false
+            isAnonymousPlayers: tournament.isAnonymousDefault,
+            isAnonymousSpectators: tournament.isAnonymousSpectators,
+            rosterVisibility: tournament.rosterVisibility,
+            requireOwnership: tournament.requireOwnership,
+            costSetId: tournament.costSetId,
+            disconnectPolicy: tournament.disconnectPolicy,
+            disconnectForfeitSeconds: tournament.disconnectForfeitSeconds, // A36: one optional timer
+            gameMode: tournament.defaultGameMode,
+            bestOf: bracketMatch.bestOf > 0 ? bracketMatch.bestOf : 1, // D-11 / A28
+            // A27: the WB finalist (slot 1 = Blue) starts the grand final one game up
+            bestOfNAdvantage: (bracketMatch.winnerAdvantage > 0 ? { tag: 'Blue', value: {} } : { tag: 'None', value: {} }) as any,
+
+            // ── Free set (A33, A33a), from the preset ──
+            draftMode: preset.draftMode,
+            banMode: preset.banMode,
+            banRestriction: preset.banRestriction,
+            standardTurnSeconds: preset.standardTurnSeconds,
+            reserveBankSeconds: preset.reserveBankSeconds,
+            rosterDiffAdvantage: preset.rosterDiffAdvantage,
+            rosterThreshold: preset.rosterThreshold,
+            underThresholdAdvantage: preset.underThresholdAdvantage,
+            aboveThresholdPenalty: preset.aboveThresholdPenalty,
+            deathPenalty: preset.deathPenalty,
+            characterBudget: preset.characterBudget,
+            lightconeBudget: preset.lightconeBudget,
+            minimumBidRaise: preset.minimumBidRaise,
+            autoRandomPick: preset.autoRandomPick,
+            refereeCanUndo: preset.refereeCanUndo,
+            refereeCanPause: preset.refereeCanPause,
+            refereeCanSetCaptain: preset.refereeCanSetCaptain,
+            refereeCanKick: preset.refereeCanKick,
+            allowPlayerPause: preset.allowPlayerPause,
+            refereeExclusiveConcede: preset.refereeExclusiveConcede,
+            hideMmr: preset.hideMmr, // A40
+            refereeControlsShelving: preset.refereeControlsShelving,
 
             // Player count (just the creator for now)
             currentPlayerCount: 1,
-
-            // Budgets — tournament standard defaults (f32)
-            characterBudget: 0,
-            lightconeBudget: 0,
-            minimumBidRaise: 20,
-
-            // Draft options — tournament standard defaults
-            allowMirrorPicks: false,  // Ranked forces false per D-42
-            autoRandomPick: false,
-
-            // Referee powers — tournament defaults (permissive)
-            refereeCanUndo: true,
-            refereeCanPause: true,
-            refereeCanSetCaptain: true,
-            refereeCanKick: false,
-
-            // Player pause
-            allowPlayerPause: true,
 
             // Tournament linkage (D-65)
             tournamentId: tournament.id,
             bracketMatchId: args.bracketMatchId,
             isTournamentControlled: true,
 
-            // Anonymous play inherited from tournament
-            isAnonymousPlayers: tournament.isAnonymousDefault,
-            isAnonymousSpectators: tournament.isAnonymousSpectators,
-            hideMmr: false, // S8: from the preset (free set, A40)
-
-            // Roster visibility inherited from tournament
-            rosterVisibility: tournament.rosterVisibility,
-
-            // Ownership — inherited from tournament (Phase 12.3 follow-up)
-            requireOwnership: tournament.requireOwnership,
-
-            // Cost set inherited from tournament
-            costSetId: tournament.costSetId,
-
             // Tournament lobbies are public within the tournament
             isPublic: true,
-
-            // Disconnect behavior inherited from tournament
-            disconnectPolicy: tournament.disconnectPolicy,
-            disconnectForfeitSeconds: tournament.disconnectForfeitSeconds, // A36: one optional timer
-
-            // Game mode from tournament
-            gameMode: tournament.defaultGameMode,
-
-            // Referee exclusive concede (D-92)
-            refereeExclusiveConcede: true,
-
-            // D-11: Copy bestOf from BracketMatch (tournament match series length)
-            bestOf: bracketMatch.bestOf > 0 ? bracketMatch.bestOf : 1,
-            // S8 (A27): Blue when bracketMatch.winnerAdvantage > 0 (the WB finalist is always slot 1 = Blue)
-            bestOfNAdvantage: { tag: 'None', value: {} } as any,
-
-            // D-06: Referee controls shelving for tournament lobbies (default true)
-            refereeControlsShelving: true,
 
             // Lifecycle
             lastActivityAt: ctx.timestamp,
             stage: { tag: 'Waiting', value: {} } as any,
         }, user.id));
 
-        // D-24: host joins as referee, D-27: starts as Spectator
+        // A34: the creator is host and referee; a participant sits on its team's player seat (A26 / A35), staff on
+        // the Spectator seat (D-27).
+        const slot = isParticipant ? autoSeatSlot(ctx, lobby, user.id) : 'Spectator';
         ctx.db.LobbyMember.insert(insertWithAudit(ctx, {
             lobbyId: lobby.id,
             userId: user.id,
             isOnline: true,
-            lobbySlot: { tag: 'Spectator', value: {} } as any,
+            lobbySlot: { tag: slot, value: {} } as any,
             isReferee: true,
             isConfirmed: false,
             isCaptain: false,
@@ -213,73 +170,84 @@ export const create_tournament_lobby = spacetimedb.reducer(
             lastLineupAt: undefined,
         }, user.id));
 
-        console.log(`[TOURNAMENT_LOBBY] Lobby #${lobby.id} created for bracket match #${args.bracketMatchId} by user #${user.id}`);
+        console.log(`[TOURNAMENT_LOBBY] Lobby #${lobby.id} created for bracket match #${args.bracketMatchId} by user #${user.id} (${slot})`);
     }
 );
 
+/** Shared checks of the stand-in reducers: the match, `participants` permission (A25). */
+function standInMatch(ctx: any, bracketMatchId: number): { user: any; bracketMatch: any } {
+    const bracketMatch = ctx.db.BracketMatch.id.find(bracketMatchId);
+    if (!bracketMatch) {
+        throw new SenderError('Bracket match not found.');
+    }
+    const { user } = ensureTournamentPermission(ctx, bracketMatch.tournamentId, 'participants');
+    return { user, bracketMatch };
+}
+
 // ─── approve_stand_in ─────────────────────────────────────────────────────────
-// Approves a stand-in player for a bracket match.
-// Per D-68: TO/admin/moderator/assistant can approve anyone as a stand-in.
-// Inserts a TournamentStandIn row (bracketMatchId + userId composite PK).
-// Approval can happen before or during the lobby.
+// A25 `participants`; A35 / review §5.4 (S8d). Approves `userId` as a stand-in of `teamId` (team1 or team2 of the
+// match) for one bracket match: any verified user who is not enrolled on the other team of the match. The row
+// carries teamId, which allowedSlotsFor reads (team1 -> Blue, team2 -> Red). Approval can happen before or during
+// the lobby.
 
 export const approve_stand_in = spacetimedb.reducer(
     {
         bracketMatchId: t.u32(),
+        teamId: t.u32(),
         userId: t.u32(),
     },
     (ctx, args) => {
-        const user = getAuthenticatedUser(ctx);
+        const { user, bracketMatch } = standInMatch(ctx, args.bracketMatchId);
 
-        // Resolve bracket match and tournament
-        const bracketMatch = ctx.db.BracketMatch.id.find(args.bracketMatchId);
-        if (!bracketMatch) {
-            throw new SenderError('Bracket match not found.');
+        if (args.teamId !== bracketMatch.team1Id && args.teamId !== bracketMatch.team2Id) {
+            throw new SenderError('The team does not play this bracket match.');
         }
-
-        const tournament = ctx.db.Tournament.id.find(bracketMatch.tournamentId);
-        if (!tournament) {
-            throw new SenderError('Tournament not found.');
-        }
-
-        // Permission: TO, Admin, Moderator, or tournament assistant
-        let isAuthorized = false;
-        if (isRoleAtLeast(user.role, 'Moderator')) {
-            isAuthorized = true;
-        } else if (tournament.organizerId === user.id) {
-            isAuthorized = true;
-        } else {
-            const assistant = [...ctx.db.TournamentAssistant.by_tournament_and_user.filter([bracketMatch.tournamentId, user.id])][0];
-            if (assistant) {
-                isAuthorized = true;
-            }
-        }
-
-        if (!isAuthorized) {
-            throw new SenderError('Only a tournament organizer, assistant, moderator, or admin can approve stand-ins.');
-        }
-
-        // Validate target user exists
         const targetUser = ctx.db.User.id.find(args.userId);
         if (!targetUser) {
             throw new SenderError('Target user not found.');
         }
-
-        // Check not already approved for this match
+        if (targetUser.isGuest) {
+            throw new SenderError('A stand-in must be a verified user.');
+        }
+        const otherTeamId = args.teamId === bracketMatch.team1Id ? bracketMatch.team2Id : bracketMatch.team1Id;
+        const membership = [...ctx.db.TournamentTeamMember.by_tournament_and_user.filter([bracketMatch.tournamentId, args.userId])][0];
+        if (membership && otherTeamId !== undefined && membership.teamId === otherTeamId) {
+            throw new SenderError('A stand-in cannot be enrolled on the other team of the match.');
+        }
         const existing = [...ctx.db.TournamentStandIn.by_match_and_user.filter([args.bracketMatchId, args.userId])][0];
         if (existing) {
             throw new SenderError('Stand-in already approved for this bracket match.');
         }
 
-        // Insert TournamentStandIn row
         ctx.db.TournamentStandIn.insert(insertWithAudit(ctx, {
             id: 0,
             bracketMatchId: args.bracketMatchId,
-            teamId: 0, // S8 (A35): the team the stand-in covers (team1 -> Blue, team2 -> Red), a reducer argument
+            teamId: args.teamId, // A35: team1 -> Blue, team2 -> Red
             userId: args.userId,
             approvedByUserId: user.id,
         }, user.id));
 
-        console.log(`[TOURNAMENT_LOBBY] Stand-in user #${args.userId} approved for bracket match #${args.bracketMatchId} by user #${user.id}`);
+        console.log(`[TOURNAMENT_LOBBY] Stand-in user #${args.userId} approved for team #${args.teamId} in bracket match #${args.bracketMatchId} by user #${user.id}`);
+    }
+);
+
+// ─── revoke_stand_in ──────────────────────────────────────────────────────────
+// A25 `participants` (S8d). Deletes the stand-in approval of `userId` for the bracket match. A seat the stand-in
+// already holds in a lobby is not changed (seat rules apply to the next join or move).
+
+export const revoke_stand_in = spacetimedb.reducer(
+    {
+        bracketMatchId: t.u32(),
+        userId: t.u32(),
+    },
+    (ctx, args) => {
+        const { user } = standInMatch(ctx, args.bracketMatchId);
+        const existing = [...ctx.db.TournamentStandIn.by_match_and_user.filter([args.bracketMatchId, args.userId])][0];
+        if (!existing) {
+            throw new SenderError('No stand-in approval for this user in this bracket match.');
+        }
+        ctx.db.TournamentStandIn.id.delete(existing.id);
+
+        console.log(`[TOURNAMENT_LOBBY] Stand-in user #${args.userId} revoked for bracket match #${args.bracketMatchId} by user #${user.id}`);
     }
 );

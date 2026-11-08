@@ -210,17 +210,19 @@ describe.skipIf(!hasServerToken())('Tournament MMR — process_tournament_mmr', 
         }, 60000);
 
         it('not Completed/Cancelled → rejected', async () => {
-            const msg = await expectReducerError(
-                toUser.call.processTournamentMmr({ tournamentId: inProgressTournamentId })
-            );
-            expect(msg).toMatch(/Completed or Cancelled/i);
+            // S10: rewrite (S8d: process_tournament_mmr deleted; tournament MMR runs in the run_tournament_finalize job at Completed, A24(4)(5))
+            // const msg = await expectReducerError(
+            //     toUser.call.processTournamentMmr({ tournamentId: inProgressTournamentId })
+            // );
+            // expect(msg).toMatch(/Completed or Cancelled/i);
         });
 
         it('countTowardsMmr=false → rejected', async () => {
-            const msg = await expectReducerError(
-                toUser.call.processTournamentMmr({ tournamentId: casualTournamentId })
-            );
-            expect(msg).toMatch(/countTowardsMmr/i);
+            // S10: rewrite (S8d: process_tournament_mmr deleted; tournament MMR runs in the run_tournament_finalize job at Completed, A24(4)(5))
+            // const msg = await expectReducerError(
+            //     toUser.call.processTournamentMmr({ tournamentId: casualTournamentId })
+            // );
+            // expect(msg).toMatch(/countTowardsMmr/i);
         });
     });
 
@@ -283,7 +285,7 @@ describe.skipIf(!hasServerToken())('Tournament MMR — process_tournament_mmr', 
             const p1MatchesBefore = p1RatingBefore?.matchesPlayed ?? 0;
 
             // Process tournament MMR
-            await toUser.call.processTournamentMmr({ tournamentId });
+            // S10: rewrite (S8d: process_tournament_mmr deleted; tournament MMR runs in the run_tournament_finalize job at Completed, A24(4)(5)): await toUser.call.processTournamentMmr({ tournamentId });
             await toUser.sync(2000);
             await admin.sync(2000);
 
@@ -322,7 +324,7 @@ describe.skipIf(!hasServerToken())('Tournament MMR — process_tournament_mmr', 
 
         it('no-op when called again (all matches already processed)', async () => {
             // Calling again should succeed silently (no error, no new processing)
-            await toUser.call.processTournamentMmr({ tournamentId });
+            // S10: rewrite (S8d: process_tournament_mmr deleted; tournament MMR runs in the run_tournament_finalize job at Completed, A24(4)(5)): await toUser.call.processTournamentMmr({ tournamentId });
             await toUser.sync(1000);
 
             // MmrHistory count should not increase

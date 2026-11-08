@@ -8,7 +8,12 @@ import { initSessionForGame } from '../helpers/matchSessionInit';
 import { computeLobbyMemberRating } from '../helpers/accountRating';
 import { banRestrictionError, isBanLegal } from '../helpers/banRestriction';
 import { ensureMatchAlive } from '../helpers/disconnectHelpers';
-import { getNextSequence } from '../helpers/stepSequence';
+import { currentGameSteps, getNextSequence } from '../helpers/stepSequence';
+
+/** A65(2): the steps of the lobby's current game (the earlier games' steps stay until finalization). */
+function gameSteps(ctx: any, lobbyId: number): any[] {
+    return currentGameSteps(ctx, lobbyId, ctx.db.MatchSession.lobbyId.find(lobbyId)?.currentGameNumber ?? 1);
+}
 
 // ─── start_draft ──────────────────────────────────────────────────────────────
 // Initializes the draft for a lobby.
@@ -273,7 +278,7 @@ export const pick_character = spacetimedb.reducer(
         }
 
         // Character availability: check not already picked or banned (unless allowMirrorPicks)
-        const existingSteps = [...ctx.db.MatchSessionStep.lobby_id.filter(lobbyId)];
+        const existingSteps = gameSteps(ctx, lobbyId); // A65(2): current game only
         if (!lobby.allowMirrorPicks) {
             const alreadyPicked = existingSteps.some(
                 (s: any) =>
@@ -469,7 +474,7 @@ export const ban_character = spacetimedb.reducer(
         }
 
         // Character availability: not already banned or picked
-        const existingSteps = [...ctx.db.MatchSessionStep.lobby_id.filter(lobbyId)];
+        const existingSteps = gameSteps(ctx, lobbyId); // A65(2): current game only
         const alreadyBanned = existingSteps.some(
             (s: any) =>
                 s.action.tag === 'Ban' &&
@@ -602,7 +607,7 @@ export const timer_expiry_classic = spacetimedb.reducer(
 
             // D-43b: autoRandomPick — deterministic selection from available pool
             if (lobby.autoRandomPick) {
-                const existingSteps = [...ctx.db.MatchSessionStep.lobby_id.filter(lobbyId)];
+                const existingSteps = gameSteps(ctx, lobbyId); // A65(2): current game only
                 const bannedChars = new Set(
                     existingSteps
                         .filter((s: any) => s.action.tag === 'Ban' && s.payload.tag === 'Ban')
@@ -690,7 +695,7 @@ export const timer_expiry_classic = spacetimedb.reducer(
 
             // D-43b: autoRandomPick — deterministic selection from unban/unpicked pool
             if (lobby.autoRandomPick) {
-                const existingSteps = [...ctx.db.MatchSessionStep.lobby_id.filter(lobbyId)];
+                const existingSteps = gameSteps(ctx, lobbyId); // A65(2): current game only
                 const bannedChars = new Set(
                     existingSteps
                         .filter((s: any) => s.action.tag === 'Ban' && s.payload.tag === 'Ban')

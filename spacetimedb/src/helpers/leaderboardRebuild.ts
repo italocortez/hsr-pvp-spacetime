@@ -1,7 +1,7 @@
 // ─── Leaderboard Rebuild Helper ─────────────────────────────────────────────
 // Rebuilds the materialized Leaderboard table from MmrRating and PlayerStat data.
-// Called inline after MMR processing (finalize_match_result for standalone Ranked,
-// process_tournament_mmr for tournament batch).
+// Called inline after MMR processing (runFinalization for standalone Ranked) and once at the end of the
+// run_tournament_finalize job of an MMR tournament (S8d).
 
 import { insertWithAudit } from './auditHelpers';
 

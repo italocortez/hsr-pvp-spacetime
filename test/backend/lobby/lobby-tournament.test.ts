@@ -261,6 +261,8 @@ describe('Tournament Lobby & Stand-In', () => {
         it('approves stand-in — TournamentStandIn row created', async () => {
             await toUser.call.approveStandIn({
                 bracketMatchId,
+                // S10: rewrite (S8d: approve_stand_in takes the stand-in's teamId; compile-only, team1 of the match)
+                teamId: [...toUser.conn.db.BracketMatch.iter()].find((m) => m.id === bracketMatchId)?.team1Id ?? 0,
                 userId: standIn.userId,
             });
             await toUser.sync(1500);
@@ -278,6 +280,8 @@ describe('Tournament Lobby & Stand-In', () => {
             const err = await expectReducerError(
                 toUser.call.approveStandIn({
                     bracketMatchId,
+                    // S10: rewrite (S8d: approve_stand_in takes the stand-in's teamId; compile-only, team1 of the match)
+                    teamId: [...toUser.conn.db.BracketMatch.iter()].find((m) => m.id === bracketMatchId)?.team1Id ?? 0,
                     userId: standIn.userId,
                 })
             );
@@ -288,6 +292,8 @@ describe('Tournament Lobby & Stand-In', () => {
             const err = await expectReducerError(
                 bystander.call.approveStandIn({
                     bracketMatchId,
+                    // S10: rewrite (S8d: approve_stand_in takes the stand-in's teamId; compile-only, team1 of the match)
+                    teamId: [...toUser.conn.db.BracketMatch.iter()].find((m) => m.id === bracketMatchId)?.team1Id ?? 0,
                     userId: standIn.userId,
                 })
             );
@@ -300,6 +306,8 @@ describe('Tournament Lobby & Stand-In', () => {
             const err = await expectReducerError(
                 toUser.call.approveStandIn({
                     bracketMatchId,
+                    // S10: rewrite (S8d: approve_stand_in takes the stand-in's teamId; compile-only, team1 of the match)
+                    teamId: [...toUser.conn.db.BracketMatch.iter()].find((m) => m.id === bracketMatchId)?.team1Id ?? 0,
                     userId: 999999,
                 })
             );

@@ -360,6 +360,19 @@ _Superseded in Phase S6 execution (DECISIONS.md A57, A58): the scheduled reducer
 | `server_set_mmr` | MMR (MmrRating) | Direct upsert | writes |
 | `ensureAdmin` / `ensureTournamentHost` | All privileged reducers | Permission gate | reads |
 
+## Acceptance Scenarios (Phase S8d execution)
+
+### S8d-A1 Admin tools refuse tournament lobbies (D.8.3)
+**Given** a tournament lobby parked in AwaitingResult
+**When** a Moderator calls `admin_force_finalize` or `admin_void_match`
+**Then** rejected: "This is a tournament lobby: use resolve_bracket_match(bracketMatchId, winnerTeamId, reason) or validate_match_result(matchResultId) (results permission)." / "This is a tournament lobby: use rollback_bracket_match(bracketMatchId, reason) (results permission)."; nothing changes
+
+### S8d-A2 A Moderator restarts a stopped finalize job (A24(7))
+**Given** a Completed tournament whose finalize job stopped (a tick threw): `finalizedAt` unset, no job row
+**When** a Moderator calls `admin_restart_tournament_finalize(tournamentId)`
+**Then** one job row is scheduled now and finalization resumes at the first surviving record; a non-Moderator, an InProgress tournament, a finalized one or one with a scheduled job is rejected
+
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -380,3 +393,4 @@ _Superseded in Phase S6 execution (DECISIONS.md A57, A58): the scheduled reducer
 | "Circuit Breaker Trips" restated for the inline breaker: evaluated in `create_lobby` on the 51st guest creation inside the window (default 50 in 10 minutes), the crossing creation succeeds and trips the switch in the same transaction, one alert per trip | Phase S6 execution (DECISIONS.md A57, A58) | 2026-11-06 |
 | Admin edits of a closed game and the staff close listed as admin tools; scenario "Admin Corrects a Closed Game" added | Phase S7b execution (DECISIONS.md A60) | 2026-11-07 |
 | `admin_set_bracket_winner` removed; scenario "Staff Correct a Tournament Bracket" (`resolve_bracket_match` / `rollback_bracket_match`) added | Phase S8c execution (DECISIONS.md A23, A24(3), A25) | 2026-11-07 |
+| Scenario S8d-A1: admin tools redirect tournament lobbies to the bracket reducers | Phase S8d execution (D.8.3) | 2026-11-07 |

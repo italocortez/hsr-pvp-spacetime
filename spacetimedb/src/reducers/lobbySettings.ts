@@ -6,6 +6,7 @@ import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { ensureLobbyMember, ensureHostOrAbove, ensureStageIs, slotTeam, slotIsCoach, slotIsSpectator, slotToTeamSide } from '../helpers/lobbyHelpers';
 import { ensureBestOf, normalizeLobbyName, resolveAdvantage } from '../helpers/seriesSettings';
 import { ensureCostSetCovers, ensureSelectableCostSet } from '../helpers/costSetGuards';
+import { ensureSeatAllowed } from '../helpers/tournamentLobbySides';
 
 // ─── update_lobby_settings ────────────────────────────────────────────────────
 // Updates all mutable lobby configuration fields.
@@ -266,6 +267,10 @@ export const set_team_slot = spacetimedb.reducer(
         // Find target member
         const targetMember = ensureLobbyMember(ctx, lobbyId, targetUserId);
 
+        // A35 / D.8.5 (S8d): in a tournament lobby the target may only take a slot of allowedSlotsFor (its team's
+        // player / coach slots, Spectator always); casual lobbies allow every slot.
+        ensureSeatAllowed(ctx, lobby, targetUserId, args.lobbySlot.tag);
+
         const newSlotTag = args.lobbySlot.tag;
         const newTeam = slotTeam(args.lobbySlot);
         const currentTeam = slotTeam(targetMember.lobbySlot);
@@ -477,6 +482,10 @@ export const shuffle_teams = spacetimedb.reducer(
         }
         ensureHostOrAbove(ctx, lobby, user);
         ensureStageIs(lobby, 'Waiting');
+        // A35 (S8d review): a shuffle would seat team1 on Red while the bracket credits Blue = team1.
+        if (lobby.isTournamentControlled) {
+            throw new SenderError('Seats in a tournament lobby follow the bracket (A35); shuffling is not available.');
+        }
 
         const members = [...ctx.db.LobbyMember.lobby_id.filter(lobbyId)];
         const newSlot = new Map<number, { tag: string }>();

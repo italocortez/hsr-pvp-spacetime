@@ -114,6 +114,14 @@ export const EquipLightconePayload = t.object('EquipLightconePayload', {
     costPaid: t.f32(),             // LC cost deducted from LC budget
 });
 
+// S7b hand-off (landed in S8d): unequip_lightcone removes the latest light cone still equipped on characterName; refunded = that
+// equip's costPaid, returned to the side's light-cone budget (current game).
+export const UnequipLightconePayload = t.object('UnequipLightconePayload', {
+    characterName: t.string(),
+    lightconeName: t.string(),
+    refunded: t.f32(),
+});
+
 export const ArrangeLineupPayload = t.object('ArrangeLineupPayload', {
     positions: t.string(),         // JSON string of position array (order of characters)
 });
@@ -152,6 +160,7 @@ export const StepPayload = t.enum('StepPayload', {
     ArrangeLineup: ArrangeLineupPayload,
     SetEidolon: SetEidolonPayload,     // A60 (S7b)
     ConfirmGame: ConfirmGamePayload,   // A60 (S7b)
+    UnequipLightcone: UnequipLightconePayload, // S7b hand-off (unequip_lightcone)
 });
 
 // -------------------- NEW STRUCTS --------------------

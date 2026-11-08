@@ -2,6 +2,7 @@ import spacetimedb from '../schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser } from '../helpers/ensurePermissions';
 import { updateWithAudit } from '../helpers/auditHelpers';
+import { hasTournamentPermission } from '../helpers/tournamentPermissions';
 
 // ─── transfer_referee ─────────────────────────────────────────────────────────
 // Transfers the referee flag from the caller to another lobby member.
@@ -51,7 +52,8 @@ export const transfer_referee = spacetimedb.reducer(
 
 // ─── reclaim_referee ──────────────────────────────────────────────────────────
 // Reclaims the referee flag from the current holder back to the lobby host.
-// Permission: lobby host only.
+// Permission: lobby host only. D.8.4 (S8d): in a tournament lobby also a seated (member) staff member with the
+// `results` permission (canResolveResults assistant, organizer, Moderator+), who takes the flag themself.
 // NOTE: Auto-assignment of the referee flag at lobby creation is deferred to Phase 9.
 
 export const reclaim_referee = spacetimedb.reducer(
@@ -66,7 +68,13 @@ export const reclaim_referee = spacetimedb.reducer(
         if (!lobby) {
             throw new SenderError('Lobby not found.');
         }
-        if (lobby.hostUserId !== user.id) {
+        const isTournamentStaff = lobby.isTournamentControlled && lobby.tournamentId !== undefined
+            && [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, user.id])].length > 0
+            && (() => {
+                const tournament = ctx.db.Tournament.id.find(lobby.tournamentId);
+                return !!tournament && hasTournamentPermission(ctx, user, tournament, 'results');
+            })();
+        if (lobby.hostUserId !== user.id && !isTournamentStaff) {
             throw new SenderError('Only the lobby host can reclaim the referee flag.');
         }
 
@@ -80,7 +88,7 @@ export const reclaim_referee = spacetimedb.reducer(
             return;
         }
 
-        // Find host's LobbyMember row
+        // Find the caller's LobbyMember row (the host, or the D.8.4 tournament staff member)
         const hostMember = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, user.id])][0];
         if (!hostMember) {
             throw new SenderError('Host is not a member of this lobby.');

@@ -249,7 +249,10 @@ describe('F8 / A22(4): result reducers in AwaitingResult', () => {
         test.db.Lobby.id.update({ ...lobbyRow(test, s.lobbyId), isTournamentControlled: true });
         tx(test, s.host, (ctx) => M.concede_match(ctx, { lobbyId: s.lobbyId, losingTeamSide: 1 }));
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('AwaitingResult');
-        expect(test.db.MatchResultRecord.id.find(recordId)?.status.tag).toBe('Pending');
+        // T-S8d (A54): the concede settles the lobby's one record in place (Validated, Concede), no second record.
+        expect(test.db.MatchResultRecord.id.find(recordId)?.status.tag).toBe('Validated');
+        expect(test.db.MatchResultRecord.id.find(recordId)?.matchEndReason?.tag).toBe('Concede');
+        expect([...test.db.MatchResultRecord.lobby_id.filter(s.lobbyId)]).toHaveLength(1);
 
         const blueScores = scores(s, 'Blue', 1000);
         expectReject(test, s.host, (ctx) => M.record_group_scores(ctx, blueScores), 'Match has been conceded.');

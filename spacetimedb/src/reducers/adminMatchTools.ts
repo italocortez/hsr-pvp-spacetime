@@ -5,6 +5,17 @@ import { runFinalization } from '../helpers/finalizationHelpers';
 import { hardDeleteLobby } from './lobbyGc';
 import { updateWithAudit } from '../helpers/auditHelpers';
 import { slotTeam, slotIsCoach, slotIsSpectator } from '../helpers/lobbyHelpers';
+import { findLobbyResult } from '../helpers/scoringHelpers';
+
+/**
+ * ACCESS-SECURITY-OPS §D.8.3 (S8d): the casual admin tools do not touch tournament lobbies, whose records are the input
+ * of the Completed finalization (A24); staff use the bracket reducers instead.
+ */
+function rejectTournamentLobby(lobby: any, pointer: string): void {
+    if (lobby.isTournamentControlled) {
+        throw new SenderError(`This is a tournament lobby: use ${pointer} (results permission).`);
+    }
+}
 
 // ─── Permission helper ───────────────────────────────────────────────────────
 // Checks Moderator+ role, OR tournament organizer for tournament-controlled lobbies.
@@ -27,7 +38,8 @@ function ensureAdminOrOrganizer(ctx: any, user: any, lobby: any): void {
 
 // ─── admin_force_finalize ────────────────────────────────────────────────────
 // Resolves an AwaitingResult match by setting a winner and running full
-// finalization pipeline. Per D-52.
+// finalization pipeline. Per D-52. D.8.3 (S8d): standalone lobbies only; a tournament lobby points at
+// resolve_bracket_match (a Submitted / Disputed tournament record: validate_match_result).
 
 export const admin_force_finalize = spacetimedb.reducer(
     {
@@ -42,6 +54,7 @@ export const admin_force_finalize = spacetimedb.reducer(
             throw new SenderError('Lobby not found.');
         }
 
+        rejectTournamentLobby(lobby, 'resolve_bracket_match(bracketMatchId, winnerTeamId, reason) or validate_match_result(matchResultId)');
         ensureAdminOrOrganizer(ctx, user, lobby);
 
         // D-52: Only AwaitingResult
@@ -49,8 +62,8 @@ export const admin_force_finalize = spacetimedb.reducer(
             throw new SenderError('Can only force-finalize matches in AwaitingResult stage.');
         }
 
-        // Find MatchResultRecord
-        const matchResult = [...ctx.db.MatchResultRecord.lobby_id.filter(lobbyId)][0];
+        // A54: the lobby's one MatchResultRecord
+        const matchResult = findLobbyResult(ctx, lobbyId);
         if (!matchResult) {
             throw new SenderError('No match result record found for this lobby.');
         }
@@ -60,31 +73,15 @@ export const admin_force_finalize = spacetimedb.reducer(
             throw new SenderError('This match has already been processed. Cannot force-finalize.');
         }
 
-        // Determine winnerTeamSide from winnerTeamId
-        // Convention: team1 = Blue, team2 = Red on BracketMatch
-        // For non-tournament matches: 1 = Blue wins, 2 = Red wins (admin tool convention)
+        // Determine winnerTeamSide from winnerTeamId: winnerTeamId is a team side indicator
+        // (1 = Blue wins, 2 = Red wins, admin tool convention; tournament lobbies are rejected above, D.8.3)
         let winnerTeamSide: 'Blue' | 'Red' | undefined;
-
-        if (lobby.isTournamentControlled && matchResult.bracketMatchId) {
-            const bracketMatch = ctx.db.BracketMatch.id.find(matchResult.bracketMatchId);
-            if (bracketMatch) {
-                if (winnerTeamId === bracketMatch.team1Id) {
-                    winnerTeamSide = 'Blue';
-                } else if (winnerTeamId === bracketMatch.team2Id) {
-                    winnerTeamSide = 'Red';
-                }
-            }
-        } else {
-            // Non-tournament: winnerTeamId is used as a team side indicator
-            // 1 = Blue wins, 2 = Red wins (convention for admin tool)
-            if (winnerTeamId === 1) winnerTeamSide = 'Blue';
-            else if (winnerTeamId === 2) winnerTeamSide = 'Red';
-        }
+        if (winnerTeamId === 1) winnerTeamSide = 'Blue';
+        else if (winnerTeamId === 2) winnerTeamSide = 'Red';
 
         // A31: no draws. A concede record keeps its winner; otherwise winnerTeamId must name a side.
-        // S8 (D.8.3): for tournament lobbies this reducer points at resolve_bracket_match instead.
         if (!winnerTeamSide && matchResult.winnerTeamSide === undefined) {
-            throw new SenderError('winnerTeamId must name the winning team (1 = Blue, 2 = Red, or a bracket team id): no draws.');
+            throw new SenderError('winnerTeamId must name the winning team (1 = Blue, 2 = Red): no draws.');
         }
         const matchEndReason: any = { tag: 'Completed', value: {} };
 
@@ -107,7 +104,8 @@ export const admin_force_finalize = spacetimedb.reducer(
 
 // ─── admin_void_match ────────────────────────────────────────────────────────
 // Erases an AwaitingResult match completely without running finalization.
-// No stats written. Per D-53, D-55.
+// No stats written. Per D-53, D-55. D.8.3 (S8d): standalone lobbies only; a tournament lobby points at
+// rollback_bracket_match (reverts the bracket, marks the record Voided, hard-deletes the lobby, A24(3)).
 
 export const admin_void_match = spacetimedb.reducer(
     {
@@ -121,6 +119,7 @@ export const admin_void_match = spacetimedb.reducer(
             throw new SenderError('Lobby not found.');
         }
 
+        rejectTournamentLobby(lobby, 'rollback_bracket_match(bracketMatchId, reason)');
         ensureAdminOrOrganizer(ctx, user, lobby);
 
         // D-53: Only AwaitingResult
@@ -128,8 +127,8 @@ export const admin_void_match = spacetimedb.reducer(
             throw new SenderError('Can only void matches in AwaitingResult stage.');
         }
 
-        // Find MatchResultRecord
-        const matchResult = [...ctx.db.MatchResultRecord.lobby_id.filter(lobbyId)][0];
+        // A54: the lobby's one MatchResultRecord
+        const matchResult = findLobbyResult(ctx, lobbyId);
 
         // D-56: Cannot void already-processed matches
         if (matchResult?.mmrProcessedAt !== undefined) {

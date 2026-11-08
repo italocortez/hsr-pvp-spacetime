@@ -3,7 +3,8 @@ import { t, SenderError } from 'spacetimedb/server';
 import { ensureModerator } from '../helpers/ensurePermissions';
 import { ensureTournamentPermission } from '../helpers/tournamentPermissions';
 import { findEnrolled, findMembership, refreshTeamStatus, transferTournamentCaptain, updateEnrolled } from '../helpers/tournamentHelpers';
-import { applyBracketResult } from '../helpers/bracketResults';
+import { applyBracketResult, rollbackBracketResult, seriesGames } from '../helpers/bracketResults';
+import { recordWinnerTeamId, voidTournamentLobby } from '../helpers/tournamentResults';
 import { setSlotBye, settle } from '../helpers/bracketStore';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { deleteCalendarEventForBracketMatch } from '../helpers/calendarCascade';
@@ -27,9 +28,10 @@ const ACTIVE_LOBBY_STAGES = new Set(['Drafting', 'Equipping', 'Scoring']);
 //     Ready -> applyBracketResult(opponent, decidedBy Dq, 0-0); Pending (opponent not known yet) -> the team's
 //     slot becomes a BYE and `settle` walks the opponent over once it arrives. Repeated until the team holds
 //     no open slot (a double-elimination loss routes it into the losers bracket first).
-//   - Live lobby of the team (unchanged, S8d revisits): Drafting / Equipping / Scoring -> force-concede on the
-//     last member (D-25); Shelved / BetweenGames -> hard-delete (D-26); a member DQ'd from a team that plays on
-//     is kicked from an active lobby.
+//   - Live lobby of the team: Drafting / Equipping / Scoring -> force-concede on the last member (D-25; A54: the
+//     lobby's record becomes the Validated concede record, the bracket is already settled by the DQ, and the lobby
+//     parks until the finalize job); Shelved / BetweenGames -> hard-delete (D-26); a member DQ'd from a team that
+//     plays on is kicked from an active lobby.
 
 /** Settles every open bracket slot of a disqualified team (see dq_participant). */
 function settleDisqualifiedTeam(ctx: any, tournamentId: number, teamId: number, actorId: number): void {
@@ -174,7 +176,15 @@ export const dq_participant = spacetimedb.reducer(
 //   - Uses winnerTeamSide instead of winnerUserId.
 //   - Uses matchEndReason instead of matchOutcome.
 //   - Derives tournamentId from bracketMatch.tournamentId (no tournamentId column on MatchResultRecord).
-// Permission: results (A25) for tournament matches; Moderator+ for non-tournament matches. S8d replaces it.
+// Permission: results (A25) for tournament matches; Moderator+ for non-tournament matches.
+// A24(1)(3), TD-13/14 (override = rollback + re-apply through the single writer), for a tournament record, the
+// tournament InProgress, the record not Voided:
+//   - Validated(winner): the record becomes Validated (Completed, settledAt) for that side; its bracket match is
+//     rolled back first when it is Decided for the other team (refused while anything downstream is Decided), then
+//     decided for the record's team (decidedBy Staff, the series score of the session). The lobby stays parked.
+//   - Rejected: the bracket match is rolled back when it is Decided for this record's team, and the lobby is voided
+//     (record kept as Rejected for audit, lobby hard-deleted so a replay lobby can be made, A24(3)).
+// Standalone records keep the old behaviour (status / winner / end reason written on the record only).
 
 export const override_match_result = spacetimedb.reducer(
     {
@@ -243,17 +253,63 @@ export const override_match_result = spacetimedb.reducer(
             }
         }
 
+        // A24(1)(3): a tournament record goes through the bracket's single writer (see the header).
+        const bracketMatch = matchResult.isTournamentControlled && matchResult.bracketMatchId !== undefined
+            ? ctx.db.BracketMatch.id.find(matchResult.bracketMatchId)
+            : undefined;
+        if (bracketMatch) {
+            const tournament = ctx.db.Tournament.id.find(bracketMatch.tournamentId);
+            if (!tournament || tournament.stage.tag !== 'InProgress') throw new SenderError('Tournament is not in progress.');
+            if (matchResult.status.tag === 'Voided') throw new SenderError('This result was voided by a rollback.');
+            // S8d review: only a submitted, disputed or validated result of a parked lobby (a Pending record belongs to a
+            // match still being played; a voided lobby has nothing left to finalize).
+            if (!['Submitted', 'Disputed', 'Validated'].includes(matchResult.status.tag)) {
+                throw new SenderError(`Only a Submitted, Disputed or Validated tournament result can be overridden (this one is ${matchResult.status.tag}).`);
+            }
+            if (!ctx.db.Lobby.id.find(matchResult.lobbyId)) {
+                throw new SenderError('The match lobby no longer exists; use resolve_bracket_match.');
+            }
+        }
+
         // Update the MatchResultRecord using winnerTeamSide + matchEndReason (D-30, D-31)
         ctx.db.MatchResultRecord.id.update(updateWithAudit(ctx, matchResult, {
             status: { tag: newStatusTag, value: {} } as any,
             winnerTeamSide: newStatusTag === 'Validated' ? winnerTeamSide : undefined,
-            // A31: a Validated result always has a winner (checked above). S8 (A24): override_match_result is
-            // replaced by resolve_bracket_match / rollback_bracket_match through the single writer.
+            // A31: a Validated result always has a winner (checked above).
             matchEndReason: newStatusTag === 'Validated'
                 ? { tag: 'Completed', value: {} } as any
                 : matchResult.matchEndReason,
             disputeReason: reason, // Reuse disputeReason field to store override reason
+            ...(newStatusTag === 'Validated' ? { settledAt: ctx.timestamp } : {}),
         }, actingUserId));
+
+        if (bracketMatch) {
+            const updated = ctx.db.MatchResultRecord.id.find(matchResultId)!;
+            if (newStatusTag === 'Validated') {
+                const teamId = recordWinnerTeamId(bracketMatch, updated);
+                if (teamId === undefined) throw new SenderError('The bracket match has no team on that side.');
+                if (bracketMatch.state.tag === 'Decided' && bracketMatch.winnerTeamId !== teamId) {
+                    rollbackBracketResult(ctx, bracketMatch.id, actingUserId);
+                }
+                const fresh = ctx.db.BracketMatch.id.find(bracketMatch.id)!;
+                if (fresh.state.tag === 'Ready') {
+                    const session = ctx.db.MatchSession.lobbyId.find(updated.lobbyId);
+                    applyBracketResult(ctx, bracketMatch.id, teamId, 'Staff',
+                        session ? seriesGames(session) : { team1: 0, team2: 0 }, actingUserId);
+                }
+            } else {
+                const previousTeam = recordWinnerTeamId(bracketMatch, matchResult);
+                if (bracketMatch.state.tag === 'Decided' && previousTeam !== undefined && bracketMatch.winnerTeamId === previousTeam) {
+                    rollbackBracketResult(ctx, bracketMatch.id, actingUserId);
+                }
+                if (ctx.db.Lobby.id.find(updated.lobbyId)) voidTournamentLobby(ctx, updated.lobbyId, actingUserId);
+                // voidTournamentLobby marks the record Voided; keep the Rejected status the caller asked for.
+                const kept = ctx.db.MatchResultRecord.id.find(matchResultId);
+                if (kept && kept.status.tag !== 'Rejected') {
+                    ctx.db.MatchResultRecord.id.update(updateWithAudit(ctx, kept, { status: { tag: 'Rejected', value: {} } as any }, actingUserId));
+                }
+            }
+        }
 
         console.log(`[MATCH] Match result #${matchResultId} overridden to "${newStatusTag}" by user #${actingUserId}: ${reason}`);
     }

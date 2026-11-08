@@ -15,4 +15,5 @@ export default {
   characterName: __t.string(),
   lightconeName: __t.string(),
   superimposition: __t.u8(),
+  gameNumber: __t.option(__t.u8()),
 };

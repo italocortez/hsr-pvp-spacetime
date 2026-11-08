@@ -551,6 +551,56 @@ Note: TournamentEnrolled row does NOT contain hsrAccountId — that column was r
 **When:** Staff with the participants permission call `dq_participant(tournamentId, userId, reason, dqWholeTeam?)` for T's last member, or for any member with `dqWholeTeam = true`
 **Then:** Every disqualified member's enrolment is Disqualified (rows kept); T becomes Disqualified (row kept); T's open matches are settled for the opponents (decidedBy Dq) or turned into BYE slots while the opponent is unknown. A DQ that leaves members on the team only removes that player (captain transferred; before generation the team status is refreshed, after it the team keeps its status and plays with stand-ins). In Seeding after generation the DQ stamps `lastSeedChangeAt`, so the bracket must be regenerated before InProgress.
 
+## Acceptance Scenarios (Phase S8d execution)
+
+### S8d-T1 A participant creates the match lobby (A34, A35, A27)
+**Given** an InProgress tournament, a Ready bracket match, the caller a member of team1
+**When** the caller calls `create_tournament_lobby(bracketMatchId)`
+**Then** a Waiting lobby exists with the tournament's integrity set, the preset's free set, `bestOf` from the match, `bestOfNAdvantage` Blue when `winnerAdvantage > 0`; the caller is host and referee on `BluePlayer`
+
+### S8d-T2 Staff create the lobby as a spectator referee (A34)
+**Given** an assistant with `canManageBracket`, not in any lobby
+**When** the assistant creates the lobby
+**Then** the assistant is host and referee on `Spectator`; a second lobby for the match is rejected: "A lobby already exists for this bracket match."; a user already in a lobby is rejected by the one-lobby rule
+
+### S8d-T3 Lobby creation preconditions
+**When** the match is not Ready, the tournament is not InProgress, or the caller is neither a participant nor `bracket` staff
+**Then** rejected: "<key> is <state>; a lobby needs a Ready match." · "Tournament is not in progress." · "You are not authorized to create a lobby for this bracket match."
+
+### S8d-T4 A deleted preset falls back to the system preset (A33a)
+**Given** `Tournament.lobbyPresetId` names a deleted preset
+**When** a lobby is created
+**Then** its free set equals the system preset's values
+
+### S8d-T5 Stand-ins (review §5.4)
+**When** `participants` staff call `approve_stand_in(matchId, team1Id, userId)`
+**Then** the row carries `teamId = team1Id`; the user may sit on Blue. A member of team2, a guest, a team that does not play the match, or a duplicate is rejected; `revoke_stand_in` deletes the row ("No stand-in approval for this user in this bracket match." when none)
+
+### S8d-T6 Completed: format check and placements (A24(4))
+**Given** a single-elimination tournament with every match settled and every tournament lobby parked in AwaitingResult
+**When** the organizer advances to Completed
+**Then** champion 1, final loser 2, third-place winner 3 (or both semifinal losers 3 without a third-place match), `finalizationStartedAt` set, one `TournamentFinalizeJob { cursor: 0 }`. A GroupInto* tournament without elimination rows is rejected: "The elimination stage has not been generated yet (advance_group_stage)."; a live (non-AwaitingResult) lobby: "N tournament lobby(ies) still open."
+
+### S8d-T7 The finalize job (D.8.1)
+**Given** a Completed MMR tournament with 6 Validated records and 1 Voided record
+**When** the job runs
+**Then** each tick processes at most 4 records in bracket order and reschedules first; Validated records get history rows (with `tournamentId` / `bracketMatchId`), stats, MMR (`MmrHistory.matchHistoryId` = the history row) and their lobby deleted; the Voided record is deleted without effect; the last tick rebuilds the leaderboard once and sets `finalizedAt`
+
+### S8d-T8 Cancelled counts stats, never MMR (A24(5))
+**Given** an InProgress MMR tournament with one parked Validated record and one live lobby
+**When** the organizer cancels
+**Then** the live lobby is voided (record Voided, lobby deleted); bracket matches, teams and assistants stay; the job finalizes the parked record with stats and no `MmrHistory` row
+
+### Edge cases (Phase S8d execution)
+
+| Case | Expected | Notes |
+|---|---|---|
+| Cancel cascade (supersedes "Cancel Tournament" / "Cancel InProgress Tournament" above) | BracketMatch, TournamentTeam, TournamentTeamMember, TournamentAssistant kept; requests, calendar events, player-account locks deleted | review §5.1, A24(5) |
+| Withdrawn / Disqualified teams at Completed | no `finalPlacement` | placements rank the others |
+| Job tick for a tournament row that is gone | ends silently | the job row was consumed |
+| A second start of the job | no second job row | `finalizationStartedAt` re-stamped |
+
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -577,6 +627,7 @@ Note: TournamentEnrolled row does NOT contain hsrAccountId — that column was r
 | Moderator promote/demote with role guards | Phase 3 execution | 2026-03-19 |
 | Withdraw preserves row (status=Withdrawn), double-withdraw guard | Phase 3 execution | 2026-03-19 |
 | bestOf cap {1, 3} on `defaultBestOf` (grand final follows); `winnerAdvantage < ceil(grandFinalBestOf / 2)` replaces the 0-3 range; `Tournament.lobbyPresetId` = system preset at creation, swappable through the optional `update_tournament` argument while editable; cost-set guards | Phase S6 execution (DECISIONS.md A27, A28, A33a, A38(2); backlog #2, #7, #8) | 2026-11-06 |
+| Lobbies (creator host + referee, integrity / free sets, A27 advantage), stand-ins with `teamId` and `revoke_stand_in`, Completed (format check, placements, finalize job) and Cancelled (bracket / teams kept, live lobbies voided, stats without MMR); scenarios S8d-T1..T8 | Phase S8d execution (DECISIONS.md A24, A27, A33, A33a, A34, A35) | 2026-11-07 |
 
 | Stage guard: Seeding->InProgress requires bracket rows | Phase 4 execution | 2026-03-18 |
 | server_set_mmr reducer for test seeding | Phase 4 UAT | 2026-03-19 |

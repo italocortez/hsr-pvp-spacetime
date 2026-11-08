@@ -463,7 +463,8 @@ describe.skipIf(!hasServerToken())('Auto-Pick Ownership Pool (D-I-04)', () => {
             const bracketMatchId = bracketMatches[0].id;
 
             // Approve stand-in for this bracket match (D-68)
-            await toUser.call.approveStandIn({ bracketMatchId, userId: standIn.userId });
+            // S10: rewrite (S8d: approve_stand_in takes the stand-in's teamId; compile-only, team1 of the match)
+            await toUser.call.approveStandIn({ bracketMatchId, teamId: bracketMatches[0].team1Id ?? 0, userId: standIn.userId });
             await toUser.sync(1000);
 
             // Create tournament lobby

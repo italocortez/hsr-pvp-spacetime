@@ -465,6 +465,18 @@ All functions are pure math with zero database access.
 | `Archetype` + `HsrCharacterArchetype` | `computeAccountRating` | Archetype coverage drives horizontal score | reads |
 | `concedeFlags.doMmr` | Concede finalization matrix | Ranked non-tournament: true; others: false | reads |
 
+## Acceptance Scenarios (Phase S8d execution)
+
+### S8d-M1 Tournament MMR at Completed (A24(4))
+**Given** a `countTowardsMmr` tournament whose matches are Validated and parked
+**When** the tournament is Completed and the finalize job runs
+**Then** every participant gets `MmrHistory` rows whose `matchHistoryId` names the match's history row, in bracket order; the leaderboard is rebuilt once
+
+### S8d-M2 No MMR for a cancelled tournament (A24(5))
+**When** the tournament is cancelled instead
+**Then** stats and history are written for the settled matches, no `MmrHistory` row and no rating change
+
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -492,6 +504,7 @@ All functions are pure math with zero database access.
 | D-42: tournamentId removed from MatchResultRecord; derived via BracketMatch chain | Phase 7 execution | 2026-03-25 |
 | Full hydration from codebase | Phase 13 normalization | 2026-04-09 |
 | MMR snapshot input: MAX of the selected accounts → merged rating over the union of their rosters; ratchet kept; scenarios "Merged Account Rating for Multi-Account Players", "Snapshot Ratchet" added | Phase S6 execution (backlog #10) | 2026-11-06 |
+| Scenarios S8d-M1, S8d-M2: tournament MMR in the finalize job, none on Cancelled | Phase S8d execution (DECISIONS.md A24(4)(5)) | 2026-11-07 |
 
 ---
 

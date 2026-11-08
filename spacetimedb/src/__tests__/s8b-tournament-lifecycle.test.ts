@@ -447,10 +447,14 @@ describe('stage machine (review §5.1)', () => {
 
     it('advance_tournament_stage → Cancelled runs the cancel cascade; terminal stages cannot be cancelled', () => {
         const { test, org, id, ts } = seeded();
+        const bracketCount = [...test.db.BracketMatch.tournament_id.filter(id)].length;
         advanceStage(test, org, id, 'Cancelled');
         expect(stageOf(test, id)).toBe('Cancelled');
-        expect(teams(test, id)).toHaveLength(0);
-        expect([...test.db.BracketMatch.tournament_id.filter(id)]).toHaveLength(0);
+        // T-S8d (A24(5), S8d interpretation 2): the cascade keeps teams and bracket rows (display and the finalize
+        // job's bracket order) and starts the finalize job; it no longer deletes them.
+        expect(teams(test, id)).toHaveLength(4);
+        expect([...test.db.BracketMatch.tournament_id.filter(id)]).toHaveLength(bracketCount);
+        expect([...test.db.TournamentFinalizeJob.tournament_id.filter(id)]).toHaveLength(1);
         expect(enrolled(test, id, ts[0].captain.userId)).toBeDefined(); // enrolments kept (audit trail)
         expectReject(test, org, (ctx) => M.cancel_tournament(ctx, { tournamentId: id }),
             'Cannot cancel a tournament that is already Cancelled.');
@@ -483,7 +487,9 @@ describe('admin_cancel_idle_tournaments (A24(6))', () => {
         tx(test, mod, (ctx) => M.admin_cancel_idle_tournaments(ctx, { idleDays: 7 }));
         expect(stageOf(test, idleReg)).toBe('Cancelled');
         expect(stageOf(test, idleSeeded)).toBe('Cancelled');
-        expect(teams(test, idleSeeded)).toHaveLength(0);
+        // T-S8d (A24(5), S8d interpretation 2): teams are kept by the cancel cascade; the finalize job starts.
+        expect(teams(test, idleSeeded)).toHaveLength(2);
+        expect([...test.db.TournamentFinalizeJob.tournament_id.filter(idleSeeded)]).toHaveLength(1);
         expect(stageOf(test, recent)).toBe('Registration');
         expect(stageOf(test, draft)).toBe('Draft');
         expect(stageOf(test, done)).toBe('Completed');

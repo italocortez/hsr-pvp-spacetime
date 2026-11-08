@@ -6,6 +6,7 @@ import { SenderError } from 'spacetimedb/server';
 import { insertWithAudit, updateWithAudit } from './auditHelpers';
 import { runFinalization } from './finalizationHelpers';
 import { getNextSequence } from './stepSequence';
+import { handOffToBracket } from './tournamentResults';
 import {
     findGame,
     isClosedGame,
@@ -106,8 +107,12 @@ export function closeGame(
  * submit_match_result reducer, without its confirmation check and override arguments). Every game of the record must
  * be closed with a complete result (defensive); series winner = closed-game wins + the A27 head start (a level
  * series is rejected, which closeGame cannot produce). Casual → Validated and runFinalization inline (D-04 / D-37);
- * otherwise Submitted (staff backlog: force-finalize; tournament routing unchanged). refereeUserId = the closer.
- * The lobby moves to AwaitingResult with the system chat line.
+ * otherwise Submitted (staff backlog: force-finalize). refereeUserId = the closer. The lobby moves to AwaitingResult
+ * with the system chat line.
+ * Tournament records (A24(1)(2)(4), A36, S8d): Submitted when the tournament has requireResultValidation (forced on
+ * for countTowardsMmr; staff validate with validate_match_result), otherwise Validated with settledAt and the
+ * bracket hand-off (handOffToBracket); never finalized here: the lobby parks in AwaitingResult until the tournament's
+ * Completed / Cancelled finalize job (casual tournament matches validate but do not finalize, A24(4)).
  */
 export function submitSeriesResult(ctx: any, record: any, lobby: any, actorId: number): void {
     const games = [...ctx.db.MatchResultGame.match_result_id.filter(record.id)]
@@ -122,13 +127,18 @@ export function submitSeriesResult(ctx: any, record: any, lobby: any, actorId: n
         throw new SenderError(`The series is level (${tally.blue}-${tally.red}): play the deciding game first.`);
     }
     const winnerTeamSide: TeamTag = tally.blue > tally.red ? 'Blue' : 'Red';
-    const isCasual = record.matchType.tag === 'Casual';
+    const isTournament = record.isTournamentControlled && record.bracketMatchId !== undefined;
+    const tournament = isTournament && lobby?.tournamentId !== undefined ? ctx.db.Tournament.id.find(lobby.tournamentId) : undefined;
+    // A36: a tournament's own validation gate decides; a casual standalone match validates at once.
+    const validates = isTournament ? !(tournament?.requireResultValidation ?? true) : record.matchType.tag === 'Casual';
+    const isCasual = validates && !isTournament; // finalized inline below
 
     ctx.db.MatchResultRecord.id.update(updateWithAudit(ctx, record, {
-        status: (isCasual ? { tag: 'Validated', value: {} } : { tag: 'Submitted', value: {} }) as any,
+        status: (validates ? { tag: 'Validated', value: {} } : { tag: 'Submitted', value: {} }) as any,
         winnerTeamSide: teamSideValue(winnerTeamSide),
         matchEndReason: { tag: 'Completed', value: {} } as any,
         refereeUserId: actorId,
+        ...(validates ? { settledAt: ctx.timestamp } : {}),
     }, actorId));
 
     if (lobby && lobby.stage.tag !== 'AwaitingResult' && lobby.stage.tag !== 'Finished') {
@@ -141,24 +151,26 @@ export function submitSeriesResult(ctx: any, record: any, lobby: any, actorId: n
             : 'Match complete. Stage: AwaitingResult', actorId);
     }
 
-    console.log(`[MATCH] Match result #${record.id} ${isCasual ? 'Validated (auto)' : 'Submitted'} by the close of user #${actorId}, winnerTeamSide: ${winnerTeamSide}`);
+    console.log(`[MATCH] Match result #${record.id} ${validates ? 'Validated (auto)' : 'Submitted'} by the close of user #${actorId}, winnerTeamSide: ${winnerTeamSide}`);
 
-    // Auto-finalize casual matches inline (per D-37)
+    // A24(1): a validated tournament result advances the bracket now; the record parks with the lobby (A24(2)).
+    if (isTournament && validates) handOffToBracket(ctx, ctx.db.MatchResultRecord.id.find(record.id), 'Played');
+    // Auto-finalize casual standalone matches inline (per D-37); never a tournament record (A24(4)).
     if (isCasual) runFinalization(ctx, ctx.db.MatchResultRecord.id.find(record.id), actorId);
 }
 
 /**
- * A60(7): after an Admin's edit of a closed game (the current game; see ensureOpenGame). Recomputes the game; a game
+ * A60(7), A65(4): after an Admin's edit of a closed game (`gameNumber`: the current game or an earlier closed one; see
+ * ensureOpenGame / ensureEditableGame). Recomputes that game; a game
  * that ends up a level-4 tie rejects the whole edit, unless it was already a tie closed with a staff override, whose
  * decision is kept (S7b interpretation: the override is part of the closed game). Then the tally (closed games +
  * A27 head start) is rewritten. A Submitted record keeps a decided series (its winnerTeamSide follows the tally);
  * an edit that leaves it undecided is rejected. A Pending record (closed game between games) whose series becomes
  * decided is submitted now, as the deciding close would have done.
  */
-export function recomputeSeriesAfterAdminEdit(ctx: any, lobby: any, record: any, actorId: number): void {
+export function recomputeSeriesAfterAdminEdit(ctx: any, lobby: any, record: any, actorId: number, gameNumber: number): void {
     const session = ctx.db.MatchSession.lobbyId.find(lobby.id);
     if (!session) throw new SenderError('Match session not found.');
-    const gameNumber = session.currentGameNumber;
     const before = findGame(ctx, record.id, gameNumber);
     const result = recomputeGame(ctx, record, lobby, gameNumber, actorId);
     if (!result) throw new SenderError('The edit would leave the game without a complete result.');

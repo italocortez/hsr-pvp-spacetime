@@ -208,6 +208,17 @@ Previous behavior matched on `(characterName, gameMode)` only, silently overwrit
 - `test/backend/reducers/admin/cost-set-pk.test.ts` -- asserts distinct `costSetId` rows coexist for all three cost tables; specific regression for the "default-set-overwrites-custom-set" live bug.
 - `test/backend/seed/round-trip.test.ts` -- D-21a clean-DB reseed round-trip; asserts Spine + positioning columns populate on `hsr_character` and all three cost tables contain all 3 game modes.
 
+## Phase S8d execution (ACCESS-SECURITY-OPS §D.8.3, DECISIONS.md A24)
+
+`admin_force_finalize` and `admin_void_match` reject tournament-controlled lobbies before any other check, pointing
+at `resolve_bracket_match` / `validate_match_result` (force-finalize) and `rollback_bracket_match` (void), all
+`results`. Standalone lobbies keep their behaviour; the force-finalize `winnerTeamId` is 1 = Blue, 2 = Red. Both read
+the lobby's one record (`findLobbyResult`, A54). `process_tournament_mmr` is deleted (tournament MMR runs in the
+finalize job). New staff reducer: `validate_match_result` (see [../match-results/architecture.md](../match-results/architecture.md)).
+New Moderator+ reducer: `admin_restart_tournament_finalize(tournamentId)` re-inserts a stopped finalize job (a tick
+that threw); rules in [../tournament/architecture.md](../tournament/architecture.md).
+
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -230,6 +241,7 @@ Previous behavior matched on `(characterName, gameMode)` only, silently overwrit
 | Staff close (`close_game`) and Admin edits of a closed game (role Admin, record Pending or Submitted, current game) as admin tools; cross-reference to match-results "Game package" | Phase S7b execution (DECISIONS.md A60) | 2026-11-07 |
 | Staff close restated for A63: `close_game` is the submit (captains once both are ready, staff at any time); only staff decide a tie | Phase S7b follow-up (DECISIONS.md A63) | 2026-11-07 |
 | `admin_set_bracket_winner` removed; `resolve_bracket_match` / `rollback_bracket_match` (`results`) are the staff bracket tools | Phase S8c execution (DECISIONS.md A23, A24(3), A25) | 2026-11-07 |
+| `admin_force_finalize` / `admin_void_match` reject tournament lobbies with a pointer; `process_tournament_mmr` deleted; `validate_match_result` added (D.8.3, A24) | Phase S8d execution | 2026-11-07 |
 
 ---
 

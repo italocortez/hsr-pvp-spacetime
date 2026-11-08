@@ -21,6 +21,7 @@ import { computeAnonymousLabel } from '../helpers/anonymousLabels';
 const AnonymousMatchStepRow = t.object('AnonymousMatchStepRow', {
     id: t.u32(),
     lobbyId: t.u32(),
+    gameNumber: t.u8(), // A65(3): the steps of every game stay for the series; the client shows one game at a time
     sequence: t.u32(),
     actorUserId: t.u32(),
     anonymousLabel: t.string().optional(),
@@ -55,6 +56,7 @@ export const view_my_match_steps = spacetimedb.view(
                 results.push({
                     id: step.id,
                     lobbyId: step.lobbyId,
+                    gameNumber: step.gameNumber,
                     sequence: step.sequence,
                     actorUserId: anonymize ? 0 : step.actorUserId,
                     anonymousLabel: anonymize ? step.anonymousLabel : undefined,

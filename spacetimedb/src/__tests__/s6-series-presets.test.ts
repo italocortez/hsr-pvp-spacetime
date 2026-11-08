@@ -198,9 +198,11 @@ describe('F2: game 2 of a Bo3 drafts to completion', () => {
 
         draftClassicGame(s, 2);
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Equipping');
+        // T-S8d (A65): game 1's steps stay for the series (advance_to_next_game no longer deletes them): 16 picks per game.
         const picks = steps(test, s.lobbyId).filter((x) => x.action.tag === 'Pick');
-        expect(picks).toHaveLength(16);
-        expect(picks.every((x) => x.gameNumber === 2)).toBe(true);
+        expect(picks).toHaveLength(32);
+        expect(picks.filter((x) => x.gameNumber === 1)).toHaveLength(16);
+        expect(picks.filter((x) => x.gameNumber === 2)).toHaveLength(16);
     });
 
     it('Auction: game 2 opens the auction phase and reaches Equipping after 16 sales; won counters kept', () => {
@@ -223,7 +225,10 @@ describe('F2: game 2 of a Bo3 drafts to completion', () => {
         expect(done.blueCharactersWon).toBe(8);
         expect(done.redCharactersWon).toBe(8);
         expect(done.currentGameNumber).toBe(2);
-        expect(steps(test, s.lobbyId).filter((x) => x.action.tag === 'AuctionSold')).toHaveLength(16);
+        // T-S8d (A65): game 1's sales stay for the series; game 2 sold 16 of its own.
+        const sold = steps(test, s.lobbyId).filter((x) => x.action.tag === 'AuctionSold');
+        expect(sold).toHaveLength(32);
+        expect(sold.filter((x) => x.gameNumber === 2)).toHaveLength(16);
     });
 });
 

@@ -25,6 +25,8 @@ import { performConcede } from './concede';
 import { consumeLobbyCreateAllowance, readAbuseConfig, recordGuestLobbyCreation } from '../helpers/abuseControls';
 import { ensureBestOf, normalizeLobbyName, resolveAdvantage } from '../helpers/seriesSettings';
 import { ensureCostSetUsable } from '../helpers/costSetGuards';
+import { currentGameSteps } from '../helpers/stepSequence';
+import { autoSeatSlot } from '../helpers/tournamentLobbySides';
 
 // ─── create_lobby ─────────────────────────────────────────────────────────────
 // Creates a new lobby and inserts the creator as the host/referee.
@@ -285,8 +287,10 @@ export const join_lobby = spacetimedb.reducer(
             if (lobby.stage.tag === 'Drafting') {
                 const session = ctx.db.MatchSession.lobbyId.find(lobbyId);
                 if (session && session.timerState.isPaused) {
-                    // Check if the last step was an auto-pause
-                    const lastStep = [...ctx.db.MatchSessionStep.lobby_id.filter(lobbyId)]
+                    // Check if the latest Pause step of the current game was an auto-pause (S7b hand-off: a
+                    // SetEidolon or other step logged after the pause no longer hides it; A65(2): current game only)
+                    const lastStep = currentGameSteps(ctx, lobbyId, session.currentGameNumber)
+                        .filter((s: any) => s.payload?.tag === 'Pause')
                         .sort((a: any, b: any) => b.sequence - a.sequence)[0];
                     if (lastStep?.payload?.tag === 'Pause' && lastStep.payload.value?.isAutoPause) {
                         // Auto-resume
@@ -335,17 +339,21 @@ export const join_lobby = spacetimedb.reducer(
         if (allMembers.length >= 20) {
             throw new SenderError('Lobby is full (max 20 members).');
         }
+        // A26 / A35 (S8d): in a tournament lobby in Waiting a member of either team (or an approved stand-in) is
+        // auto-seated on its team's first free player seat; everyone else, staff included, joins as Spectator.
+        // join_lobby takes no slot argument; set_team_slot enforces allowedSlotsFor for every later move.
+        const joinSlot = lobby.stage.tag === 'Waiting' ? autoSeatSlot(ctx, lobby, user.id) : 'Spectator';
         const spectatorCount = allMembers.filter((m: any) => m.lobbySlot.tag === 'Spectator').length;
-        if (spectatorCount >= 12) {
+        if (joinSlot === 'Spectator' && spectatorCount >= 12) {
             throw new SenderError('Spectator slots are full (max 12).');
         }
 
-        // D-27: join as Spectator
+        // D-27: join as Spectator (casual lobbies; tournament lobbies: the auto-seat above)
         ctx.db.LobbyMember.insert(insertWithAudit(ctx, {
             lobbyId,
             userId: user.id,
             isOnline: true,
-            lobbySlot: { tag: 'Spectator', value: {} } as any,
+            lobbySlot: { tag: joinSlot, value: {} } as any,
             isReferee: false,
             isConfirmed: false,
             isCaptain: false,

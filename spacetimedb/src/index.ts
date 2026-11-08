@@ -87,7 +87,7 @@ export { run_user_deletion } from './reducers/userDeletion';
 export { create_hsr_account, update_hsr_account, set_active_hsr_account, delete_hsr_account, batch_upsert_characters, batch_remove_characters, migrate_roster } from './reducers/roster';
 export { admin_create_hsr_account, admin_update_hsr_account, admin_delete_hsr_account, admin_batch_upsert_characters, admin_batch_remove_characters, admin_upsert_archetype, admin_delete_archetype, admin_assign_character_archetypes, admin_remove_character_archetypes } from './reducers/rosterAdmin';
 export { create_cost_set, edit_draft_character_cost, edit_draft_lightcone_cost, edit_draft_synergy_cost, publish_cost_set, lock_cost_set, unpublish_cost_set, delete_cost_set } from './reducers/costSetManagement';
-export { create_tournament, update_tournament, advance_tournament_stage, cancel_tournament, admin_cancel_idle_tournaments } from './reducers/tournamentManagement';
+export { create_tournament, update_tournament, advance_tournament_stage, cancel_tournament, admin_cancel_idle_tournaments, admin_restart_tournament_finalize } from './reducers/tournamentManagement';
 export { check_in_tournament } from './reducers/tournamentCheckIn';
 export { register_for_tournament, withdraw_from_tournament, approve_participant, reject_participant, waitlist_promote, add_participant, set_anonymous_alias } from './reducers/tournamentRegistration';
 export { create_tournament_team, request_join_team, accept_team_request, reject_team_request, leave_tournament_team, disband_tournament_team, withdraw_tournament_team, add_team_member, rename_tournament_team, assign_team_group, clear_team_groups } from './reducers/tournamentTeams';
@@ -97,7 +97,7 @@ export { record_group_scores, set_score_adjustment } from './reducers/scoreEntry
 export { dq_participant, override_match_result, assign_tournament_assistant, remove_tournament_assistant, mod_promote_to_host, mod_demote_from_host } from './reducers/tournamentAdmin';
 export { generate_bracket, seed_bracket, set_seed_order } from './reducers/bracketGeneration';
 export { advance_group_stage, resolve_bracket_match, rollback_bracket_match } from './reducers/bracketAdvancement';
-export { finalize_match_result, process_tournament_mmr } from './reducers/matchFinalization';
+export { finalize_match_result, validate_match_result } from './reducers/matchFinalization';
 export { create_season, set_active_season } from './reducers/seasonAdmin';
 export { create_achievement, update_achievement, delete_achievement, add_achievement_criteria, remove_achievement_criteria, manual_award_achievement, set_displayed_achievement } from './reducers/achievementManagement';
 export { create_availability_slot, update_availability_slot, delete_availability_slot } from './reducers/calendarAvailability';
@@ -108,7 +108,7 @@ export { create_lobby, join_lobby, leave_lobby, close_lobby, kick_member, ban_me
 export { send_chat_message, delete_chat_message } from './reducers/chat';
 export { update_lobby_settings, set_team_slot, confirm_ready, unconfirm_ready, set_captain, shuffle_teams } from './reducers/lobbySettings';
 export { create_lobby_preset, update_lobby_preset, delete_lobby_preset } from './reducers/lobbyPresets';
-export { create_tournament_lobby, approve_stand_in } from './reducers/tournamentLobby';
+export { create_tournament_lobby, approve_stand_in, revoke_stand_in } from './reducers/tournamentLobby';
 export { run_lobby_gc, admin_gc_lobbies, seed_lobby_gc_job } from './reducers/lobbyGc';
 export { run_identity_gc, admin_gc_identities, seed_identity_gc_job } from './reducers/identityGc';
 export { run_referee_transfer_check } from './reducers/refereeTransfer';
@@ -117,7 +117,7 @@ export { admin_update_abuse_config, admin_set_guest_lobby_creation, admin_acknow
 export { start_draft, pick_character, ban_character, timer_expiry_classic } from './reducers/draftClassic';
 export { undo_last_step, pause_draft, resume_draft } from './reducers/draftControl';
 export { nominate_character, place_bid, pass_bid, timer_expiry_auction } from './reducers/draftAuction';
-export { equip_lightcone, arrange_lineup, set_eidolon, advance_stage } from './reducers/postDraft';
+export { equip_lightcone, unequip_lightcone, arrange_lineup, set_eidolon, advance_stage } from './reducers/postDraft';
 export { concede_match, claim_forfeit, defer_match } from './reducers/concede';
 export { advance_to_next_game, shelve_series, resume_series } from './reducers/seriesManagement';
 export { admin_force_finalize, admin_void_match } from './reducers/adminMatchTools';

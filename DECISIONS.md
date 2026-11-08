@@ -669,3 +669,14 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Supersedes:** the S7 interpretation "Admin edits reach the current game only" (`docs/match-results/architecture.md`, the `ensureCurrentGame` edge case in the contract) and the `advance_to_next_game` step deletion (D-13 era). Nothing in A60 changes.
 - **Also accepted** (S8b interpretations the user was shown on 2026-11-07 and did not overrule): (a) A26a wins over A26 for still-Forming teams: they survive the registration close and are withdrawn at bracket generation; (b) `admin_cancel_idle_tournaments` covers every non-terminal stage (Registration through InProgress), wider than A24(6)'s "in-progress".
 - **Where implemented:** S8d (Opus implements, Fable reviews, T-S8d tests)
+
+### A66 — A concede's roster is the start-of-draft participant copy, like every other result
+
+- **Date:** 2026-11-07 · **Status:** decided
+- **Decision:**
+  1. The participants of a conceded match are the `MatchParticipant` rows `start_draft` wrote, exactly as for a played match. The D-75 fallback (read the live `LobbyMember` roster) stays what it was: a fallback used only when no participant rows exist, which no reducer path produces any more.
+  2. Leavers count: a player who was seated at `start_draft` and left the lobby before the result settled is still a participant of the conceded match (a loser when on the conceding side).
+- **Why:** user decision 2026-11-07, on the S8d review. A54 asked for the live roster because, in the old code, a concede finalized at once, so the live roster at that moment was the roster that played. After A24(2) a tournament lobby parks in AwaitingResult until the tournament completes, seats are frozen after Waiting (A35), and players may leave the parked lobby; a live read at job time would drop players who played. The start-of-draft copy is the only durable roster, and it is the one every other result already uses.
+- **Supersedes:** A54's clause "the finalization participant fallback (D-75) becomes the rule for concedes (live `LobbyMember` roster, not the start-of-draft copy)". The rest of A54 (one record per lobby; concede and defer update the Pending record; explicit readers) stands and is implemented in S8d.
+- **Also corrected:** A65(2) names `client_connected` as the site of the latest-Pause auto-resume lookup; the lookup lives in `join_lobby`'s reconnect branch (`reducers/lobbyLifecycle.ts`) and was fixed there. No behaviour difference.
+- **Where implemented:** S8d (already in the working tree; Fable-reviewed)

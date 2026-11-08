@@ -14,6 +14,7 @@ import {
     findEditableResult,
     findGame,
     isAdminRole,
+    isClosedGame,
     recomputeGame,
     replaceGame,
     resetConfirmations,
@@ -25,13 +26,18 @@ import { recomputeSeriesAfterAdminEdit } from '../helpers/gameClose';
 // boss columns) is gone; the server computes every game's outcome from these inputs through @shared/scoring.
 
 /**
- * The game the scores belong to must be the one being played: tie-breaks 2 and 3 read that game's steps. A60(7): the
- * Admin path has the same limit, so Admin edits reach the current game only (after the deciding close: the last game).
+ * The game the scores belong to: the current game for everyone. A65(4) (supersedes the S7 "current game only" limit
+ * for Admins): an Admin may also name an earlier game of the series (1 <= gameNumber < currentGameNumber) whose
+ * MatchResultGame row exists and is closed; the steps of every game stay until finalization (A65(1)), so tie-breaks 2
+ * and 3 can read that game's steps. A later game is rejected for everyone.
  */
-function ensureCurrentGame(ctx: any, lobbyId: number, gameNumber: number): void {
+function ensureEditableGame(ctx: any, lobbyId: number, gameNumber: number, user: any, record: any): void {
     const session = ctx.db.MatchSession.lobbyId.find(lobbyId);
     if (!session) throw new SenderError('Match session not found.');
-    if (gameNumber !== session.currentGameNumber) {
+    if (gameNumber === session.currentGameNumber) return;
+    const earlierClosed = gameNumber >= 1 && gameNumber < session.currentGameNumber
+        && isClosedGame(findGame(ctx, record.id, gameNumber));
+    if (!earlierClosed || !isAdminRole(user)) {
         throw new SenderError(`Scores can only be entered for the current game (${session.currentGameNumber}).`);
     }
 }
@@ -64,7 +70,7 @@ export const record_group_scores = spacetimedb.reducer(
         if (!admin) ensureCaptainOrReferee(ctx, lobbyId, user.id, side, 'record scores for that team');
         ensureNotConceded(ctx, lobby); // D-12 / F8: allowed in AwaitingResult, blocked after a concede
         const record = findEditableResult(ctx, lobbyId, admin);
-        ensureCurrentGame(ctx, lobbyId, gameNumber);
+        ensureEditableGame(ctx, lobbyId, gameNumber, user, record);
         const mode = ensureOpenGame(ctx, lobby, record, gameNumber, user);
         if (mode === 'open' && admin) ensureCaptainOrReferee(ctx, lobbyId, user.id, side, 'record scores for that team');
 
@@ -101,7 +107,7 @@ export const record_group_scores = spacetimedb.reducer(
             ? { teamBlueDeaths: deaths, ...(screenshot ? { teamBlueScreenshotUrl: screenshot } : {}) }
             : { teamRedDeaths: deaths, ...(screenshot ? { teamRedScreenshotUrl: screenshot } : {}) }, user.id);
         if (mode === 'admin') {
-            recomputeSeriesAfterAdminEdit(ctx, lobby, record, user.id);
+            recomputeSeriesAfterAdminEdit(ctx, lobby, record, user.id, gameNumber);
         } else {
             recomputeGame(ctx, record, lobby, gameNumber, user.id);
             resetConfirmations(ctx, findGame(ctx, record.id, gameNumber), user.id);
@@ -142,7 +148,7 @@ export const set_score_adjustment = spacetimedb.reducer(
         ensureResultAuthority(ctx, lobby, user, 'Only a referee, a Moderator or, in a tournament lobby, the organizer or a results assistant can set score adjustments.');
         ensureNotConceded(ctx, lobby);
         const record = findEditableResult(ctx, lobbyId, isAdminRole(user));
-        ensureCurrentGame(ctx, lobbyId, gameNumber);
+        ensureEditableGame(ctx, lobbyId, gameNumber, user, record);
         const mode = ensureOpenGame(ctx, lobby, record, gameNumber, user);
 
         if (Math.abs(value) > MAX_SCORE_HUNDREDTHS) {
@@ -184,7 +190,7 @@ export const set_score_adjustment = spacetimedb.reducer(
 
         ensureGame(ctx, record, lobby, gameNumber, user.id);
         if (mode === 'admin') {
-            recomputeSeriesAfterAdminEdit(ctx, lobby, record, user.id);
+            recomputeSeriesAfterAdminEdit(ctx, lobby, record, user.id, gameNumber);
         } else {
             recomputeGame(ctx, record, lobby, gameNumber, user.id);
             resetConfirmations(ctx, findGame(ctx, record.id, gameNumber), user.id);

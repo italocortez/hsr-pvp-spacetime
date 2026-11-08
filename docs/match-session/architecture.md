@@ -125,6 +125,7 @@ Lobby (id: u32 autoInc PK)
 4. Update `MatchSession.stage` and `Lobby.stage`
 
 ### advance_to_next_game(lobbyId)
+(A65(1), S8d: the finished game's `MatchSessionStep` rows are no longer deleted here; they stay until finalization.)
 1. Permission: host OR TO/Assistant/Mod+; referee if `refereeControlsShelving=true`
 2. Lobby must be in BetweenGames stage
 3. Increment `MatchSession.currentGame`; reset draft state (`draftPhase=0`, `draftTurnIndex=0`)
@@ -254,6 +255,37 @@ Behavior: [contract.md](contract.md) scenarios tagged "Phase S7b execution". Con
 - **Review fixes (Phase S7b execution, A61(4)/(5), A22(3)):** in Auction Drafting, while the team holds the current bid, `set_eidolon` treats the bid plus the extra the team would owe at the sale (`teamDefaultEidolon`) as reserved: a positive delta above (char + LC budget) − (bid + extra) is rejected (`'Not enough budget for that eidolon: your current bid is reserved.'`) and the character budget is charged only above the committed bid (the rest from the light-cone budget). `resolveSale` rejects a winning amount above the winner's character budget (`'Winning amount exceeds the <side> character budget.'`) instead of clamping. `set_eidolon` is rejected with `'Draft is paused.'` in a paused Drafting stage (open path; the reconnect auto-resume reads the last step for an auto-pause).
 - **Thirds orders (A59):** `buildClassicSequence(banMode, 'Thirds')` returns the per-ban-mode order from `THIRDS_ORDERS` (`helpers/draftSequences.ts`); `THIRDS_EXTRA_PICKS` is gone. The three orders: [draft-order.md](draft-order.md) "Thirds (12 picks per team)". Halves and `buildAuctionBanSequence` unchanged.
 
+## Phase S8d execution (DECISIONS.md A65; S7b hand-offs)
+
+**Step table lifecycle (A65).** `MatchSessionStep` rows of every game of a series stay in the live table until the
+match ends: `advance_to_next_game` no longer deletes them. Exits: finalization archives every game into
+`MatchSessionStepHistory` (`[matchHistoryId, gameNumber, sequence]`; step 4 sorts by (gameNumber, sequence), step 8
+copies `step.gameNumber`) and then deletes the live rows; the lobby GC / `hardDeleteLobby` deletes them on the other
+exits. Sequences stay lobby-wide (`getNextSequence`; game 2 continues after game 1's last sequence).
+
+**Game-scoped readers** go through `currentGameSteps(ctx, lobbyId, gameNumber)` (`helpers/stepSequence.ts`): the
+ban restriction, Classic availability / auto-random pick, the Auction won / banned sets and the nomination lookup,
+`undo_last_step` ("Nothing to undo in this game." when the current game has no Pick / Ban; it never crosses into an
+earlier game), `resume_draft` (latest Pause), the join auto-resume (latest Pause of the current game), `teamDraft`
+(tie-breaks, lineups, edits). Lobby-wide: `getNextSequence`, the user-deletion guard, the lobby GC, the finalization
+read. `view_my_match_steps` rows carry `gameNumber`.
+
+**unequip_lightcone(lobbyId, characterName, gameNumber?)** (new). Same callers and window as `equip_lightcone`.
+Removes the latest light cone still equipped on the character for the side; refunds its `costPaid` to the side's
+light-cone budget (current game only); logs `UnequipLightcone` (`UnequipLightconePayload { characterName,
+lightconeName, refunded }`, new `ActionType` / `StepPayload` member); refreshes the lineup costs; recomputes and resets
+confirmations (A60(2)). `teamDraft.lightconeCosts` = the light cones still equipped (`equippedLightcones`).
+`MatchSessionStepHistory.targetName` = the light cone. "X has no light cone equipped." when none.
+
+**equip_lightcone** (S7b hand-off): on the open path the character must be in the caller's team draft of the game
+("X is not in your team's draft of this game."); the sequence comes from `getNextSequence`.
+
+**Earlier-game Admin edits (A65(4)).** `set_eidolon`, `equip_lightcone`, `unequip_lightcone`, `arrange_lineup`
+take an optional trailing `gameNumber`; `resolveEditWindow` applies it (Admin only, an earlier closed game;
+"Only an Admin may edit an earlier game." / "Only a closed earlier game of the series can be edited."). Such an edit
+records its step (or lineup row) on that game and recomputes it; it does not charge or refund a session budget.
+
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -282,6 +314,7 @@ Behavior: [contract.md](contract.md) scenarios tagged "Phase S7b execution". Con
 | Auction: E0 nominations (`nominate_character` loses `eidolon`), ownership on nominations and bids, total-budget guard, extra charged at the sale (character budget first, then light cones), `AuctionSoldPayload.eidolonCost`; Auction eidolon refunds go to the light-cone budget (orchestrator rule) | Phase S7b execution (DECISIONS.md A61) | 2026-11-07 |
 | Classic Thirds orders per ban mode (`THIRDS_ORDERS`), `THIRDS_EXTRA_PICKS` removed; `draft-order.md` gains the Thirds section | Phase S7b execution (DECISIONS.md A59) | 2026-11-07 |
 | Auction default eidolon at the sale, the bid-time guard and the bid reservation = the **lowest** owned level (`teamDefaultEidolon` returns the first of the ascending owned list); Classic keeps the highest (`resolveOwnedEidolon`) | Phase S7b follow-up (DECISIONS.md A64) | 2026-11-07 |
+| Steps kept for the whole series (A65): game-scoped readers filter by gameNumber (`currentGameSteps`), finalization archives every game, `view_my_match_steps` carries `gameNumber`; `unequip_lightcone` + `UnequipLightcone` step; `equip_lightcone` checks the caller's team draft; auto-resume reads the latest Pause; optional `gameNumber` on the edit reducers (A65(4)) | Phase S8d execution | 2026-11-07 |
 
 ---
 

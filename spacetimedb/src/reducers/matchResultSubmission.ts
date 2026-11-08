@@ -212,13 +212,10 @@ export const dispute_match_result = spacetimedb.reducer(
             throw new SenderError('A match result can only be disputed after it has been submitted.');
         }
 
-        // Block dispute after concede (but NOT after AwaitingResult — disputes happen there)
-        const disputeLobby = ctx.db.Lobby.id.find(matchResult.lobbyId);
-        if (disputeLobby) {
-            const existingResult = [...ctx.db.MatchResultRecord.lobby_id.filter(disputeLobby.id)][0];
-            if (existingResult?.matchEndReason?.tag === 'Concede') {
-                throw new SenderError('Match has been conceded.');
-            }
+        // Block dispute after concede (but NOT after AwaitingResult — disputes happen there). A54 (S8d): the
+        // lobby's one record is this record, so its own matchEndReason is the concede marker.
+        if (matchResult.matchEndReason?.tag === 'Concede') {
+            throw new SenderError('Match has been conceded.');
         }
 
         // Validate caller is a match participant via MatchResultParticipant

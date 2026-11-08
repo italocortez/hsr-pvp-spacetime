@@ -559,8 +559,9 @@ export const server_nuke_test_data = spacetimedb.reducer({
     ctx.db.MatchResultAdjustment.clear();
     ctx.db.MatchLineup.clear();
     ctx.db.MatchLineupHistory.clear();
-    // S8: also clear the remaining S3 tables (LinkRequest, TournamentFinalizeJob) once their writers exist
-    // (S8 owns the tournament finalize job; LinkRequest's writer lands with the auth function).
+    // ── Tournament finalize job (A24(7), S8d): pending ticks of a tournament wiped below. LinkRequest is cleared once
+    // its writer lands with the auth function.
+    ctx.db.TournamentFinalizeJob.clear();
 
     // ── Abuse controls (A42, B-7, A57): rate windows, the inline breaker's counters and alerts. AbuseConfig is
     // seeded by init and survives the nuke.

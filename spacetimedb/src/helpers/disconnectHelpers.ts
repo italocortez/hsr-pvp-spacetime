@@ -1,14 +1,13 @@
 import { SenderError } from 'spacetimedb/server';
 import { slotTeam, slotIsCoach, slotIsSpectator } from './lobbyHelpers';
+import { findLobbyResult } from './scoringHelpers';
 
 /**
- * True when any MatchResultRecord of the lobby carries matchEndReason Concede. Scans every record on purpose:
- * performConcede and defer_match insert a second record next to the Pending one from start_draft (an old-repo
- * sequencing accident, see docs/log/2026-11-06-s4.md finding 13), so reading [0] misses the concede. S8 consolidates
- * to one record per lobby (DECISIONS.md A54); this scan stays correct either way.
+ * True when the lobby's MatchResultRecord carries matchEndReason Concede. A54 (S8d): one record per lobby; concede and
+ * defer update the start_draft record in place, so the one record is read explicitly.
  */
 function hasConcededRecord(ctx: any, lobbyId: number): boolean {
-    return [...ctx.db.MatchResultRecord.lobby_id.filter(lobbyId)].some((r: any) => r.matchEndReason?.tag === 'Concede');
+    return findLobbyResult(ctx, lobbyId)?.matchEndReason?.tag === 'Concede';
 }
 
 /**

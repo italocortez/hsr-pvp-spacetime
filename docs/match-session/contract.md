@@ -1073,6 +1073,32 @@ D-50 applies to ALL Drafting→Equipping transitions: auto (last Classic pick, l
 
 ---
 
+## Acceptance Scenarios (Phase S8d execution)
+
+### S8d-S1 Game 1 steps survive the next game (A65(1))
+**Given** a Bo3 whose game 1 is closed
+**When** the host calls `advance_to_next_game`
+**Then** game 1's steps are still in `MatchSessionStep`; game 2's draft state (availability, ban restriction, undo) reads game 2's steps only
+
+### S8d-S2 Undo stays in the current game (A65(2))
+**Given** game 2 has no Pick or Ban yet
+**When** the referee calls `undo_last_step`
+**Then** rejected ("No steps to undo." at turnIndex 0, "Nothing to undo in this game." otherwise); game 1's steps are untouched
+
+### S8d-S3 The archive holds every game (A65(3))
+**When** the series is finalized
+**Then** `MatchSessionStepHistory` holds the steps of games 1 and 2 with their `gameNumber`
+
+### S8d-S4 Unequip a light cone (S7b hand-off)
+**Given** a light cone equipped on a drafted character in Equipping
+**When** that team's player calls `unequip_lightcone(lobbyId, characterName)`
+**Then** an `UnequipLightcone` step is logged, the cost is refunded to the light-cone budget, the roster cost drops, both confirmations reset
+
+### S8d-S5 Equip only on your own draft
+**When** a player equips a light cone on a character the other team drafted
+**Then** rejected: "X is not in your team's draft of this game."
+
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -1125,6 +1151,7 @@ D-50 applies to ALL Drafting→Equipping transitions: auto (last Classic pick, l
 | Auction eidolon economics: E0 nominations and bids, ownership on nominations and bids, total-budget guard, the extra charged at the sale across both budgets, edits pay or refund (refund to the light-cone budget); scenarios "Auction Sale Charges the Eidolon Extra Across Both Budgets", "A Nomination or Bid Without Ownership Is Rejected" added | Phase S7b execution (DECISIONS.md A61) | 2026-11-07 |
 | Thirds Classic orders per ban mode; scenario "A Thirds Draft Follows the A59 Order" added (supersedes the S7 extra-picks order in "Thirds Lobbies Draft 12 per Team") | Phase S7b execution (DECISIONS.md A59) | 2026-11-07 |
 | Auction default eidolon at the sale = the lowest owned level (was the highest, A61(3)); higher levels bought through `set_eidolon`; scenario "Auction Sale Resolves the Lowest Owned Eidolon" added and "Auction Sale Charges the Eidolon Extra Across Both Budgets" marked superseded | Phase S7b follow-up (DECISIONS.md A64) | 2026-11-07 |
+| Scenarios S8d-S1..S5: steps kept for the series, undo within the game, archive of every game, `unequip_lightcone`, own-draft equip | Phase S8d execution (DECISIONS.md A65) | 2026-11-07 |
 
 ---
 

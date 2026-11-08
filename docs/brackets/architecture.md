@@ -95,7 +95,7 @@ The bracket reducers now run on `shared/bracket` and the S8a helpers. Deleted: `
 (results), `bracketResults.rollbackBracketResult` (clears it) and `bracketStore.settle` (structural BYE walkovers).
 Callers of `applyBracketResult`: `resolve_bracket_match` (Staff), `dq_participant` (Dq), `performConcede`
 (Concede, A38(1); only while the match is Ready; series score from the session; audit actor `SYSTEM_USER_ID`, A37)
-and finalization step 17 (Played / Concede, `SYSTEM_USER_ID`; S8d replaces that step with the A24 hand-off).
+and finalization step 17 (Played / Concede, `SYSTEM_USER_ID`; removed in S8d: see "Phase S8d execution").
 
 ### Reducer reference
 
@@ -131,6 +131,24 @@ be rolled back (the slot no longer holds the team).
 | `GroupOnly` | `insertGroupBracket(groups)`; groups = manual `groupId`s (A36a; validated: every Ready team grouped, exactly `groupCount(n, groupSize)` groups, each >= `groupSize` unless there is only one group, sizes within one) or `splitIntoGroups(teamIdsBySeed, groupSize)` (A32 snake); within a group, teams by seed | placements from the standings at Completed (S8d) |
 | `GroupIntoSingleElim` / `GroupIntoDoubleElim` | the group rows only | `advance_group_stage` creates the elimination rows from the standings (T7) |
 
+## Phase S8d execution (DECISIONS.md A24(1)(3), A35, A38(1), A54; ACCESS-SECURITY-OPS §D.8.3)
+
+**Hand-off.** `helpers/tournamentResults.ts` `handOffToBracket(ctx, record, 'Played' | 'Concede')` is the one
+result path into `applyBracketResult`: winner team = team1 for Blue, team2 for Red (A35); series score from the
+session; actor `SYSTEM_USER_ID` (A37); only a Ready match of an InProgress tournament (idempotent and quiet otherwise).
+Callers: `performConcede` (Concede, A38(1)), `submitSeriesResult` (Played, a tournament without
+`requireResultValidation`), `validate_match_result` (Played). Finalization step 17 is gone. `override_match_result`
+uses `rollbackBracketResult` + `applyBracketResult` (Staff) directly. Callers of `applyBracketResult` now:
+`handOffToBracket`, `resolve_bracket_match`, `dq_participant`, `override_match_result`.
+
+**Resolve / rollback side effects (`voidMatchLobbies`).**
+
+| Reducer | Records and lobbies of the match |
+|---|---|
+| `rollback_bracket_match` | every lobby of the match (`Lobby.bracket_match_id`) is voided: its record is marked **Voided** and kept (audit; the finalize job deletes it without effect), the lobby is hard-deleted with every other row of the match (`hardDeleteLobby(…, keepResultRecord = true)`), so a replay lobby can be created (A24(3)) |
+| `resolve_bracket_match` | a lobby whose record is **Validated for the resolved winner** stays parked (finalized at Completed); every other lobby of the match (Waiting or playing, a Pending / Submitted / Disputed record, or a Validated record for the other team) is voided as above: staff decided the match |
+
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -152,6 +170,7 @@ be rolled back (the slot no longer holds the team).
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
 | Shared pure `shared/bracket/` + `bracketStore` / `bracketResults` / `tournamentStandings` / `tournamentLobbySides` helpers, not wired yet (A23, A27, A29–A32, A35) | Phase S8a execution | 2026-11-07 |
 | Bracket reducers rebuilt on the shared engine: `seed_bracket` (ctx.random), `set_seed_order`, `generate_bracket` (A26a Withdraw, manual / auto groups, `bracketGeneratedAt`), `advance_group_stage`, `resolve_bracket_match`, `rollback_bracket_match`, `dq_participant` through `applyBracketResult`; legacy generation / advancement and `admin_set_bracket_winner` deleted; single writer enforced (A23, A24, A25, A26a, A29, A30, A32, A36a, A38(1)) | Phase S8c execution | 2026-11-07 |
+| Result hand-off `handOffToBracket` (validation, concede; finalization step 17 removed); rollback voids the match's lobbies (record Voided and kept, lobby hard-deleted); resolve keeps a parked record that agrees with the staff winner and voids the rest (A24(1)(3), A38(1), D.8.3) | Phase S8d execution | 2026-11-07 |
 
 ---
 

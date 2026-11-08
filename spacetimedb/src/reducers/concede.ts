@@ -5,8 +5,8 @@ import { ensureLobbyMember, slotTeam, slotIsCoach, slotIsSpectator } from '../he
 import { buildConcedeSummary, isForfeitEligible, isThirdPartyReferee } from '../helpers/disconnectHelpers';
 import { runFinalization } from '../helpers/finalizationHelpers';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
-import { SYSTEM_USER_ID } from '../helpers/auditColumns';
-import { applyBracketResult, seriesGames } from '../helpers/bracketResults';
+import { findLobbyResult } from '../helpers/scoringHelpers';
+import { handOffToBracket } from '../helpers/tournamentResults';
 
 // ─── Shared concede helper ──────────────────────────────────────────────────
 // Used by concede_match, claim_forfeit, and leave_lobby auto-concede.
@@ -27,44 +27,26 @@ export function performConcede(
         ? buildConcedeSummary(ctx, lobby, disconnectedMembers, triggerUserId, concedeTrigger.tag)
         : `${losingTeam} team conceded. Trigger: ${concedeTrigger.tag} by userId:${triggerUserId}, stage: ${lobby.stage.tag}`;
 
-    // 4. Create MatchResultRecord
-    const insertedResult = ctx.db.MatchResultRecord.insert(insertWithAudit(ctx, {
-        id: 0, // autoInc
-        bracketMatchId: lobby.bracketMatchId ?? undefined,
-        lobbyId: lobby.id,
-        isTournamentControlled: lobby.isTournamentControlled,
+    // 4. A54 (S8d): the lobby has one MatchResultRecord (start_draft's Pending one); the concede settles it in place.
+    // Every concede path runs from Drafting on (after start_draft), so the record exists.
+    const existingResult = findLobbyResult(ctx, lobby.id);
+    if (!existingResult) throw new SenderError('No match result for this lobby.');
+    ctx.db.MatchResultRecord.id.update(updateWithAudit(ctx, existingResult, {
         status: { tag: 'Validated', value: {} } as any,
         winnerTeamSide: { tag: winnerTeamSide, value: {} } as any,
-        mmrProcessedAt: undefined,
-        refereeUserId: undefined,
-        disputedByUserId: undefined,
-        disputeReason: undefined,
-        refereeFullControl: false,
-        matchType: lobby.matchType,
+        refereeUserId: triggerUserId,
         matchEndReason: { tag: 'Concede', value: {} } as any,
         concedeTrigger: concedeTrigger,
         concedeSummary: summary,
         concedeAtStage: lobby.stage.tag,
-        winnerOverride: undefined,
-        winnerOverrideById: undefined,
-        winnerOverrideReason: undefined,
         settledAt: ctx.timestamp, // A24(1): a concede counts as a settled result
     }, triggerUserId));
+    const settledResult = ctx.db.MatchResultRecord.id.find(existingResult.id);
 
     // 5. A38(1): a concede is a settled result and advances the bracket through the single writer (decidedBy
-    // Concede, the series score so far, A35 Blue = team1; SYSTEM_USER_ID as audit actor so the conceding player's id
-    // never lands on the public row, A37). Only a Ready match: one already settled by staff or a DQ stays as it is.
-    if (lobby.isTournamentControlled && lobby.bracketMatchId) {
-        const bracketMatch = ctx.db.BracketMatch.id.find(lobby.bracketMatchId);
-        if (bracketMatch && bracketMatch.state.tag === 'Ready') {
-            const winnerTeamId = winnerTeamSide === 'Blue' ? bracketMatch.team1Id : bracketMatch.team2Id;
-            if (winnerTeamId !== undefined) {
-                const session = ctx.db.MatchSession.lobbyId.find(lobby.id);
-                applyBracketResult(ctx, bracketMatch.id, winnerTeamId, 'Concede',
-                    session ? seriesGames(session) : { team1: 0, team2: 0 }, SYSTEM_USER_ID);
-            }
-        }
-    }
+    // Concede, the series score so far, A35 Blue = team1, SYSTEM_USER_ID as audit actor, A37). Only a Ready match:
+    // one already settled by staff or a DQ stays as it is. No finalization for tournament records (A24(4)).
+    handOffToBracket(ctx, settledResult, 'Concede');
 
     // 6. Transition lobby to AwaitingResult (D-28)
     ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
@@ -87,7 +69,7 @@ export function performConcede(
     // Tournament concedes park in AwaitingResult (A24(2)); the bracket already advanced in step 5 (A38(1)).
     // Non-tournament concedes finalize immediately — no reason to wait for admin.
     if (!lobby.isTournamentControlled) {
-        const freshResult = ctx.db.MatchResultRecord.id.find(insertedResult.id);
+        const freshResult = ctx.db.MatchResultRecord.id.find(settledResult.id);
         if (freshResult) {
             runFinalization(ctx, freshResult, triggerUserId);
         }
@@ -317,28 +299,13 @@ export const defer_match = spacetimedb.reducer(
         // Build concedeSummary (D-21)
         const summary = buildConcedeSummary(ctx, lobby, disconnectedMembers, user.id, 'DeferMatch');
 
-        // Create MatchResultRecord with NO winner (deferred, D-22)
-        ctx.db.MatchResultRecord.insert(insertWithAudit(ctx, {
-            id: 0,
-            bracketMatchId: lobby.bracketMatchId ?? undefined,
-            lobbyId: lobby.id,
-            isTournamentControlled: lobby.isTournamentControlled,
-            status: { tag: 'Pending', value: {} } as any,
-            winnerTeamSide: undefined,
-            mmrProcessedAt: undefined,
-            refereeUserId: undefined,
-            disputedByUserId: undefined,
-            disputeReason: undefined,
-            refereeFullControl: false,
-            matchType: lobby.matchType,
-            matchEndReason: undefined,  // Not yet determined
-            concedeTrigger: undefined,
+        // A54 (S8d): the lobby's one record (start_draft's Pending record) stays Pending with NO winner (deferred,
+        // D-22); the defer records its summary and stage on it. Defer runs from Drafting on, so the record exists.
+        const pendingResult = findLobbyResult(ctx, lobby.id);
+        if (!pendingResult) throw new SenderError('No match result for this lobby.');
+        ctx.db.MatchResultRecord.id.update(updateWithAudit(ctx, pendingResult, {
             concedeSummary: summary,
             concedeAtStage: lobby.stage.tag,
-            winnerOverride: undefined,
-            winnerOverrideById: undefined,
-            winnerOverrideReason: undefined,
-            settledAt: undefined,
         }, user.id));
 
         // Transition lobby to AwaitingResult (D-22)

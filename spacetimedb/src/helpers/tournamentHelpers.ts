@@ -2,7 +2,9 @@ import { SenderError } from 'spacetimedb/server';
 import { canStartInProgress, isEligibleTeam } from '@shared/bracket';
 import { insertWithAudit, updateWithAudit } from './auditHelpers';
 import { deleteCalendarEventsForTournament, deleteUserInvitesForTournament } from './calendarCascade';
-import { hardDeleteLobby } from '../reducers/lobbyGc';
+import { findLobbyResult } from './scoringHelpers';
+import { voidTournamentLobby } from './tournamentResults';
+import { startTournamentFinalization } from './tournamentFinalization';
 
 // Forward-only stage order (Cancelled is handled separately as a terminal transition)
 // CheckIn is included between Registration and Seeding (D-35, D-37).
@@ -83,40 +85,30 @@ export function transferTournamentCaptain(ctx: any, teamId: number, leavingUserI
 }
 
 /**
- * Cascade-deletes all tournament-scoped infrastructure rows on cancellation.
+ * The cancellation cleanup (A24(5), review §5.1 "teams/bracket kept for display"; S8d).
  *
- * Preserves: TournamentEnrolled (audit trail). MatchSessionHistory (the actual
- *            archive layer — MatchResultRecord is ephemeral by design and has
- *            usually already been deleted by runFinalization step 18 before
- *            this helper runs).
- * Deletes:   TournamentTeamRequest, TournamentTeamMember, TournamentTeam, TournamentAssistant,
- *            BracketMatch, TournamentPlayerAccount.
- *            Also hard-deletes Shelved/BetweenGames lobbies linked to bracket
- *            matches (D-18), which cascades to any still-ephemeral MRR/MRP rows.
- *
- * Note: For MMR tournaments mid-flight (rare), some MatchResultRecord rows may
- * still exist because the D-H-01 guard blocks per-match finalize for MMR
- * tournaments. Those rows are orphaned (bracket_match_id → deleted BracketMatch)
- * after this helper runs. Casual tournament matches never reach this state —
- * they auto-finalize at submit and runFinalization has already cleaned them up.
- *
- * Order: requests → linked lobbies (before bracket) → standings → calendar → bracket → player accounts → team members → teams → assistants
- * (child rows before parents to avoid referencing deleted data mid-transaction)
+ * Preserves: TournamentEnrolled (audit trail), BracketMatch, TournamentTeam, TournamentTeamMember and
+ *            TournamentAssistant (display, and the bracket order the finalize job reads), and every settled match:
+ *            a lobby parked in AwaitingResult with a Validated record stays for the job, which counts its stats
+ *            without MMR (A24(5)).
+ * Voids:     every other tournament lobby (Waiting, playing, Shelved, BetweenGames, or parked with a Pending /
+ *            Submitted / Disputed record): the record (if any) is marked Voided and the lobby hard-deleted
+ *            (voidTournamentLobby); the job deletes the Voided records without effect.
+ * Deletes:   TournamentTeamRequest, the calendar events of the bracket matches (D-21), TournamentPlayerAccount.
  */
-export function cascadeCleanupTournament(ctx: any, tournamentId: number): void {
+export function cascadeCleanupTournament(ctx: any, tournamentId: number, actorId: number): void {
     // 1. Team requests (via teams — no tournamentId on request table)
     cleanupTeamRequests(ctx, tournamentId);
 
-    // 1b. D-18: Hard-delete Shelved/BetweenGames lobbies linked to bracket matches.
-    // Must run BEFORE deleting bracket match rows (lobby references bracketMatchId).
-    // Uses Lobby.bracket_match_id btree index for efficient reverse lookup (NOT full table scan).
-    const bracketMatchesForLobbies = [...ctx.db.BracketMatch.tournament_id.filter(tournamentId)];
-    for (const bracketMatch of bracketMatchesForLobbies) {
-        const linkedLobbies = [...ctx.db.Lobby.bracket_match_id.filter(bracketMatch.id)];
-        for (const linkedLobby of linkedLobbies) {
-            if (linkedLobby.stage.tag === 'Shelved' || linkedLobby.stage.tag === 'BetweenGames') {
-                console.log(`[TOURNAMENT] Hard-deleting ${linkedLobby.stage.tag} lobby #${linkedLobby.id} linked to bracket match #${bracketMatch.id}`);
-                hardDeleteLobby(ctx, linkedLobby.id);
+    // 1b. A24(5) (S8d): void every live tournament lobby; keep the settled ones for the finalize job.
+    //     Lobby.bracket_match_id btree index (NOT a full table scan).
+    for (const bracketMatch of [...ctx.db.BracketMatch.tournament_id.filter(tournamentId)]) {
+        for (const linkedLobby of [...ctx.db.Lobby.bracket_match_id.filter(bracketMatch.id)]) {
+            const record = findLobbyResult(ctx, linkedLobby.id);
+            const settled = linkedLobby.stage.tag === 'AwaitingResult' && record?.status.tag === 'Validated';
+            if (!settled) {
+                console.log(`[TOURNAMENT] Voiding ${linkedLobby.stage.tag} lobby #${linkedLobby.id} linked to bracket match #${bracketMatch.id}`);
+                voidTournamentLobby(ctx, linkedLobby.id, actorId);
             }
         }
     }
@@ -124,13 +116,9 @@ export function cascadeCleanupTournament(ctx: any, tournamentId: number): void {
     // 2. (group_phase_record dropped in S3, A23: standings are computed; nothing to delete)
 
     // 3. Calendar events linked to tournament bracket matches (D-21)
-    //    Must run before bracket match rows are deleted, since it reads BracketMatch to find linked events
     deleteCalendarEventsForTournament(ctx, tournamentId);
 
-    // 4. Bracket matches
-    for (const match of [...ctx.db.BracketMatch.tournament_id.filter(tournamentId)]) {
-        ctx.db.BracketMatch.delete(match);
-    }
+    // 4. (S8d) Bracket matches are kept (display, finalize-job order).
 
     // 5. Tournament player accounts (locked roster snapshots)
     const enrolledRows = [...ctx.db.TournamentEnrolled.tournament_id.filter(tournamentId)];
@@ -140,22 +128,7 @@ export function cascadeCleanupTournament(ctx: any, tournamentId: number): void {
         }
     }
 
-    // 6. TournamentTeamMember rows — delete before TournamentTeam (child before parent)
-    for (const team of [...ctx.db.TournamentTeam.tournament_id.filter(tournamentId)]) {
-        for (const member of [...ctx.db.TournamentTeamMember.team_id.filter(team.id)]) {
-            ctx.db.TournamentTeamMember.delete(member);
-        }
-    }
-
-    // 7. Tournament teams
-    for (const team of [...ctx.db.TournamentTeam.tournament_id.filter(tournamentId)]) {
-        ctx.db.TournamentTeam.id.delete(team.id);
-    }
-
-    // 8. Tournament assistants
-    for (const assistant of [...ctx.db.TournamentAssistant.tournament_id.filter(tournamentId)]) {
-        ctx.db.TournamentAssistant.delete(assistant);
-    }
+    // 6-8. (S8d) Team members, teams and assistants are kept (display).
 }
 
 // ─── S8b: registration, teams and the stage machine (A26, A26a, A36a, A36b, review §5.1) ─────────────────────
@@ -529,7 +502,9 @@ export function activateTeams(ctx: any, tournament: any, actorId: number): void 
  */
 export function cancelTournament(ctx: any, tournament: any, actorId: number): void {
     validateStageTransition(tournament.stage.tag, 'Cancelled');
-    cascadeCleanupTournament(ctx, tournament.id);
+    cascadeCleanupTournament(ctx, tournament.id, actorId);
     ctx.db.Tournament.id.update(updateWithAudit(ctx, tournament, { stage: unit('Cancelled') }, actorId));
+    // A24(5) (S8d): the same chunked finalization as Completed; the job counts stats and skips MMR.
+    startTournamentFinalization(ctx, tournament.id, actorId);
 }
 

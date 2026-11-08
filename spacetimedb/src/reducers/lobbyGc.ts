@@ -35,9 +35,11 @@ import { SenderError } from 'spacetimedb/server';
 // admin_force_finalize, admin_void_match) clean MatchResult* rows. AwaitingResult lobbies
 // are admin-only resolution (D-48). No orphaned MatchResultRecord gaps found.
 
-export function hardDeleteLobby(ctx: any, lobbyId: number): void {
+export function hardDeleteLobby(ctx: any, lobbyId: number, keepResultRecord = false): void {
     // 0a. Delete MatchResult* rows (MatchResultParticipant, MatchResultGame, MatchResultRecord) and, A56(3),
-    //     the scoring inputs (MatchResultGroupScore, MatchResultAdjustment) and the live MatchLineup rows
+    //     the scoring inputs (MatchResultGroupScore, MatchResultAdjustment) and the live MatchLineup rows.
+    //     keepResultRecord (A24(3), S8d voidTournamentLobby): the record row itself survives (the caller marked it
+    //     Voided for audit); its children are deleted as usual. The finalize job deletes it later.
     const matchResults = [...ctx.db.MatchResultRecord.lobby_id.filter(lobbyId)];
     for (const mr of matchResults) {
         deleteScoringRows(ctx, mr.id, lobbyId); // first: the game rows bound its per-game scans
@@ -47,7 +49,7 @@ export function hardDeleteLobby(ctx: any, lobbyId: number): void {
         for (const g of [...ctx.db.MatchResultGame.match_result_id.filter(mr.id)]) {
             ctx.db.MatchResultGame.delete(g);
         }
-        ctx.db.MatchResultRecord.delete(mr);
+        if (!keepResultRecord) ctx.db.MatchResultRecord.delete(mr);
     }
     // Lineups are keyed by lobby: also sweep them when no record exists.
     for (const l of lobbyLineups(ctx, lobbyId)) ctx.db.MatchLineup.id.delete(l.id);

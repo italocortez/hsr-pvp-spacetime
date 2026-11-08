@@ -1152,6 +1152,23 @@ The lobby system manages the lifecycle of match rooms where players assemble, co
 | TournamentStandIn | BracketMatch, User | Approves non-registered stand-in players | Reads/Writes |
 | view_lobby_browser | Lobby (anonymous view) | Projects public lobby list for browser | Reads |
 
+## Acceptance Scenarios (Phase S8d execution)
+
+### S8d-L1 Players are auto-seated in a tournament lobby (A26, A35)
+**Given** a Waiting tournament lobby of a match between team1 and team2
+**When** a member of team2 joins
+**Then** the member sits on `RedPlayer`; a non-member (staff included) joins as `Spectator`; a team member whose side is full joins as `Spectator`
+
+### S8d-L2 Seats outside the team are refused (A35)
+**When** a team1 member (or the host moving them) asks `set_team_slot` for `RedPlayer` or `RedCoach`
+**Then** rejected: "This seat is not available to you in this tournament lobby."; `BlueCoach` and `Spectator` are allowed; a casual lobby accepts every slot
+
+### S8d-L3 Staff reclaim the referee flag (D.8.4)
+**Given** a tournament lobby whose referee is a player
+**When** a member of the lobby with `canResolveResults` calls `reclaim_referee`
+**Then** the caller holds the flag; an assistant without `canResolveResults` is rejected: "Only the lobby host can reclaim the referee flag."
+
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -1212,6 +1229,7 @@ The lobby system manages the lifecycle of match rooms where players assemble, co
 | B-7 / A42: `create_lobby` hourly cap (guests included), guest kill switch, preset cap; scenarios "Lobby Creation Cap", "Guest Kill Switch", "Preset Cap" and two edge cases added | Phase S5 execution (DECISIONS.md A42, A43) | 2026-11-06 |
 | Scenarios "Create Lobby With Series Settings", "bestOf Capped to 1 or 3", "Series Settings Editable in Waiting", "Tournament Lobby Locks bestOf and lineupFormat", "Cost Set Must Be Selectable and Cover the Mode", "Preset Stores the Series Fields", "System Preset", "Shuffle Teams", "Unban Member", "Guest Burst Trips the Kill Switch" added | Phase S6 execution (DECISIONS.md A27, A28, A33, A33a, A38, A40, A45, A57, A58, D-A8; backlog #2, #6-#9) | 2026-11-06 |
 | Scenarios "The Lineup Format Is the Character Count", "Only the Captain or a Referee Arranges the Lineup" added | Phase S7 execution (DECISIONS.md A21; backlog #3) | 2026-11-06 |
+| Scenarios S8d-L1..L3: auto-seat, seat enforcement, staff referee reclaim | Phase S8d execution (DECISIONS.md A26, A35; D.8.4) | 2026-11-07 |
 
 ---
 

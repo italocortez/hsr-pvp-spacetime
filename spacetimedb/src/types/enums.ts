@@ -112,6 +112,7 @@ export const ActionType = t.enum('ActionType', {
     ArrangeLineup: t.unit(),
     SetEidolon: t.unit(),    // A60 (S7b); ConfirmLineup removed (A60(8))
     ConfirmGame: t.unit(),   // A60 (S7b)
+    UnequipLightcone: t.unit(), // S7b hand-off (landed in S8d): removes the latest light cone of a character, refunded
 });
 
 export const TournamentStage = t.enum('TournamentStage', {

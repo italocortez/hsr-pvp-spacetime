@@ -21,4 +21,5 @@ export default {
   },
   characterName: __t.string(),
   eidolon: __t.u8(),
+  gameNumber: __t.option(__t.u8()),
 };

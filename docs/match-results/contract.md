@@ -616,6 +616,12 @@ after `start_draft`).
 | Series level after the override (Phase S7 execution) | Rejected: "The series is level (x-y): play the deciding game first." | Bo3 only |
 | Adjustment value 0 without `adjustmentId` (Phase S7 execution) | Rejected: "An adjustment of 0 changes nothing." | With an id, 0 deletes the entry |
 | `admin_force_finalize` with a `winnerTeamId` that names no side and no concede winner (Phase S7 execution, A31) | Rejected: "winnerTeamId must name the winning team …: no draws." | `runFinalization` also refuses a record without a winner |
+| Scores for an earlier game (Phase S8d execution, DECISIONS.md A65(4)) | An Admin may edit an earlier **closed** game (scores, adjustments, eidolons, light cones, lineup); anyone else: "Scores can only be entered for the current game (N)." / "Only an Admin may edit an earlier game." | supersedes the Phase S7 row "Scores for a game other than the current one" (the steps of every game now stay until finalization) |
+| `finalize_match_result` on a tournament record (Phase S8d execution, A24(4)) | Rejected: "Tournament matches finalize when the tournament completes (A24)." | casual and ranked tournaments alike |
+| `admin_force_finalize` / `admin_void_match` on a tournament lobby (Phase S8d execution, D.8.3) | Rejected with a pointer to `resolve_bracket_match` / `validate_match_result` / `rollback_bracket_match` | |
+| Concede or defer (Phase S8d execution, A54) | The lobby keeps one record: the Pending record becomes the concede record / carries the defer summary | no second record |
+| `validate_match_result` on a Pending / Validated / Voided record (Phase S8d execution) | Rejected: "Only a Submitted or Disputed result can be validated (this one is X)." | |
+
 
 ## Integration Points
 
@@ -636,6 +642,28 @@ after `start_draft`).
 | Tie-breaks 2 and 3 (Phase S7 execution) | `HsrCharacter.rarity`, `MatchSessionStep` Pick / AuctionSold payloads | 4★ count, 5★ eidolon total | Reads |
 | Tie-break 1 (Phase S7 execution) | steps + `MatchLineup.groups` (match-session) | Live roster cost (picks / sold characters + light cones + surcharge of the current groups), also after confirmation | Reads |
 | `runFinalization` (Phase S7 execution, A56) | `MatchLineupHistory`; `MatchResultGroupScore`, `MatchResultAdjustment`, `MatchLineup` | Archive lineups; delete the live rows | Writes |
+
+## Acceptance Scenarios (Phase S8d execution)
+
+### S8d-R1 A casual tournament match validates without finalizing (A24(1)(4))
+**Given** a tournament lobby of a casual tournament without `requireResultValidation`
+**When** the deciding game is closed
+**Then** the record is Validated with `settledAt`, the bracket match Decided (Played) for the winning side's team, the lobby in AwaitingResult with its record, participants, games and steps; no history row exists
+
+### S8d-R2 A ranked tournament match waits for staff (A36)
+**When** the deciding game of a `countTowardsMmr` tournament lobby is closed
+**Then** the record is Submitted and the bracket unchanged; a captain may dispute it; `validate_match_result` by `results` staff validates a Submitted or Disputed record and advances the bracket
+
+### S8d-R3 One record per lobby (A54)
+**Given** a lobby in Drafting (one Pending record from `start_draft`)
+**When** a player concedes
+**Then** the same record is Validated with `matchEndReason: Concede` and the winner; the lobby has exactly one record
+
+### S8d-R4 Admin edit of an earlier game (A65(4))
+**Given** a Bo3 in game 2 with game 1 closed
+**When** an Admin records new group scores for game 1, or calls `set_eidolon(…, gameNumber: 1)`
+**Then** game 1 is recomputed (still closed, confirmations untouched) and the series tally follows; a non-Admin is rejected
+
 
 ## Phase History
 
@@ -660,6 +688,7 @@ after `start_draft`).
 | Phase S7 execution | Review fixes: roster cost computed live (light cones equipped after `confirm_lineup` count); `set_score_adjustment` authority widened to the A39 staff set; input caps; series rule for `winnerOverride` stated. Synergy pairs (A21 / backlog #3): canonical storage + update-on-resubmit supersedes the literal "reject a pair that exists in either order" wording, **pending the user's confirmation** (docs/cost-sets/architecture.md) | 2026-11-06 |
 | Phase S7b execution | Game package (DECISIONS.md A60): per-game confirmation `confirm_game` (second confirmation closes the game; a level-4 tie stays open), staff close `close_game` with `winnerOverride` (A39 seating rule at the close replaces the Disputed route), automatic series submission at the deciding close (Casual finalizes inline, Ranked → Submitted), closed-game rule for every edit reducer, Admin edits of a closed game; `confirm_match_scores`, `submit_match_result` and `MatchResultRecord.blueConfirmed/redConfirmed` removed. Rules section "Game Confirmation, Close and Series Submission" and scenarios "Both Captains Confirm a Bo1" … "An Admin Edit That Would Undo the Series Is Rejected" added; the `confirm_match_scores` / `submit_match_result` reducer sections and the S7 override scenarios describe the removed path | 2026-11-07 |
 | Phase S7b follow-up (DECISIONS.md A63) | `confirm_game` sets only the captain's ready flag (never closes; full-control referee shortcut removed); `close_game` is the explicit submit: either captain once both flags are set, or the staff set at any time; only staff may pass `winnerOverride`. Scenario "Both Captains Ready, a Captain Submits the Game" added; "Both Captains Confirm a Bo1", "A Bo3 Game 1 Close Moves to BetweenGames" and "A Tie Stays Open Until a Staff Close" marked superseded | 2026-11-07 |
+| One record per lobby (A54); tournament routing at the deciding close, `validate_match_result`, `finalize_match_result` rejects tournament records, admin tools redirect (D.8.3); Admin edits of earlier closed games (A65(4)); scenarios S8d-R1..R4 and edge-case rows | Phase S8d execution (DECISIONS.md A24, A36, A54, A65) | 2026-11-07 |
 
 ---
 

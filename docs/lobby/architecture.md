@@ -303,6 +303,29 @@ B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3
 - **Captain / Host** -> the D-34 / D-36 helpers above, with the same grace, while the lobby is still in an active stage.
 - **Auto-pause** -> only an offline team player (never a spectator, coach or spectator-referee), only in Drafting, only under Standard/Deferred, only when not already paused.
 
+## Phase S8d execution (DECISIONS.md A26, A34, A35; ACCESS-SECURITY-OPS §D.8.4, §D.8.5)
+
+- **Seat enforcement (A35, D.8.5).** `set_team_slot` calls `ensureSeatAllowed(ctx, lobby, targetUserId, slot)`
+  (`helpers/tournamentLobbySides.ts`, over `allowedSlotsFor`): in a tournament lobby a slot outside the target's
+  allowed set is rejected, "This seat is not available to you in this tournament lobby."; casual lobbies allow every
+  slot. `shuffle_teams` rejects tournament lobbies: "Seats in a tournament lobby follow the bracket (A35); shuffling
+  is not available." (a shuffle would seat team1 on Red while the hand-off credits Blue = team1).
+- **Auto-seat (A26).** `join_lobby` has no slot argument; in a tournament lobby in Waiting the new member gets
+  `autoSeatSlot`: the player slot of its team (member or approved stand-in) while that side has fewer than `teamSize`
+  non-coach members, otherwise Spectator; coaches are never auto-seated. Casual lobbies and later stages: Spectator.
+  The 12-spectator cap applies only to a Spectator join.
+- **Referee reclaim (D.8.4).** `reclaim_referee` also accepts, in a tournament lobby, a member of the lobby holding the
+  `results` permission (assistant with `canResolveResults`, organizer, Moderator+); the flag moves to the caller.
+  Casual lobbies: host only.
+- **Auto-resume (S7b hand-off).** The reconnect branch of `join_lobby` resumes an auto-paused draft when the latest
+  **Pause** step of the current game is an auto-pause (a later SetEidolon or other step no longer hides it).
+- **Tournament lobby settings.** `update_lobby_settings` keeps the integrity set locked (verified: `bestOf`,
+  `lineupFormat`, `bestOfNAdvantage` rejected on change; the D-65 fields silently kept); the free set stays editable
+  by the host or Moderator+ in Waiting (A38(4)).
+- `hardDeleteLobby(ctx, lobbyId, keepResultRecord = false)`: with `keepResultRecord` the record row survives (the
+  caller marked it Voided, A24(3)); its children are deleted as usual.
+
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -337,6 +360,7 @@ B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3
 | Inline guest-lobby breaker in `create_lobby` (AbuseCounter fixed window, default 50 in 10 minutes) | Phase S6 execution (DECISIONS.md A57, A58) | 2026-11-06 |
 | `select_match_account` ratchet uses the merged rating of the current selection | Phase S6 execution (backlog #10) | 2026-11-06 |
 | `lineupFormat` drives the character count (Thirds = 12 per team) and the lineup groups; lineups arranged / confirmed by the captain or a referee only | Phase S7 execution (DECISIONS.md A21; backlog #3) | 2026-11-06 |
+| Seat enforcement in `set_team_slot`, auto-seat in `join_lobby` (tournament lobbies), `reclaim_referee` for seated `results` staff, auto-resume reads the latest Pause step of the current game, `hardDeleteLobby` keepResultRecord flag | Phase S8d execution (DECISIONS.md A24(3), A26, A35; D.8.4, D.8.5) | 2026-11-07 |
 
 ---
 

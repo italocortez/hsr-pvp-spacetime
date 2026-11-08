@@ -211,7 +211,7 @@ Index note: the (id, gameNumber) indexes are scanned per full key over `lobbyGam
 
 | Reducer | Arguments | Notes |
 |---|---|---|
-| `record_group_scores` | `lobbyId: u32, gameNumber: u8, teamSide: TeamSide, values: u32[] (hundredths, one per group), deaths: u8, screenshotUrl?: string` | captain of that side or any referee; Pending record; `ensureNotConceded`; current game only; resets both confirmations; recomputes the game; each value ≤ 100,000,000 hundredths |
+| `record_group_scores` | `lobbyId: u32, gameNumber: u8, teamSide: TeamSide, values: u32[] (hundredths, one per group), deaths: u8, screenshotUrl?: string` | captain of that side or any referee; Pending record; `ensureNotConceded`; the current game, or an earlier closed game for an Admin (`ensureEditableGame`, A65(4)); resets both confirmations; recomputes the game; each value ≤ 100,000,000 hundredths |
 | `set_score_adjustment` | `lobbyId: u32, gameNumber: u8, teamSide: TeamSide, value: i32, reason?: string, adjustmentId?: u32` | a lobby referee, Moderator+, or in a tournament lobby the organizer or an assistant with `canResolveResults` (the A39 staff set); no id → insert (0 rejected); id + value ≠ 0 → replace value / team / reason; id + 0 → delete; reason trimmed, ≤ 1000 chars; |value| ≤ 100,000,000 hundredths |
 | `confirm_match_scores` | `matchResultId: u32` | unchanged |
 | `submit_match_result` | `matchResultId: u32, winnerOverride?: TeamSide, winnerOverrideReason?: string` | recomputes the current game; every game needs complete scores; override only on a level-4 tie (A39 routing in the contract); series winner = game wins + A27 head start |
@@ -251,11 +251,39 @@ Phase S7b follow-up (DECISIONS.md A63, amends A60(3)): `confirm_game` only sets 
 |---|---|---|
 | `confirm_game` | `lobbyId: u32, teamSide: TeamSide` | A63 (amends A60(3)): the captain's ready flag only, never a close. Equipping or Scoring; `ensureMatchAlive`; Pending record; game open; caller = the captain of `teamSide` (live `LobbyMember.isCaptain`, player seat; a referee who is that captain confirms as the captain), anyone else `'Only the team captain can confirm the game.'`, a captain naming the other side `` `Only the team captain can confirm the ${side} side of the game.` ``; the side's lineup; both sides' scores complete (the game is recomputed); Auction gate for the side. A side cannot confirm twice. Sets the flag, logs `ConfirmGame { confirmedSide: side, closed: false }`, bumps `lastActivityAt`. The full-control spectator referee shortcut is removed (A63(4)); `MatchResultRecord.refereeFullControl` is no longer read |
 | `close_game` | `lobbyId: u32, winnerOverride?: TeamSide, winnerOverrideReason?: string` | A63(2): the submit of a game. Authority: the A60(4) staff set at any time (`resultAuthority`: lobby referee seated or spectator, Moderator+, organizer, assistant with `canResolveResults`), or, once `blueConfirmed && redConfirmed`, the captain of either team (player seat). A captain before both flags: `'Both captains must confirm the game before it can be submitted.'`; anyone else: `'Only a captain (once both sides confirmed), a referee, a Moderator or, in a tournament lobby, the organizer or a results assistant can close a game.'`. Equipping or Scoring; `ensureMatchAlive`; Pending record; game open; both lineups; scores complete; Auction gate for both. `winnerOverride` from the staff set only (a captain: `'Only staff may decide a tie.'`), only on a level-4 tie (`'A winner override is only accepted on an unresolved tie.'`), required on one; reason trimmed ≤ 1000. A39: in a tournament lobby a seated referee (player or coach slot) who is not staff cannot override (`'A referee seated on a team cannot decide a tie in a tournament lobby; staff must close this game.'`); casual: accepted and audited. Step `closed: true`; `actorSlot` = `confirmedSide` = the closer's team side for a captain or a seated referee, `Spectator` otherwise (A63(5)) |
-| `record_group_scores`, `set_score_adjustment` | unchanged | current game only (`ensureCurrentGame`) + `ensureOpenGame` after `findEditableResult`; open game: recompute + `resetConfirmations` on the game row; Admin on a closed game: no reset, `recomputeSeriesAfterAdminEdit`. `record_group_scores` skips the captain/referee check for an Admin's closed-game edit |
+| `record_group_scores`, `set_score_adjustment` | unchanged | the current game, or an earlier closed game for an Admin (`ensureEditableGame`, A65(4); was `ensureCurrentGame`) + `ensureOpenGame` after `findEditableResult`; open game: recompute + `resetConfirmations` on the game row; Admin on a closed game: no reset, `recomputeSeriesAfterAdminEdit`. `record_group_scores` skips the captain/referee check for an Admin's closed-game edit |
 | `advance_stage` (Scoring) | — | rejected: `'Games close through confirm_game or close_game; the stage moves on the close.'` |
 | `dispute_match_result` | unchanged | still requires Submitted |
 
-**Admin edits reach the current game only** (A60(7) with the `ensureCurrentGame` limit: tie-breaks 2/3 read the game's steps, which `advance_to_next_game` deletes). Between a close and the next draft, and after the deciding close, the current game is the last closed one.
+**Admin edits reach any closed game of the series** (A65(4), S8d; supersedes the S7 "current game only" limit): `record_group_scores` / `set_score_adjustment` go through `ensureEditableGame(ctx, lobbyId, gameNumber, user, record)` (the current game for everyone; an earlier game whose `MatchResultGame` row exists and is closed for an Admin; otherwise "Scores can only be entered for the current game (N)."); `set_eidolon`, `equip_lightcone`, `unequip_lightcone` and `arrange_lineup` take an optional trailing `gameNumber` (an earlier closed game, Admin only: "Only an Admin may edit an earlier game."). `recomputeSeriesAfterAdminEdit(ctx, lobby, record, actorId, gameNumber)` recomputes the edited game. The steps of every game stay until finalization (A65(1)), so tie-breaks 2/3 can read them. An earlier-game edit does not touch the session budgets (they belong to the current game).
+
+## Phase S8d execution (DECISIONS.md A24, A36, A38(1), A54, A60(6), A63, A65; ACCESS-SECURITY-OPS §D.8.3)
+
+**One record per lobby (A54).** `start_draft` inserts the lobby's only `MatchResultRecord`; `performConcede`
+updates it in place (Validated, `winnerTeamSide`, `matchEndReason: Concede`, `concedeTrigger`, `concedeSummary`,
+`concedeAtStage`, `settledAt`, `refereeUserId` = the conceding caller) and `defer_match` records `concedeSummary` /
+`concedeAtStage` on the Pending record (no winner). Both reject "No match result for this lobby." when none exists
+(they run from Drafting on). Readers: `findLobbyResult` (scoringHelpers) and `findPendingResult` /
+`findEditableResult` on it; `hasConcededRecord` reads the one record; `admin_force_finalize` / `admin_void_match`
+use `findLobbyResult`; `dispute_match_result` reads the disputed record's own `matchEndReason`. Views that still read
+records per lobby (S9 rewrites them; unchanged and correct with one record): `view_my_match_participants`
+(`views/matchViews.ts`, `[0]`),`view_my_tournament_match_results` (`views/tournamentViews.ts`, every record
+of a bracket match, Voided ones included), plus `accountSelection.ts` (`[0]`).
+
+**Routing at the deciding close (`submitSeriesResult`).** Standalone: Casual → Validated + `runFinalization`; Ranked →
+Submitted. Tournament (A24(1)(2)(4), A36): `requireResultValidation` → Submitted (staff: `validate_match_result`);
+otherwise Validated with `settledAt` and `handOffToBracket`. A tournament record is **never** finalized here; the lobby
+parks in AwaitingResult until the finalize job ([../tournament/architecture.md](../tournament/architecture.md)).
+
+| Reducer | Change |
+|---|---|
+| `validate_match_result(matchResultId)` (new) | `results`; tournament InProgress; record Submitted or Disputed (the dispute blocks until staff review, A36); → Validated, `settledAt`, `handOffToBracket('Played')`. Standalone records: "Only tournament results are validated by staff; use admin_force_finalize for a standalone match." |
+| `finalize_match_result` | tournament records rejected first: "Tournament matches finalize when the tournament completes (A24)."; authority = Moderator+ or the record's referee (the tournament branch and the D-H-01 guard are gone) |
+| `process_tournament_mmr` | **deleted**; MMR of tournament records runs in `runFinalization` step 11 inside the job (`options.tournamentMmr`), with the real `matchHistoryId` (the sentinel back-fill, step 12, is gone) |
+| `admin_force_finalize` / `admin_void_match` | reject tournament lobbies: "This is a tournament lobby: use resolve_bracket_match(bracketMatchId, winnerTeamId, reason) or validate_match_result(matchResultId) (results permission)." / "… use rollback_bracket_match(bracketMatchId, reason) …"; standalone unchanged (`winnerTeamId` 1 = Blue, 2 = Red) |
+| `override_match_result` | tournament record (InProgress; status Submitted, Disputed or Validated, else "Only a Submitted, Disputed or Validated tournament result can be overridden (this one is X)."; the lobby still exists, else "The match lobby no longer exists; use resolve_bracket_match."): Validated(winner) → record Validated + `settledAt`, then rollback when the match is Decided for the other team and `applyBracketResult(…, 'Staff')`; Rejected → rollback when the match is Decided for this record's team, lobby voided, status kept Rejected. Standalone unchanged |
+| `runFinalization` | 4th argument `options`; step 4 sorts by (gameNumber, sequence) and step 8 archives every game (A65(3)); step 17 (bracket) removed; leaderboard rebuild (13b) stays standalone-only |
+
 
 ## Phase History
 
@@ -278,6 +306,7 @@ Phase S7b follow-up (DECISIONS.md A63, amends A60(3)): `confirm_game` only sets 
 | Review fixes: roster cost always live (light cones after confirm count), `equip_lightcone` refreshes the lineup and reserves a confirmed Auction surcharge, adjustment authority = A39 staff set, input bounds, surcharge clamped before summing, `@shared/scoring` import | Phase S7 execution | 2026-11-06 |
 | "Game package" section: per-game `blueConfirmed` / `redConfirmed` / `closedAt` / `closedById` on `MatchResultGame`; `confirm_game`, `close_game` (A39 seating rule at the close), automatic series submission (`submitSeriesResult`), closed-game rule (`ensureOpenGame`), Admin edit path (`recomputeSeriesAfterAdminEdit`); `confirm_match_scores`, `submit_match_result`, `MatchResultRecord.blueConfirmed/redConfirmed` removed; `advance_stage` Scoring branch removed | Phase S7b execution (DECISIONS.md A60) | 2026-11-07 |
 | `confirm_game` = ready flag only (captain of the side; full-control referee shortcut removed); `close_game` = the submit (either captain once both flags are set, or the staff set; only staff may override); close step `actorSlot` = the closer's team side or Spectator; `resultAuthority` split from `ensureResultAuthority` | Phase S7b follow-up (DECISIONS.md A63) | 2026-11-07 |
+| One record per lobby (concede / defer update it; readers explicit); tournament routing at the deciding close (Validated + hand-off, or Submitted for staff); `validate_match_result` added; `process_tournament_mmr` deleted; `finalize_match_result` and the admin tools reject tournament records / lobbies; Admin edits reach earlier closed games (A24, A36, A54, A65(4), D.8.3) | Phase S8d execution | 2026-11-07 |
 
 ---
 
