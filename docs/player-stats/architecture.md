@@ -92,6 +92,16 @@ No direct client-callable reducers. All writes are performed by internal helpers
 2. Increment `winsAgainst`, `lossesAgainst`, or `drawsAgainst`
 3. Write via delete+insert
 
+## Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48)
+
+- `view_my_player_stats` / `view_my_character_stats` (`views/statsViews.ts`) emit the stat key and counters only: no
+  `userId` (the caller) and no audit columns, whose actor is the finalizing user (possibly an anonymized opponent or
+  referee, A37). Index-only (`by_user`).
+- `GlobalCharacterStat` (public): `incrementGlobalCharacterStat` lost its `actingUserId` parameter and stamps
+  `SYSTEM_USER_ID` on insert and update (A37, R2(3)). `view_my_relationships` carries the other player's card
+  (displayName, avatar, title, MMR per mode; PAGE-MAP D2, A40) and no audit columns: see
+  [../views/architecture.md](../views/architecture.md) "Phase S9b execution".
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -104,6 +114,7 @@ No direct client-callable reducers. All writes are performed by internal helpers
 | pickRate / banRate / winRate computed on write and stored (not computed at query time) | Phase 06 execution | 2026-02-28 |
 | MatchType (Solo | Team) partition allows separate stats for 1v1 vs team formats | Phase 06 execution | 2026-02-28 |
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
+| Stat views without userId / audit ids; GlobalCharacterStat SYSTEM actor; relationships with the other player's card and MMR | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 
 ---
 

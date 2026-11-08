@@ -17,24 +17,19 @@ import {
 
 
 export default __t.row({
-  userId: __t.u32().name("user_id"),
   get gameMode() {
     return GameMode.name("game_mode");
   },
   get draftMode() {
     return DraftMode.name("draft_mode");
   },
-  matchesPlayed: __t.u32().name("matches_played"),
-  wins: __t.u32(),
-  losses: __t.u32(),
-  matchesSpectated: __t.u32().name("matches_spectated"),
-  seasonId: __t.u32().name("season_id"),
   get matchType() {
     return MatchType.name("match_type");
   },
   teamSize: __t.u8().name("team_size"),
-  createdById: __t.u32().name("created_by_id"),
-  createdDate: __t.timestamp().name("created_date"),
-  lastModifiedById: __t.u32().name("last_modified_by_id"),
-  lastModifiedDate: __t.timestamp().name("last_modified_date"),
+  seasonId: __t.u32().name("season_id"),
+  matchesPlayed: __t.u32().name("matches_played"),
+  wins: __t.u32(),
+  losses: __t.u32(),
+  matchesSpectated: __t.u32().name("matches_spectated"),
 });

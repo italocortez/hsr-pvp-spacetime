@@ -390,6 +390,22 @@ _Superseded in Phase S8e execution (S8e review, DECISIONS.md A67(4), TD-13/14): 
 **When** an Admin deletes a `MatchSessionStepHistory` row through the admin row tool
 **Then** the key is the JSON pair `[matchHistoryId, sequence]`
 
+## Acceptance Scenarios (Phase S9b execution)
+
+### S9b-AD1 Admin panel data is staff-only (PAGE-MAP D6, §A.4 P4)
+**Given** a Moderator, an Admin and a plain User
+**When** each reads `view_admin_user_identities`, `view_admin_ban_records`, `view_admin_deleted_users`, `view_admin_presence`, `view_admin_lobby_bans`, `view_admin_abuse_config` and `view_admin_user_private`
+**Then** the Moderator and the Admin receive every row of each (real ids and names, anonymous lobbies' bans included); the User receives no row from any of them.
+
+### S9b-AD2 Presence counts (A48)
+**Given** a user connected on two devices, one of which disconnects
+**When** a Moderator reads `view_admin_presence`
+**Then** the user has two rows, one `isOnline = true`; the panel counts the user online.
+
+### S9b-AD3 Kill switch state (A42)
+**When** an Admin calls `admin_set_guest_lobby_creation(false)` (or the breaker trips)
+**Then** the `view_admin_abuse_config` row updates in place with `guestLobbyCreationEnabled = false`; the row carries no audit column. A Moderator sees the state but cannot change it.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -412,3 +428,4 @@ _Superseded in Phase S8e execution (S8e review, DECISIONS.md A67(4), TD-13/14): 
 | `admin_set_bracket_winner` removed; scenario "Staff Correct a Tournament Bracket" (`resolve_bracket_match` / `rollback_bracket_match`) added | Phase S8c execution (DECISIONS.md A23, A24(3), A25) | 2026-11-07 |
 | Scenario S8d-A1: admin tools redirect tournament lobbies to the bracket reducers | Phase S8d execution (D.8.3) | 2026-11-07 |
 | Scenarios S8e-A1..A3: override recomputes the derived tally, decided matches must be rolled back first, step-history key without a game number; supersedes the S8d override rule "rollback + re-apply" | Phase S8e execution (DECISIONS.md A67(3)(4)) | 2026-11-08 |
+| Scenarios S9b-AD1..AD3: admin views staff-only, per-identity presence rows, kill-switch state through `view_admin_abuse_config` | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |

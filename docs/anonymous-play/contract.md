@@ -186,6 +186,21 @@ when an earlier enrollment is withdrawn (the row is deleted, A26a(1)); the alias
 **When** Bob (Red) reads `view_my_lobby_chat`
 **Then** the lines read "Blue-1 left the match." and "Blue-1 is back."; Alice's teammates read her display name.
 
+## Acceptance Scenarios (Phase S9b execution)
+
+### S9b-A1 Public aggregates carry no player as audit actor (A37, R2(3))
+**Given** an anonymous ranked lobby whose result is finalized by a player
+**When** finalization writes the public aggregates
+**Then** every `Leaderboard` row, every `GlobalCharacterStat` row it touches and every automatically awarded `UserAchievement` row carry `SYSTEM_USER_ID` (0) as `createdById` / `lastModifiedById` and, for awards, `awardedById`; the finalizing player's id appears in none of them. A manual award (`manual_award_achievement`) keeps the awarding staff member's id (staff are identified).
+
+### S9b-A2 Residual risk of public aggregates (A40)
+The public aggregates stay readable by anyone (A37 aggregates): the top 20 per leaderboard category with the ranked user's id and exact rating, the award instant of each achievement, and public rosters (`view_public_hsr_accounts`, the owner's opt-in). Matching an anonymized seat's exact rating, a fresh award's timing, or an `OpenRoster` character set against these listings can defeat anonymity; the project accepts this risk and does not try to prevent it. Only the top 20 per category are public, so the bulk of ratings stays private (`MmrRating`).
+
+### S9b-A3 Roster visibility follows A40, not the D-18 override
+**Given** an anonymous-players lobby
+**When** an opponent reads `view_my_roster_visibility`
+**Then** the roster visibility setting decides as for identified seats (OpenRoster: roster and rating; ClosedWithRating: rating; ClosedNoRating: nothing), and the hidden member's `memberUserId` and `hsrAccountId` read 0 (the account id is a cross-lobby identifier). Supersedes the Phase 10.4 D-18 rule that forced ClosedNoRating for anonymized opponents.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -207,6 +222,7 @@ when an earlier enrollment is withdrawn (the row is deleted, A26a(1)); the alias
 | Full hydration from codebase | Phase 13 normalization | 2026-04-09 |
 | A37 / A40 rules as implemented in the S9a views (user ids 0 for anonymized and departed members, audit columns dropped, joinSeq label order, tournament alias / seat labels, ratings per roster visibility, MMR per hideMmr), the accepted residual risk; scenarios S9a-A1..A3 | Phase S9a execution (DECISIONS.md A37, A40) | 2026-11-08 |
 | S9a fix pass: the target's seat kind picks the toggle (spectators follow isAnonymousSpectators); member-event chat lines rendered per reader; banned user, registrant accounts and step labels masked or labelled; scenarios S9a-A4, S9a-A5 | Phase S9a execution (DECISIONS.md A37) | 2026-11-08 |
+| Scenarios S9b-A1..A3: SYSTEM audit actor on the public aggregates (top-20 leaderboard, global character stats, auto-awards), the residual risk of public aggregates and rosters, roster visibility per A40 with masked member and account ids (D-18 override superseded) | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 
 ---
 

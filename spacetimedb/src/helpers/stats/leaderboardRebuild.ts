@@ -2,14 +2,20 @@
 // Rebuilds the materialized Leaderboard table from MmrRating and PlayerStat data.
 // Called inline after MMR processing (runFinalization for standalone Ranked) and once at the end of the
 // run_tournament_finalize job of an MMR tournament (S8d).
+//
+// S9b (A40 mitigation (1), A44(2), A45(1)): the public table holds only the top 20 rows per category (three modes +
+// Global), ordered by rating, then wins, then user id (a total order: equal rating and wins never swap between
+// rebuilds). A37: every row's audit actor is SYSTEM_USER_ID; the finalizing player's id never reaches this public
+// aggregate (it may be a player of an anonymous lobby).
 
 import { insertWithAudit } from '@module/helpers/admin/auditHelpers';
+import { SYSTEM_USER_ID } from '@module/helpers/admin/auditColumns';
 
 /** Minimum matches required to appear on a leaderboard (D-46). */
 const MIN_MATCHES = 2;
 
-/** Maximum entries per leaderboard category. */
-const MAX_ENTRIES = 100;
+/** Maximum entries per leaderboard category (S9b: top 20, A40 / A44(2) / A45(1)). */
+export const LEADERBOARD_MAX_ENTRIES = 20;
 
 /** Per-mode category definitions mapping category name to GameMode tag. */
 const MODE_CATEGORIES = [
@@ -17,6 +23,8 @@ const MODE_CATEGORIES = [
     { category: 'ApocalypticShadow', gameModeTag: 'ApocalypticShadow' },
     { category: 'AnomalyArbitration', gameModeTag: 'AnomalyArbitration' },
 ];
+
+type Entry = { userId: number; rating: number; matchesPlayed: number; wins: number };
 
 /**
  * Returns the active season's id, or 0 if no active season exists.
@@ -26,95 +34,90 @@ function getActiveSeasonId(ctx: any): number {
     return active ? active.id : 0;
 }
 
+/** S9b total order: rating descending, then wins descending, then user id ascending. */
+function compareEntries(a: Entry, b: Entry): number {
+    if (b.rating !== a.rating) return b.rating - a.rating;
+    if (b.wins !== a.wins) return b.wins - a.wins;
+    return a.userId - b.userId;
+}
+
+/** Sums the user's PlayerStat wins of one season, optionally restricted to one game mode. */
+function sumWins(ctx: any, userId: number, seasonId: number, gameModeTag?: string): number {
+    let wins = 0;
+    for (const s of ctx.db.PlayerStat.by_user.filter(userId)) {
+        if (s.seasonId !== seasonId) continue;
+        if (gameModeTag !== undefined && s.gameMode.tag !== gameModeTag) continue;
+        wins += s.wins;
+    }
+    return wins;
+}
+
+function insertCategory(ctx: any, category: string, seasonId: number, entries: Entry[]): void {
+    entries.sort(compareEntries);
+    const top = entries.slice(0, LEADERBOARD_MAX_ENTRIES);
+    for (let i = 0; i < top.length; i++) {
+        const entry = top[i];
+        ctx.db.Leaderboard.insert(insertWithAudit(ctx, {
+            category,
+            rank: i + 1,
+            userId: entry.userId,
+            rating: entry.rating,
+            matchesPlayed: entry.matchesPlayed,
+            wins: entry.wins,
+            seasonId,
+        }, SYSTEM_USER_ID));
+    }
+}
+
 /**
- * Deletes all existing Leaderboard rows for the given seasonId and rebuilds
- * top 100 per category from MmrRating + PlayerStat data.
- * If seasonId is not provided, uses the active season (or 0 for pre-season).
+ * Deletes the season's Leaderboard rows (every category) and writes the top 20 per category from MmrRating +
+ * PlayerStat data. If seasonId is not provided, uses the active season (or 0 for pre-season). The audit actor is
+ * always SYSTEM_USER_ID (S9b, A37): callers no longer pass one.
  */
-export function rebuildLeaderboard(ctx: any, actingUserId: number, seasonId?: number): void {
+export function rebuildLeaderboard(ctx: any, seasonId?: number): void {
     const effectiveSeasonId = seasonId !== undefined ? seasonId : getActiveSeasonId(ctx);
 
-    // 1. Delete existing Leaderboard rows for this season
+    // 1. Delete the season's rows of every category (at most 4 × 20 per season, all rewritten below)
     for (const row of [...ctx.db.Leaderboard.iter()]) {
         if (row.seasonId === effectiveSeasonId) {
             ctx.db.Leaderboard.delete(row);
         }
     }
 
-    // 2. Per-mode categories
+    // 2. One pass over the season's ratings: per-mode candidates and the Global candidates' user ids
+    const byMode = new Map<string, Entry[]>();
+    for (const { gameModeTag } of MODE_CATEGORIES) byMode.set(gameModeTag, []);
+    const globalUserIds = new Set<number>();
+    for (const r of ctx.db.MmrRating.iter()) {
+        if (r.seasonId !== effectiveSeasonId || r.matchesPlayed < MIN_MATCHES) continue;
+        globalUserIds.add(r.userId);
+        const list = byMode.get(r.gameMode.tag);
+        if (!list) continue;
+        list.push({
+            userId: r.userId,
+            rating: r.rating,
+            matchesPlayed: r.matchesPlayed,
+            wins: sumWins(ctx, r.userId, effectiveSeasonId, r.gameMode.tag),
+        });
+    }
+
     for (const { category, gameModeTag } of MODE_CATEGORIES) {
-        const entries = [...ctx.db.MmrRating.iter()]
-            .filter((r: any) =>
-                r.gameMode.tag === gameModeTag &&
-                r.matchesPlayed >= MIN_MATCHES &&
-                r.seasonId === effectiveSeasonId
-            );
-
-        // Sort by rating descending
-        entries.sort((a: any, b: any) => b.rating - a.rating);
-
-        // Take top 100
-        const top = entries.slice(0, MAX_ENTRIES);
-
-        for (let i = 0; i < top.length; i++) {
-            const entry = top[i];
-            // Sum wins across all draftModes for this userId, gameMode, and season
-            const wins = [...ctx.db.PlayerStat.by_user.filter(entry.userId)]
-                .filter((s: any) => s.gameMode.tag === gameModeTag && s.seasonId === effectiveSeasonId)
-                .reduce((sum: number, s: any) => sum + s.wins, 0);
-
-            ctx.db.Leaderboard.insert(insertWithAudit(ctx, {
-                category,
-                rank: i + 1,
-                userId: entry.userId,
-                rating: entry.rating,
-                matchesPlayed: entry.matchesPlayed,
-                wins,
-                seasonId: effectiveSeasonId,
-            }, actingUserId));
-        }
+        insertCategory(ctx, category, effectiveSeasonId, byMode.get(gameModeTag) ?? []);
     }
 
-    // 3. Global category
-    // Collect all unique userIds with >= MIN_MATCHES in any mode for this season
-    const allRatings = [...ctx.db.MmrRating.iter()]
-        .filter((r: any) => r.matchesPlayed >= MIN_MATCHES && r.seasonId === effectiveSeasonId);
-    const userIds = new Set<number>();
-    for (const r of allRatings) {
-        userIds.add(r.userId);
-    }
-
-    const globalEntries: Array<{ userId: number; globalRating: number; totalMatches: number; totalWins: number }> = [];
-    for (const userId of userIds) {
+    // 3. Global category: the stored globalCompositeRating of users with >= MIN_MATCHES in any mode this season
+    const globalEntries: Entry[] = [];
+    for (const userId of globalUserIds) {
         const userRatings = [...ctx.db.MmrRating.user_id.filter(userId)]
             .filter((r: any) => r.seasonId === effectiveSeasonId);
         const globalRating = userRatings[0]?.globalCompositeRating ?? 0;
         if (globalRating <= 0) continue;
-
-        const totalMatches = userRatings.reduce((sum: number, r: any) => sum + r.matchesPlayed, 0);
-        const totalWins = [...ctx.db.PlayerStat.by_user.filter(userId)]
-            .filter((s: any) => s.seasonId === effectiveSeasonId)
-            .reduce((sum: number, s: any) => sum + s.wins, 0);
-
-        globalEntries.push({ userId, globalRating, totalMatches, totalWins });
+        globalEntries.push({
+            userId,
+            rating: globalRating,
+            matchesPlayed: userRatings.reduce((sum: number, r: any) => sum + r.matchesPlayed, 0),
+            wins: sumWins(ctx, userId, effectiveSeasonId),
+        });
     }
-
-    // Sort by globalCompositeRating descending
-    globalEntries.sort((a, b) => b.globalRating - a.globalRating);
-
-    // Take top 100
-    const topGlobal = globalEntries.slice(0, MAX_ENTRIES);
-
-    for (let i = 0; i < topGlobal.length; i++) {
-        const entry = topGlobal[i];
-        ctx.db.Leaderboard.insert(insertWithAudit(ctx, {
-            category: 'Global',
-            rank: i + 1,
-            userId: entry.userId,
-            rating: entry.globalRating,
-            matchesPlayed: entry.totalMatches,
-            wins: entry.totalWins,
-            seasonId: effectiveSeasonId,
-        }, actingUserId));
-    }
+    insertCategory(ctx, 'Global', effectiveSeasonId, globalEntries);
 }

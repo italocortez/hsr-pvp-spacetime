@@ -8,8 +8,8 @@ import { table, t } from 'spacetimedb/server';
  * and its displayName is archived here so `resolveUserLabel` (D-12) can still
  * render past actions.
  *
- * Write-once: no update path, no audit columns. PK-lookup only, no btree index.
- * Client never subscribes — only server-side helpers and the nuke flow touch this.
+ * Write-once: no update path, no audit columns.
+ * Client never subscribes — server-side helpers, the nuke flow and view_admin_deleted_users (S9b, Moderator+) read it.
  */
 export const DeletedUser = table({
     name: 'deleted_user',

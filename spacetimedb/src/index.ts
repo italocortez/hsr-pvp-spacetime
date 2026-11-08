@@ -31,6 +31,8 @@ export {
     view_my_profile,
     view_public_hsr_accounts,
     view_admin_user_private,
+    view_user_by_username,                  // S9b: arg view (username)
+    view_user_achievements,                 // S9b: arg view (userId)
 } from '@module/views/identityViews';
 export {
     view_my_cost_sets,
@@ -41,7 +43,23 @@ export {
 export {
     view_my_player_stats,
     view_my_character_stats,
+    view_my_mmr_ratings,                    // S9b
 } from '@module/views/statsViews';
+export {
+    view_my_calendar_events,                // S9b
+    view_my_calendar_invites,
+    view_my_availability,
+    view_saved_calendar_availability,
+    view_my_saved_calendars,
+} from '@module/views/calendarViews';
+export {
+    view_admin_user_identities,             // S9b: Moderator+
+    view_admin_ban_records,
+    view_admin_deleted_users,
+    view_admin_presence,
+    view_admin_lobby_bans,
+    view_admin_abuse_config,
+} from '@module/views/adminViews';
 export {
     view_my_relationships,
     view_my_roster_visibility,

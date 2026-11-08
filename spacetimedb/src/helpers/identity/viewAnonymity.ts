@@ -3,6 +3,7 @@ import { computeAnonymousLabel } from './anonymousLabels';
 import { resolveUserLabel } from './userLabel';
 import { slotIsSpectator, slotSameTeam } from '@module/helpers/lobby/lobbyHelpers';
 import { parseMemberEvent, renderMemberEvent } from '@module/helpers/lobby/memberEventChat';
+import { isRoleAtLeast } from './ensurePermissions';
 
 // ─── View-side anonymity (S9a; A37, A40) ────────────────────────────────────────────────────────────────────
 // Read-only helpers shared by the per-sender lobby / match views. Index-only: UserIdentity.identity,
@@ -95,4 +96,38 @@ export function renderSystemChat(ctx: any, lobby: any, caller: any, msg: any): {
         content: renderMemberEvent(ev.event, label),
         metadata: hidden ? JSON.stringify({ event: ev.event, subjectUserId: 0 }) : msg.metadata,
     };
+}
+
+// ─── S9b additions ───────────────────────────────────────────────────────────────────────────────────────────
+
+/** S9b: the caller's user id (UserIdentity.identity), or undefined for an unmapped identity. */
+export function callerUserId(ctx: any): number | undefined {
+    return ctx.db.UserIdentity.identity.find(ctx.sender)?.userId;
+}
+
+/** S9b staff views: the caller's User row when their role is Moderator or above, else undefined (the view returns []). */
+export function staffCaller(ctx: any): any | undefined {
+    const userId = callerUserId(ctx);
+    if (userId === undefined) return undefined;
+    const user = ctx.db.User.id.find(userId);
+    if (!user || !isRoleAtLeast(user.role, 'Moderator')) return undefined;
+    return user;
+}
+
+/** The MMR modes in the order of every `mmrByMode` array: [MemoryOfChaos, ApocalypticShadow, AnomalyArbitration]. */
+export const MMR_GAME_MODES = ['MemoryOfChaos', 'ApocalypticShadow', 'AnomalyArbitration'] as const;
+
+/**
+ * S9b (A40): a user's MMR per mode for the active season (0 = pre-season), `EloConfig.initialRating` for a mode never
+ * played; index-only (Season.is_active, EloConfigTable.id, MmrRating.by_user_mode_season). The same reading as the
+ * lobby member row's `mmrByMode`.
+ */
+export function mmrByModeOf(ctx: any, userId: number): number[] {
+    const activeSeason = [...ctx.db.Season.is_active.filter(true)][0];
+    const seasonId = activeSeason ? activeSeason.id : 0;
+    const initialRating = ctx.db.EloConfigTable.id.find(1)?.initialRating ?? 0;
+    return MMR_GAME_MODES.map((mode) => {
+        const row = [...ctx.db.MmrRating.by_user_mode_season.filter([userId, { tag: mode } as any, seasonId])][0];
+        return row ? row.rating : initialRating;
+    });
 }

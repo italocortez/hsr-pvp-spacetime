@@ -110,12 +110,22 @@ User (id: u32 autoInc PK)
    b. Skip if global cap reached (`by_achievement` count vs `maxAwards`)
    c. Load criteria via `by_achievement` index
    d. Evaluate ALL criteria (AND logic) against stat tables
-   e. Award if all criteria pass (insert `UserAchievement`)
+   e. Award if all criteria pass (insert `UserAchievement`; Phase S9b execution: `awardedById` and the audit columns are `SYSTEM_USER_ID`)
 
 Criteria resolution uses a hardcoded resolver map:
 - `PlayerStat`: sum filtered rows by `by_user` index
 - `PlayerCharacterStat`: sum filtered rows by `by_user` index
 - `MmrRating`: max across all rows for user (`user_id` index)
+
+## Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48)
+
+- **Audit actor (A37, R2(3)).** `checkAndAwardAchievements(ctx, userId)` (the `actingUserId` parameter is gone) inserts
+  auto-awards with `awardedById = SYSTEM_USER_ID` and SYSTEM audit columns: `UserAchievement` is public, and the
+  finalizing player may sit in an anonymous lobby. `manual_award_achievement` keeps the awarding staff member's id.
+- **`view_user_achievements(userId)`** (`views/identityViews.ts`, anonymous arg view, A43): `{ achievementId, awardedAt }`
+  per row of the user (index `by_user`), `awardedAt` = the row's `createdDate`; no `awardedById`, no audit columns. The
+  profile subscribes `SELECT * FROM view_user_achievements(<own id>)` + the public `Achievement` table. The award instant is
+  the A40 residual risk.
 
 ## Phase History
 
@@ -131,6 +141,7 @@ Criteria resolution uses a hardcoded resolver map:
 | Cascade: Achievement -> AchievementCriteria -> UserAchievement -> User.displayedAchievementId (D-23) | Phase 07 CONTEXT.md | 2026-03-14 |
 | Title = Achievement.name; no separate title table; displayedAchievementId FK on User (D-17, D-18) | Phase 07 CONTEXT.md | 2026-03-14 |
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
+| Auto-awards stamped SYSTEM (`awardedById` + audit), `actingUserId` parameter removed; `view_user_achievements(userId)` | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 
 ---
 

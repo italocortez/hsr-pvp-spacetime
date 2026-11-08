@@ -486,6 +486,17 @@ _Superseded in Phase S8e execution (DECISIONS.md A69(3))._ The ratchet is remove
 **When** the tournament is Completed
 **Then** MMR moves once per Validated record, in bracket order; nothing aggregates across games; a casual best-of-3 is three unrelated lobbies
 
+## Acceptance Scenarios (Phase S9b execution)
+
+### S9b-M1 Leaderboard holds the top 20 per category (A40, A44(2), A45(1))
+**Given** 25 players with at least 2 ranked matches in MemoryOfChaos this season, two of them tied on rating
+**When** a ranked match is finalized (or an MMR tournament's finalize job ends)
+**Then** the MemoryOfChaos category holds exactly 20 rows ranked 1..20 by rating; of the tied pair the one with more wins ranks higher, and on equal wins the lower user id; the Global category also holds at most 20 rows; every row's `createdById` / `lastModifiedById` is 0 (SYSTEM), whoever finalized.
+
+### S9b-M2 Own MMR ratings (A44(1) D1)
+**When** a player reads `view_my_mmr_ratings`
+**Then** they receive one row per mode and season they have a rating in, with rating, matchesPlayed, the season's wins in that mode and `lastUpdatedAt`; nobody else's rating arrives, and `MmrRating` cannot be subscribed directly.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -516,6 +527,7 @@ _Superseded in Phase S8e execution (DECISIONS.md A69(3))._ The ratchet is remove
 | Scenarios S8d-M1, S8d-M2: tournament MMR in the finalize job, none on Cancelled | Phase S8d execution (DECISIONS.md A24(4)(5)) | 2026-11-07 |
 | Scenario S8e-M1: every lobby is a match for MMR; an MMR-tournament Bo3 moves MMR up to three times (user confirmed 2026-11-08) | Phase S8e execution (DECISIONS.md A67(7)) | 2026-11-08 |
 | Scenario "Snapshot Ratchet" superseded: the ratchet is removed, the snapshot is taken once at `start_draft` (A66) | Phase S8e execution (DECISIONS.md A69(3)) | 2026-11-08 |
+| Scenarios S9b-M1, S9b-M2: top-20 leaderboard with the rating / wins / user id order and SYSTEM actor; own ratings through `view_my_mmr_ratings` | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 
 ---
 

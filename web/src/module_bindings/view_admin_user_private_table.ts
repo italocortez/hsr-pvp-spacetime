@@ -15,8 +15,4 @@ export default __t.row({
   loginMethod: __t.string().name("login_method"),
   providerId: __t.string().name("provider_id"),
   providerUsername: __t.string().name("provider_username"),
-  createdById: __t.u32().name("created_by_id"),
-  createdDate: __t.timestamp().name("created_date"),
-  lastModifiedById: __t.u32().name("last_modified_by_id"),
-  lastModifiedDate: __t.timestamp().name("last_modified_date"),
 });

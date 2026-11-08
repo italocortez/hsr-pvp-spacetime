@@ -137,18 +137,21 @@ Identity GC deletes the `UserPresence` row together with each identity it remove
 
 | View | Scope | Returns |
 |------|-------|---------|
-| `view_my_profile` | ctx.sender only | Merged User + UserPrivate fields (MyProfileRow) |
-| `view_my_identity` | ctx.sender only | Caller's UserIdentity row |
-| `view_admin_user_private` | Moderator+ only | All UserPrivate rows |
+| `view_my_profile` | ctx.sender only | Merged User + UserPrivate fields (MyProfileRow; an array of at most one row, PK `id`, since Phase S9b execution) |
+| `view_my_identity` | ctx.sender only | Caller's identity mapping: `{ identity, userId }` (Phase S9b execution) |
+| `view_admin_user_private` | Moderator+ only | All UserPrivate rows: userId, loginMethod, providerId, providerUsername (Phase S9b execution: staff-only full read after the role check, no audit columns) |
+| `view_user_by_username(username)` | anonymous arg view | At most one `User` projection for the exact username (Phase S9b execution, PAGE-MAP D7) |
 | `view_public_hsr_accounts` | Anonymous (projection-based privacy) | HsrAccount rows where `isRosterPublic=true`; rating included when `isRatingPublic=true`. Flat rows (one per character). Renamed from `view_public_accounts` in Phase 15.5 (D-04) — `hsr_` names the source table explicitly. Stays `anonymousView` per Phase 15.5 D-05 (projection body is the privacy gate, not subscription timing). |
 
 ### MyProfileRow fields (view_my_profile)
+Phase S9b execution (S3 hand-off, PAGE-MAP profile, A46, A48):
 ```
-id, username, displayName, isGuest, isOnline, lastLoginAt, role,
-hasDiscordLinked, avatarCharacterName, displayedAchievementId?, deletedAt?,
-discordId?, discordUsername?, email?,
-createdById, createdDate, lastModifiedById, lastModifiedDate
+id (PK), username, displayName, avatarCharacterName, displayedAchievementId?,
+hasDiscordLinked, isGuest, role,
+loginMethod?, providerId?, providerUsername?
 ```
+Presence lives on `UserPresence` (A48, staff-only through `view_admin_presence`); `email`, `discordId`,
+`discordUsername` left the schema in S3 (A46, D-B4); `deletedAt` and the audit columns are not projected.
 Note: `isPrivate` removed from schema (Phase 15.2 D-02 -- dead code, never gated).
 
 ## performUserDeletion Flow (Phase 15.2 D-09)
@@ -307,6 +310,7 @@ Any new frontend subscription to a raw table (no projection view body) OR a per-
 | Per-identity presence goes live: `client_connected` upserts `UserPresence`, restores lobby memberships (F1) and deletes pending `RefereeTransferCheck` rows; `client_disconnected` marks the identity offline and, only when no other device is live, marks memberships offline and schedules the 15 s check; `login_as_guest` writes the fresh guest's row; `server_link_provider` case 1b re-points the row; identity GC and `performUserDeletion` delete rows with the identity; staleness rule recorded (no heartbeat) | Phase S4 execution (DECISIONS.md A22a, A48, A16; S3 review L3/M3) | 2026-11-06 |
 | B-8 maintenance-mode rejection in `client_connected` (`AbuseConfig.maintenanceMode`, server identities exempt); inert until S5 seeds the row | Phase S4 execution (ACCESS-SECURITY-OPS §B.5) | 2026-11-06 |
 | `performUserDeletion` hands over the user's lobby flags first (A68(7)); `client_connected` / `client_disconnected` skip away / abandoned lobby rows (A68(2), details in `docs/lobby/architecture.md`) | Phase S8f execution (DECISIONS.md A68) | 2026-11-08 |
+| `view_my_profile` row re-shaped for the profile page (PK `id`; no presence, deletedAt or audit columns; provider fields per A46); `view_my_identity` = `{ identity, userId }`; `view_admin_user_private` a staff-only full read; new `view_user_by_username` | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 
 ---
 

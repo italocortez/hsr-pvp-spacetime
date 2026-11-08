@@ -173,7 +173,7 @@ export function runTournamentFinalizeTick(ctx: any, job: { tournamentId: number;
     if (batch.length === 0) {
         if (tournament.countTowardsMmr && tournament.stage.tag === 'Completed') { // A24(5): no MMR ran on Cancelled
             const activeSeason = [...ctx.db.Season.is_active.filter(true)][0];
-            rebuildLeaderboard(ctx, SYSTEM_USER_ID, activeSeason ? activeSeason.id : 0); // once, A37 audit actor
+            rebuildLeaderboard(ctx, activeSeason ? activeSeason.id : 0); // once; SYSTEM audit actor inside (A37, S9b)
         }
         ctx.db.Tournament.id.update(updateWithAudit(ctx, tournament, { finalizedAt: ctx.timestamp }, SYSTEM_USER_ID));
         for (const row of [...ctx.db.TournamentFinalizeJob.tournament_id.filter(job.tournamentId)]) {

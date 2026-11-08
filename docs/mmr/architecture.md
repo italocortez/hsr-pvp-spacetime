@@ -106,7 +106,7 @@ Called from `run_finalization`. Per-participant:
 ### rebuild_leaderboard(gameMode, seasonId)
 1. `ensureAdmin(ctx)` OR Moderator+
 2. Query all `MmrRating` rows for `[gameMode, seasonId]` via indexes
-3. Sort by `rating` descending; take top-N (configurable, default 100)
+3. Sort by `rating` descending; take top-N (configurable, default 100) [superseded in Phase S9b execution: top 20, see below]
 4. Delete existing `Leaderboard` rows for `[gameMode, seasonId]`
 5. Insert new `Leaderboard` rows with `rank` 1..N
 
@@ -128,6 +128,24 @@ played over three lobbies produces three records, each finalized by the job in b
 creation time), so MMR moves up to three times in an MMR tournament (user confirmed 2026-11-08). Nothing aggregates
 across games; the job's `{ tournamentMmr }` option is unchanged. No table change.
 
+## Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48)
+
+**Leaderboard (A40 mitigation (1), A44(2), A45(1)).** `helpers/stats/leaderboardRebuild.ts` `rebuildLeaderboard(ctx,
+seasonId?)` deletes the season's rows of every category and writes at most **20 rows per category** (`MemoryOfChaos`,
+`ApocalypticShadow`, `AnomalyArbitration`, `Global`; `LEADERBOARD_MAX_ENTRIES = 20`), ordered by rating descending, then
+wins descending, then user id ascending (a total order: equal rating and wins never swap between rebuilds). Eligibility
+is unchanged (`MIN_MATCHES = 2` in the season; Global = the stored `globalCompositeRating` > 0). Wins = the season's
+`PlayerStat.wins` of the user in that mode (every draft mode and match type), summed for Global. The audit actor of
+every row is `SYSTEM_USER_ID` (A37: the finalizing player may sit in an anonymous lobby); the `actingUserId` parameter is
+gone, so `runFinalization` and the S8d finalize job call `rebuildLeaderboard(ctx, seasonId)`. One pass over `MmrRating`
+(was four). No view: `Leaderboard` stays public.
+
+**`view_my_mmr_ratings`** (`views/statsViews.ts`, per-sender; A44(1) D1): the caller's `MmrRating` rows (index `user_id`),
+one per mode and season: `gameMode`, `seasonId`, `rating`, `matchesPlayed`, `wins` (the season's PlayerStat wins in that
+mode, as above), `lastUpdatedAt` (`lastModifiedDate`). No audit ids. `MmrRating` stays private (A40); other players'
+MMR reaches a client only where the UI names that player: the lobby member row (S9a) and `view_my_relationships`
+(`otherMmrByMode`, S9b).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -146,6 +164,7 @@ across games; the job's `{ tournamentMmr }` option is unchanged. No table change
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
 | Tournament MMR moved into the finalize job (Completed only, bracket order, real matchHistoryId, one leaderboard rebuild); `process_tournament_mmr` deleted (A24) | Phase S8d execution | 2026-11-07 |
 | MMR per game: one record per lobby, each finalized on its own; nothing aggregates across the games of a bracket match (A67(7)) | Phase S8e execution | 2026-11-08 |
+| Leaderboard: top 20 per category (rating, wins, user id), SYSTEM audit actor, `actingUserId` parameter removed; `view_my_mmr_ratings` (own rows per mode and season) | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 
 ---
 

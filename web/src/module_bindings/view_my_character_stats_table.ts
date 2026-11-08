@@ -17,7 +17,6 @@ import {
 
 
 export default __t.row({
-  userId: __t.u32().name("user_id"),
   characterName: __t.string().name("character_name"),
   get gameMode() {
     return GameMode.name("game_mode");
@@ -25,20 +24,16 @@ export default __t.row({
   get draftMode() {
     return DraftMode.name("draft_mode");
   },
-  wins: __t.u32(),
-  losses: __t.u32(),
-  matchesPlayed: __t.u32().name("matches_played"),
-  seasonId: __t.u32().name("season_id"),
   get matchType() {
     return MatchType.name("match_type");
   },
   teamSize: __t.u8().name("team_size"),
+  seasonId: __t.u32().name("season_id"),
+  matchesPlayed: __t.u32().name("matches_played"),
+  wins: __t.u32(),
+  losses: __t.u32(),
   timesBannedInMatch: __t.u32().name("times_banned_in_match"),
   timesFaced: __t.u32().name("times_faced"),
   winsAgainst: __t.u32().name("wins_against"),
   lossesAgainst: __t.u32().name("losses_against"),
-  createdById: __t.u32().name("created_by_id"),
-  createdDate: __t.timestamp().name("created_date"),
-  lastModifiedById: __t.u32().name("last_modified_by_id"),
-  lastModifiedDate: __t.timestamp().name("last_modified_date"),
 });

@@ -148,7 +148,7 @@ Defaults (D-B5): cursor 50 ms, chat 700 ms / 30 per minute, lineup 250 ms (no de
 - `admin_acknowledge_alert(alertId)`: `ensureAdmin`; "Alert N not found." when absent; no-op when already acknowledged; sets `isAcknowledged=true`, `acknowledgedAt=now` with **SYSTEM** audit columns (public row, no user ids); the admin's id goes only to the module log.
 - Inline circuit breaker (Phase S6 execution, A57 / A58; replaces the S5 scheduled breaker, which is deleted): `recordGuestLobbyCreation(ctx)` (helpers/lobby/abuseControls.ts) runs inside `create_lobby` for a **guest** caller after the kill-switch check passed. It bumps the fixed window `AbuseCounter['guest_lobby_create']` (a new window, count 1, opens when the stored one is `guestLobbyBurstWindowMinutes` old). When the new count exceeds `guestLobbyBurstThreshold` while the switch is on, the creation still succeeds, `guestLobbyCreationEnabled=false` (SYSTEM actor) and one `AdminAlert { kind: 'guest_lobby_burst', windowStartAt: counter.windowStart, windowEndAt: now, count, threshold, isAcknowledged: false }` is inserted, all in the same transaction. Later guest creations are rejected by the kill switch, so a trip writes one alert. Counts creations, not surviving lobbies; a rejected creation rolls its bump back. Cost: one PK read + one write per guest creation, nothing when idle.
 - Cleanup: `performUserDeletion` deletes the user's `UserRateState` row; `server_nuke_test_data` clears `UserRateState`, `AbuseCounter` and `AdminAlert` and keeps `AbuseConfig`.
-- Not here: `view_admin_abuse_config` (S9), the GitHub Actions notifier that reads `AdminAlert` (S13 companion).
+- Not here: the GitHub Actions notifier that reads `AdminAlert` (S13 companion). `view_admin_abuse_config` landed in Phase S9b execution (below).
 
 ### Game close and closed-game edits (Phase S7b execution, DECISIONS.md A60(4)(7))
 Two admin-side tools of the game package; the full reference is `docs/match-results/architecture.md` "Game package".
@@ -235,6 +235,29 @@ that threw); rules in [../tournament/architecture.md](../tournament/architecture
 - **Admin edits of a closed game (A60(7))**: the edit reducers take no game number; the record's one game is edited
   while the record is Pending or Submitted ([../match-results/architecture.md](../match-results/architecture.md)).
 
+## Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48)
+
+Staff views for the admin panel (`views/adminViews.ts`; PAGE-MAP D6 and adminpanel "after S9"). Each is per-sender and
+returns `[]` unless the caller's role is Moderator or above (`staffCaller` in `helpers/identity/viewAnonymity.ts`); staff
+are never an anonymous context, so ids and names are real. Each listing reads its whole table with `.iter()` only after
+the role check (A37 exemption for admin views: small tables, tab-gated), so a non-staff caller gets `[]` without touching
+the table; the panel subscribes each view while its tab is open. No `.iter()` in any view a non-staff client can subscribe.
+
+| View | Row | Index |
+|---|---|---|
+| `view_admin_user_identities` | identity (PK), userId, lastSeenAt (UserIdentity has no kind column; the Owner and Delegate server identities appear under the SYSTEM user's id) | full read |
+| `view_admin_ban_records` | id (PK), loginMethod, providerId, reason, bannedByUserId, bannedByLabel, createdDate | full read |
+| `view_admin_deleted_users` | id (PK), displayName, isGuest, deletedAt | full read |
+| `view_admin_presence` | identity (PK), userId, isOnline, lastLoginAt, lastSeenAt (A48: replaces `User.isOnline` / `lastLoginAt`; "online" = any live row of the user) | full read |
+| `view_admin_lobby_bans` | lobbyId, bannedUserId, bannedUserLabel, bannedByUserId, bannedByLabel, createdDate (the In-Cell `lobby_ban` grid; `unban_member` for staff) | full read |
+| `view_admin_abuse_config` | the `AbuseConfig` singleton (PK `id`), every column but the audit ones, incl. `guestLobbyCreationEnabled` (A42 kill switch) and `maintenanceMode`; Moderator+ reads, only an Admin writes | `AbuseConfig.id` |
+| `view_admin_user_private` (identityViews, re-checked) | userId (PK), loginMethod, providerId, providerUsername; no audit columns | full read |
+| `view_admin_stuck_games` (matchResultViews, S9a) | unchanged | — |
+
+Not built: `view_admin_lobbies`, `view_admin_match_results`, `view_admin_match_history` (ACCESS-SECURITY-OPS Appendix B
+lists them as trimmable; PAGE-MAP's adminpanel section, authoritative by A44(1), does not use them). The Users tab's
+public `User` subscription is the only `User` subscription in the app (PAGE-MAP D2).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -259,6 +282,7 @@ that threw); rules in [../tournament/architecture.md](../tournament/architecture
 | `admin_set_bracket_winner` removed; `resolve_bracket_match` / `rollback_bracket_match` (`results`) are the staff bracket tools | Phase S8c execution (DECISIONS.md A23, A24(3), A25) | 2026-11-07 |
 | `admin_force_finalize` / `admin_void_match` reject tournament lobbies with a pointer; `process_tournament_mmr` deleted; `validate_match_result` added (D.8.3, A24) | Phase S8d execution | 2026-11-07 |
 | `override_match_result` on a tournament record: Decided match rejected ("roll back first"), then `recordGameSettled` recomputes the derived tally (decidedBy Staff); `admin_delete_row` step-history key `[matchHistoryId, sequence]` (A67(3)(4)) | Phase S8e execution | 2026-11-08 |
+| Six Moderator+ admin views (`view_admin_user_identities`, `_ban_records`, `_deleted_users`, `_presence`, `_lobby_bans`, `_abuse_config`); `view_admin_user_private` without audit columns (staff-only full reads after the role check); three Appendix B admin views not built | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 
 ---
 

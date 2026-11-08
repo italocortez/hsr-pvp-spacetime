@@ -140,6 +140,27 @@ All cascades run in the same transaction as the triggering reducer:
 
 Cascade helper functions live in `spacetimedb/src/helpers/calendar/calendarCascade.ts`.
 
+## Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48)
+
+The four calendar tables are private since S3 (A37 calendar contexts); the calendar page reads them only through the
+per-sender views of `views/calendarViews.ts` (index-only, no audit columns, labels via `resolveUserLabel`, so no calendar
+route subscribes `User`, PAGE-MAP D2). Searches use `view_user_by_username(username)` (exact match, D7).
+
+| View | Rows | Indexes |
+|---|---|---|
+| `view_my_calendar_events` | each once: (a) events the caller organizes; (b) events the caller is invited to; (c) events linked to a bracket match of the caller's team (both teams' members, with or without an invite row); (d) events organized by a saved calendar the caller shows (`isVisible`). Columns: id (PK), organizerId, organizerLabel, title, description?, startAt, endAt, bracketMatchId? | `CalendarEvent.organizer_id` / `id` / `bracket_match_id`, `CalendarEventInvite.invitee_user_id`, `TournamentEnrolled.user_id`, `TournamentTeamMember.by_tournament_and_user`, `BracketMatch.tournament_id`, `SavedCalendar.user_id` |
+| `view_my_calendar_invites` | the caller's own invites, plus every invite of the events the caller organizes (the organizer's RSVP list; `remove_invite` takes the invitee id). Columns: inviteKey (PK = eventId << 32 \| inviteeUserId), eventId, inviteeUserId, inviteeLabel, inviteStatus, respondedAt?, inviterLabel (the invite's `createdById`, else the organizer) | `CalendarEventInvite.invitee_user_id` / `event_id`, `CalendarEvent.organizer_id` / `id` |
+| `view_my_availability` | the caller's slots: id (PK), startAt, endAt, isRecurring, recurrenceRule, expiresAt | `AvailabilitySlot.user_id` |
+| `view_saved_calendar_availability` | the slots of each saved calendar the caller shows: id (PK), userId, userLabel + the slot columns (A45(4): no consent flag) | `SavedCalendar.user_id`, `AvailabilitySlot.user_id` |
+| `view_my_saved_calendars` | the caller's bookmarks: targetUserId (PK), targetLabel, targetAvatarCharacterName? (undefined for a deleted target), isVisible | `SavedCalendar.user_id`, `User.id` |
+
+`isVisible` now filters server-side (events and availability of a hidden saved calendar are not sent; the bookmark row
+still is), as the Phase 08 slot view did; toggling re-sends at most one user's rows. A match event is visible to
+both teams' members whatever the invite rows (rule (c)), so `remove_invite` on a tournament-linked event removes the
+RSVP row, not the event from a removed team member's calendar; a stand-in (`TournamentStandIn`) sees it only through an
+invite row. An invitee never sees the other
+invitees of an event (an anonymous tournament's match event would otherwise list the opposing players).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -162,6 +183,7 @@ Cascade helper functions live in `spacetimedb/src/helpers/calendar/calendarCasca
 | TournamentParticipant split into TournamentEnrolled + TournamentTeamMember; create_calendar_event updated to use new tables | Phase 10.1 execution | 2026-03-25 |
 | Optional description on CalendarEvent appended at end for safe migration (D-26) | Phase 08 execution | 2026-03-28 |
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
+| Calendar views (five per-sender views, index-only, labels denormalized, `isVisible` filtered server-side, tournament match events visible to both teams' members, organizer sees the invite list) | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 
 ---
 

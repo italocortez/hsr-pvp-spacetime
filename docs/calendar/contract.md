@@ -558,6 +558,27 @@ When a user account is deleted, cascade-delete all calendar data:
 | UserDeletionJob cascade | All 4 calendar tables | Full user data cleanup | Writes (delete) |
 | SavedCalendar | AvailabilitySlot (client-side) | Subscription routing: client reads saved userIds, subscribes to their slots | Reads (client) |
 
+## Acceptance Scenarios (Phase S9b execution)
+
+The calendar tables are private (A37 calendar contexts; supersedes the Phase 08 D-05 "All CalendarEvent data fully public"); A45(4) keeps calendars public between players: a saved player's availability and own events are visible to every saver.
+
+### S9b-C1 Events the caller sees
+**Given** Carol organizes event E1 inviting Dave; Dave organizes E2; a TO created E3 for the bracket match of Dave's team; Dave saved Erin's calendar (shown) and Frank's (hidden); Erin organizes E4, Frank E5
+**When** Dave reads `view_my_calendar_events`
+**Then** E1, E2, E3 and E4 arrive once each with the organizer's display name as `organizerLabel`; E5 does not. E3 stays visible to Dave if his invite row is removed, as long as his team plays the match. An outsider reads none of them.
+
+### S9b-C2 Invites and RSVPs
+**When** Dave reads `view_my_calendar_invites`
+**Then** his invite to E1 arrives with `inviterLabel` = Carol's name, its status and `respondedAt`; the other invitees of E1 do not. **When** Carol reads it, every invite of E1 arrives with the invitee's id, name and response. Responding updates the row in place.
+
+### S9b-C3 Availability and saved calendars
+**When** Dave reads `view_my_availability`, `view_saved_calendar_availability` and `view_my_saved_calendars`
+**Then** he gets his own slots; Erin's slots with her id and name, none of Frank's (hidden); and both bookmarks with the target's name, avatar and `isVisible`. Showing Frank's calendar again sends his slots and events. No row carries an audit column; no calendar page subscribes the `User` table.
+
+### S9b-C4 Finding a player
+**When** Dave enters Erin's exact username in "Add calendar" or "Invite players"
+**Then** `view_user_by_username('<username>')` returns Erin's id, name and avatar; a prefix or an unknown name returns nothing.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -595,6 +616,8 @@ When a user account is deleted, cascade-delete all calendar data:
 
 | TournamentParticipant renamed to TournamentEnrolled + TournamentTeamMember | Phase 10.1 execution | 2026-04-03 |
 | Full hydration from codebase | Phase 13 normalization | 2026-04-09 |
+| Scenarios S9b-C1..C4: the calendar tables are private (supersedes D-05) and read through five per-sender views; events visible to organizer, invitees, both teams of a linked match and visible savers; invite lists for organizers; availability and bookmarks with labels; exact username search | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
+| A tournament-linked event stays visible to both teams' members whatever the invite rows: `remove_invite` on a match event deletes the RSVP row only and cannot hide the event from a removed team member; stand-ins see it only through an invite row | Phase S9b execution (DECISIONS.md A37, A40) | 2026-11-08 |
 
 ---
 

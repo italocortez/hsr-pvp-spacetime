@@ -17,25 +17,24 @@ import {
 
 
 export default __t.row({
-  userId: __t.u32().name("user_id"),
   otherUserId: __t.u32().name("other_user_id"),
+  otherDisplayName: __t.string().name("other_display_name"),
+  otherAvatarCharacterName: __t.option(__t.string()).name("other_avatar_character_name"),
+  otherDisplayedAchievementId: __t.option(__t.u32()).name("other_displayed_achievement_id"),
+  otherMmrByMode: __t.option(__t.array(__t.u32())).name("other_mmr_by_mode"),
   get gameMode() {
     return GameMode.name("game_mode");
   },
   get draftMode() {
     return DraftMode.name("draft_mode");
   },
-  matchesAsAlly: __t.u32().name("matches_as_ally"),
-  winsAsAlly: __t.u32().name("wins_as_ally"),
-  matchesAsOpponent: __t.u32().name("matches_as_opponent"),
-  winsAsOpponent: __t.u32().name("wins_as_opponent"),
-  seasonId: __t.u32().name("season_id"),
   get matchType() {
     return MatchType.name("match_type");
   },
   teamSize: __t.u8().name("team_size"),
-  createdById: __t.u32().name("created_by_id"),
-  createdDate: __t.timestamp().name("created_date"),
-  lastModifiedById: __t.u32().name("last_modified_by_id"),
-  lastModifiedDate: __t.timestamp().name("last_modified_date"),
+  seasonId: __t.u32().name("season_id"),
+  matchesAsAlly: __t.u32().name("matches_as_ally"),
+  winsAsAlly: __t.u32().name("wins_as_ally"),
+  matchesAsOpponent: __t.u32().name("matches_as_opponent"),
+  winsAsOpponent: __t.u32().name("wins_as_opponent"),
 });

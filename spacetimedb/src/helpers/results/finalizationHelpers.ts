@@ -457,13 +457,13 @@ export function runFinalization(
         }
     }
 
-    // S9 (R2(3), A37): write SYSTEM_USER_ID as the audit actor of the public Leaderboard rows; actingUserId
-    // may be a player in an anonymous lobby.
+    // S9b (R2(3), A37): rebuildLeaderboard stamps SYSTEM_USER_ID on the public Leaderboard rows itself (actingUserId
+    // may be a player in an anonymous lobby) and keeps the top 20 per category (A40, A44(2)).
     // 13b. Rebuild leaderboard after PlayerStat increments (reads PlayerStat.wins); tournament records: the S8d job
     //      rebuilds it once when the tournament is done
     if (!isConcede || concedeFlags.doLeaderboard) {
         if (matchResult.matchType.tag === 'Ranked' && !matchResult.isTournamentControlled) {
-            rebuildLeaderboard(ctx, actingUserId, seasonId);
+            rebuildLeaderboard(ctx, seasonId);
         }
     }
 
@@ -519,16 +519,16 @@ export function runFinalization(
                         incrementFacedStat(ctx, p.userId, charName, gameMode, draftMode, seasonId, matchType, teamSize, didOpponentWin, actingUserId);
                     }
                 }
-                // S9 (R2(3), A37): SYSTEM_USER_ID as the audit actor of the public GlobalCharacterStat rows.
-                incrementGlobalCharacterStat(ctx, charName, gameMode, draftMode, seasonId, matchType, teamSize, true, didActorWin, actingUserId);
+                // S9b (R2(3), A37): the helper stamps SYSTEM_USER_ID on the public GlobalCharacterStat rows.
+                incrementGlobalCharacterStat(ctx, charName, gameMode, draftMode, seasonId, matchType, teamSize, true, didActorWin);
             }
 
             if (actionTag === 'Ban') {
                 for (const p of effectiveParticipants) {
                     incrementBanStat(ctx, p.userId, charName, gameMode, draftMode, seasonId, matchType, teamSize, actingUserId);
                 }
-                // S9 (R2(3), A37): SYSTEM_USER_ID as the audit actor of the public GlobalCharacterStat rows.
-                incrementGlobalCharacterStat(ctx, charName, gameMode, draftMode, seasonId, matchType, teamSize, false, false, actingUserId);
+                // S9b (R2(3), A37): the helper stamps SYSTEM_USER_ID on the public GlobalCharacterStat rows.
+                incrementGlobalCharacterStat(ctx, charName, gameMode, draftMode, seasonId, matchType, teamSize, false, false);
             }
         }
     }
@@ -536,7 +536,7 @@ export function runFinalization(
     // 16.5. Check and award achievements per participant (D-14, D-76: ALWAYS skipped for concede)
     if (!isConcede || concedeFlags.doAchievements) {
         for (const p of effectiveParticipants) {
-            checkAndAwardAchievements(ctx, p.userId, actingUserId);
+            checkAndAwardAchievements(ctx, p.userId); // S9b: SYSTEM award actor (A37)
         }
     }
 

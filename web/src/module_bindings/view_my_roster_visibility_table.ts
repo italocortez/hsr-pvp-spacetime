@@ -12,6 +12,7 @@ import {
 
 export default __t.row({
   lobbyId: __t.u32().name("lobby_id"),
+  joinSeq: __t.u32().name("join_seq"),
   memberUserId: __t.u32().name("member_user_id"),
   hsrAccountId: __t.u32().name("hsr_account_id"),
   characterName: __t.string().name("character_name"),

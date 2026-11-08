@@ -1,101 +1,96 @@
 // ─── Identity Views ───────────────────────────────────────────────────────────
 // Views exposing user identity / profile data plus public roster account rows.
 //
-// 1. view_my_identity          — per-user, own UserIdentity mapping
-// 2. view_my_profile           — per-user, User + UserPrivate merge (D-04)
-// 3. view_public_hsr_accounts  — anonymous, HsrAccount rows where isRosterPublic=true (D-22; renamed Phase 15.5 D-04)
-// 4. view_admin_user_private   — admin/mod view, full UserPrivate rows (D-05)
+// 1. view_my_identity          — per-user, own UserIdentity mapping (identity + userId)
+// 2. view_my_profile           — per-user, User + UserPrivate merge for the profile page (D-04; S9b row)
+// 3. view_public_hsr_accounts  — anonymous, HsrAccount rows where isRosterPublic=true (D-22; S9b: is_roster_public index)
+// 4. view_admin_user_private   — Moderator+, UserPrivate rows (D-05; S9b: staff-only full read, no audit columns)
+// 5. view_user_by_username     — anonymous arg view (username): exact lookup on the unique User.username (S9b, D7)
+// 6. view_user_achievements    — anonymous arg view (userId): a user's UserAchievement rows (S9b, A43, A40)
+//
+// No full scan in any view a non-staff client can read (S9b). The Moderator+ listing reads the whole table after the
+// role check (A37 exemption for admin views: small tables, tab-gated).
 
 import spacetimedb from '@module/schema';
 import { t } from 'spacetimedb/server';
-import { UserIdentity } from '@module/tables/identity/userIdentity';
-import { UserPrivate } from '@module/tables/identity/userPrivate';
-import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { Role } from '@module/types/enums';
+import { staffCaller } from '@module/helpers/identity/viewAnonymity';
 
 // ---------------------------------------------------------------------------
-// 1. My Identity (per-user view) — only the caller's own identity mapping(s)
-//    Uses ctx.sender directly on the PK (identity column).
+// 1. My Identity (per-user view) — the caller's own identity mapping. Uses ctx.sender directly on the PK.
+//    S9b: identity + userId only (no audit columns, no lastSeenAt: a connect no longer rewrites the client row).
 // ---------------------------------------------------------------------------
+const MyIdentityRow = t.object('MyIdentityRow', {
+    identity: t.identity(),
+    userId: t.u32(),
+});
+
 // Phase 15 D-01/D-02: moved from securityViews.ts
 export const view_my_identity = spacetimedb.view(
     { name: 'view_my_identity', public: true },
-    t.option(UserIdentity.rowType),
+    t.option(MyIdentityRow),
     (ctx) => {
-        return ctx.db.UserIdentity.identity.find(ctx.sender) ?? undefined;
+        const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
+        if (!mapping) return undefined;
+        return { identity: mapping.identity, userId: mapping.userId };
     }
 );
 
 // ---------------------------------------------------------------------------
-// 2. My Profile (per-user view) -- merged User + UserPrivate for the requesting
-//    user. Returns full User fields plus private auth fields (loginMethod,
-//    providerId, providerUsername) so the caller sees their own data in a single
-//    subscription. (D-04)
-//    S3: isOnline / lastLoginAt / email left the row with the User columns (A48, D-B4);
-//    S9 re-shapes this view for the profile page (PAGE-MAP).
+// 2. My Profile (per-user view, layer 0) — User + UserPrivate for the caller (D-04), the profile page's row
+//    (PAGE-MAP profile): id, username ("IPC Battleground UID"), displayName, avatarCharacterName,
+//    displayedAchievementId, hasDiscordLinked, isGuest, role, and the provider fields (A46) when linked.
+//    S9b (S3 hand-off): no presence (UserPresence, A48), no email / discordId / discordUsername (gone in S3),
+//    no deletedAt, no audit columns. One row, PK `id` (updates in place: display name, avatar, title).
 // ---------------------------------------------------------------------------
-const MyProfileRow = t.object('MyProfileRow', {
-    // User fields
-    id: t.u32(),
+const MyProfileRow = t.row('MyProfileRow', {
+    id: t.u32().primaryKey(),
     username: t.string(),
     displayName: t.string(),
-    isGuest: t.bool(),
-    role: Role,
-    hasDiscordLinked: t.bool(),
     avatarCharacterName: t.string(),
     displayedAchievementId: t.u32().optional(),
-    deletedAt: t.timestamp().optional(),
+    hasDiscordLinked: t.bool(),
+    isGuest: t.bool(),
+    role: Role,
     // UserPrivate fields (only visible to the user themselves; A46 provider generalization)
     loginMethod: t.string().optional(),
     providerId: t.string().optional(),
     providerUsername: t.string().optional(),
-    // Audit from User
-    createdById: t.u32(),
-    createdDate: t.timestamp(),
-    lastModifiedById: t.u32(),
-    lastModifiedDate: t.timestamp(),
 });
 
 // Phase 15 D-01/D-02: moved from securityViews.ts
 export const view_my_profile = spacetimedb.view(
     { name: 'view_my_profile', public: true },
-    t.option(MyProfileRow),
+    t.array(MyProfileRow),
     (ctx) => {
         const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
-        if (!mapping) return undefined;
+        if (!mapping) return [];
         const user = ctx.db.User.id.find(mapping.userId);
-        if (!user) return undefined;
-
-        // Merge UserPrivate fields if they exist
+        if (!user) return [];
         const priv = ctx.db.UserPrivate.userId.find(mapping.userId);
-
-        return {
+        return [{
             id: user.id,
             username: user.username,
             displayName: user.displayName,
-            isGuest: user.isGuest,
-            role: user.role,
-            hasDiscordLinked: user.hasDiscordLinked,
             avatarCharacterName: user.avatarCharacterName,
             displayedAchievementId: user.displayedAchievementId,
-            deletedAt: user.deletedAt,
+            hasDiscordLinked: user.hasDiscordLinked,
+            isGuest: user.isGuest,
+            role: user.role,
             loginMethod: priv?.loginMethod,
             providerId: priv?.providerId,
             providerUsername: priv?.providerUsername,
-            createdById: user.createdById,
-            createdDate: user.createdDate,
-            lastModifiedById: user.lastModifiedById,
-            lastModifiedDate: user.lastModifiedDate,
-        };
+        }];
     }
 );
 
 // ---------------------------------------------------------------------------
-// 3. view_public_hsr_accounts — Anonymous view returning all HsrAccount rows where
-//    isRosterPublic=true. For profile browsing. Characters included, rating
-//    included if isRatingPublic=true. Replaces raw HsrAccount subscription (D-20,
-//    D-22). Flat rows (one per character); accounts with no characters emit a
-//    single row with characterName/eidolonLevel = undefined.
+// 3. view_public_hsr_accounts — anonymous view over HsrAccount rows the owner made public (isRosterPublic),
+//    through the S9b `is_roster_public` btree index (no scan). Characters included; the rating only when the
+//    owner also set isRatingPublic. Flat rows (one per character); an account with no characters emits one row
+//    with characterName / eidolonLevel undefined. The owner's `userId` is present: a public roster is
+//    identified by the owner's choice (not an anonymous context, A37); the residual risk that a public roster
+//    fingerprints an anonymized seat under OpenRoster is the one A40 accepts for ratings.
 // ---------------------------------------------------------------------------
 const PublicHsrAccountRow = t.object('PublicHsrAccountRow', {
     accountId: t.u32(),
@@ -115,61 +110,110 @@ export const view_public_hsr_accounts = spacetimedb.anonymousView(
     t.array(PublicHsrAccountRow),
     (ctx) => {
         const results: any[] = [];
-
-        // HsrAccount has no isRosterPublic index — iter() acceptable at ~300 rows
-        for (const account of ctx.db.HsrAccount.iter()) {
-            if (!account.isRosterPublic) continue;
-
-            const showRating = account.isRatingPublic;
-
+        for (const account of ctx.db.HsrAccount.is_roster_public.filter(true)) {
+            const base = {
+                accountId: account.id,
+                userId: account.userId,
+                uid: account.uid,
+                region: account.region,
+                displayLabel: account.displayLabel,
+                accountRating: account.isRatingPublic ? account.accountRating : undefined,
+            };
             const characters = [...ctx.db.HsrAccountCharacter.hsr_account_id.filter(account.id)];
             if (characters.length === 0) {
-                results.push({
-                    accountId: account.id,
-                    userId: account.userId,
-                    uid: account.uid,
-                    region: account.region,
-                    displayLabel: account.displayLabel,
-                    accountRating: showRating ? account.accountRating : undefined,
-                    characterName: undefined,
-                    eidolonLevel: undefined,
-                });
+                results.push({ ...base, characterName: undefined, eidolonLevel: undefined });
             } else {
                 for (const char of characters) {
-                    results.push({
-                        accountId: account.id,
-                        userId: account.userId,
-                        uid: account.uid,
-                        region: account.region,
-                        displayLabel: account.displayLabel,
-                        accountRating: showRating ? account.accountRating : undefined,
-                        characterName: char.characterName,
-                        eidolonLevel: char.eidolonLevel,
-                    });
+                    results.push({ ...base, characterName: char.characterName, eidolonLevel: char.eidolonLevel });
                 }
             }
         }
-
         return results;
     }
 );
 
 // ---------------------------------------------------------------------------
-// 4. Admin User Private (admin/mod view) -- returns all UserPrivate rows
-//    when caller has role >= Moderator (level 75). Enables admins and
-//    moderators to look up providerUsername for moderation. (D-05)
+// 4. Admin User Private (Moderator+) — every UserPrivate row, so staff can look up the provider name / id for
+//    moderation and the ban form (D-05). `[]` for anyone below Moderator. S9b: a staff-only full read after the role
+//    check, no audit columns. PK `userId` (a relink updates the row in place).
 // ---------------------------------------------------------------------------
+const AdminUserPrivateRow = t.row('AdminUserPrivateRow', {
+    userId: t.u32().primaryKey(),
+    loginMethod: t.string(),
+    providerId: t.string(),
+    providerUsername: t.string(),
+});
+
 // Phase 15 D-01/D-02: moved from securityViews.ts
 export const view_admin_user_private = spacetimedb.view(
     { name: 'view_admin_user_private', public: true },
-    t.array(UserPrivate.rowType),
+    t.array(AdminUserPrivateRow),
     (ctx) => {
-        const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
-        if (!mapping) return [];
-        const user = ctx.db.User.id.find(mapping.userId);
-        if (!user) return [];
-        if (!isRoleAtLeast(user.role, 'Moderator')) return [];
-        // iter() acceptable: admin-only view, bounded by number of verified users
-        return [...ctx.db.UserPrivate.iter()];
+        if (!staffCaller(ctx)) return [];
+        const rows: any[] = [];
+        // staff-only full read (A37 exemption for admin views: small tables, tab-gated)
+        for (const p of ctx.db.UserPrivate.iter()) {
+            rows.push({
+                userId: p.userId,
+                loginMethod: p.loginMethod,
+                providerId: p.providerId,
+                providerUsername: p.providerUsername,
+            });
+        }
+        return rows;
+    }
+);
+
+// ---------------------------------------------------------------------------
+// 5. view_user_by_username(username) — S9b (A44(1), PAGE-MAP D7): the calendar's "Add calendar" / "Invite players"
+//    search. Exact match on the unique `User.username` index (the UI asks for the exact IPC UID); no prefix
+//    search (it would need a scan). At most one row; an unknown or soft-deleted user returns []. Shared per
+//    argument (anonymousView): `User` is a public table, so the row discloses nothing new.
+// ---------------------------------------------------------------------------
+const UserByUsernameRow = t.row('UserByUsernameRow', {
+    userId: t.u32(),
+    username: t.string(),
+    displayName: t.string(),
+    avatarCharacterName: t.string(),
+    displayedAchievementId: t.u32().optional(),
+});
+
+export const view_user_by_username = spacetimedb.anonymousView(
+    { name: 'view_user_by_username', public: true },
+    { username: t.string() },
+    t.array(UserByUsernameRow),
+    (ctx, { username }) => {
+        const user = ctx.db.User.username.find(username);
+        if (!user || user.deletedAt !== undefined) return [];
+        return [{
+            userId: user.id,
+            username: user.username,
+            displayName: user.displayName,
+            avatarCharacterName: user.avatarCharacterName,
+            displayedAchievementId: user.displayedAchievementId,
+        }];
+    }
+);
+
+// ---------------------------------------------------------------------------
+// 6. view_user_achievements(userId) — S9b (A43: UserAchievement stays public; A37 aggregates; §A.4 P3): a user's
+//    titles for the profile's achievements view. `achievementId` + `awardedAt` (the row's createdDate); no
+//    `awardedById` and no audit columns (the A40 residual risk is the award timing, not the awarder).
+// ---------------------------------------------------------------------------
+const UserAchievementViewRow = t.row('UserAchievementViewRow', {
+    achievementId: t.u32(),
+    awardedAt: t.timestamp(),
+});
+
+export const view_user_achievements = spacetimedb.anonymousView(
+    { name: 'view_user_achievements', public: true },
+    { userId: t.u32() },
+    t.array(UserAchievementViewRow),
+    (ctx, { userId }) => {
+        const rows: any[] = [];
+        for (const ua of ctx.db.UserAchievement.by_user.filter(userId)) {
+            rows.push({ achievementId: ua.achievementId, awardedAt: ua.createdDate });
+        }
+        return rows;
     }
 );

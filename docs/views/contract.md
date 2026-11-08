@@ -599,6 +599,47 @@ _Superseded in Phase S9a execution (DECISIONS.md A37): the public history views 
 **When** an enrolled player reads `view_my_tournament_enrollment`, `view_my_team_requests`, `view_my_stand_ins` and `view_tournament_matches_for_me`
 **Then** they get their own enrollment rows; the requests they sent plus those to the team they captain (with the requester's id and label); the stand-ins naming them or their team; and the Ready / Pending bracket matches of their team with the opponent's name, the blue and red team ids (unset choice = team1 Blue) and the tally with the head start on team1. Staff reading `view_my_tournament_lobbies` get each lobby with its match's blue / red team ids.
 
+## Acceptance Scenarios (Phase S9b execution)
+
+### S9b-V1 Profile row (S3 hand-off, PAGE-MAP profile)
+**When** a signed-in user reads `view_my_profile`
+**Then** one row keyed by their user id carries username, displayName, avatarCharacterName, displayedAchievementId, hasDiscordLinked, isGuest, role and, once a provider is linked, loginMethod / providerId / providerUsername; no presence, `deletedAt` or audit column. An unmapped identity reads no row. `view_my_identity` returns only `{ identity, userId }`.
+
+### S9b-V2 Exact username lookup (A44(1), PAGE-MAP D7)
+**When** anyone subscribes `SELECT * FROM view_user_by_username('<username>')`
+**Then** the user with exactly that username is returned with id, username, display name, avatar and title; a different case, a prefix, an unknown name or a soft-deleted user returns no row.
+
+### S9b-V3 Achievements of a user (A43, A40)
+**When** anyone subscribes `SELECT * FROM view_user_achievements(<userId>)`
+**Then** each of that user's titles is listed as `{ achievementId, awardedAt }`, with no awarder and no audit column.
+
+### S9b-V4 Own stats and MMR (A40, A44(1) D1)
+**When** a player reads `view_my_player_stats`, `view_my_character_stats` and `view_my_mmr_ratings`
+**Then** only their own rows arrive, without `userId` and without audit columns (the finalizing user, who may be an anonymized opponent, never reaches the client); `view_my_mmr_ratings` has one row per mode and season with rating, matchesPlayed, the season's wins in that mode and `lastUpdatedAt`. Another user's rows and the private `MmrRating` table stay unreadable.
+
+### S9b-V5 Relationships carry the other player's card (PAGE-MAP D2, A40 CH-M1)
+**Given** Alice and Bob finished a ranked match as opponents
+**When** Alice reads `view_my_relationships`
+**Then** her row for Bob carries Bob's id, display name, avatar, title and his MMR per mode for the active season (the initial rating for a mode he never played), with the counters; no page needs a `User` subscription. After Bob's account is deleted the row keeps his archived name and no avatar, title or MMR.
+
+### S9b-V6 Roster visibility on anonymized seats (A37, A40)
+**Given** an anonymous-players lobby with `rosterVisibility = OpenRoster`; Bob (Red) and Alice (Blue) have selected accounts
+**When** Bob reads `view_my_roster_visibility`
+**Then** Alice's characters, eidolons and rating arrive with `memberUserId = 0`, `hsrAccountId = 0` and her `joinSeq`; Bob's own and his teammates' rows carry real ids. With `ClosedWithRating` Alice's seat yields one rating-only row per selected account (characterName '', eidolonLevel 0); with `ClosedNoRating` nothing. Any referee sees every roster (D-14); a seated referee still reads 0 for anonymized opponents' ids, a spectator referee reads real ids (D-71).
+
+### S9b-V7 Public rosters through the index (S3 hand-off)
+**When** anyone reads `view_public_hsr_accounts`
+**Then** exactly the accounts whose owner set `isRosterPublic` are listed with the owner's id, one row per character, the rating only when `isRatingPublic`; the view reads them through the `is_roster_public` index.
+
+### S9b-V8 Calendar views (A37, A45(4), PAGE-MAP calendar)
+**Given** Carol organizes an event inviting Dave; Dave saved Erin's calendar (shown) and Frank's (hidden); a tournament match event exists for Dave's team
+**When** Dave reads the calendar views
+**Then** `view_my_calendar_events` lists Carol's event, the match event (even without an invite row) and Erin's own events, each once with the organizer's label, and none of Frank's; `view_my_calendar_invites` lists Dave's invite with Carol as inviter and no other invitee's row, while Carol reads every invite of her event with the invitees' labels and responses; `view_my_availability` lists Dave's slots; `view_saved_calendar_availability` lists Erin's slots with her label and not Frank's; `view_my_saved_calendars` lists Erin and Frank with labels, avatars and `isVisible`. No calendar row carries an audit column.
+
+### S9b-V9 Admin views are staff-only (§A.4 P4, PAGE-MAP D6, A42, A48)
+**When** a Moderator reads `view_admin_user_identities`, `view_admin_ban_records`, `view_admin_deleted_users`, `view_admin_presence`, `view_admin_lobby_bans`, `view_admin_abuse_config` and `view_admin_user_private`
+**Then** every identity mapping, provider ban (with the banning admin's label), archived user, per-identity presence row (isOnline, lastLoginAt, lastSeenAt), lobby ban (real ids and labels, anonymous lobbies included), the abuse configuration with the guest kill switch (no audit columns) and every provider link are listed; a User or a guest reads `[]` from each.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -632,6 +673,7 @@ _Superseded in Phase S9a execution (DECISIONS.md A37): the public history views 
 | Scenarios S8e-V1..V2: step / history views without `gameNumber`; lobby browser over the live stages | Phase S8e execution (DECISIONS.md A67(1)(3)) | 2026-11-08 |
 | Scenarios S9a-V1..V11: browser without user ids, layer-0 list + full lobby row, A37 masking of lobby / result ids, member presence state and A40 ratings, bans and presets, live match views, staff stuck-games view, public history views removed, tournament arg and per-sender views | Phase S9a execution (DECISIONS.md A37, A40, A44, A48, A56, A60, A63, A68, A70) | 2026-11-08 |
 | S9a fix pass: `view_tournament_registrant_accounts` adds `seat` and masks `userId` / `hsrAccountId` (0) of other participants for a non-staff reader of an `isAnonymousDefault` tournament; spectators anonymized only under `isAnonymousSpectators` (anonymous-play contract "S9a fix pass") | Phase S9a execution (DECISIONS.md A37) | 2026-11-08 |
+| Scenarios S9b-V1..V9: profile row, exact username lookup, a user's achievements, own stats and MMR without audit ids, relationships with the other player's card and MMR, roster visibility per A40 with masked ids, public rosters through the index, the five calendar views, the staff-only admin views | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 
 ---
 

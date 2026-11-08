@@ -20,7 +20,7 @@ User (id: u32 autoInc PK)
   |     isRatingPublic: bool
   |     isDuplicateUid: bool (auto-recalculated when accounts share a UID)
   |     audit columns
-  |     Indexes: user_id (btree)
+  |     Indexes: user_id (btree), uid (btree), is_roster_public (btree, Phase S9b execution)
   |
   |     +-- HsrAccountCharacter (PK: [hsrAccountId, characterName])  [PRIVATE]
   |           hsrAccountId -> HsrAccount.id  [btree: hsr_account_id]
@@ -144,6 +144,21 @@ by an admin reducer.
 - `computeMergedAccountRating(ctx, accountIds)`: union of the accounts' rosters, per character the max eidolon across them, rated by the same formula; no accounts → 0.
 - `computeLobbyMemberRating(ctx, lobbyId, userId)`: the member's `LobbyMemberAccount` selection; one account → its stored `accountRating`; several → merged. Used by `start_draft` (MMR snapshot, taken once; the `select_match_account` ratchet is gone, A69(3)). The display path (`view_my_lobby_members`) is S9.
 
+## Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48)
+
+- **Index `HsrAccount.is_roster_public`** (btree on `isRosterPublic`, S3 hand-off): `view_public_hsr_accounts` reads the
+  public accounts through `is_roster_public.filter(true)` instead of scanning `HsrAccount`. Row unchanged: accountId,
+  userId, uid, region, displayLabel, accountRating (only when `isRatingPublic`), one row per character. The owner's
+  `userId` is present on purpose: a public roster is identified by the owner's choice, not an anonymous context (A37); the
+  chance that a public character set fingerprints an anonymized `OpenRoster` seat is part of the A40 accepted risk
+  ([../anonymous-play/contract.md](../anonymous-play/contract.md) S9b-A2).
+- **`view_my_roster_visibility`** (per-sender, the lobby room's Account Selection modal and roster drawer): A40 replaces
+  the D-18 override (anonymity no longer forces ClosedNoRating on opponents); self, teammates and any referee (D-14) see
+  roster and rating; others follow `rosterVisibility` (OpenRoster both, ClosedWithRating rating only, ClosedNoRating
+  nothing). Rows gain `joinSeq` (the member card's key); `memberUserId` and `hsrAccountId` are 0 when the member is
+  hidden from the caller (`hideUserId`). Abandoned memberships of the caller are skipped.
+- **`view_my_roster`** re-checked against the profile page: unchanged.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -160,6 +175,7 @@ by an admin reducer.
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
 | Phase 12.3 | Helper extraction (rosterMutations.ts with applyBatchUpsert / applyBatchRemove), migrate_roster rating-recompute fix (D-D-04 latent bug), four D-G lobby guards on set_active / batch_upsert / batch_remove / migrate_roster |
 | `computeAccountRating` refactored over a character set (`computeRosterRating`) with a single-account wrapper; `computeMergedAccountRating` / `computeLobbyMemberRating` added for multi-account players | Phase S6 execution (backlog #10) | 2026-11-06 |
+| `is_roster_public` index; `view_public_hsr_accounts` index-only (owner identified by choice); `view_my_roster_visibility` per A40 with `joinSeq` and masked ids | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 
 ---
 

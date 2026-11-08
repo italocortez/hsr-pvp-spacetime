@@ -15,22 +15,17 @@ import {
 
 
 export default __t.row({
-  id: __t.u32(),
+  id: __t.u32().primaryKey(),
   username: __t.string(),
   displayName: __t.string().name("display_name"),
+  avatarCharacterName: __t.string().name("avatar_character_name"),
+  displayedAchievementId: __t.option(__t.u32()).name("displayed_achievement_id"),
+  hasDiscordLinked: __t.bool().name("has_discord_linked"),
   isGuest: __t.bool().name("is_guest"),
   get role() {
     return Role;
   },
-  hasDiscordLinked: __t.bool().name("has_discord_linked"),
-  avatarCharacterName: __t.string().name("avatar_character_name"),
-  displayedAchievementId: __t.option(__t.u32()).name("displayed_achievement_id"),
-  deletedAt: __t.option(__t.timestamp()).name("deleted_at"),
   loginMethod: __t.option(__t.string()).name("login_method"),
   providerId: __t.option(__t.string()).name("provider_id"),
   providerUsername: __t.option(__t.string()).name("provider_username"),
-  createdById: __t.u32().name("created_by_id"),
-  createdDate: __t.timestamp().name("created_date"),
-  lastModifiedById: __t.u32().name("last_modified_by_id"),
-  lastModifiedDate: __t.timestamp().name("last_modified_date"),
 });

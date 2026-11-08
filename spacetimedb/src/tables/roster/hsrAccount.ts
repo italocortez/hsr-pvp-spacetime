@@ -23,5 +23,6 @@ export const HsrAccount = table({
     indexes: [
         { accessor: 'user_id', algorithm: 'btree', columns: ['userId'] },
         { accessor: 'uid', algorithm: 'btree', columns: ['uid'] },
+        { accessor: 'is_roster_public', algorithm: 'btree', columns: ['isRosterPublic'] }, // S9b: view_public_hsr_accounts (no scan)
     ],
 }, hsrAccountColumns);

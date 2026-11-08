@@ -184,7 +184,7 @@ Added to `matchHistoryViews.ts`, bindings at `src/module_bindings/view_my_*_hist
 ## Phase S9a execution (DECISIONS.md A37, A40, A44, A48, A56, A60, A63, A67, A68, A70, A71)
 
 Views part 1: lobby, match session, match results, tournament. S9b covers identity, stats, roster, calendar and
-admin. Every view body below is index-only (no table scan). Per-sender views return `[]` for an unknown sender and
+admin. No `.iter()` in any view a non-staff client can subscribe; admin views may read whole tables after the role check (S9b). Per-sender views return `[]` for an unknown sender and
 fan out from the caller's memberships with abandoned rows excluded (`callerMemberships`, A68(4)). Behaviour:
 [contract.md](contract.md) "Acceptance Scenarios (Phase S9a execution)"; the anonymity rules:
 [../anonymous-play/contract.md](../anonymous-play/contract.md).
@@ -255,6 +255,52 @@ Not changed, with the reason: `view_tournament_staff` keeps the three A25 flags 
 `view_my_lobby_bans` has no row id to add (LobbyBan's PK is `(lobbyId, bannedUserId)`). A tournament `Seat-<n>` is the
 enrollment rank and renumbers after a withdrawal (no stored enrollment counter; the alias is the stable label).
 
+## Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48)
+
+Views part 2: identity / profile, stats, roster, calendar, admin. The rule: no `.iter()` in any view a non-staff client can
+subscribe; admin views may read whole tables after the role check (the two S9a hand-off scans in `identityViews.ts` are
+gone). The six staff listings (`adminViews.ts` and `view_admin_user_private`) call `.iter()` only after the Moderator+
+check (`staffCaller`; A37 exemption for admin views: small tables, tab-gated), so a non-staff subscriber's read set is
+the caller's own identity and user rows. An unbounded index `Range` is not a substitute: it walks the whole index at
+the cost of a scan. New helpers in
+`helpers/identity/viewAnonymity.ts`: `callerUserId`, `staffCaller`, `MMR_GAME_MODES`, `mmrByModeOf` (the member row's
+MMR reading, shared). New files `views/calendarViews.ts`, `views/adminViews.ts`. Behaviour:
+[contract.md](contract.md) "Acceptance Scenarios (Phase S9b execution)".
+
+### Catalogue (S9b)
+
+| View | File | Scope | Row | Anonymity | Indexes |
+|---|---|---|---|---|---|
+| `view_my_identity` (modified) | identityViews | per-sender | `MyIdentityRow`: identity, userId (no audit columns, no lastSeenAt) | own | `UserIdentity.identity` |
+| `view_my_profile` (modified) | identityViews | per-sender, layer 0 | `MyProfileRow` (PK `id`; now an array of at most one row): username, displayName, avatarCharacterName, displayedAchievementId?, hasDiscordLinked, isGuest, role, loginMethod?, providerId?, providerUsername? | own; no presence, deletedAt or audit columns | `UserIdentity.identity`, `User.id`, `UserPrivate.userId` |
+| `view_public_hsr_accounts` (modified) | identityViews | anonymous shared | `PublicHsrAccountRow` (unchanged columns) | owner identified by choice (public roster) | `HsrAccount.is_roster_public` (**new index**), `HsrAccountCharacter.hsr_account_id` |
+| `view_admin_user_private` (modified) | identityViews | Moderator+ (else `[]`) | `AdminUserPrivateRow` (PK `userId`): loginMethod, providerId, providerUsername (no audit columns) | staff | full read (staff-only) |
+| `view_user_by_username(username)` (new) | identityViews | anonymous arg view | `UserByUsernameRow`: userId, username, displayName, avatarCharacterName, displayedAchievementId?; exact match, soft-deleted → `[]` | `User` is public | `User.username` (unique) |
+| `view_user_achievements(userId)` (new) | identityViews | anonymous arg view | `UserAchievementViewRow`: achievementId, awardedAt | no awarder, no audit ids (A40 residual risk = timing) | `UserAchievement.by_user` |
+| `view_my_player_stats` (modified) | statsViews | per-sender | `MyPlayerStatRow`: mode, draft, match type, team size, season, matchesPlayed, wins, losses, matchesSpectated | no userId, no audit ids (the writer stamps the finalizing user) | `PlayerStat.by_user` |
+| `view_my_character_stats` (modified) | statsViews | per-sender | `MyCharacterStatRow`: characterName + the stat key + the eight counters | as above | `PlayerCharacterStat.by_user` |
+| `view_my_mmr_ratings` (new) | statsViews | per-sender | `MyMmrRatingRow`: gameMode, seasonId, rating, matchesPlayed, wins (the season's PlayerStat wins in that mode), lastUpdatedAt | own | `MmrRating.user_id`, `PlayerStat.by_user` |
+| `view_my_relationships` (modified) | socialViews | per-sender | `MyRelationshipRow`: otherUserId, otherDisplayName, otherAvatarCharacterName?, otherDisplayedAchievementId?, otherMmrByMode? (active season, A40), the key and the four counters | other party identified (finished matches); no audit ids | `PlayerRelationship.by_user`, `User.id`, `DeletedUser.id`, `Season.is_active`, `EloConfigTable.id`, `MmrRating.by_user_mode_season` |
+| `view_my_roster_visibility` (modified) | socialViews | per-sender | `RosterVisibilityRow`: lobbyId, **joinSeq**, memberUserId, hsrAccountId, characterName, eidolonLevel, accountRating? | A40 replaces the D-18 override; `memberUserId` / `hsrAccountId` 0 when `hideUserId` | `LobbyMember.user_id` / `lobby_id` / `by_lobby_and_user`, `LobbyMemberAccount.by_lobby_and_user`, `HsrAccount.id`, `HsrAccountCharacter.hsr_account_id` |
+| `view_my_roster` (kept) | socialViews | per-sender | unchanged | own | `HsrAccount.user_id` |
+| `view_my_calendar_events` (new) | calendarViews | per-sender | `MyCalendarEventRow` (PK `id`): organizerId, organizerLabel, title, description?, startAt, endAt, bracketMatchId? | organizer identified; no invitee list | `CalendarEvent.organizer_id` / `id` / `bracket_match_id`, `CalendarEventInvite.invitee_user_id`, `TournamentEnrolled.user_id`, `TournamentTeamMember.by_tournament_and_user`, `BracketMatch.tournament_id`, `SavedCalendar.user_id` |
+| `view_my_calendar_invites` (new) | calendarViews | per-sender: own invites + invites of own events | `MyCalendarInviteRow` (PK `inviteKey` = eventId << 32 \| inviteeUserId): eventId, inviteeUserId, inviteeLabel, inviteStatus, respondedAt?, inviterLabel | an invitee never sees other invitees | `CalendarEventInvite.invitee_user_id` / `event_id`, `CalendarEvent.organizer_id` / `id` |
+| `view_my_availability` (new) | calendarViews | per-sender | `MyAvailabilityRow` (PK `id`): startAt, endAt, isRecurring, recurrenceRule, expiresAt | own | `AvailabilitySlot.user_id` |
+| `view_saved_calendar_availability` (new) | calendarViews | per-sender: visible saved calendars | `SavedCalendarAvailabilityRow` (PK `id`): userId, userLabel + the slot columns | A45(4): public between players | `SavedCalendar.user_id`, `AvailabilitySlot.user_id` |
+| `view_my_saved_calendars` (new) | calendarViews | per-sender | `MySavedCalendarRow` (PK `targetUserId`): targetLabel, targetAvatarCharacterName?, isVisible | — | `SavedCalendar.user_id`, `User.id` |
+| `view_admin_user_identities` (new) | adminViews | Moderator+ | `AdminUserIdentityRow` (PK `identity`): userId, lastSeenAt | staff | full read (staff-only) |
+| `view_admin_ban_records` (new) | adminViews | Moderator+ | `AdminBanRecordRow` (PK `id`): loginMethod, providerId, reason, bannedByUserId, bannedByLabel, createdDate | staff | full read (staff-only) |
+| `view_admin_deleted_users` (new) | adminViews | Moderator+ | `AdminDeletedUserRow` (PK `id`): displayName, isGuest, deletedAt | staff | full read (staff-only) |
+| `view_admin_presence` (new) | adminViews | Moderator+ | `AdminPresenceRow` (PK `identity`): userId, isOnline, lastLoginAt, lastSeenAt | staff | full read (staff-only) |
+| `view_admin_lobby_bans` (new) | adminViews | Moderator+ | `AdminLobbyBanRow`: lobbyId, bannedUserId, bannedUserLabel, bannedByUserId, bannedByLabel, createdDate | staff read real ids | full read (staff-only) |
+| `view_admin_abuse_config` (new) | adminViews | Moderator+ | `AdminAbuseConfigRow` (PK `id`): every `AbuseConfig` column but the audit ones (incl. `guestLobbyCreationEnabled`, `maintenanceMode`) | staff | `AbuseConfig.id` |
+
+Not built: `view_admin_lobbies`, `view_admin_match_results`, `view_admin_match_history` (Appendix B lists them, but
+PAGE-MAP's adminpanel section, authoritative by A44(1), does not). No `view_leaderboard` (A44(2)): `Leaderboard` stays a
+public table of at most 20 rows per category. The catalogue is 63 views: Appendix B's 62 minus the three trimmed admin
+views, plus `view_admin_stuck_games` (A60), `view_my_match_lineup_history` (A56), `view_my_mmr_ratings` and
+`view_user_by_username` (A44(1) D1 / D7; Appendix B predates them).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -278,6 +324,7 @@ enrollment rank and renumbers after a withdrawal (no stored enrollment counter; 
 | `view_my_lobbies` drops abandoned memberships; lobby rows carry `maxSpectators` | Phase S8f execution (DECISIONS.md A68) | 2026-11-08 |
 | S9a catalogue: browser re-created (no user id), `view_my_lobbies` trimmed to the layer-0 row, new `view_my_lobby`, `view_my_lobby_bans`, `view_lobby_presets`, `view_my_match_session`, `view_my_lineups`, `view_my_match_result`, `view_my_match_result_games`, `view_admin_stuck_games`, `view_my_match_lineup_history`, four tournament arg views and four per-sender tournament views; member row with presence state, ratings per A40; public history views removed; `viewAnonymity` helper; labels ordered by `joinSeq` | Phase S9a execution (DECISIONS.md A37, A40, A44, A48, A56, A60, A63, A67, A68, A70, A71) | 2026-11-08 |
 | S9a fix pass: seat-kind toggles in `shouldAnonymize`, browser host label, per-reader System chat lines, masked banned user, read-time step labels, no "Unknown" label, `view_tournament_registrant_accounts` masked + `seat` | Phase S9a execution (DECISIONS.md A37) | 2026-11-08 |
+| S9b catalogue: `view_my_profile` re-shaped (PK row, no presence / audit), `view_my_identity` trimmed, `view_public_hsr_accounts` index-only, `view_admin_user_private` a staff-only full read, new `view_user_by_username`, `view_user_achievements`, `view_my_mmr_ratings`, five calendar views, six admin views; stats and relationship rows without audit ids, relationships with the other player's card + MMR, roster visibility per A40 with `joinSeq` and masked ids | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 
 ---
 

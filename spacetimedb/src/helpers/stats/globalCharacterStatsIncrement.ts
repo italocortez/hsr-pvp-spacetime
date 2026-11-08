@@ -1,9 +1,11 @@
 // ─── Global Character Stat Increment Helper ─────────────────────────────────
 // Community-wide character aggregates (pick rate, ban rate, win rate).
 // Per D-34: GlobalCharacterStat is public, incremented during finalization.
+// S9b (R2(3), A37): the audit actor is always SYSTEM_USER_ID; the finalizing user's id never reaches this public row.
 
 import { auditUpdate } from '@module/helpers/admin/auditColumns';
 import { insertWithAudit } from '@module/helpers/admin/auditHelpers';
+import { SYSTEM_USER_ID } from '@module/helpers/admin/auditColumns';
 
 /**
  * Increments GlobalCharacterStat for a character action (pick or ban).
@@ -21,7 +23,6 @@ export function incrementGlobalCharacterStat(
     teamSize: number,
     isPick: boolean,
     isWin: boolean,
-    actingUserId: number
 ): void {
     // GlobalCharacterStat has no composite PK btree index with all 6 columns.
     // Use by_char_mode (2-col) + post-filter for the remaining columns.
@@ -47,7 +48,7 @@ export function incrementGlobalCharacterStat(
             wins: existing.wins + (isPick && isWin ? 1 : 0),
             losses: existing.losses + (isPick && !isWin ? 1 : 0),
             matchesPlayed: existing.matchesPlayed + (isPick ? 1 : 0),
-            ...auditUpdate(ctx, existing, actingUserId),
+            ...auditUpdate(ctx, existing, SYSTEM_USER_ID),
         } as any);
     } else {
         ctx.db.GlobalCharacterStat.insert(insertWithAudit(ctx, {
@@ -62,6 +63,6 @@ export function incrementGlobalCharacterStat(
             wins: isPick && isWin ? 1 : 0,
             losses: isPick && !isWin ? 1 : 0,
             matchesPlayed: isPick ? 1 : 0,
-        }, actingUserId));
+        }, SYSTEM_USER_ID));
     }
 }

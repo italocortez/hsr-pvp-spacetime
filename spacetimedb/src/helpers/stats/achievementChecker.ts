@@ -4,6 +4,7 @@
 // any that are newly satisfied.
 
 import { insertWithAudit } from '@module/helpers/admin/auditHelpers';
+import { SYSTEM_USER_ID } from '@module/helpers/admin/auditColumns';
 
 // ─── getField ────────────────────────────────────────────────────────────────
 // Explicit switch/case field resolution — NOT string indexing on row objects.
@@ -111,10 +112,11 @@ function evaluateCriterion(ctx: any, userId: number, criterion: any): boolean {
 // ─── checkAndAwardAchievements ───────────────────────────────────────────────
 // Called from runFinalization for each participant after all stat increments.
 //
-// @param userId       — the participant whose stats were just updated
-// @param actingUserId — the user who triggered finalization (used for audit cols)
+// @param userId — the participant whose stats were just updated
+// S9b (R2(3), A37): auto-awards are stamped with SYSTEM_USER_ID (awardedById and audit columns); a manual award
+// (manual_award_achievement) keeps the awarding staff member's id.
 
-export function checkAndAwardAchievements(ctx: any, userId: number, actingUserId: number): void {
+export function checkAndAwardAchievements(ctx: any, userId: number): void {
     // Achievement is admin-managed content with typically <100 rows; iter() is
     // acceptable here because it's a small, slowly-changing admin table. A btree
     // index on isManualOnly would add write overhead without meaningful benefit.
@@ -140,14 +142,14 @@ export function checkAndAwardAchievements(ctx: any, userId: number, actingUserId
         if (!allPassed) continue;
 
         // Award the achievement
-        // S9 (R2(3), A37): auto-awards write SYSTEM_USER_ID as awardedById and audit actor; the public
+        // S9b (R2(3), A37): auto-awards write SYSTEM_USER_ID as awardedById and audit actor; the public
         // UserAchievement row must not carry the finalizing player's id (anonymous lobbies).
         ctx.db.UserAchievement.insert(insertWithAudit(ctx, {
             id: 0,
             userId,
             achievementId: achievement.id,
-            awardedById: actingUserId,
-        }, actingUserId));
+            awardedById: SYSTEM_USER_ID,
+        }, SYSTEM_USER_ID));
 
         console.log(`[ACHIEVEMENT] Auto-awarded "${achievement.name}" to user #${userId}`);
     }

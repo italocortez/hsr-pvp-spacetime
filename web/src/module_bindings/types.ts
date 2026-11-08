@@ -130,6 +130,22 @@ export const AdjustmentItem = __t.object("AdjustmentItem", {
 });
 export type AdjustmentItem = __Infer<typeof AdjustmentItem>;
 
+export const AdminAbuseConfigRow = __t.object("AdminAbuseConfigRow", {
+  id: __t.u32(),
+  cursorMinIntervalMs: __t.u32(),
+  chatMinIntervalMs: __t.u32(),
+  chatPerMinute: __t.u32(),
+  lineupMinIntervalMs: __t.u32(),
+  lobbyCreatesPerHour: __t.u32(),
+  maxPresetsPerUser: __t.u32(),
+  maxCostSetsPerUser: __t.u32(),
+  maintenanceMode: __t.bool(),
+  guestLobbyCreationEnabled: __t.bool(),
+  guestLobbyBurstThreshold: __t.u32(),
+  guestLobbyBurstWindowMinutes: __t.u32(),
+});
+export type AdminAbuseConfigRow = __Infer<typeof AdminAbuseConfigRow>;
+
 export const AdminAlert = __t.object("AdminAlert", {
   id: __t.u32(),
   kind: __t.string(),
@@ -146,6 +162,59 @@ export const AdminAlert = __t.object("AdminAlert", {
   lastModifiedDate: __t.timestamp(),
 });
 export type AdminAlert = __Infer<typeof AdminAlert>;
+
+export const AdminBanRecordRow = __t.object("AdminBanRecordRow", {
+  id: __t.u32(),
+  loginMethod: __t.string(),
+  providerId: __t.string(),
+  reason: __t.string(),
+  bannedByUserId: __t.u32(),
+  bannedByLabel: __t.string(),
+  createdDate: __t.timestamp(),
+});
+export type AdminBanRecordRow = __Infer<typeof AdminBanRecordRow>;
+
+export const AdminDeletedUserRow = __t.object("AdminDeletedUserRow", {
+  id: __t.u32(),
+  displayName: __t.string(),
+  isGuest: __t.bool(),
+  deletedAt: __t.timestamp(),
+});
+export type AdminDeletedUserRow = __Infer<typeof AdminDeletedUserRow>;
+
+export const AdminLobbyBanRow = __t.object("AdminLobbyBanRow", {
+  lobbyId: __t.u32(),
+  bannedUserId: __t.u32(),
+  bannedUserLabel: __t.string(),
+  bannedByUserId: __t.u32(),
+  bannedByLabel: __t.string(),
+  createdDate: __t.timestamp(),
+});
+export type AdminLobbyBanRow = __Infer<typeof AdminLobbyBanRow>;
+
+export const AdminPresenceRow = __t.object("AdminPresenceRow", {
+  identity: __t.identity(),
+  userId: __t.u32(),
+  isOnline: __t.bool(),
+  lastLoginAt: __t.timestamp(),
+  lastSeenAt: __t.timestamp(),
+});
+export type AdminPresenceRow = __Infer<typeof AdminPresenceRow>;
+
+export const AdminUserIdentityRow = __t.object("AdminUserIdentityRow", {
+  identity: __t.identity(),
+  userId: __t.u32(),
+  lastSeenAt: __t.timestamp(),
+});
+export type AdminUserIdentityRow = __Infer<typeof AdminUserIdentityRow>;
+
+export const AdminUserPrivateRow = __t.object("AdminUserPrivateRow", {
+  userId: __t.u32(),
+  loginMethod: __t.string(),
+  providerId: __t.string(),
+  providerUsername: __t.string(),
+});
+export type AdminUserPrivateRow = __Infer<typeof AdminUserPrivateRow>;
 
 export const AnonymousChatRow = __t.object("AnonymousChatRow", {
   id: __t.u32(),
@@ -1745,6 +1814,72 @@ export const MmrRating = __t.object("MmrRating", {
 });
 export type MmrRating = __Infer<typeof MmrRating>;
 
+export const MyAvailabilityRow = __t.object("MyAvailabilityRow", {
+  id: __t.u32(),
+  startAt: __t.timestamp(),
+  endAt: __t.timestamp(),
+  isRecurring: __t.bool(),
+  get recurrenceRule() {
+    return RecurrenceRule;
+  },
+  expiresAt: __t.timestamp(),
+});
+export type MyAvailabilityRow = __Infer<typeof MyAvailabilityRow>;
+
+export const MyCalendarEventRow = __t.object("MyCalendarEventRow", {
+  id: __t.u32(),
+  organizerId: __t.u32(),
+  organizerLabel: __t.string(),
+  title: __t.string(),
+  description: __t.option(__t.string()),
+  startAt: __t.timestamp(),
+  endAt: __t.timestamp(),
+  bracketMatchId: __t.option(__t.u32()),
+});
+export type MyCalendarEventRow = __Infer<typeof MyCalendarEventRow>;
+
+export const MyCalendarInviteRow = __t.object("MyCalendarInviteRow", {
+  inviteKey: __t.u64(),
+  eventId: __t.u32(),
+  inviteeUserId: __t.u32(),
+  inviteeLabel: __t.string(),
+  get inviteStatus() {
+    return InviteStatus;
+  },
+  respondedAt: __t.option(__t.timestamp()),
+  inviterLabel: __t.string(),
+});
+export type MyCalendarInviteRow = __Infer<typeof MyCalendarInviteRow>;
+
+export const MyCharacterStatRow = __t.object("MyCharacterStatRow", {
+  characterName: __t.string(),
+  get gameMode() {
+    return GameMode;
+  },
+  get draftMode() {
+    return DraftMode;
+  },
+  get matchType() {
+    return MatchType;
+  },
+  teamSize: __t.u8(),
+  seasonId: __t.u32(),
+  matchesPlayed: __t.u32(),
+  wins: __t.u32(),
+  losses: __t.u32(),
+  timesBannedInMatch: __t.u32(),
+  timesFaced: __t.u32(),
+  winsAgainst: __t.u32(),
+  lossesAgainst: __t.u32(),
+});
+export type MyCharacterStatRow = __Infer<typeof MyCharacterStatRow>;
+
+export const MyIdentityRow = __t.object("MyIdentityRow", {
+  identity: __t.identity(),
+  userId: __t.u32(),
+});
+export type MyIdentityRow = __Infer<typeof MyIdentityRow>;
+
 export const MyLobbyListRow = __t.object("MyLobbyListRow", {
   id: __t.u32(),
   joinCode: __t.string(),
@@ -1756,27 +1891,77 @@ export const MyLobbyListRow = __t.object("MyLobbyListRow", {
 });
 export type MyLobbyListRow = __Infer<typeof MyLobbyListRow>;
 
+export const MyMmrRatingRow = __t.object("MyMmrRatingRow", {
+  get gameMode() {
+    return GameMode;
+  },
+  seasonId: __t.u32(),
+  rating: __t.u32(),
+  matchesPlayed: __t.u32(),
+  wins: __t.u32(),
+  lastUpdatedAt: __t.timestamp(),
+});
+export type MyMmrRatingRow = __Infer<typeof MyMmrRatingRow>;
+
+export const MyPlayerStatRow = __t.object("MyPlayerStatRow", {
+  get gameMode() {
+    return GameMode;
+  },
+  get draftMode() {
+    return DraftMode;
+  },
+  get matchType() {
+    return MatchType;
+  },
+  teamSize: __t.u8(),
+  seasonId: __t.u32(),
+  matchesPlayed: __t.u32(),
+  wins: __t.u32(),
+  losses: __t.u32(),
+  matchesSpectated: __t.u32(),
+});
+export type MyPlayerStatRow = __Infer<typeof MyPlayerStatRow>;
+
 export const MyProfileRow = __t.object("MyProfileRow", {
   id: __t.u32(),
   username: __t.string(),
   displayName: __t.string(),
+  avatarCharacterName: __t.string(),
+  displayedAchievementId: __t.option(__t.u32()),
+  hasDiscordLinked: __t.bool(),
   isGuest: __t.bool(),
   get role() {
     return Role;
   },
-  hasDiscordLinked: __t.bool(),
-  avatarCharacterName: __t.string(),
-  displayedAchievementId: __t.option(__t.u32()),
-  deletedAt: __t.option(__t.timestamp()),
   loginMethod: __t.option(__t.string()),
   providerId: __t.option(__t.string()),
   providerUsername: __t.option(__t.string()),
-  createdById: __t.u32(),
-  createdDate: __t.timestamp(),
-  lastModifiedById: __t.u32(),
-  lastModifiedDate: __t.timestamp(),
 });
 export type MyProfileRow = __Infer<typeof MyProfileRow>;
+
+export const MyRelationshipRow = __t.object("MyRelationshipRow", {
+  otherUserId: __t.u32(),
+  otherDisplayName: __t.string(),
+  otherAvatarCharacterName: __t.option(__t.string()),
+  otherDisplayedAchievementId: __t.option(__t.u32()),
+  otherMmrByMode: __t.option(__t.array(__t.u32())),
+  get gameMode() {
+    return GameMode;
+  },
+  get draftMode() {
+    return DraftMode;
+  },
+  get matchType() {
+    return MatchType;
+  },
+  teamSize: __t.u8(),
+  seasonId: __t.u32(),
+  matchesAsAlly: __t.u32(),
+  winsAsAlly: __t.u32(),
+  matchesAsOpponent: __t.u32(),
+  winsAsOpponent: __t.u32(),
+});
+export type MyRelationshipRow = __Infer<typeof MyRelationshipRow>;
 
 export const MyRosterAccountRow = __t.object("MyRosterAccountRow", {
   accountId: __t.u32(),
@@ -1792,6 +1977,14 @@ export const MyRosterAccountRow = __t.object("MyRosterAccountRow", {
   eidolonLevel: __t.option(__t.u8()),
 });
 export type MyRosterAccountRow = __Infer<typeof MyRosterAccountRow>;
+
+export const MySavedCalendarRow = __t.object("MySavedCalendarRow", {
+  targetUserId: __t.u32(),
+  targetLabel: __t.string(),
+  targetAvatarCharacterName: __t.option(__t.string()),
+  isVisible: __t.bool(),
+});
+export type MySavedCalendarRow = __Infer<typeof MySavedCalendarRow>;
 
 export const NominatePayload = __t.object("NominatePayload", {
   characterName: __t.string(),
@@ -1971,6 +2164,7 @@ export type RosterVisibility = __Infer<typeof RosterVisibility>;
 
 export const RosterVisibilityRow = __t.object("RosterVisibilityRow", {
   lobbyId: __t.u32(),
+  joinSeq: __t.u32(),
   memberUserId: __t.u32(),
   hsrAccountId: __t.u32(),
   characterName: __t.string(),
@@ -1989,6 +2183,20 @@ export const SavedCalendar = __t.object("SavedCalendar", {
   lastModifiedDate: __t.timestamp(),
 });
 export type SavedCalendar = __Infer<typeof SavedCalendar>;
+
+export const SavedCalendarAvailabilityRow = __t.object("SavedCalendarAvailabilityRow", {
+  id: __t.u32(),
+  userId: __t.u32(),
+  userLabel: __t.string(),
+  startAt: __t.timestamp(),
+  endAt: __t.timestamp(),
+  isRecurring: __t.bool(),
+  get recurrenceRule() {
+    return RecurrenceRule;
+  },
+  expiresAt: __t.timestamp(),
+});
+export type SavedCalendarAvailabilityRow = __Infer<typeof SavedCalendarAvailabilityRow>;
 
 export const Season = __t.object("Season", {
   id: __t.u32(),
@@ -2510,6 +2718,21 @@ export const UserAchievement = __t.object("UserAchievement", {
 });
 export type UserAchievement = __Infer<typeof UserAchievement>;
 
+export const UserAchievementViewRow = __t.object("UserAchievementViewRow", {
+  achievementId: __t.u32(),
+  awardedAt: __t.timestamp(),
+});
+export type UserAchievementViewRow = __Infer<typeof UserAchievementViewRow>;
+
+export const UserByUsernameRow = __t.object("UserByUsernameRow", {
+  userId: __t.u32(),
+  username: __t.string(),
+  displayName: __t.string(),
+  avatarCharacterName: __t.string(),
+  displayedAchievementId: __t.option(__t.u32()),
+});
+export type UserByUsernameRow = __Infer<typeof UserByUsernameRow>;
+
 export const UserDeletionJob = __t.object("UserDeletionJob", {
   scheduledId: __t.u64(),
   scheduledAt: __t.scheduleAt(),
@@ -2578,8 +2801,26 @@ export const ValidationStatus = __t.enum("ValidationStatus", {
 });
 export type ValidationStatus = __Infer<typeof ValidationStatus>;
 
+export const ViewAdminAbuseConfig = __t.object("ViewAdminAbuseConfig", {});
+export type ViewAdminAbuseConfig = __Infer<typeof ViewAdminAbuseConfig>;
+
+export const ViewAdminBanRecords = __t.object("ViewAdminBanRecords", {});
+export type ViewAdminBanRecords = __Infer<typeof ViewAdminBanRecords>;
+
+export const ViewAdminDeletedUsers = __t.object("ViewAdminDeletedUsers", {});
+export type ViewAdminDeletedUsers = __Infer<typeof ViewAdminDeletedUsers>;
+
+export const ViewAdminLobbyBans = __t.object("ViewAdminLobbyBans", {});
+export type ViewAdminLobbyBans = __Infer<typeof ViewAdminLobbyBans>;
+
+export const ViewAdminPresence = __t.object("ViewAdminPresence", {});
+export type ViewAdminPresence = __Infer<typeof ViewAdminPresence>;
+
 export const ViewAdminStuckGames = __t.object("ViewAdminStuckGames", {});
 export type ViewAdminStuckGames = __Infer<typeof ViewAdminStuckGames>;
+
+export const ViewAdminUserIdentities = __t.object("ViewAdminUserIdentities", {});
+export type ViewAdminUserIdentities = __Infer<typeof ViewAdminUserIdentities>;
 
 export const ViewAdminUserPrivate = __t.object("ViewAdminUserPrivate", {});
 export type ViewAdminUserPrivate = __Infer<typeof ViewAdminUserPrivate>;
@@ -2589,6 +2830,15 @@ export type ViewLobbyBrowser = __Infer<typeof ViewLobbyBrowser>;
 
 export const ViewLobbyPresets = __t.object("ViewLobbyPresets", {});
 export type ViewLobbyPresets = __Infer<typeof ViewLobbyPresets>;
+
+export const ViewMyAvailability = __t.object("ViewMyAvailability", {});
+export type ViewMyAvailability = __Infer<typeof ViewMyAvailability>;
+
+export const ViewMyCalendarEvents = __t.object("ViewMyCalendarEvents", {});
+export type ViewMyCalendarEvents = __Infer<typeof ViewMyCalendarEvents>;
+
+export const ViewMyCalendarInvites = __t.object("ViewMyCalendarInvites", {});
+export type ViewMyCalendarInvites = __Infer<typeof ViewMyCalendarInvites>;
 
 export const ViewMyCharacterStats = __t.object("ViewMyCharacterStats", {});
 export type ViewMyCharacterStats = __Infer<typeof ViewMyCharacterStats>;
@@ -2659,6 +2909,9 @@ export type ViewMyMatchSteps = __Infer<typeof ViewMyMatchSteps>;
 export const ViewMyMmrHistory = __t.object("ViewMyMmrHistory", {});
 export type ViewMyMmrHistory = __Infer<typeof ViewMyMmrHistory>;
 
+export const ViewMyMmrRatings = __t.object("ViewMyMmrRatings", {});
+export type ViewMyMmrRatings = __Infer<typeof ViewMyMmrRatings>;
+
 export const ViewMyPlayerStats = __t.object("ViewMyPlayerStats", {});
 export type ViewMyPlayerStats = __Infer<typeof ViewMyPlayerStats>;
 
@@ -2673,6 +2926,9 @@ export type ViewMyRoster = __Infer<typeof ViewMyRoster>;
 
 export const ViewMyRosterVisibility = __t.object("ViewMyRosterVisibility", {});
 export type ViewMyRosterVisibility = __Infer<typeof ViewMyRosterVisibility>;
+
+export const ViewMySavedCalendars = __t.object("ViewMySavedCalendars", {});
+export type ViewMySavedCalendars = __Infer<typeof ViewMySavedCalendars>;
 
 export const ViewMyStandIns = __t.object("ViewMyStandIns", {});
 export type ViewMyStandIns = __Infer<typeof ViewMyStandIns>;
@@ -2707,6 +2963,9 @@ export type ViewMyTournaments = __Infer<typeof ViewMyTournaments>;
 export const ViewPublicHsrAccounts = __t.object("ViewPublicHsrAccounts", {});
 export type ViewPublicHsrAccounts = __Infer<typeof ViewPublicHsrAccounts>;
 
+export const ViewSavedCalendarAvailability = __t.object("ViewSavedCalendarAvailability", {});
+export type ViewSavedCalendarAvailability = __Infer<typeof ViewSavedCalendarAvailability>;
+
 export const ViewTournamentMatchesForMe = __t.object("ViewTournamentMatchesForMe", {});
 export type ViewTournamentMatchesForMe = __Infer<typeof ViewTournamentMatchesForMe>;
 
@@ -2732,4 +2991,14 @@ export const ViewTournamentTeams = __t.object("ViewTournamentTeams", {
   tournamentId: __t.u32(),
 });
 export type ViewTournamentTeams = __Infer<typeof ViewTournamentTeams>;
+
+export const ViewUserAchievements = __t.object("ViewUserAchievements", {
+  userId: __t.u32(),
+});
+export type ViewUserAchievements = __Infer<typeof ViewUserAchievements>;
+
+export const ViewUserByUsername = __t.object("ViewUserByUsername", {
+  username: __t.string(),
+});
+export type ViewUserByUsername = __Infer<typeof ViewUserByUsername>;
 

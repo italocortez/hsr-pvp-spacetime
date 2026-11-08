@@ -175,7 +175,9 @@ export const admin_delete_row = spacetimedb.reducer(
                     );
                 }
 
-                // Soft-delete: set deletedAt so the client can show a notification
+                // Soft-delete: set deletedAt (no client signal: view_my_profile does not carry it). The scheduled
+                // run_user_deletion (performUserDeletion) then deletes the user's UserIdentity rows, so view_my_identity
+                // and view_my_profile go empty for every session of that user; the connection itself is not closed.
                 ctx.db.User.id.update(
                     updateWithAudit(ctx, user, { deletedAt: ctx.timestamp }, admin.id),
                 );

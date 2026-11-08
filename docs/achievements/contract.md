@@ -323,6 +323,17 @@ The achievement checker runs at step 16.5 of `runFinalization`, after all stat i
 | delete_achievement cascade | User table | Clears displayedAchievementId | Writes |
 | scripts/stdb/bootstrap.ts (data/seed/achievements.json) | Achievement/AchievementCriteria | Seeds 3 starter achievements | Writes |
 
+## Acceptance Scenarios (Phase S9b execution)
+
+### S9b-AC1 Auto-awards carry the SYSTEM actor (A37)
+**Given** a player meets an achievement's criteria in a match finalized by another player
+**When** the auto-award runs
+**Then** the new `UserAchievement` row has `awardedById = 0` and SYSTEM audit columns; a manual award by a Moderator records the Moderator's id.
+
+### S9b-AC2 A user's achievements through the arg view (A43)
+**When** anyone subscribes `SELECT * FROM view_user_achievements(<userId>)`
+**Then** the user's titles arrive as `{ achievementId, awardedAt }` without the awarder.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -340,6 +351,7 @@ The achievement checker runs at step 16.5 of `runFinalization`, after all stat i
 | Moderators have same permissions as Admins except delete_achievement and set other user's title | Phase 07 UAT (user decision) | 2026-03-28 |
 | Bootstrap seedAchievements fixed: subscriptionBuilder().subscribeToAllTables() + cache lookup replaces broken onInsert pattern | Phase 07 UAT | 2026-03-28 |
 | Full hydration from codebase | Phase 13 normalization | 2026-04-09 |
+| Scenarios S9b-AC1, S9b-AC2: SYSTEM actor on auto-awards; `view_user_achievements` | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 
 ---
 
