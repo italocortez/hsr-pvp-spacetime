@@ -22,6 +22,9 @@ export {
     view_my_lobbies,
     view_my_lobby_chat,
     view_my_lobby_members,
+    view_my_lobby,                          // S9a
+    view_my_lobby_bans,                     // S9a
+    view_lobby_presets,                     // S9a
 } from '@module/views/lobbyViews';
 export {
     view_my_identity,
@@ -47,16 +50,22 @@ export {
 export {
     view_my_match_steps,
     view_my_match_participants,
+    view_my_match_session,                  // S9a
+    view_my_lineups,                        // S9a
 } from '@module/views/matchViews';
 export {
-    view_match_history,
-    view_match_participant_history,
-    view_match_step_history,
+    view_my_match_result,                   // S9a
+    view_my_match_result_games,             // S9a
+    view_admin_stuck_games,                 // S9a
+} from '@module/views/matchResultViews';
+export {
+    // S9a (A37): view_match_history, view_match_participant_history, view_match_step_history removed
     view_my_match_session_history,          // Phase 15 D-13
     view_my_match_session_step_history,     // Phase 15 D-13
     view_my_match_participant_history,      // Phase 15 D-13
     view_my_mmr_history,                    // Phase 15 D-13
     view_my_match_result_game_history,      // Phase 15 D-13
+    view_my_match_lineup_history,           // S9a (A56)
 } from '@module/views/matchHistoryViews';
 export {
     view_my_tournaments,
@@ -67,6 +76,14 @@ export {
     view_my_tournament_match_results,
     view_my_tournament_lobbies,
     view_tournament_registrant_accounts,
+    view_tournament_participants,           // S9a: arg views (tournamentId)
+    view_tournament_teams,
+    view_tournament_team_members,
+    view_tournament_staff,
+    view_my_tournament_enrollment,          // S9a: per-sender
+    view_my_team_requests,
+    view_my_stand_ins,
+    view_tournament_matches_for_me,
 } from '@module/views/tournamentViews';
 export { broadcast_cursor } from '@module/reducers/lobby/cursor';
 export { login_as_guest } from '@module/reducers/identity/auth';

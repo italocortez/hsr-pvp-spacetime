@@ -12,14 +12,21 @@ import {
 import {
   GameMode,
   DraftMode,
+  RosterVisibility,
+  DisconnectPolicy,
+  LineupFormat,
   MatchType,
+  BanMode,
+  BanRestriction,
   LobbyStage,
 } from "./types";
 
 
 export default __t.row({
-  id: __t.u32(),
-  joinCode: __t.string().name("join_code"),
+  id: __t.u32().primaryKey(),
+  name: __t.string(),
+  joinCode: __t.option(__t.string()).name("join_code"),
+  hostLabel: __t.string().name("host_label"),
   get gameMode() {
     return GameMode.name("game_mode");
   },
@@ -29,14 +36,34 @@ export default __t.row({
   get matchType() {
     return MatchType.name("match_type");
   },
+  get banMode() {
+    return BanMode.name("ban_mode");
+  },
+  get banRestriction() {
+    return BanRestriction.name("ban_restriction");
+  },
+  get lineupFormat() {
+    return LineupFormat.name("lineup_format");
+  },
+  get rosterVisibility() {
+    return RosterVisibility.name("roster_visibility");
+  },
+  get disconnectPolicy() {
+    return DisconnectPolicy.name("disconnect_policy");
+  },
+  teamSize: __t.u8().name("team_size"),
   currentPlayerCount: __t.u8().name("current_player_count"),
-  isTournamentControlled: __t.bool().name("is_tournament_controlled"),
+  coachCount: __t.u8().name("coach_count"),
+  spectatorCount: __t.u8().name("spectator_count"),
+  maxSpectators: __t.u8().name("max_spectators"),
+  isPublic: __t.bool().name("is_public"),
   isAnonymousPlayers: __t.bool().name("is_anonymous_players"),
+  isAnonymousSpectators: __t.bool().name("is_anonymous_spectators"),
+  isTournamentControlled: __t.bool().name("is_tournament_controlled"),
   get stage() {
     return LobbyStage;
   },
-  isPublic: __t.bool().name("is_public"),
-  teamSize: __t.u8().name("team_size"),
+  createdDate: __t.timestamp().name("created_date"),
   tournamentName: __t.option(__t.string()).name("tournament_name"),
   costSetName: __t.option(__t.string()).name("cost_set_name"),
 });

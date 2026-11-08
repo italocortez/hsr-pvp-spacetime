@@ -15,7 +15,7 @@ Presence and disconnects (Phase S4 execution; A22a, A48): a member's `isOnline` 
 ## Table Relationships
 
 ```
-Lobby (id: u32 autoInc PK)  [public: true]
+Lobby (id: u32 autoInc PK)  [PRIVATE; view_my_lobby / view_lobby_browser; staff view in S9b]
   +-- joinCode: string  [unique]
   +-- hostUserId -> User.id  [btree: host_user_id]
   +-- teamBlueAlias: string / teamRedAlias: string
@@ -90,7 +90,7 @@ Lobby (id: u32 autoInc PK)  [public: true]
   |     x: f32 / y: f32 / timestamp: Timestamp
   |     audit columns
   |
-  +-- LobbyPreset (id: u32 autoInc PK)  [public: true]
+  +-- LobbyPreset (id: u32 autoInc PK)  [PRIVATE; read through view_lobby_presets (system preset + own), S9a]
         name: string / isSystemPreset: bool
         creatorUserId -> User.id  [btree: creator_user_id]
         <full flat copy of Lobby config fields: teamSize, draftMode, banMode, gameMode, matchType,
@@ -387,6 +387,31 @@ Membership lifecycle after A68 (details in the reducer flows above):
 - **DQ (A68(6)).** `dq_participant` no longer removes a DQ'd player from a live lobby; the whole-team settlement is unchanged ([../tournament/architecture.md](../tournament/architecture.md)).
 - **Views.** `view_my_lobbies` skips abandoned rows (A68(10)); the presence state of `view_my_lobby_members` is S9's.
 
+## Phase S9a execution (DECISIONS.md A37, A40, A44(1), A48, A68(10))
+
+- **`LobbyPreset` is private**; `view_lobby_presets` (per-sender) returns the system preset (`creatorUserId = SYSTEM`,
+  `isSystemPreset`) plus the caller's own presets, every column but the audit ones (index `creator_user_id`).
+- **`view_lobby_browser`** (anonymous shared) lists the live-stage lobbies, public and private, with no user id: an
+  empty `name` reads "Lobby <joinCode>" (public) or "Private lobby" (private), `joinCode` only on public lobbies (F17),
+  `hostLabel` = the host's display name or "Anonymous host" (D-A4), coach / spectator counts and `maxSpectators`.
+- **`view_my_lobby_members`** row: `memberKey` (PK, lobbyId << 32 | joinSeq), `lobbyId`, `joinSeq`, `userId` (0 when
+  anonymized), `label`, `lobbySlot`, `presence` (`MemberPresence`: Gone if `abandonedAt`, Away if `leftAt`, else Online
+  when the row or any `UserPresence` row of the user is live, A48, else Offline), `isHost`, `isReferee`, `isCaptain`,
+  `isConfirmed`, `avatarCharacterName?` / `displayedAchievementId?` (identified seats), `mmrByMode?` (identified, not
+  `hideMmr`), `accountRating?` (`computeLobbyMemberRating`, merged) / `accountCount?` (A40 roster visibility). No
+  throttle stamps, no audit columns.
+- **`view_my_lobby`** returns the full `Lobby` row (host and audit ids masked per A37); **`view_my_lobbies`** is the
+  layer-0 row `{ id, joinCode, name, stage, isAway }`; **`view_my_lobby_bans`** lists the bans of lobbies the caller
+  hosts or referees. Catalogue: [../views/architecture.md](../views/architecture.md).
+
+## Phase S9a execution, fix pass (DECISIONS.md A37)
+
+- `shouldAnonymize` (`helpers/identity/anonymousHelpers.ts`): the target's seat kind picks the toggle, a spectator target `isAnonymousSpectators`, a player or coach target `isAnonymousPlayers` (spectator callers included); exemptions unchanged (self, teammates, spectator referee).
+- `view_lobby_browser`: `hostLabel = "Anonymous host"` when the host's own seat kind is anonymous (one `LobbyMember.by_lobby_and_user` lookup; no member row: either flag).
+- Member-event System chat (`join_lobby`, `leave_lobby`, `kick_member`, `ban_member`) through `postMemberEventChat` (`helpers/lobby/memberEventChat.ts`), rendered per reader by `view_my_lobby_chat`; see [chat architecture](../chat/architecture.md) "System messages".
+- `view_my_lobby_bans`: `bannedUserId = 0` and label "Banned player" (the seat label while still seated) when `hideUserId` holds for the banned user; the row keeps `lobbyId` + `createdDate` (LobbyBan has no other key; `unban_member` by id stays open with the user).
+- `view_my_lobby_members`: the no-op `Math.round` on `accountRating` removed (the helper returns an integer, A40 exact).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -426,6 +451,8 @@ Membership lifecycle after A68 (details in the reducer flows above):
 | `select_match_account` loses the D-B-03 snapshot ratchet (dead since selection is Waiting-only); the snapshot is taken once at `start_draft` | Phase S8e execution (DECISIONS.md A69(3)) | 2026-11-08 |
 | Tournament seating reads the bracket match's colour mapping; shuffle guard message names A70 | Phase S8g execution (DECISIONS.md A70) | 2026-11-08 |
 | Membership lifecycle: `voluntarilyLeft` replaced by `leftAt` / `abandonedAt`; a player's live-stage Leave runs `markMemberOffline` (shared with `client_disconnected`); no auto-concede, no rejoin ban; `abandonCurrentMatch` on `create_lobby` / `join_lobby` / `create_tournament_lobby`; kick / ban of players only before the draft (and in AwaitingResult), LMA rows deleted; one flag-transfer order (A22(5), online first then any) for every row removal; spectator joins in the live stages capped by the new `maxSpectators` (Lobby, LobbyPreset, system preset 12); GC presence test for Waiting; `reclaim_referee` fills an unheld flag; `view_my_lobbies` drops abandoned rows | Phase S8f execution (DECISIONS.md A68) | 2026-11-08 |
+| `LobbyPreset` private + `view_lobby_presets`; `view_lobby_browser` without user ids (name label, joinCode only when public, hostLabel, counts); `view_my_lobby_members` row with `presence` (A68(10)) and A40 ratings; `view_my_lobby`, layer-0 `view_my_lobbies`, `view_my_lobby_bans` | Phase S9a execution (DECISIONS.md A37, A40, A44(1), A48, A68(10)) | 2026-11-08 |
+| S9a fix pass: spectator targets follow `isAnonymousSpectators`; browser host label per the host's seat kind; member-event chat lines rendered per reader; banned user masked in `view_my_lobby_bans`; `Lobby` header marked private | Phase S9a execution (DECISIONS.md A37) | 2026-11-08 |
 | Fix pass: `maxSpectators` caps watchers, not seat candidates (casual Waiting joins and `set_team_slot` moves into Spectator are not counted; live-stage joins and tournament Waiting spectators are); `ensureNotInLobby` runs `transferFlagsOnRemoval` on the away row before writing `abandonedAt` | Phase S8f execution (DECISIONS.md A68(4)(7)(8)) | 2026-11-08 |
 
 ---

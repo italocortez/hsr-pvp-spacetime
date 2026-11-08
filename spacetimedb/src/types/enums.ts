@@ -80,6 +80,15 @@ export const TeamSide = t.enum('TeamSide', {
     Red: t.unit(),
 });
 
+// A68(10) (S9a): the seat state the member views project. Gone = abandonedAt set (A68(4)); Away = leftAt set (A68(2));
+// otherwise Online when the membership or any of the user's presence rows is live (A48), else Offline.
+export const MemberPresence = t.enum('MemberPresence', {
+    Online: t.unit(),
+    Offline: t.unit(),
+    Away: t.unit(),
+    Gone: t.unit(),
+});
+
 // A31: no draws anywhere. The server computes a winner for every match (A21 chain ending in the
 // referee's winnerOverride), so the former Draw variant is gone.
 export const MatchEndReason = t.enum('MatchEndReason', {

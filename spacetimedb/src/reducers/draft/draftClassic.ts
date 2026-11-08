@@ -148,14 +148,7 @@ export const start_draft = spacetimedb.reducer(
             pausesUsedRed: 0,
         } as any, user.id));
 
-        // Determine refereeFullControl from referee's team slot (D-44):
-        // spectator referee = full control; player-side referee = false
-        const refereeFullControl = (() => {
-            const referee = allMembers.find((m: any) => m.isReferee);
-            if (!referee) return false;
-            return slotTeam(referee.lobbySlot) === null;
-        })();
-
+        // S9a (user 2026-11-07): no referee full-control snapshot on the record; since A63 no reducer reads it, the live seat decides.
         // Find referee userId (optional)
         const refereeRow = allMembers.find((m: any) => m.isReferee);
         const refereeUserId = refereeRow ? refereeRow.userId : undefined;
@@ -172,7 +165,6 @@ export const start_draft = spacetimedb.reducer(
             refereeUserId,
             disputedByUserId: undefined,
             disputeReason: undefined,
-            refereeFullControl,
             matchType: lobby.matchType,
             matchEndReason: undefined,
             concedeTrigger: undefined,

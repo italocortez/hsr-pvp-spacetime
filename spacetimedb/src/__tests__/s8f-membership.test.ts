@@ -1096,7 +1096,7 @@ describe('A68(2)(4)(8): schema', () => {
 // ─── Not drivable in memory ──────────────────────────────────────────────────
 
 describe('A68: outside the in-memory harness', () => {
-    it.todo('A68(10) / S9: member views project a presence state (online / offline / away / gone); view_my_lobby_members has no such column yet');
+    // A68(10) / S9: the member presence state (online / offline / away / gone) landed in S9a; covered by s9a-views.test.ts (T-S9a).
     it.todo('A68 / S14: the client prompt "join here and give up lobby {code}?" and the Leave confirmation copy (UI, not the module)');
     it.todo('A22a / A68(1): the real scheduler firing the 15 s RefereeTransferCheck (the harness fires the row by hand; live residue on test1)');
 });

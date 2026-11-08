@@ -299,6 +299,16 @@ records its step (or lineup row) on that game and recomputes it; it does not cha
   `currentGameNumber`, `initSessionForGame`, `currentGameSteps`.
 
 
+## Phase S9a execution (DECISIONS.md A37, A40, A56, A60, A63; user 2026-11-07)
+
+- `start_draft` no longer writes `MatchResultRecord.refereeFullControl` (column dropped; since A63 no reducer read it;
+  the referee's live seat decides neutrality).
+- New per-sender views (subscribed past Waiting, PAGE-MAP D3): `view_my_match_session` (the `MatchSession` row without
+  audit columns, PK `lobbyId`), `view_my_lineups` (both teams' live `MatchLineup` rows with the game's
+  `blueConfirmed` / `redConfirmed` / `closedAt`), `view_my_match_lineup_history` (replay, participated matches, A56(1)).
+  `view_my_match_steps` and `view_my_match_participants` mask user ids through `hideUserId`; the participant row adds
+  `accountRatingSnapshot?` per A40. Catalogue: [../views/architecture.md](../views/architecture.md).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -331,6 +341,7 @@ records its step (or lineup row) on that game and recomputes it; it does not cha
 | One game per lobby: session created once by `start_draft` (initializer folded in), no series columns, steps / lineups without `gameNumber`, `lobbySteps` replaces `currentGameSteps`, edit reducers lose the trailing `gameNumber`, series reducers deleted | Phase S8e execution (DECISIONS.md A67(1)(3)) | 2026-11-08 |
 | Edit window ends at validation (`ensureEditableRecord`: three precise rejections); `select_match_account` ratchet removed | Phase S8e execution (DECISIONS.md A69(2)(3)) | 2026-11-08 |
 | A live-stage Leave runs the disconnect path (auto-pause via the 15 s check, forfeit clock); away rows offline for the check and the forfeit test; no automatic concede | Phase S8f execution (DECISIONS.md A68) | 2026-11-08 |
+| `refereeFullControl` write removed from `start_draft`; live views `view_my_match_session`, `view_my_lineups` (A60 flags), replay `view_my_match_lineup_history`; step / participant views mask ids via `hideUserId` | Phase S9a execution (DECISIONS.md A37, A40, A56, A60, A63) | 2026-11-08 |
 
 ---
 

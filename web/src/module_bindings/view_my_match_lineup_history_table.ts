@@ -11,23 +11,18 @@ import {
 } from "spacetimedb";
 import {
   TeamSide,
-  ActionType,
 } from "./types";
 
 
 export default __t.row({
+  id: __t.u32().primaryKey(),
   matchHistoryId: __t.u32().name("match_history_id"),
-  sequence: __t.u32(),
-  actorUserId: __t.u32().name("actor_user_id"),
-  actorDisplayName: __t.string().name("actor_display_name"),
   get teamSide() {
     return TeamSide.name("team_side");
   },
-  get action() {
-    return ActionType;
-  },
-  targetName: __t.option(__t.string()).name("target_name"),
-  payload: __t.option(__t.string()),
+  groups: __t.string(),
+  synergySurcharge: __t.u32().name("synergy_surcharge"),
+  rosterCost: __t.u32().name("roster_cost"),
   createdById: __t.u32().name("created_by_id"),
   createdDate: __t.timestamp().name("created_date"),
   lastModifiedById: __t.u32().name("last_modified_by_id"),

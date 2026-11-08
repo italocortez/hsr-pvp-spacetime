@@ -217,6 +217,11 @@ Lobby chat provides ephemeral, per-lobby messaging for all lobby members. Messag
 | `advance_stage` (postDraft) | `ChatMessage` | System message insert (Equipping, Scoring) | Writes |
 | `close_lobby` / auto-close | `ChatMessage` | Cascade hard-delete all lobby messages | Deletes |
 
+### S9a fix: System Line About a Hidden Member
+**Given:** An anonymous-players lobby; Alice (Blue) leaves the live match and returns through `join_lobby`
+**When:** Bob (Red) reads `view_my_lobby_chat`
+**Then:** The lines read "Blue-1 left the match." and "Blue-1 is back." with `metadata` `subjectUserId = 0`; Alice's teammate reads her display name and her real id in `metadata`. The stored row keeps "{displayName} left the match." (private table).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -234,6 +239,7 @@ Lobby chat provides ephemeral, per-lobby messaging for all lobby members. Messag
 | Client reads via view_my_lobby_chat, not raw ChatMessage table (D-92) | Phase 9 execution | 2026-03-29 |
 | Full hydration from codebase | Phase 13 normalization | 2026-04-09 |
 | Rate limit (`chatMinIntervalMs`, `chatPerMinute` from `AbuseConfig`, window in `UserRateState`); scenarios "Chat Too Fast", "Chat Per-Minute Cap" and three edge cases added | Phase S5 execution (DECISIONS.md A43, D-B5) | 2026-11-06 |
+| Member-event System lines rendered per reader in `view_my_lobby_chat` (scenario "S9a fix: System Line About a Hidden Member") | Phase S9a execution (DECISIONS.md A37) | 2026-11-08 |
 
 ---
 

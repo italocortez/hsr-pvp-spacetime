@@ -11,19 +11,29 @@ import {
 } from "spacetimedb";
 import {
   LobbySlot,
+  MemberPresence,
 } from "./types";
 
 
 export default __t.row({
+  memberKey: __t.u64().primaryKey().name("member_key"),
   lobbyId: __t.u32().name("lobby_id"),
+  joinSeq: __t.u32().name("join_seq"),
   userId: __t.u32().name("user_id"),
-  isOnline: __t.bool().name("is_online"),
+  label: __t.string(),
   get lobbySlot() {
     return LobbySlot.name("lobby_slot");
   },
+  get presence() {
+    return MemberPresence;
+  },
+  isHost: __t.bool().name("is_host"),
   isReferee: __t.bool().name("is_referee"),
-  isConfirmed: __t.bool().name("is_confirmed"),
   isCaptain: __t.bool().name("is_captain"),
-  displayName: __t.string().name("display_name"),
-  anonymousLabel: __t.option(__t.string()).name("anonymous_label"),
+  isConfirmed: __t.bool().name("is_confirmed"),
+  avatarCharacterName: __t.option(__t.string()).name("avatar_character_name"),
+  displayedAchievementId: __t.option(__t.u32()).name("displayed_achievement_id"),
+  mmrByMode: __t.option(__t.array(__t.u32())).name("mmr_by_mode"),
+  accountRating: __t.option(__t.u32()).name("account_rating"),
+  accountCount: __t.option(__t.u8()).name("account_count"),
 });

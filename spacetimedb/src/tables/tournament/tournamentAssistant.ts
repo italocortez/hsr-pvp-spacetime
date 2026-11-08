@@ -15,7 +15,8 @@ export const tournamentAssistantColumns = {
     lastModifiedDate: t.timestamp(),
 };
 
-// S3 (D-A3): private; participants see display names through view_tournament_staff(id), flags are staff-only (S9).
+// S3 (D-A3): private; S9a: view_tournament_staff(id) emits each assistant's display name and the three flags to
+// anyone (the S9a brief and the T-S9a column list; D-A3's "flags are staff-only" is open with the user, review #6).
 export const TournamentAssistant = table({
     name: 'tournament_assistant',
     public: false,

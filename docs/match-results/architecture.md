@@ -337,6 +337,20 @@ reaches ceil(bestOf / 2) or staff resolve it). Stage list: Drafting, Equipping, 
   same way: [../brackets/architecture.md](../brackets/architecture.md) "Phase S8g execution". Records keep
   `winnerTeamSide` as a colour; nothing changes in the record schema.
 
+## Phase S9a execution (DECISIONS.md A37, A54, A56, A60(9), A63; user 2026-11-07)
+
+- **`MatchResultRecord.refereeFullControl` is dropped** with its `start_draft` write: since A63 no reducer read it, the
+  live seat decides neutrality, and the snapshot went stale after a referee transfer. `view_my_tournament_match_results`
+  (projects the row type) no longer carries it.
+- **`view_my_match_result`** (per-sender, live or parked lobby): status, winner, concede and override fields, settledAt;
+  no `refereeUserId`; `disputedByUserId` / `winnerOverrideById` masked per A37.
+- **`view_my_match_result_games`**: the record's one `MatchResultGame` with its `MatchResultGroupScore` rows
+  (`groupScores[]`) and `MatchResultAdjustment` rows (`adjustments[]`) nested; the A60 flags and closed marker;
+  `validatedByUserId`, `closedById`, `setById` masked per A37; no audit columns.
+- **`view_admin_stuck_games`** (Moderator+, else `[]`): ranked lobbies in Scoring whose open game has exactly one ready
+  flag, or both on an unresolved level-4 tie (`isUnresolvedTie`); `{ lobbyId, joinCode, stage, blueConfirmed,
+  redConfirmed, isTie, sinceAt = game.lastModifiedDate }`. Catalogue: [../views/architecture.md](../views/architecture.md).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -362,6 +376,7 @@ reaches ceil(bestOf / 2) or staff resolve it). Stage list: Drafting, Equipping, 
 | One game per record: `gameNumber` and the per-game keys removed from the result tables; the close submits the game (`submitGameResult`); `recomputeAfterAdminEdit`; `ensureEditableGame` removed; override recomputes the derived bracket tally (A67(3)(4)(6)) | Phase S8e execution | 2026-11-08 |
 | Admin edit window ends at validation (`ensureEditableRecord` / `findEditableResult(ctx, lobbyId, user)`, three rejections); `ensureOpenGame` loses its status throws; `recomputeAfterAdminEdit` loses its Pending branch | Phase S8e execution (DECISIONS.md A69(2)(3)) | 2026-11-08 |
 | `recordWinnerTeamId` maps the winning colour through the bracket match's colour mapping | Phase S8g execution (DECISIONS.md A70) | 2026-11-08 |
+| `refereeFullControl` dropped; `view_my_match_result`, `view_my_match_result_games` (nested group scores and adjustments), staff-only `view_admin_stuck_games` | Phase S9a execution (DECISIONS.md A37, A54, A56, A60(9), A63) | 2026-11-08 |
 
 ---
 

@@ -22,6 +22,7 @@ import {
 import { hardDeleteLobby } from './lobbyGc';
 import { removeMemberRow } from '@module/helpers/lobby/memberRemoval';
 import { resolveUserLabel } from '@module/helpers/identity/userLabel';
+import { memberEventLabel, postMemberEventChat } from '@module/helpers/lobby/memberEventChat';
 import { markMemberOffline } from '@module/helpers/lobby/disconnectHelpers';
 import { consumeLobbyCreateAllowance, readAbuseConfig, recordGuestLobbyCreation } from '@module/helpers/lobby/abuseControls';
 import { normalizeLobbyName } from '@module/helpers/tournament/seriesSettings';
@@ -290,15 +291,7 @@ export const join_lobby = spacetimedb.reducer(
                 disconnectPoolRemainingMs: newPool,
             }, user.id));
             if (isReturn) {
-                ctx.db.ChatMessage.insert(insertWithAudit(ctx, {
-                    id: 0,
-                    lobbyId,
-                    senderUserId: 0,
-                    senderType: { tag: 'System', value: {} } as any,
-                    content: user.displayName + ' is back.',
-                    metadata: undefined,
-                    anonymousLabel: undefined,
-                }, user.id));
+                postMemberEventChat(ctx, lobby, 'back', user.id, user.displayName, user.id); // S9a fix (A37)
             }
             // Auto-resume if draft was auto-paused (D-11, D-39)
             if (lobby.stage.tag === 'Drafting') {
@@ -443,16 +436,8 @@ export const join_lobby = spacetimedb.reducer(
             lastActivityAt: ctx.timestamp,
         }, user.id));
 
-        // D-11: system message
-        ctx.db.ChatMessage.insert(insertWithAudit(ctx, {
-            id: 0, // autoInc
-            lobbyId,
-            senderUserId: 0,
-            senderType: { tag: 'System', value: {} } as any,
-            content: user.displayName + ' joined the lobby.',
-            metadata: undefined,
-            anonymousLabel: undefined,
-        }, user.id));
+        // D-11: system message (S9a fix, A37: rendered per reader by view_my_lobby_chat)
+        postMemberEventChat(ctx, lobby, 'joined', user.id, user.displayName, user.id);
 
         console.log(`[LOBBY] User #${user.id} joined lobby #${lobbyId}`);
     }
@@ -492,16 +477,8 @@ export const leave_lobby = spacetimedb.reducer(
 
             markMemberOffline(ctx, lobby, member, user.id, { leftAt: ctx.timestamp });
 
-            // D-11: system message
-            ctx.db.ChatMessage.insert(insertWithAudit(ctx, {
-                id: 0,
-                lobbyId,
-                senderUserId: 0,
-                senderType: { tag: 'System', value: {} } as any,
-                content: user.displayName + ' left the match.',
-                metadata: undefined,
-                anonymousLabel: undefined,
-            }, user.id));
+            // D-11: system message (S9a fix, A37: rendered per reader by view_my_lobby_chat)
+            postMemberEventChat(ctx, lobby, 'away', user.id, user.displayName, user.id);
 
             // Update activity (do NOT decrement currentPlayerCount — row is kept)
             ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
@@ -512,19 +489,13 @@ export const leave_lobby = spacetimedb.reducer(
             return;
         }
 
+        const leaverLabel = memberEventLabel(ctx, lobby, user.id); // read before the row is removed
         if (!removeMemberRow(ctx, lobbyId, user.id, user.id)) return; // empty Waiting lobby deleted
 
         // D-11: system message (a spectator's or coach's leave during the match stays silent, as before)
+        // S9a fix (A37): rendered per reader by view_my_lobby_chat
         if (!isLiveStage) {
-            ctx.db.ChatMessage.insert(insertWithAudit(ctx, {
-                id: 0,
-                lobbyId,
-                senderUserId: 0,
-                senderType: { tag: 'System', value: {} } as any,
-                content: user.displayName + ' left the lobby.',
-                metadata: undefined,
-                anonymousLabel: undefined,
-            }, user.id));
+            postMemberEventChat(ctx, lobby, 'left', user.id, user.displayName, user.id, leaverLabel);
         }
 
         console.log(`[LOBBY] User #${user.id} left lobby #${lobbyId}`);
@@ -625,18 +596,11 @@ export const kick_member = spacetimedb.reducer(
         const { displayName: targetName } = resolveUserLabel(ctx, targetUserId);
 
         // Remove target from lobby (A68(7): flags transferred; LobbyMemberAccount rows deleted; count decremented)
+        const targetLabel = memberEventLabel(ctx, lobby, targetUserId); // read before the row is removed
         removeMemberRow(ctx, lobbyId, targetUserId, user.id);
 
-        // D-11: system message
-        ctx.db.ChatMessage.insert(insertWithAudit(ctx, {
-            id: 0,
-            lobbyId,
-            senderUserId: 0,
-            senderType: { tag: 'System', value: {} } as any,
-            content: targetName + ' was kicked from the lobby.',
-            metadata: undefined,
-            anonymousLabel: undefined,
-        }, user.id));
+        // D-11: system message (S9a fix, A37: rendered per reader by view_my_lobby_chat)
+        postMemberEventChat(ctx, lobby, 'kicked', targetUserId, targetName, user.id, targetLabel);
 
         console.log(`[LOBBY] User #${targetUserId} was kicked from lobby #${lobbyId} by user #${user.id}`);
     }
@@ -695,20 +659,13 @@ export const ban_member = spacetimedb.reducer(
         }, user.id));
 
         // Remove from lobby if currently a member (A68(7): flags transferred; LobbyMemberAccount rows deleted)
+        const targetLabel = memberEventLabel(ctx, lobby, targetUserId); // read before the row is removed
         if (targetMember) {
             removeMemberRow(ctx, lobbyId, targetUserId, user.id);
         }
 
-        // D-11: system message
-        ctx.db.ChatMessage.insert(insertWithAudit(ctx, {
-            id: 0,
-            lobbyId,
-            senderUserId: 0,
-            senderType: { tag: 'System', value: {} } as any,
-            content: targetName + ' was banned from the lobby.',
-            metadata: undefined,
-            anonymousLabel: undefined,
-        }, user.id));
+        // D-11: system message (S9a fix, A37: rendered per reader by view_my_lobby_chat)
+        postMemberEventChat(ctx, lobby, 'banned', targetUserId, targetName, user.id, targetLabel);
 
         console.log(`[LOBBY] User #${targetUserId} was banned from lobby #${lobbyId} by user #${user.id}`);
     }

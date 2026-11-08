@@ -10,14 +10,6 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 import {
-  GameMode,
-  DraftMode,
-  RosterVisibility,
-  DisconnectPolicy,
-  LineupFormat,
-  MatchType,
-  BanMode,
-  BanRestriction,
   LobbyStage,
 } from "./types";
 
@@ -26,70 +18,8 @@ export default __t.row({
   id: __t.u32().primaryKey(),
   joinCode: __t.string().name("join_code"),
   name: __t.string(),
-  hostUserId: __t.u32().name("host_user_id"),
-  teamBlueAlias: __t.string().name("team_blue_alias"),
-  teamRedAlias: __t.string().name("team_red_alias"),
-  teamSize: __t.u8().name("team_size"),
-  get draftMode() {
-    return DraftMode.name("draft_mode");
-  },
-  get banMode() {
-    return BanMode.name("ban_mode");
-  },
-  get banRestriction() {
-    return BanRestriction.name("ban_restriction");
-  },
-  get lineupFormat() {
-    return LineupFormat.name("lineup_format");
-  },
-  standardTurnSeconds: __t.u32().name("standard_turn_seconds"),
-  reserveBankSeconds: __t.u32().name("reserve_bank_seconds"),
-  rosterDiffAdvantage: __t.i32().name("roster_diff_advantage"),
-  rosterThreshold: __t.u32().name("roster_threshold"),
-  underThresholdAdvantage: __t.i32().name("under_threshold_advantage"),
-  aboveThresholdPenalty: __t.i32().name("above_threshold_penalty"),
-  deathPenalty: __t.i32().name("death_penalty"),
-  get matchType() {
-    return MatchType.name("match_type");
-  },
-  currentPlayerCount: __t.u8().name("current_player_count"),
-  maxSpectators: __t.u8().name("max_spectators"),
-  characterBudget: __t.f32().name("character_budget"),
-  lightconeBudget: __t.f32().name("lightcone_budget"),
-  minimumBidRaise: __t.f32().name("minimum_bid_raise"),
-  allowMirrorPicks: __t.bool().name("allow_mirror_picks"),
-  autoRandomPick: __t.bool().name("auto_random_pick"),
-  refereeCanUndo: __t.bool().name("referee_can_undo"),
-  refereeCanPause: __t.bool().name("referee_can_pause"),
-  refereeCanSetCaptain: __t.bool().name("referee_can_set_captain"),
-  refereeCanKick: __t.bool().name("referee_can_kick"),
-  allowPlayerPause: __t.bool().name("allow_player_pause"),
-  refereeExclusiveConcede: __t.bool().name("referee_exclusive_concede"),
-  tournamentId: __t.option(__t.u32()).name("tournament_id"),
-  bracketMatchId: __t.option(__t.u32()).name("bracket_match_id"),
-  isTournamentControlled: __t.bool().name("is_tournament_controlled"),
-  isAnonymousPlayers: __t.bool().name("is_anonymous_players"),
-  isAnonymousSpectators: __t.bool().name("is_anonymous_spectators"),
-  hideMmr: __t.bool().name("hide_mmr"),
-  get rosterVisibility() {
-    return RosterVisibility.name("roster_visibility");
-  },
-  requireOwnership: __t.bool().name("require_ownership"),
-  costSetId: __t.u32().name("cost_set_id"),
-  isPublic: __t.bool().name("is_public"),
-  get disconnectPolicy() {
-    return DisconnectPolicy.name("disconnect_policy");
-  },
-  disconnectForfeitSeconds: __t.option(__t.u32()).name("disconnect_forfeit_seconds"),
-  get gameMode() {
-    return GameMode.name("game_mode");
-  },
-  lastActivityAt: __t.timestamp().name("last_activity_at"),
   get stage() {
     return LobbyStage;
   },
-  createdById: __t.u32().name("created_by_id"),
-  createdDate: __t.timestamp().name("created_date"),
-  lastModifiedById: __t.u32().name("last_modified_by_id"),
-  lastModifiedDate: __t.timestamp().name("last_modified_date"),
+  isAway: __t.bool().name("is_away"),
 });

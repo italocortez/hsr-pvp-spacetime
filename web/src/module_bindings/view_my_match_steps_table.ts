@@ -17,7 +17,7 @@ import {
 
 
 export default __t.row({
-  id: __t.u32(),
+  id: __t.u32().primaryKey(),
   lobbyId: __t.u32().name("lobby_id"),
   sequence: __t.u32(),
   actorUserId: __t.u32().name("actor_user_id"),

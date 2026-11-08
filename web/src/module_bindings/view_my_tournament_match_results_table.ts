@@ -33,7 +33,6 @@ export default __t.row({
   refereeUserId: __t.option(__t.u32()).name("referee_user_id"),
   disputedByUserId: __t.option(__t.u32()).name("disputed_by_user_id"),
   disputeReason: __t.option(__t.string()).name("dispute_reason"),
-  refereeFullControl: __t.bool().name("referee_full_control"),
   get matchType() {
     return MatchType.name("match_type");
   },

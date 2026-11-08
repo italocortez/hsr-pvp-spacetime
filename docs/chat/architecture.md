@@ -54,6 +54,7 @@ Rate limit (Phase S5 execution; DECISIONS.md A43, D-B5; ACCESS-SECURITY-OPS B-4)
 Inserted by: `join_lobby`, `leave_lobby`, `kick_member`, `ban_member`, `advance_stage` (Drafting->Equipping, Equipping->Scoring), `start_draft`.
 - `senderType=System`, `senderUserId=0`, no `anonymousLabel`
 - Subject to the same 50-message rolling window
+- S9a fix (A37): member events (`join_lobby` joined / back, `leave_lobby` left / away, `kick_member` kicked, `ban_member` banned) go through `postMemberEventChat` (`helpers/lobby/memberEventChat.ts`): `content` keeps the plain text with the display name (the table is private), `metadata = {"event","subjectUserId"}`, and `anonymousLabel` holds the subject's seat label in an anonymous lobby, read before any row removal. `view_my_lobby_chat` renders these lines per reader through `renderSystemChat` (`helpers/identity/viewAnonymity.ts`): template `{member} joined the lobby.` / `left the lobby.` / `left the match.` / `is back.` / `was kicked from the lobby.` / `was banned from the lobby.`, `{member}` = display name when the subject is visible to the reader, else the live seat label, else the stored label, else "A player"; metadata goes out with `subjectUserId = 0` for a hidden subject. Other System lines pass through unchanged.
 
 ### Lifecycle cleanup (close_lobby / auto-close)
 - All `ChatMessage` rows for the lobby are hard-deleted via `lobby_id` index before the Lobby row is deleted (D-19, CHAT-03)
@@ -73,6 +74,7 @@ Inserted by: `join_lobby`, `leave_lobby`, `kick_member`, `ban_member`, `advance_
 | Reply to deleted message: backend stores dangling replyToMessageId; frontend handles gracefully (D-17) | Phase 09 CONTEXT.md | 2026-03-28 |
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
 | Chat rate limit: `chatMinIntervalMs` since the sender's last message + `chatPerMinute` fixed window in `UserRateState`, both from `AbuseConfig` | Phase S5 execution (DECISIONS.md A43, D-B5) | 2026-11-06 |
+| Member-event System lines carry `metadata {event, subjectUserId}` + the seat label and are rendered per reader in `view_my_lobby_chat` (no hidden member named) | Phase S9a execution (DECISIONS.md A37) | 2026-11-08 |
 
 ---
 

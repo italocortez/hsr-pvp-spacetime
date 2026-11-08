@@ -24,10 +24,9 @@ export function computeAnonymousLabel(ctx: any, lobbyId: number, userId: number)
             ? m.lobbySlot.tag === 'Spectator'
             : slotSameTeam(m.lobbySlot, member.lobbySlot) && !slotIsCoach(m.lobbySlot));
 
-    // Sort by createdDate ascending (join order -- earlier = lower number)
-    peers.sort((a: any, b: any) => {
-        return Number(a.createdDate.microsSinceUnixEpoch / 1000n) - Number(b.createdDate.microsSinceUnixEpoch / 1000n);
-    });
+    // Sort by joinSeq ascending (R4 / A37: the per-lobby join counter is the join order; never the user id).
+    // S9a: was createdDate (ms), which ties within one millisecond; joinSeq is unique among the lobby's members.
+    peers.sort((a: any, b: any) => a.joinSeq - b.joinSeq);
 
     // Find the index of the target userId in the sorted list
     const index = peers.findIndex((m: any) => m.userId === userId);

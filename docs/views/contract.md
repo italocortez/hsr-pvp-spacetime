@@ -19,6 +19,7 @@ The `view_my_*` prefix guarantees the caller never sees another user's private d
 ## Views
 
 ### view_lobby_browser
+_Superseded in Phase S9a execution: see S9a-V1 (DECISIONS.md A37, A44(1))._
 
 **Purpose:** Projected lobby list for the lobby browser UI -- excludes config details and Finished lobbies.
 
@@ -36,6 +37,7 @@ The `view_my_*` prefix guarantees the caller never sees another user's private d
 **Excluded data:** Timer settings, budget values, penalty settings, disconnect policy, audit columns (createdDate, updatedDate), rosterVisibility, hostId, all internal IDs except lobby id.
 
 ### view_my_lobbies
+_Superseded in Phase S9a execution: see S9a-V2 (layer-0 projection; the full row is view_my_lobby)._
 
 **Purpose:** Full Lobby rows for lobbies the caller is currently a member of.
 
@@ -225,6 +227,7 @@ The `view_my_*` prefix guarantees the caller never sees another user's private d
 5. If not anonymizing: return real `senderUserId`, no `anonymousLabel`
 
 ### view_my_lobby_members
+_Superseded in Phase S9a execution: see S9a-V3..V5 (DECISIONS.md A40, A68(10)): `LobbyMemberViewRow`._
 
 **Purpose:** LobbyMember rows for the caller's lobbies with anonymous enforcement. (D-92)
 
@@ -271,6 +274,7 @@ The `view_my_*` prefix guarantees the caller never sees another user's private d
 6. If not anonymizing: return real `userId`, no `anonymousLabel`
 
 ### view_match_history
+_Superseded in Phase S9a execution: see S9a-V9 (DECISIONS.md A37): removed._
 
 **Purpose:** MatchSessionHistory rows visible to the caller -- prevents tournament scouting. (D-93)
 
@@ -290,6 +294,7 @@ The `view_my_*` prefix guarantees the caller never sees another user's private d
 - Deduplication via Set
 
 ### view_match_participant_history
+_Superseded in Phase S9a execution: see S9a-V9 (DECISIONS.md A37): removed._
 
 **Purpose:** MatchParticipantHistory rows for visible matches only. (D-93)
 
@@ -301,6 +306,7 @@ The `view_my_*` prefix guarantees the caller never sees another user's private d
 3. Return full `MatchParticipantHistory` rows
 
 ### view_match_step_history
+_Superseded in Phase S9a execution: see S9a-V9 (DECISIONS.md A37): removed._
 
 **Purpose:** MatchSessionStepHistory rows (draft replay data) for visible matches only. (D-93)
 
@@ -424,30 +430,35 @@ Phase 15.5 retired `view_user_directory` (was dead code with zero client subscri
 **Then:** Labels are: "Blue-1", "Blue-2", "Red-1", "Coach-Blue". Labels are deterministic based on team side and join order (createdDate ascending).
 
 ### History: Publicly visible match accessible to non-participant
+_Superseded in Phase S9a execution (DECISIONS.md A37): the public history views are removed; see S9a-V9._
 
 **Given:** MatchSessionHistory row with `isPubliclyVisible=true`. User C did not participate.
 **When:** User C subscribes to `view_match_history`
 **Then:** Match is included in results.
 
 ### History: Non-public match hidden from non-participant
+_Superseded in Phase S9a execution (DECISIONS.md A37): the public history views are removed; see S9a-V9._
 
 **Given:** MatchSessionHistory row with `isPubliclyVisible=false` (active tournament match). User C did not participate.
 **When:** User C subscribes to `view_match_history`
 **Then:** Match is NOT included in results.
 
 ### History: Participant sees their own non-public match
+_Superseded in Phase S9a execution (DECISIONS.md A37): the public history views are removed; see S9a-V9._
 
 **Given:** MatchSessionHistory row with `isPubliclyVisible=false`. User A participated (has MatchParticipantHistory row).
 **When:** User A subscribes to `view_match_history`
 **Then:** Match IS included in results (participant override).
 
 ### History: Tournament reveal makes matches public
+_Superseded in Phase S9a execution (DECISIONS.md A37): the public history views are removed; see S9a-V9._
 
 **Given:** Tournament completes. `revealTournamentHistory` sets `isPubliclyVisible=true` on all tournament matches. (D-84)
 **When:** Any user subscribes to `view_match_history`
 **Then:** All completed tournament matches now visible to everyone.
 
 ### History: Consistent gate across all three history views
+_Superseded in Phase S9a execution (DECISIONS.md A37): the public history views are removed; see S9a-V9._
 
 **Given:** Match X is visible (either public or participant). Match Y is hidden.
 **When:** User subscribes to `view_match_history`, `view_match_participant_history`, and `view_match_step_history`
@@ -532,6 +543,62 @@ Phase 15.5 retired `view_user_directory` (was dead code with zero client subscri
 **When** anyone reads `view_lobby_browser`
 **Then** only Waiting, Drafting, Equipping and Scoring lobbies are listed (AwaitingResult excluded; no other stage exists)
 
+## Acceptance Scenarios (Phase S9a execution)
+
+### S9a-V1 Lobby browser carries no user id (A37, A44(1) D2, D-A4, D-A8, F17)
+**Given** a public lobby "Scrim" hosted by Alice, a private lobby with an empty name, and an anonymous public lobby, all in Waiting
+**When** anyone (no login needed) reads `view_lobby_browser`
+**Then** the three rows carry no user id at all; "Scrim" shows `hostLabel = "Alice"` and its `joinCode`; the private one is named "Private lobby" and has no `joinCode`; the anonymous one shows `hostLabel = "Anonymous host"`; a public lobby with an empty name is named "Lobby <joinCode>"; each row carries the coach and spectator counts and `maxSpectators`. Lobbies in Drafting, Equipping and Scoring are listed as before (S8e-V2; spectators may join them, A68(8)); AwaitingResult is not.
+
+### S9a-V2 Layer-0 list and full lobby row (PAGE-MAP D10, §A.4 P1, A68(4)(10))
+**Given** Bob, a Red player who pressed Leave in Drafting (away)
+**When** Bob reads `view_my_lobbies` and `view_my_lobby`
+**Then** `view_my_lobbies` lists the lobby with `{ id, joinCode, name, stage, isAway = true }` and `view_my_lobby` returns its full `Lobby` row; once Bob abandons it for another lobby both views drop it.
+
+### S9a-V3 Lobby row in an anonymous lobby (A37)
+**Given** an anonymous-players lobby hosted by Alice (Blue), with Bob on Red
+**When** Bob reads `view_my_lobby`
+**Then** `hostUserId`, `createdById` and `lastModifiedById` are 0 (Alice is anonymized for Bob); Alice reads her own id; a spectator referee reads every real id. Bob's `view_my_lobby_members` marks Alice's seat `isHost = true` with `userId = 0` and label "Blue-1".
+
+### S9a-V4 Member row and presence state (A68(10), A48, R3, R4)
+**Given** a lobby in Drafting with Blue-1 online on a second device only, Blue-2 disconnected, Red-1 away (`leftAt`) and Red-2 abandoned (`abandonedAt`)
+**When** a member reads `view_my_lobby_members`
+**Then** the presences are Online (a live `UserPresence` row counts even when the membership row says offline), Offline, Away and Gone; no row carries the cursor or lineup throttle stamps or audit columns; each row's key `memberKey` is unique across the caller's lobbies (a parked AwaitingResult lobby next to a live one).
+
+### S9a-V5 Ratings on anonymized seats (A40)
+**Given** an anonymous lobby with `rosterVisibility = ClosedWithRating` and `hideMmr = false`
+**When** Bob (Red) reads `view_my_lobby_members`
+**Then** the Blue seats show `userId = 0`, the label, `accountRating` (merged over the member's selected accounts) and `accountCount`, but no `mmrByMode`, avatar or title; Bob's teammates show everything. With `ClosedNoRating` the Blue seats carry no rating (own and teammates' still do); with `hideMmr = true` no seat carries `mmrByMode`.
+
+### S9a-V6 Bans and presets (PAGE-MAP D4)
+**When** the host or a referee reads `view_my_lobby_bans`
+**Then** each ban of their lobby is listed with the banned user's name; a plain member gets nothing; in an anonymous lobby `bannedByUserId` is withheld.
+**When** a user reads `view_lobby_presets`
+**Then** the system preset and the user's own presets are returned without audit columns; another user's preset is never returned; `LobbyPreset` itself is private.
+
+### S9a-V7 Live match views (PAGE-MAP D3, A60, A63, A56)
+**Given** a lobby in Scoring where Blue confirmed the game
+**When** a member reads `view_my_match_session`, `view_my_lineups`, `view_my_match_result` and `view_my_match_result_games`
+**Then** the session row has no audit columns; both teams' lineups are listed with `blueConfirmed = true`, `redConfirmed = false`, no `closedAt`; the record row has status, winner and settlement fields and no referee id; the game row nests its group scores and adjustments; in an anonymous lobby every user id of an anonymized member (an adjustment's `setById`, the closer) reads 0.
+
+### S9a-V8 Stuck ranked games are staff-only (A60(9), A63)
+**Given** a ranked lobby in Scoring with one ready flag set, and another with both flags set on an unresolved level-4 tie
+**When** a Moderator reads `view_admin_stuck_games`
+**Then** both lobbies are listed with `isTie` false and true; a casual lobby or a closed game is not; a User reads `[]`.
+
+### S9a-V9 Public history views are gone (A37)
+**When** a client subscribes `view_match_history`, `view_match_participant_history` or `view_match_step_history`
+**Then** the views do not exist; a participant reads their matches through the `view_my_*_history` set, which now includes `view_my_match_lineup_history` (A56(1)).
+
+### S9a-V10 Tournament page arg views (A37, A26a(2), §A.4 P3)
+**Given** an anonymous tournament (`isAnonymousDefault`) with one Disqualified participant
+**When** anyone subscribes `SELECT * FROM view_tournament_participants(<id>)`, `view_tournament_teams(<id>)`, `view_tournament_team_members(<id>)` and `view_tournament_staff(<id>)`
+**Then** participants and members carry `userId = 0` and the alias or `Seat-<n>` label (enrollment order); the DQ row is absent; teams carry no `captainUserId`; staff rows carry the organizer and assistants with real ids and their flags. In a non-anonymous tournament the ids and display names are real.
+
+### S9a-V11 Per-sender tournament views (PAGE-MAP D9, A70(1), A71)
+**When** an enrolled player reads `view_my_tournament_enrollment`, `view_my_team_requests`, `view_my_stand_ins` and `view_tournament_matches_for_me`
+**Then** they get their own enrollment rows; the requests they sent plus those to the team they captain (with the requester's id and label); the stand-ins naming them or their team; and the Ready / Pending bracket matches of their team with the opponent's name, the blue and red team ids (unset choice = team1 Blue) and the tally with the head start on team1. Staff reading `view_my_tournament_lobbies` get each lobby with its match's blue / red team ids.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -563,6 +630,8 @@ Phase 15.5 retired `view_user_directory` (was dead code with zero client subscri
 | `view_public_accounts` renamed to `view_public_hsr_accounts` (D-04) — keeps the `public` prefix marking anonymous intent, adds `hsr_` to make the projected source table (`HsrAccount`) explicit. `PublicAccountRow` row type renamed to `PublicHsrAccountRow`. Anonymous registration + projection body unchanged from Phase 10.4 — pure identifier rename. Stays anonymous per Phase 15.5 D-05: the projection body is the privacy gate (filters by `isRosterPublic` / `isRatingPublic` flags), not subscription timing. Naming-Convention table, Integration Surface table, and the "Unauthenticated caller sees anonymous views" security scenario all updated | Phase 15.5 execution | 2026-04-16 |
 | Phase 15.5 verify-work sweep: `### view_user_directory` subsection removed from Views section; `view_public_accounts` references swept to `view_public_hsr_accounts` in the Naming-Convention table, the security scenario, and the Integration Surface table. Historical Phase 9, 10.4, 15.2 Phase History rows left untouched (CLAUDE.md rule — no rewriting historical entries) | Phase 15.5 verify-work | 2026-04-17 |
 | Scenarios S8e-V1..V2: step / history views without `gameNumber`; lobby browser over the live stages | Phase S8e execution (DECISIONS.md A67(1)(3)) | 2026-11-08 |
+| Scenarios S9a-V1..V11: browser without user ids, layer-0 list + full lobby row, A37 masking of lobby / result ids, member presence state and A40 ratings, bans and presets, live match views, staff stuck-games view, public history views removed, tournament arg and per-sender views | Phase S9a execution (DECISIONS.md A37, A40, A44, A48, A56, A60, A63, A68, A70) | 2026-11-08 |
+| S9a fix pass: `view_tournament_registrant_accounts` adds `seat` and masks `userId` / `hsrAccountId` (0) of other participants for a non-staff reader of an `isAnonymousDefault` tournament; spectators anonymized only under `isAnonymousSpectators` (anonymous-play contract "S9a fix pass") | Phase S9a execution (DECISIONS.md A37) | 2026-11-08 |
 
 ---
 

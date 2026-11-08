@@ -1,6 +1,6 @@
 # Views -- Architecture
 
-Last updated: 2026-04-13
+Last updated: 2026-11-08
 
 ## Overview
 
@@ -181,6 +181,80 @@ Added to `matchHistoryViews.ts`, bindings at `src/module_bindings/view_my_*_hist
 - `view_my_lobby_members` is unchanged here; the presence state (online / offline / away / gone) it should project is
   S9's (A68(10)).
 
+## Phase S9a execution (DECISIONS.md A37, A40, A44, A48, A56, A60, A63, A67, A68, A70, A71)
+
+Views part 1: lobby, match session, match results, tournament. S9b covers identity, stats, roster, calendar and
+admin. Every view body below is index-only (no table scan). Per-sender views return `[]` for an unknown sender and
+fan out from the caller's memberships with abandoned rows excluded (`callerMemberships`, A68(4)). Behaviour:
+[contract.md](contract.md) "Acceptance Scenarios (Phase S9a execution)"; the anonymity rules:
+[../anonymous-play/contract.md](../anonymous-play/contract.md).
+
+**Shared helper** `helpers/identity/viewAnonymity.ts`: `callerMemberships`, `lobbyAnonymousFor` (the lobby has an
+anonymity flag and the caller is not a spectator referee, D-71), `hideUserId` / `maskUserId` (a current member
+follows `shouldAnonymize`; in a lobby whose anonymity applies to the caller, an id that is no longer a member is
+withheld too), `maskLobbyRow` (host and audit ids), `ratingVisible` (A40). `computeAnonymousLabel` now orders peers
+by `joinSeq` (R4) instead of `createdDate`; same order, no millisecond ties.
+
+### Catalogue (S9a)
+
+| View | File | Scope | Row | Anonymity | Indexes |
+|---|---|---|---|---|---|
+| `view_lobby_browser` (re-created) | lobbyViews | anonymous shared | `LobbyBrowserRow` (PK `id`): name (empty → "Lobby <code>" / "Private lobby"), joinCode? (public only), hostLabel, game / draft / match type, ban mode + restriction, lineup format, roster visibility, disconnect policy, team size, player / coach / spectator counts, maxSpectators, isPublic, anonymity flags, isTournamentControlled, stage, createdDate, tournamentName?, costSetName? | no user id at all; "Anonymous host" when isAnonymousPlayers | `Lobby.stage` ×4, `LobbyMember.lobby_id`, `User.id`, `Tournament.id`, `CostSet.id` |
+| `view_my_lobbies` (modified) | lobbyViews | per-sender | `MyLobbyListRow` (PK `id`): joinCode, name, stage, isAway | no user id | `UserIdentity.identity`, `LobbyMember.user_id`, `Lobby.id` |
+| `view_my_lobby` (new) | lobbyViews | per-sender | `Lobby` row | hostUserId / createdById / lastModifiedById 0 when hidden for the caller | as above |
+| `view_my_lobby_members` (modified) | lobbyViews | per-sender | `LobbyMemberViewRow` (PK `memberKey` = lobbyId << 32 \| joinSeq): lobbyId, joinSeq, userId, label, lobbySlot, presence, isHost, isReferee, isCaptain, isConfirmed, avatarCharacterName?, displayedAchievementId?, mmrByMode?, accountRating?, accountCount? | anonymized seat: userId 0, `computeAnonymousLabel`, no avatar / title / MMR; ratings per `ratingVisible` | + `LobbyMember.lobby_id`, `User.id`, `UserPresence.user_id`, `Season.is_active`, `EloConfigTable.id`, `MmrRating.by_user_mode_season`, `LobbyMemberAccount.by_lobby_and_user`, `HsrAccount.id` |
+| `view_my_lobby_chat` (kept) | lobbyViews | per-sender | `AnonymousChatRow` (PK `id`) | senderUserId 0 + stored label via `hideUserId`; System never | `ChatMessage.lobby_id` |
+| `view_my_lobby_bans` (new) | lobbyViews | per-sender, host or referee of the lobby | `LobbyBanViewRow`: lobbyId, bannedUserId, label, bannedByUserId?, createdDate | bannedByUserId withheld when the lobby's anonymity applies | `LobbyBan.lobby_id` |
+| `view_lobby_presets` (new) | lobbyViews | per-sender | `LobbyPresetViewRow` (PK `id`): every `LobbyPreset` column but the audit ones | system preset (SYSTEM) + own | `LobbyPreset.creator_user_id` ×2 |
+| `view_my_match_session` (new) | matchViews | per-sender | `MatchSessionViewRow` (PK `lobbyId`): every `MatchSession` column but the audit ones | no user id | `MatchSession.lobbyId` |
+| `view_my_match_steps` (kept) | matchViews | per-sender | `AnonymousMatchStepRow` (PK `id`), no gameNumber | actorUserId 0 + stored label via `hideUserId` | `MatchSessionStep.lobby_id` |
+| `view_my_match_participants` (modified) | matchViews | per-sender | `AnonymousMatchParticipantRow` + `accountRatingSnapshot?` | userId 0 + label; snapshot per `ratingVisible` | `MatchResultRecord.lobby_id`, `MatchResultParticipant.match_result_id` |
+| `view_my_lineups` (new) | matchViews | per-sender, both teams | `MatchLineupViewRow` (PK `id`): lobbyId, teamSide, groups, synergySurcharge, rosterCost, blueConfirmed, redConfirmed, closedAt? | no user id | `MatchLineup.by_lobby`, `MatchResultGame.match_result_id` |
+| `view_my_match_result` (new) | matchResultViews | per-sender, live or parked | `MatchResultViewRow` (PK `id`): status, winner, concede and override fields, settledAt; no refereeUserId | disputedByUserId / winnerOverrideById masked | `MatchResultRecord.lobby_id` |
+| `view_my_match_result_games` (new) | matchResultViews | per-sender | `MatchResultGameViewRow` (PK `matchResultId`) with nested `groupScores[]` and `adjustments[]` | validatedByUserId / closedById / setById masked | `MatchResultGame.match_result_id`, `MatchResultGroupScore.by_result`, `MatchResultAdjustment.by_result` |
+| `view_admin_stuck_games` (new) | matchResultViews | Moderator+ (else `[]`) | `StuckGameRow` (PK `lobbyId`): joinCode, stage, both flags, isTie, sinceAt | staff only | `User.id`, `Lobby.stage`, `MatchResultRecord.lobby_id`, `MatchResultGame.match_result_id` |
+| `view_my_match_lineup_history` (new) | matchHistoryViews | per-sender, participated (Pattern B) | `MatchLineupHistory` row | revealed after the match (A37) | `MatchParticipantHistory.by_user`, `MatchLineupHistory.by_match_history` |
+| `view_match_history`, `view_match_participant_history`, `view_match_step_history` | — | **removed** (A37) | — | — | — |
+| `view_tournament_participants(tournamentId)` (new) | tournamentViews | anonymous arg view | `TournamentParticipantRow`: seat, teamId?, userId, label, status, isWaitlisted; Disqualified hidden (A26a(2)) | `isAnonymousDefault`: userId 0, label = alias or `Seat-<n>` (enrollment order) | `Tournament.id`, `TournamentEnrolled.tournament_id` / `by_tournament_and_user`, `TournamentTeamMember.by_tournament_and_user` |
+| `view_tournament_teams(tournamentId)` (new) | tournamentViews | anonymous arg view | `TournamentTeamPublicRow`: id, name, status, seedNumber?, groupId?, finalPlacement?, captainUserId? | captainUserId only when not anonymous | `TournamentTeam.tournament_id` |
+| `view_tournament_team_members(tournamentId)` (new) | tournamentViews | anonymous arg view | `TournamentTeamMemberPublicRow`: teamId, userId, label | userId 0 + alias / seat when anonymous | `TournamentTeam.tournament_id`, `TournamentTeamMember.team_id` |
+| `view_tournament_staff(tournamentId)` (new) | tournamentViews | anonymous arg view | `TournamentStaffRow`: userId, label, isOrganizer, three A25 flags | staff are never anonymous | `TournamentAssistant.tournament_id` |
+| `view_my_tournament_enrollment` (new) | tournamentViews | per-sender | `TournamentEnrolled` row | the caller's own | `TournamentEnrolled.user_id` |
+| `view_my_team_requests` (new) | tournamentViews | per-sender: sent, or to a team the caller captains | `TeamRequestViewRow`: teamId, tournamentId, teamName, userId, label, isMine, createdDate | label alias / seat when anonymous; the captain gets the requester's id (the accept reducer takes it) | `TournamentTeamRequest.user_id` / `team_id`, `TournamentTeam.captain_user_id` |
+| `view_my_stand_ins` (new) | tournamentViews | per-sender: naming the caller, or of the caller's teams | `StandInViewRow` (PK `id`): bracketMatchId, teamId, userId, label | own team (teammates are real) | `TournamentStandIn.user_id` (**new index**) / `team_id` |
+| `view_tournament_matches_for_me` (new) | tournamentViews | per-sender | `MatchForMeRow` (PK `bracketMatchId`): my / opponent team, opponent name, blue / red team (A70(1)), state, side, round, bestOf, team ids and tally (head start on team1, A71), scheduledAt | team ids only | `TournamentEnrolled.user_id`, `TournamentTeamMember.by_tournament_and_user`, `BracketMatch.tournament_id` |
+| `view_my_tournament_lobbies` (modified) | tournamentViews | organizer / assistants | `TournamentLobbyRow` = `Lobby` columns + blueTeamId? / redTeamId? (`matchSides`) | staff: real ids | + `BracketMatch.id` |
+| `view_my_tournament_match_results` (kept) | tournamentViews | organizer / assistants | `MatchResultRecord` row, without `refereeFullControl` (column dropped) | staff | unchanged |
+
+Kept unchanged: the replay set (`view_my_match_session_history`, `_step_history`, `_participant_history`,
+`_result_game_history`, `view_my_mmr_history`), `view_my_tournaments`, `view_my_tournament_enrolled`,
+`view_my_tournament_teams`, `view_my_tournament_team_members`, `view_my_tournament_matches`,
+`view_tournament_registrant_accounts`.
+
+**Known scans outside the view bodies.** `computeLobbyMemberRating` (the merged rating of a member with several
+selected accounts, backlog #10) reads the `HsrCharacter` reference table in full through `computeRosterRating`; a
+member with one account reads the stored `HsrAccount.accountRating`. `views/identityViews.ts` still scans
+`HsrAccount` and `UserPrivate` (S9b).
+
+### S9a fix pass (DECISIONS.md A37)
+
+| View | Change |
+|---|---|
+| every lobby view (through `shouldAnonymize`) | the target's seat kind picks the toggle: spectator target `isAnonymousSpectators`, player / coach target `isAnonymousPlayers` (spectator callers included) |
+| `view_lobby_browser` | "Anonymous host" when the host's own seat kind is anonymous (+ `LobbyMember.by_lobby_and_user`) |
+| `view_my_lobby_chat` | System member-event lines (`metadata {event, subjectUserId}`) rendered per reader by `renderSystemChat`: subject label = display name if visible, else live seat label / stored label / "A player"; metadata `subjectUserId = 0` when hidden (+ `LobbyMember.by_lobby_and_user`, `User.id`) |
+| `view_my_lobby_bans` | `bannedUserId = 0`, label "Banned player" (seat label while seated) when `hideUserId` holds for the banned user |
+| `view_my_lobby_members` | no-op `Math.round` on `accountRating` removed |
+| `view_my_match_steps` | `anonymousLabel` computed at read time (`anonymousLabelOr`: live seat label, else the stored label, else "<Side> player") |
+| `view_my_match_participants` | a hidden participant without a member row reads "<Side> player", never "Unknown" |
+| `view_tournament_registrant_accounts` (modified) | row + `seat`; in an `isAnonymousDefault` tournament a non-staff reader (not TO, assistant or Moderator+) gets other participants' rows with `userId = 0` and `hsrAccountId = 0` (+ `User.id`) |
+
+Not changed, with the reason: `view_tournament_staff` keeps the three A25 flags and `view_lobby_browser` keeps
+`lineupFormat` / `stage` / `createdDate` (the T-S9a column lists pin them; review #6 / #7 open with the user);
+`view_my_lobby` keeps the full `Lobby` row with `lastActivityAt` (PAGE-MAP lobbyroom lists the full row, review #12);
+`view_my_lobby_bans` has no row id to add (LobbyBan's PK is `(lobbyId, bannedUserId)`). A tournament `Seat-<n>` is the
+enrollment rank and renumbers after a withdrawal (no stored enrollment counter; the alias is the stable label).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -202,6 +276,8 @@ Added to `matchHistoryViews.ts`, bindings at `src/module_bindings/view_my_*_hist
 | Phase 15.5 verify-work: harmonized doc wording with shipped `useAuth.ts` identifier `hadUserIdOnMount`; `docs/views/contract.md` swept of stale `view_user_directory` subsection + `view_public_accounts` references | Phase 15.5 verify-work | 2026-04-17 |
 | `view_my_match_steps` and the step / game history views without `gameNumber`; lobby rows without the series settings (A67(1)(3)) | Phase S8e execution | 2026-11-08 |
 | `view_my_lobbies` drops abandoned memberships; lobby rows carry `maxSpectators` | Phase S8f execution (DECISIONS.md A68) | 2026-11-08 |
+| S9a catalogue: browser re-created (no user id), `view_my_lobbies` trimmed to the layer-0 row, new `view_my_lobby`, `view_my_lobby_bans`, `view_lobby_presets`, `view_my_match_session`, `view_my_lineups`, `view_my_match_result`, `view_my_match_result_games`, `view_admin_stuck_games`, `view_my_match_lineup_history`, four tournament arg views and four per-sender tournament views; member row with presence state, ratings per A40; public history views removed; `viewAnonymity` helper; labels ordered by `joinSeq` | Phase S9a execution (DECISIONS.md A37, A40, A44, A48, A56, A60, A63, A67, A68, A70, A71) | 2026-11-08 |
+| S9a fix pass: seat-kind toggles in `shouldAnonymize`, browser host label, per-reader System chat lines, masked banned user, read-time step labels, no "Unknown" label, `view_tournament_registrant_accounts` masked + `seat` | Phase S9a execution (DECISIONS.md A37) | 2026-11-08 |
 
 ---
 

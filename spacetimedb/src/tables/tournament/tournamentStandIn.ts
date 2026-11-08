@@ -21,5 +21,6 @@ export const TournamentStandIn = table({
         { accessor: 'bracket_match_id', algorithm: 'btree', columns: ['bracketMatchId'] },
         { accessor: 'by_match_and_user', algorithm: 'btree', columns: ['bracketMatchId', 'userId'] },
         { accessor: 'team_id', algorithm: 'btree', columns: ['teamId'] },
+        { accessor: 'user_id', algorithm: 'btree', columns: ['userId'] }, // S9a: view_my_stand_ins (the caller's own stand-in rows)
     ],
 }, tournamentStandInColumns);

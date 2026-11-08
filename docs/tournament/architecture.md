@@ -326,6 +326,21 @@ finalize job of this tournament is still scheduled." Placements also count a wal
 - **create_tournament_lobby.** Optional `abandonCurrentMatch` (A68(4), see [../lobby/architecture.md](../lobby/architecture.md)
   "Phase S8f execution"); the lobby copies `maxSpectators` from the preset's free set (A68(8)).
 
+## Phase S9a execution (DECISIONS.md A37, A44(1), A26a(2), A70(1), A71)
+
+- **Arg views** (`anonymousView` with `{ tournamentId: u32 }`, no PK; subscribe `SELECT * FROM view_x(<id>)`):
+  `view_tournament_participants` (enrolled rows minus Disqualified; `userId` 0 and label = alias or `Seat-<n>` by
+  enrollment order when `isAnonymousDefault`), `view_tournament_teams` (`captainUserId` only when not anonymous),
+  `view_tournament_team_members` (`userId` 0 + alias / seat when anonymous), `view_tournament_staff` (organizer and
+  assistants with the three A25 flags; never anonymous).
+- **Per-sender**: `view_my_tournament_enrollment` (own `TournamentEnrolled` rows), `view_my_team_requests` (sent, or to a
+  team the caller captains; the captain gets the requester's id for `accept_team_request`), `view_my_stand_ins` (rows
+  naming the caller or of the caller's teams; **new index `TournamentStandIn.user_id`**),
+  `view_tournament_matches_for_me` (Ready / Pending matches of the caller's team with the opponent's name, the colours
+  through `matchSides` and the tally; head start on team1, A71).
+- `view_my_tournament_lobbies` rows carry the match's `blueTeamId` / `redTeamId` (`matchSides`, A70(1)).
+  Catalogue: [../views/architecture.md](../views/architecture.md).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -359,6 +374,7 @@ finalize job of this tournament is still scheduled." Placements also count a wal
 | `create_tournament_lobby` / stand-in seating and the DQ force-concede read the match's colour mapping (`helpers/tournament/matchSides.ts`) | Phase S8g execution (DECISIONS.md A70) | 2026-11-08 |
 | `set_match_sides(bracketMatchId, blueTeamId)`: the head start stays on team1 whatever the colours | Phase S8g execution (DECISIONS.md A71) | 2026-11-08 |
 | `dq_participant` no longer kicks a DQ'd player from a live lobby (whole-team path unchanged); `create_tournament_lobby` takes `abandonCurrentMatch` and copies `maxSpectators` | Phase S8f execution (DECISIONS.md A68) | 2026-11-08 |
+| Tournament arg views (participants, teams, team members, staff), per-sender enrollment / team requests / stand-ins / matches-for-me, `TournamentStandIn.user_id` index, colours on `view_my_tournament_lobbies` | Phase S9a execution (DECISIONS.md A37, A44(1), A26a(2), A70(1), A71) | 2026-11-08 |
 
 ---
 

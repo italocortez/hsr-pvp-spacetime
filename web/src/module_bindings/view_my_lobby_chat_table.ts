@@ -15,7 +15,7 @@ import {
 
 
 export default __t.row({
-  id: __t.u32(),
+  id: __t.u32().primaryKey(),
   lobbyId: __t.u32().name("lobby_id"),
   senderUserId: __t.u32().name("sender_user_id"),
   get senderType() {

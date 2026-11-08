@@ -16,9 +16,9 @@ import { slotIsSpectator, slotSameTeam } from '@module/helpers/lobby/lobbyHelper
  * - Caller is a spectator referee (D-71)
  * - Caller and target are on the same team (D-70)
  *
- * Returns true (anonymize) when:
- * - Caller is a spectator (non-referee) and target is a player
- * - Caller is a player viewing an opponent and lobby.isAnonymousPlayers is true
+ * Returns true (anonymize) when (S9a fix: the flag follows the target's seat kind):
+ * - Target is a player or coach not on the caller's team (spectator callers included) and isAnonymousPlayers
+ * - Target is a spectator and isAnonymousSpectators
  */
 export function shouldAnonymize(ctx: any, lobbyId: number, targetUserId: number, lobby?: any): boolean {
     if (!lobby) lobby = ctx.db.Lobby.id.find(lobbyId);
@@ -43,9 +43,9 @@ export function shouldAnonymize(ctx: any, lobbyId: number, targetUserId: number,
     // D-70: Same team = real identities
     if (slotSameTeam(callerMember.lobbySlot, targetMember.lobbySlot)) return false;
 
-    // D-70: Spectators see all anonymized
-    if (slotIsSpectator(callerMember.lobbySlot)) return true;
-
-    // Opponent on a team = anonymize based on lobby setting
+    // S9a fix (A37; anonymous-play contract "two independent toggles"): the target's own seat kind picks the flag.
+    // A spectator target follows isAnonymousSpectators; a player or coach target follows isAnonymousPlayers, for a
+    // spectator caller (D-70) and an opposing player alike.
+    if (slotIsSpectator(targetMember.lobbySlot)) return lobby.isAnonymousSpectators;
     return lobby.isAnonymousPlayers;
 }

@@ -22,4 +22,5 @@ export default __t.row({
   },
   isCaptain: __t.bool().name("is_captain"),
   anonymousLabel: __t.option(__t.string()).name("anonymous_label"),
+  accountRatingSnapshot: __t.option(__t.f64()).name("account_rating_snapshot"),
 });

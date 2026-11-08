@@ -13,6 +13,7 @@ import {
 export default __t.row({
   tournamentId: __t.u32().name("tournament_id"),
   userId: __t.u32().name("user_id"),
+  seat: __t.u32(),
   hsrAccountId: __t.u32().name("hsr_account_id"),
   displayLabel: __t.string().name("display_label"),
   accountRating: __t.option(__t.u32()).name("account_rating"),
