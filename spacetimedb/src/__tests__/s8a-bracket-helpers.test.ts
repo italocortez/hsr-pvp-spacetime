@@ -146,6 +146,9 @@ function checkInserted({ test, t, spec, ids }: ReturnType<typeof setup>) {
             expect(row.bestOf).toBe(t.defaultBestOf);
             expect(row.winnerAdvantage).toBe(0);
         }
+        // T-S8g (A70(1), A71(1)): generation writes the default colours (no blueTeamId: team1 = Blue); the head start is
+        // team-based (team1Games = winnerAdvantage, asserted below), no colour column
+        expect(row.blueTeamId).toBeUndefined();
         // BYE matches are settled right after insert, the real entrant already routed
         const kind = kinds.get(m.key)!;
         if (kind === 'walkover' && row.state.tag === 'Pending') {
@@ -423,6 +426,9 @@ describe('group stage helpers', () => {
                 expect(r.nextWinnerMatchId).toBeUndefined();
                 expect(r.nextLoserMatchId).toBeUndefined();
                 expect(r.bestOf).toBe(t.defaultBestOf);
+                // T-S8g (A70(1), A71(1)): group rows get the same default colours; no head start (0–0)
+                expect(r.blueTeamId).toBeUndefined();
+                expect([r.team1Games, r.team2Games]).toEqual([0, 0]);
             }
         }
         groups.forEach((g, gi) => g.forEach((id) => expect(team(test, id).groupId).toBe(gi)));

@@ -320,6 +320,7 @@ export const BracketMatch = __t.object("BracketMatch", {
   },
   team1Games: __t.u8(),
   team2Games: __t.u8(),
+  blueTeamId: __t.option(__t.u32()),
   createdById: __t.u32(),
   createdDate: __t.timestamp(),
   lastModifiedById: __t.u32(),

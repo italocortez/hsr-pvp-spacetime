@@ -8,6 +8,7 @@ import { SenderError } from 'spacetimedb/server';
 import { groupSpec, type BracketSpec, type SlotSource } from '@shared/bracket';
 import { insertWithAudit, updateWithAudit } from './auditHelpers';
 import { deleteCalendarEventForBracketMatch } from './calendarCascade';
+import { slotChangeReset } from './matchSides';
 
 export type Entrant = number | 'BYE';
 export type BracketSlot = 1 | 2;
@@ -65,6 +66,7 @@ export function insertBracket(ctx: any, tournament: any, spec: BracketSpec, team
             decidedBy: undefined,
             team1Games: m.winnerAdvantage, // A69(1): the A27 head start sits on the row from generation
             team2Games: 0,
+            blueTeamId: undefined, // A70(1): default mapping at generation (team1 = Blue); the head start stays on team1 (A71(1))
         }, actorId));
         ids.set(m.key, row.id);
     }
@@ -113,6 +115,7 @@ export function insertGroupBracket(ctx: any, tournament: any, groups: number[][]
             decidedBy: undefined,
             team1Games: 0,
             team2Games: 0,
+            blueTeamId: undefined, // A70(1): default mapping (team1 = Blue)
         }, actorId));
         ids.set(g.key, row.id);
     }
@@ -140,9 +143,10 @@ export function placeEntrant(ctx: any, matchId: number, slot: BracketSlot, teamI
     if (current !== undefined) {
         throw new SenderError(`${row.positionKey} slot ${slot} already holds ${current === 'BYE' ? 'BYE' : `team ${current}`}.`);
     }
+    // A71(3): a slot change voids the colour choice and resets the tally to the derived one (no counted game yet).
     const changes: any = slot === 1
-        ? { team1Id: teamId === 'BYE' ? undefined : teamId, team1IsBye: teamId === 'BYE' }
-        : { team2Id: teamId === 'BYE' ? undefined : teamId, team2IsBye: teamId === 'BYE' };
+        ? { team1Id: teamId === 'BYE' ? undefined : teamId, team1IsBye: teamId === 'BYE', ...slotChangeReset(row) }
+        : { team2Id: teamId === 'BYE' ? undefined : teamId, team2IsBye: teamId === 'BYE', ...slotChangeReset(row) };
     const other = slotEntrant(row, slot === 1 ? 2 : 1);
     if (row.state.tag === 'Pending' && typeof teamId === 'number' && typeof other === 'number') changes.state = tag('Ready');
     ctx.db.BracketMatch.id.update(updateWithAudit(ctx, row, changes, actorId));
@@ -155,9 +159,9 @@ export function placeEntrant(ctx: any, matchId: number, slot: BracketSlot, teamI
 export function setSlotBye(ctx: any, matchId: number, slot: BracketSlot, actorId: number): void {
     const row = ctx.db.BracketMatch.id.find(matchId);
     if (!row) throw new SenderError(`Bracket match ${matchId} not found.`);
-    ctx.db.BracketMatch.id.update(updateWithAudit(ctx, row, slot === 1
-        ? { team1Id: undefined, team1IsBye: true }
-        : { team2Id: undefined, team2IsBye: true }, actorId));
+    ctx.db.BracketMatch.id.update(updateWithAudit(ctx, row, slot === 1 // A71(3): colours and tally reset with the slot
+        ? { team1Id: undefined, team1IsBye: true, ...slotChangeReset(row) }
+        : { team2Id: undefined, team2IsBye: true, ...slotChangeReset(row) }, actorId));
 }
 
 /**

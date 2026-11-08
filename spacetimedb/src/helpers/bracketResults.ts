@@ -3,12 +3,14 @@
 // resolve_bracket_match / rollback_bracket_match, dq_participant, override_match_result and handOffToBracket
 // (game close, validate_match_result, performConcede).
 // A67(4): the bracket match is the only series. team1Games / team2Games are the running tally, derived here (never
-// incremented): head start (team1 gets winnerAdvantage, A27) + the Validated records of the match won by each side.
+// incremented): head start (team1 gets winnerAdvantage, A27 / A71(1)) + the Validated
+// records of the match won by each team under the match's colour mapping (A70(1), matchSides.ts).
 
 import { SenderError } from 'spacetimedb/server';
 import { updateWithAudit } from './auditHelpers';
 import { placeEntrant, settle, slotEntrant, type BracketSlot, type Entrant } from './bracketStore';
 import { winsNeededFor } from './seriesSettings';
+import { sideSlot, slotChangeReset } from './matchSides';
 import { hardDeleteLobby } from '../reducers/lobbyGc';
 
 export type BracketDecisionTag = 'Played' | 'Concede' | 'Dq' | 'Staff';
@@ -33,7 +35,8 @@ function setTeamStatus(ctx: any, teamId: number, from: string, to: string, actor
  * Records a settled result on a bracket match. **This is the only writer of `BracketMatch.winnerTeamId`**
  * (every other writer was deleted in S8c; `settle` only stamps structural BYE walkovers).
  *
- * - The match must hold two real teams and `winnerTeamId` must be one of them; team1 = Blue, team2 = Red (A35).
+ * - The match must hold two real teams and `winnerTeamId` must be one of them (by slot; colours do not matter here:
+ *   callers map a winning side to a team through matchSides.ts, A70(1)).
  * - Ready → Decided. Decided with the same winner → no-op (idempotent); a different winner → "roll back first"
  *   (A24(3)). Any other state is refused.
  * - Sets winner, loser, `decidedBy`, the tally (`games`, A30 game differential; A67(4): the derived tally), routes the winner and
@@ -96,6 +99,7 @@ function unplaceEntrant(ctx: any, matchId: number, slot: BracketSlot, expected: 
     const fresh = ctx.db.BracketMatch.id.find(matchId);
     ctx.db.BracketMatch.id.update(updateWithAudit(ctx, fresh, {
         ...(slot === 1 ? { team1Id: undefined, team1IsBye: false } : { team2Id: undefined, team2IsBye: false }),
+        ...slotChangeReset(fresh), // A71(3): colours voided, tally back to the head start
         state: tag('Pending'),
         winnerTeamId: undefined,
         loserTeamId: undefined,
@@ -110,7 +114,8 @@ function unplaceEntrant(ctx: any, matchId: number, slot: BracketSlot, expected: 
  * A67(4): with `voidDeciding` (rollback_bracket_match) a match decided by play (Played / Concede) also voids its
  * deciding record only (voidDecidingRecord; earlier games stay); a staff or DQ decision has no deciding record, so
  * nothing is voided. resolve_bracket_match and override_match_result pass false (they keep every Validated game).
- * Then the tally is recomputed from the remaining Validated records (head start included) and written.
+ * Then the tally is recomputed from the remaining Validated records (head start on team1, A71(1);
+ * games credited through the match's colour mapping, A70(1)) and written.
  * A67(4) (S8e review): with `redecide` (rollback_bracket_match) a Ready match whose tally already gives a side
  * ceil(bestOf / 2) games is decided again as Played (e.g. 2-0 by play, then a staff resolve for the other team, then
  * a rollback: the games decide it). resolve and override pass false: they decide the match themselves right after.
@@ -145,19 +150,22 @@ export function rollbackBracketResult(ctx: any, bracketMatchId: number, actorId:
 
 
 /**
- * A67(4), A27, A35: the derived tally of a bracket match. team1 = winnerAdvantage + the Validated records of the match
- * whose winnerTeamSide is Blue; team2 = the Validated records won by Red (Blue = team1, Red = team2). A record counts
- * only when Validated (a concede is Validated, A24(1)); Pending, Submitted, Disputed, Rejected and Voided records do not.
+ * A67(4), A27, A70(1), A71(1): the derived tally of a bracket match. team1 (slot 1, the WB finalist) starts at
+ * winnerAdvantage whatever the colours, team2 at 0; each Validated record of the match adds one game to the team that played its
+ * winnerTeamSide under the match's colour mapping (matchSides.ts). A record counts only when Validated (a concede is
+ * Validated, A24(1)); Pending, Submitted, Disputed, Rejected and Voided records do not.
  */
 export function matchGames(ctx: any, match: any): SeriesGames {
-    let team1 = match.winnerAdvantage;
-    let team2 = 0;
+    const games = { team1: match.winnerAdvantage, team2: 0 }; // A71(1): head start on slot 1 (A27)
+    const credit = (slot: number | undefined, n: number) => {
+        if (slot === 1) games.team1 += n;
+        else if (slot === 2) games.team2 += n;
+    };
     for (const record of ctx.db.MatchResultRecord.bracket_match_id.filter(match.id)) {
         if (record.status.tag !== 'Validated') continue;
-        if (record.winnerTeamSide?.tag === 'Blue') team1++;
-        else if (record.winnerTeamSide?.tag === 'Red') team2++;
+        credit(sideSlot(match, record.winnerTeamSide?.tag), 1);
     }
-    return { team1, team2 };
+    return games;
 }
 
 /**
@@ -177,7 +185,8 @@ export function writeMatchGames(ctx: any, matchId: number, actorId: number): Ser
 /**
  * A67(4): a game of the bracket match settled (its record became Validated by the close, validate_match_result, an
  * override, or a concede). Only a Ready match counts it: a match staff already settled (resolve, DQ) stays as it is.
- * Recomputes and writes the tally; when a side reaches ceil(bestOf / 2) the match is decided for that side through
+ * Recomputes and writes the tally (matchGames: the record's winning colour is credited to the team playing it,
+ * A70(1)); when a side reaches ceil(bestOf / 2) the match is decided for that side through
  * applyBracketResult with the tally (routing, A30, audit actor as given). A non-deciding game only updates the tally.
  */
 export function recordGameSettled(ctx: any, record: any, decidedBy: BracketDecisionTag, actorId: number): void {

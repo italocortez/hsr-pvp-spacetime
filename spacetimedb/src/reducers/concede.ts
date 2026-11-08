@@ -45,7 +45,7 @@ export function performConcede(
 
     // 5. A38(1), A67(6): a concede settles this game and hands it to the bracket through the single writer, which
     // recomputes the derived tally and decides the match only when a side reaches ceil(bestOf / 2) (decidedBy
-    // Concede, A35 Blue = team1, SYSTEM_USER_ID as audit actor, A37). Only a Ready match: one already settled by
+    // Concede, colours by the match's mapping, A70(1), SYSTEM_USER_ID as audit actor, A37). Only a Ready match: one already settled by
     // staff or a DQ stays as it is. No finalization for tournament records (A24(4)).
     handOffToBracket(ctx, settledResult, 'Concede');
 

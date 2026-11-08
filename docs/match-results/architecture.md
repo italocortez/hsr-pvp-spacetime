@@ -329,6 +329,14 @@ reaches ceil(bestOf / 2) or staff resolve it). Stage list: Drafting, Equipping, 
 |---|---|
 | `override_match_result` | tournament record: a Decided bracket match is first reverted without voiding any game (`rollbackBracketResult(…, false, false)`, refused while a downstream match is Decided); Validated → record Validated, then `recordGameSettled(…, 'Staff')`; Rejected → lobby voided, status kept Rejected, then the tally is recomputed. Details: [../admin/architecture.md](../admin/architecture.md). The Ranked screenshot message names "the game" (no number) |
 
+## Phase S8g execution (DECISIONS.md A70)
+
+- **Result credit by the match's colours (A70(1)).** `recordWinnerTeamId(match, record)` (`helpers/tournamentResults.ts`)
+  returns `sideTeamId(match, record.winnerTeamSide)` (`helpers/matchSides.ts`): the team that plays the winning colour
+  in this bracket match (`BracketMatch.blueTeamId`, default team1 = Blue). The tally credits each Validated record the
+  same way: [../brackets/architecture.md](../brackets/architecture.md) "Phase S8g execution". Records keep
+  `winnerTeamSide` as a colour; nothing changes in the record schema.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -353,6 +361,7 @@ reaches ceil(bestOf / 2) or staff resolve it). Stage list: Drafting, Equipping, 
 | One record per lobby (concede / defer update it; readers explicit); tournament routing at the deciding close (Validated + hand-off, or Submitted for staff); `validate_match_result` added; `process_tournament_mmr` deleted; `finalize_match_result` and the admin tools reject tournament records / lobbies; Admin edits reach earlier closed games (A24, A36, A54, A65(4), D.8.3) | Phase S8d execution | 2026-11-07 |
 | One game per record: `gameNumber` and the per-game keys removed from the result tables; the close submits the game (`submitGameResult`); `recomputeAfterAdminEdit`; `ensureEditableGame` removed; override recomputes the derived bracket tally (A67(3)(4)(6)) | Phase S8e execution | 2026-11-08 |
 | Admin edit window ends at validation (`ensureEditableRecord` / `findEditableResult(ctx, lobbyId, user)`, three rejections); `ensureOpenGame` loses its status throws; `recomputeAfterAdminEdit` loses its Pending branch | Phase S8e execution (DECISIONS.md A69(2)(3)) | 2026-11-08 |
+| `recordWinnerTeamId` maps the winning colour through the bracket match's colour mapping | Phase S8g execution (DECISIONS.md A70) | 2026-11-08 |
 
 ---
 

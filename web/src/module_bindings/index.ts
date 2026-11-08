@@ -172,6 +172,7 @@ import SetAnonymousAliasReducer from "./set_anonymous_alias_reducer";
 import SetCaptainReducer from "./set_captain_reducer";
 import SetDisplayedAchievementReducer from "./set_displayed_achievement_reducer";
 import SetEidolonReducer from "./set_eidolon_reducer";
+import SetMatchSidesReducer from "./set_match_sides_reducer";
 import SetScoreAdjustmentReducer from "./set_score_adjustment_reducer";
 import SetSeedOrderReducer from "./set_seed_order_reducer";
 import SetTeamSlotReducer from "./set_team_slot_reducer";
@@ -987,6 +988,7 @@ const reducersSchema = __reducers(
   __reducerSchema("set_captain", SetCaptainReducer),
   __reducerSchema("set_displayed_achievement", SetDisplayedAchievementReducer),
   __reducerSchema("set_eidolon", SetEidolonReducer),
+  __reducerSchema("set_match_sides", SetMatchSidesReducer),
   __reducerSchema("set_score_adjustment", SetScoreAdjustmentReducer),
   __reducerSchema("set_seed_order", SetSeedOrderReducer),
   __reducerSchema("set_team_slot", SetTeamSlotReducer),

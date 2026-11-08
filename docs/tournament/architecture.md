@@ -306,6 +306,16 @@ finalize job of this tournament is still scheduled." Placements also count a wal
 - **dq_participant.** The live-lobby lookup covers Drafting / Equipping / Scoring only; the D-26 hard-delete branch of
   the removed stages is gone; a Ready match is settled with the derived tally (`matchGames`).
 
+## Phase S8g execution (DECISIONS.md A70)
+
+- **Seating by the match's colours (A70(1)).** `create_tournament_lobby` seats a participant on the player seat of the
+  colour its team plays in this bracket match (`autoSeatSlot` → `allowedSlotsFor`, which reads `matchSides(match)`:
+  `BracketMatch.blueTeamId`, default team1 = Blue). An approved stand-in (`TournamentStandIn.teamId`) sits on the
+  colour of that team in the match. The colours are chosen per match with `set_match_sides(bracketMatchId, blueTeamId)`; the head start stays on team1 (A71(1))
+  (`bracket`, until the first game; then rejected while a lobby of the match exists): [../brackets/architecture.md](../brackets/architecture.md) "Phase S8g execution".
+- **dq_participant.** The force-concede of the DQ'd team's live lobby concedes the colour that team plays
+  (`teamSideOf(match, teamId)`), not a fixed team1 = Blue.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -336,6 +346,8 @@ finalize job of this tournament is still scheduled." Placements also count a wal
 | Bracket reducers on the shared engine: + `set_seed_order`, `advance_group_stage`, `resolve_bracket_match`; − `swap_seeds`, `advance_bracket_match`, `submit_and_advance_bracket`, `advance_group_to_elimination`, `admin_set_bracket_winner`; `generate_bracket` withdraws still-Forming teams (A26a); `dq_participant` keeps the team (Disqualified) and settles through `applyBracketResult` (A23, A26a(2)) | Phase S8c execution | 2026-11-07 |
 | `create_tournament_lobby` on the A33 / A33a / A34 / A27 rules, `approve_stand_in` with `teamId`, `revoke_stand_in`; Completed: format check + `canComplete` + placements + the chunked finalize job (K = 4, reschedule first, bracket order); Cancelled keeps bracket / teams, voids live lobbies, runs the same job without MMR (A24, A27, A33, A33a, A34, A35, A56) | Phase S8d execution | 2026-11-07 |
 | `create_tournament_lobby`: D-45 = no unsettled lobby of the match, decided / capped matches rejected, no series settings copied; several records per bracket match in the finalize job, ordered by creation time; DQ settles with the derived tally (A67(2)(5)(7)(8)) | Phase S8e execution | 2026-11-08 |
+| `create_tournament_lobby` / stand-in seating and the DQ force-concede read the match's colour mapping (`helpers/matchSides.ts`) | Phase S8g execution (DECISIONS.md A70) | 2026-11-08 |
+| `set_match_sides(bracketMatchId, blueTeamId)`: the head start stays on team1 whatever the colours | Phase S8g execution (DECISIONS.md A71) | 2026-11-08 |
 
 ---
 

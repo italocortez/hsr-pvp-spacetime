@@ -1,6 +1,6 @@
 import { table, t } from 'spacetimedb/server';
 
-// A35 (S3): teamId says which side the stand-in may sit on (team1 -> Blue, team2 -> Red).
+// A35 (S3) / A70(1): teamId says which side the stand-in may sit on: the colour that team plays in the match (default team1 -> Blue).
 export const tournamentStandInColumns = {
     id: t.u32().primaryKey().autoInc(),
     bracketMatchId: t.u32(),

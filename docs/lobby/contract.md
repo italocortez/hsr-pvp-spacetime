@@ -1172,10 +1172,12 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(2))._
 **Given** a Waiting tournament lobby of a match between team1 and team2
 **When** a member of team2 joins
 **Then** the member sits on `RedPlayer`; a non-member (staff included) joins as `Spectator`; a team member whose side is full joins as `Spectator`
+_Superseded in Phase S8g execution (DECISIONS.md A70)._ team1 = Blue / team2 = Red is the default only; the seat follows the colour the team plays in the bracket match (S8g-L1).
 
 ### S8d-L2 Seats outside the team are refused (A35)
 **When** a team1 member (or the host moving them) asks `set_team_slot` for `RedPlayer` or `RedCoach`
 **Then** rejected: "This seat is not available to you in this tournament lobby."; `BlueCoach` and `Spectator` are allowed; a casual lobby accepts every slot
+_Superseded in Phase S8g execution (DECISIONS.md A70)._ Read "team1" as "the Blue team of the match" (default team1, S8g-L1).
 
 ### S8d-L3 Staff reclaim the referee flag (D.8.4)
 **Given** a tournament lobby whose referee is a player
@@ -1202,6 +1204,17 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(2))._
 **Given** lobbies idle for more than 30 minutes
 **When** `run_lobby_gc` runs
 **Then** Waiting lobbies and live lobbies with every member offline are hard-deleted; AwaitingResult lobbies are kept (D-48)
+
+## Acceptance Scenarios (Phase S8g execution)
+
+### S8g-L1 Seats follow the bracket match's colours (A35, A70(1))
+**Given** a bracket match whose staff called `set_match_sides(blueTeamId = team2)` before any lobby
+**When** a member of team2 joins (or creates) the match's lobby, and a member of team1 asks `set_team_slot` for `BluePlayer`
+**Then** the team2 member sits on `BluePlayer`; the team1 member is refused ("This seat is not available to you in this tournament lobby.") and may sit on `RedPlayer` / `RedCoach`; approved stand-ins follow their team's colour; with the sides never set, team1 = Blue as before
+
+### S8g-L2 Shuffle stays refused in tournament lobbies (A35, A70(1))
+**When** the host calls `shuffle_teams` in a tournament lobby
+**Then** rejected: "Seats in a tournament lobby follow the bracket's sides (A35 / A70); shuffling is not available."
 
 ## Phase History
 
@@ -1265,6 +1278,7 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(2))._
 | Scenarios "The Lineup Format Is the Character Count", "Only the Captain or a Referee Arranges the Lineup" added | Phase S7 execution (DECISIONS.md A21; backlog #3) | 2026-11-06 |
 | Scenarios S8d-L1..L3: auto-seat, seat enforcement, staff referee reclaim | Phase S8d execution (DECISIONS.md A26, A35; D.8.4) | 2026-11-07 |
 | Scenarios S8e-L1..L4: one game per lobby, no series settings, live-stage lists, GC without the D-16 / D-17 rules; supersedes D-10, D-15, D-16, D-19, D-93 | Phase S8e execution (DECISIONS.md A67(1)(2)) | 2026-11-08 |
+| Scenarios S8g-L1..L2: tournament seats follow the bracket match's colours (`set_match_sides`), shuffle guard message; S8d-L1 / L2 fixed mapping superseded | Phase S8g execution (DECISIONS.md A70) | 2026-11-08 |
 
 ---
 

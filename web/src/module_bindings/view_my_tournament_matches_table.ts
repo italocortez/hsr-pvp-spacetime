@@ -47,6 +47,7 @@ export default __t.row({
   },
   team1Games: __t.u8().name("team_1_games"),
   team2Games: __t.u8().name("team_2_games"),
+  blueTeamId: __t.option(__t.u32()).name("blue_team_id"),
   createdById: __t.u32().name("created_by_id"),
   createdDate: __t.timestamp().name("created_date"),
   lastModifiedById: __t.u32().name("last_modified_by_id"),

@@ -48,7 +48,7 @@ export const finalize_match_result = spacetimedb.reducer(
 // A24(1), A36, ACCESS-SECURITY-OPS §D.8.3 (S8d): staff validation of a tournament record waiting in Submitted (Ranked
 // tournaments and requireResultValidation) or Disputed (a captain's dispute blocks validation until staff review it;
 // validating is the review's outcome). Permission: `results` (A25); the tournament InProgress. The record becomes
-// Validated with settledAt, then the bracket hand-off (handOffToBracket, decidedBy Played, A35 Blue = team1). The lobby
+// Validated with settledAt, then the bracket hand-off (handOffToBracket, decidedBy Played, colours by the match's mapping, A70(1)). The lobby
 // stays parked in AwaitingResult; nothing derived runs until the tournament completes (A24(4)). Standalone records
 // are rejected (their staff tool is admin_force_finalize).
 

@@ -462,9 +462,9 @@ export const shuffle_teams = spacetimedb.reducer(
         }
         ensureHostOrAbove(ctx, lobby, user);
         ensureStageIs(lobby, 'Waiting');
-        // A35 (S8d review): a shuffle would seat team1 on Red while the bracket credits Blue = team1.
+        // A35 / A70(1) (S8d review): a shuffle would break the match's colour mapping the bracket credits by.
         if (lobby.isTournamentControlled) {
-            throw new SenderError('Seats in a tournament lobby follow the bracket (A35); shuffling is not available.');
+            throw new SenderError("Seats in a tournament lobby follow the bracket's sides (A35 / A70); shuffling is not available.");
         }
 
         const members = [...ctx.db.LobbyMember.lobby_id.filter(lobbyId)];

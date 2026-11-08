@@ -35,7 +35,7 @@ function isMatchParticipant(ctx: any, bracketMatch: any, userId: number): boolea
 // the lobby (the bracket match carries bestOf and the A27 head start). The free set
 // from the preset at Tournament.lobbyPresetId, the system preset when that row is gone (A33a). name = the tournament
 // name + the match key (D-A8, truncated to 50 characters).
-// The creator is host and referee (A34): a participant is seated as a player on its team's side (A26 / A35); staff
+// The creator is host and referee (A34): a participant is seated as a player on its team's side (A26 / A35; the colour from the match's mapping, A70(1)); staff
 // are seated as a spectator referee and become a member like anyone else (the one-lobby-at-a-time rule applies, D-22).
 // isCaptain stays false, as in create_lobby (start_draft assigns captains, D-30). `joinCode` is ignored (the server
 // generates the code, as before).
@@ -204,7 +204,7 @@ function standInMatch(ctx: any, bracketMatchId: number): { user: any; bracketMat
 // ─── approve_stand_in ─────────────────────────────────────────────────────────
 // A25 `participants`; A35 / review §5.4 (S8d). Approves `userId` as a stand-in of `teamId` (team1 or team2 of the
 // match) for one bracket match: any verified user who is not enrolled on the other team of the match. The row
-// carries teamId, which allowedSlotsFor reads (team1 -> Blue, team2 -> Red). Approval can happen before or during
+// carries teamId, which allowedSlotsFor reads (the team's colour in this match, A70(1); default team1 -> Blue). Approval can happen before or during
 // the lobby.
 
 export const approve_stand_in = spacetimedb.reducer(
@@ -239,7 +239,7 @@ export const approve_stand_in = spacetimedb.reducer(
         ctx.db.TournamentStandIn.insert(insertWithAudit(ctx, {
             id: 0,
             bracketMatchId: args.bracketMatchId,
-            teamId: args.teamId, // A35: team1 -> Blue, team2 -> Red
+            teamId: args.teamId, // A35 / A70(1): seated on the colour this team plays in the match
             userId: args.userId,
             approvedByUserId: user.id,
         }, user.id));

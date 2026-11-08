@@ -310,6 +310,7 @@ B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3
   allowed set is rejected, "This seat is not available to you in this tournament lobby."; casual lobbies allow every
   slot. `shuffle_teams` rejects tournament lobbies: "Seats in a tournament lobby follow the bracket (A35); shuffling
   is not available." (a shuffle would seat team1 on Red while the hand-off credits Blue = team1).
+  _Superseded in Phase S8g execution (DECISIONS.md A70)._
 - **Auto-seat (A26).** `join_lobby` has no slot argument; in a tournament lobby in Waiting the new member gets
   `autoSeatSlot`: the player slot of its team (member or approved stand-in) while that side has fewer than `teamSize`
   non-coach members, otherwise Spectator; coaches are never auto-seated. Casual lobbies and later stages: Spectator.
@@ -352,6 +353,17 @@ B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3
   caller marked it Voided, A24(3)); its children are deleted as usual.
 
 
+## Phase S8g execution (DECISIONS.md A70)
+
+- **Seat enforcement by the match's colours (A35, A70(1)).** `allowedSlotsFor` feeds the shared core the team that
+  plays Blue in the bracket match (`matchSides(match)`: `BracketMatch.blueTeamId`, default team1) as its `team1*`
+  inputs and the Red team as `team2*`; the rule itself is unchanged (a team's players and approved stand-ins on its
+  colour, everyone else Spectator). Auto-seat follows. The colours are set per match with `set_match_sides` before
+  the first lobby: [../brackets/architecture.md](../brackets/architecture.md) "Phase S8g execution".
+- **Shuffle guard.** `shuffle_teams` still rejects tournament lobbies, now with "Seats in a tournament lobby follow
+  the bracket's sides (A35 / A70); shuffling is not available." (a shuffle would break the match's colour mapping).
+  _The S8d sentence above ("follow the bracket (A35)", "seat team1 on Red while the hand-off credits Blue = team1") is superseded in Phase S8g execution (DECISIONS.md A70)._
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -389,6 +401,7 @@ B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3
 | Seat enforcement in `set_team_slot`, auto-seat in `join_lobby` (tournament lobbies), `reclaim_referee` for seated `results` staff, auto-resume reads the latest Pause step of the current game, `hardDeleteLobby` keepResultRecord flag | Phase S8d execution (DECISIONS.md A24(3), A26, A35; D.8.4, D.8.5) | 2026-11-07 |
 | One game per lobby: series stages, series reducers and series settings removed; stage lists shrink to the live stages; GC D-16 / D-17 gone; D-45 = one unsettled lobby per bracket match + decided / cap rejections | Phase S8e execution (DECISIONS.md A67(1)(2)(5)) | 2026-11-08 |
 | `select_match_account` loses the D-B-03 snapshot ratchet (dead since selection is Waiting-only); the snapshot is taken once at `start_draft` | Phase S8e execution (DECISIONS.md A69(3)) | 2026-11-08 |
+| Tournament seating reads the bracket match's colour mapping; shuffle guard message names A70 | Phase S8g execution (DECISIONS.md A70) | 2026-11-08 |
 
 ---
 

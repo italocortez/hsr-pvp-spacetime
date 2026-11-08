@@ -547,6 +547,8 @@ Reducers on the shared engine and the single writer (A23); every scenario tagged
 **Given** a Ready bracket match
 **When** a game record of the match becomes Validated (close, `validate_match_result`, override, concede)
 **Then** `team1Games = winnerAdvantage + Validated records won by Blue`, `team2Games = Validated records won by Red`; Pending, Submitted, Disputed, Rejected and Voided records do not count
+_Superseded in Phase S8g execution (DECISIONS.md A70)._ The head start goes to the team holding `headStartSide` and each Validated record to the team playing its winning colour (scenario S8g-B2).
+_Superseded in Phase S8g execution (DECISIONS.md A71)._ The head start stays on team1 (`team1Games = winnerAdvantage + records won by the colour team1 plays`); only the record credit follows the colours (scenario S8g-B8).
 
 ### S8e-B2 Decided at ceil(bestOf / 2) (A67(4))
 **Given** a Bo3 match
@@ -567,6 +569,62 @@ Reducers on the shared engine and the single writer (A23); every scenario tagged
 **Given** a tournament whose grand final has `winnerAdvantage = 1`
 **When** `generate_bracket` runs
 **Then** the grand final row reads `team1Games = 1`, `team2Games = 0` before any game is played (stored = derived); no result record represents the head start; group-stage rows read 0 / 0
+
+## Acceptance Scenarios (Phase S8g execution)
+
+### S8g-B1 Default mapping unchanged (A70(1)(2), A35, A27)
+**Given** a bracket match whose sides were never set (`blueTeamId` unset, `headStartSide = Blue`, as written at generation)
+**When** its lobbies are seated and its games settle
+**Then** team1 plays Blue and team2 Red; the head start sits on team1; seating, result credit and tally behave as in S8e-B1 / S8e-B5
+_Superseded in Phase S8g execution (DECISIONS.md A71)._ `headStartSide` no longer exists; the head start sits on team1 whatever the colours (S8g-B8).
+
+### S8g-B2 Sides set before the first lobby move the head start with the colour (A70(2)(3))
+**Given** a Ready Bo3 grand final with `winnerAdvantage = 1` (tally 1–0 for team1), no lobby and no record
+**When** `bracket` staff call `set_match_sides(gf, blueTeamId = team2, headStartSide = Red)`
+**Then** team2 plays Blue and team1 Red in every lobby of the match, team1 (Red) keeps the head start and the row still reads 1–0; with `headStartSide = Blue` instead the row reads 0–1 (the head start moves to team2, the Blue team); a game won by Blue is credited to team2
+_Superseded in Phase S8g execution (DECISIONS.md A71)._ The call is `set_match_sides(gf, blueTeamId = team2)`; the row reads 1–0 for team1 whatever the colours (S8g-B8).
+
+### S8g-B3 Rejected once a game has started (A70(3))
+**Given** a Ready match with a record that is Pending, Submitted, Disputed or Validated
+**When** staff call `set_match_sides`
+**Then** rejected: "The sides can no longer be changed: a game of this match has started."; a match whose only records are Voided or Rejected is accepted
+
+### S8g-B4 Rejected while a lobby of the match exists (A70(3))
+**Given** a Ready match with a lobby (any stage)
+**When** staff call `set_match_sides`
+**Then** rejected: "Close the open lobby of this match before changing its sides."; nothing changes
+_Superseded in Phase S8g execution (DECISIONS.md A71)._ The records are checked first: a lobby whose record is Pending / Submitted / Disputed / Validated gets the S8g-B3 message; this message applies to a Waiting lobby, or one whose records are all Voided / Rejected (S8g-B9).
+
+### S8g-B5 A stale blueTeamId falls back to the default (A70(1))
+**Given** a match whose `blueTeamId` names a team that no longer holds either slot (replaced after a DQ or a rollback)
+**When** the match is seated, credited or tallied
+**Then** team1 = Blue, team2 = Red, as if `blueTeamId` were unset
+
+### S8g-B6 Group-stage matches choose colours too (A70(1))
+**Given** a Ready group-stage match
+**When** staff call `set_match_sides`
+**Then** accepted with the same guards; `headStartSide` is stored but its tally is unchanged (`winnerAdvantage = 0`); group standings stay team-based
+_Superseded in Phase S8g execution (DECISIONS.md A71)._ There is no `headStartSide`; only `blueTeamId` is stored.
+
+### S8g-B7 Other guards (A70(3), A25)
+**When** `set_match_sides` is called by a user without the `bracket` permission, on a non-Ready match, in a Completed / Cancelled tournament, with `headStartSide = Spectator`, or with a `blueTeamId` outside the match
+**Then** rejected respectively: "You are not authorized to set the sides of this match.", "{positionKey} is {state}; sides are set on a Ready match.", "Tournament is over.", "headStartSide must be Blue or Red.", "blueTeamId must be one of the match's two teams."
+_Superseded in Phase S8g execution (DECISIONS.md A71)._ The `headStartSide` argument and its guard are removed; the other four rejections stand.
+
+### S8g-B8 Colours never move the head start (A71(1)(2), A27)
+**Given** a Ready Bo3 grand final with `winnerAdvantage = 1` (tally 1–0 for team1, the WB finalist), no lobby and no record
+**When** `bracket` staff call `set_match_sides(gf, blueTeamId = team2)` and later a game is won by Blue
+**Then** team2 plays Blue and team1 Red; the row reads 1–0 after the call (colours change neither number) and 1–1 after the game (Blue's win credits team2)
+
+### S8g-B9 A started game is reported before an open lobby (A70(3), A71)
+**Given** a Ready match with a live lobby whose record is Pending (or Submitted / Disputed / Validated)
+**When** staff call `set_match_sides`
+**Then** rejected: "The sides can no longer be changed: a game of this match has started."; with only a Waiting lobby (or one whose records are all Voided / Rejected) the rejection is "Close the open lobby of this match before changing its sides."
+
+### S8g-B10 A slot change voids the colour choice (A71(3))
+**Given** a match whose `blueTeamId` was set, then one of its slots changes (rolled back upstream, filled again, or turned into a BYE after a DQ)
+**When** the slot is written
+**Then** `blueTeamId` is unset in the same write (default team1 = Blue) and the stored tally equals the derived one (`team1Games = winnerAdvantage`, `team2Games = 0`)
 
 ## Phase History
 
@@ -617,6 +675,8 @@ Reducers on the shared engine and the single writer (A23); every scenario tagged
 | Scenarios S8d-B1..B4: rollback / resolve side effects on records and lobbies, validation hand-off | Phase S8d execution (DECISIONS.md A24(1)(3)) | 2026-11-07 |
 | Scenarios S8e-B1..B4: derived tally, decide at ceil(bestOf / 2), rollback of the deciding record only, resolve keeps Validated games; supersedes the S8d-B1 "every lobby voided" and S8d-B2/B3 voiding of a Validated record for the other team | Phase S8e execution (DECISIONS.md A67(4)(8)) | 2026-11-08 |
 | Scenario S8e-B5: the A27 head start is stored on the bracket row at generation (`team1Games = winnerAdvantage`), so the public row and the derived tally agree before the first game | Phase S8e execution (DECISIONS.md A69(1)) | 2026-11-08 |
+| Scenarios S8g-B1..B7: colours per bracket match (`blueTeamId`, default team1 = Blue, stale falls back), head start by colour (`headStartSide`), `set_match_sides` until the first game, group matches included; S8e-B1's fixed mapping superseded | Phase S8g execution (DECISIONS.md A70) | 2026-11-08 |
+| Scenarios S8g-B8..B10: the head start stays on team1 whatever the colours (`headStartSide` removed; S8g-B1 / B2 / B6 / B7 superseded in part); records checked before lobbies (S8g-B4 superseded in part); a slot change unsets `blueTeamId` and resets the stored tally (A71(3)) | Phase S8g execution (DECISIONS.md A71) | 2026-11-08 |
 
 ---
 

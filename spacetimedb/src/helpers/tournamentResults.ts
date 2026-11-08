@@ -7,21 +7,21 @@ import { SYSTEM_USER_ID } from './auditColumns';
 import { updateWithAudit } from './auditHelpers';
 import { recordGameSettled } from './bracketResults';
 import { findLobbyResult } from './scoringHelpers';
+import { sideTeamId } from './matchSides';
 import { hardDeleteLobby } from '../reducers/lobbyGc';
 
 const unit = (tag: string) => ({ tag, value: {} }) as any;
 
-/** A35: the bracket team a record's winning side stands for (Blue = team1, Red = team2), or undefined. */
+/** A35 / A70(1): the bracket team a record's winning side stands for under the match's colour mapping, or undefined. */
 export function recordWinnerTeamId(match: any, record: any): number | undefined {
-    const side = record.winnerTeamSide?.tag;
-    return side === 'Blue' ? match.team1Id : side === 'Red' ? match.team2Id : undefined;
+    return sideTeamId(match, record.winnerTeamSide?.tag);
 }
 
 /**
  * A24(1), A38(1), A67(4): the settled-result hand-off, called when a tournament lobby's record becomes Validated (the
  * close of the game in a tournament without requireResultValidation, validate_match_result) or settles by concede.
  * Hands the game to its bracket match through the single writer (recordGameSettled: the derived tally is rewritten
- * and the match is decided, decidedBy Played / Concede, when a side reaches ceil(bestOf / 2); A35 Blue = team1).
+ * and the match is decided, decidedBy Played / Concede, when a side reaches ceil(bestOf / 2); colours by the match's mapping, A70(1)).
  * Idempotent and quiet: only a Ready match of an InProgress tournament counts the game; a match already settled
  * (staff resolve, DQ) is left as it is. Audit actor SYSTEM_USER_ID (A37: the public BracketMatch row never carries a
  * player's id). Nothing derived runs here (A24(4)).

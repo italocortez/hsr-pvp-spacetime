@@ -2,6 +2,7 @@
 
 76 tables. Updated 2026-11-06 (S3 backend reset: 27 tables public → private per A37 / ACCESS-SECURITY-OPS Appendix A, 10 new, `group_phase_record` dropped per A23). Visibility: **21 public** (reference data, aggregates, `user`, `tournament`, `bracket_match`, `admin_alert`, the `lobby_cursor_event` event table); every other table is PRIVATE and read through views (S9). Paste into [mermaid.live](https://mermaid.live) to preview.
 
+Phase S8g execution (DECISIONS.md A70): `bracket_match` gains `blueTeamId` (optional, the team playing Blue; unset or stale = team1; still public, team ids only); A71: the head start stays on team1 whatever the colours (no `headStartSide` column) and a slot change resets `blueTeamId`.
 Phase S8e execution (DECISIONS.md A67): one game per lobby. `lobby` / `lobby_preset` lose `bestOf`, `bestOfNAdvantage`, `refereeControlsShelving` (the `AdvantageSide` enum is gone); `match_session` loses `currentGameNumber`, `gamesWonBlue`, `gamesWonRed`, `seriesBestOf`; `gameNumber` leaves `match_session_step`, `match_session_step_history` (PK `[matchHistoryId, sequence]`), `match_lineup` (index `by_lobby`), `match_lineup_history`, `match_result_group_score` / `match_result_adjustment` (index `by_result`), `match_result_game` (PK `matchResultId`, one row per record) and `match_result_game_history` (PK `matchHistoryId`); `LobbyStage` = Waiting | Drafting | Equipping | Scoring | AwaitingResult. `bracket_match.team1Games` / `team2Games` are the derived series tally (A67(4)).
 
 Phase S7b execution (DECISIONS.md A60): `match_result_game` gains `blueConfirmed`, `redConfirmed` (per-game captain confirmations), `closedAt` (optional, the closed marker) and `closedById` (optional, FK user); `match_result_record` loses `blueConfirmed` / `redConfirmed`; `match_lineup` loses `isConfirmed`.
@@ -205,6 +206,7 @@ erDiagram
         string state "Pending|Ready|Walkover|Void|Decided"
         u8 team1Games "A67(4), A69(1): derived tally (head start, stored from generation + Validated games)"
         u8 team2Games "A67(4): derived tally (Validated games)"
+        u32 blueTeamId FK "A70(1): team playing Blue; null or stale = team1; reset on a slot change (A71(3))"
     }
     tournament_finalize_job {
         u64 scheduledId PK

@@ -94,6 +94,7 @@ export { transfer_referee, reclaim_referee } from './reducers/refereeManagement'
 export { confirm_game, close_game, dispute_match_result } from './reducers/matchResultSubmission';
 export { record_group_scores, set_score_adjustment } from './reducers/scoreEntry';
 export { dq_participant, override_match_result, assign_tournament_assistant, remove_tournament_assistant, mod_promote_to_host, mod_demote_from_host } from './reducers/tournamentAdmin';
+export { set_match_sides } from './reducers/bracketSides';
 export { generate_bracket, seed_bracket, set_seed_order } from './reducers/bracketGeneration';
 export { advance_group_stage, resolve_bracket_match, rollback_bracket_match } from './reducers/bracketAdvancement';
 export { finalize_match_result, validate_match_result } from './reducers/matchFinalization';

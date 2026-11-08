@@ -3,8 +3,10 @@ import { BracketSide, BracketMatchState, BracketDecision } from '../types/enums'
 
 // A23 (review 5.2): exact-slot, single-writer bracket. positionKey ('W-R1-M1', 'L-R2-M1', 'GF', 'TP',
 // 'G0-R1-M1') is the engine's stable address; nextWinnerSlot / nextLoserSlot (1 or 2) name the slot the
-// winner / loser fills in the next match; team1 = Blue, team2 = Red in the lobby (A35); the WB finalist is
-// slot 1 of the grand final (A27). state + decidedBy replace checkInRequired and resultStatus; gameMode
+// winner / loser fills in the next match; the WB finalist is slot 1 of the grand final (A27). Colours (A70(1)):
+// blueTeamId names the team that plays Blue in every lobby of the match; unset or stale falls back to the default
+// team1 = Blue, team2 = Red (A35); helpers/matchSides.ts is the one mapping; a slot change resets it (A71(3)).
+// The winnerAdvantage head start stays on team1 whatever the colours (A71(1), A27). state + decidedBy replace checkInRequired and resultStatus; gameMode
 // is read from Tournament.defaultGameMode (integrity set, A33). Public: team ids only, no user ids (R1).
 export const bracketMatchColumns = {
     id: t.u32().primaryKey().autoInc(),
@@ -31,6 +33,7 @@ export const bracketMatchColumns = {
     decidedBy: BracketDecision.optional(),
     team1Games: t.u8(),                   // A67(4): derived tally (head start + Validated games), written only by helpers/bracketResults.ts (bracketStore inserts the head start, A69(1)); A30 game differential + display
     team2Games: t.u8(),
+    blueTeamId: t.u32().optional(),       // A70(1): set by set_match_sides; undefined (or stale) = default team1 = Blue
     createdById: t.u32(),
     createdDate: t.timestamp(),
     lastModifiedById: t.u32(),

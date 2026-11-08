@@ -6,6 +6,7 @@ import { findEnrolled, findMembership, refreshTeamStatus, transferTournamentCapt
 import { applyBracketResult, matchGames, recordGameSettled, rollbackBracketResult, writeMatchGames } from '../helpers/bracketResults';
 import { recordWinnerTeamId, voidTournamentLobby } from '../helpers/tournamentResults';
 import { setSlotBye, settle } from '../helpers/bracketStore';
+import { teamSideOf } from '../helpers/matchSides';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { deleteCalendarEventForBracketMatch } from '../helpers/calendarCascade';
 import { performConcede } from './concede';
@@ -135,7 +136,7 @@ export const dq_participant = spacetimedb.reducer(
                 const { lobby, bracketMatch } = activeLobby;
                 // DQ during active draft/scoring: force-concede (D-25); the bracket is already settled
                 // above, so the concede's hand-off is skipped (match no longer Ready).
-                const losingTeamSide = bracketMatch.team1Id === teamId ? 'Blue' : 'Red';
+                const losingTeamSide = teamSideOf(bracketMatch, teamId)!; // A70(1): the colour the DQ'd team plays
                 performConcede(
                     ctx,
                     lobby,

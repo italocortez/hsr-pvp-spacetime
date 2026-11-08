@@ -443,7 +443,7 @@ describe('shuffle_teams in a tournament lobby (A35, S8d review)', () => {
         for (const who of [blue.captain, red.captain]) join(f.test, who, lobbyId);
         for (const mode of ['TeamSwap', 'RandomSwap']) {
             expectReject(f.test, f.org, (ctx) => M.shuffle_teams(ctx, { lobbyId, mode: { tag: mode } as any }),
-                'Seats in a tournament lobby follow the bracket (A35); shuffling is not available.');
+                "Seats in a tournament lobby follow the bracket's sides (A35 / A70); shuffling is not available."); // T-S8g: A70 message
         }
         expect(slotOf(f.test, lobbyId, blue.captain)).toBe('BluePlayer');
         expect(slotOf(f.test, lobbyId, red.captain)).toBe('RedPlayer');

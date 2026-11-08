@@ -5,6 +5,7 @@
 import { SenderError } from 'spacetimedb/server';
 import { allowedSlotsFor as allowedSlotsCore, ALL_SLOTS, type Slot } from '@shared/lobby-rules';
 import { slotIsCoach, slotTeam } from './lobbyHelpers';
+import { matchSides } from './matchSides';
 
 export type LobbySlotTag = Slot;
 
@@ -19,23 +20,26 @@ function sideUserIds(ctx: any, bracketMatchId: number, teamId: number | undefine
 }
 
 /**
- * A35: in a tournament lobby, members of `BracketMatch.team1Id` and its approved stand-ins (TournamentStandIn
- * rows exist only once approved) may take BluePlayer / BlueCoach, team2 RedPlayer / RedCoach (coaches follow the
- * team rule, D.8.5); everyone else, staff included, Spectator only. Spectator is always allowed. A casual lobby
- * (or one without a bracket match) allows every slot.
+ * A35 / A70(1): in a tournament lobby, members of the team that plays Blue in this bracket match (matchSides:
+ * `blueTeamId`, default team1) and its approved stand-ins (TournamentStandIn rows exist only once approved) may
+ * take BluePlayer / BlueCoach, the Red team's RedPlayer / RedCoach (coaches follow the team rule, D.8.5); everyone
+ * else, staff included, Spectator only. Spectator is always allowed. A casual lobby (or one without a bracket
+ * match) allows every slot.
  */
 export function allowedSlotsFor(ctx: any, lobby: any, userId: number): LobbySlotTag[] {
     if (!lobby.isTournamentControlled || lobby.bracketMatchId === undefined) return [...ALL_SLOTS];
     const match = ctx.db.BracketMatch.id.find(lobby.bracketMatchId);
     if (!match) return ['Spectator'];
-    const team1 = sideUserIds(ctx, match.id, match.team1Id);
-    const team2 = sideUserIds(ctx, match.id, match.team2Id);
+    const { blueTeamId, redTeamId } = matchSides(match);
+    const blue = sideUserIds(ctx, match.id, blueTeamId);
+    const red = sideUserIds(ctx, match.id, redTeamId);
+    // A70(1): the shared core's team1 inputs mean "the Blue side", so it is fed the Blue team.
     const allowed = allowedSlotsCore({
         isTournamentControlled: true,
-        team1MemberIds: team1.members,
-        team2MemberIds: team2.members,
-        team1StandInIds: team1.standIns,
-        team2StandInIds: team2.standIns,
+        team1MemberIds: blue.members,
+        team2MemberIds: red.members,
+        team1StandInIds: blue.standIns,
+        team2StandInIds: red.standIns,
     }, userId);
     return ALL_SLOTS.filter((s) => allowed.has(s));
 }
