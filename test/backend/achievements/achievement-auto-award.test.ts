@@ -108,7 +108,7 @@ describe.skipIf(!hasServerToken())('Achievement Auto-Award via Finalization', ()
         await blue.call.joinLobby({ lobbyId, joinCode: '', password: '' });
         await blue.sync();
         await blue.call.setTeamSlot({
-            lobbyId, targetUserId: blue.userId,
+            lobbyId, 
             lobbySlot: { tag: 'BluePlayer' as const },
         });
         await blue.sync();
@@ -116,7 +116,7 @@ describe.skipIf(!hasServerToken())('Achievement Auto-Award via Finalization', ()
         await red.call.joinLobby({ lobbyId, joinCode: '', password: '' });
         await red.sync();
         await red.call.setTeamSlot({
-            lobbyId, targetUserId: red.userId,
+            lobbyId, 
             lobbySlot: { tag: 'RedPlayer' as const },
         });
         await red.sync();

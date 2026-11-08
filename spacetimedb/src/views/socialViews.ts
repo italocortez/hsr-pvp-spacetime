@@ -10,7 +10,7 @@
 import spacetimedb from '@module/schema';
 import { t } from 'spacetimedb/server';
 import { GameMode, DraftMode, MatchType } from '@module/types/enums';
-import { slotSameTeam } from '@module/helpers/lobby/lobbyHelpers';
+import { slotIsSpectator, slotSameTeam } from '@module/helpers/lobby/lobbyHelpers';
 import { resolveUserLabel } from '@module/helpers/identity/userLabel';
 import {
     callerMemberships, callerUserId, hideUserId, mmrByModeOf, ratingVisible,
@@ -89,7 +89,8 @@ export const view_my_relationships = spacetimedb.view(
 //    drawer of the lobby room (PAGE-MAP lobbyroom gap (2)).
 //
 //    Rules (S9b: A40 replaces the D-18 "anonymous forces ClosedNoRating" override):
-//    - Self, a teammate (D-70) and any referee (D-14): roster and rating.
+//    - Self, a teammate (D-70) and the spectator referee (D-14 narrowed by A75, as D-71 / A40): roster and rating.
+//      A referee seated on a team is a player: opponents per rosterVisibility below.
 //    - Anyone else: OpenRoster → roster and rating (D-11), ClosedWithRating → rating only (D-12), ClosedNoRating →
 //      nothing (D-13); on anonymized seats too (A40: exact ratings; the roster only under OpenRoster).
 //    - Spectators follow the opponent rules (D-16), except the spectator referee.
@@ -126,7 +127,9 @@ export const view_my_roster_visibility = spacetimedb.view(
 
             for (const member of ctx.db.LobbyMember.lobby_id.filter(lobby.id)) {
                 const isSelf = member.userId === me.userId;
-                const fullAccess = isSelf || myMembership.isReferee || slotSameTeam(myMembership.lobbySlot, member.lobbySlot);
+                const fullAccess = isSelf
+                    || (myMembership.isReferee && slotIsSpectator(myMembership.lobbySlot)) // A75: spectator referee only
+                    || slotSameTeam(myMembership.lobbySlot, member.lobbySlot);
                 const canSeeRoster = fullAccess || openRoster;
                 const canSeeRating = canSeeRoster || ratingVisible(lobby, myMembership, member);
                 if (!canSeeRoster && !canSeeRating) continue;

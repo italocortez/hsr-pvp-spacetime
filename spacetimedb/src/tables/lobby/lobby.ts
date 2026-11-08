@@ -87,6 +87,10 @@ export const lobbyColumns = {
     lastActivityAt: t.timestamp(),
     stage: LobbyStage,
 
+    // A74(3): the last seat number handed out (the host's is 1). nextJoinSeq reads and bumps it, so a seat number
+    // names one membership for the lobby's lifetime and is never reused.
+    lastJoinSeq: t.u32(),
+
     // Audit:
     createdById: t.u32(),
     createdDate: t.timestamp(),

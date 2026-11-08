@@ -4,6 +4,7 @@ export const lobbyBanColumns = {
     lobbyId: t.u32(),
     bannedUserId: t.u32(),
     bannedByUserId: t.u32(),
+    bannedJoinSeq: t.u32(),   // A74(2): the seat the member held when banned; unban_member resolves the ban by it
     createdById: t.u32(),
     createdDate: t.timestamp(),
     lastModifiedById: t.u32(),

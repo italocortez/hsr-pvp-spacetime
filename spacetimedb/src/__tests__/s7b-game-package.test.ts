@@ -24,6 +24,7 @@ import {
     type Harness,
     type Lobby,
     type SetupOpts,
+    seatOf,
 } from './s4-fixtures';
 import {
     H,
@@ -240,7 +241,7 @@ describe('A60(3): confirm_game', () => {
     it('a referee seated on a team who is not its captain cannot confirm', () => {
         const test = newHarness();
         const s = setupLobby(test, { hostSlot: 'BluePlayer', seats: [['b1', 'BluePlayer'], ['r1', 'RedPlayer']] });
-        tx(test, s.host, (ctx) => M.set_captain(ctx, { lobbyId: s.lobbyId, targetUserId: s.a.b1.userId }));
+        tx(test, s.host, (ctx) => M.set_captain(ctx, { lobbyId: s.lobbyId, targetJoinSeq: seatOf(ctx, s.lobbyId, s.a.b1.userId) }));
         expect(captain(s, 'Blue').userId).toBe(s.a.b1.userId);
         draftClassic(s, blueNames(), redNames());
         arrange(s, s.a.b1, 'Blue', halves(blueNames()));

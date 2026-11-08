@@ -29,6 +29,7 @@ import {
     tx,
     type Harness,
     type SetupOpts,
+    seatOf,
 } from './s4-fixtures';
 
 const GRACE_MICROS = 15_000_000n;
@@ -79,7 +80,7 @@ describe('A22a / A22(5): the referee flag moves after 20 s, in candidate order',
                 const ref = guest(test, 'ref');
                 tx(test, ref, (ctx) => M.join_lobby(ctx, { lobbyId: l.lobbyId, joinCode: '', password: '' }));
                 l.a.ref = ref;
-                tx(test, l.host, (ctx) => M.transfer_referee(ctx, { lobbyId: l.lobbyId, targetUserId: ref.userId }));
+                tx(test, l.host, (ctx) => M.transfer_referee(ctx, { lobbyId: l.lobbyId, targetJoinSeq: seatOf(ctx, l.lobbyId, ref.userId) }));
                 opts.beforeStart?.(l);
             },
         });
@@ -147,7 +148,7 @@ describe('A22a / A22(5): the referee flag moves after 20 s, in candidate order',
                     const coach = guest(l.test, 'coach');
                     tx(l.test, coach, (ctx) => M.join_lobby(ctx, { lobbyId: l.lobbyId, joinCode: '', password: '' }));
                     tx(l.test, l.host, (ctx) =>
-                        M.set_team_slot(ctx, { lobbyId: l.lobbyId, targetUserId: coach.userId, lobbySlot: { tag: 'BlueCoach' } as any }),
+                        M.set_team_slot(ctx, { lobbyId: l.lobbyId, targetJoinSeq: seatOf(ctx, l.lobbyId, coach.userId), lobbySlot: { tag: 'BlueCoach' } as any }),
                     );
                     l.a.coach = coach;
                 },

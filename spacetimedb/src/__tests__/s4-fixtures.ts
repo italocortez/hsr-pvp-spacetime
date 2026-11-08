@@ -56,6 +56,16 @@ export const disconnect = (test: Harness, a: Actor) => tx(test, a, (ctx) => M.cl
 export function member(test: Harness, lobbyId: number, userId: number) {
     return [...test.db.LobbyMember.by_lobby_and_user.filter([lobbyId, userId])][0];
 }
+/**
+ * T-S9c (A74): the seat number (`LobbyMember.joinSeq`) `userId` holds in the lobby; the six member-targeting reducers
+ * take it. `src` is the harness outside a transaction, or the reducer `ctx` inside a `tx` body (reading `test.db`
+ * inside `withReducerTx` crashes the in-memory datastore, S5 log note 6).
+ */
+export function seatOf(src: { db: any }, lobbyId: number, userId: number): number {
+    const row = [...src.db.LobbyMember.by_lobby_and_user.filter([lobbyId, userId])][0] as { joinSeq: number } | undefined;
+    if (!row) throw new Error(`seatOf: user ${userId} holds no row in lobby ${lobbyId}`);
+    return row.joinSeq;
+}
 export const lobbyRow = (test: Harness, lobbyId: number) => test.db.Lobby.id.find(lobbyId)!;
 export const session = (test: Harness, lobbyId: number) => test.db.MatchSession.lobbyId.find(lobbyId)!;
 export const steps = (test: Harness, lobbyId: number) => [...test.db.MatchSessionStep.lobby_id.filter(lobbyId)];
@@ -173,8 +183,13 @@ export function setupLobby(test: Harness, opts: SetupOpts = {}): Lobby {
         if (slot === 'Spectator') return;
         const isCoach = slot === 'BlueCoach' || slot === 'RedCoach';
         // Coaches are assigned by the host (not self-assignable).
+        // T-S9c (A74(1)): the host targets the coach's seat; a self-move omits the seat.
         tx(test, isCoach ? host : who, (ctx) =>
-            M.set_team_slot(ctx, { lobbyId, targetUserId: who.userId, lobbySlot: { tag: slot } as any }),
+            M.set_team_slot(ctx, {
+                lobbyId,
+                ...(isCoach ? { targetJoinSeq: seatOf(ctx, lobbyId, who.userId) } : {}),
+                lobbySlot: { tag: slot } as any,
+            }),
         );
         if (!isCoach) tx(test, who, (ctx) => M.confirm_ready(ctx, { lobbyId }));
     };

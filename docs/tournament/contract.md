@@ -633,6 +633,13 @@ Note: TournamentEnrolled row does NOT contain hsrAccountId — that column was r
 **When** they call `create_tournament_lobby` for another bracket match without `abandonCurrentMatch`
 **Then** rejected: "You left lobby ABC123 mid-match. Joining here means you cannot return to it."; with `abandonCurrentMatch = true` the lobby is created and their row in ABC123 becomes abandoned
 
+## Acceptance Scenarios (Phase S9c execution)
+
+### S9c-T1 A team request identifies the requester to the captain (A73)
+**Given** an `isAnonymousDefault` team tournament in Registration; Player B asks to join Team A
+**When** Team A's captain reads `view_my_team_requests`
+**Then** the request carries Player B's real `userId` and display name (not the alias or `Seat-<n>`), in every tournament; `accept_team_request` / `reject_team_request` keep taking that id; Player B's own row is unchanged
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -699,6 +706,7 @@ Note: TournamentEnrolled row does NOT contain hsrAccountId — that column was r
 | create / update arguments: grandFinalBestOf, groupAdvanceCount, groupAssignmentMode, checkInEnabled, requireResultValidation, allowMirrorPicks, lineupFormat, disconnectForfeitSeconds, optional minimumMmr and lobbyPresetId; A29 / A32 validation | Phase S8b execution (DECISIONS.md A28, A29, A32, A33, A33a, A36) | 2026-11-07 |
 | Scenarios S8e-T1..T4: D-45 = one unsettled lobby per bracket match, decided / capped rejections, no series settings on the lobby, several records per match in the job; supersedes S8d-T1 (`bestOf` / `bestOfNAdvantage` copied) and the S8d-T2 duplicate-lobby message | Phase S8e execution (DECISIONS.md A67(2)(5)(7)(8)) | 2026-11-08 |
 | Scenarios S8f-T1..T2: a DQ'd player plays the live game on (D-25 mid-match kick removed); `create_tournament_lobby` with `abandonCurrentMatch` | Phase S8f execution (DECISIONS.md A68) | 2026-11-08 |
+| Scenario S9c-T1: a captain reads the requester's display name on a team request in every tournament (A37 clarification) | Phase S9c execution (DECISIONS.md A73) | 2026-11-08 |
 
 ---
 

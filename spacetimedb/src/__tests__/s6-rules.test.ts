@@ -21,6 +21,7 @@ import {
     type Actor,
     type Harness,
     type Lobby,
+    seatOf,
 } from './s4-fixtures';
 import { finishGame } from './s7-fixtures';
 
@@ -339,16 +340,19 @@ describe('A45(3): unban_member', () => {
     it('the host lifts a ban and the user can rejoin; a plain player cannot; an unbanned user is rejected', () => {
         const test = newHarness();
         const s = setupLobby(test, { noStart: true });
-        tx(test, s.host, (ctx) => M.ban_member(ctx, { lobbyId: s.lobbyId, targetUserId: s.a.r2.userId }));
+        // T-S9c (A74(2)): the ban records the seat; unban_member takes that seat number.
+        const seat = seatOf(test, s.lobbyId, s.a.r2.userId);
+        tx(test, s.host, (ctx) => M.ban_member(ctx, { lobbyId: s.lobbyId, targetJoinSeq: seat }));
         expect([...test.db.LobbyBan.lobby_id.filter(s.lobbyId)]).toHaveLength(1);
 
-        expectReject(test, s.a.b1, (ctx) => M.unban_member(ctx, { lobbyId: s.lobbyId, userId: s.a.r2.userId }), /lift a lobby ban/);
-        tx(test, s.host, (ctx) => M.unban_member(ctx, { lobbyId: s.lobbyId, userId: s.a.r2.userId }));
+        expectReject(test, s.a.b1, (ctx) => M.unban_member(ctx, { lobbyId: s.lobbyId, bannedJoinSeq: seat }), /lift a lobby ban/);
+        tx(test, s.host, (ctx) => M.unban_member(ctx, { lobbyId: s.lobbyId, bannedJoinSeq: seat }));
         expect([...test.db.LobbyBan.lobby_id.filter(s.lobbyId)]).toHaveLength(0);
         tx(test, s.a.r2, (ctx) => M.join_lobby(ctx, { lobbyId: s.lobbyId, joinCode: '', password: '' }));
         expect(member(test, s.lobbyId, s.a.r2.userId)).toBeDefined();
 
-        expectReject(test, s.host, (ctx) => M.unban_member(ctx, { lobbyId: s.lobbyId, userId: s.a.r2.userId }), /not banned/);
+        // T-S9c (A74(2)/(3)): the lifted seat has no ban left (the old "not banned" text is now the seat rejection).
+        expectReject(test, s.host, (ctx) => M.unban_member(ctx, { lobbyId: s.lobbyId, bannedJoinSeq: seat }), `No ban is recorded for seat ${seat} of this lobby.`);
     });
 });
 

@@ -760,3 +760,34 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** the three folders had grown to 43 / 48 / 78 flat files. User, 2026-11-08: "could we do a small mechanical refactor to create subfolders that make sense and group files inside them?"; on imports: "do whatever is gonna be easier for future agents and less prone to errors" — a location-independent alias beats counting `..` across nested folders, and the per-folder declaration is the price of the bundler's one-segment matching (the same limit that made `@shared` folders use barrels, S4).
 - **Supersedes:** nothing (a layout convention; A53 covers `design/`).
 - **Where implemented:** S8h (mechanical: `git mv`, import rewrites, configs, architecture docs' path citations, CLAUDE.md §1); T-S8h (test imports, `test/` configs)
+
+### A73 — Team requests identify the requester to the captain, in every tournament
+
+- **Date:** 2026-11-08 · **Status:** decided (user ruling on the S9a open item)
+- **Decision:**
+  1. `view_my_team_requests` shows a captain who is asking to join their team: the requester's real `userId` **and** real display name (`resolveUserLabel`), whatever the tournament's anonymity setting. The requester's own rows (`isMine`) are unchanged. `accept_team_request` / `reject_team_request` keep taking the requester's user id.
+  2. This is an A37 clarification, not an exception: team formation is a social act between people who are about to play together, before any match exists; the anonymity rules (`isAnonymousDefault`, seat labels) apply to opponents and spectators once the bracket is seeded. Team members see each other identified anyway (A37 teammates).
+- **Why:** S9a left the row half-way (real id, anonymized label), which the review flagged. User, 2026-11-08: "For 1, keep the requested identified."
+- **Supersedes:** nothing (clarifies A37 for the team-request flow).
+- **Where implemented:** S9c (view label, docs)
+
+### A74 — Lobby members are targeted by seat number; the server translates the seat to the user id
+
+- **Date:** 2026-11-08 · **Status:** decided (user ruling on the S9a open item)
+- **Decision:**
+  1. **One argument, one path.** `kick_member`, `ban_member`, `set_team_slot`, `set_captain` and `transfer_referee` take `targetJoinSeq: u32` (the seat number `view_my_lobby_members.joinSeq`, the only member key an anonymized caller sees) instead of a user id. The reducer resolves the seat to the lobby's `LobbyMember` row with that `joinSeq` (`resolveSeat(ctx, lobbyId, joinSeq)`, through `LobbyMember.lobby_id`; "No member sits at seat N of this lobby." when none does) and continues with the resolved user id through the existing logic: every permission check, stage rule, message, flag transfer, chat event and audit stamp is unchanged. No reducer keeps a user-id variant. `set_team_slot`'s `targetJoinSeq` is optional: omitted means the caller's own seat (the self-move), so a client never looks up its own seat number.
+  2. **Bans record the seat.** `LobbyBan` gains `bannedJoinSeq: u32`, the seat the member held when banned. `ban_member` therefore requires a member row (present or away, A68(2)); the preventive ban of a user who holds no row is gone: a ban exists to stop a rejoin, and a user without a row is banned when they come back. `unban_member(lobbyId, bannedJoinSeq)` resolves the ban row by `(lobbyId, bannedJoinSeq)` through `LobbyBan.lobby_id` ("No ban is recorded for seat N of this lobby.") and deletes it; its permission rule (A45(3)) is unchanged. `view_my_lobby_bans` and `view_admin_lobby_bans` carry `bannedJoinSeq`; the admin In-Cell `lobby_ban` grid lifts a ban through the same reducer.
+  3. **Seat numbers are never reused within a lobby.** `Lobby` gains `lastJoinSeq: u32` (the host's seat is 1 at creation); `nextJoinSeq` reads and bumps it instead of `max(joinSeq) + 1` over the current members, so a departed member's seat number is never given to a later joiner: a seat number names exactly one membership for the lifetime of the lobby, and a ban's seat stays unambiguous.
+  4. **Anonymity (A37).** No argument or rejection text of these reducers names a user id; rejections cite the seat number. The S9a chat events and labels are unchanged.
+- **Why:** since S9a an anonymized host or referee cannot know a member's user id, so the six reducers were uncallable from an anonymous lobby. User, 2026-11-08: "yes, by seat number, but it would be better that the server translates it to user id so we dont do a different path."
+- **Supersedes:** the `targetUserId` / `userId` arguments of the six reducers (D-21, D-27, D-28, D-30, A45(3) as to their argument shape); the "Ban Non-Member" preventive ban; R4's `max + 1` join counter (the counter semantics stand).
+- **Where implemented:** S9c (reducers, the two columns, the two ban views, bindings, docs; T-S9c rewrites the call sites in the in-memory suites and marks the live ones for S10)
+
+### A75 — Only the spectator referee sees every roster
+
+- **Date:** 2026-11-08 · **Status:** decided (user ruling on the S9b open item)
+- **Decision:**
+  1. In `view_my_roster_visibility` the referee exemption of D-14 ("any referee sees every roster and rating") applies to the **spectator referee** only, as D-71 (identities) and A40's member row (exact ratings) already do. A referee who sits on a team is a player: self and teammates in full, opponents per the lobby's `rosterVisibility` (OpenRoster → roster and rating; ClosedWithRating → rating only; ClosedNoRating → nothing).
+- **Why:** a seated referee could read the opponents' characters, eidolons and exact rating under `ClosedNoRating` through the roster view while the member row withheld the rating from the same caller (S9b review #1). User, 2026-11-08: "For 3, also agree."
+- **Supersedes:** D-14's "any referee" (narrowed).
+- **Where implemented:** S9c (one condition in the view, docs)

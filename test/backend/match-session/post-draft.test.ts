@@ -54,12 +54,12 @@ async function setupDraftLobby(
 
     await blue.call.joinLobby({ lobbyId: lobby.id, joinCode: '', password: '' });
     await blue.sync();
-    await blue.call.setTeamSlot({ lobbyId: lobby.id, targetUserId: blue.userId, lobbySlot: { tag: 'BluePlayer' as const } });
+    await blue.call.setTeamSlot({ lobbyId: lobby.id, lobbySlot: { tag: 'BluePlayer' as const } });
     await blue.sync();
 
     await red.call.joinLobby({ lobbyId: lobby.id, joinCode: '', password: '' });
     await red.sync();
-    await red.call.setTeamSlot({ lobbyId: lobby.id, targetUserId: red.userId, lobbySlot: { tag: 'RedPlayer' as const } });
+    await red.call.setTeamSlot({ lobbyId: lobby.id, lobbySlot: { tag: 'RedPlayer' as const } });
     await red.sync();
 
     await blue.call.confirmReady({ lobbyId: lobby.id });
@@ -524,20 +524,20 @@ describe('Post-Draft (Equipping + Scoring)', () => {
             // Blue player
             await cPlayer.call.joinLobby({ lobbyId: cLobbyId, joinCode: '', password: '' });
             await cPlayer.sync();
-            await cPlayer.call.setTeamSlot({ lobbyId: cLobbyId, targetUserId: cPlayer.userId, lobbySlot: { tag: 'BluePlayer' as const } });
+            await cPlayer.call.setTeamSlot({ lobbyId: cLobbyId, lobbySlot: { tag: 'BluePlayer' as const } });
             await cPlayer.sync();
 
             // Blue coach (assigned by host to avoid permission issues)
             await cCoach.call.joinLobby({ lobbyId: cLobbyId, joinCode: '', password: '' });
             await cCoach.sync();
-            await cHost.call.setTeamSlot({ lobbyId: cLobbyId, targetUserId: cCoach.userId, lobbySlot: { tag: 'BlueCoach' as const } });
+            await cHost.call.setTeamSlot({ lobbyId: cLobbyId, targetJoinSeq: 0, lobbySlot: { tag: 'BlueCoach' as const } }); // S10: rewrite (A74: was targetUserId: cCoach.userId; take the seat from view_my_lobby_members)
             await cHost.sync();
             await cCoach.sync();
 
             // Red player
             await cRed.call.joinLobby({ lobbyId: cLobbyId, joinCode: '', password: '' });
             await cRed.sync();
-            await cRed.call.setTeamSlot({ lobbyId: cLobbyId, targetUserId: cRed.userId, lobbySlot: { tag: 'RedPlayer' as const } });
+            await cRed.call.setTeamSlot({ lobbyId: cLobbyId, lobbySlot: { tag: 'RedPlayer' as const } });
             await cRed.sync();
 
             // Coaches don't confirm — only non-coach players confirm

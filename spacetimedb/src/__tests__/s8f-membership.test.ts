@@ -31,6 +31,7 @@ import {
     type Harness,
     type Lobby,
     type SetupOpts,
+    seatOf,
 } from './s4-fixtures';
 import { byKey, playLobbyGame, createTournamentLobby, join, openMatchLobby, recordsOfLobby, sidesOf } from './s8d-fixtures';
 import { liveField, matchRow, tRow, verified } from './s8-fixtures';
@@ -59,9 +60,9 @@ const claim = (test: Harness, who: Actor, lobbyId: number, side = 0) =>
     tx(test, who, (ctx) => M.claim_forfeit(ctx, { lobbyId, forfeitingTeamSide: side }));
 const advanceStageOf = (test: Harness, s: Lobby) => tx(test, s.host, (ctx) => M.advance_stage(ctx, { lobbyId: s.lobbyId }));
 const kick = (test: Harness, by: Actor, lobbyId: number, target: Actor) =>
-    tx(test, by, (ctx) => M.kick_member(ctx, { lobbyId, targetUserId: target.userId }));
+    tx(test, by, (ctx) => M.kick_member(ctx, { lobbyId, targetJoinSeq: seatOf(ctx, lobbyId, target.userId) }));
 const ban = (test: Harness, by: Actor, lobbyId: number, target: Actor) =>
-    tx(test, by, (ctx) => M.ban_member(ctx, { lobbyId, targetUserId: target.userId }));
+    tx(test, by, (ctx) => M.ban_member(ctx, { lobbyId, targetJoinSeq: seatOf(ctx, lobbyId, target.userId) }));
 const gc = (test: Harness) => tx(test, 'internal', (ctx) => M.admin_gc_lobbies(ctx, {}));
 const lmaRows = (test: Harness, lobbyId: number, userId: number) =>
     [...test.db.LobbyMemberAccount.by_lobby_and_user.filter([lobbyId, userId])];
@@ -258,7 +259,7 @@ describe('A68(5): a spectator\'s or coach\'s Leave deletes the row in every stag
                     l.a[name] = guest(test, name);
                     rejoin(test, l.a[name], l.lobbyId);
                 }
-                tx(test, l.host, (ctx) => M.set_team_slot(ctx, { lobbyId: l.lobbyId, targetUserId: l.a.coach.userId, lobbySlot: { tag: 'BlueCoach' } as any }));
+                tx(test, l.host, (ctx) => M.set_team_slot(ctx, { lobbyId: l.lobbyId, targetJoinSeq: seatOf(ctx, l.lobbyId, l.a.coach.userId), lobbySlot: { tag: 'BlueCoach' } as any }));
                 giveAccounts(l, ['spec', 'coach']);
             },
         });
@@ -539,7 +540,7 @@ describe('A68(6): kick / ban', () => {
     it('Waiting: banning the player who holds the referee flag moves it (A68(7))', () => {
         const test = newHarness();
         const s = setupLobby(test, { noStart: true });
-        tx(test, s.host, (ctx) => M.transfer_referee(ctx, { lobbyId: s.lobbyId, targetUserId: s.a.r1.userId }));
+        tx(test, s.host, (ctx) => M.transfer_referee(ctx, { lobbyId: s.lobbyId, targetJoinSeq: seatOf(ctx, s.lobbyId, s.a.r1.userId) }));
         ban(test, s.host, s.lobbyId, s.a.r1);
         expect(refereeIds(test, s.lobbyId)).toEqual([s.host.userId]); // the host tier, online
         expectFlagsHeld(test, s.lobbyId);
@@ -552,14 +553,14 @@ describe('A68(6): kick / ban', () => {
                 beforeStart: (l) => {
                     l.a.coach = guest(test, 'coach');
                     rejoin(test, l.a.coach, l.lobbyId);
-                    tx(test, l.host, (ctx) => M.set_team_slot(ctx, { lobbyId: l.lobbyId, targetUserId: l.a.coach.userId, lobbySlot: { tag: 'RedCoach' } as any }));
+                    tx(test, l.host, (ctx) => M.set_team_slot(ctx, { lobbyId: l.lobbyId, targetJoinSeq: seatOf(ctx, l.lobbyId, l.a.coach.userId), lobbySlot: { tag: 'RedCoach' } as any }));
                 },
             });
             toStage(test, s, stage);
             const spec = joinAsSpectator(s, 'spec');
 
-            expectReject(test, s.host, (ctx) => M.kick_member(ctx, { lobbyId: s.lobbyId, targetUserId: s.a.b1.userId }), NO_PLAYER_REMOVAL);
-            expectReject(test, s.host, (ctx) => M.ban_member(ctx, { lobbyId: s.lobbyId, targetUserId: s.a.r2.userId }), NO_PLAYER_REMOVAL);
+            expectReject(test, s.host, (ctx) => M.kick_member(ctx, { lobbyId: s.lobbyId, targetJoinSeq: seatOf(ctx, s.lobbyId, s.a.b1.userId) }), NO_PLAYER_REMOVAL);
+            expectReject(test, s.host, (ctx) => M.ban_member(ctx, { lobbyId: s.lobbyId, targetJoinSeq: seatOf(ctx, s.lobbyId, s.a.r2.userId) }), NO_PLAYER_REMOVAL);
             expect(member(test, s.lobbyId, s.a.b1.userId)).toBeDefined();
             expect(member(test, s.lobbyId, s.a.r2.userId)).toBeDefined();
             expect([...test.db.LobbyBan.by_lobby_and_user.filter([s.lobbyId, s.a.r2.userId])]).toHaveLength(0);
@@ -577,7 +578,7 @@ describe('A68(6): kick / ban', () => {
         const test = newHarness();
         const s = setupLobby(test);
         const ref = joinAsSpectator(s, 'ref');
-        tx(test, s.host, (ctx) => M.transfer_referee(ctx, { lobbyId: s.lobbyId, targetUserId: ref.userId }));
+        tx(test, s.host, (ctx) => M.transfer_referee(ctx, { lobbyId: s.lobbyId, targetJoinSeq: seatOf(ctx, s.lobbyId, ref.userId) }));
         kick(test, s.host, s.lobbyId, ref);
         expect(refereeIds(test, s.lobbyId)).toEqual([s.host.userId]);
         expectFlagsHeld(test, s.lobbyId);
@@ -607,7 +608,7 @@ describe('A68(6): dq_participant', () => {
         join(f.test, victim, next);
         expect(member(f.test, next, victim.userId).lobbySlot.tag).toBe('Spectator');
         expectReject(f.test, victim, (ctx) =>
-            M.set_team_slot(ctx, { lobbyId: next, targetUserId: victim.userId, lobbySlot: { tag: 'BluePlayer' } as any }), SEAT);
+            M.set_team_slot(ctx, { lobbyId: next, targetJoinSeq: seatOf(ctx, next, victim.userId), lobbySlot: { tag: 'BluePlayer' } as any }), SEAT);
     });
 
     it('a whole-team DQ still settles the bracket and force-concedes the live lobby with the team\'s colour', () => {
@@ -653,8 +654,8 @@ describe('A68(7): host, captain and referee move on every removal (A22(5) order,
     it('a captain who is also referee leaves in Waiting: captain to the teammate, referee to the online host', () => {
         const test = newHarness();
         const s = setupLobby(test, { noStart: true });
-        tx(test, s.host, (ctx) => M.set_captain(ctx, { lobbyId: s.lobbyId, targetUserId: s.a.b1.userId }));
-        tx(test, s.host, (ctx) => M.transfer_referee(ctx, { lobbyId: s.lobbyId, targetUserId: s.a.b1.userId }));
+        tx(test, s.host, (ctx) => M.set_captain(ctx, { lobbyId: s.lobbyId, targetJoinSeq: seatOf(ctx, s.lobbyId, s.a.b1.userId) }));
+        tx(test, s.host, (ctx) => M.transfer_referee(ctx, { lobbyId: s.lobbyId, targetJoinSeq: seatOf(ctx, s.lobbyId, s.a.b1.userId) }));
         leave(test, s.a.b1, s.lobbyId);
         expect(captainOf(test, s.lobbyId, 'BluePlayer')?.userId).toBe(s.a.b2.userId);
         expect(refereeIds(test, s.lobbyId)).toEqual([s.host.userId]);
@@ -664,7 +665,7 @@ describe('A68(7): host, captain and referee move on every removal (A22(5) order,
     it('a player leaves in AwaitingResult: the row goes and its referee flag moves', () => {
         const test = newHarness();
         const s = parkedLobby(test);
-        tx(test, s.host, (ctx) => M.transfer_referee(ctx, { lobbyId: s.lobbyId, targetUserId: s.a.r1.userId }));
+        tx(test, s.host, (ctx) => M.transfer_referee(ctx, { lobbyId: s.lobbyId, targetJoinSeq: seatOf(ctx, s.lobbyId, s.a.r1.userId) }));
         leave(test, s.a.r1, s.lobbyId);
         expect(member(test, s.lobbyId, s.a.r1.userId)).toBeUndefined();
         expect(refereeIds(test, s.lobbyId)).toEqual([s.host.userId]);
@@ -674,8 +675,8 @@ describe('A68(7): host, captain and referee move on every removal (A22(5) order,
     it('user deletion while a member: the referee + captain of a deleted guest move; a deleted guest host hands over the host', () => {
         const test = newHarness();
         const s = setupLobby(test, { noStart: true });
-        tx(test, s.host, (ctx) => M.set_captain(ctx, { lobbyId: s.lobbyId, targetUserId: s.a.b1.userId }));
-        tx(test, s.host, (ctx) => M.transfer_referee(ctx, { lobbyId: s.lobbyId, targetUserId: s.a.b1.userId }));
+        tx(test, s.host, (ctx) => M.set_captain(ctx, { lobbyId: s.lobbyId, targetJoinSeq: seatOf(ctx, s.lobbyId, s.a.b1.userId) }));
+        tx(test, s.host, (ctx) => M.transfer_referee(ctx, { lobbyId: s.lobbyId, targetJoinSeq: seatOf(ctx, s.lobbyId, s.a.b1.userId) }));
         tx(test, s.a.b1, (ctx) => M.delete_my_account(ctx, {}));
         expect(refereeIds(test, s.lobbyId)).toEqual([s.host.userId]);
         expect(captainOf(test, s.lobbyId, 'BluePlayer')?.userId).toBe(s.a.b2.userId);
@@ -737,8 +738,8 @@ describe('A68(7): user deletion removes the membership like a leave; a live play
         const test = newHarness();
         const s = setupLobby(test, { noStart: true });
         giveAccounts(s, ['b1', 'b2']);
-        tx(test, s.host, (ctx) => M.set_captain(ctx, { lobbyId: s.lobbyId, targetUserId: s.a.b1.userId }));
-        tx(test, s.host, (ctx) => M.transfer_referee(ctx, { lobbyId: s.lobbyId, targetUserId: s.a.b1.userId }));
+        tx(test, s.host, (ctx) => M.set_captain(ctx, { lobbyId: s.lobbyId, targetJoinSeq: seatOf(ctx, s.lobbyId, s.a.b1.userId) }));
+        tx(test, s.host, (ctx) => M.transfer_referee(ctx, { lobbyId: s.lobbyId, targetJoinSeq: seatOf(ctx, s.lobbyId, s.a.b1.userId) }));
         const countBefore = lobbyRow(test, s.lobbyId).currentPlayerCount;
 
         tx(test, s.a.b1, (ctx) => M.delete_my_account(ctx, {}));
@@ -965,8 +966,8 @@ describe('A68(8): spectator joins and maxSpectators', () => {
             beforeStart: (l) => {
                 tx(test, l.host, (ctx) => M.update_lobby_settings(ctx, settingsArgs(l.lobbyId, { maxSpectators: 1 })));
                 // Fix pass: a casual Waiting lobby's Spectator slot holds seat candidates (D-27) and is not capped.
-                tx(test, l.a.b2, (ctx) => M.set_team_slot(ctx, { lobbyId: l.lobbyId, targetUserId: l.a.b2.userId, lobbySlot: { tag: 'Spectator' } as any }));
-                tx(test, l.a.b2, (ctx) => M.set_team_slot(ctx, { lobbyId: l.lobbyId, targetUserId: l.a.b2.userId, lobbySlot: { tag: 'BluePlayer' } as any }));
+                tx(test, l.a.b2, (ctx) => M.set_team_slot(ctx, { lobbyId: l.lobbyId, targetJoinSeq: seatOf(ctx, l.lobbyId, l.a.b2.userId), lobbySlot: { tag: 'Spectator' } as any }));
+                tx(test, l.a.b2, (ctx) => M.set_team_slot(ctx, { lobbyId: l.lobbyId, targetJoinSeq: seatOf(ctx, l.lobbyId, l.a.b2.userId), lobbySlot: { tag: 'BluePlayer' } as any }));
                 for (const n of ['b1', 'b2', 'r1', 'r2']) tx(test, l.a[n], (ctx) => M.confirm_ready(ctx, { lobbyId: l.lobbyId }));
             },
         });

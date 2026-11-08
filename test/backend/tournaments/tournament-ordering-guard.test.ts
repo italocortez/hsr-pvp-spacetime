@@ -85,7 +85,6 @@ async function setupValidatedTournamentMatch(
     await blue.sync();
     await blue.call.setTeamSlot({
         lobbyId,
-        targetUserId: blue.userId,
         lobbySlot: { tag: 'BluePlayer' as const },
     });
     await blue.sync();
@@ -95,7 +94,6 @@ async function setupValidatedTournamentMatch(
     await red.sync();
     await red.call.setTeamSlot({
         lobbyId,
-        targetUserId: red.userId,
         lobbySlot: { tag: 'RedPlayer' as const },
     });
     await red.sync();
@@ -182,7 +180,6 @@ async function setupValidatedNonTournamentMatch(
     await blue.sync();
     await blue.call.setTeamSlot({
         lobbyId,
-        targetUserId: blue.userId,
         lobbySlot: { tag: 'BluePlayer' as const },
     });
     await blue.sync();
@@ -191,7 +188,6 @@ async function setupValidatedNonTournamentMatch(
     await red.sync();
     await red.call.setTeamSlot({
         lobbyId,
-        targetUserId: red.userId,
         lobbySlot: { tag: 'RedPlayer' as const },
     });
     await red.sync();

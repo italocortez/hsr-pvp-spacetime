@@ -57,6 +57,7 @@ import {
     type Lobby,
     type SetupOpts,
     type SlotTag,
+    seatOf,
 } from './s4-fixtures';
 import {
     H,
@@ -130,7 +131,7 @@ const COLS = {
     member: ['memberKey', 'lobbyId', 'joinSeq', 'userId', 'label', 'lobbySlot', 'presence', 'isHost', 'isReferee',
         'isCaptain', 'isConfirmed', 'avatarCharacterName', 'displayedAchievementId', 'mmrByMode', 'accountRating',
         'accountCount'] as const,
-    ban: ['lobbyId', 'bannedUserId', 'label', 'bannedByUserId', 'createdDate'] as const,
+    ban: ['lobbyId', 'bannedUserId', 'bannedJoinSeq', 'label', 'bannedByUserId', 'createdDate'] as const, // T-S9c: + bannedJoinSeq (A74(2))
     chat: ['id', 'lobbyId', 'senderUserId', 'senderType', 'content', 'metadata', 'anonymousLabel', 'createdDate'] as const,
     session: ['lobbyId', 'turnIndex', 'draftSequence', 'timerState', 'isAuctionPhase', 'nextNominatorTeam',
         'blueCharactersWon', 'redCharactersWon', 'currentNomination', 'currentBidAmount', 'currentBidTeam',
@@ -242,7 +243,7 @@ describe('A37 outsider isolation: per-sender views', () => {
             beforeStart: (l) => {
                 const banned = guest(test, 'banned');
                 tx(test, banned, (ctx) => M.join_lobby(ctx, { lobbyId: l.lobbyId, joinCode: '', password: '' }));
-                tx(test, l.host, (ctx) => M.ban_member(ctx, { lobbyId: l.lobbyId, targetUserId: banned.userId }));
+                tx(test, l.host, (ctx) => M.ban_member(ctx, { lobbyId: l.lobbyId, targetJoinSeq: seatOf(ctx, l.lobbyId, banned.userId) }));
             },
         });
         chat(test, s.a.b1, s.lobbyId, 'hello');
@@ -836,7 +837,7 @@ describe('view_my_lobby_bans', () => {
         const s = setupLobby(test, { lobby, noStart: true, ...opts });
         const target = guest(test, 'target');
         tx(test, target, (ctx) => M.join_lobby(ctx, { lobbyId: s.lobbyId, joinCode: '', password: '' }));
-        tx(test, s.host, (ctx) => M.ban_member(ctx, { lobbyId: s.lobbyId, targetUserId: target.userId }));
+        tx(test, s.host, (ctx) => M.ban_member(ctx, { lobbyId: s.lobbyId, targetJoinSeq: seatOf(ctx, s.lobbyId, target.userId) }));
         return { test, s, target };
     }
 
@@ -852,13 +853,13 @@ describe('view_my_lobby_bans', () => {
 
     it('a referee who is not the host reads the bans', () => {
         const { test, s } = banned();
-        tx(test, s.host, (ctx) => M.transfer_referee(ctx, { lobbyId: s.lobbyId, targetUserId: s.a.r1.userId }));
+        tx(test, s.host, (ctx) => M.transfer_referee(ctx, { lobbyId: s.lobbyId, targetJoinSeq: seatOf(ctx, s.lobbyId, s.a.r1.userId) }));
         expect(view(test, 'view_my_lobby_bans', s.a.r1)).toHaveLength(1);
     });
 
     it('anonymous lobby: a player referee does not read bannedByUserId of the host who banned', () => {
         const { test, s } = banned(ANON, { hostSlot: 'BluePlayer', seats: [['b2', 'BluePlayer'], ['r1', 'RedPlayer'], ['r2', 'RedPlayer']] });
-        tx(test, s.host, (ctx) => M.transfer_referee(ctx, { lobbyId: s.lobbyId, targetUserId: s.a.r1.userId }));
+        tx(test, s.host, (ctx) => M.transfer_referee(ctx, { lobbyId: s.lobbyId, targetJoinSeq: seatOf(ctx, s.lobbyId, s.a.r1.userId) }));
         const [row] = view<LobbyBanViewRow>(test, 'view_my_lobby_bans', s.a.r1);
         expect(row.bannedByUserId).toBeUndefined();
     });
@@ -869,7 +870,7 @@ describe('view_my_lobby_bans', () => {
     // question for the user.)
     it('A37: anonymous lobby: a player referee reads neither the real id nor the display name of a banned (former) member', () => {
         const { test, s, target } = banned(ANON, { hostSlot: 'BluePlayer', seats: [['b2', 'BluePlayer'], ['r1', 'RedPlayer'], ['r2', 'RedPlayer']] });
-        tx(test, s.host, (ctx) => M.transfer_referee(ctx, { lobbyId: s.lobbyId, targetUserId: s.a.r1.userId }));
+        tx(test, s.host, (ctx) => M.transfer_referee(ctx, { lobbyId: s.lobbyId, targetJoinSeq: seatOf(ctx, s.lobbyId, s.a.r1.userId) }));
         const [row] = view<LobbyBanViewRow>(test, 'view_my_lobby_bans', s.a.r1);
         expect(row.bannedUserId).toBe(0);
         expect(row.label).not.toBe(displayName(test, target));
@@ -1194,7 +1195,8 @@ describe('per-sender tournament views', () => {
         expect(view(test, 'view_my_team_requests', third)).toEqual([]);
     });
 
-    it('view_my_team_requests in an anonymous tournament: the label is the seat label, not the display name', () => {
+    // T-S9c: S9a's seat label is superseded by A73(1): the captain reads the requester's real display name in every tournament.
+    it('view_my_team_requests in an anonymous tournament: the captain reads the display name of the requester (A73(1), was the seat label)', () => {
         const test = newHarness();
         const org = tournamentHost(test, 'org');
         const id = openTournament(test, org, { isAnonymousDefault: true });
@@ -1206,7 +1208,8 @@ describe('per-sender tournament views', () => {
         const teamId = [...test.db.TournamentTeam.tournament_id.filter(id)][0].id;
         tx(test, asker, (ctx) => M.request_join_team(ctx, { teamId }));
         const [row] = view<TeamRequestViewRow>(test, 'view_my_team_requests', cap);
-        expect(row.label).toBe('Seat-2');
+        expect(row.label).toBe(displayName(test, asker));
+        expect(row.userId).toBe(asker.userId);
     });
 
     it('view_my_stand_ins: the stand-in and their team read the row; the opponents do not (interpretation 11)', () => {
@@ -1475,7 +1478,7 @@ describe('S9a fix: member-event System lines rendered per reader (A37, D-70, D-7
     it('kick: a kicked Blue player (no longer a member) reads "Blue-2 was kicked from the lobby." for Red, with subjectUserId 0; the spectator referee reads the name', () => {
         const test = newHarness();
         const s = setupLobby(test, { lobby: ANON, noStart: true });
-        tx(test, s.host, (ctx) => M.kick_member(ctx, { lobbyId: s.lobbyId, targetUserId: s.a.b2.userId }));
+        tx(test, s.host, (ctx) => M.kick_member(ctx, { lobbyId: s.lobbyId, targetJoinSeq: seatOf(ctx, s.lobbyId, s.a.b2.userId) }));
         const raw = memberEventRow(test, s.lobbyId, 'kicked', s.a.b2.userId);
         const opp = chatRowById(test, s.a.r1, raw.id);
         expect(opp.content).toBe('Blue-2 was kicked from the lobby.');
@@ -1488,7 +1491,7 @@ describe('S9a fix: member-event System lines rendered per reader (A37, D-70, D-7
         const s = setupLobby(test, { lobby: ANON, noStart: true });
         const target = guest(test, 'target');
         tx(test, target, (ctx) => M.join_lobby(ctx, { lobbyId: s.lobbyId, joinCode: '', password: '' }));
-        tx(test, s.host, (ctx) => M.ban_member(ctx, { lobbyId: s.lobbyId, targetUserId: target.userId }));
+        tx(test, s.host, (ctx) => M.ban_member(ctx, { lobbyId: s.lobbyId, targetJoinSeq: seatOf(ctx, s.lobbyId, target.userId) }));
         const raw = memberEventRow(test, s.lobbyId, 'banned', target.userId);
         const opp = chatRowById(test, s.a.r1, raw.id);
         expect(opp.content).toMatch(/^Spectator-\d was banned from the lobby\.$/);

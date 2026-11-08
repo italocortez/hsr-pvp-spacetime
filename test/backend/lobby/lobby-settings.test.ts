@@ -226,7 +226,6 @@ describe('Lobby Settings, Slots & Ready', () => {
 
             await member1.call.setTeamSlot({
                 lobbyId: lobby.id,
-                targetUserId: member1.userId,
                 lobbySlot: { tag: 'BluePlayer' as const },
             });
             await member1.sync();
@@ -256,7 +255,7 @@ describe('Lobby Settings, Slots & Ready', () => {
 
             await host.call.setTeamSlot({
                 lobbyId: lobby.id,
-                targetUserId: member1.userId,
+                targetJoinSeq: 0, // S10: rewrite (A74: was targetUserId: member1.userId; take the seat from view_my_lobby_members)
                 lobbySlot: { tag: 'RedPlayer' as const },
             });
             await host.sync();
@@ -286,7 +285,7 @@ describe('Lobby Settings, Slots & Ready', () => {
 
             await host.call.setTeamSlot({
                 lobbyId: lobby.id,
-                targetUserId: member1.userId,
+                targetJoinSeq: 0, // S10: rewrite (A74: was targetUserId: member1.userId; take the seat from view_my_lobby_members)
                 lobbySlot: { tag: 'BlueCoach' as const },
             });
             await host.sync();
@@ -318,7 +317,6 @@ describe('Lobby Settings, Slots & Ready', () => {
             const err = await expectReducerError(
                 member1.call.setTeamSlot({
                     lobbyId: lobby.id,
-                    targetUserId: member1.userId,
                     lobbySlot: { tag: 'BlueCoach' as const },
                 })
             );
@@ -350,7 +348,6 @@ describe('Lobby Settings, Slots & Ready', () => {
             // member1 takes the single BluePlayer slot
             await member1.call.setTeamSlot({
                 lobbyId: lobby.id,
-                targetUserId: member1.userId,
                 lobbySlot: { tag: 'BluePlayer' as const },
             });
             await member1.sync();
@@ -360,7 +357,6 @@ describe('Lobby Settings, Slots & Ready', () => {
             const err = await expectReducerError(
                 member2.call.setTeamSlot({
                     lobbyId: lobby.id,
-                    targetUserId: member2.userId,
                     lobbySlot: { tag: 'BluePlayer' as const },
                 })
             );
@@ -393,7 +389,7 @@ describe('Lobby Settings, Slots & Ready', () => {
             // Host assigns member1 as BlueCoach
             await host.call.setTeamSlot({
                 lobbyId: lobby.id,
-                targetUserId: member1.userId,
+                targetJoinSeq: 0, // S10: rewrite (A74: was targetUserId: member1.userId; take the seat from view_my_lobby_members)
                 lobbySlot: { tag: 'BlueCoach' as const },
             });
             await host.sync();
@@ -402,7 +398,7 @@ describe('Lobby Settings, Slots & Ready', () => {
             const err = await expectReducerError(
                 host.call.setTeamSlot({
                     lobbyId: lobby.id,
-                    targetUserId: member2.userId,
+                    targetJoinSeq: 0, // S10: rewrite (A74: was targetUserId: member2.userId; take the seat from view_my_lobby_members)
                     lobbySlot: { tag: 'BlueCoach' as const },
                 })
             );
@@ -437,7 +433,6 @@ describe('Lobby Settings, Slots & Ready', () => {
             // member1 moves to BluePlayer
             await member1.call.setTeamSlot({
                 lobbyId: lobby.id,
-                targetUserId: member1.userId,
                 lobbySlot: { tag: 'BluePlayer' as const },
             });
             await member1.sync();
@@ -455,7 +450,6 @@ describe('Lobby Settings, Slots & Ready', () => {
             // member1 moves to a different slot
             await member1.call.setTeamSlot({
                 lobbyId: lobby.id,
-                targetUserId: member1.userId,
                 lobbySlot: { tag: 'RedPlayer' as const },
             });
             await member1.sync();
@@ -545,14 +539,13 @@ describe('Lobby Settings, Slots & Ready', () => {
             // member1 moves to BluePlayer
             await member1.call.setTeamSlot({
                 lobbyId: lobby.id,
-                targetUserId: member1.userId,
                 lobbySlot: { tag: 'BluePlayer' as const },
             });
             await member1.sync();
             await host.sync();
 
             // Host assigns captain
-            await host.call.setCaptain({ lobbyId: lobby.id, targetUserId: member1.userId });
+            await host.call.setCaptain({ lobbyId: lobby.id, targetJoinSeq: 0 }); // S10: rewrite (A74: was targetUserId: member1.userId; take the seat from view_my_lobby_members)
             await host.sync();
             await member1.sync();
 
@@ -586,7 +579,6 @@ describe('Lobby Settings, Slots & Ready', () => {
             // Both members move to BluePlayer
             await member1.call.setTeamSlot({
                 lobbyId: lobby.id,
-                targetUserId: member1.userId,
                 lobbySlot: { tag: 'BluePlayer' as const },
             });
             await member1.sync();
@@ -594,21 +586,20 @@ describe('Lobby Settings, Slots & Ready', () => {
 
             await member2.call.setTeamSlot({
                 lobbyId: lobby.id,
-                targetUserId: member2.userId,
                 lobbySlot: { tag: 'BluePlayer' as const },
             });
             await member2.sync();
             await host.sync();
 
             // Host assigns member1 as captain first
-            await host.call.setCaptain({ lobbyId: lobby.id, targetUserId: member1.userId });
+            await host.call.setCaptain({ lobbyId: lobby.id, targetJoinSeq: 0 }); // S10: rewrite (A74: was targetUserId: member1.userId; take the seat from view_my_lobby_members)
             await host.sync();
 
             const m1First = getMember(host, lobby.id, member1.userId);
             expect(m1First!.isCaptain).toBe(true);
 
             // Host now assigns member2 as captain — member1 should be demoted
-            await host.call.setCaptain({ lobbyId: lobby.id, targetUserId: member2.userId });
+            await host.call.setCaptain({ lobbyId: lobby.id, targetJoinSeq: 0 }); // S10: rewrite (A74: was targetUserId: member2.userId; take the seat from view_my_lobby_members)
             await host.sync();
             await member1.sync();
             await member2.sync();
@@ -640,7 +631,7 @@ describe('Lobby Settings, Slots & Ready', () => {
 
             // member1 joins as Spectator (default) — host tries to set as captain
             const err = await expectReducerError(
-                host.call.setCaptain({ lobbyId: lobby.id, targetUserId: member1.userId })
+                host.call.setCaptain({ lobbyId: lobby.id, targetJoinSeq: 0 }) // S10: rewrite (A74: was targetUserId: member1.userId; take the seat from view_my_lobby_members)
             );
             expect(err).toContain('Captain must be a team member (Blue or Red), not a spectator.');
 
@@ -665,14 +656,14 @@ describe('Lobby Settings, Slots & Ready', () => {
             // Host assigns member1 as BlueCoach
             await host.call.setTeamSlot({
                 lobbyId: lobby.id,
-                targetUserId: member1.userId,
+                targetJoinSeq: 0, // S10: rewrite (A74: was targetUserId: member1.userId; take the seat from view_my_lobby_members)
                 lobbySlot: { tag: 'BlueCoach' as const },
             });
             await host.sync();
 
             // Host tries to set the coach as captain
             const err = await expectReducerError(
-                host.call.setCaptain({ lobbyId: lobby.id, targetUserId: member1.userId })
+                host.call.setCaptain({ lobbyId: lobby.id, targetJoinSeq: 0 }) // S10: rewrite (A74: was targetUserId: member1.userId; take the seat from view_my_lobby_members)
             );
             expect(err).toContain('A coach cannot be assigned as captain.');
 
@@ -701,7 +692,6 @@ describe('Lobby Settings, Slots & Ready', () => {
             // Move member1 to BluePlayer so there is a valid captain target
             await member1.call.setTeamSlot({
                 lobbyId: lobby.id,
-                targetUserId: member1.userId,
                 lobbySlot: { tag: 'BluePlayer' as const },
             });
             await member1.sync();
@@ -709,7 +699,7 @@ describe('Lobby Settings, Slots & Ready', () => {
 
             // member2 is a regular member — calling setCaptain should be blocked
             const err = await expectReducerError(
-                member2.call.setCaptain({ lobbyId: lobby.id, targetUserId: member1.userId })
+                member2.call.setCaptain({ lobbyId: lobby.id, targetJoinSeq: 0 }) // S10: rewrite (A74: was targetUserId: member1.userId; take the seat from view_my_lobby_members)
             );
             expect(err).toContain('Only the host, an authorized referee, or an admin can assign captains.');
 

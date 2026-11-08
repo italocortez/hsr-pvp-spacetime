@@ -6,7 +6,7 @@
 // reaches maincloud. The A67(5) D-45 rule and the game cap are tested in s8e-bracket-series.test.ts.
 import { describe, expect, it } from 'vitest';
 import { TOURNAMENT_PERM_MESSAGES } from '@module/helpers/tournament/tournamentPermissions';
-import { M, expectReject, guest, lobbyRow, member, newHarness, setupLobby, tx, type Actor, type Harness } from './s4-fixtures';
+import { M, expectReject, guest, lobbyRow, member, newHarness, setupLobby, tx, type Actor, type Harness, seatOf } from './s4-fixtures';
 import {
     advanceStage,
     assignAssistant,
@@ -26,7 +26,7 @@ const PARTICIPANTS = TOURNAMENT_PERM_MESSAGES.participants;
 
 const slotOf = (test: Harness, lobbyId: number, who: Actor) => member(test, lobbyId, who.userId)?.lobbySlot.tag;
 const setSlot = (test: Harness, by: Actor, lobbyId: number, target: Actor, slot: string) =>
-    tx(test, by, (ctx) => M.set_team_slot(ctx, { lobbyId, targetUserId: target.userId, lobbySlot: { tag: slot } as any }));
+    tx(test, by, (ctx) => M.set_team_slot(ctx, { lobbyId, targetJoinSeq: seatOf(ctx, lobbyId, target.userId), lobbySlot: { tag: slot } as any }));
 const approve = (test: Harness, by: Actor, bracketMatchId: number, teamId: number, userId: number) =>
     tx(test, by, (ctx) => M.approve_stand_in(ctx, { bracketMatchId, teamId, userId }));
 const revoke = (test: Harness, by: Actor, bracketMatchId: number, userId: number) =>
@@ -335,12 +335,12 @@ describe('seat rule: join_lobby auto-seat and set_team_slot (A35, A26, D.8.5)', 
         const out = verified(f.test, 'out');
         for (const who of [blue.captain, red.captain, out]) join(f.test, who, lobbyId);
 
-        expectReject(f.test, out, (ctx) => M.set_team_slot(ctx, { lobbyId, targetUserId: out.userId, lobbySlot: { tag: 'BluePlayer' } as any }), SEAT);
-        expectReject(f.test, red.captain, (ctx) => M.set_team_slot(ctx, { lobbyId, targetUserId: red.captain.userId, lobbySlot: { tag: 'BluePlayer' } as any }), SEAT);
-        expectReject(f.test, f.org, (ctx) => M.set_team_slot(ctx, { lobbyId, targetUserId: out.userId, lobbySlot: { tag: 'RedCoach' } as any }), SEAT);
-        expectReject(f.test, f.org, (ctx) => M.set_team_slot(ctx, { lobbyId, targetUserId: blue.captain.userId, lobbySlot: { tag: 'RedCoach' } as any }), SEAT);
+        expectReject(f.test, out, (ctx) => M.set_team_slot(ctx, { lobbyId, targetJoinSeq: seatOf(ctx, lobbyId, out.userId), lobbySlot: { tag: 'BluePlayer' } as any }), SEAT);
+        expectReject(f.test, red.captain, (ctx) => M.set_team_slot(ctx, { lobbyId, targetJoinSeq: seatOf(ctx, lobbyId, red.captain.userId), lobbySlot: { tag: 'BluePlayer' } as any }), SEAT);
+        expectReject(f.test, f.org, (ctx) => M.set_team_slot(ctx, { lobbyId, targetJoinSeq: seatOf(ctx, lobbyId, out.userId), lobbySlot: { tag: 'RedCoach' } as any }), SEAT);
+        expectReject(f.test, f.org, (ctx) => M.set_team_slot(ctx, { lobbyId, targetJoinSeq: seatOf(ctx, lobbyId, blue.captain.userId), lobbySlot: { tag: 'RedCoach' } as any }), SEAT);
         // Staff may not sit as a player either (Spectator only).
-        expectReject(f.test, f.org, (ctx) => M.set_team_slot(ctx, { lobbyId, targetUserId: f.org.userId, lobbySlot: { tag: 'RedPlayer' } as any }), SEAT);
+        expectReject(f.test, f.org, (ctx) => M.set_team_slot(ctx, { lobbyId, targetJoinSeq: seatOf(ctx, lobbyId, f.org.userId), lobbySlot: { tag: 'RedPlayer' } as any }), SEAT);
 
         setSlot(f.test, red.captain, lobbyId, red.captain, 'Spectator');
         expect(slotOf(f.test, lobbyId, red.captain)).toBe('Spectator');

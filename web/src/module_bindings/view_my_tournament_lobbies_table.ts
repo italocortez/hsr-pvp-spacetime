@@ -88,6 +88,7 @@ export default __t.row({
   get stage() {
     return LobbyStage;
   },
+  lastJoinSeq: __t.u32().name("last_join_seq"),
   createdById: __t.u32().name("created_by_id"),
   createdDate: __t.timestamp().name("created_date"),
   lastModifiedById: __t.u32().name("last_modified_by_id"),

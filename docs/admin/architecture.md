@@ -249,7 +249,7 @@ the table; the panel subscribes each view while its tab is open. No `.iter()` in
 | `view_admin_ban_records` | id (PK), loginMethod, providerId, reason, bannedByUserId, bannedByLabel, createdDate | full read |
 | `view_admin_deleted_users` | id (PK), displayName, isGuest, deletedAt | full read |
 | `view_admin_presence` | identity (PK), userId, isOnline, lastLoginAt, lastSeenAt (A48: replaces `User.isOnline` / `lastLoginAt`; "online" = any live row of the user) | full read |
-| `view_admin_lobby_bans` | lobbyId, bannedUserId, bannedUserLabel, bannedByUserId, bannedByLabel, createdDate (the In-Cell `lobby_ban` grid; `unban_member` for staff) | full read |
+| `view_admin_lobby_bans` | lobbyId, bannedUserId, bannedJoinSeq, bannedUserLabel, bannedByUserId, bannedByLabel, createdDate (the In-Cell `lobby_ban` grid lifts a ban with `unban_member(lobbyId, bannedJoinSeq)`, A74(2)) | full read |
 | `view_admin_abuse_config` | the `AbuseConfig` singleton (PK `id`), every column but the audit ones, incl. `guestLobbyCreationEnabled` (A42 kill switch) and `maintenanceMode`; Moderator+ reads, only an Admin writes | `AbuseConfig.id` |
 | `view_admin_user_private` (identityViews, re-checked) | userId (PK), loginMethod, providerId, providerUsername; no audit columns | full read |
 | `view_admin_stuck_games` (matchResultViews, S9a) | unchanged | — |
@@ -283,6 +283,7 @@ public `User` subscription is the only `User` subscription in the app (PAGE-MAP 
 | `admin_force_finalize` / `admin_void_match` reject tournament lobbies with a pointer; `process_tournament_mmr` deleted; `validate_match_result` added (D.8.3, A24) | Phase S8d execution | 2026-11-07 |
 | `override_match_result` on a tournament record: Decided match rejected ("roll back first"), then `recordGameSettled` recomputes the derived tally (decidedBy Staff); `admin_delete_row` step-history key `[matchHistoryId, sequence]` (A67(3)(4)) | Phase S8e execution | 2026-11-08 |
 | Six Moderator+ admin views (`view_admin_user_identities`, `_ban_records`, `_deleted_users`, `_presence`, `_lobby_bans`, `_abuse_config`); `view_admin_user_private` without audit columns (staff-only full reads after the role check); three Appendix B admin views not built | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
+| `view_admin_lobby_bans` carries `bannedJoinSeq`; the In-Cell `lobby_ban` grid passes it to `unban_member` | Phase S9c execution (DECISIONS.md A74) | 2026-11-08 |
 
 ---
 

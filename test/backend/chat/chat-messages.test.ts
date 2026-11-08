@@ -549,7 +549,7 @@ describe('Chat Messages', () => {
             await memberA.sync();
             await host.sync();
 
-            await host.call.kickMember({ lobbyId: lobby.id, targetUserId: memberA.userId });
+            await host.call.kickMember({ lobbyId: lobby.id, targetJoinSeq: 0 }); // S10: rewrite (A74: was targetUserId: memberA.userId; take the seat from view_my_lobby_members)
             await host.sync();
             await memberA.sync();
 
@@ -574,7 +574,7 @@ describe('Chat Messages', () => {
             await memberB.sync();
             await host.sync();
 
-            await host.call.banMember({ lobbyId: lobby.id, targetUserId: memberB.userId });
+            await host.call.banMember({ lobbyId: lobby.id, targetJoinSeq: 0 }); // S10: rewrite (A74: was targetUserId: memberB.userId; take the seat from view_my_lobby_members)
             await host.sync();
             await memberB.sync();
 
@@ -606,7 +606,6 @@ describe('Chat Messages', () => {
             // Move memberA to a team slot so the label is meaningful
             await memberA.call.setTeamSlot({
                 lobbyId: lobby.id,
-                targetUserId: memberA.userId,
                 lobbySlot: { tag: 'BluePlayer' as const },
             });
             await memberA.sync();

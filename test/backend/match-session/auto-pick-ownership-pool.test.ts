@@ -108,7 +108,6 @@ async function setupDraftLobby(
     await blue.sync();
     await blue.call.setTeamSlot({
         lobbyId,
-        targetUserId: blue.userId,
         lobbySlot: { tag: 'BluePlayer' as const },
     });
     await blue.sync();
@@ -117,7 +116,6 @@ async function setupDraftLobby(
     await red.sync();
     await red.call.setTeamSlot({
         lobbyId,
-        targetUserId: red.userId,
         lobbySlot: { tag: 'RedPlayer' as const },
     });
     await red.sync();
@@ -345,7 +343,7 @@ describe.skipIf(!hasServerToken())('Auto-Pick Ownership Pool (D-I-04)', () => {
             await p1.sync(1500);
 
             // Set P1 to Blue BEFORE selecting accounts (Spectators cannot select)
-            await toUser.call.setTeamSlot({ lobbyId, targetUserId: p1.userId, lobbySlot: { tag: 'BluePlayer' as const } });
+            await toUser.call.setTeamSlot({ lobbyId, targetJoinSeq: 0, lobbySlot: { tag: 'BluePlayer' as const } }); // S10: rewrite (A74: was targetUserId: p1.userId; take the seat from view_my_lobby_members)
             await toUser.sync();
 
             // Tournament additive path: select BOTH accounts into LMA
@@ -373,7 +371,7 @@ describe.skipIf(!hasServerToken())('Auto-Pick Ownership Pool (D-I-04)', () => {
             // P2 as Red (P1 already Blue from earlier setTeamSlot)
             await p2.call.joinLobby({ lobbyId, joinCode: '', password: '' });
             await p2.sync(1500);
-            await toUser.call.setTeamSlot({ lobbyId, targetUserId: p2.userId, lobbySlot: { tag: 'RedPlayer' as const } });
+            await toUser.call.setTeamSlot({ lobbyId, targetJoinSeq: 0, lobbySlot: { tag: 'RedPlayer' as const } }); // S10: rewrite (A74: was targetUserId: p2.userId; take the seat from view_my_lobby_members)
             await toUser.sync();
 
             await p1.call.confirmReady({ lobbyId });
@@ -498,12 +496,12 @@ describe.skipIf(!hasServerToken())('Auto-Pick Ownership Pool (D-I-04)', () => {
             expect(Number(lma[0].hsr_account_id)).toBe(standInAccount);
 
             // Set team slots: stand-in as Blue, opponent as Red
-            await toUser.call.setTeamSlot({ lobbyId, targetUserId: standIn.userId, lobbySlot: { tag: 'BluePlayer' as const } });
+            await toUser.call.setTeamSlot({ lobbyId, targetJoinSeq: 0, lobbySlot: { tag: 'BluePlayer' as const } }); // S10: rewrite (A74: was targetUserId: standIn.userId; take the seat from view_my_lobby_members)
             await toUser.sync();
 
             await opponent.call.joinLobby({ lobbyId, joinCode: '', password: '' });
             await opponent.sync(1500);
-            await toUser.call.setTeamSlot({ lobbyId, targetUserId: opponent.userId, lobbySlot: { tag: 'RedPlayer' as const } });
+            await toUser.call.setTeamSlot({ lobbyId, targetJoinSeq: 0, lobbySlot: { tag: 'RedPlayer' as const } }); // S10: rewrite (A74: was targetUserId: opponent.userId; take the seat from view_my_lobby_members)
             await toUser.sync();
 
             await standIn.call.confirmReady({ lobbyId });

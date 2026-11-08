@@ -144,7 +144,7 @@ _Superseded in Phase S9a execution: see S9a-V2 (layer-0 projection; the full row
 1. Resolve `ctx.sender` -> caller's memberships
 2. For each lobby membership, determine caller's team via `slotTeam()`
 3. For each member in that lobby, apply visibility rules:
-   - **Referee (D-14):** sees all rosters and ratings regardless of setting
+   - **Referee (D-14):** sees all rosters and ratings regardless of setting _Superseded in Phase S9c execution (DECISIONS.md A75)._ Only the spectator referee; a referee seated on a team follows the player rules (S9c-V1).
    - **Self + own team:** always see full roster and rating
    - **Opponent visibility (D-11, D-12, D-13):**
      - OpenRoster: all rosters visible
@@ -625,7 +625,7 @@ _Superseded in Phase S9a execution (DECISIONS.md A37): the public history views 
 ### S9b-V6 Roster visibility on anonymized seats (A37, A40)
 **Given** an anonymous-players lobby with `rosterVisibility = OpenRoster`; Bob (Red) and Alice (Blue) have selected accounts
 **When** Bob reads `view_my_roster_visibility`
-**Then** Alice's characters, eidolons and rating arrive with `memberUserId = 0`, `hsrAccountId = 0` and her `joinSeq`; Bob's own and his teammates' rows carry real ids. With `ClosedWithRating` Alice's seat yields one rating-only row per selected account (characterName '', eidolonLevel 0); with `ClosedNoRating` nothing. Any referee sees every roster (D-14); a seated referee still reads 0 for anonymized opponents' ids, a spectator referee reads real ids (D-71).
+**Then** Alice's characters, eidolons and rating arrive with `memberUserId = 0`, `hsrAccountId = 0` and her `joinSeq`; Bob's own and his teammates' rows carry real ids. With `ClosedWithRating` Alice's seat yields one rating-only row per selected account (characterName '', eidolonLevel 0); with `ClosedNoRating` nothing. Any referee sees every roster (D-14); a seated referee still reads 0 for anonymized opponents' ids, a spectator referee reads real ids (D-71). _Superseded in Phase S9c execution (DECISIONS.md A75)._ Only the spectator referee sees every roster (S9c-V1).
 
 ### S9b-V7 Public rosters through the index (S3 hand-off)
 **When** anyone reads `view_public_hsr_accounts`
@@ -639,6 +639,22 @@ _Superseded in Phase S9a execution (DECISIONS.md A37): the public history views 
 ### S9b-V9 Admin views are staff-only (§A.4 P4, PAGE-MAP D6, A42, A48)
 **When** a Moderator reads `view_admin_user_identities`, `view_admin_ban_records`, `view_admin_deleted_users`, `view_admin_presence`, `view_admin_lobby_bans`, `view_admin_abuse_config` and `view_admin_user_private`
 **Then** every identity mapping, provider ban (with the banning admin's label), archived user, per-identity presence row (isOnline, lastLoginAt, lastSeenAt), lobby ban (real ids and labels, anonymous lobbies included), the abuse configuration with the guest kill switch (no audit columns) and every provider link are listed; a User or a guest reads `[]` from each.
+
+## Acceptance Scenarios (Phase S9c execution)
+
+### S9c-V1 Only the spectator referee sees every roster (A75)
+**Given** a lobby where the referee R sits on BluePlayer and Red players have selected accounts
+**When** R reads `view_my_roster_visibility` under `ClosedNoRating`; then under `ClosedWithRating`; then under `OpenRoster`
+**Then** `ClosedNoRating`: no Red row (R's own and Blue teammates' rows in full); `ClosedWithRating`: one rating-only row per Red selected account (characterName '', eidolonLevel 0); `OpenRoster`: Red rosters and ratings. When R moves to the Spectator slot (the spectator referee) R reads every member's roster and rating under any setting, with real ids (D-71).
+
+### S9c-V2 Ban rows carry the seat (A74(2))
+**When** the host or a referee reads `view_my_lobby_bans`, or a Moderator reads `view_admin_lobby_bans`
+**Then** each row carries `bannedJoinSeq`, the seat the banned member held, which `unban_member(lobbyId, bannedJoinSeq)` takes; the masking of `bannedUserId` / `bannedByUserId` and the label are unchanged.
+
+### S9c-V3 A captain sees who asks to join (A73)
+**Given** an `isAnonymousDefault` tournament; Erin asks to join the team Dave captains
+**When** Dave reads `view_my_team_requests`
+**Then** the row carries Erin's real `userId` and her display name as `label`; Erin's own row (`isMine`) is unchanged.
 
 ## Phase History
 
@@ -674,6 +690,8 @@ _Superseded in Phase S9a execution (DECISIONS.md A37): the public history views 
 | Scenarios S9a-V1..V11: browser without user ids, layer-0 list + full lobby row, A37 masking of lobby / result ids, member presence state and A40 ratings, bans and presets, live match views, staff stuck-games view, public history views removed, tournament arg and per-sender views | Phase S9a execution (DECISIONS.md A37, A40, A44, A48, A56, A60, A63, A68, A70) | 2026-11-08 |
 | S9a fix pass: `view_tournament_registrant_accounts` adds `seat` and masks `userId` / `hsrAccountId` (0) of other participants for a non-staff reader of an `isAnonymousDefault` tournament; spectators anonymized only under `isAnonymousSpectators` (anonymous-play contract "S9a fix pass") | Phase S9a execution (DECISIONS.md A37) | 2026-11-08 |
 | Scenarios S9b-V1..V9: profile row, exact username lookup, a user's achievements, own stats and MMR without audit ids, relationships with the other player's card and MMR, roster visibility per A40 with masked ids, public rosters through the index, the five calendar views, the staff-only admin views | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
+| Scenarios S9c-V1..V2: a seated referee reads opponents' rosters per `rosterVisibility`, only the spectator referee sees every roster (D-14 narrowed); `view_my_lobby_bans` / `view_admin_lobby_bans` carry `bannedJoinSeq` | Phase S9c execution (DECISIONS.md A75, A74) | 2026-11-08 |
+| Scenario S9c-V3: a captain reads the requester's display name on a request to their team, in every tournament | Phase S9c execution (DECISIONS.md A73) | 2026-11-08 |
 
 ---
 

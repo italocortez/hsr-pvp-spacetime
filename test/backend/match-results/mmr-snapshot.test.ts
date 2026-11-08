@@ -108,7 +108,6 @@ async function runLobbyToStartDraft(
     await blue.sync();
     await blue.call.setTeamSlot({
         lobbyId,
-        targetUserId: blue.userId,
         lobbySlot: { tag: 'BluePlayer' as const },
     });
     await blue.sync();
@@ -117,7 +116,6 @@ async function runLobbyToStartDraft(
     await red.sync();
     await red.call.setTeamSlot({
         lobbyId,
-        targetUserId: red.userId,
         lobbySlot: { tag: 'RedPlayer' as const },
     });
     await red.sync();
@@ -346,13 +344,13 @@ describe.skipIf(!hasServerToken())('Phase 12.3: MMR accountRatingSnapshot captur
             await player2.sync(1500);
             await toUser.call.setTeamSlot({
                 lobbyId,
-                targetUserId: player1.userId,
+                targetJoinSeq: 0, // S10: rewrite (A74: was targetUserId: player1.userId; take the seat from view_my_lobby_members)
                 lobbySlot: { tag: 'BluePlayer' as const },
             });
             await toUser.sync(1500);
             await toUser.call.setTeamSlot({
                 lobbyId,
-                targetUserId: player2.userId,
+                targetJoinSeq: 0, // S10: rewrite (A74: was targetUserId: player2.userId; take the seat from view_my_lobby_members)
                 lobbySlot: { tag: 'RedPlayer' as const },
             });
             await toUser.sync(1500);

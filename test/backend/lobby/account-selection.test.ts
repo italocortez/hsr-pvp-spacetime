@@ -155,7 +155,7 @@ describe.skipIf(!hasServerToken())('Account Selection', () => {
             expect(Number(lmaRows[0].hsr_account_id)).toBe(joinerAccountId);
 
             // Host assigns joiner to a team slot so they can select accounts
-            await host.call.setTeamSlot({ lobbyId: lobby.id, targetUserId: joiner.userId, lobbySlot: { tag: 'BluePlayer' } });
+            await host.call.setTeamSlot({ lobbyId: lobby.id, targetJoinSeq: 0, lobbySlot: { tag: 'BluePlayer' } }); // S10: rewrite (A74: was targetUserId: joiner.userId; take the seat from view_my_lobby_members)
             await host.sync(1500);
             await joiner.sync(1500);
 
@@ -185,7 +185,7 @@ describe.skipIf(!hasServerToken())('Account Selection', () => {
             await joiner.sync(1500);
 
             // Move joiner to Spectator explicitly (should already be)
-            await host.call.setTeamSlot({ lobbyId: lobby.id, targetUserId: joiner.userId, lobbySlot: { tag: 'Spectator' } });
+            await host.call.setTeamSlot({ lobbyId: lobby.id, targetJoinSeq: 0, lobbySlot: { tag: 'Spectator' } }); // S10: rewrite (A74: was targetUserId: joiner.userId; take the seat from view_my_lobby_members)
             await host.sync(1500);
             await joiner.sync(1500);
 
@@ -210,7 +210,7 @@ describe.skipIf(!hasServerToken())('Account Selection', () => {
             await joiner.sync(1500);
 
             // Assign joiner to coach slot
-            await host.call.setTeamSlot({ lobbyId: lobby.id, targetUserId: joiner.userId, lobbySlot: { tag: 'BlueCoach' } });
+            await host.call.setTeamSlot({ lobbyId: lobby.id, targetJoinSeq: 0, lobbySlot: { tag: 'BlueCoach' } }); // S10: rewrite (A74: was targetUserId: joiner.userId; take the seat from view_my_lobby_members)
             await host.sync(1500);
             await joiner.sync(1500);
 
@@ -236,7 +236,7 @@ describe.skipIf(!hasServerToken())('Account Selection', () => {
             await joiner.sync(1500);
 
             // Assign to team
-            await host.call.setTeamSlot({ lobbyId: lobby.id, targetUserId: joiner.userId, lobbySlot: { tag: 'BluePlayer' } });
+            await host.call.setTeamSlot({ lobbyId: lobby.id, targetJoinSeq: 0, lobbySlot: { tag: 'BluePlayer' } }); // S10: rewrite (A74: was targetUserId: joiner.userId; take the seat from view_my_lobby_members)
             await host.sync(1500);
             await joiner.sync(1500);
 
@@ -483,7 +483,7 @@ describe.skipIf(!hasServerToken())('Account Selection', () => {
         it('9. additive selection up to maxAccountsPerPlayer (2 rows)', async () => {
             // Player1 should already be in the lobby with 1 LMA from test 8.
             // Assign player1 to a team slot
-            await toUser.call.setTeamSlot({ lobbyId, targetUserId: player1.userId, lobbySlot: { tag: 'BluePlayer' } });
+            await toUser.call.setTeamSlot({ lobbyId, targetJoinSeq: 0, lobbySlot: { tag: 'BluePlayer' } }); // S10: rewrite (A74: was targetUserId: player1.userId; take the seat from view_my_lobby_members)
             await toUser.sync(1500);
             await player1.sync(1500);
 
@@ -536,7 +536,7 @@ describe.skipIf(!hasServerToken())('Account Selection', () => {
             await player2.sync(1500);
 
             // Assign player2 to a team slot
-            await toUser.call.setTeamSlot({ lobbyId, targetUserId: player2.userId, lobbySlot: { tag: 'RedPlayer' } });
+            await toUser.call.setTeamSlot({ lobbyId, targetJoinSeq: 0, lobbySlot: { tag: 'RedPlayer' } }); // S10: rewrite (A74: was targetUserId: player2.userId; take the seat from view_my_lobby_members)
             await toUser.sync(1500);
             await player2.sync(1500);
 

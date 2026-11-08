@@ -185,6 +185,7 @@ export type AdminDeletedUserRow = __Infer<typeof AdminDeletedUserRow>;
 export const AdminLobbyBanRow = __t.object("AdminLobbyBanRow", {
   lobbyId: __t.u32(),
   bannedUserId: __t.u32(),
+  bannedJoinSeq: __t.u32(),
   bannedUserLabel: __t.string(),
   bannedByUserId: __t.u32(),
   bannedByLabel: __t.string(),
@@ -981,6 +982,7 @@ export const Lobby = __t.object("Lobby", {
   get stage() {
     return LobbyStage;
   },
+  lastJoinSeq: __t.u32(),
   createdById: __t.u32(),
   createdDate: __t.timestamp(),
   lastModifiedById: __t.u32(),
@@ -992,6 +994,7 @@ export const LobbyBan = __t.object("LobbyBan", {
   lobbyId: __t.u32(),
   bannedUserId: __t.u32(),
   bannedByUserId: __t.u32(),
+  bannedJoinSeq: __t.u32(),
   createdById: __t.u32(),
   createdDate: __t.timestamp(),
   lastModifiedById: __t.u32(),
@@ -1002,6 +1005,7 @@ export type LobbyBan = __Infer<typeof LobbyBan>;
 export const LobbyBanViewRow = __t.object("LobbyBanViewRow", {
   lobbyId: __t.u32(),
   bannedUserId: __t.u32(),
+  bannedJoinSeq: __t.u32(),
   label: __t.string(),
   bannedByUserId: __t.option(__t.u32()),
   createdDate: __t.timestamp(),
@@ -2533,6 +2537,7 @@ export const TournamentLobbyRow = __t.object("TournamentLobbyRow", {
   get stage() {
     return LobbyStage;
   },
+  lastJoinSeq: __t.u32(),
   createdById: __t.u32(),
   createdDate: __t.timestamp(),
   lastModifiedById: __t.u32(),

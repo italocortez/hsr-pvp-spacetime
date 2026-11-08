@@ -54,6 +54,7 @@ import {
     type Lobby,
     type SetupOpts,
     type SlotTag,
+    seatOf,
 } from './s4-fixtures';
 import { blueNames, finishGame, playToScoring, redNames, setRole, type ScoringLobbyOpts } from './s7-fixtures';
 import { AUDIT, insertHsrAccount, moderator, verified } from './s8-fixtures';
@@ -115,7 +116,7 @@ const COLS = {
     adminBan: ['id', 'loginMethod', 'providerId', 'reason', 'bannedByUserId', 'bannedByLabel', 'createdDate'] as const,
     adminDeleted: ['id', 'displayName', 'isGuest', 'deletedAt'] as const,
     adminPresence: ['identity', 'userId', 'isOnline', 'lastLoginAt', 'lastSeenAt'] as const,
-    adminLobbyBan: ['lobbyId', 'bannedUserId', 'bannedUserLabel', 'bannedByUserId', 'bannedByLabel', 'createdDate'] as const,
+    adminLobbyBan: ['lobbyId', 'bannedUserId', 'bannedJoinSeq', 'bannedUserLabel', 'bannedByUserId', 'bannedByLabel', 'createdDate'] as const, // T-S9c: + bannedJoinSeq (A74(2))
     adminAbuse: ['id', 'cursorMinIntervalMs', 'chatMinIntervalMs', 'chatPerMinute', 'lineupMinIntervalMs',
         'lobbyCreatesPerHour', 'maxPresetsPerUser', 'maxCostSetsPerUser', 'maintenanceMode', 'guestLobbyCreationEnabled',
         'guestLobbyBurstThreshold', 'guestLobbyBurstWindowMinutes'] as const,
@@ -676,7 +677,8 @@ describe('view_my_roster_visibility (S9b-V6, S9b-A3)', () => {
         expect(r.some((x) => x.memberUserId === 0)).toBe(false);
     });
 
-    it('a seated player-referee sees every roster (D-14) but anonymized opponents\' ids stay 0 (D-71)', () => {
+    // T-S9c: D-14's "any referee" is narrowed by A75(1): a referee seated on a team reads opponents per rosterVisibility.
+    it('a seated player-referee under ClosedNoRating reads nothing of the opponents (A75(1), was D-14 "every roster")', () => {
         const test = newHarness();
         const host = verified(test, 'seatref');
         const s = setupLobby(test, {
@@ -686,8 +688,7 @@ describe('view_my_roster_visibility (S9b-V6, S9b-A3)', () => {
         const accR1 = selectAccount(test, s.lobbyId, s.a.r1, 'r1-acc', 1200, ['r1-c1']);
         const r = view<RosterVisibilityRow>(test, 'view_my_roster_visibility', host);
         const r1 = r.filter((x) => x.joinSeq === member(test, s.lobbyId, s.a.r1.userId).joinSeq);
-        expect(r1).toHaveLength(1);
-        expect(r1[0]).toMatchObject({ characterName: 'r1-c1', memberUserId: 0, hsrAccountId: 0 });
+        expect(r1).toEqual([]);
         expect(r.some((x) => x.memberUserId === s.a.r1.userId || x.hsrAccountId === accR1)).toBe(false);
     });
 });
@@ -901,7 +902,7 @@ describe('admin views (S9b-AD1..AD3, S9b-V9)', () => {
         const l = setupLobby(test, { lobby: ANON, seats: seatsOf('L'), actors: { host: guest(test, 'Lhost') }, noStart: true });
         const lb = guest(test, 'Lbanned');
         tx(test, lb, (ctx) => M.join_lobby(ctx, { lobbyId: l.lobbyId, joinCode: '', password: '' }));
-        tx(test, l.host, (ctx) => M.ban_member(ctx, { lobbyId: l.lobbyId, targetUserId: lb.userId }));
+        tx(test, l.host, (ctx) => M.ban_member(ctx, { lobbyId: l.lobbyId, targetJoinSeq: seatOf(ctx, l.lobbyId, lb.userId) }));
         return { test, mod, admin, player, bannee, leaver, d1, d2, l, lb, outsider: guest(test, 'aout') };
     }
     const ALL = ['view_admin_user_identities', 'view_admin_ban_records', 'view_admin_deleted_users', 'view_admin_presence',

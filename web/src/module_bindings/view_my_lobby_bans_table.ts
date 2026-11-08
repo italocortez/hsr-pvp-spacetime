@@ -13,6 +13,7 @@ import {
 export default __t.row({
   lobbyId: __t.u32().name("lobby_id"),
   bannedUserId: __t.u32().name("banned_user_id"),
+  bannedJoinSeq: __t.u32().name("banned_join_seq"),
   label: __t.string(),
   bannedByUserId: __t.option(__t.u32()).name("banned_by_user_id"),
   createdDate: __t.timestamp().name("created_date"),

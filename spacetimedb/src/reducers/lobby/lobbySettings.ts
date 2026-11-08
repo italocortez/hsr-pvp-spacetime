@@ -3,7 +3,7 @@ import { t, SenderError } from 'spacetimedb/server';
 import { DraftMode, BanMode, GameMode, MatchType, RosterVisibility, DisconnectPolicy, LobbySlot, BanRestriction, LineupFormat, ShuffleMode } from '@module/types/enums';
 import { getAuthenticatedUser, isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
-import { ensureLobbyMember, ensureHostOrAbove, ensureStageIs, slotTeam, slotIsCoach, slotIsSpectator, slotToTeamSide, resolveMaxSpectators } from '@module/helpers/lobby/lobbyHelpers';
+import { ensureLobbyMember, ensureHostOrAbove, ensureStageIs, resolveSeat, slotTeam, slotIsCoach, slotIsSpectator, slotToTeamSide, resolveMaxSpectators } from '@module/helpers/lobby/lobbyHelpers';
 import { normalizeLobbyName } from '@module/helpers/tournament/seriesSettings';
 import { ensureCostSetCovers, ensureSelectableCostSet } from '@module/helpers/draft/costSetGuards';
 import { ensureSeatAllowed } from '@module/helpers/tournament/tournamentLobbySides';
@@ -218,22 +218,36 @@ export const update_lobby_settings = spacetimedb.reducer(
 // Per D-27/D-28: free movement during Waiting. Moving resets isConfirmed for the mover.
 // Self-move: any member can move themselves.
 // Moving others: requires host/moderator/admin.
+// A74(1): the target is a seat number (`targetJoinSeq`); omitted = the caller's own seat (the self-move). A seat that
+// resolves to the caller is the self-move too.
+// Guard order: lobby -> (a seat given by a non-member: ensureHostOrAbove) -> seat -> the existing branches.
 
 export const set_team_slot = spacetimedb.reducer(
     {
         lobbyId: t.u32(),
-        targetUserId: t.u32(),
+        targetJoinSeq: t.u32().optional(),
         lobbySlot: LobbySlot,
     },
     (ctx, args) => {
         const user = getAuthenticatedUser(ctx);
         const lobbyId = args.lobbyId;
-        const targetUserId = args.targetUserId;
 
         const lobby = ctx.db.Lobby.id.find(lobbyId);
         if (!lobby) {
             throw new SenderError('Lobby not found.');
         }
+
+        // A74(1): a caller with no LobbyMember row here can only be moving someone else, which needs host-or-above;
+        // checked before the seat is resolved so a stranger learns nothing about the lobby's seats
+        if (args.targetJoinSeq !== undefined
+            && [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, user.id])].length === 0) {
+            ensureHostOrAbove(ctx, lobby, user);
+        }
+
+        // A74(1): seat -> member row ("No member sits at seat N of this lobby."); omitted = the caller
+        const targetUserId = args.targetJoinSeq === undefined
+            ? user.id
+            : resolveSeat(ctx, lobbyId, args.targetJoinSeq).userId;
 
         // D-28: free movement only during Waiting
         ensureStageIs(lobby, 'Waiting');
@@ -383,16 +397,17 @@ export const unconfirm_ready = spacetimedb.reducer(
 // Per D-30: host, referee (when refereeCanSetCaptain=true), or admin can assign captains.
 // Target must be on a team (Blue or Red) and not a coach.
 // Existing captain on same team is demoted.
+// A74(1): the target is a seat number (`targetJoinSeq`), resolved to the member row.
+// Guard order: lobby -> the caller's membership and permission -> seat.
 
 export const set_captain = spacetimedb.reducer(
     {
         lobbyId: t.u32(),
-        targetUserId: t.u32(),
+        targetJoinSeq: t.u32(),
     },
     (ctx, args) => {
         const user = getAuthenticatedUser(ctx);
         const lobbyId = args.lobbyId;
-        const targetUserId = args.targetUserId;
 
         const lobby = ctx.db.Lobby.id.find(lobbyId);
         if (!lobby) {
@@ -407,6 +422,11 @@ export const set_captain = spacetimedb.reducer(
         if (!isHost && !isRefereeWithPower && !isAdmin) {
             throw new SenderError('Only the host, an authorized referee, or an admin can assign captains.');
         }
+
+        // A74(1): seat -> member row ("No member sits at seat N of this lobby."), resolved only after the caller's
+        // checks so a stranger learns nothing about the lobby's seats
+        const target = resolveSeat(ctx, lobbyId, args.targetJoinSeq);
+        const targetUserId = target.userId;
 
         // Find target member
         const targetMember = ensureLobbyMember(ctx, lobbyId, targetUserId);

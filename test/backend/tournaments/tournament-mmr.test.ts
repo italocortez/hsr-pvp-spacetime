@@ -63,12 +63,12 @@ async function setupTournamentMatch(
     // Players join + set slots
     await blue.call.joinLobby({ lobbyId, joinCode: '', password: '' });
     await blue.sync();
-    await blue.call.setTeamSlot({ lobbyId, targetUserId: blue.userId, lobbySlot: { tag: 'BluePlayer' as const } });
+    await blue.call.setTeamSlot({ lobbyId, lobbySlot: { tag: 'BluePlayer' as const } });
     await blue.sync();
 
     await red.call.joinLobby({ lobbyId, joinCode: '', password: '' });
     await red.sync();
-    await red.call.setTeamSlot({ lobbyId, targetUserId: red.userId, lobbySlot: { tag: 'RedPlayer' as const } });
+    await red.call.setTeamSlot({ lobbyId, lobbySlot: { tag: 'RedPlayer' as const } });
     await red.sync();
 
     // Confirm ready

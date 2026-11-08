@@ -8,6 +8,8 @@ Lobbies are the per-match rooms where players draft characters and play games. E
 
 Key membership model (D-24 / D-27): the host is inserted as a `LobbyMember` with `lobbySlot=Spectator` and `isReferee=true`. **Every** joiner also lands in the `Spectator` slot; team/coach placement happens afterward via `set_team_slot`. There is no `allowSpectators`/`maxSpectators` configuration — spectating is always allowed, capped by hardcoded limits (max 12 spectators, max 20 total members) enforced in `join_lobby` and `set_team_slot`.
 
+Seats (A74, S9c): every membership gets a seat number `LobbyMember.joinSeq` at insert (host = 1, then `Lobby.lastJoinSeq + 1`). A seat number names exactly one membership for the lobby's lifetime and is never reused. It is the only member key an anonymized caller sees (`view_my_lobby_members.joinSeq`), so the member-targeting reducers (`kick_member`, `ban_member`, `set_team_slot`, `set_captain`, `transfer_referee`) take `targetJoinSeq` and resolve it server-side with `resolveSeat(ctx, lobbyId, joinSeq)` (`helpers/lobby/lobbyHelpers.ts`, through `LobbyMember.lobby_id`; "No member sits at seat N of this lobby."), then run their existing logic on the resolved user id. `unban_member` takes the ban's `bannedJoinSeq`. No argument or rejection of these reducers names a user id (A74(4)).
+
 Passwords live in the private `LobbyPassword` table (never broadcast). Anonymous play zeroes `senderUserId` at write time on cursor/chat events. `LobbyPreset` stores a full flat copy of the lobby config fields for save/restore. `LobbyMemberAccount` records which HSR account(s) each member uses for the match (private, D-02). Stand-ins (`TournamentStandIn`) track approved substitutes per bracket match.
 
 Presence and disconnects (Phase S4 execution; A22a, A48): a member's `isOnline` follows the user's `UserPresence` rows (one per device, see `docs/auth/architecture.md`), so closing one device while another is connected changes nothing. `client_disconnected` only marks the member offline, stamps `disconnectedAt` (Standard/Deferred) and inserts a `RefereeTransferCheck` 15 s out; `run_referee_transfer_check` then moves the referee / captain / host flags and auto-pauses the draft only if the user is still offline. A reconnect (`client_connected`, or the explicit `join_lobby`) restores the member and cancels the pending check, so a page refresh moves no flag and pauses nothing.
@@ -43,6 +45,7 @@ Lobby (id: u32 autoInc PK)  [PRIVATE; view_my_lobby / view_lobby_browser; staff 
   +-- gameMode: GameMode
   +-- lastActivityAt: Timestamp  (drives GC idle checks)
   +-- stage: LobbyStage (Waiting | Drafting | Equipping | Scoring | AwaitingResult)  (A67(1): one game per lobby)
+  +-- lastJoinSeq: u32  (A74(3), S9c: the last seat number handed out; host = 1; nextJoinSeq reads it, join_lobby writes the bump)
   +-- audit columns
   Indexes: host_user_id (btree), stage (btree), tournament_id (btree), bracket_match_id (btree)
 
@@ -58,7 +61,7 @@ Lobby (id: u32 autoInc PK)  [PRIVATE; view_my_lobby / view_lobby_browser; staff 
   |     abandonedAt: Timestamp?              (A68(4): gone; set when the away player takes another lobby with abandonCurrentMatch; never cleared)
   |     disconnectedAt: Timestamp?           (D-08: disconnect event time; A22a grace check and isForfeitEligible read it)
   |     disconnectPoolRemainingMs: u32       (D-10: remaining disconnect pool, init 300000 at draft start)
-  |     joinSeq: u32                         (R4, S4: per-lobby join counter, host = 1 then max + 1; A22(5) order and S9 labels derive from it)
+  |     joinSeq: u32                         (R4, S4; A74(3), S9c: the seat number, host = 1 then Lobby.lastJoinSeq + 1, never reused; A22(5) order, S9 labels and the A74 seat targeting derive from it)
   |     lastCursorAt: Timestamp? / lastLineupAt: Timestamp?   (B-4 throttle stamps, written from S5)
   |     audit columns
   |     Indexes: lobby_id (btree), user_id (btree), by_lobby_and_user (btree, [lobbyId, userId])
@@ -70,10 +73,11 @@ Lobby (id: u32 autoInc PK)  [PRIVATE; view_my_lobby / view_lobby_browser; staff 
   |     D-02: never broadcast to opponents. Ephemeral: created at join, deleted at leave/close.
   |     Indexes: lobby_id (btree), by_lobby_and_user (btree, [lobbyId, userId]), by_account (btree, hsrAccountId)
   |
-  +-- LobbyBan (PK: [lobbyId, bannedUserId])  [public: true]
+  +-- LobbyBan (PK: [lobbyId, bannedUserId])  [PRIVATE since S3 (A37); view_my_lobby_bans / view_admin_lobby_bans]
   |     lobbyId -> Lobby.id  [btree: lobby_id]
   |     bannedUserId -> User.id
   |     bannedByUserId -> User.id
+  |     bannedJoinSeq: u32   (A74(2), S9c: the seat the member held when banned; unban_member resolves the ban by it)
   |     audit columns
   |     Indexes: lobby_id (btree), by_lobby_and_user (btree, [lobbyId, bannedUserId])
   |
@@ -133,7 +137,7 @@ Lobby-owned reducers live in `reducers/lobby/lobbyLifecycle.ts`, `lobbySettings.
 4. Generate a server-side `joinCode` (`generateJoinCode`, 6 uppercase alnum, up to 10 retries; the arg is ignored for storage).
 5. D-23: reject guest + `matchType=Ranked`; force `rosterVisibility=ClosedNoRating` for guests.
 6. D-42: if `matchType=Ranked`, force `allowMirrorPicks=false`. Resolve `disconnectForfeitSeconds` (0 sentinel -> undefined).
-7. Insert `Lobby` (`insertWithAudit`) with `stage=Waiting`, `currentPlayerCount=1`, `hostUserId`, `isTournamentControlled=false`, `lastActivityAt=now`.
+7. Insert `Lobby` (`insertWithAudit`) with `stage=Waiting`, `currentPlayerCount=1`, `hostUserId`, `isTournamentControlled=false`, `lastActivityAt=now`, `lastJoinSeq=1` (A74(3)).
 8. D-24 / D-27: insert host as `LobbyMember` with `lobbySlot=Spectator`, `isReferee=true`, `isConfirmed=false`, `isOnline=true`, `joinSeq=1` (R4, S4).
 9. D-02: if `!isPublic` and password provided, insert `LobbyPassword` row.
 
@@ -157,9 +161,9 @@ Abuse guards (Phase S5 execution; DECISIONS.md A42, A43; ACCESS-SECURITY-OPS B-7
 4. **New-join path** only: D-22 / A68(4) `ensureNotInLobby(ctx, userId, abandonCurrentMatch ?? false)`; D-23 guest restrictions; D-21 `ensureNotBanned` (reject if a `LobbyBan` row exists).
 5. D-04 / A68(8): require stage Waiting, Drafting, Equipping or Scoring (AwaitingResult: "Cannot join a lobby in stage: AwaitingResult"); D-02 verify password against `LobbyPassword` if `!isPublic`.
 6. Cap enforcement: reject if total members >= 20 ("Lobby is full (max 20 members)."); a join that can only be watching is rejected when the lobby already has `maxSpectators` spectators ("Spectator slots are full (max N)." with N = `Lobby.maxSpectators`, A68(8)): every live-stage join, and a Waiting join of a tournament lobby that auto-seated to Spectator. A casual Waiting joiner lands on Spectator as a seat candidate (D-27) and is not counted against `maxSpectators` (Phase S8f fix pass: the setting caps watchers, not seat candidates; the 20-member cap still applies). Only new joins are tested: members already in the Spectator slot are unaffected by a later lower setting.
-7. D-27: insert `LobbyMember` with `lobbySlot` = the A26 / A35 auto-seat in Waiting (casual lobbies: Spectator) and Spectator in a live stage, `isReferee=false`, `isConfirmed=false`, `leftAt` / `abandonedAt` unset, `joinSeq = max(joinSeq in lobby) + 1` (R4, S4).
+7. D-27: insert `LobbyMember` with `lobbySlot` = the A26 / A35 auto-seat in Waiting (casual lobbies: Spectator) and Spectator in a live stage, `isReferee=false`, `isConfirmed=false`, `leftAt` / `abandonedAt` unset, `joinSeq = nextJoinSeq(ctx, lobby)` = `Lobby.lastJoinSeq + 1` (R4; A74(3), S9c: a departed member's number is never handed out again).
 8. D-04 / D-09 / D-26: auto-insert `LobbyMemberAccount` for the user's active HSR account (tournament path validates/snapshots against `TournamentPlayerAccount`; approved stand-ins snapshot all their accounts into TPA first).
-9. Increment `currentPlayerCount`, bump `lastActivityAt`, insert System `ChatMessage` "{name} joined the lobby."
+9. Increment `currentPlayerCount`, bump `lastActivityAt`, write `lastJoinSeq = joinSeq` (A74(3); the same Lobby update, no second write), insert System `ChatMessage` "{name} joined the lobby."
 
 ### leave_lobby(lobbyId)
 1. `getAuthenticatedUser(ctx)`; `ensureLobbyMember`; load lobby.
@@ -174,26 +178,26 @@ Abuse guards (Phase S5 execution; DECISIONS.md A42, A43; ACCESS-SECURITY-OPS B-7
 3. D-20: `ensureStageIs(Waiting)` (A67(1): the unused terminal stage is gone).
 4. D-19: `hardDeleteLobby` -- cascade delete (order): MatchResultParticipant -> MatchResultGame -> MatchResultRecord -> ChatMessage -> LobbyMemberAccount -> LobbyMember -> LobbyBan -> LobbyPassword -> MatchSessionStep -> MatchSession -> Lobby (LobbyCursorEvent auto-expires).
 
-### kick_member(lobbyId, targetUserId)
-1. `getAuthenticatedUser(ctx)`; load lobby; `ensureLobbyMember` (caller).
+### kick_member(lobbyId, targetJoinSeq)
+1. `getAuthenticatedUser(ctx)`; load lobby; `ensureLobbyMember` (caller) and the permission check (step 2); then A74(1) `resolveSeat(ctx, lobbyId, targetJoinSeq)` ("No member sits at seat N of this lobby."), the target is its row. Guard order: lobby → caller checks → seat.
 2. Permission `canKickOrBan`: host, Admin, Moderator, or referee with `refereeCanKick`.
-3. Reject kicking self or host; validate target is a member.
+3. Reject kicking self or host (on the resolved user id); the target is a member by construction.
 4. A68(6): in Drafting / Equipping / Scoring a target in a player slot is rejected ("Players cannot be removed once the draft has started; the match ends by result, concede or forfeit."); spectators and coaches may be removed in every stage; in Waiting and AwaitingResult any member.
 5. `removeMemberRow`: flags transferred (A68(7)), `LobbyMemberAccount` rows and the member row deleted, `currentPlayerCount` decremented.
 6. Insert System `ChatMessage` "{name} was kicked from the lobby." (No LobbyBan.)
 
-### ban_member(lobbyId, targetUserId)
-1. `getAuthenticatedUser(ctx)`; load lobby; `ensureLobbyMember` (caller).
+### ban_member(lobbyId, targetJoinSeq)
+1. `getAuthenticatedUser(ctx)`; load lobby; `ensureLobbyMember` (caller) and the permission check; then A74(1) `resolveSeat` (as kick). Guard order: lobby → caller checks → seat.
 2. Permission `canKickOrBan` (same as kick); reject self or host.
-3. A68(6): the kick stage rule for a target who is a member (a non-member may be banned in any stage).
-4. Insert `LobbyBan` row (`bannedUserId`, `bannedByUserId=caller`).
-5. If target is currently a member: `removeMemberRow` (as kick).
-5. Insert System `ChatMessage` "{name} was banned from the lobby." (Phase S6 execution: `unban_member` lifts a ban, below.)
+3. A68(6): the kick stage rule. A74(2): the target always holds a row (present or away); a user without a row cannot be banned (no preventive ban).
+4. Insert `LobbyBan` row (`bannedUserId`, `bannedByUserId=caller`, `bannedJoinSeq` = the target's seat).
+5. `removeMemberRow` (as kick).
+6. Insert System `ChatMessage` "{name} was banned from the lobby." (Phase S6 execution: `unban_member` lifts a ban, below.)
 
-### unban_member(lobbyId, userId) (Phase S6 execution, A45(3))
+### unban_member(lobbyId, bannedJoinSeq) (Phase S6 execution, A45(3); A74(2))
 1. `getAuthenticatedUser(ctx)`; load lobby (any stage).
 2. Permission: the host, Moderator+ (membership not required), or a member who is referee while `refereeCanKick` is on; else "Only the host, moderators, admins, or an authorized referee can lift a lobby ban."
-3. Reject when no `LobbyBan` row exists ("This user is not banned from the lobby."); delete it (`by_lobby_and_user`). No chat message, no Lobby write (bans are private, so nothing else changes on the wire).
+3. Find the ban through `LobbyBan.lobby_id` by `bannedJoinSeq`; reject when none ("No ban is recorded for seat N of this lobby."); delete `(lobbyId, ban.bannedUserId)` (`by_lobby_and_user`). No chat message, no Lobby write (bans are private, so nothing else changes on the wire).
 
 ### update_lobby_settings(lobbyId, config fields..., isPublic, password)
 1. `getAuthenticatedUser(ctx)`; load lobby.
@@ -212,8 +216,8 @@ Phase S6 execution (backlog #2, #6, #7, #9; DECISIONS.md A28, A33, A38(2)/(4), A
 - Step 7 (confirmation reset) covers every change, the new fields included.
 - Phase S8f execution (A68(8)): optional `maxSpectators` (0-12, omitted = unchanged; "maxSpectators must be between 0 and 12."), a free-set field, editable in tournament lobbies too. A lower value never evicts a member already in the Spectator slot; it caps later joins.
 
-### set_team_slot(lobbyId, targetUserId, lobbySlot)
-1. `getAuthenticatedUser(ctx)`; load lobby; D-28 `ensureStageIs(Waiting)`.
+### set_team_slot(lobbyId, targetJoinSeq?, lobbySlot)
+1. `getAuthenticatedUser(ctx)`; load lobby; when `targetJoinSeq` is given and the caller holds no `LobbyMember` row here, `ensureHostOrAbove` first (a non-member can only be moving someone else); then A74(1) `targetJoinSeq` omitted = the caller (self-move), else `resolveSeat` (a seat that resolves to the caller is the self-move too); D-28 `ensureStageIs(Waiting)`. Guard order: lobby → caller checks → seat.
 2. Permission: moving someone else requires `ensureHostOrAbove`; self-move requires membership. `ensureLobbyMember` (target).
 3. Coach guard: assigning a coach slot to a non-coach requires host or referee.
 4. Cap enforcement (when team/coach status changes): 1 coach per team, `teamSize` players per team, `Lobby.maxSpectators` spectators ("Spectator slots are full (max N).", A68(8); was a hard 12) for a tournament lobby only: a casual Waiting lobby's Spectator slot holds seat candidates and is not capped (Phase S8f fix pass, the same rule as `join_lobby`).
@@ -223,8 +227,8 @@ Phase S6 execution (backlog #2, #6, #7, #9; DECISIONS.md A28, A33, A38(2)/(4), A
 1. `getAuthenticatedUser(ctx)`; load lobby; D-28 `ensureStageIs(Waiting)`; `ensureLobbyMember`.
 2. Delete+reinsert caller `LobbyMember` with `isConfirmed=true` (confirm) or `false` (unconfirm).
 
-### set_captain(lobbyId, targetUserId)
-1. `getAuthenticatedUser(ctx)`; load lobby; `ensureLobbyMember` (caller).
+### set_captain(lobbyId, targetJoinSeq)
+1. `getAuthenticatedUser(ctx)`; load lobby; `ensureLobbyMember` (caller) and the permission check; then A74(1) `resolveSeat`. Guard order: lobby → caller checks → seat.
 2. D-30 permission: host OR (referee AND `refereeCanSetCaptain`) OR Admin+.
 3. `ensureLobbyMember` (target); reject if target is Spectator or Coach.
 4. Demote existing captain(s) on target's team; promote target (`isCaptain=true`) via delete+reinsert.
@@ -248,8 +252,8 @@ Phase S6 execution (backlog #2, #6, #7, #9; DECISIONS.md A28, A33, A38(2)/(4), A
 3. `RandomSwap`: the non-coach Blue + Red players (ordered by `joinSeq`) are shuffled with `ctx.random.shuffle` and dealt Blue, Red, Blue, ...; coaches and spectators stay; captain flags are cleared (`start_draft` assigns them, D-30).
 4. One pass over the members: new slot, `isConfirmed=false`, cleared captain flag (delete + reinsert only for rows that change); bump `lastActivityAt`.
 
-### transfer_referee(lobbyId, targetUserId) / reclaim_referee(lobbyId)
-- `transfer_referee`: caller must currently be referee (`isReferee=true`); reject self-target; delete+reinsert caller `isReferee=false` and target `isReferee=true`. No stage gate.
+### transfer_referee(lobbyId, targetJoinSeq) / reclaim_referee(lobbyId)
+- `transfer_referee`: caller must be a member and currently referee (`isReferee=true`); then A74(1) `resolveSeat` (this reducer has no Lobby lookup, so the seat is resolved after the caller checks; guard order: caller checks → seat); the resolved row is the target; reject self-target ("You are already the referee."); delete+reinsert caller `isReferee=false` and target `isReferee=true`. No stage gate.
 - `reclaim_referee`: A68(7): when no member holds the flag, any member who calls takes it (non-members: "You are not a member of this lobby."). Otherwise the caller must be the lobby host (or seated `results` staff in a tournament lobby, D.8.4); no-op if the caller already holds it; delete+reinsert referee `isReferee=false` and caller `isReferee=true`.
 - There is no `assign_referee`/`remove_referee` reducer -- the host starts as referee (D-24) and the flag moves via transfer/reclaim/the A68(7) transfers.
 
@@ -274,7 +278,7 @@ B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3
 3. `deselect`: find and delete the matching `LobbyMemberAccount` row (throw if not selected). No snapshot hook.
 
 ### create_tournament_lobby(bracketMatchId, joinCode, abandonCurrentMatch?) / approve_stand_in(bracketMatchId, userId)
-- `create_tournament_lobby`: resolve BracketMatch + Tournament; D-64 authorize (Moderator+, organizer, `TournamentAssistant`, or a team member of `team1Id`/`team2Id`); D-45 reject a duplicate non-Finished lobby for the match; D-22 / A68(4) `ensureNotInLobby(ctx, userId, abandonCurrentMatch ?? false)`; `maxSpectators` copied from the preset's free set (A68(8)); D-67 `matchType` from `countTowardsMmr`; insert `Lobby` with `isTournamentControlled=true` inheriting tournament fields + hardcoded tournament defaults; D-24/D-27 insert creator as `Spectator` + `isReferee=true`, `joinSeq=1` (R4, S4).
+- `create_tournament_lobby`: resolve BracketMatch + Tournament; D-64 authorize (Moderator+, organizer, `TournamentAssistant`, or a team member of `team1Id`/`team2Id`); D-45 reject a duplicate non-Finished lobby for the match; D-22 / A68(4) `ensureNotInLobby(ctx, userId, abandonCurrentMatch ?? false)`; `maxSpectators` copied from the preset's free set (A68(8)); D-67 `matchType` from `countTowardsMmr`; insert `Lobby` with `isTournamentControlled=true` inheriting tournament fields + hardcoded tournament defaults; D-24/D-27 insert creator as `Spectator` + `isReferee=true`, `joinSeq=1` (R4, S4); `Lobby.lastJoinSeq=1` (A74(3), S9c).
 - `approve_stand_in`: resolve BracketMatch + Tournament; D-68 authorize (Moderator+, organizer, or assistant); validate target user; reject duplicate; insert `TournamentStandIn` (PK `[bracketMatchId, userId]`, `approvedByUserId=caller`). There is no `remove_stand_in` reducer.
 
 ### claim_forfeit(lobbyId, forfeitingTeamSide) (concede.ts; F7, Phase S4 execution)
@@ -409,7 +413,13 @@ Membership lifecycle after A68 (details in the reducer flows above):
 - `shouldAnonymize` (`helpers/identity/anonymousHelpers.ts`): the target's seat kind picks the toggle, a spectator target `isAnonymousSpectators`, a player or coach target `isAnonymousPlayers` (spectator callers included); exemptions unchanged (self, teammates, spectator referee).
 - `view_lobby_browser`: `hostLabel = "Anonymous host"` when the host's own seat kind is anonymous (one `LobbyMember.by_lobby_and_user` lookup; no member row: either flag).
 - Member-event System chat (`join_lobby`, `leave_lobby`, `kick_member`, `ban_member`) through `postMemberEventChat` (`helpers/lobby/memberEventChat.ts`), rendered per reader by `view_my_lobby_chat`; see [chat architecture](../chat/architecture.md) "System messages".
-- `view_my_lobby_bans`: `bannedUserId = 0` and label "Banned player" (the seat label while still seated) when `hideUserId` holds for the banned user; the row keeps `lobbyId` + `createdDate` (LobbyBan has no other key; `unban_member` by id stays open with the user).
+- `view_my_lobby_bans`: `bannedUserId = 0` and label "Banned player" when `hideUserId` holds for the banned user (a banned user holds no member row while banned, so there is no seat label to show). Resolved in S9c (A74(2)): the row carries `bannedJoinSeq` (unique with `lobbyId`), which identifies the ban to the client and to `unban_member`.
+
+## Phase S9c execution (DECISIONS.md A74)
+
+- Seat targeting: the six reducers' arguments and `resolveSeat` (the "Seats" paragraph at the top and each reducer above). Guard order: lobby → the caller's membership and permission checks → seat, so a stranger never learns which seats are occupied (`transfer_referee` has no Lobby lookup: caller checks → seat; `set_team_slot` with a seat and a non-member caller runs `ensureHostOrAbove` before the seat).
+- `Lobby.lastJoinSeq` (written 1 by `create_lobby` and `create_tournament_lobby`, bumped by `join_lobby` in the Lobby update it already makes) replaces the `max(joinSeq) + 1` scan. `view_my_lobby` and `view_my_tournament_lobbies` spread the Lobby columns and carry `lastJoinSeq` too.
+- `LobbyBan.bannedJoinSeq` (written by `ban_member`); `view_my_lobby_bans` and `view_admin_lobby_bans` carry it.
 - `view_my_lobby_members`: the no-op `Math.round` on `accountRating` removed (the helper returns an integer, A40 exact).
 
 ## Phase History
@@ -453,6 +463,7 @@ Membership lifecycle after A68 (details in the reducer flows above):
 | Membership lifecycle: `voluntarilyLeft` replaced by `leftAt` / `abandonedAt`; a player's live-stage Leave runs `markMemberOffline` (shared with `client_disconnected`); no auto-concede, no rejoin ban; `abandonCurrentMatch` on `create_lobby` / `join_lobby` / `create_tournament_lobby`; kick / ban of players only before the draft (and in AwaitingResult), LMA rows deleted; one flag-transfer order (A22(5), online first then any) for every row removal; spectator joins in the live stages capped by the new `maxSpectators` (Lobby, LobbyPreset, system preset 12); GC presence test for Waiting; `reclaim_referee` fills an unheld flag; `view_my_lobbies` drops abandoned rows | Phase S8f execution (DECISIONS.md A68) | 2026-11-08 |
 | `LobbyPreset` private + `view_lobby_presets`; `view_lobby_browser` without user ids (name label, joinCode only when public, hostLabel, counts); `view_my_lobby_members` row with `presence` (A68(10)) and A40 ratings; `view_my_lobby`, layer-0 `view_my_lobbies`, `view_my_lobby_bans` | Phase S9a execution (DECISIONS.md A37, A40, A44(1), A48, A68(10)) | 2026-11-08 |
 | S9a fix pass: spectator targets follow `isAnonymousSpectators`; browser host label per the host's seat kind; member-event chat lines rendered per reader; banned user masked in `view_my_lobby_bans`; `Lobby` header marked private | Phase S9a execution (DECISIONS.md A37) | 2026-11-08 |
+| Seat targeting: `kick_member`, `ban_member`, `set_captain`, `transfer_referee` take `targetJoinSeq`, `set_team_slot` an optional `targetJoinSeq` (omitted = self), `unban_member` takes `bannedJoinSeq`; `resolveSeat`; `Lobby.lastJoinSeq` replaces the `max + 1` join counter (seat numbers never reused); `LobbyBan.bannedJoinSeq`; no preventive ban of a non-member | Phase S9c execution (DECISIONS.md A74) | 2026-11-08 |
 | Fix pass: `maxSpectators` caps watchers, not seat candidates (casual Waiting joins and `set_team_slot` moves into Spectator are not counted; live-stage joins and tournament Waiting spectators are); `ensureNotInLobby` runs `transferFlagsOnRemoval` on the away row before writing `abandonedAt` | Phase S8f execution (DECISIONS.md A68(4)(7)(8)) | 2026-11-08 |
 
 ---

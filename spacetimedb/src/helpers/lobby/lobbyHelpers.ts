@@ -97,14 +97,27 @@ export function ensureGuestRestrictions(user: any, matchType: any): void {
 }
 
 /**
- * Next per-lobby join counter (R4): max existing `LobbyMember.joinSeq` in the lobby + 1, starting at 1
- * for the first member (the host). Assigned at insert time by create_lobby, join_lobby and
- * create_tournament_lobby; the A22(5) referee-candidate order and the S9 anonymous labels derive from it.
+ * Next per-lobby join counter (R4, A74(3)): `lobby.lastJoinSeq + 1`. The host's seat is 1, written with
+ * `lastJoinSeq: 1` by create_lobby and create_tournament_lobby; join_lobby takes the next number and writes it back
+ * as `lastJoinSeq` in the Lobby update it already makes (currentPlayerCount / lastActivityAt), so a departed member's
+ * seat number is never handed to a later joiner. The A22(5) referee-candidate order and the S9 anonymous labels
+ * derive from it.
  */
-export function nextJoinSeq(ctx: any, lobbyId: number): number {
-    const members = [...ctx.db.LobbyMember.lobby_id.filter(lobbyId)];
-    if (members.length === 0) return 1;
-    return Math.max(...members.map((m: any) => m.joinSeq)) + 1;
+export function nextJoinSeq(ctx: any, lobby: any): number {
+    return lobby.lastJoinSeq + 1;
+}
+
+/**
+ * A74(1): the LobbyMember row holding seat `joinSeq` (`view_my_lobby_members.joinSeq`) of the lobby, through
+ * `LobbyMember.lobby_id`. The member-targeting reducers (kick_member, ban_member, set_team_slot, set_captain,
+ * transfer_referee) resolve their `targetJoinSeq` here and continue with the row's user id. The rejection names the
+ * seat, never a user id (A74(4)).
+ */
+export function resolveSeat(ctx: any, lobbyId: number, joinSeq: number): any {
+    for (const member of ctx.db.LobbyMember.lobby_id.filter(lobbyId)) {
+        if (member.joinSeq === joinSeq) return member;
+    }
+    throw new SenderError(`No member sits at seat ${joinSeq} of this lobby.`);
 }
 
 /**

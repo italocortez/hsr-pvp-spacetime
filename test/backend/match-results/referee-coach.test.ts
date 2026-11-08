@@ -48,12 +48,12 @@ describe.skipIf(!hasServerToken())('Referee & Coach Management', () => {
 
         await blue.call.joinLobby({ lobbyId, joinCode: '', password: '' });
         await blue.sync();
-        await blue.call.setTeamSlot({ lobbyId, targetUserId: blue.userId, lobbySlot: { tag: 'BluePlayer' as const } });
+        await blue.call.setTeamSlot({ lobbyId, lobbySlot: { tag: 'BluePlayer' as const } });
         await blue.sync();
 
         await red.call.joinLobby({ lobbyId, joinCode: '', password: '' });
         await red.sync();
-        await red.call.setTeamSlot({ lobbyId, targetUserId: red.userId, lobbySlot: { tag: 'RedPlayer' as const } });
+        await red.call.setTeamSlot({ lobbyId, lobbySlot: { tag: 'RedPlayer' as const } });
         await red.sync();
         await host.sync();
     }, 60000);
@@ -80,27 +80,27 @@ describe.skipIf(!hasServerToken())('Referee & Coach Management', () => {
 
         it('self-transfer rejected', async () => {
             const err = await expectReducerError(
-                host.call.transferReferee({ lobbyId, targetUserId: host.userId })
+                host.call.transferReferee({ lobbyId, targetJoinSeq: 0 }) // S10: rewrite (A74: was targetUserId: host.userId; take the seat from view_my_lobby_members)
             );
             expect(err).toContain('You are already the referee.');
         });
 
         it('non-referee cannot transfer', async () => {
             const err = await expectReducerError(
-                blue.call.transferReferee({ lobbyId, targetUserId: red.userId })
+                blue.call.transferReferee({ lobbyId, targetJoinSeq: 0 }) // S10: rewrite (A74: was targetUserId: red.userId; take the seat from view_my_lobby_members)
             );
             expect(err).toContain('You are not the referee of this lobby.');
         });
 
         it('target not in lobby rejected', async () => {
             const err = await expectReducerError(
-                host.call.transferReferee({ lobbyId, targetUserId: outsider.userId })
+                host.call.transferReferee({ lobbyId, targetJoinSeq: 0 }) // S10: rewrite (A74: was targetUserId: outsider.userId; take the seat from view_my_lobby_members)
             );
             expect(err).toContain('Target user is not a member of this lobby.');
         });
 
         it('host transfers referee to blue', async () => {
-            await host.call.transferReferee({ lobbyId, targetUserId: blue.userId });
+            await host.call.transferReferee({ lobbyId, targetJoinSeq: 0 }); // S10: rewrite (A74: was targetUserId: blue.userId; take the seat from view_my_lobby_members)
             await host.sync(1000);
             await blue.sync(1000);
 
@@ -166,7 +166,6 @@ describe.skipIf(!hasServerToken())('Referee & Coach Management', () => {
             await blue.sync();
             await blue.call.setTeamSlot({
                 lobbyId: coachLobbyId,
-                targetUserId: blue.userId,
                 lobbySlot: { tag: 'BluePlayer' as const },
             });
             await blue.sync();
@@ -181,7 +180,7 @@ describe.skipIf(!hasServerToken())('Referee & Coach Management', () => {
         it('host assigns member to BlueCoach', async () => {
             await host.call.setTeamSlot({
                 lobbyId: coachLobbyId,
-                targetUserId: blue.userId,
+                targetJoinSeq: 0, // S10: rewrite (A74: was targetUserId: blue.userId; take the seat from view_my_lobby_members)
                 lobbySlot: { tag: 'BlueCoach' as const },
             });
             await host.sync(1000);
@@ -197,7 +196,7 @@ describe.skipIf(!hasServerToken())('Referee & Coach Management', () => {
             // Host resets back to BluePlayer first
             await host.call.setTeamSlot({
                 lobbyId: coachLobbyId,
-                targetUserId: blue.userId,
+                targetJoinSeq: 0, // S10: rewrite (A74: was targetUserId: blue.userId; take the seat from view_my_lobby_members)
                 lobbySlot: { tag: 'BluePlayer' as const },
             });
             await host.sync(1000);
@@ -206,7 +205,6 @@ describe.skipIf(!hasServerToken())('Referee & Coach Management', () => {
             const err = await expectReducerError(
                 blue.call.setTeamSlot({
                     lobbyId: coachLobbyId,
-                    targetUserId: blue.userId,
                     lobbySlot: { tag: 'BlueCoach' as const },
                 })
             );

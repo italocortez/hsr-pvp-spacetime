@@ -2,6 +2,7 @@
 
 76 tables. Updated 2026-11-06 (S3 backend reset: 27 tables public → private per A37 / ACCESS-SECURITY-OPS Appendix A, 10 new, `group_phase_record` dropped per A23). Visibility: **21 public** (reference data, aggregates, `user`, `tournament`, `bracket_match`, `admin_alert`, the `lobby_cursor_event` event table); every other table is PRIVATE and read through views (S9). Paste into [mermaid.live](https://mermaid.live) to preview.
 
+Phase S9c execution (DECISIONS.md A74): `lobby` gains `lastJoinSeq` (the seat counter, replacing the `max(joinSeq) + 1` scan) and `lobby_ban` gains `bannedJoinSeq` (the banned member's seat). No index change.
 Phase S9b execution (DECISIONS.md A37, A40, A44): `hsr_account` gains an `is_roster_public` btree index (`view_public_hsr_accounts` reads through it); `leaderboard` is rewritten with at most 20 rows per category and SYSTEM audit columns, as are the `global_character_stat` writes and automatic `user_achievement` awards (data rule, no column change). Views only change otherwise.
 Phase S9a execution (DECISIONS.md A37, A63; user 2026-11-07): `match_result_record` loses `refereeFullControl` (no reducer read it since A63; the live seat decides neutrality); `lobby_preset` is private (read through `view_lobby_presets`); `tournament_stand_in` gains a `user_id` btree index (`view_my_stand_ins`). Views only change otherwise.
 Phase S8f execution (DECISIONS.md A68): `lobby_member` replaces `voluntarilyLeft` with `leftAt` (optional timestamp, away: a player's Leave in a live stage) and `abandonedAt` (optional timestamp, gone: the away player took another lobby); `lobby` and `lobby_preset` gain `maxSpectators` (u8, 0-12, default 12).
@@ -230,6 +231,7 @@ erDiagram
         string banRestriction "A45"
         bool hideMmr "A40"
         u8 maxSpectators "A68(8): 0-12, caps new Spectator joins"
+        u32 lastJoinSeq "A74(3): last seat number handed out; host = 1; never reused"
     }
     lobby_member_account {
         u32 lobbyId PK_FK
@@ -257,6 +259,7 @@ erDiagram
         u32 lobbyId PK_FK
         u32 bannedUserId PK_FK
         u32 bannedByUserId FK
+        u32 bannedJoinSeq "A74(2): the seat the member held; unban_member takes it"
     }
     lobby_preset {
         u32 id PK

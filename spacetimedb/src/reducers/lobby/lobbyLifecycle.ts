@@ -13,6 +13,7 @@ import {
     canKickOrBan,
     generateJoinCode,
     nextJoinSeq,
+    resolveSeat,
     slotIsCoach,
     slotIsSpectator,
     LIVE_STAGES,
@@ -191,6 +192,7 @@ export const create_lobby = spacetimedb.reducer(
             gameMode: args.gameMode,
             lastActivityAt: ctx.timestamp,
             stage: { tag: 'Waiting', value: {} },
+            lastJoinSeq: 1, // A74(3): the host's seat
         }, user.id));
 
         // D-24: host joins as referee, D-27: starts as Spectator
@@ -206,7 +208,7 @@ export const create_lobby = spacetimedb.reducer(
             abandonedAt: undefined,
             disconnectedAt: undefined,
             disconnectPoolRemainingMs: 0,
-            joinSeq: nextJoinSeq(ctx, lobby.id), // R4: per-lobby join counter; A22(5) order and the S9 labels derive from it
+            joinSeq: 1, // R4 / A74(3): the host's seat; lobby.lastJoinSeq starts at 1
             lastCursorAt: undefined,
             lastLineupAt: undefined,
         }, user.id));
@@ -362,6 +364,9 @@ export const join_lobby = spacetimedb.reducer(
             throw new SenderError(`Spectator slots are full (max ${lobby.maxSpectators}).`);
         }
 
+        // R4 / A74(3): the next seat number; written back as lobby.lastJoinSeq in the Lobby update below
+        const joinSeq = nextJoinSeq(ctx, lobby);
+
         // D-27: join as Spectator (casual lobbies; tournament lobbies: the auto-seat above)
         ctx.db.LobbyMember.insert(insertWithAudit(ctx, {
             lobbyId,
@@ -375,7 +380,7 @@ export const join_lobby = spacetimedb.reducer(
             abandonedAt: undefined,
             disconnectedAt: undefined,
             disconnectPoolRemainingMs: 0,
-            joinSeq: nextJoinSeq(ctx, lobby.id), // R4: per-lobby join counter; A22(5) order and the S9 labels derive from it
+            joinSeq, // R4: per-lobby join counter; A22(5) order and the S9 labels derive from it
             lastCursorAt: undefined,
             lastLineupAt: undefined,
         }, user.id));
@@ -430,10 +435,11 @@ export const join_lobby = spacetimedb.reducer(
             }
         }
 
-        // Increment currentPlayerCount
+        // Increment currentPlayerCount; A74(3): record the seat number just handed out
         ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
             currentPlayerCount: lobby.currentPlayerCount + 1,
             lastActivityAt: ctx.timestamp,
+            lastJoinSeq: joinSeq,
         }, user.id));
 
         // D-11: system message (S9a fix, A37: rendered per reader by view_my_lobby_chat)
@@ -549,16 +555,17 @@ function ensureRemovableMember(lobby: any, targetMember: any): void {
 // Permission: host, admin, moderator, or referee (if refereeCanKick=true).
 // A68(6)(7): stage rule above; the row and its LobbyMemberAccount rows are deleted and the flags transferred
 // (removeMemberRow).
+// A74(1): the target is a seat number (`targetJoinSeq`, view_my_lobby_members.joinSeq), resolved to the member row.
+// Guard order: lobby -> the caller's membership and permission -> seat.
 
 export const kick_member = spacetimedb.reducer(
     {
         lobbyId: t.u32(),
-        targetUserId: t.u32(),
+        targetJoinSeq: t.u32(),
     },
     (ctx, args) => {
         const user = getAuthenticatedUser(ctx);
         const lobbyId = args.lobbyId;
-        const targetUserId = args.targetUserId;
 
         const lobby = ctx.db.Lobby.id.find(lobbyId);
         if (!lobby) {
@@ -573,6 +580,11 @@ export const kick_member = spacetimedb.reducer(
             throw new SenderError('Only the host, moderators, admins, or an authorized referee can kick members.');
         }
 
+        // A74(1): seat -> member row ("No member sits at seat N of this lobby."), resolved only after the caller's
+        // checks so a stranger learns nothing about the lobby's seats
+        const target = resolveSeat(ctx, lobbyId, args.targetJoinSeq);
+        const targetUserId = target.userId;
+
         // Cannot kick self
         if (targetUserId === user.id) {
             throw new SenderError('Cannot kick yourself.');
@@ -583,11 +595,8 @@ export const kick_member = spacetimedb.reducer(
             throw new SenderError('Cannot kick the host.');
         }
 
-        // Validate target is a member
-        const targetMember = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, targetUserId])][0];
-        if (!targetMember) {
-            throw new SenderError('Target user is not a member of this lobby.');
-        }
+        // The target is a member by construction (resolveSeat)
+        const targetMember = target;
 
         // A68(6): no player removal after the draft starts
         ensureRemovableMember(lobby, targetMember);
@@ -609,17 +618,19 @@ export const kick_member = spacetimedb.reducer(
 // ─── ban_member ───────────────────────────────────────────────────────────────
 // Bans a user from a lobby. Creates a LobbyBan row and removes current membership.
 // Per D-21: banned users cannot rejoin.
-// A68(6)(7): a member target follows kick_member's stage rule and removal (removeMemberRow).
+// A68(6)(7): the target follows kick_member's stage rule and removal (removeMemberRow).
+// A74(1)(2): the target is a seat number resolved to a member row (present or away); the ban records the seat
+// (`bannedJoinSeq`). A user who holds no row is not banned preventively (the "Ban Non-Member" case is gone).
+// Guard order: lobby -> the caller's membership and permission -> seat.
 
 export const ban_member = spacetimedb.reducer(
     {
         lobbyId: t.u32(),
-        targetUserId: t.u32(),
+        targetJoinSeq: t.u32(),
     },
     (ctx, args) => {
         const user = getAuthenticatedUser(ctx);
         const lobbyId = args.lobbyId;
-        const targetUserId = args.targetUserId;
 
         const lobby = ctx.db.Lobby.id.find(lobbyId);
         if (!lobby) {
@@ -634,6 +645,11 @@ export const ban_member = spacetimedb.reducer(
             throw new SenderError('Only the host, moderators, admins, or an authorized referee can ban members.');
         }
 
+        // A74(1): seat -> member row ("No member sits at seat N of this lobby."), resolved only after the caller's
+        // checks so a stranger learns nothing about the lobby's seats
+        const target = resolveSeat(ctx, lobbyId, args.targetJoinSeq);
+        const targetUserId = target.userId;
+
         // Cannot ban self
         if (targetUserId === user.id) {
             throw new SenderError('Cannot ban yourself.');
@@ -645,7 +661,7 @@ export const ban_member = spacetimedb.reducer(
         }
 
         // A68(6): no player removal after the draft starts
-        const targetMember = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, targetUserId])][0];
+        const targetMember = target;
         ensureRemovableMember(lobby, targetMember);
 
         // Resolve target's display name for system message (D-12: falls back to DeletedUser archive)
@@ -656,13 +672,12 @@ export const ban_member = spacetimedb.reducer(
             lobbyId,
             bannedUserId: targetUserId,
             bannedByUserId: user.id,
+            bannedJoinSeq: targetMember.joinSeq, // A74(2): the seat the member held
         }, user.id));
 
-        // Remove from lobby if currently a member (A68(7): flags transferred; LobbyMemberAccount rows deleted)
+        // Remove from lobby, as for a kick (A68(7): flags transferred; LobbyMemberAccount rows deleted)
         const targetLabel = memberEventLabel(ctx, lobby, targetUserId); // read before the row is removed
-        if (targetMember) {
-            removeMemberRow(ctx, lobbyId, targetUserId, user.id);
-        }
+        removeMemberRow(ctx, lobbyId, targetUserId, user.id);
 
         // D-11: system message (S9a fix, A37: rendered per reader by view_my_lobby_chat)
         postMemberEventChat(ctx, lobby, 'banned', targetUserId, targetName, user.id, targetLabel);
@@ -679,11 +694,13 @@ export const ban_member = spacetimedb.reducer(
 // A45(3): lifts a lobby ban (deletes the LobbyBan row) so the user can rejoin. Allowed for the host, a referee
 // while lobby.refereeCanKick is on (the same power that lets a referee ban, D-32), or Moderator+ (who need not be
 // a member). Any stage. The admin In-Cell Edit exposes the same reducer.
+// A74(2): the ban is named by the seat the member held (`bannedJoinSeq`, view_my_lobby_bans / view_admin_lobby_bans),
+// resolved through LobbyBan.lobby_id.
 
 export const unban_member = spacetimedb.reducer(
     {
         lobbyId: t.u32(),
-        userId: t.u32(),
+        bannedJoinSeq: t.u32(),
     },
     (ctx, args) => {
         const user = getAuthenticatedUser(ctx);
@@ -702,12 +719,12 @@ export const unban_member = spacetimedb.reducer(
             throw new SenderError('Only the host, moderators, admins, or an authorized referee can lift a lobby ban.');
         }
 
-        const ban = [...ctx.db.LobbyBan.by_lobby_and_user.filter([lobbyId, args.userId])][0];
+        const ban = [...ctx.db.LobbyBan.lobby_id.filter(lobbyId)].find((b: any) => b.bannedJoinSeq === args.bannedJoinSeq);
         if (!ban) {
-            throw new SenderError('This user is not banned from the lobby.');
+            throw new SenderError(`No ban is recorded for seat ${args.bannedJoinSeq} of this lobby.`);
         }
-        ctx.db.LobbyBan.by_lobby_and_user.delete([lobbyId, args.userId]);
+        ctx.db.LobbyBan.by_lobby_and_user.delete([lobbyId, ban.bannedUserId]);
 
-        console.log(`[LOBBY] User #${args.userId} unbanned from lobby #${lobbyId} by user #${user.id}`);
+        console.log(`[LOBBY] User #${ban.bannedUserId} (seat ${args.bannedJoinSeq}) unbanned from lobby #${lobbyId} by user #${user.id}`);
     }
 );

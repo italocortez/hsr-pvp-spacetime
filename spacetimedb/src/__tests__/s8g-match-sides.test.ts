@@ -7,7 +7,7 @@
 // group-stage matches, and the public row (A37). Builders in s4 / s7 / s8 / s8d fixtures; the S8e tally suite is the
 // regression baseline. Nothing reaches maincloud.
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { M, advance, expectReject, lobbyRow, member, tx, type Actor, type Harness, type Lobby } from './s4-fixtures';
+import { M, advance, expectReject, lobbyRow, member, tx, type Actor, type Harness, type Lobby, seatOf } from './s4-fixtures';
 import {
     advanceStage,
     assignAssistant,
@@ -153,9 +153,9 @@ describe('A71(1): set_match_sides(gf, team2) on a Bo3 grand final with winnerAdv
         join(f.test, t1.captain, lobbyId);
         expect(slotOf(f.test, lobbyId, t2.captain)).toBe('BluePlayer');
         expect(slotOf(f.test, lobbyId, t1.captain)).toBe('RedPlayer');
-        expectReject(f.test, t1.captain, (ctx) => M.set_team_slot(ctx, { lobbyId, targetUserId: t1.captain.userId, lobbySlot: { tag: 'BluePlayer' } as any }), SEAT);
-        expectReject(f.test, f.org, (ctx) => M.set_team_slot(ctx, { lobbyId, targetUserId: t2.captain.userId, lobbySlot: { tag: 'RedPlayer' } as any }), SEAT);
-        expectReject(f.test, f.org, (ctx) => M.set_team_slot(ctx, { lobbyId, targetUserId: t1.captain.userId, lobbySlot: { tag: 'BlueCoach' } as any }), SEAT);
+        expectReject(f.test, t1.captain, (ctx) => M.set_team_slot(ctx, { lobbyId, targetJoinSeq: seatOf(ctx, lobbyId, t1.captain.userId), lobbySlot: { tag: 'BluePlayer' } as any }), SEAT);
+        expectReject(f.test, f.org, (ctx) => M.set_team_slot(ctx, { lobbyId, targetJoinSeq: seatOf(ctx, lobbyId, t2.captain.userId), lobbySlot: { tag: 'RedPlayer' } as any }), SEAT);
+        expectReject(f.test, f.org, (ctx) => M.set_team_slot(ctx, { lobbyId, targetJoinSeq: seatOf(ctx, lobbyId, t1.captain.userId), lobbySlot: { tag: 'BlueCoach' } as any }), SEAT);
         const lobby = lobbyRow(f.test, lobbyId);
         const allowed = (who: Actor) => tx(f.test, 'internal', (ctx) => allowedSlotsFor(ctx, lobby, who.userId));
         expect(allowed(t2.mate)).toEqual(expect.arrayContaining(['BluePlayer', 'BlueCoach', 'Spectator']));

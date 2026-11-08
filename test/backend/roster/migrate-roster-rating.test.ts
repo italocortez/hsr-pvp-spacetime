@@ -239,7 +239,7 @@ describe.skipIf(!hasServerToken())('migrate_roster — D-D-04 rating recompute +
         await h.sync();
         await host.call.setTeamSlot({
             lobbyId: lobby.id,
-            targetUserId: h.userId,
+            targetJoinSeq: 0, // S10: rewrite (A74: was targetUserId: h.userId; take the seat from view_my_lobby_members)
             lobbySlot: { tag: 'BluePlayer' as const },
         });
         await host.sync();
@@ -290,7 +290,7 @@ describe.skipIf(!hasServerToken())('migrate_roster — D-D-04 rating recompute +
         await h.sync();
         await host.call.setTeamSlot({
             lobbyId: lobby.id,
-            targetUserId: h.userId,
+            targetJoinSeq: 0, // S10: rewrite (A74: was targetUserId: h.userId; take the seat from view_my_lobby_members)
             lobbySlot: { tag: 'BluePlayer' as const },
         });
         await host.sync();

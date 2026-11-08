@@ -16,7 +16,7 @@ import {
 
 export default {
   lobbyId: __t.u32(),
-  targetUserId: __t.u32(),
+  targetJoinSeq: __t.option(__t.u32()),
   get lobbySlot() {
     return LobbySlot;
   },

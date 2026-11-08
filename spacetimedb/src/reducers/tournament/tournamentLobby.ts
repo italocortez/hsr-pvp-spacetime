@@ -2,7 +2,7 @@ import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser } from '@module/helpers/identity/ensurePermissions';
 import { insertWithAudit } from '@module/helpers/admin/auditHelpers';
-import { ensureNotInLobby, generateJoinCode, nextJoinSeq } from '@module/helpers/lobby/lobbyHelpers';
+import { ensureNotInLobby, generateJoinCode } from '@module/helpers/lobby/lobbyHelpers';
 import { ensureTournamentPermission, hasTournamentPermission } from '@module/helpers/tournament/tournamentPermissions';
 import { findSystemLobbyPreset, SYSTEM_PRESET_VALUES } from '@module/helpers/lobby/systemPreset';
 import { autoSeatSlot } from '@module/helpers/tournament/tournamentLobbySides';
@@ -169,6 +169,7 @@ export const create_tournament_lobby = spacetimedb.reducer(
             // Lifecycle
             lastActivityAt: ctx.timestamp,
             stage: { tag: 'Waiting', value: {} } as any,
+            lastJoinSeq: 1, // A74(3): the host's seat
         }, user.id));
 
         // A34: the creator is host and referee; a participant sits on its team's player seat (A26 / A35), staff on
@@ -186,7 +187,7 @@ export const create_tournament_lobby = spacetimedb.reducer(
             abandonedAt: undefined,
             disconnectedAt: undefined,
             disconnectPoolRemainingMs: 0,
-            joinSeq: nextJoinSeq(ctx, lobby.id), // R4: per-lobby join counter; A22(5) order and the S9 labels derive from it
+            joinSeq: 1, // R4 / A74(3): the host's seat; lobby.lastJoinSeq starts at 1
             lastCursorAt: undefined,
             lastLineupAt: undefined,
         }, user.id));

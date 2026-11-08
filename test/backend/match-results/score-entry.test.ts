@@ -38,12 +38,12 @@ async function setupDraftLobby(
 
     await blue.call.joinLobby({ lobbyId: lobby.id, joinCode: '', password: '' });
     await blue.sync();
-    await blue.call.setTeamSlot({ lobbyId: lobby.id, targetUserId: blue.userId, lobbySlot: { tag: 'BluePlayer' as const } });
+    await blue.call.setTeamSlot({ lobbyId: lobby.id, lobbySlot: { tag: 'BluePlayer' as const } });
     await blue.sync();
 
     await red.call.joinLobby({ lobbyId: lobby.id, joinCode: '', password: '' });
     await red.sync();
-    await red.call.setTeamSlot({ lobbyId: lobby.id, targetUserId: red.userId, lobbySlot: { tag: 'RedPlayer' as const } });
+    await red.call.setTeamSlot({ lobbyId: lobby.id, lobbySlot: { tag: 'RedPlayer' as const } });
     await red.sync();
 
     await blue.call.confirmReady({ lobbyId: lobby.id });
@@ -343,19 +343,19 @@ describe.skipIf(!hasServerToken())('Score Entry + Confirmation', () => {
             // Blue1 joins first → will be auto-captain (D-30)
             await ncBlue1.call.joinLobby({ lobbyId: ncLobbyId, joinCode: '', password: '' });
             await ncBlue1.sync();
-            await ncBlue1.call.setTeamSlot({ lobbyId: ncLobbyId, targetUserId: ncBlue1.userId, lobbySlot: { tag: 'BluePlayer' as const } });
+            await ncBlue1.call.setTeamSlot({ lobbyId: ncLobbyId, lobbySlot: { tag: 'BluePlayer' as const } });
             await ncBlue1.sync();
 
             // Blue2 joins second → non-captain
             await ncBlue2.call.joinLobby({ lobbyId: ncLobbyId, joinCode: '', password: '' });
             await ncBlue2.sync();
-            await ncBlue2.call.setTeamSlot({ lobbyId: ncLobbyId, targetUserId: ncBlue2.userId, lobbySlot: { tag: 'BluePlayer' as const } });
+            await ncBlue2.call.setTeamSlot({ lobbyId: ncLobbyId, lobbySlot: { tag: 'BluePlayer' as const } });
             await ncBlue2.sync();
 
             // Red joins
             await ncRed.call.joinLobby({ lobbyId: ncLobbyId, joinCode: '', password: '' });
             await ncRed.sync();
-            await ncRed.call.setTeamSlot({ lobbyId: ncLobbyId, targetUserId: ncRed.userId, lobbySlot: { tag: 'RedPlayer' as const } });
+            await ncRed.call.setTeamSlot({ lobbyId: ncLobbyId, lobbySlot: { tag: 'RedPlayer' as const } });
             await ncRed.sync();
 
             // All non-coach players confirm ready

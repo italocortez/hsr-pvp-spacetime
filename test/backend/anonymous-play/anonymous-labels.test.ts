@@ -94,7 +94,7 @@ describe.skipIf(!hasServerToken())('Anonymous Play', () => {
             await blue.call.joinLobby({ lobbyId, joinCode: '', password: '' });
             await blue.sync();
             await blue.call.setTeamSlot({
-                lobbyId, targetUserId: blue.userId,
+                lobbyId, 
                 lobbySlot: { tag: 'BluePlayer' as const },
             });
             await blue.sync();
@@ -103,7 +103,7 @@ describe.skipIf(!hasServerToken())('Anonymous Play', () => {
             await red.call.joinLobby({ lobbyId, joinCode: '', password: '' });
             await red.sync();
             await red.call.setTeamSlot({
-                lobbyId, targetUserId: red.userId,
+                lobbyId, 
                 lobbySlot: { tag: 'RedPlayer' as const },
             });
             await red.sync();
@@ -116,7 +116,7 @@ describe.skipIf(!hasServerToken())('Anonymous Play', () => {
             await outsider.call.joinLobby({ lobbyId, joinCode: '', password: '' });
             await outsider.sync();
             await host.call.setTeamSlot({
-                lobbyId, targetUserId: outsider.userId,
+                lobbyId, targetJoinSeq: 0, // S10: rewrite (A74: was targetUserId: outsider.userId; take the seat from view_my_lobby_members)
                 lobbySlot: { tag: 'BlueCoach' as const },
             });
             await outsider.sync();
@@ -186,7 +186,7 @@ describe.skipIf(!hasServerToken())('Anonymous Play', () => {
             await blue.call.joinLobby({ lobbyId, joinCode: '', password: '' });
             await blue.sync();
             await blue.call.setTeamSlot({
-                lobbyId, targetUserId: blue.userId,
+                lobbyId, 
                 lobbySlot: { tag: 'BluePlayer' as const },
             });
             await blue.sync();
@@ -243,7 +243,7 @@ describe.skipIf(!hasServerToken())('Anonymous Play', () => {
             await blue.call.joinLobby({ lobbyId, joinCode: '', password: '' });
             await blue.sync();
             await blue.call.setTeamSlot({
-                lobbyId, targetUserId: blue.userId,
+                lobbyId, 
                 lobbySlot: { tag: 'BluePlayer' as const },
             });
             await blue.sync();

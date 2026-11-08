@@ -59,11 +59,11 @@ async function setup2v1Drafting(
     await red.call.joinLobby({ lobbyId: lobby.id, joinCode: '', password: '' });
     await red.sync(500);
 
-    await blue1.call.setTeamSlot({ lobbyId: lobby.id, targetUserId: blue1.userId, lobbySlot: { tag: 'BluePlayer' as const } });
+    await blue1.call.setTeamSlot({ lobbyId: lobby.id, lobbySlot: { tag: 'BluePlayer' as const } });
     await blue1.sync(500);
-    await blue2.call.setTeamSlot({ lobbyId: lobby.id, targetUserId: blue2.userId, lobbySlot: { tag: 'BluePlayer' as const } });
+    await blue2.call.setTeamSlot({ lobbyId: lobby.id, lobbySlot: { tag: 'BluePlayer' as const } });
     await blue2.sync(500);
-    await red.call.setTeamSlot({ lobbyId: lobby.id, targetUserId: red.userId, lobbySlot: { tag: 'RedPlayer' as const } });
+    await red.call.setTeamSlot({ lobbyId: lobby.id, lobbySlot: { tag: 'RedPlayer' as const } });
     await red.sync(500);
 
     await blue1.call.confirmReady({ lobbyId: lobby.id });
@@ -200,9 +200,9 @@ describe('leave_lobby during active match', () => {
             await spectator.call.joinLobby({ lobbyId: lobby.id, joinCode: '', password: '' });
             await spectator.sync(500);
 
-            await blue.call.setTeamSlot({ lobbyId: lobby.id, targetUserId: blue.userId, lobbySlot: { tag: 'BluePlayer' as const } });
+            await blue.call.setTeamSlot({ lobbyId: lobby.id, lobbySlot: { tag: 'BluePlayer' as const } });
             await blue.sync(500);
-            await red.call.setTeamSlot({ lobbyId: lobby.id, targetUserId: red.userId, lobbySlot: { tag: 'RedPlayer' as const } });
+            await red.call.setTeamSlot({ lobbyId: lobby.id, lobbySlot: { tag: 'RedPlayer' as const } });
             await red.sync(500);
             // spectator stays on Spectator slot (default)
 

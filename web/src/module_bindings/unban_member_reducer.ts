@@ -12,5 +12,5 @@ import {
 
 export default {
   lobbyId: __t.u32(),
-  userId: __t.u32(),
+  bannedJoinSeq: __t.u32(),
 };

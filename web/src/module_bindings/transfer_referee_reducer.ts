@@ -12,5 +12,5 @@ import {
 
 export default {
   lobbyId: __t.u32(),
-  targetUserId: __t.u32(),
+  targetJoinSeq: __t.u32(),
 };

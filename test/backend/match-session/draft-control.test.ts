@@ -51,12 +51,12 @@ async function setupDraftLobby(
 
     await blue.call.joinLobby({ lobbyId: lobby.id, joinCode: '', password: '' });
     await blue.sync();
-    await blue.call.setTeamSlot({ lobbyId: lobby.id, targetUserId: blue.userId, lobbySlot: { tag: 'BluePlayer' as const } });
+    await blue.call.setTeamSlot({ lobbyId: lobby.id, lobbySlot: { tag: 'BluePlayer' as const } });
     await blue.sync();
 
     await red.call.joinLobby({ lobbyId: lobby.id, joinCode: '', password: '' });
     await red.sync();
-    await red.call.setTeamSlot({ lobbyId: lobby.id, targetUserId: red.userId, lobbySlot: { tag: 'RedPlayer' as const } });
+    await red.call.setTeamSlot({ lobbyId: lobby.id, lobbySlot: { tag: 'RedPlayer' as const } });
     await red.sync();
 
     await blue.call.confirmReady({ lobbyId: lobby.id });
@@ -127,20 +127,20 @@ describe('Draft Controls', () => {
             // Blue player joins and takes BluePlayer slot
             await bluePlayer.call.joinLobby({ lobbyId, joinCode: '', password: '' });
             await bluePlayer.sync();
-            await bluePlayer.call.setTeamSlot({ lobbyId, targetUserId: bluePlayer.userId, lobbySlot: { tag: 'BluePlayer' as const } });
+            await bluePlayer.call.setTeamSlot({ lobbyId, lobbySlot: { tag: 'BluePlayer' as const } });
             await bluePlayer.sync();
 
             // Blue coach joins and takes BlueCoach slot (assigned by host)
             await blueCoach.call.joinLobby({ lobbyId, joinCode: '', password: '' });
             await blueCoach.sync();
-            await host.call.setTeamSlot({ lobbyId, targetUserId: blueCoach.userId, lobbySlot: { tag: 'BlueCoach' as const } });
+            await host.call.setTeamSlot({ lobbyId, targetJoinSeq: 0, lobbySlot: { tag: 'BlueCoach' as const } }); // S10: rewrite (A74: was targetUserId: blueCoach.userId; take the seat from view_my_lobby_members)
             await host.sync();
             await blueCoach.sync();
 
             // Red player joins
             await redPlayer.call.joinLobby({ lobbyId, joinCode: '', password: '' });
             await redPlayer.sync();
-            await redPlayer.call.setTeamSlot({ lobbyId, targetUserId: redPlayer.userId, lobbySlot: { tag: 'RedPlayer' as const } });
+            await redPlayer.call.setTeamSlot({ lobbyId, lobbySlot: { tag: 'RedPlayer' as const } });
             await redPlayer.sync();
 
             // Coaches don't need to confirm — only non-coach players confirm
@@ -180,20 +180,20 @@ describe('Draft Controls', () => {
             // Blue player
             await bluePlayer.call.joinLobby({ lobbyId, joinCode: '', password: '' });
             await bluePlayer.sync();
-            await bluePlayer.call.setTeamSlot({ lobbyId, targetUserId: bluePlayer.userId, lobbySlot: { tag: 'BluePlayer' as const } });
+            await bluePlayer.call.setTeamSlot({ lobbyId, lobbySlot: { tag: 'BluePlayer' as const } });
             await bluePlayer.sync();
 
             // Blue coach (assigned by host)
             await blueCoach.call.joinLobby({ lobbyId, joinCode: '', password: '' });
             await blueCoach.sync();
-            await host.call.setTeamSlot({ lobbyId, targetUserId: blueCoach.userId, lobbySlot: { tag: 'BlueCoach' as const } });
+            await host.call.setTeamSlot({ lobbyId, targetJoinSeq: 0, lobbySlot: { tag: 'BlueCoach' as const } }); // S10: rewrite (A74: was targetUserId: blueCoach.userId; take the seat from view_my_lobby_members)
             await host.sync();
             await blueCoach.sync();
 
             // Red player
             await redPlayer.call.joinLobby({ lobbyId, joinCode: '', password: '' });
             await redPlayer.sync();
-            await redPlayer.call.setTeamSlot({ lobbyId, targetUserId: redPlayer.userId, lobbySlot: { tag: 'RedPlayer' as const } });
+            await redPlayer.call.setTeamSlot({ lobbyId, lobbySlot: { tag: 'RedPlayer' as const } });
             await redPlayer.sync();
 
             await bluePlayer.call.confirmReady({ lobbyId });
@@ -259,19 +259,19 @@ describe('Draft Controls', () => {
             // blue1 takes BluePlayer slot (will be auto-assigned captain as first player)
             await blue1.call.joinLobby({ lobbyId, joinCode: '', password: '' });
             await blue1.sync();
-            await blue1.call.setTeamSlot({ lobbyId, targetUserId: blue1.userId, lobbySlot: { tag: 'BluePlayer' as const } });
+            await blue1.call.setTeamSlot({ lobbyId, lobbySlot: { tag: 'BluePlayer' as const } });
             await blue1.sync();
 
             // blue2 also takes BluePlayer slot (second player, no captain)
             await blue2.call.joinLobby({ lobbyId, joinCode: '', password: '' });
             await blue2.sync();
-            await blue2.call.setTeamSlot({ lobbyId, targetUserId: blue2.userId, lobbySlot: { tag: 'BluePlayer' as const } });
+            await blue2.call.setTeamSlot({ lobbyId, lobbySlot: { tag: 'BluePlayer' as const } });
             await blue2.sync();
 
             // red player
             await red.call.joinLobby({ lobbyId, joinCode: '', password: '' });
             await red.sync();
-            await red.call.setTeamSlot({ lobbyId, targetUserId: red.userId, lobbySlot: { tag: 'RedPlayer' as const } });
+            await red.call.setTeamSlot({ lobbyId, lobbySlot: { tag: 'RedPlayer' as const } });
             await red.sync();
 
             // All players confirm
@@ -326,19 +326,19 @@ describe('Draft Controls', () => {
             // blue1 joins first (auto-captain)
             await blue1.call.joinLobby({ lobbyId, joinCode: '', password: '' });
             await blue1.sync();
-            await blue1.call.setTeamSlot({ lobbyId, targetUserId: blue1.userId, lobbySlot: { tag: 'BluePlayer' as const } });
+            await blue1.call.setTeamSlot({ lobbyId, lobbySlot: { tag: 'BluePlayer' as const } });
             await blue1.sync();
 
             // blue2 joins second (non-captain)
             await blue2.call.joinLobby({ lobbyId, joinCode: '', password: '' });
             await blue2.sync();
-            await blue2.call.setTeamSlot({ lobbyId, targetUserId: blue2.userId, lobbySlot: { tag: 'BluePlayer' as const } });
+            await blue2.call.setTeamSlot({ lobbyId, lobbySlot: { tag: 'BluePlayer' as const } });
             await blue2.sync();
 
             // red player
             await red.call.joinLobby({ lobbyId, joinCode: '', password: '' });
             await red.sync();
-            await red.call.setTeamSlot({ lobbyId, targetUserId: red.userId, lobbySlot: { tag: 'RedPlayer' as const } });
+            await red.call.setTeamSlot({ lobbyId, lobbySlot: { tag: 'RedPlayer' as const } });
             await red.sync();
 
             await blue1.call.confirmReady({ lobbyId });

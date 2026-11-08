@@ -328,14 +328,17 @@ export const view_my_lobby_members = spacetimedb.view(
 
 // ---------------------------------------------------------------------------
 // 6. view_my_lobby_bans (PAGE-MAP D4; A44(1)): LobbyBan rows of the lobbies where the caller is the host or holds
-//    the referee flag (the ban list of the context menu; unban_member takes the banned user's id). bannedByUserId is
+//    the referee flag (the ban list of the context menu; A74(2): unban_member takes the row's `bannedJoinSeq`, the
+//    seat the member held when banned, so an anonymized caller can lift a ban it cannot name). bannedByUserId is
 //    withheld when the lobby's anonymity applies to the caller (A37). S9a fix (A37): the banned user follows
-//    hideUserId (a former member of an anonymous lobby is hidden): bannedUserId 0 and the label "Banned player" (the
-//    seat label if still seated); the row has no other key (LobbyBan's PK is (lobbyId, bannedUserId)).
+//    hideUserId (a former member of an anonymous lobby is hidden): bannedUserId 0 and the label "Banned player" (a
+//    banned user holds no member row while banned); `bannedJoinSeq` (a unique key of the row with lobbyId) identifies
+//    the ban to the client and to unban_member.
 // ---------------------------------------------------------------------------
 const LobbyBanViewRow = t.row('LobbyBanViewRow', {
     lobbyId: t.u32(),
     bannedUserId: t.u32(),
+    bannedJoinSeq: t.u32(),
     label: t.string(),
     bannedByUserId: t.u32().optional(),
     createdDate: t.timestamp(),
@@ -359,6 +362,7 @@ export const view_my_lobby_bans = spacetimedb.view(
                 results.push({
                     lobbyId: ban.lobbyId,
                     bannedUserId: hideBanned ? 0 : ban.bannedUserId,
+                    bannedJoinSeq: ban.bannedJoinSeq,
                     label: hideBanned
                         ? anonymousLabelOr(ctx, lobby.id, ban.bannedUserId, 'Banned player')
                         : resolveUserLabel(ctx, ban.bannedUserId).displayName,

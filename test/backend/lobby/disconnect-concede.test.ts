@@ -71,9 +71,9 @@ async function setupDraftingLobby(
     await red.call.joinLobby({ lobbyId: lobby.id, joinCode: '', password: '' });
     await red.sync(500);
 
-    await blue.call.setTeamSlot({ lobbyId: lobby.id, targetUserId: blue.userId, lobbySlot: { tag: 'BluePlayer' as const } });
+    await blue.call.setTeamSlot({ lobbyId: lobby.id, lobbySlot: { tag: 'BluePlayer' as const } });
     await blue.sync(500);
-    await red.call.setTeamSlot({ lobbyId: lobby.id, targetUserId: red.userId, lobbySlot: { tag: 'RedPlayer' as const } });
+    await red.call.setTeamSlot({ lobbyId: lobby.id, lobbySlot: { tag: 'RedPlayer' as const } });
     await red.sync(500);
 
     await blue.call.confirmReady({ lobbyId: lobby.id });
@@ -132,7 +132,7 @@ describe('Concede / Forfeit / Defer', () => {
 
                 await blue.call.joinLobby({ lobbyId: lobby.id, joinCode: '', password: '' });
                 await blue.sync(500);
-                await blue.call.setTeamSlot({ lobbyId: lobby.id, targetUserId: blue.userId, lobbySlot: { tag: 'BluePlayer' as const } });
+                await blue.call.setTeamSlot({ lobbyId: lobby.id, lobbySlot: { tag: 'BluePlayer' as const } });
                 await blue.sync(500);
 
                 // Lobby is still in Waiting — concede should be rejected

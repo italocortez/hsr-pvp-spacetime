@@ -232,7 +232,7 @@ _Superseded in Phase S8f execution (DECISIONS.md A68)._ A live-stage Leave trans
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
 | lobbyId | u32 | Yes | Lobby |
-| targetUserId | u32 | Yes | User to kick |
+| targetUserId | u32 | Yes | User to kick _Superseded in Phase S9c execution (DECISIONS.md A74)._ |
 
 **Flow:**
 1. Authenticate caller
@@ -260,7 +260,7 @@ _Superseded in Phase S8f execution (DECISIONS.md A68)._ A live-stage Leave trans
 | No kick permission | "Only the host, moderators, admins, or an authorized referee can kick members." |
 | Kicking self | "Cannot kick yourself." |
 | Kicking host | "Cannot kick the host." |
-| Target not a member | "Target user is not a member of this lobby." |
+| Target not a member | "Target user is not a member of this lobby." _Superseded in Phase S9c execution (DECISIONS.md A74): the seat is resolved first; an unknown seat is rejected with "No member sits at seat N of this lobby."._ |
 
 ---
 
@@ -274,7 +274,7 @@ _Superseded in Phase S8f execution (DECISIONS.md A68)._ A live-stage Leave trans
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
 | lobbyId | u32 | Yes | Lobby |
-| targetUserId | u32 | Yes | User to ban |
+| targetUserId | u32 | Yes | User to ban _Superseded in Phase S9c execution (DECISIONS.md A74)._ |
 
 **Flow:**
 1. Authenticate caller
@@ -356,7 +356,7 @@ _Superseded in Phase S8f execution (DECISIONS.md A68)._ A live-stage Leave trans
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
 | lobbyId | u32 | Yes | Lobby |
-| targetUserId | u32 | Yes | User to move (can be self) |
+| targetUserId | u32 | Yes | User to move (can be self) _Superseded in Phase S9c execution (DECISIONS.md A74)._ |
 | lobbySlot | LobbySlot | Yes | Target slot |
 
 **Flow:**
@@ -465,7 +465,7 @@ _Superseded in Phase S8f execution (DECISIONS.md A68)._ A live-stage Leave trans
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
 | lobbyId | u32 | Yes | Lobby |
-| targetUserId | u32 | Yes | User to designate as captain |
+| targetUserId | u32 | Yes | User to designate as captain _Superseded in Phase S9c execution (DECISIONS.md A74)._ |
 
 **Flow:**
 1. Authenticate caller
@@ -741,72 +741,72 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(1))._
 
 ### Kick Member
 **Given:** Lobby #10, user #5 is host, user #7 is a member
-**When:** User #5 calls `kick_member(lobbyId=10, targetUserId=7)`
+**When:** User #5 calls `kick_member(lobbyId=10, targetUserId=7)` _Superseded in Phase S9c execution (DECISIONS.md A74)._
 **Then:** User #7's LobbyMember deleted. currentPlayerCount decremented. System chat: "{name} was kicked from the lobby."
 
 ### Kick by Referee (refereeCanKick=true)
 **Given:** Lobby #10 with refereeCanKick=true, user #6 is referee (not host)
-**When:** User #6 calls `kick_member(lobbyId=10, targetUserId=7)`
+**When:** User #6 calls `kick_member(lobbyId=10, targetUserId=7)` _Superseded in Phase S9c execution (DECISIONS.md A74)._
 **Then:** Kick succeeds.
 
 ### Kick by Referee (refereeCanKick=false)
 **Given:** Lobby #10 with refereeCanKick=false, user #6 is referee (not host, not mod/admin)
-**When:** User #6 calls `kick_member(lobbyId=10, targetUserId=7)`
+**When:** User #6 calls `kick_member(lobbyId=10, targetUserId=7)` _Superseded in Phase S9c execution (DECISIONS.md A74)._
 **Then:** Throws "Only the host, moderators, admins, or an authorized referee can kick members."
 
 ### Kick Self (Blocked)
 **Given:** Lobby #10, user #5 is host
-**When:** User #5 calls `kick_member(lobbyId=10, targetUserId=5)`
+**When:** User #5 calls `kick_member(lobbyId=10, targetUserId=5)` _Superseded in Phase S9c execution (DECISIONS.md A74)._
 **Then:** Throws "Cannot kick yourself."
 
 ### Kick Host (Blocked)
 **Given:** Lobby #10, user #5 is host, user #6 is admin
-**When:** User #6 calls `kick_member(lobbyId=10, targetUserId=5)`
+**When:** User #6 calls `kick_member(lobbyId=10, targetUserId=5)` _Superseded in Phase S9c execution (DECISIONS.md A74)._
 **Then:** Throws "Cannot kick the host."
 
 ### Ban Member
 **Given:** Lobby #10, user #5 is host, user #7 is a member
-**When:** User #5 calls `ban_member(lobbyId=10, targetUserId=7)`
+**When:** User #5 calls `ban_member(lobbyId=10, targetUserId=7)` _Superseded in Phase S9c execution (DECISIONS.md A74)._
 **Then:** LobbyBan row inserted. User #7's LobbyMember deleted. currentPlayerCount decremented. System chat: "{name} was banned from the lobby."
 
 ### Ban Non-Member
 **Given:** Lobby #10, user #5 is host, user #7 is NOT a current member
-**When:** User #5 calls `ban_member(lobbyId=10, targetUserId=7)`
-**Then:** LobbyBan row inserted (preventive ban). No LobbyMember deletion (nothing to delete). currentPlayerCount unchanged.
+**When:** User #5 calls `ban_member(lobbyId=10, targetUserId=7)` _Superseded in Phase S9c execution (DECISIONS.md A74)._
+**Then:** LobbyBan row inserted (preventive ban). No LobbyMember deletion (nothing to delete). currentPlayerCount unchanged. _Superseded in Phase S9c execution (DECISIONS.md A74): the preventive ban is gone; `ban_member` takes a seat, so its target always holds a member row (A74(2)); a user without a row is banned when they come back (S9c-L1)._
 
 ### Set Team Slot (Self-Move to BluePlayer)
 **Given:** Lobby #10 (teamSize=3, Waiting), user #5 is Spectator
-**When:** User #5 calls `set_team_slot(lobbyId=10, targetUserId=5, lobbySlot=BluePlayer)`
+**When:** User #5 calls `set_team_slot(lobbyId=10, targetUserId=5, lobbySlot=BluePlayer)` _Superseded in Phase S9c execution (DECISIONS.md A74)._
 **Then:** User #5's lobbySlot changed to BluePlayer. isConfirmed reset to false.
 
 ### Set Team Slot (Host Moves Other to RedPlayer)
 **Given:** Lobby #10, user #5 is host, user #7 is Spectator
-**When:** User #5 calls `set_team_slot(lobbyId=10, targetUserId=7, lobbySlot=RedPlayer)`
+**When:** User #5 calls `set_team_slot(lobbyId=10, targetUserId=7, lobbySlot=RedPlayer)` _Superseded in Phase S9c execution (DECISIONS.md A74)._
 **Then:** User #7 moved to RedPlayer. isConfirmed=false.
 
 ### Set Team Slot (Coach Assignment by Host)
 **Given:** Lobby #10, user #5 is host, user #7 is Spectator, no existing Blue coach
-**When:** User #5 calls `set_team_slot(lobbyId=10, targetUserId=7, lobbySlot=BlueCoach)`
+**When:** User #5 calls `set_team_slot(lobbyId=10, targetUserId=7, lobbySlot=BlueCoach)` _Superseded in Phase S9c execution (DECISIONS.md A74)._
 **Then:** User #7 moved to BlueCoach.
 
 ### Set Team Slot (Coach Self-Assignment Blocked)
 **Given:** Lobby #10, user #7 is a regular member (not host, not referee)
-**When:** User #7 calls `set_team_slot(lobbyId=10, targetUserId=7, lobbySlot=BlueCoach)`
+**When:** User #7 calls `set_team_slot(lobbyId=10, targetUserId=7, lobbySlot=BlueCoach)` _Superseded in Phase S9c execution (DECISIONS.md A74)._
 **Then:** Throws "Only the lobby host or referee can assign the coach role."
 
 ### Set Team Slot (Team Full)
 **Given:** Lobby #10 (teamSize=1), Blue team already has 1 player
-**When:** `set_team_slot(lobbyId=10, targetUserId=7, lobbySlot=BluePlayer)`
+**When:** `set_team_slot(lobbyId=10, targetUserId=7, lobbySlot=BluePlayer)` _Superseded in Phase S9c execution (DECISIONS.md A74)._
 **Then:** Throws "Blue team is full (max 1 players)."
 
 ### Set Team Slot (Duplicate Coach)
 **Given:** Lobby #10, Red team already has a coach
-**When:** Host calls `set_team_slot(lobbyId=10, targetUserId=7, lobbySlot=RedCoach)`
+**When:** Host calls `set_team_slot(lobbyId=10, targetUserId=7, lobbySlot=RedCoach)` _Superseded in Phase S9c execution (DECISIONS.md A74)._
 **Then:** Throws "Red team already has a coach."
 
 ### Set Team Slot (Spectator Slots Full)
 **Given:** Lobby #10 with 12 spectators
-**When:** `set_team_slot(lobbyId=10, targetUserId=7, lobbySlot=Spectator)` (user #7 is BluePlayer)
+**When:** `set_team_slot(lobbyId=10, targetUserId=7, lobbySlot=Spectator)` (user #7 is BluePlayer) _Superseded in Phase S9c execution (DECISIONS.md A74)._
 **Then:** Throws "Spectator slots are full (max 12)."
 
 ### Confirm Ready
@@ -836,27 +836,27 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(1))._
 
 ### Set Captain
 **Given:** Lobby #10, user #7 is BluePlayer, no existing Blue captain
-**When:** Host calls `set_captain(lobbyId=10, targetUserId=7)`
+**When:** Host calls `set_captain(lobbyId=10, targetUserId=7)` _Superseded in Phase S9c execution (DECISIONS.md A74)._
 **Then:** User #7's isCaptain set to true.
 
 ### Set Captain (Demotes Existing)
 **Given:** Lobby #10, user #6 is Blue captain (isCaptain=true), user #7 is BluePlayer
-**When:** Host calls `set_captain(lobbyId=10, targetUserId=7)`
+**When:** Host calls `set_captain(lobbyId=10, targetUserId=7)` _Superseded in Phase S9c execution (DECISIONS.md A74)._
 **Then:** User #6's isCaptain set to false. User #7's isCaptain set to true.
 
 ### Set Captain (Spectator Blocked)
 **Given:** Lobby #10, user #7 is Spectator
-**When:** Host calls `set_captain(lobbyId=10, targetUserId=7)`
+**When:** Host calls `set_captain(lobbyId=10, targetUserId=7)` _Superseded in Phase S9c execution (DECISIONS.md A74)._
 **Then:** Throws "Captain must be a team member (Blue or Red), not a spectator."
 
 ### Set Captain (Coach Blocked)
 **Given:** Lobby #10, user #7 is BlueCoach
-**When:** Host calls `set_captain(lobbyId=10, targetUserId=7)`
+**When:** Host calls `set_captain(lobbyId=10, targetUserId=7)` _Superseded in Phase S9c execution (DECISIONS.md A74)._
 **Then:** Throws "A coach cannot be assigned as captain."
 
 ### Set Captain (Referee Without Power)
 **Given:** Lobby #10 with refereeCanSetCaptain=false, user #6 is referee (not host, not admin)
-**When:** User #6 calls `set_captain(lobbyId=10, targetUserId=7)`
+**When:** User #6 calls `set_captain(lobbyId=10, targetUserId=7)` _Superseded in Phase S9c execution (DECISIONS.md A74)._
 **Then:** Throws "Only the host, an authorized referee, or an admin can assign captains."
 
 ### Create Lobby Preset (TO)
@@ -1099,7 +1099,7 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(2))._
 
 ### Unban Member (Phase S6 execution, A45(3))
 **Given:** The host banned r2 from lobby #10
-**When:** Player b1 (no referee power) calls `unban_member(10, r2)`; then the host does; then the host repeats it
+**When:** Player b1 (no referee power) calls `unban_member(10, r2)`; then the host does; then the host repeats it _Superseded in Phase S9c execution (DECISIONS.md A74)._
 **Then:** b1 is rejected ("Only the host, moderators, admins, or an authorized referee can lift a lobby ban."); the host's call deletes the `LobbyBan` row and r2 can join again; the repeat is rejected ("This user is not banned from the lobby."). A referee may unban while `refereeCanKick` is on; Moderator+ may unban without being a member.
 
 ### Guest Burst Trips the Kill Switch (Phase S6 execution, A57, A58)
@@ -1308,6 +1308,28 @@ _Superseded in Phase S8g execution (DECISIONS.md A70)._ Read "team1" as "the Blu
 **When** a user who is in no lobby calls `join_lobby`
 **Then** rejected: "Spectator slots are full (max 0)."
 
+## Acceptance Scenarios (Phase S9c execution)
+
+### S9c-L1 Members are targeted by seat number (A74(1)(4))
+**Given** an anonymous lobby #10 in Waiting: the host holds seat 1, b1 seat 2, r1 seat 3; `refereeCanKick` is off
+**When** the host calls `kick_member(10, targetJoinSeq=3)`; then `kick_member(10, targetJoinSeq=9)`; then `ban_member`, `set_captain` or `transfer_referee` with `targetJoinSeq=9`
+**Then** r1's row is removed exactly as a kick by user id was (flags, `LobbyMemberAccount` rows, count, the System chat line); every call naming seat 9 is rejected "No member sits at seat 9 of this lobby." The guard order is lobby → caller checks → seat: "Lobby not found." stays first, then the caller's membership and permission checks, then the seat, so a non-member caller meets the membership / permission rejection and learns nothing about which seats are occupied (`transfer_referee` has no Lobby lookup: caller membership and referee flag, then the seat; `set_team_slot` with a seat from a non-member: `ensureHostOrAbove`, then the seat). No argument or rejection names a user id; the self / host checks ("Cannot kick yourself.", "Cannot kick the host.", "You are already the referee.") run on the resolved seat
+
+### S9c-L2 A self-move omits the seat (A74(1))
+**Given** lobby #10 in Waiting, b1 (seat 2) is a Spectator and not the host
+**When** b1 calls `set_team_slot(10, lobbySlot=BluePlayer)` with no `targetJoinSeq`; later `set_team_slot(10, targetJoinSeq=2, lobbySlot=Spectator)`
+**Then** both are self-moves (membership only, no host check): b1 sits on BluePlayer, then on Spectator, unconfirmed each time. b1 naming another seat is rejected "Only the host, moderators, or admins can perform this action."
+
+### S9c-L3 A ban records the seat; the unban names it (A74(2))
+**Given** lobby #10, r1 holds seat 3 (present, or away in a live stage under the A68(6) rule)
+**When** the host calls `ban_member(10, targetJoinSeq=3)`; then `unban_member(10, bannedJoinSeq=3)`; then the same unban again
+**Then** the `LobbyBan` row carries `bannedJoinSeq = 3` and r1's row is removed as for a kick; `view_my_lobby_bans` and `view_admin_lobby_bans` show `bannedJoinSeq = 3`; the first unban deletes the ban and r1 may join again; the repeat is rejected "No ban is recorded for seat 3 of this lobby." A user who holds no row in the lobby cannot be banned (no seat to name)
+
+### S9c-L4 Seat numbers are never reused (A74(3))
+**Given** lobby #10 in Waiting with seats 1, 2, 3 taken (`Lobby.lastJoinSeq = 3`)
+**When** the member on seat 3 leaves (or is kicked), then a new user joins
+**Then** the new member gets seat 4 and `lastJoinSeq` becomes 4; seat 3 names the departed membership for the lobby's lifetime (a ban of seat 3 stays unambiguous). A member who returns through `join_lobby`'s reconnect path keeps their seat; the host's seat is 1 in a casual and a tournament lobby alike
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -1363,7 +1385,7 @@ _Superseded in Phase S8g execution (DECISIONS.md A70)._ Read "team1" as "the Blu
 | A22a / A48 / F5: `client_disconnected` marks offline and schedules `RefereeTransferCheck` (15 s) only when the user's last device dropped; `run_referee_transfer_check` decides referee (A22(5) order by joinSeq) / captain / host transfers and the player-only auto-pause; supersedes the Phase 10 row "clientDisconnected: auto-pause drafting…, flag transfers permanent" | Phase S4 execution (DECISIONS.md A22(5), A22a, A48) | 2026-11-06 |
 | F6: `leave_lobby` spreads the re-read Lobby row after `transferHost` | Phase S4 execution (DECISIONS.md A22(2)) | 2026-11-06 |
 | F7: `claim_forfeit(lobbyId, forfeitingTeamSide)`; the exclusive referee must name the team; section added to this contract | Phase S4 execution (DECISIONS.md A22(2)) | 2026-11-06 |
-| R4: `LobbyMember.joinSeq` assigned at insert (host = 1, then max + 1) | Phase S4 execution (DECISIONS.md A22(5), A37) | 2026-11-06 |
+| R4: `LobbyMember.joinSeq` assigned at insert (host = 1, then max + 1) | Phase S4 execution (DECISIONS.md A22(5), A37) | 2026-11-06 _Superseded in Phase S9c execution (DECISIONS.md A74)._ |
 | B-4: cursor bounds + per-member throttle (`cursorMinIntervalMs`); scenarios "Cursor Throttle", "Cursor Out of Bounds" added | Phase S5 execution (DECISIONS.md A43, D-B5) | 2026-11-06 |
 | B-7 / A42: `create_lobby` hourly cap (guests included), guest kill switch, preset cap; scenarios "Lobby Creation Cap", "Guest Kill Switch", "Preset Cap" and two edge cases added | Phase S5 execution (DECISIONS.md A42, A43) | 2026-11-06 |
 | Scenarios "Create Lobby With Series Settings", "bestOf Capped to 1 or 3", "Series Settings Editable in Waiting", "Tournament Lobby Locks bestOf and lineupFormat", "Cost Set Must Be Selectable and Cover the Mode", "Preset Stores the Series Fields", "System Preset", "Shuffle Teams", "Unban Member", "Guest Burst Trips the Kill Switch" added | Phase S6 execution (DECISIONS.md A27, A28, A33, A33a, A38, A40, A45, A57, A58, D-A8; backlog #2, #6-#9) | 2026-11-06 |
@@ -1375,6 +1397,7 @@ _Superseded in Phase S8g execution (DECISIONS.md A70)._ Read "team1" as "the Blu
 | Fix pass: S8f-L15 (`maxSpectators` caps watchers, not seat candidates; S8f-L10 narrowed); abandoning an away row with `abandonCurrentMatch` first hands any host / captain / referee flag still on it to a candidate in the A22(5) order, online first then any (A68(4)(7)) | Phase S8f execution (DECISIONS.md A68) | 2026-11-08 |
 | Fix pass 2: user deletion is a row removal (A68(7)): a deleted user's membership in Waiting / AwaitingResult (and a spectator's or coach's in any stage) is removed as a leave; a player's row in a live stage is kept away and abandoned (A68(6)), offline for the forfeit test (A68(3)) and never a host / captain / referee candidate | Phase S8f execution (DECISIONS.md A68) | 2026-11-08 |
 | S9a fix pass (A37): join / leave / away / return / kick / ban System chat lines carry `metadata {event, subjectUserId}` and the subject's seat label; `view_my_lobby_chat` renders them per reader, so an anonymized member is never named (chat contract "S9a fix: System Line About a Hidden Member"); `view_my_lobby_bans` masks a hidden banned user (0, "Banned player") | Phase S9a execution (DECISIONS.md A37) | 2026-11-08 |
+| Scenarios S9c-L1..L4: `kick_member`, `ban_member`, `set_team_slot` (optional, omitted = self), `set_captain`, `transfer_referee` take `targetJoinSeq`, `unban_member` takes `bannedJoinSeq`; rejection "No member sits at seat N of this lobby." / "No ban is recorded for seat N of this lobby."; `LobbyBan.bannedJoinSeq`; `Lobby.lastJoinSeq` (seat numbers never reused; supersedes R4's max + 1); the `targetUserId` parameter rows and scenario calls and "Ban Non-Member" marked superseded | Phase S9c execution (DECISIONS.md A74) | 2026-11-08 |
 
 ---
 

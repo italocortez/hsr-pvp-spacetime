@@ -57,12 +57,12 @@ async function setupDraftLobby(
 
     await blue.call.joinLobby({ lobbyId: lobby.id, joinCode: '', password: '' });
     await blue.sync();
-    await blue.call.setTeamSlot({ lobbyId: lobby.id, targetUserId: blue.userId, lobbySlot: { tag: 'BluePlayer' as const } });
+    await blue.call.setTeamSlot({ lobbyId: lobby.id, lobbySlot: { tag: 'BluePlayer' as const } });
     await blue.sync();
 
     await red.call.joinLobby({ lobbyId: lobby.id, joinCode: '', password: '' });
     await red.sync();
-    await red.call.setTeamSlot({ lobbyId: lobby.id, targetUserId: red.userId, lobbySlot: { tag: 'RedPlayer' as const } });
+    await red.call.setTeamSlot({ lobbyId: lobby.id, lobbySlot: { tag: 'RedPlayer' as const } });
     await red.sync();
 
     await blue.call.confirmReady({ lobbyId: lobby.id });
@@ -449,12 +449,12 @@ describe.skipIf(!hasServerToken())('MMR + Leaderboard + Stats', () => {
             // Blue + Red join as players
             await banBlue.call.joinLobby({ lobbyId, joinCode: '', password: '' });
             await banBlue.sync();
-            await banBlue.call.setTeamSlot({ lobbyId, targetUserId: banBlue.userId, lobbySlot: { tag: 'BluePlayer' as const } });
+            await banBlue.call.setTeamSlot({ lobbyId, lobbySlot: { tag: 'BluePlayer' as const } });
             await banBlue.sync();
 
             await banRed.call.joinLobby({ lobbyId, joinCode: '', password: '' });
             await banRed.sync();
-            await banRed.call.setTeamSlot({ lobbyId, targetUserId: banRed.userId, lobbySlot: { tag: 'RedPlayer' as const } });
+            await banRed.call.setTeamSlot({ lobbyId, lobbySlot: { tag: 'RedPlayer' as const } });
             await banRed.sync();
 
             // Spectator joins (stays as Spectator slot — default after join)
@@ -814,7 +814,6 @@ describe.skipIf(!hasServerToken())('Phase 12.3: snapshot-backed MMR + D-G guard 
             await blue.sync(1500);
             await blue.call.setTeamSlot({
                 lobbyId: guardLobbyId,
-                targetUserId: blue.userId,
                 lobbySlot: { tag: 'BluePlayer' as const },
             });
             await blue.sync();

@@ -3,17 +3,21 @@ import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser } from '@module/helpers/identity/ensurePermissions';
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { hasTournamentPermission } from '@module/helpers/tournament/tournamentPermissions';
+import { resolveSeat } from '@module/helpers/lobby/lobbyHelpers';
 
 // ─── transfer_referee ─────────────────────────────────────────────────────────
 // Transfers the referee flag from the caller to another lobby member.
 // Permission: current referee of the lobby.
+// A74(1): the target is a seat number (`targetJoinSeq`), resolved to the member row. The reducer has no Lobby
+// lookup; the seat is resolved after the caller's membership and referee checks, so a non-referee learns nothing
+// about the lobby's seats.
 
 export const transfer_referee = spacetimedb.reducer(
     {
         lobbyId: t.u32(),
-        targetUserId: t.u32(),
+        targetJoinSeq: t.u32(),
     },
-    (ctx, { lobbyId, targetUserId }) => {
+    (ctx, { lobbyId, targetJoinSeq }) => {
         const user = getAuthenticatedUser(ctx);
 
         // Find caller's LobbyMember row
@@ -27,15 +31,13 @@ export const transfer_referee = spacetimedb.reducer(
             throw new SenderError('You are not the referee of this lobby.');
         }
 
+        // A74(1): seat -> member row ("No member sits at seat N of this lobby.")
+        const targetMember = resolveSeat(ctx, lobbyId, targetJoinSeq);
+        const targetUserId = targetMember.userId;
+
         // Validate target is different from caller
         if (targetUserId === user.id) {
             throw new SenderError('You are already the referee.');
-        }
-
-        // Find target's LobbyMember row
-        const targetMember = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, targetUserId])][0];
-        if (!targetMember) {
-            throw new SenderError('Target user is not a member of this lobby.');
         }
 
         // Remove referee flag from caller

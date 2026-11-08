@@ -153,8 +153,8 @@ by an admin reducer.
   chance that a public character set fingerprints an anonymized `OpenRoster` seat is part of the A40 accepted risk
   ([../anonymous-play/contract.md](../anonymous-play/contract.md) S9b-A2).
 - **`view_my_roster_visibility`** (per-sender, the lobby room's Account Selection modal and roster drawer): A40 replaces
-  the D-18 override (anonymity no longer forces ClosedNoRating on opponents); self, teammates and any referee (D-14) see
-  roster and rating; others follow `rosterVisibility` (OpenRoster both, ClosedWithRating rating only, ClosedNoRating
+  the D-18 override (anonymity no longer forces ClosedNoRating on opponents); self, teammates and the spectator referee
+  (D-14 narrowed by A75 in S9c: a referee seated on a team is a player) see roster and rating; others follow `rosterVisibility` (OpenRoster both, ClosedWithRating rating only, ClosedNoRating
   nothing). Rows gain `joinSeq` (the member card's key); `memberUserId` and `hsrAccountId` are 0 when the member is
   hidden from the caller (`hideUserId`). Abandoned memberships of the caller are skipped.
 - **`view_my_roster`** re-checked against the profile page: unchanged.

@@ -284,7 +284,7 @@ describe('Lobby Lifecycle', () => {
             await joiner.sync();
             await host.sync();
 
-            await host.call.banMember({ lobbyId: lobby.id, targetUserId: joiner.userId });
+            await host.call.banMember({ lobbyId: lobby.id, targetJoinSeq: 0 }); // S10: rewrite (A74: was targetUserId: joiner.userId; take the seat from view_my_lobby_members)
             await host.sync();
             await joiner.sync();
 
@@ -467,7 +467,7 @@ describe('Lobby Lifecycle', () => {
 
             const countBeforeKick = [...host.conn.db.Lobby.iter()].find(l => l.id === lobby.id)!.currentPlayerCount;
 
-            await host.call.kickMember({ lobbyId: lobby.id, targetUserId: joiner.userId });
+            await host.call.kickMember({ lobbyId: lobby.id, targetJoinSeq: 0 }); // S10: rewrite (A74: was targetUserId: joiner.userId; take the seat from view_my_lobby_members)
             await host.sync();
             await joiner.sync();
 
@@ -491,7 +491,7 @@ describe('Lobby Lifecycle', () => {
             openedLobbyIds.push(lobby.id);
 
             const err = await expectReducerError(
-                host.call.kickMember({ lobbyId: lobby.id, targetUserId: host.userId })
+                host.call.kickMember({ lobbyId: lobby.id, targetJoinSeq: 0 }) // S10: rewrite (A74: was targetUserId: host.userId; take the seat from view_my_lobby_members)
             );
             expect(err).toContain('Cannot kick yourself.');
 
@@ -520,7 +520,7 @@ describe('Lobby Lifecycle', () => {
             await joiner.sync(1500);
 
             const err = await expectReducerError(
-                joiner.call.kickMember({ lobbyId: lobby.id, targetUserId: host.userId })
+                joiner.call.kickMember({ lobbyId: lobby.id, targetJoinSeq: 0 }) // S10: rewrite (A74: was targetUserId: host.userId; take the seat from view_my_lobby_members)
             );
             expect(err).toContain('Cannot kick the host.');
 
@@ -554,7 +554,7 @@ describe('Lobby Lifecycle', () => {
             await joiner.sync();
             await host.sync();
 
-            await host.call.banMember({ lobbyId: lobby.id, targetUserId: joiner.userId });
+            await host.call.banMember({ lobbyId: lobby.id, targetJoinSeq: 0 }); // S10: rewrite (A74: was targetUserId: joiner.userId; take the seat from view_my_lobby_members)
             await host.sync();
             await joiner.sync();
 
@@ -578,7 +578,7 @@ describe('Lobby Lifecycle', () => {
             openedLobbyIds.push(lobby.id);
 
             // joiner is NOT in the lobby — ban them preemptively
-            await host.call.banMember({ lobbyId: lobby.id, targetUserId: joiner.userId });
+            await host.call.banMember({ lobbyId: lobby.id, targetJoinSeq: 0 }); // S10: rewrite (A74: was targetUserId: joiner.userId; take the seat from view_my_lobby_members)
             await host.sync();
 
             const ban = lobbyBans(host, lobby.id).find(b => b.bannedUserId === joiner.userId);
@@ -606,7 +606,7 @@ describe('Lobby Lifecycle', () => {
             await joiner.sync();
             await host.sync();
 
-            await host.call.banMember({ lobbyId: lobby.id, targetUserId: joiner.userId });
+            await host.call.banMember({ lobbyId: lobby.id, targetJoinSeq: 0 }); // S10: rewrite (A74: was targetUserId: joiner.userId; take the seat from view_my_lobby_members)
             await host.sync();
             await joiner.sync();
 
@@ -630,7 +630,7 @@ describe('Lobby Lifecycle', () => {
             openedLobbyIds.push(lobby.id);
 
             const err = await expectReducerError(
-                host.call.banMember({ lobbyId: lobby.id, targetUserId: host.userId })
+                host.call.banMember({ lobbyId: lobby.id, targetJoinSeq: 0 }) // S10: rewrite (A74: was targetUserId: host.userId; take the seat from view_my_lobby_members)
             );
             expect(err).toContain('Cannot ban yourself.');
 
@@ -658,7 +658,7 @@ describe('Lobby Lifecycle', () => {
             await joiner.sync(1500);
 
             const err = await expectReducerError(
-                joiner.call.banMember({ lobbyId: lobby.id, targetUserId: host.userId })
+                joiner.call.banMember({ lobbyId: lobby.id, targetJoinSeq: 0 }) // S10: rewrite (A74: was targetUserId: host.userId; take the seat from view_my_lobby_members)
             );
             expect(err).toContain('Cannot ban the host.');
 

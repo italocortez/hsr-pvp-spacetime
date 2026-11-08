@@ -201,6 +201,36 @@ The public aggregates stay readable by anyone (A37 aggregates): the top 20 per l
 **When** an opponent reads `view_my_roster_visibility`
 **Then** the roster visibility setting decides as for identified seats (OpenRoster: roster and rating; ClosedWithRating: rating; ClosedNoRating: nothing), and the hidden member's `memberUserId` and `hsrAccountId` read 0 (the account id is a cross-lobby identifier). Supersedes the Phase 10.4 D-18 rule that forced ClosedNoRating for anonymized opponents.
 
+## Acceptance Scenarios (Phase S9c execution)
+
+**Seat targeting (A74(4)).** The member-targeting lobby reducers (`kick_member`, `ban_member`, `set_team_slot`,
+`set_captain`, `transfer_referee`) take the target's seat number (`targetJoinSeq`, the `joinSeq` of
+`view_my_lobby_members`), and `unban_member` the ban's `bannedJoinSeq`; the server resolves the seat to the member.
+No argument or rejection text of these reducers names a user id ("No member sits at seat N of this lobby.", "No ban is
+recorded for seat N of this lobby."), so an anonymized host or referee can act on a seat it cannot name.
+
+**Rosters (A75).** Only the spectator referee sees every roster in `view_my_roster_visibility`, as for identities
+(D-71) and ratings (A40); a referee seated on a team reads opponents per the lobby's roster visibility.
+
+**Team requests (A73, an A37 clarification).** Team formation identifies the requester to the captain: a captain reads
+the requester's real id and display name on a request to their team in every tournament, `isAnonymousDefault`
+included. The anonymity rules apply to opponents and spectators once the bracket is seeded.
+
+### S9c-A1 An anonymized host acts by seat
+**Given** an anonymous-players lobby whose host sits as Spectator and sees the Red player as "Red-1" with `userId = 0` and `joinSeq = 3`
+**When** the host calls `kick_member(lobbyId, targetJoinSeq=3)`, or `ban_member` then `unban_member(lobbyId, bannedJoinSeq=3)`
+**Then** the calls act on the Red player without the host ever reading their user id; a wrong seat is rejected with the seat number only.
+
+### S9c-A2 A seated referee is a player for rosters
+**Given** an anonymous-players lobby with `ClosedNoRating`, the referee seated on Blue
+**When** the referee reads `view_my_roster_visibility`
+**Then** no Red roster or rating arrives (and Red ids stay 0); a spectator referee reads every roster with real ids.
+
+### S9c-A3 Captain sees the requester
+**Given** an `isAnonymousDefault` tournament
+**When** a captain reads `view_my_team_requests`
+**Then** a request to their team carries the requester's real id and display name.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -223,6 +253,9 @@ The public aggregates stay readable by anyone (A37 aggregates): the top 20 per l
 | A37 / A40 rules as implemented in the S9a views (user ids 0 for anonymized and departed members, audit columns dropped, joinSeq label order, tournament alias / seat labels, ratings per roster visibility, MMR per hideMmr), the accepted residual risk; scenarios S9a-A1..A3 | Phase S9a execution (DECISIONS.md A37, A40) | 2026-11-08 |
 | S9a fix pass: the target's seat kind picks the toggle (spectators follow isAnonymousSpectators); member-event chat lines rendered per reader; banned user, registrant accounts and step labels masked or labelled; scenarios S9a-A4, S9a-A5 | Phase S9a execution (DECISIONS.md A37) | 2026-11-08 |
 | Scenarios S9b-A1..A3: SYSTEM audit actor on the public aggregates (top-20 leaderboard, global character stats, auto-awards), the residual risk of public aggregates and rosters, roster visibility per A40 with masked member and account ids (D-18 override superseded) | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
+| Seat targeting: no user id in the arguments or rejections of the member-targeting lobby reducers; scenario S9c-A1 | Phase S9c execution (DECISIONS.md A74) | 2026-11-08 |
+| Only the spectator referee sees every roster; scenario S9c-A2 | Phase S9c execution (DECISIONS.md A75) | 2026-11-08 |
+| Team requests identify the requester to the captain in every tournament (A37 clarification); scenario S9c-A3 | Phase S9c execution (DECISIONS.md A73) | 2026-11-08 |
 
 ---
 

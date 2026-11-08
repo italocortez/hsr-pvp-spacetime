@@ -145,13 +145,15 @@ export const view_admin_presence = spacetimedb.view(
 
 // ---------------------------------------------------------------------------
 // 5. view_admin_lobby_bans — every LobbyBan row (PAGE-MAP D6: the In-Cell `lobby_ban` grid; unban_member is exposed
-//    to staff): lobbyId, bannedUserId, bannedUserLabel, bannedByUserId, bannedByLabel, createdDate. Staff read real
+//    to staff): lobbyId, bannedUserId, bannedJoinSeq, bannedUserLabel, bannedByUserId, bannedByLabel, createdDate.
+//    The grid lifts a ban with unban_member(lobbyId, bannedJoinSeq) (A74(2)). Staff read real
 //    ids in anonymous lobbies too. No PK (LobbyBan's key is (lobbyId, bannedUserId); rows are inserted / deleted).
 //    Full read (staff-only).
 // ---------------------------------------------------------------------------
 const AdminLobbyBanRow = t.row('AdminLobbyBanRow', {
     lobbyId: t.u32(),
     bannedUserId: t.u32(),
+    bannedJoinSeq: t.u32(),
     bannedUserLabel: t.string(),
     bannedByUserId: t.u32(),
     bannedByLabel: t.string(),
@@ -169,6 +171,7 @@ export const view_admin_lobby_bans = spacetimedb.view(
             rows.push({
                 lobbyId: ban.lobbyId,
                 bannedUserId: ban.bannedUserId,
+                bannedJoinSeq: ban.bannedJoinSeq,
                 bannedUserLabel: resolveUserLabel(ctx, ban.bannedUserId).displayName,
                 bannedByUserId: ban.bannedByUserId,
                 bannedByLabel: resolveUserLabel(ctx, ban.bannedByUserId).displayName,

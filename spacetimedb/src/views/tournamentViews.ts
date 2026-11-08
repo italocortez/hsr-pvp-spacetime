@@ -581,8 +581,10 @@ export const view_my_tournament_enrollment = spacetimedb.view(
 
 // ---------------------------------------------------------------------------
 // 15. view_my_team_requests — TournamentTeamRequest rows the caller sent, plus the rows targeting a team the caller
-//     captains (accept_team_request / reject_team_request take the requester's id, so the captain gets it; the label
-//     follows the tournament's anonymity: alias or seat).
+//     captains (accept_team_request / reject_team_request take the requester's id, so the captain gets it). A73: a
+//     request targeting the caller's team is identified, in every tournament: the label is the requester's display
+//     name (resolveUserLabel), whatever isAnonymousDefault says (team formation precedes any match; an A37
+//     clarification). The caller's own rows (isMine) keep the tournament-anonymity label (alias or seat).
 // ---------------------------------------------------------------------------
 const TeamRequestViewRow = t.row('TeamRequestViewRow', {
     teamId: t.u32(),
@@ -610,7 +612,9 @@ export const view_my_team_requests = spacetimedb.view(
                 tournamentId: team.tournamentId,
                 teamName: team.name,
                 userId: req.userId,
-                label: participantLabel(ctx, tournament, req.userId, enrollmentSeats(ctx, team.tournamentId)),
+                label: req.userId === me
+                    ? participantLabel(ctx, tournament, req.userId, enrollmentSeats(ctx, team.tournamentId))
+                    : resolveUserLabel(ctx, req.userId).displayName, // A73: the captain sees who asks
                 isMine: req.userId === me,
                 createdDate: req.createdDate,
             });
