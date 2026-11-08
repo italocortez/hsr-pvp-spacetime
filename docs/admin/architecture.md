@@ -136,6 +136,7 @@ BanRecord (id: u32 autoInc PK)  [PRIVATE -- public: false]
 1. Scheduled reducer, fires 5 seconds after `UserDeletionJob` inserted
 2. Calls `performUserDeletion(ctx, job.userId, job.createdById)`:
    - Hard-delete active-state rows: UserIdentity, HsrAccountCharacter, HsrAccount, AvailabilitySlot, SavedCalendar, CalendarEventInvite, CalendarEvent
+   - Lobby memberships (S8f fix pass 2, A68(6)(7)): removed as a leave, except a player's row in a live stage, which is kept away + abandoned; see [lobby/architecture.md](../lobby/architecture.md) "User deletion"
    - If user has history references: soft-delete (set username='deleted_\<id\>', clear discordId, preserve displayName)
    - If guest with no history references: hard-delete User row
 

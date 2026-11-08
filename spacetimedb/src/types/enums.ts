@@ -89,7 +89,7 @@ export const MatchEndReason = t.enum('MatchEndReason', {
 
 export const ConcedeTrigger = t.enum('ConcedeTrigger', {
     Disconnect: t.unit(),
-    VoluntaryLeave: t.unit(),
+    VoluntaryLeave: t.unit(), // a player's own concede_match; leave_lobby no longer writes it (A68(3): no auto-concede). Kept for history rows.
     RefereeDecision: t.unit(),
 });
 

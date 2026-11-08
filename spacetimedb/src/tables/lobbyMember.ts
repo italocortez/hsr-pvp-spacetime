@@ -10,7 +10,8 @@ export const lobbyMemberColumns = {
     isReferee: t.bool(),     // Admin powers within this lobby
     isConfirmed: t.bool(),   // Ready-up per D-29
     isCaptain: t.bool(),     // Captain designation per D-30
-    voluntarilyLeft: t.bool(),                // D-31: player voluntarily left active match
+    leftAt: t.timestamp().optional(),         // A68(2): away ("out of the room"): a player's Leave in a live stage; cleared by an explicit return through join_lobby
+    abandonedAt: t.timestamp().optional(),    // A68(4): gone: the away player took another lobby (abandonCurrentMatch); never cleared, no return
     disconnectedAt: t.timestamp().optional(), // D-08: timestamp of disconnect event (A22a: the grace check compares against it)
     disconnectPoolRemainingMs: t.u32(),       // D-10: remaining disconnect pool in ms (init 300000 at draft start)
     joinSeq: t.u32(),                         // R4: per-lobby join counter assigned at join; anonymous labels derive from it, never from the id

@@ -35,6 +35,7 @@ function isMatchParticipant(ctx: any, bracketMatch: any, userId: number): boolea
 // the lobby (the bracket match carries bestOf and the A27 head start). The free set
 // from the preset at Tournament.lobbyPresetId, the system preset when that row is gone (A33a). name = the tournament
 // name + the match key (D-A8, truncated to 50 characters).
+// A68(4): `abandonCurrentMatch` lets an away creator give up that match (ensureNotInLobby).
 // The creator is host and referee (A34): a participant is seated as a player on its team's side (A26 / A35; the colour from the match's mapping, A70(1)); staff
 // are seated as a spectator referee and become a member like anyone else (the one-lobby-at-a-time rule applies, D-22).
 // isCaptain stays false, as in create_lobby (start_draft assigns captains, D-30). `joinCode` is ignored (the server
@@ -44,6 +45,7 @@ export const create_tournament_lobby = spacetimedb.reducer(
     {
         bracketMatchId: t.u32(),
         joinCode: t.string(),
+        abandonCurrentMatch: t.bool().optional(), // A68(4): give up an away membership; default false
     },
     (ctx, args) => {
         const user = getAuthenticatedUser(ctx);
@@ -93,8 +95,8 @@ export const create_tournament_lobby = spacetimedb.reducer(
             throw new SenderError('This bracket match is decided by its games.');
         }
 
-        // D-22: one lobby at a time per user (staff creators included, A34)
-        ensureNotInLobby(ctx, user.id);
+        // D-22 / A68(4): one lobby at a time per user (staff creators included, A34)
+        ensureNotInLobby(ctx, user.id, args.abandonCurrentMatch ?? false);
 
         // D-67: matchType from tournament.countTowardsMmr
         const isRanked = tournament.countTowardsMmr;
@@ -151,6 +153,7 @@ export const create_tournament_lobby = spacetimedb.reducer(
             allowPlayerPause: preset.allowPlayerPause,
             refereeExclusiveConcede: preset.refereeExclusiveConcede,
             hideMmr: preset.hideMmr, // A40
+            maxSpectators: preset.maxSpectators, // A68(8): free set
 
             // Player count (just the creator for now)
             currentPlayerCount: 1,
@@ -179,7 +182,8 @@ export const create_tournament_lobby = spacetimedb.reducer(
             isReferee: true,
             isConfirmed: false,
             isCaptain: false,
-            voluntarilyLeft: false,
+            leftAt: undefined,
+            abandonedAt: undefined,
             disconnectedAt: undefined,
             disconnectPoolRemainingMs: 0,
             joinSeq: nextJoinSeq(ctx, lobby.id), // R4: per-lobby join counter; A22(5) order and the S9 labels derive from it

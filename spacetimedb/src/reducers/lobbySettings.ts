@@ -3,7 +3,7 @@ import { t, SenderError } from 'spacetimedb/server';
 import { DraftMode, BanMode, GameMode, MatchType, RosterVisibility, DisconnectPolicy, LobbySlot, BanRestriction, LineupFormat, ShuffleMode } from '../types/enums';
 import { getAuthenticatedUser, isRoleAtLeast } from '../helpers/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
-import { ensureLobbyMember, ensureHostOrAbove, ensureStageIs, slotTeam, slotIsCoach, slotIsSpectator, slotToTeamSide } from '../helpers/lobbyHelpers';
+import { ensureLobbyMember, ensureHostOrAbove, ensureStageIs, slotTeam, slotIsCoach, slotIsSpectator, slotToTeamSide, resolveMaxSpectators } from '../helpers/lobbyHelpers';
 import { normalizeLobbyName } from '../helpers/seriesSettings';
 import { ensureCostSetCovers, ensureSelectableCostSet } from '../helpers/costSetGuards';
 import { ensureSeatAllowed } from '../helpers/tournamentLobbySides';
@@ -20,7 +20,7 @@ import { ensureSeatAllowed } from '../helpers/tournamentLobbySides';
 // Per D-23: guests forced to ClosedNoRating and Casual.
 // Resets all members' isConfirmed to false on settings change (A38(4)).
 // Backlog #9 (A33 tiering): lineupFormat joins the tournament lock list; banRestriction, hideMmr,
-//   refereeExclusiveConcede and name are free-set fields, editable in tournament lobbies too.
+//   refereeExclusiveConcede, name and maxSpectators (A68(8)) are free-set fields, editable in tournament lobbies too.
 //   The new arguments are optional: an omitted key keeps the lobby's current value.
 //   A67(2): the series settings are gone (one game per lobby; the bracket match carries bestOf and the head start).
 // Backlog #2 (R2, D-D6): a changed costSetId must be selectable; a change of costSetId, gameMode or draftMode
@@ -69,6 +69,7 @@ export const update_lobby_settings = spacetimedb.reducer(
         banRestriction: BanRestriction.optional(),
         hideMmr: t.bool().optional(),
         name: t.string().optional(),
+        maxSpectators: t.u8().optional(), // A68(8): 0-12, free set (tournament lobbies too); omitted = unchanged
     },
     (ctx, args) => {
         const user = getAuthenticatedUser(ctx);
@@ -169,6 +170,7 @@ export const update_lobby_settings = spacetimedb.reducer(
             isPublic: args.isPublic,
             banRestriction: args.banRestriction ?? lobby.banRestriction,
             hideMmr: args.hideMmr ?? lobby.hideMmr,
+            maxSpectators: resolveMaxSpectators(args.maxSpectators, lobby.maxSpectators), // A68(8)
             name,
             lastActivityAt: ctx.timestamp,
         }, user.id));
@@ -283,10 +285,12 @@ export const set_team_slot = spacetimedb.reducer(
                         throw new SenderError(`${newTeam} team is full (max ${lobby.teamSize} players).`);
                     }
                 }
-            } else if (newSlotTag === 'Spectator') {
+            } else if (newSlotTag === 'Spectator' && (lobby.stage.tag !== 'Waiting' || lobby.isTournamentControlled)) {
+                // A68(8): maxSpectators caps watchers, not seat candidates, as in join_lobby: a casual Waiting lobby's
+                // Spectator slot holds seat candidates (D-27) and is not capped; live stages and tournament lobbies are.
                 const spectatorCount = allMembers.filter((m: any) => slotIsSpectator(m.lobbySlot) && m.userId !== targetUserId).length;
-                if (spectatorCount >= 12) {
-                    throw new SenderError('Spectator slots are full (max 12).');
+                if (spectatorCount >= lobby.maxSpectators) {
+                    throw new SenderError(`Spectator slots are full (max ${lobby.maxSpectators}).`);
                 }
             }
         }

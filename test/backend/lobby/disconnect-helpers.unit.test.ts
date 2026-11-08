@@ -214,7 +214,7 @@ describe('isForfeitEligible', () => {
     it('returns true when all team players offline + grace expired', () => {
         const ctx = mockCtx({
             lobbyMembers: [
-                { lobbyId: 1, userId: 10, lobbySlot: RedPlayer, isOnline: false, voluntarilyLeft: false, disconnectedAt: ts(0n), disconnectPoolRemainingMs: 300000 },
+                { lobbyId: 1, userId: 10, lobbySlot: RedPlayer, isOnline: false, disconnectedAt: ts(0n), disconnectPoolRemainingMs: 300000 },
             ],
         });
         expect(isForfeitEligible(ctx, baseLobby, 'Red', baseNow)).toBe(true);
@@ -223,8 +223,8 @@ describe('isForfeitEligible', () => {
     it('returns false when one player is still online', () => {
         const ctx = mockCtx({
             lobbyMembers: [
-                { lobbyId: 1, userId: 10, lobbySlot: RedPlayer, isOnline: false, voluntarilyLeft: false, disconnectedAt: ts(0n), disconnectPoolRemainingMs: 300000 },
-                { lobbyId: 1, userId: 11, lobbySlot: RedPlayer, isOnline: true, voluntarilyLeft: false, disconnectedAt: undefined, disconnectPoolRemainingMs: 300000 },
+                { lobbyId: 1, userId: 10, lobbySlot: RedPlayer, isOnline: false, disconnectedAt: ts(0n), disconnectPoolRemainingMs: 300000 },
+                { lobbyId: 1, userId: 11, lobbySlot: RedPlayer, isOnline: true, disconnectedAt: undefined, disconnectPoolRemainingMs: 300000 },
             ],
         });
         expect(isForfeitEligible(ctx, baseLobby, 'Red', baseNow)).toBe(false);
@@ -233,7 +233,7 @@ describe('isForfeitEligible', () => {
     it('returns true when pool depleted (regardless of grace)', () => {
         const ctx = mockCtx({
             lobbyMembers: [
-                { lobbyId: 1, userId: 10, lobbySlot: RedPlayer, isOnline: false, voluntarilyLeft: false, disconnectedAt: ts(100_000_000n), disconnectPoolRemainingMs: 0 },
+                { lobbyId: 1, userId: 10, lobbySlot: RedPlayer, isOnline: false, disconnectedAt: ts(100_000_000n), disconnectPoolRemainingMs: 0 },
             ],
         });
         // Only 20s since disconnect but pool=0 → immediately eligible
@@ -243,7 +243,7 @@ describe('isForfeitEligible', () => {
     it('returns false when no disconnectedAt', () => {
         const ctx = mockCtx({
             lobbyMembers: [
-                { lobbyId: 1, userId: 10, lobbySlot: RedPlayer, isOnline: false, voluntarilyLeft: false, disconnectedAt: undefined, disconnectPoolRemainingMs: 300000 },
+                { lobbyId: 1, userId: 10, lobbySlot: RedPlayer, isOnline: false, disconnectedAt: undefined, disconnectPoolRemainingMs: 300000 },
             ],
         });
         expect(isForfeitEligible(ctx, baseLobby, 'Red', baseNow)).toBe(false);
@@ -254,13 +254,35 @@ describe('isForfeitEligible', () => {
         expect(isForfeitEligible(ctx, baseLobby, 'Red', baseNow)).toBe(false);
     });
 
-    it('excludes voluntarilyLeft members', () => {
+    // T-S8f (A68(3)): the D-31 "voluntarilyLeft rows are excluded" rule is superseded; away (leftAt) and abandoned
+    // (abandonedAt) rows are offline players with the disconnectedAt stamped at the Leave.
+    it('an away (leftAt) player counts as an offline player: eligible after the grace', () => {
         const ctx = mockCtx({
             lobbyMembers: [
-                { lobbyId: 1, userId: 10, lobbySlot: RedPlayer, isOnline: false, voluntarilyLeft: true, disconnectedAt: ts(0n), disconnectPoolRemainingMs: 0 },
+                { lobbyId: 1, userId: 10, lobbySlot: RedPlayer, isOnline: false, leftAt: ts(0n), disconnectedAt: ts(0n), disconnectPoolRemainingMs: 300000 },
             ],
         });
-        // The only Red player voluntarily left — team is "empty" → false
+        expect(isForfeitEligible(ctx, baseLobby, 'Red', baseNow)).toBe(true);
+        expect(isForfeitEligible(ctx, baseLobby, 'Red', ts(30_000_000n))).toBe(false); // inside the grace
+    });
+
+    it('an away or abandoned row is offline even when its isOnline flag reads true (A68(2))', () => {
+        const ctx = mockCtx({
+            lobbyMembers: [
+                { lobbyId: 1, userId: 10, lobbySlot: RedPlayer, isOnline: true, leftAt: ts(0n), disconnectedAt: ts(0n), disconnectPoolRemainingMs: 300000 },
+                { lobbyId: 1, userId: 11, lobbySlot: RedPlayer, isOnline: true, leftAt: ts(0n), abandonedAt: ts(1n), disconnectedAt: ts(0n), disconnectPoolRemainingMs: 300000 },
+            ],
+        });
+        expect(isForfeitEligible(ctx, baseLobby, 'Red', baseNow)).toBe(true);
+    });
+
+    it('one online player and one away player: not eligible', () => {
+        const ctx = mockCtx({
+            lobbyMembers: [
+                { lobbyId: 1, userId: 10, lobbySlot: RedPlayer, isOnline: false, leftAt: ts(0n), disconnectedAt: ts(0n), disconnectPoolRemainingMs: 0 },
+                { lobbyId: 1, userId: 11, lobbySlot: RedPlayer, isOnline: true, disconnectedAt: undefined, disconnectPoolRemainingMs: 300000 },
+            ],
+        });
         expect(isForfeitEligible(ctx, baseLobby, 'Red', baseNow)).toBe(false);
     });
 });
@@ -271,8 +293,8 @@ describe('isThirdPartyReferee', () => {
     it('returns spectator referee when present', () => {
         const ctx = mockCtx({
             lobbyMembers: [
-                { lobbyId: 1, userId: 5, lobbySlot: Spectator, isReferee: true, voluntarilyLeft: false },
-                { lobbyId: 1, userId: 10, lobbySlot: BluePlayer, isReferee: false, voluntarilyLeft: false },
+                { lobbyId: 1, userId: 5, lobbySlot: Spectator, isReferee: true },
+                { lobbyId: 1, userId: 10, lobbySlot: BluePlayer, isReferee: false },
             ],
         });
         const ref = isThirdPartyReferee(ctx, 1);
@@ -283,7 +305,7 @@ describe('isThirdPartyReferee', () => {
     it('returns null when no referee exists', () => {
         const ctx = mockCtx({
             lobbyMembers: [
-                { lobbyId: 1, userId: 10, lobbySlot: BluePlayer, isReferee: false, voluntarilyLeft: false },
+                { lobbyId: 1, userId: 10, lobbySlot: BluePlayer, isReferee: false },
             ],
         });
         expect(isThirdPartyReferee(ctx, 1)).toBeNull();
@@ -292,18 +314,21 @@ describe('isThirdPartyReferee', () => {
     it('returns null when referee is on a team (not 3rd party)', () => {
         const ctx = mockCtx({
             lobbyMembers: [
-                { lobbyId: 1, userId: 10, lobbySlot: BluePlayer, isReferee: true, voluntarilyLeft: false },
+                { lobbyId: 1, userId: 10, lobbySlot: BluePlayer, isReferee: true },
             ],
         });
         expect(isThirdPartyReferee(ctx, 1)).toBeNull();
     });
 
-    it('returns null when spectator referee voluntarilyLeft', () => {
-        const ctx = mockCtx({
-            lobbyMembers: [
-                { lobbyId: 1, userId: 5, lobbySlot: Spectator, isReferee: true, voluntarilyLeft: true },
-            ],
-        });
-        expect(isThirdPartyReferee(ctx, 1)).toBeNull();
+    // T-S8f (A68(2)(4)): the exclusion now reads leftAt / abandonedAt.
+    it('returns null when the spectator referee is away or abandoned', () => {
+        for (const over of [{ leftAt: ts(0n) }, { abandonedAt: ts(0n) }]) {
+            const ctx = mockCtx({
+                lobbyMembers: [
+                    { lobbyId: 1, userId: 5, lobbySlot: Spectator, isReferee: true, ...over },
+                ],
+            });
+            expect(isThirdPartyReferee(ctx, 1)).toBeNull();
+        }
     });
 });

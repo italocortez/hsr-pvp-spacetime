@@ -1,5 +1,8 @@
 import { SenderError } from 'spacetimedb/server';
 import { isRoleAtLeast } from './ensurePermissions';
+import { updateWithAudit } from './auditHelpers';
+import { transferFlagsOnRemoval } from './flagTransferHelpers';
+import { memberHasLeft, slotTeam } from './memberPredicates';
 
 // ─── Server-generated join codes ──────────────────────────────────────────────
 // Deterministic hash-based code generation (no Math.random — reducers must be deterministic).
@@ -24,20 +27,62 @@ export function generateJoinCode(ctx: any, userId: number): string {
     throw new SenderError('Could not generate a unique join code. Please try again.');
 }
 
+/** A67(1): the live stages of a lobby's one game. */
+export const LIVE_STAGES: readonly string[] = ['Drafting', 'Equipping', 'Scoring'];
+
+// memberHasLeft (A68(2)(4)) and slotTeam live in memberPredicates (no imports) and are re-exported here.
+export { memberHasLeft, slotTeam } from './memberPredicates';
+
+/** A68(8): the spectator count setting, 0-12; `value` omitted takes `fallback`. */
+export function resolveMaxSpectators(value: number | undefined, fallback: number): number {
+    const resolved = value ?? fallback;
+    if (resolved < 0 || resolved > 12) {
+        throw new SenderError('maxSpectators must be between 0 and 12.');
+    }
+    return resolved;
+}
+
 /**
- * Ensures the user is not currently in any lobby.
- * Per D-22: one lobby at a time per user.
- * Throws if the user is already a member of any lobby.
+ * D-22 / A68(4): how a membership counts for the one-lobby-at-a-time rule.
+ *   - 'free': the lobby is gone or parked in AwaitingResult, or the row is abandoned (A68(4)); never counts.
+ *   - 'away': a `leftAt` row in a live stage (A68(2)); the user may give it up with abandonCurrentMatch.
+ *   - 'held': anything else (online in any stage, a Waiting row, a spectator / coach row, A68(5)).
  */
-export function ensureNotInLobby(ctx: any, userId: number): void {
-    const memberships = [...ctx.db.LobbyMember.user_id.filter(userId)];
-    // Skip memberships in AwaitingResult lobbies and voluntarilyLeft members
-    const activeMemberships = memberships.filter((m: any) => {
-        const lobby = ctx.db.Lobby.id.find(m.lobbyId);
-        return lobby && lobby.stage.tag !== 'AwaitingResult' && !m.voluntarilyLeft;
-    });
-    if (activeMemberships.length > 0) {
-        throw new SenderError('You are already in a lobby. Leave it before creating or joining another.');
+export function membershipHold(ctx: any, member: any): { kind: 'free' | 'away' | 'held'; lobby: any } {
+    const lobby = ctx.db.Lobby.id.find(member.lobbyId);
+    if (!lobby || lobby.stage.tag === 'AwaitingResult' || member.abandonedAt !== undefined) return { kind: 'free', lobby };
+    if (member.leftAt !== undefined && LIVE_STAGES.includes(lobby.stage.tag)) return { kind: 'away', lobby };
+    return { kind: 'held', lobby };
+}
+
+/**
+ * D-22 / A68(4): one lobby at a time. Throws when the user holds a membership; an away membership (A68(2)) is given
+ * up only when the caller confirms (`abandonCurrentMatch`): its row becomes abandoned (`abandonedAt` set, `leftAt`,
+ * `isOnline = false` and `disconnectedAt` kept; it still counts as an offline player for the forfeit test and in
+ * currentPlayerCount) and the caller may proceed. Callers: create_lobby, join_lobby (new joins), create_tournament_lobby.
+ */
+export function ensureNotInLobby(ctx: any, userId: number, abandonCurrentMatch: boolean): void {
+    const away: Array<{ member: any; lobby: any }> = [];
+    for (const member of [...ctx.db.LobbyMember.user_id.filter(userId)]) {
+        const hold = membershipHold(ctx, member);
+        if (hold.kind === 'held') {
+            throw new SenderError('You are already in a lobby. Leave it before creating or joining another.');
+        }
+        if (hold.kind === 'away') away.push({ member, lobby: hold.lobby });
+    }
+    if (away.length === 0) return;
+    if (!abandonCurrentMatch) {
+        // A68(4): the prompt text the client shows before the caller confirms.
+        throw new SenderError(`You left lobby ${away[0].lobby.joinCode} mid-match. Joining here means you cannot return to it.`);
+    }
+    for (const { member } of away) {
+        // A68(4) "the flag transfers" / A68(7) "always has a host and a referee": flags the 15 s check left on the away
+        // row (no online candidate then) move now, online first then any; the abandoned row is never a candidate again.
+        transferFlagsOnRemoval(ctx, member.lobbyId, userId);
+        const current = [...ctx.db.LobbyMember.by_lobby_and_user.filter([member.lobbyId, userId])][0] ?? member;
+        ctx.db.LobbyMember.by_lobby_and_user.delete([member.lobbyId, userId]);
+        ctx.db.LobbyMember.insert(updateWithAudit(ctx, current, { abandonedAt: ctx.timestamp }, userId));
+        console.log(`[LOBBY] User #${userId} abandoned lobby #${member.lobbyId} to take another lobby (A68(4))`);
     }
 }
 
@@ -127,14 +172,6 @@ export function canKickOrBan(ctx: any, lobby: any, user: any, member: any): bool
 
 // ─── LobbySlot helpers ──────────────────────────────────────────────────────
 // Utility functions for extracting team/role info from the unified LobbySlot enum.
-
-/** Get team from LobbySlot: BluePlayer→'Blue', RedCoach→'Red', Spectator→null */
-export function slotTeam(slot: any): string | null {
-    const tag: string = slot.tag;
-    if (tag.startsWith('Blue')) return 'Blue';
-    if (tag.startsWith('Red')) return 'Red';
-    return null;
-}
 
 /** Check if slot is a coach variant */
 export function slotIsCoach(slot: any): boolean {

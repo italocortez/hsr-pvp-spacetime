@@ -221,6 +221,13 @@ Pre-15.2, path 2 did not exist — archived users were soft-deleted in `User` wi
 **When:** They call `delete_my_account()`
 **Then:** `performUserDeletion` runs at once: UserPrivate, calendars, presence, rate state, every `UserIdentity` and every HSR account are deleted; the `User` row is archived to `DeletedUser` (display name kept for history labels). Rejected while they sit in a lobby (any stage but AwaitingResult / Finished, not voluntarily left): "Leave your lobby before deleting your account."; rejected while enrolled (not Withdrawn / Disqualified) in a tournament that is not Completed / Cancelled: "You are enrolled in a tournament that has not finished. Withdraw first, or wait until it ends."
 
+_Superseded in Phase S8f execution (DECISIONS.md A68)._ The lobby guard is the D-22 test: see "Delete My Account While Away".
+
+### Delete My Account While Away (Phase S8f execution, A68(4))
+**Given:** A verified user who pressed Leave in a lobby in Drafting / Equipping / Scoring (an away row, `leftAt` set)
+**When:** They call `delete_my_account()`
+**Then:** Rejected: "Leave your lobby before deleting your account." (an away membership counts for the one-lobby rule). A user whose only membership is abandoned (they took another lobby with `abandonCurrentMatch`) or in an AwaitingResult lobby is not blocked. Any lobby flag (host, referee, captain) the deleted user still holds moves to the next member (A68(7)).
+
 ### Delete My Account as a Guest (Phase S6 execution, A45(3); replaces delete_guest_account)
 **Given:** A guest
 **When:** They call `delete_my_account()`
@@ -292,3 +299,4 @@ Pre-15.2, path 2 did not exist — archived users were soft-deleted in `User` wi
 | Phase 16 UAT findings (CSP, SW, image handling) — `next.config.ts` CSP `script-src` requires `'unsafe-eval'` in both dev AND prod because the SpacetimeDB SDK uses `Function()` constructor at runtime for BSATN codec generation; dropping it at build-time breaks auth (and all reducer calls) in CSP-enforcing browsers. `next.config.ts` `connect-src` requires `https://*.ufs.sh` so the Service Worker can re-issue allowlisted CDN fetches without CSP rejection. Neither finding changes the auth API surface — both are infrastructure prerequisites for auth + SDK to work in prod | Phase 16 verify-work | 2026-04-19 |
 
 | `delete_my_account()` for every user (verified: lobby + live-tournament guards, cascades through `performUserDeletion`; guest: the old `delete_guest_account` behaviour); `delete_guest_account` removed | Phase S6 execution (DECISIONS.md A45(3)) | 2026-11-06 |
+| Scenario "Delete My Account While Away": the lobby guard is the D-22 test (away blocks, abandoned / AwaitingResult do not); `performUserDeletion` hands over the user's lobby flags | Phase S8f execution (DECISIONS.md A68) | 2026-11-08 |

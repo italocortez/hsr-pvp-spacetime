@@ -6,7 +6,7 @@
 // (A60(7)), the stage lists of concede / claim_forfeit / defer and the lobby GC (A67(1)). Builders in s4 / s7 / s8 /
 // s8d fixtures. Nothing reaches maincloud.
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { M, advance, expectReject, guest, lobbyRow, newHarness, setupLobby, tx, type Harness, type Lobby } from './s4-fixtures';
+import { M, advance, disconnect, expectReject, guest, lobbyRow, newHarness, setupLobby, tx, type Harness, type Lobby } from './s4-fixtures';
 import { finishGame, setRole } from './s7-fixtures';
 import { advanceStage, bracketRows, liveField, matchRow, resolveMatch, tRow } from './s8-fixtures';
 import {
@@ -631,7 +631,9 @@ describe('A67(1): concede / claim_forfeit / defer stage lists', () => {
 describe('A67(1): the lobby GC', () => {
     const gc = (test: Harness) => tx(test, 'internal', (ctx) => M.admin_gc_lobbies(ctx, {}));
 
-    it('Waiting: deleted after 30 min idle, kept before; AwaitingResult never deleted', () => {
+    // T-S8f (A68(9)): D-49's unconditional Waiting rule is retired; a Waiting lobby takes the presence test first, so the
+    // members of the idle lobby disconnect before the 30 min rule can delete it (s8f-membership covers the online case).
+    it('Waiting with every member offline: deleted after 30 min idle, kept before; AwaitingResult never deleted', () => {
         const test = newHarness();
         const waiting = setupLobby(test, { noStart: true });
         const host2 = guest(test, 'host2');
@@ -643,6 +645,7 @@ describe('A67(1): the lobby GC', () => {
         tx(test, parked.host, (ctx) => M.defer_match(ctx, { lobbyId: parked.lobbyId }));
         expect(lobbyRow(test, parked.lobbyId).stage.tag).toBe('AwaitingResult');
 
+        for (const who of Object.values(waiting.a)) disconnect(test, who);
         advance(test, 29 * 60_000);
         gc(test);
         expect(test.db.Lobby.id.find(waiting.lobbyId)).toBeTruthy();

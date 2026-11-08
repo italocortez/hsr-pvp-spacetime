@@ -127,11 +127,13 @@ describe('A22a / A22(5): the referee flag moves after 20 s, in candidate order',
         expectFlagMovedTo(s, a.b2.userId);
     });
 
-    it('host offline, Blue gone (one left voluntarily, one offline) → the first Red player', () => {
+    // T-S8f (A68(2)): the Leave marks the row away (leftAt); still never a candidate, whatever the presence rows say.
+    it('host offline, Blue gone (one away after Leave, one offline) → the first Red player', () => {
         const s = withSpectatorReferee();
         const { test, lobbyId, a } = s;
         tx(test, a.b1, (ctx) => M.leave_lobby(ctx, { lobbyId }));
-        expect(member(test, lobbyId, a.b1.userId).voluntarilyLeft).toBe(true);
+        expect(member(test, lobbyId, a.b1.userId).leftAt).toBeDefined();
+        expect(test.db.UserPresence.identity.find(a.b1.identity)?.isOnline).toBe(true); // still on the site
         disconnect(test, a.b2);
         disconnect(test, s.host);
         refereeDropsFor20s(s);

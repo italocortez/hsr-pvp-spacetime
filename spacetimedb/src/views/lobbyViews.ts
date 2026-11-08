@@ -115,6 +115,8 @@ export const view_my_lobbies = spacetimedb.view(
         // Fetch each lobby by PK (users are in at most 1-2 lobbies)
         const lobbies = [];
         for (const membership of memberships) {
+            // A68(4)(10): an abandoned row drops its lobby from the list; an away row keeps it (still their match).
+            if (membership.abandonedAt !== undefined) continue;
             const lobby = ctx.db.Lobby.id.find(membership.lobbyId);
             if (lobby) {
                 lobbies.push(lobby);

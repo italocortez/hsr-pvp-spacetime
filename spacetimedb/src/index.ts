@@ -3,17 +3,11 @@ import { ScheduleAt } from 'spacetimedb';
 import { SYSTEM_USER_ID } from './helpers/auditColumns';
 import { insertWithAudit, updateWithAudit } from './helpers/auditHelpers';
 import { checkProviderBan } from './helpers/banHelper';
-import { handleDisconnectPoolUpdate } from './helpers/disconnectHelpers';
+import { handleDisconnectPoolUpdate, markMemberOffline } from './helpers/disconnectHelpers';
 import { hasLivePresence, markPresenceOnline } from './helpers/presenceHelpers';
 import { seedAbuseConfigDefaults } from './helpers/abuseControls';
 import { seedSystemLobbyPreset } from './helpers/systemPreset';
-import { ACTIVE_STAGES, type LobbyStage } from '@shared/lobby-rules';
-
-// A22a: the grace period between a user's last disconnect and the referee / captain / host transfer check.
-const REFEREE_TRANSFER_GRACE_MICROS = 15_000_000n;
-// D-08: the forfeit clock (disconnectedAt -> pool decrement, isForfeitEligible) runs only in the three live-match
-// stages. A67(1): those are also every ACTIVE_STAGES entry (the between-games stages are gone).
-const DISCONNECT_CLOCK_STAGES: readonly LobbyStage[] = ['Drafting', 'Equipping', 'Scoring'];
+import { memberHasLeft } from './helpers/lobbyHelpers';
 
 // Private auth tables — imported for schema registration
 import './tables/userPrivate';
@@ -203,7 +197,10 @@ export const client_connected = spacetimedb.clientConnected((ctx) => {
   // F1 (A22(2)): restore every membership of the user and cancel its pending A22a checks, so a reconnect inside
   // the 15 s window keeps every flag and never pauses the draft. Idempotent: a row already online is left alone.
   // The pool decrement is the D-10/D-11 rule (handleDisconnectPoolUpdate); join_lobby stays the explicit path.
+  // A68(2): an away / abandoned row is left alone (offline, its pending 15 s check kept): the user may be browsing
+  // the site; only an explicit return through join_lobby clears leftAt.
   for (const member of [...ctx.db.LobbyMember.user_id.filter(user.id)]) {
+    if (memberHasLeft(member)) continue;
     for (const check of [...ctx.db.RefereeTransferCheck.by_lobby_and_user.filter([member.lobbyId, user.id])]) {
       ctx.db.RefereeTransferCheck.scheduledId.delete(check.scheduledId);
     }
@@ -258,36 +255,17 @@ export const client_disconnected = spacetimedb.clientDisconnected((ctx) => {
   if (hasLivePresence(ctx, userId)) return;
 
   // A22a (D.8.2): per membership, mark offline; in an active stage also stamp disconnectedAt (Standard/Deferred
-  // only, D-08; NoAction tracks nothing) and schedule the grace check 15 s out. Nothing else happens here: the
-  // referee / captain / host transfers and the player auto-pause are decided by run_referee_transfer_check.
+  // only, D-08; NoAction tracks nothing) and schedule the grace check 15 s out (markMemberOffline, shared with a
+  // player's live-stage Leave, A68(1)). Nothing else happens here: the referee / captain / host transfers and the
+  // player auto-pause are decided by run_referee_transfer_check. A68(2): away / abandoned rows are already offline
+  // and keep their stamp and pending check.
   for (const member of [...ctx.db.LobbyMember.user_id.filter(userId)]) {
+    if (memberHasLeft(member)) continue;
     const lobby = ctx.db.Lobby.id.find(member.lobbyId);
     if (!lobby) continue;
 
-    const stageTag = lobby.stage.tag as LobbyStage;
-    const isActiveStage = ACTIVE_STAGES.includes(stageTag);
-    const tracksDisconnect = DISCONNECT_CLOCK_STAGES.includes(stageTag) && lobby.disconnectPolicy.tag !== 'NoAction';
-
-    ctx.db.LobbyMember.by_lobby_and_user.delete([member.lobbyId, userId]);
-    ctx.db.LobbyMember.insert(updateWithAudit(ctx, member, {
-      isOnline: false,
-      disconnectedAt: tracksDisconnect ? ctx.timestamp : member.disconnectedAt,
-    }, SYSTEM_USER_ID));
-
-    if (!isActiveStage) continue;
-
-    // One pending check per (lobby, user): drop a stale one before scheduling.
-    for (const check of [...ctx.db.RefereeTransferCheck.by_lobby_and_user.filter([member.lobbyId, userId])]) {
-      ctx.db.RefereeTransferCheck.scheduledId.delete(check.scheduledId);
-    }
-    ctx.db.RefereeTransferCheck.insert({
-      scheduledId: 0n,
-      scheduledAt: ScheduleAt.time(ctx.timestamp.microsSinceUnixEpoch + REFEREE_TRANSFER_GRACE_MICROS),
-      lobbyId: member.lobbyId,
-      userId,
-    });
-
-    console.log(`[DISCONNECT] User #${userId} offline in lobby #${member.lobbyId} (stage: ${stageTag}); transfer check scheduled in 15 s`);
+    markMemberOffline(ctx, lobby, member, SYSTEM_USER_ID);
+    console.log(`[DISCONNECT] User #${userId} offline in lobby #${member.lobbyId} (stage: ${lobby.stage.tag})`);
   }
 });
 

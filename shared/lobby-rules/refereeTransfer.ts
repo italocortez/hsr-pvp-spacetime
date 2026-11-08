@@ -8,7 +8,8 @@ export interface MemberLite {
     userId: number;
     slot: Slot;
     isOnline: boolean;
-    voluntarilyLeft: boolean;
+    /** A68(2)(4): the row carries `leftAt` (away) or `abandonedAt` (gone): offline whatever the presence rows say; never a candidate. */
+    hasLeft: boolean;
     isReferee: boolean;
     /** Join order within the lobby (LobbyMember.joinSeq); lower = earlier. */
     joinOrder: number;
@@ -26,15 +27,19 @@ export const isCoach = (s: Slot): boolean => s === 'BlueCoach' || s === 'RedCoac
 const byJoin = (a: MemberLite, b: MemberLite) => a.joinOrder - b.joinOrder;
 
 /**
- * A22 order: host → Blue players (join order) → Red players (join order) → spectators (join order)
- * → coaches (Blue then Red, join order). Skips the leaver, offline members and anyone who voluntarilyLeft.
- * Returns null when nobody is eligible (the leaver keeps the flag; GC handles the orphan).
+ * A22(5) candidate order: host → Blue players (join order) → Red players (join order) → spectators (join order)
+ * → coaches (Blue then Red, join order). The leaver and `hasLeft` rows (A68(2)(4)) are never candidates; `predicate`
+ * narrows the set further (the captain's teammates). Online and offline candidates both appear, in order.
  */
-export function pickRefereeSuccessor(members: readonly MemberLite[], hostUserId: number, leaverUserId: number): number | null {
-    const eligible = members.filter(m => m.userId !== leaverUserId && m.isOnline && !m.voluntarilyLeft);
+function orderedCandidates(
+    members: readonly MemberLite[],
+    hostUserId: number,
+    leaverUserId: number,
+    predicate: (m: MemberLite) => boolean,
+): MemberLite[] {
+    const eligible = members.filter(m => m.userId !== leaverUserId && !m.hasLeft && predicate(m));
     const host = eligible.find(m => m.userId === hostUserId);
-    if (host) return host.userId;
-
+    const ordered: MemberLite[] = host ? [host] : [];
     const tiers: Array<(m: MemberLite) => boolean> = [
         m => m.slot === 'BluePlayer',
         m => m.slot === 'RedPlayer',
@@ -43,10 +48,34 @@ export function pickRefereeSuccessor(members: readonly MemberLite[], hostUserId:
         m => m.slot === 'RedCoach',
     ];
     for (const tier of tiers) {
-        const pick = eligible.filter(tier).sort(byJoin)[0];
-        if (pick) return pick.userId;
+        ordered.push(...eligible.filter(m => m !== host && tier(m)).sort(byJoin));
     }
-    return null;
+    return ordered;
+}
+
+/**
+ * A22 / A22a: the first *online* candidate in the A22(5) order (the 15 s check, where an away player loses the flags,
+ * A68(7)). Skips the leaver, offline members and `hasLeft` rows. Returns null when nobody is eligible (the flag stays).
+ */
+export function pickRefereeSuccessor(members: readonly MemberLite[], hostUserId: number, leaverUserId: number): number | null {
+    return pickSuccessor(members, hostUserId, leaverUserId, () => true, true);
+}
+
+/**
+ * A68(7): the successor of a flag (host, captain, referee) in the A22(5) order, online candidates first, then any
+ * remaining member, so a lobby with members always has a host and a referee. `onlineOnly` keeps the 15 s check's
+ * rule (A22a: the first online candidate, or nobody). Returns null when no candidate is left.
+ */
+export function pickSuccessor(
+    members: readonly MemberLite[],
+    hostUserId: number,
+    leaverUserId: number,
+    predicate: (m: MemberLite) => boolean = () => true,
+    onlineOnly = false,
+): number | null {
+    const ordered = orderedCandidates(members, hostUserId, leaverUserId, predicate);
+    const pick = ordered.find(m => m.isOnline) ?? (onlineOnly ? undefined : ordered[0]);
+    return pick?.userId ?? null;
 }
 
 export interface TransferCheckInput {
@@ -84,11 +113,12 @@ export interface AutoPauseInput {
 /**
  * F5 + A22a: the draft auto-pauses only for a *player* on a team who is still offline when the
  * check fires, only in Drafting, only under Standard/Deferred, and only if not already paused.
- * Spectators and coaches never pause anything.
+ * Spectators and coaches never pause anything. A68(1): a player's Leave is a disconnect, so an away (`hasLeft`)
+ * player pauses the draft like any other offline player (the caller passes `isOnline = false` for such a row).
  */
 export function decideAutoPause(input: AutoPauseInput): boolean {
     const { subject } = input;
-    if (!subject || subject.isOnline || subject.voluntarilyLeft) return false;
+    if (!subject || subject.isOnline) return false;
     if (!isPlayer(subject.slot)) return false;
     if (input.stage !== 'Drafting') return false;
     if (input.disconnectPolicy === 'NoAction') return false;

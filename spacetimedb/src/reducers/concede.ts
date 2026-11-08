@@ -1,7 +1,7 @@
 import spacetimedb from '../schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser } from '../helpers/ensurePermissions';
-import { ensureLobbyMember, slotTeam, slotIsCoach, slotIsSpectator } from '../helpers/lobbyHelpers';
+import { ensureLobbyMember, slotTeam, slotIsCoach, slotIsSpectator, memberHasLeft } from '../helpers/lobbyHelpers';
 import { buildConcedeSummary, isForfeitEligible, isThirdPartyReferee } from '../helpers/disconnectHelpers';
 import { runFinalization } from '../helpers/finalizationHelpers';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
@@ -9,7 +9,8 @@ import { findLobbyResult } from '../helpers/scoringHelpers';
 import { handOffToBracket } from '../helpers/tournamentResults';
 
 // ─── Shared concede helper ──────────────────────────────────────────────────
-// Used by concede_match, claim_forfeit, and leave_lobby auto-concede.
+// Used by concede_match, claim_forfeit and dq_participant's team settlement. A68(3): no reducer concedes
+// automatically (leave_lobby's D-31 auto-concede is gone).
 
 export function performConcede(
     ctx: any,
@@ -237,7 +238,7 @@ export const claim_forfeit = spacetimedb.reducer(
 
         // Get disconnected members for summary
         const disconnectedMembers = [...ctx.db.LobbyMember.lobby_id.filter(lobbyId)]
-            .filter((m: any) => slotTeam(m.lobbySlot) === targetTeam && !slotIsCoach(m.lobbySlot) && !slotIsSpectator(m.lobbySlot) && !m.isOnline);
+            .filter((m: any) => slotTeam(m.lobbySlot) === targetTeam && !slotIsCoach(m.lobbySlot) && !slotIsSpectator(m.lobbySlot) && (!m.isOnline || memberHasLeft(m)));
 
         performConcede(ctx, lobby, targetTeam, user.id, concedeTrigger, disconnectedMembers);
     }
@@ -293,9 +294,9 @@ export const defer_match = spacetimedb.reducer(
             throw new SenderError('Defer is only available under Deferred disconnect policy.');
         }
 
-        // Get all disconnected members (any team) for summary
+        // Get all disconnected members (any team) for summary. A68(3): away / abandoned rows are offline players too.
         const disconnectedMembers = [...ctx.db.LobbyMember.lobby_id.filter(lobbyId)]
-            .filter((m: any) => !m.isOnline && !slotIsCoach(m.lobbySlot) && !slotIsSpectator(m.lobbySlot) && !m.voluntarilyLeft);
+            .filter((m: any) => (!m.isOnline || memberHasLeft(m)) && !slotIsCoach(m.lobbySlot) && !slotIsSpectator(m.lobbySlot));
 
         // Build concedeSummary (D-21)
         const summary = buildConcedeSummary(ctx, lobby, disconnectedMembers, user.id, 'DeferMatch');

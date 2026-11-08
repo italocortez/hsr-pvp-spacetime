@@ -8,10 +8,13 @@ import {
     connect,
     disconnect,
     expectReject,
+    fireCheck,
     guest,
     lobbyRow,
     member,
     newHarness,
+    pendingCheck,
+    refereeIds,
     session,
     setupLobby,
     steps,
@@ -142,12 +145,21 @@ describe('F6: host leaves mid-draft', () => {
         });
         tx(test, s.host, (ctx) => M.leave_lobby(ctx, { lobbyId: s.lobbyId }));
 
+        // T-S8f (A68(1)(7)): a player's Leave in a live stage is a disconnect: the row is kept (away, leftAt) and the
+        // flags move only through the 15 s check (D-35's immediate lowest-userId transfer is retired).
+        expect(lobbyRow(test, s.lobbyId).hostUserId).toBe(s.host.userId);
+        expect(member(test, s.lobbyId, s.host.userId).leftAt).toBeDefined();
+        advance(test, 15_000);
+        fireCheck(test, pendingCheck(test, s.lobbyId, s.host.userId));
+
         const lobby = lobbyRow(test, s.lobbyId);
         expect(lobby.hostUserId).not.toBe(s.host.userId);
-        // transferReferee hands the flag to b1 (lowest eligible userId), then transferHost prefers the referee.
+        // A22(5): the leaver held the host tier, so the first online Blue player by joinSeq (b1) takes host and referee.
         expect(lobby.hostUserId).toBe(s.a.b1.userId);
+        expect(refereeIds(test, s.lobbyId)).toEqual([s.a.b1.userId]);
         expect(lobby.stage.tag).toBe('Drafting');
-        expect(member(test, s.lobbyId, s.host.userId).voluntarilyLeft).toBe(true);
+        expect(member(test, s.lobbyId, s.host.userId).isReferee).toBe(false);
+        expect(member(test, s.lobbyId, s.host.userId).leftAt).toBeDefined();
     });
 });
 

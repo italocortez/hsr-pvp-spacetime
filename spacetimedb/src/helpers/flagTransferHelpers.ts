@@ -1,12 +1,36 @@
-import { slotTeam, slotIsCoach, slotIsSpectator } from './lobbyHelpers';
+import { pickSuccessor, type MemberLite, type Slot } from '@shared/lobby-rules';
+import { slotTeam, memberHasLeft } from './memberPredicates';
 import { SYSTEM_USER_ID } from './auditColumns';
 import { updateWithAudit } from './auditHelpers';
 
-/**
- * Transfers captain flag from the leaving user to the next eligible teammate (D-34).
- * Deterministic: picks lowest userId candidate on the same team.
- */
-export function transferCaptain(ctx: any, lobbyId: number, leavingUserId: number): void {
+// ─── Flag transfers (A22(5), A68(7)) ──────────────────────────────────────────
+// Host, captain and referee move in the A22(5) order (host → Blue players → Red players → spectators → coaches, by
+// joinSeq), online candidates first, then any remaining member (A68(7): a lobby with members always has a host and a
+// referee); the leaver and away / abandoned rows (A68(2)(4)) are never candidates. D-35's lowest-user-id rule is
+// retired. `onlineOnly` is the 15 s check's rule (A22a: the first online candidate, or the flag stays). Flags never
+// return automatically to the original holder. Audit actor: SYSTEM_USER_ID.
+
+export interface TransferOptions {
+    onlineOnly?: boolean;
+}
+
+/** The pure-core view of a LobbyMember row; an away / abandoned row is offline whatever its flag says (A68(2)). */
+export const toMemberLite = (m: any): MemberLite => ({
+    userId: m.userId,
+    slot: m.lobbySlot.tag as Slot,
+    isOnline: m.isOnline && !memberHasLeft(m),
+    hasLeft: memberHasLeft(m),
+    isReferee: m.isReferee,
+    joinOrder: m.joinSeq,
+});
+
+function setMemberFlags(ctx: any, member: any, patch: Record<string, unknown>): void {
+    ctx.db.LobbyMember.by_lobby_and_user.delete([member.lobbyId, member.userId]);
+    ctx.db.LobbyMember.insert(updateWithAudit(ctx, member, patch, SYSTEM_USER_ID));
+}
+
+/** Captain (D-34, A68(7)): to a player of the same team, A22(5) order, online first then any. */
+export function transferCaptain(ctx: any, lobbyId: number, leavingUserId: number, opts: TransferOptions = {}): void {
     const members = [...ctx.db.LobbyMember.lobby_id.filter(lobbyId)];
     const leavingMember = members.find((m: any) => m.userId === leavingUserId);
     if (!leavingMember || !leavingMember.isCaptain) return;
@@ -14,36 +38,18 @@ export function transferCaptain(ctx: any, lobbyId: number, leavingUserId: number
     const team = slotTeam(leavingMember.lobbySlot);
     if (!team) return; // spectator — no captain transfer needed
 
-    const candidates = members
-        .filter(
-            (m: any) =>
-                slotTeam(m.lobbySlot) === team &&
-                !slotIsCoach(m.lobbySlot) &&
-                !m.voluntarilyLeft &&
-                m.userId !== leavingUserId,
-        )
-        .sort((a: any, b: any) => a.userId - b.userId);
-
-    if (candidates.length > 0) {
-        const newCaptain = candidates[0];
-        ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, newCaptain.userId]);
-        ctx.db.LobbyMember.insert(
-            updateWithAudit(ctx, newCaptain, { isCaptain: true }, SYSTEM_USER_ID),
-        );
-    }
-
-    // Demote leaving member
-    ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, leavingUserId]);
-    ctx.db.LobbyMember.insert(
-        updateWithAudit(ctx, leavingMember, { isCaptain: false }, SYSTEM_USER_ID),
+    const hostUserId = ctx.db.Lobby.id.find(lobbyId)?.hostUserId ?? 0;
+    const toUserId = pickSuccessor(
+        members.map(toMemberLite), hostUserId, leavingUserId, (m) => m.slot === `${team}Player`, opts.onlineOnly ?? false,
     );
+    if (toUserId === null) return; // nobody else on the team: the flag stays with its holder
+
+    setMemberFlags(ctx, members.find((m: any) => m.userId === toUserId), { isCaptain: true });
+    setMemberFlags(ctx, leavingMember, { isCaptain: false });
 }
 
-/**
- * Transfers referee flag from the leaving user to next eligible member (D-35).
- * Priority: (1) host if online and on a team, (2) lowest-userId eligible member.
- */
-export function transferReferee(ctx: any, lobbyId: number, leavingUserId: number): void {
+/** Referee (A22(5), A68(7)): any member, A22(5) order, online first then any. */
+export function transferReferee(ctx: any, lobbyId: number, leavingUserId: number, opts: TransferOptions = {}): void {
     const members = [...ctx.db.LobbyMember.lobby_id.filter(lobbyId)];
     const leavingMember = members.find((m: any) => m.userId === leavingUserId);
     if (!leavingMember || !leavingMember.isReferee) return;
@@ -51,35 +57,11 @@ export function transferReferee(ctx: any, lobbyId: number, leavingUserId: number
     const lobby = ctx.db.Lobby.id.find(lobbyId);
     if (!lobby) return;
 
-    // Find eligible candidates: online, non-spectator, non-coach, not leaving
-    const eligible = members.filter(
-        (m: any) =>
-            m.userId !== leavingUserId &&
-            m.isOnline &&
-            !slotIsSpectator(m.lobbySlot) &&
-            !slotIsCoach(m.lobbySlot) &&
-            !m.voluntarilyLeft,
-    );
+    const toUserId = pickSuccessor(members.map(toMemberLite), lobby.hostUserId, leavingUserId, undefined, opts.onlineOnly ?? false);
+    if (toUserId === null) return; // no other member: nothing to hand over
 
-    // Priority 1: host
-    let newReferee = eligible.find((m: any) => m.userId === lobby.hostUserId);
-    // Priority 2: lowest userId
-    if (!newReferee) {
-        newReferee = eligible.sort((a: any, b: any) => a.userId - b.userId)[0];
-    }
-
-    if (newReferee) {
-        ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, newReferee.userId]);
-        ctx.db.LobbyMember.insert(
-            updateWithAudit(ctx, newReferee, { isReferee: true }, SYSTEM_USER_ID),
-        );
-
-        ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, leavingUserId]);
-        ctx.db.LobbyMember.insert(
-            updateWithAudit(ctx, leavingMember, { isReferee: false }, SYSTEM_USER_ID),
-        );
-    }
-    // If no eligible member: leaving member keeps referee flag (GC handles orphan)
+    setMemberFlags(ctx, members.find((m: any) => m.userId === toUserId), { isReferee: true });
+    setMemberFlags(ctx, leavingMember, { isReferee: false });
 }
 
 /**
@@ -93,45 +75,32 @@ export function moveRefereeFlag(ctx: any, lobbyId: number, fromUserId: number, t
     const to = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, toUserId])][0];
     if (!from || !to || !from.isReferee) return;
 
-    ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, toUserId]);
-    ctx.db.LobbyMember.insert(
-        updateWithAudit(ctx, to, { isReferee: true }, SYSTEM_USER_ID),
-    );
-    ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, fromUserId]);
-    ctx.db.LobbyMember.insert(
-        updateWithAudit(ctx, from, { isReferee: false }, SYSTEM_USER_ID),
+    setMemberFlags(ctx, to, { isReferee: true });
+    setMemberFlags(ctx, from, { isReferee: false });
+}
+
+/** Host (D-36, A68(7)): any member, A22(5) order (the host tier is the leaver, so it starts at Blue players). */
+export function transferHost(ctx: any, lobbyId: number, lobby: any, leavingUserId: number, opts: TransferOptions = {}): void {
+    if (lobby.hostUserId !== leavingUserId) return;
+
+    const members = [...ctx.db.LobbyMember.lobby_id.filter(lobbyId)];
+    const toUserId = pickSuccessor(members.map(toMemberLite), lobby.hostUserId, leavingUserId, undefined, opts.onlineOnly ?? false);
+    if (toUserId === null) return; // no other member: the host stays (an empty Waiting lobby is deleted by the caller)
+
+    ctx.db.Lobby.id.update(
+        updateWithAudit(ctx, lobby, { hostUserId: toUserId }, SYSTEM_USER_ID),
     );
 }
 
 /**
- * Transfers host from the leaving user to next eligible member (D-36).
- * Priority: (1) current referee if online and on a team, (2) lowest-userId eligible member.
+ * A68(7): every row removal in every stage (leave in Waiting / AwaitingResult, a spectator's or coach's leave, kick,
+ * ban, user deletion) hands over captain, referee and host when the leaver held them. Runs while the leaver's row
+ * still exists; the caller deletes the row afterwards and must re-read the Lobby row before writing it (the host may
+ * have moved).
  */
-export function transferHost(ctx: any, lobbyId: number, lobby: any, leavingUserId: number): void {
-    if (lobby.hostUserId !== leavingUserId) return;
-
-    const members = [...ctx.db.LobbyMember.lobby_id.filter(lobbyId)];
-
-    const eligible = members.filter(
-        (m: any) =>
-            m.userId !== leavingUserId &&
-            m.isOnline &&
-            !slotIsSpectator(m.lobbySlot) &&
-            !slotIsCoach(m.lobbySlot) &&
-            !m.voluntarilyLeft,
-    );
-
-    // Priority 1: current referee
-    let newHost = eligible.find((m: any) => m.isReferee);
-    // Priority 2: lowest userId
-    if (!newHost) {
-        newHost = eligible.sort((a: any, b: any) => a.userId - b.userId)[0];
-    }
-
-    if (newHost) {
-        ctx.db.Lobby.id.update(
-            updateWithAudit(ctx, lobby, { hostUserId: newHost.userId }, SYSTEM_USER_ID),
-        );
-    }
-    // If no eligible member: host stays (GC handles abandoned lobby)
+export function transferFlagsOnRemoval(ctx: any, lobbyId: number, leavingUserId: number): void {
+    transferCaptain(ctx, lobbyId, leavingUserId);
+    transferReferee(ctx, lobbyId, leavingUserId);
+    const lobby = ctx.db.Lobby.id.find(lobbyId);
+    if (lobby) transferHost(ctx, lobbyId, lobby, leavingUserId);
 }

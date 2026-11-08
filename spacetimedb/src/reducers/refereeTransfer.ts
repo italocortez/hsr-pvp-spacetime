@@ -6,39 +6,32 @@ import {
     decideRefereeTransfer,
     type LobbyStage,
     type MemberLite,
-    type Slot,
 } from '@shared/lobby-rules';
 import { SYSTEM_USER_ID } from '../helpers/auditColumns';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
-import { moveRefereeFlag, transferCaptain, transferHost } from '../helpers/flagTransferHelpers';
-import { slotToTeamSide } from '../helpers/lobbyHelpers';
+import { moveRefereeFlag, toMemberLite, transferCaptain, transferHost } from '../helpers/flagTransferHelpers';
+import { memberHasLeft, slotToTeamSide } from '../helpers/lobbyHelpers';
 import { hasLivePresence } from '../helpers/presenceHelpers';
 import { getNextSequence } from '../helpers/stepSequence';
 
 // ─── run_referee_transfer_check ───────────────────────────────────────────────
 // A22a scheduled check (ACCESS-SECURITY-OPS D.8.2), bound to RefereeTransferCheck through `onSchedule`
 // (SDK 2.7+ form, no table→reducer cycle). `client_disconnected` inserts one row per active-stage membership,
-// 15 s out, when the user's last connection drops; `client_connected` deletes the pending rows, so a page
-// refresh inside the window never reaches this reducer. The scheduler consumes the row; the reducer is a
+// 15 s out, when the user's last connection drops, and a player's `leave_lobby` in a live stage inserts one too
+// (A68(1)); `client_connected` deletes the pending rows of rows without `leftAt`, so a page refresh inside the
+// window never reaches this reducer (a leaver's check survives the refresh, A68(2)). The scheduler consumes the row; the reducer is a
 // no-op when the lobby or the member is gone.
 //
 // Decisions come from the pure core in shared/lobby-rules (`decideRefereeTransfer`, `decideAutoPause`):
 //   - referee flag: moves only if the subject is still offline, still referee and the stage is active, to the
 //     first online candidate in the A22(5) order (host → Blue players → Red players → spectators → coaches,
-//     by joinSeq; leaver, offline and voluntarilyLeft skipped);
-//   - captain and host: the existing D-34 / D-36 transfers, run with the same grace when still offline;
+//     by joinSeq; leaver, offline and away / abandoned rows skipped);
+//   - captain and host: the A68(7) transfers (A22(5) order), run with the same grace when still offline; the host
+//     goes to an online candidate only (as before), the captain to an online teammate first, then any teammate;
+//   - an away / abandoned subject (A68(2)) counts as offline regardless of the user's presence rows;
 //   - auto-pause: only an offline *team player* in Drafting under Standard/Deferred, when not already paused.
 //     Spectators and coaches never pause anything (F5); a spectator referee or host loses that flag only by the
 //     A22(5) rule above, like anyone else.
-
-const toLite = (m: any): MemberLite => ({
-    userId: m.userId,
-    slot: m.lobbySlot.tag as Slot,
-    isOnline: m.isOnline,
-    voluntarilyLeft: m.voluntarilyLeft,
-    isReferee: m.isReferee,
-    joinOrder: m.joinSeq,
-});
 
 export const run_referee_transfer_check = spacetimedb.reducer(
     { onSchedule: RefereeTransferCheck },
@@ -55,12 +48,16 @@ export const run_referee_transfer_check = spacetimedb.reducer(
 
         const stage = lobby.stage.tag as LobbyStage;
         // "Still offline" (A48): the membership flag is false AND no device of the user holds a live presence row.
-        const subject: MemberLite = { ...toLite(member), isOnline: member.isOnline || hasLivePresence(ctx, userId) };
+        // A68(2): an away / abandoned row is offline regardless of presence (the leaver may still be browsing the site).
+        const subject: MemberLite = {
+            ...toMemberLite(member),
+            isOnline: !memberHasLeft(member) && (member.isOnline || hasLivePresence(ctx, userId)),
+        };
 
         const decision = decideRefereeTransfer({
             subjectUserId: userId,
             subject,
-            members: members.map(toLite),
+            members: members.map(toMemberLite),
             hostUserId: lobby.hostUserId,
             stage,
         });
@@ -76,7 +73,7 @@ export const run_referee_transfer_check = spacetimedb.reducer(
             transferCaptain(ctx, lobbyId, userId);
             const freshLobby = ctx.db.Lobby.id.find(lobbyId);
             if (freshLobby) {
-                transferHost(ctx, lobbyId, freshLobby, userId);
+                transferHost(ctx, lobbyId, freshLobby, userId, { onlineOnly: true });
             }
         }
 

@@ -77,4 +77,5 @@ export default {
   },
   hideMmr: __t.option(__t.bool()),
   name: __t.option(__t.string()),
+  maxSpectators: __t.option(__t.u8()),
 };

@@ -419,7 +419,7 @@ describe('Lobby Settings, Slots & Ready', () => {
 
         it('spectator cap: 12 spectators — contract-verified only', () => {
             // Impractical to test: requires 12+ simultaneous connections already in spectator slots.
-            // Contract specifies: "Spectator slots are full (max 12)."
+            // Contract specifies: "Spectator slots are full (max 12)." // S10: rewrite (A68(8): the cap is lobby.maxSpectators 0-12, watchers only)
             // This is enforced in set_team_slot cap enforcement before the slot change.
         });
 

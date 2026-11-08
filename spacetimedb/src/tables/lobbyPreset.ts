@@ -43,6 +43,7 @@ export const lobbyPresetColumns = {
     refereeCanKick: t.bool(),
     allowPlayerPause: t.bool(),
     refereeExclusiveConcede: t.bool(),  // A45(5)
+    maxSpectators: t.u8(),              // A68(8): 0-12, default 12; free set (tournament lobbies copy it)
     // A67(2): the series fields are gone (one game per lobby).
 
     // Audit:

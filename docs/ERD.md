@@ -2,6 +2,7 @@
 
 76 tables. Updated 2026-11-06 (S3 backend reset: 27 tables public → private per A37 / ACCESS-SECURITY-OPS Appendix A, 10 new, `group_phase_record` dropped per A23). Visibility: **21 public** (reference data, aggregates, `user`, `tournament`, `bracket_match`, `admin_alert`, the `lobby_cursor_event` event table); every other table is PRIVATE and read through views (S9). Paste into [mermaid.live](https://mermaid.live) to preview.
 
+Phase S8f execution (DECISIONS.md A68): `lobby_member` replaces `voluntarilyLeft` with `leftAt` (optional timestamp, away: a player's Leave in a live stage) and `abandonedAt` (optional timestamp, gone: the away player took another lobby); `lobby` and `lobby_preset` gain `maxSpectators` (u8, 0-12, default 12).
 Phase S8g execution (DECISIONS.md A70): `bracket_match` gains `blueTeamId` (optional, the team playing Blue; unset or stale = team1; still public, team ids only); A71: the head start stays on team1 whatever the colours (no `headStartSide` column) and a slot change resets `blueTeamId`.
 Phase S8e execution (DECISIONS.md A67): one game per lobby. `lobby` / `lobby_preset` lose `bestOf`, `bestOfNAdvantage`, `refereeControlsShelving` (the `AdvantageSide` enum is gone); `match_session` loses `currentGameNumber`, `gamesWonBlue`, `gamesWonRed`, `seriesBestOf`; `gameNumber` leaves `match_session_step`, `match_session_step_history` (PK `[matchHistoryId, sequence]`), `match_lineup` (index `by_lobby`), `match_lineup_history`, `match_result_group_score` / `match_result_adjustment` (index `by_result`), `match_result_game` (PK `matchResultId`, one row per record) and `match_result_game_history` (PK `matchHistoryId`); `LobbyStage` = Waiting | Drafting | Equipping | Scoring | AwaitingResult. `bracket_match.team1Games` / `team2Games` are the derived series tally (A67(4)).
 
@@ -226,6 +227,7 @@ erDiagram
         string lineupFormat "A21 Halves|Thirds"
         string banRestriction "A45"
         bool hideMmr "A40"
+        u8 maxSpectators "A68(8): 0-12, caps new Spectator joins"
     }
     lobby_member_account {
         u32 lobbyId PK_FK
@@ -236,6 +238,8 @@ erDiagram
         u32 lobbyId PK_FK
         u32 userId PK_FK
         u32 joinSeq "R4: anonymous labels derive from it"
+        timestamp leftAt "A68(2): away, cleared by a return"
+        timestamp abandonedAt "A68(4): took another lobby, never cleared"
     }
     referee_transfer_check {
         u64 scheduledId PK
@@ -256,6 +260,7 @@ erDiagram
         u32 id PK
         u32 creatorUserId FK
         u32 costSetId FK
+        u8 maxSpectators "A68(8): 0-12, system preset 12"
     }
     lobby_password {
         u32 lobbyId PK_FK

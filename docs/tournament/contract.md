@@ -621,6 +621,18 @@ Note: TournamentEnrolled row does NOT contain hsrAccountId — that column was r
 **When** the tournament is Completed
 **Then** the job finalizes the three records in bracket order, within the match by creation time; MMR moves once per game in an MMR tournament (A67(7))
 
+## Acceptance Scenarios (Phase S8f execution)
+
+### S8f-T1 A DQ'd player plays the current game on (A68(6))
+**Given** a tournament lobby in Drafting, Equipping or Scoring, and player P on team A, which keeps other members
+**When** staff call `dq_participant(tournamentId, P)` (without `dqWholeTeam`)
+**Then** P's enrolment is Disqualified and P leaves team A, but P's `LobbyMember` row in the live lobby is untouched and the game plays on; in the next lobby of the match P is not on a team, so P can only spectate; a DQ that empties team A (or `dqWholeTeam`) still settles the bracket and force-concedes the live lobby with team A's colour
+
+### S8f-T2 An away creator gives up the match (A68(4))
+**Given** a participant who pressed Leave in a live lobby ABC123
+**When** they call `create_tournament_lobby` for another bracket match without `abandonCurrentMatch`
+**Then** rejected: "You left lobby ABC123 mid-match. Joining here means you cannot return to it."; with `abandonCurrentMatch = true` the lobby is created and their row in ABC123 becomes abandoned
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -686,6 +698,7 @@ Note: TournamentEnrolled row does NOT contain hsrAccountId — that column was r
 | `generate_bracket` withdraws teams still Forming; `dq_participant` keeps the emptied team as Disqualified and settles its open matches through `applyBracketResult` (optional `dqWholeTeam`); scenarios "Generation Withdraws Forming Teams", "DQ Settles the Bracket" | Phase S8c execution (DECISIONS.md A23, A26a) | 2026-11-07 |
 | create / update arguments: grandFinalBestOf, groupAdvanceCount, groupAssignmentMode, checkInEnabled, requireResultValidation, allowMirrorPicks, lineupFormat, disconnectForfeitSeconds, optional minimumMmr and lobbyPresetId; A29 / A32 validation | Phase S8b execution (DECISIONS.md A28, A29, A32, A33, A33a, A36) | 2026-11-07 |
 | Scenarios S8e-T1..T4: D-45 = one unsettled lobby per bracket match, decided / capped rejections, no series settings on the lobby, several records per match in the job; supersedes S8d-T1 (`bestOf` / `bestOfNAdvantage` copied) and the S8d-T2 duplicate-lobby message | Phase S8e execution (DECISIONS.md A67(2)(5)(7)(8)) | 2026-11-08 |
+| Scenarios S8f-T1..T2: a DQ'd player plays the live game on (D-25 mid-match kick removed); `create_tournament_lobby` with `abandonCurrentMatch` | Phase S8f execution (DECISIONS.md A68) | 2026-11-08 |
 
 ---
 

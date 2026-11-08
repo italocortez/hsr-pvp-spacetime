@@ -53,6 +53,7 @@ export default __t.row({
     return MatchType.name("match_type");
   },
   currentPlayerCount: __t.u8().name("current_player_count"),
+  maxSpectators: __t.u8().name("max_spectators"),
   characterBudget: __t.f32().name("character_budget"),
   lightconeBudget: __t.f32().name("lightcone_budget"),
   minimumBidRaise: __t.f32().name("minimum_bid_raise"),

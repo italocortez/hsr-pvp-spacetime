@@ -212,7 +212,6 @@ export const start_draft = spacetimedb.reducer(
             ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, m.userId]);
             ctx.db.LobbyMember.insert(updateWithAudit(ctx, m, {
                 disconnectPoolRemainingMs: 300000,
-                voluntarilyLeft: false,
                 disconnectedAt: undefined,
             }, user.id));
         }

@@ -4,6 +4,7 @@ import { LobbyGcJob, setRunLobbyGcReducer } from '../tables/lobbyGcJob';
 import { SYSTEM_USER_ID } from '../helpers/auditColumns';
 import { insertWithAudit } from '../helpers/auditHelpers';
 import { ensureModerator } from '../helpers/ensurePermissions';
+import { memberHasLeft } from '../helpers/lobbyHelpers';
 import { ScheduleAt } from 'spacetimedb';
 import { SenderError } from 'spacetimedb/server';
 // External-invocation defense for `run_lobby_gc`: SpacetimeDB v2.2.0 engine returns
@@ -101,6 +102,8 @@ export function hardDeleteLobby(ctx: any, lobbyId: number, keepResultRecord = fa
 // ─── performLobbyGc ──────────────────────────────────────────────────────────
 // Shared GC logic called by both scheduled and admin-triggered reducers (D-14, D-15).
 // D-47: Also cleans Drafting/Equipping/Scoring where ALL members are offline + idle > 30 min.
+// A68(9): Waiting lobbies take the same presence test before the 30 min idle rule (D-49's unconditional rule is
+// retired); away and abandoned rows (A68(2)(4)) count as offline.
 // D-48: NEVER touches AwaitingResult (admin-only resolution).
 
 function performLobbyGc(ctx: any): { lobbiesScanned: number; lobbiesDeleted: number; deletedByStage: Record<string, number> } {
@@ -119,16 +122,14 @@ function performLobbyGc(ctx: any): { lobbiesScanned: number; lobbiesDeleted: num
         if (lobby.stage.tag === 'AwaitingResult') continue;
 
 
-        // D-47: Drafting/Equipping/Scoring: ALL members offline + 30 min idle -> hard delete (void, no winner)
-        if (lobby.stage.tag === 'Drafting' || lobby.stage.tag === 'Equipping' || lobby.stage.tag === 'Scoring') {
-            // Check ALL members are offline
-            const members = [...ctx.db.LobbyMember.lobby_id.filter(lobby.id)];
-            const anyOnline = members.some((m: any) => m.isOnline && !m.voluntarilyLeft);
-            if (anyOnline) continue; // At least one active member — skip
-            // Fall through to idle time check below
-        }
+        // D-47 / A68(9): Waiting, Drafting, Equipping, Scoring: ALL members offline + 30 min idle -> hard delete
+        // (void, no winner in the live stages)
+        // Check ALL members are offline (away / abandoned rows are offline, A68(2))
+        const members = [...ctx.db.LobbyMember.lobby_id.filter(lobby.id)];
+        const anyOnline = members.some((m: any) => m.isOnline && !memberHasLeft(m));
+        if (anyOnline) continue; // At least one active member — skip
 
-        // D-49: Waiting: same 30-min idle rule
+        // D-49: the 30-min idle rule
         // Check idle time based on lastActivityAt
         const idleTime = now.microsSinceUnixEpoch - lobby.lastActivityAt.microsSinceUnixEpoch;
         if (idleTime < THIRTY_MINUTES_MICROS) {

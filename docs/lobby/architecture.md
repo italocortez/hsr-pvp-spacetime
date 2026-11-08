@@ -25,7 +25,8 @@ Lobby (id: u32 autoInc PK)  [public: true]
   +-- standardTurnSeconds: u32 / reserveBankSeconds: u32
   +-- rosterDiffAdvantage / rosterThreshold / underThresholdAdvantage / aboveThresholdPenalty / deathPenalty: f32
   +-- matchType: MatchType (Casual | Ranked)
-  +-- currentPlayerCount: u8  (denormalized for browser view per D-07)
+  +-- currentPlayerCount: u8  (denormalized for browser view per D-07; away / abandoned rows still count, A68(1)(4))
+  +-- maxSpectators: u8  (A68(8): 0-12, default 12; caps new joins into the Spectator slot; free set)
   +-- characterBudget: f32 / lightconeBudget: f32 / minimumBidRaise: f32  (dual budgets per D-49)
   +-- allowMirrorPicks: bool / autoRandomPick: bool
   +-- refereeCanUndo / refereeCanPause / refereeCanSetCaptain / refereeCanKick: bool  (D-32)
@@ -53,7 +54,8 @@ Lobby (id: u32 autoInc PK)  [public: true]
   |     isReferee: bool   (admin powers within this lobby)
   |     isConfirmed: bool (ready-up per D-29)
   |     isCaptain: bool   (captain designation per D-30)
-  |     voluntarilyLeft: bool                (D-31: player voluntarily left an active match)
+  |     leftAt: Timestamp?                   (A68(2): away; set by a player's Leave in a live stage, cleared only by a return through join_lobby)
+  |     abandonedAt: Timestamp?              (A68(4): gone; set when the away player takes another lobby with abandonCurrentMatch; never cleared)
   |     disconnectedAt: Timestamp?           (D-08: disconnect event time; A22a grace check and isForfeitEligible read it)
   |     disconnectPoolRemainingMs: u32       (D-10: remaining disconnect pool, init 300000 at draft start)
   |     joinSeq: u32                         (R4, S4: per-lobby join counter, host = 1 then max + 1; A22(5) order and S9 labels derive from it)
@@ -93,7 +95,7 @@ Lobby (id: u32 autoInc PK)  [public: true]
         creatorUserId -> User.id  [btree: creator_user_id]
         <full flat copy of Lobby config fields: teamSize, draftMode, banMode, gameMode, matchType,
          timers, budgets, roster handicaps, anonymity flags, rosterVisibility, requireOwnership,
-         costSetId, disconnect settings, draft options, referee powers>
+         costSetId, disconnect settings, draft options, referee powers, maxSpectators (A68(8))>
         audit columns
 
 LobbyGcJob (scheduledId: u64 autoInc PK)  [PRIVATE, scheduled]
@@ -104,9 +106,11 @@ LobbyGcJob (scheduledId: u64 autoInc PK)  [PRIVATE, scheduled]
 RefereeTransferCheck (scheduledId: u64 autoInc PK)  [PRIVATE, scheduled, no audit columns]  (S3 table, S4 behaviour)
   scheduledAt: ScheduleAt / lobbyId: u32 / userId: u32
   Indexes: by_lobby_and_user (btree, [lobbyId, userId])
-  A22a: one row per (lobby, user), inserted by client_disconnected 15 s out for every active-stage membership
-  of a user whose last device disconnected; deleted by client_connected (reconnect inside the window) or
-  consumed by run_referee_transfer_check. Bound through `spacetimedb.reducer({ onSchedule: RefereeTransferCheck }, ...)`.
+  A22a: one row per (lobby, user), inserted 15 s out by markMemberOffline (helpers/disconnectHelpers.ts) for every
+  active-stage membership of a user whose last device disconnected (client_disconnected) and for a player's Leave in
+  a live stage (leave_lobby, A68(1)); deleted by client_connected for rows without leftAt (reconnect inside the
+  window; a leaver's row keeps its check, A68(2)) or consumed by run_referee_transfer_check. Bound through
+  `spacetimedb.reducer({ onSchedule: RefereeTransferCheck }, ...)`.
 
 TournamentStandIn (PK: [bracketMatchId, userId])  [public: true]
   bracketMatchId -> BracketMatch.id  [btree: bracket_match_id]
@@ -122,10 +126,10 @@ TournamentStandIn (PK: [bracketMatchId, userId])  [public: true]
 
 Lobby-owned reducers live in `reducers/lobbyLifecycle.ts`, `lobbySettings.ts`, `lobbyPresets.ts`, `refereeManagement.ts`, `cursor.ts`, `lobbyGc.ts`, `accountSelection.ts`, `concede.ts` (concede / claim_forfeit / defer), `refereeTransfer.ts` (the A22a scheduled check), the lifecycle hooks in `index.ts`, and (tournament-linked) `tournamentLobby.ts`. Draft-stage transitions (`start_draft`, picks/bans) live in the draft feature, not here.
 
-### create_lobby(config fields..., presetId, joinCode, password, name?, banRestriction?, lineupFormat?, hideMmr?, refereeExclusiveConcede?)
+### create_lobby(config fields..., presetId, joinCode, password, name?, banRestriction?, lineupFormat?, hideMmr?, refereeExclusiveConcede?, maxSpectators?, abandonCurrentMatch?)
 1. `getAuthenticatedUser(ctx)` -- reject guests.
 2. D-31b: if `presetId > 0`, verify `LobbyPreset` exists (validation only -- preset values are NOT applied server-side).
-3. D-22: `ensureNotInLobby` -- reject if caller has any active LobbyMember row.
+3. D-22 / A68(4): `ensureNotInLobby(ctx, userId, abandonCurrentMatch ?? false)` (see "Phase S8f execution" below). A68(8): `maxSpectators` (default 12) must be 0-12 ("maxSpectators must be between 0 and 12."); stored on the Lobby row.
 4. Generate a server-side `joinCode` (`generateJoinCode`, 6 uppercase alnum, up to 10 retries; the arg is ignored for storage).
 5. D-23: reject guest + `matchType=Ranked`; force `rosterVisibility=ClosedNoRating` for guests.
 6. D-42: if `matchType=Ranked`, force `allowMirrorPicks=false`. Resolve `disconnectForfeitSeconds` (0 sentinel -> undefined).
@@ -146,29 +150,23 @@ Abuse guards (Phase S5 execution; DECISIONS.md A42, A43; ACCESS-SECURITY-OPS B-7
 - A57 / A58 inline breaker (Phase S6 execution): right after the kill-switch check, a guest creation bumps `AbuseCounter['guest_lobby_create']` (`recordGuestLobbyCreation`); the creation that pushes the window count past `guestLobbyBurstThreshold` (default 50 in 10 minutes) succeeds and turns the switch off with one `AdminAlert` in the same transaction (docs/admin/architecture.md "Abuse controls").
 - B-7 hourly cap (D-B5, guests included per A43): `consumeLobbyCreateAllowance` (`helpers/abuseControls.ts`) keeps a fixed one-hour window in `UserRateState` (`lobbyWindowStart`, `lobbyCreates`; row created on first use) and rejects once `lobbyCreatesPerHour` creates fell in the window. D-22 (one lobby at a time) is unchanged.
 
-### join_lobby(lobbyId, joinCode, password)
+### join_lobby(lobbyId, joinCode, password, abandonCurrentMatch?)
 1. `getAuthenticatedUser(ctx)`.
 2. D-03: resolve lobby by `id` (if `lobbyId>0`) else by `joinCode`; throw "Lobby not found." if neither resolves.
-3. **Reconnect path** (existing LobbyMember row; F1 / Phase S4 execution: evaluated BEFORE the one-lobby check, which counts the row being rejoined and used to reject every reconnect): require a reconnect stage (Waiting, Drafting, Equipping, Scoring, AwaitingResult; A67(1)); D-38 reject if `voluntarilyLeft`; D-39 recompute `disconnectPoolRemainingMs`; delete+reinsert member `isOnline=true`, clear `disconnectedAt`; auto-resume the MatchSession timer if it was auto-paused; bump activity; return (no count change, no chat).
-4. **New-join path** only: D-22 `ensureNotInLobby`; D-23 guest restrictions; D-21 `ensureNotBanned` (reject if a `LobbyBan` row exists).
-5. Require stage Waiting or Drafting; D-02 verify password against `LobbyPassword` if `!isPublic`.
-6. Cap enforcement: reject if total members >= 20 ("Lobby is full (max 20 members)."); reject if spectators >= 12 ("Spectator slots are full (max 12)."). Hardcoded -- no config knob.
-7. D-27: insert `LobbyMember` with `lobbySlot=Spectator`, `isReferee=false`, `isConfirmed=false`, `joinSeq = max(joinSeq in lobby) + 1` (R4, S4).
+3. **Reconnect / return path** (existing LobbyMember row; F1 / Phase S4 execution: evaluated BEFORE the one-lobby check, which counts the row being rejoined and used to reject every reconnect; `abandonCurrentMatch` is ignored here): require a reconnect stage (Waiting, Drafting, Equipping, Scoring, AwaitingResult; A67(1)); A68(4) reject an abandoned row ("You left this match for another lobby and cannot return."); D-39 recompute `disconnectPoolRemainingMs`; delete+reinsert member `isOnline=true`, clear `disconnectedAt` and `leftAt` (A68(2): the only path that clears `leftAt`); auto-resume the MatchSession timer if it was auto-paused; bump activity; a returning away player (the row had `leftAt`) gets the System chat line "{name} is back."; return (no count change).
+4. **New-join path** only: D-22 / A68(4) `ensureNotInLobby(ctx, userId, abandonCurrentMatch ?? false)`; D-23 guest restrictions; D-21 `ensureNotBanned` (reject if a `LobbyBan` row exists).
+5. D-04 / A68(8): require stage Waiting, Drafting, Equipping or Scoring (AwaitingResult: "Cannot join a lobby in stage: AwaitingResult"); D-02 verify password against `LobbyPassword` if `!isPublic`.
+6. Cap enforcement: reject if total members >= 20 ("Lobby is full (max 20 members)."); a join that can only be watching is rejected when the lobby already has `maxSpectators` spectators ("Spectator slots are full (max N)." with N = `Lobby.maxSpectators`, A68(8)): every live-stage join, and a Waiting join of a tournament lobby that auto-seated to Spectator. A casual Waiting joiner lands on Spectator as a seat candidate (D-27) and is not counted against `maxSpectators` (Phase S8f fix pass: the setting caps watchers, not seat candidates; the 20-member cap still applies). Only new joins are tested: members already in the Spectator slot are unaffected by a later lower setting.
+7. D-27: insert `LobbyMember` with `lobbySlot` = the A26 / A35 auto-seat in Waiting (casual lobbies: Spectator) and Spectator in a live stage, `isReferee=false`, `isConfirmed=false`, `leftAt` / `abandonedAt` unset, `joinSeq = max(joinSeq in lobby) + 1` (R4, S4).
 8. D-04 / D-09 / D-26: auto-insert `LobbyMemberAccount` for the user's active HSR account (tournament path validates/snapshots against `TournamentPlayerAccount`; approved stand-ins snapshot all their accounts into TPA first).
 9. Increment `currentPlayerCount`, bump `lastActivityAt`, insert System `ChatMessage` "{name} joined the lobby."
 
 ### leave_lobby(lobbyId)
 1. `getAuthenticatedUser(ctx)`; `ensureLobbyMember`; load lobby.
-2. **Active stage** (Drafting/Equipping/Scoring; A67(1)):
-   - D-29 spectators/coaches: delete their `LobbyMemberAccount` rows, delete `LobbyMember`, decrement count, return.
-   - D-31 players: delete `LobbyMemberAccount` rows; delete+reinsert member with `voluntarilyLeft=true`, `isOnline=false` (row KEPT for finalization; count unchanged).
-   - D-34/35/36: `transferCaptain`, `transferReferee`, `transferHost` to the next eligible online team member (see flag-transfer priority below). F6 (Phase S4 execution): the `Lobby` row is re-read after the transfers; `performConcede` and the final `lastActivityAt` update spread the fresh row, so a transferred host is not handed back to the leaver.
-   - D-31/D-82: if the leaver's team has no remaining non-left members, `performConcede` (their team loses, reason `VoluntaryLeave`) -- UNLESS `refereeExclusiveConcede` + a third-party referee is present (then blocked; referee decides).
-   - Insert System `ChatMessage` "{name} left the match."; return.
-3. **Normal** (Waiting/AwaitingResult): delete `LobbyMemberAccount` rows; delete `LobbyMember`; compute new count.
-4. If count==0 and stage Waiting: `hardDeleteLobby` (auto-close) and return.
-5. (A67(1), S8e: the D-19 count-0 exemption of the removed long-pause stage is gone.)
-6. Else update `currentPlayerCount`; insert System `ChatMessage` "{name} left the lobby."
+2. **A player in a live stage** (Drafting / Equipping / Scoring; A68(1)): the Leave is a disconnect. A row that is already away or abandoned is left as it is (no-op, so the clock keeps its first stamp). Otherwise `markMemberOffline(ctx, lobby, member, callerId, { leftAt: now })` (the body `client_disconnected` runs per membership): `isOnline=false`, `disconnectedAt=now` under Standard / Deferred (never NoAction), one `RefereeTransferCheck` 15 s out, plus `leftAt=now`. The row, its `LobbyMemberAccount` rows and `currentPlayerCount` are kept; no flag moves here (the 15 s check moves them if the player is still away, A68(7)); no automatic concede (A68(3)); System `ChatMessage` "{name} left the match."; bump `lastActivityAt`.
+3. **Every other Leave** (a player in Waiting / AwaitingResult; a spectator or coach in any stage, A68(5)): `removeMemberRow` (below); an emptied Waiting lobby is hard-deleted (auto-close). System `ChatMessage` "{name} left the lobby." outside the live stages (a spectator's or coach's leave during the match stays silent, as before).
+
+`removeMemberRow(ctx, lobbyId, userId, actorId)` (`helpers/memberRemoval.ts`, S8f fix pass 2; was private to lobbyLifecycle.ts) is the one row-removal path of `leave_lobby`, `kick_member`, `ban_member` and `performUserDeletion` (outside a player's live-stage row, below): `transferFlagsOnRemoval` (captain, referee, host, while the row still exists), delete the member's `LobbyMemberAccount` rows, delete the `LobbyMember` row, re-read the `Lobby` row (the host may have moved), then hard-delete an emptied Waiting lobby or decrement `currentPlayerCount` (floored at 0) and bump `lastActivityAt`.
 
 ### close_lobby(lobbyId)
 1. `getAuthenticatedUser(ctx)`; load lobby.
@@ -180,14 +178,16 @@ Abuse guards (Phase S5 execution; DECISIONS.md A42, A43; ACCESS-SECURITY-OPS B-7
 1. `getAuthenticatedUser(ctx)`; load lobby; `ensureLobbyMember` (caller).
 2. Permission `canKickOrBan`: host, Admin, Moderator, or referee with `refereeCanKick`.
 3. Reject kicking self or host; validate target is a member.
-4. Delete target `LobbyMember`; decrement `currentPlayerCount` (floored at 0).
-5. Insert System `ChatMessage` "{name} was kicked from the lobby." (No LobbyBan, no account cleanup.)
+4. A68(6): in Drafting / Equipping / Scoring a target in a player slot is rejected ("Players cannot be removed once the draft has started; the match ends by result, concede or forfeit."); spectators and coaches may be removed in every stage; in Waiting and AwaitingResult any member.
+5. `removeMemberRow`: flags transferred (A68(7)), `LobbyMemberAccount` rows and the member row deleted, `currentPlayerCount` decremented.
+6. Insert System `ChatMessage` "{name} was kicked from the lobby." (No LobbyBan.)
 
 ### ban_member(lobbyId, targetUserId)
 1. `getAuthenticatedUser(ctx)`; load lobby; `ensureLobbyMember` (caller).
 2. Permission `canKickOrBan` (same as kick); reject self or host.
-3. Insert `LobbyBan` row (`bannedUserId`, `bannedByUserId=caller`).
-4. If target is currently a member: delete `LobbyMember`, decrement count.
+3. A68(6): the kick stage rule for a target who is a member (a non-member may be banned in any stage).
+4. Insert `LobbyBan` row (`bannedUserId`, `bannedByUserId=caller`).
+5. If target is currently a member: `removeMemberRow` (as kick).
 5. Insert System `ChatMessage` "{name} was banned from the lobby." (Phase S6 execution: `unban_member` lifts a ban, below.)
 
 ### unban_member(lobbyId, userId) (Phase S6 execution, A45(3))
@@ -210,12 +210,13 @@ Phase S6 execution (backlog #2, #6, #7, #9; DECISIONS.md A28, A33, A38(2)/(4), A
 - `bestOf`: 0 → 1, then `ensureBestOf`; `bestOfNAdvantage` forced None when the resulting bestOf is 1.
 - Cost set: a changed `costSetId` runs `ensureSelectableCostSet`; a change of `costSetId`, `gameMode` or `draftMode` runs `ensureCostSetCovers` on the resulting tuple.
 - Step 7 (confirmation reset) covers every change, the new fields included.
+- Phase S8f execution (A68(8)): optional `maxSpectators` (0-12, omitted = unchanged; "maxSpectators must be between 0 and 12."), a free-set field, editable in tournament lobbies too. A lower value never evicts a member already in the Spectator slot; it caps later joins.
 
 ### set_team_slot(lobbyId, targetUserId, lobbySlot)
 1. `getAuthenticatedUser(ctx)`; load lobby; D-28 `ensureStageIs(Waiting)`.
 2. Permission: moving someone else requires `ensureHostOrAbove`; self-move requires membership. `ensureLobbyMember` (target).
 3. Coach guard: assigning a coach slot to a non-coach requires host or referee.
-4. Cap enforcement (when team/coach status changes): 1 coach per team, `teamSize` players per team, 12 spectators.
+4. Cap enforcement (when team/coach status changes): 1 coach per team, `teamSize` players per team, `Lobby.maxSpectators` spectators ("Spectator slots are full (max N).", A68(8); was a hard 12) for a tournament lobby only: a casual Waiting lobby's Spectator slot holds seat candidates and is not capped (Phase S8f fix pass, the same rule as `join_lobby`).
 5. Delete+reinsert target `LobbyMember` with new `lobbySlot` and `isConfirmed=false`; bump activity.
 
 ### confirm_ready(lobbyId) / unconfirm_ready(lobbyId)
@@ -236,6 +237,7 @@ Phase S6 execution (backlog #2, #6, #7, #9; DECISIONS.md A28, A33, A38(2)/(4), A
 5. B-7 (Phase S5 execution): `create` counts the caller's presets on `creator_user_id` and rejects at `AbuseConfig.maxPresetsPerUser` (D-B5: 10). Guests never reach this check (TournamentHost+ guard, A43).
 6. Phase S6 execution (backlog #6, #2; A28, A45(2)) — the three series arguments are removed in S8e (A67(2)): optional arguments `bestOf`, `refereeControlsShelving`, `bestOfNAdvantage`, `lineupFormat`, `banRestriction`, `hideMmr` (create: defaults 1 / true / None / Halves / NoRestriction / false; update: omitted keeps the stored value). `ensureBestOf` and the None-for-Bo1 rule as in `create_lobby`. Cost set: `create` runs `ensureCostSetUsable`; `update` runs it when `costSetId` changes, else `ensureCostSetCovers` when gameMode / draftMode change.
 7. Phase S6 execution (A33a): `delete_lobby_preset` rejects the system preset for everyone, Admins included ("The system lobby preset cannot be deleted."); `update_lobby_preset` on it stays Admin-only (`ensureCanMutatePreset`).
+8. Phase S8f execution (A68(8)): optional `maxSpectators` (create: default 12; update: omitted keeps the stored value), validated 0-12 ("maxSpectators must be between 0 and 12."). The system preset carries 12.
 
 ### System lobby preset (helpers/systemPreset.ts; Phase S6 execution, A33a / CH-S4)
 `seedSystemLobbyPreset(ctx)` runs in `init` (and after `server_nuke_test_data` clears `LobbyPreset`), idempotent: one row with `isSystemPreset = true`, `creatorUserId = SYSTEM_USER_ID (0)` (so it never counts against a user's preset cap), name "Tournament default". Free-set values = the constants `create_tournament_lobby` hardcodes (reducers/tournamentLobby.ts): Classic, ban mode Four, NoRestriction, turn 60 s, reserve 120 s, handicaps 0, character / light-cone budget 0, minimum raise 20, autoRandomPick false, referee may undo / pause / set captain, not kick, player pause on, exclusive concede on, referee controls shelving on, hideMmr false. Integrity-set columns are placeholders the tournament overrides in a tournament lobby: teamSize 1, MemoryOfChaos, Casual, public, not anonymous, OpenRoster, no ownership, cost set 0, Standard disconnect, no forfeit timer, no mirror picks, Halves, bestOf 1, advantage None. `create_tournament` points `Tournament.lobbyPresetId` at it; S8's `create_tournament_lobby` copies the free set from the pointed preset.
@@ -248,8 +250,8 @@ Phase S6 execution (backlog #2, #6, #7, #9; DECISIONS.md A28, A33, A38(2)/(4), A
 
 ### transfer_referee(lobbyId, targetUserId) / reclaim_referee(lobbyId)
 - `transfer_referee`: caller must currently be referee (`isReferee=true`); reject self-target; delete+reinsert caller `isReferee=false` and target `isReferee=true`. No stage gate.
-- `reclaim_referee`: caller must be lobby host; find current referee (no-op if none or host already referee); delete+reinsert referee `isReferee=false` and host `isReferee=true`.
-- There is no `assign_referee`/`remove_referee` reducer -- the host starts as referee (D-24) and the flag moves via transfer/reclaim/auto-transfer-on-leave.
+- `reclaim_referee`: A68(7): when no member holds the flag, any member who calls takes it (non-members: "You are not a member of this lobby."). Otherwise the caller must be the lobby host (or seated `results` staff in a tournament lobby, D.8.4); no-op if the caller already holds it; delete+reinsert referee `isReferee=false` and caller `isReferee=true`.
+- There is no `assign_referee`/`remove_referee` reducer -- the host starts as referee (D-24) and the flag moves via transfer/reclaim/the A68(7) transfers.
 
 ### broadcast_cursor(lobbyId, x, y)
 1. Map `ctx.sender` -> `UserIdentity`; silently return if unregistered. Look up caller's `LobbyMember`; silently return if not a member.
@@ -262,7 +264,7 @@ B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3
 - Stamp: delete + reinsert the member row with `lastCursorAt = now` and the audit columns untouched (not a user edit). The event insert carries no audit columns (A19).
 
 ### run_lobby_gc / admin_gc_lobbies / seed_lobby_gc_job
-- `run_lobby_gc` (scheduled): `performLobbyGc` scans all lobbies -- D-48 skip AwaitingResult; D-47 active stages (Drafting, Equipping, Scoring) skipped while any member is online, else idle check; D-49 Waiting hard-deleted after 30 min idle (A67(1), S8e: the D-16 72 h rule and the D-17 between-games rule are gone with their stages). D-14 writes a `GcResult` audit row if anything was deleted. Requeues itself +15 min.
+- `run_lobby_gc` (scheduled): `performLobbyGc` scans all lobbies -- D-48 skip AwaitingResult; every other stage (Waiting, Drafting, Equipping, Scoring) is skipped while any member is online (D-47, extended to Waiting by A68(9); an away or abandoned row counts as offline), else hard-deleted after 30 min idle on `lastActivityAt` (A67(1), S8e: the D-16 72 h rule and the D-17 between-games rule are gone with their stages). D-14 writes a `GcResult` audit row if anything was deleted. Requeues itself +15 min.
 - `admin_gc_lobbies`: Moderator+ manual one-shot; same sweep, no self-requeue.
 - `seed_lobby_gc_job`: server-identity-only (called from `scripts/stdb/bootstrap.ts`); idempotent; inserts the first `LobbyGcJob` row to bootstrap the chain.
 
@@ -271,37 +273,38 @@ B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3
 2. `select`: reject Spectator/Coach; validate the `HsrAccount` belongs to caller. Tournament path (D-04) is additive up to `Tournament.maxAccountsPerPlayer` and requires the account be locked in `TournamentPlayerAccount`; non-tournament path (D-07) replaces (max 1). ~~D-B-03: bumps `accountRatingSnapshot` if a MatchResult already exists. Phase S6 execution (backlog #10): the bump is `max(snapshot, computeLobbyMemberRating(...))`, the merged rating of the member's current selection (one account: its stored rating), instead of the newly selected account's own rating.~~ (removed, A69(3); see step 1).
 3. `deselect`: find and delete the matching `LobbyMemberAccount` row (throw if not selected). No snapshot hook.
 
-### create_tournament_lobby(bracketMatchId, joinCode) / approve_stand_in(bracketMatchId, userId)
-- `create_tournament_lobby`: resolve BracketMatch + Tournament; D-64 authorize (Moderator+, organizer, `TournamentAssistant`, or a team member of `team1Id`/`team2Id`); D-45 reject a duplicate non-Finished lobby for the match; D-22 `ensureNotInLobby`; D-67 `matchType` from `countTowardsMmr`; insert `Lobby` with `isTournamentControlled=true` inheriting tournament fields + hardcoded tournament defaults; D-24/D-27 insert creator as `Spectator` + `isReferee=true`, `joinSeq=1` (R4, S4).
+### create_tournament_lobby(bracketMatchId, joinCode, abandonCurrentMatch?) / approve_stand_in(bracketMatchId, userId)
+- `create_tournament_lobby`: resolve BracketMatch + Tournament; D-64 authorize (Moderator+, organizer, `TournamentAssistant`, or a team member of `team1Id`/`team2Id`); D-45 reject a duplicate non-Finished lobby for the match; D-22 / A68(4) `ensureNotInLobby(ctx, userId, abandonCurrentMatch ?? false)`; `maxSpectators` copied from the preset's free set (A68(8)); D-67 `matchType` from `countTowardsMmr`; insert `Lobby` with `isTournamentControlled=true` inheriting tournament fields + hardcoded tournament defaults; D-24/D-27 insert creator as `Spectator` + `isReferee=true`, `joinSeq=1` (R4, S4).
 - `approve_stand_in`: resolve BracketMatch + Tournament; D-68 authorize (Moderator+, organizer, or assistant); validate target user; reject duplicate; insert `TournamentStandIn` (PK `[bracketMatchId, userId]`, `approvedByUserId=caller`). There is no `remove_stand_in` reducer.
 
 ### claim_forfeit(lobbyId, forfeitingTeamSide) (concede.ts; F7, Phase S4 execution)
 1. `getAuthenticatedUser(ctx)`; `ensureLobbyMember`; load lobby; stage must be Drafting / Equipping / Scoring (A67(1)).
 2. D-81: with `refereeExclusiveConcede` and a third-party (Spectator) referee present, only that referee may call; otherwise spectators and coaches are rejected. D-15: `disconnectPolicy` must be Standard.
 3. F7: `forfeitingTeamSide` 0 = the team opposing the caller's slot (rejected for the exclusive referee, who has no team: "Referee must specify forfeitingTeamSide: 1=Blue, 2=Red."), 1 = Blue, 2 = Red; any other value is rejected.
-4. D-16: `isForfeitEligible(targetTeam)` stays the gate (every non-coach player of that team offline with `disconnectedAt` set and pool depleted or `disconnectForfeitSeconds` elapsed); then `performConcede` (trigger RefereeDecision for a referee, Disconnect otherwise). `concede_match` and `defer_match` are unchanged.
+4. D-16: `isForfeitEligible(targetTeam)` stays the gate (every non-coach player of that team offline with `disconnectedAt` set and pool depleted or `disconnectForfeitSeconds` elapsed; A68(3): away and abandoned rows count as offline players, with the stamp of their Leave; a team with no player rows is never eligible); then `performConcede` (trigger RefereeDecision for a referee, Disconnect otherwise). `concede_match` is unchanged; `defer_match`'s summary lists away / abandoned players with the other offline players (A68(3)). No reducer concedes automatically (A68(3)): `performConcede`'s callers are `concede_match`, `claim_forfeit` and `dq_participant`'s whole-team settlement.
 
 ### client_connected / client_disconnected (index.ts; lobby side, Phase S4 execution)
-- `client_connected`: after the presence upsert (`docs/auth/architecture.md`), for every `LobbyMember` of the user: delete pending `RefereeTransferCheck` rows (`by_lobby_and_user`); if the row is offline, delete+reinsert with `isOnline=true`, `disconnectedAt` cleared and `disconnectPoolRemainingMs` decremented by the offline time (`handleDisconnectPoolUpdate`, D-10/D-11). Idempotent (F1). `join_lobby`'s reconnect branch does the same explicitly and additionally auto-resumes an auto-paused draft.
-- `client_disconnected`: marks the identity's presence row offline; if the user still has another live `UserPresence` row, stops (A48). Otherwise for every membership: `isOnline=false`; in an active stage (Drafting, Equipping, Scoring; A67(1) `ACTIVE_STAGES`) one `RefereeTransferCheck { lobbyId, userId, scheduledAt: now + 15 s }` (a stale pending row for the pair is replaced); `disconnectedAt=now` in every live stage (Drafting, Equipping, Scoring: the D-08 forfeit clock; never under NoAction). No flag transfer, no pause (A22a, F5).
+- `client_connected`: after the presence upsert (`docs/auth/architecture.md`), for every `LobbyMember` of the user **without `leftAt` / `abandonedAt`** (A68(2): an away row stays offline and keeps its pending check; the user may be browsing the site): delete pending `RefereeTransferCheck` rows (`by_lobby_and_user`); if the row is offline, delete+reinsert with `isOnline=true`, `disconnectedAt` cleared and `disconnectPoolRemainingMs` decremented by the offline time (`handleDisconnectPoolUpdate`, D-10/D-11). Idempotent (F1). `join_lobby`'s reconnect branch does the same explicitly, clears `leftAt` and additionally auto-resumes an auto-paused draft.
+- `client_disconnected`: marks the identity's presence row offline; if the user still has another live `UserPresence` row, stops (A48). Otherwise for every membership without `leftAt` / `abandonedAt` (those are already offline): `markMemberOffline` (helpers/disconnectHelpers.ts): `isOnline=false`; in an active stage (Drafting, Equipping, Scoring; A67(1) `ACTIVE_STAGES`) one `RefereeTransferCheck { lobbyId, userId, scheduledAt: now + 15 s }` (a stale pending row for the pair is replaced); `disconnectedAt=now` in every live stage (Drafting, Equipping, Scoring: the D-08 forfeit clock; never under NoAction). No flag transfer, no pause (A22a, F5).
 
 ### run_referee_transfer_check(arg: RefereeTransferCheck) (refereeTransfer.ts; scheduled, A22a)
 1. Re-read `Lobby` and the `LobbyMember`; no-op if either is gone (the scheduler consumed the row).
-2. "Still offline" = `LobbyMember.isOnline=false` and no live `UserPresence` row of the user (A48).
+2. "Still offline" = the row has `leftAt` / `abandonedAt` (A68(2): regardless of presence), or `LobbyMember.isOnline=false` and no live `UserPresence` row of the user (A48).
 3. `decideRefereeTransfer` (`shared/lobby-rules`): `transfer` only if still offline, still `isReferee` and the stage is active; `moveRefereeFlag` writes the two rows with the SYSTEM_USER_ID audit actor.
-4. Still offline and active stage: `transferCaptain` (D-34), then `transferHost` (D-36) on the re-read lobby.
+4. Still offline and active stage: `transferCaptain` (online teammate first, then any teammate), then `transferHost` (online candidates only, `onlineOnly`) on the re-read lobby; both in the A22(5) order.
 5. Drafting only: `decideAutoPause` -> insert the auto-Pause step (`actorUserId=0`, `isAutoPause=true`, `timeRemainingMs` as in `pause_draft`, `sequence = getNextSequence` per F9) and set `timerState.isPaused=true`.
 
 ### Flag-transfer priority (flagTransferHelpers.ts, shared/lobby-rules/refereeTransfer.ts)
-`leave_lobby` (a player leaving voluntarily) keeps the D-34/35/36 helpers. All candidates filtered to online, non-spectator, non-coach, non-left members:
-- **Captain** -> lowest-userId teammate on the same team.
-- **Referee** -> current host first, else lowest-userId eligible member.
-- **Host** -> current referee first, else lowest-userId eligible member.
+One order for every flag (A22(5), A68(7); D-35's lowest-user-id rule is retired): **host → Blue players → Red players → spectators → Blue coach → Red coach**, each tier by `joinSeq` (`pickSuccessor` in the pure core). The leaver and rows with `leftAt` / `abandonedAt` are never candidates. The captain's candidates are the players of the leaver's team. Flags never return automatically to the original holder.
 
-**Disconnects** (Phase S4 execution; A22(5), A22a, F5) move nothing in the hook. `run_referee_transfer_check` fires 15 s after the user's last device disconnected and, only if the member is still offline:
-- **Referee** -> `pickRefereeSuccessor`: the host if online, else Blue players, Red players, spectators, Blue coach, Red coach, each tier by `joinSeq`; the leaver, offline members and `voluntarilyLeft` are skipped; no candidate = the flag stays (GC handles the orphan).
-- **Captain / Host** -> the D-34 / D-36 helpers above, with the same grace, while the lobby is still in an active stage.
-- **Auto-pause** -> only an offline team player (never a spectator, coach or spectator-referee), only in Drafting, only under Standard/Deferred, only when not already paused.
+**Row removals** (A68(7): leave in Waiting / AwaitingResult, a spectator's or coach's leave in any stage, kick, ban, user deletion) run `transferFlagsOnRemoval(ctx, lobbyId, leavingUserId)` = `transferCaptain`, `transferReferee`, `transferHost`: **online candidates first, then any remaining member**, so a lobby with members always has a host and a referee. With no other member the flag stays (an empty Waiting lobby is deleted). **User deletion** (`performUserDeletion`, S8f fix pass 2, A68(6)(7)): per membership of the deleted user, a row in Waiting / AwaitingResult, a spectator or coach row in any stage, or a row whose lobby is gone goes through `removeMemberRow` exactly as a leave (flags, `LobbyMemberAccount` rows, row, `currentPlayerCount`, emptied Waiting lobby hard-deleted). A player row in Drafting / Equipping / Scoring (only an admin deletion reaches it; `delete_my_account` refuses an away or live membership) is kept (A68(6)): `transferFlagsOnRemoval`, then the row becomes away and abandoned (`isOnline = false`, `leftAt` and `abandonedAt` = now unless already set, `disconnectedAt` = now under Standard / Deferred unless already set), so it counts as an offline player for the forfeit test (A68(3)) and is never a flag candidate again (`hasLeft`). No `RefereeTransferCheck` is scheduled (the flags have already moved). The pure predicates `memberHasLeft` and `slotTeam` live in `helpers/memberPredicates.ts` (no imports; re-exported by `lobbyHelpers.ts`) so `flagTransferHelpers.ts` no longer imports `lobbyHelpers.ts` (the module's one import cycle, removed).
+
+**Disconnects and live-stage Leaves** (Phase S4 execution; A22(5), A22a, F5, A68(1)) move nothing at once. `run_referee_transfer_check` fires 15 s later and, only if the member is still offline (away rows always are):
+- **Referee** -> `pickRefereeSuccessor`: the first **online** candidate in the order above; no candidate = the flag stays.
+- **Host** -> `transferHost(..., { onlineOnly: true })`: the first online candidate, else the flag stays.
+- **Captain** -> `transferCaptain`: an online teammate first, then any teammate (as before, the captain always moves to a teammate when one exists).
+- **Auto-pause** -> only an offline team player (never a spectator, coach or spectator-referee), only in Drafting, only under Standard/Deferred, only when not already paused. A leaver counts as offline (A68(1)).
+- `reclaim_referee` fills an unheld referee flag with the calling member (A68(7)).
 
 ## Phase S8d execution (DECISIONS.md A26, A34, A35; ACCESS-SECURITY-OPS §D.8.4, §D.8.5)
 
@@ -364,6 +367,26 @@ B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3
   the bracket's sides (A35 / A70); shuffling is not available." (a shuffle would break the match's colour mapping).
   _The S8d sentence above ("follow the bracket (A35)", "seat team1 on Red while the hand-off credits Blue = team1") is superseded in Phase S8g execution (DECISIONS.md A70)._
 
+## Phase S8f execution (DECISIONS.md A68)
+
+Membership lifecycle after A68 (details in the reducer flows above):
+
+| Situation | Waiting | Drafting / Equipping / Scoring | AwaitingResult |
+|---|---|---|---|
+| Player presses Leave | row + LMA deleted, flags transferred (A68(7)) | **disconnect**: row kept offline, `leftAt` set, clock + 15 s check (A68(1)(2)) | row + LMA deleted, flags transferred |
+| Spectator / coach presses Leave | row deleted, flags transferred | row deleted, flags transferred (A68(5)) | row deleted, flags transferred |
+| Player closes the tab | offline | offline, clock + 15 s check (A22a) | offline |
+| Return | reconnect | reconnect; an away row returns through `join_lobby` ("… is back."); an abandoned row never | reconnect |
+| Kick / ban | any member but the host | spectators and coaches only (A68(6)) | any member but the host |
+| New join | auto-seat (A26 / A35); tournament Spectator capped by `maxSpectators`, casual seat candidates not | Spectator only, capped by `maxSpectators` (A68(8)) | closed |
+| GC | everyone offline + 30 min idle (A68(9)) | everyone offline + 30 min idle | never |
+
+- **Away and abandoned (A68(2)(4)).** `leftAt` marks a player who pressed Leave in a live stage: offline whatever the presence rows say (`memberHasLeft`), skipped by `client_connected` / `client_disconnected`, never a flag candidate, an offline player for the forfeit test (`isForfeitEligible`, `defer_match`'s summary, `claim_forfeit`'s summary), still counted in `currentPlayerCount`. `abandonedAt` is added when that player takes another lobby with `abandonCurrentMatch`; the row stays an offline player of its team and keeps every stamp, but no longer counts for D-22, cannot return and drops out of `view_my_lobbies`.
+- **One lobby at a time (D-22, A68(4)(5)).** `membershipHold` (helpers/lobbyHelpers.ts) classifies each membership: `free` (lobby gone or AwaitingResult, or the row abandoned), `away` (a `leftAt` row in a live stage) or `held` (anything else, spectator and coach rows included). `ensureNotInLobby(ctx, userId, abandonCurrentMatch)`: a `held` row rejects with "You are already in a lobby. Leave it before creating or joining another."; an `away` row rejects without the flag with "You left lobby {joinCode} mid-match. Joining here means you cannot return to it." and, with it, gets `abandonedAt = now` (`leftAt`, `isOnline = false`, `disconnectedAt` kept) before the caller proceeds; just before that write `transferFlagsOnRemoval` moves any host / captain / referee flag the 15 s check left on the away row (no online candidate then) in the A22(5) order, online first then any (A68(4)(7); under NoAction this is the only path that frees a stuck host or referee). `delete_my_account` rejects on any non-`free` row ("Leave your lobby before deleting your account.").
+- **No automatic forfeit (A68(3)).** The D-31 auto-concede and its D-82 branch are removed from `leave_lobby`; `ConcedeTrigger.VoluntaryLeave` stays in the enum (a player's own `concede_match` still writes it; history rows reference it).
+- **DQ (A68(6)).** `dq_participant` no longer removes a DQ'd player from a live lobby; the whole-team settlement is unchanged ([../tournament/architecture.md](../tournament/architecture.md)).
+- **Views.** `view_my_lobbies` skips abandoned rows (A68(10)); the presence state of `view_my_lobby_members` is S9's.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -402,6 +425,8 @@ B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3
 | One game per lobby: series stages, series reducers and series settings removed; stage lists shrink to the live stages; GC D-16 / D-17 gone; D-45 = one unsettled lobby per bracket match + decided / cap rejections | Phase S8e execution (DECISIONS.md A67(1)(2)(5)) | 2026-11-08 |
 | `select_match_account` loses the D-B-03 snapshot ratchet (dead since selection is Waiting-only); the snapshot is taken once at `start_draft` | Phase S8e execution (DECISIONS.md A69(3)) | 2026-11-08 |
 | Tournament seating reads the bracket match's colour mapping; shuffle guard message names A70 | Phase S8g execution (DECISIONS.md A70) | 2026-11-08 |
+| Membership lifecycle: `voluntarilyLeft` replaced by `leftAt` / `abandonedAt`; a player's live-stage Leave runs `markMemberOffline` (shared with `client_disconnected`); no auto-concede, no rejoin ban; `abandonCurrentMatch` on `create_lobby` / `join_lobby` / `create_tournament_lobby`; kick / ban of players only before the draft (and in AwaitingResult), LMA rows deleted; one flag-transfer order (A22(5), online first then any) for every row removal; spectator joins in the live stages capped by the new `maxSpectators` (Lobby, LobbyPreset, system preset 12); GC presence test for Waiting; `reclaim_referee` fills an unheld flag; `view_my_lobbies` drops abandoned rows | Phase S8f execution (DECISIONS.md A68) | 2026-11-08 |
+| Fix pass: `maxSpectators` caps watchers, not seat candidates (casual Waiting joins and `set_team_slot` moves into Spectator are not counted; live-stage joins and tournament Waiting spectators are); `ensureNotInLobby` runs `transferFlagsOnRemoval` on the away row before writing `abandonedAt` | Phase S8f execution (DECISIONS.md A68(4)(7)(8)) | 2026-11-08 |
 
 ---
 

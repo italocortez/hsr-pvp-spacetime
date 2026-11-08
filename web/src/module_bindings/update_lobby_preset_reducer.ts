@@ -74,4 +74,5 @@ export default {
     return __t.option(BanRestriction);
   },
   hideMmr: __t.option(__t.bool()),
+  maxSpectators: __t.option(__t.u8()),
 };

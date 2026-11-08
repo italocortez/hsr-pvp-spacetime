@@ -2,6 +2,7 @@ import spacetimedb from '../schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { updateWithAudit } from '../helpers/auditHelpers';
 import { performUserDeletion } from '../helpers/userDeletionHelper';
+import { membershipHold } from '../helpers/lobbyHelpers';
 
 /**
  * Helper: resolve ctx.sender → UserIdentity → User.
@@ -21,7 +22,7 @@ function resolveUser(ctx: any) {
  * Guests keep the old delete_guest_account behaviour: the caller's UserIdentity mapping is removed, and the User row
  * too once no other identity points at it.
  *
- * Verified users: rejected while they sit in a lobby (as ensureNotInLobby counts it), or hold an enrollment in a
+ * Verified users: rejected while they sit in a lobby (as ensureNotInLobby counts it, an away membership included, A68(4)), or hold an enrollment in a
  * tournament that is not Completed / Cancelled (Withdrawn and Disqualified enrollments do not block). Otherwise the
  * deletion cascades through performUserDeletion at once (UserPrivate, calendars, presence, rate state, identities,
  * HSR accounts; the User row is archived to DeletedUser when history references it).
@@ -47,12 +48,10 @@ export const delete_my_account = spacetimedb.reducer((ctx) => {
         return;
     }
 
-    // Same notion of "in a lobby" as ensureNotInLobby (D-22): AwaitingResult lobbies and voluntarily
-    // left seats do not count; lobby GC removes those rows.
+    // Same notion of "in a lobby" as ensureNotInLobby (D-22, A68(4)): AwaitingResult lobbies and abandoned rows do
+    // not count; an away membership (A68(2)) blocks deletion like any other (there is no abandon option here).
     for (const membership of ctx.db.LobbyMember.user_id.filter(user.id)) {
-        if (membership.voluntarilyLeft) continue;
-        const lobby = ctx.db.Lobby.id.find(membership.lobbyId);
-        if (lobby && lobby.stage.tag !== 'AwaitingResult') {
+        if (membershipHold(ctx, membership).kind !== 'free') {
             throw new SenderError('Leave your lobby before deleting your account.');
         }
     }

@@ -58,6 +58,7 @@ export const SYSTEM_PRESET_VALUES = {
     allowPlayerPause: true,
     refereeExclusiveConcede: true,
     hideMmr: false,
+    maxSpectators: 12, // A68(8): the upper bound, today's hard cap
 };
 
 /** The system preset row, or undefined while it is absent. */

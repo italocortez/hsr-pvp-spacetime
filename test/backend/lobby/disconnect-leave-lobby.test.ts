@@ -103,13 +103,14 @@ describe('leave_lobby during active match', () => {
             const b2After = membersAfter.find(m => m.userId === blue2.userId);
 
             // Blue1: voluntarilyLeft=true, isOnline=false, no longer captain
-            expect(b1After?.voluntarilyLeft).toBe(true);
+            expect(b1After?.voluntarilyLeft).toBe(true); // S10: rewrite (A68(1)(2): leftAt set; the captain moves only through the 15 s check, not at the Leave)
             expect(b1After?.isOnline).toBe(false);
             expect(b1After?.isCaptain).toBe(false);
 
             // Blue2: now captain
             expect(b2After?.isCaptain).toBe(true);
 
+            // S10: rewrite (A68(4): an away player needs abandonCurrentMatch to create another lobby; without it the prompt rejects)
             // Blue1 can create a new lobby (ensureNotInLobby skips voluntarilyLeft)
             await blue1.call.createLobby(defaultLobbyArgs());
             await blue1.sync(1000);
@@ -123,6 +124,7 @@ describe('leave_lobby during active match', () => {
         }
     }, 45000);
 
+    // S10: rewrite (A68(3): D-31 auto-concede removed; the last player leaving keeps the match live, forfeit by claim only)
     it('last player on team leaves → auto-concede → lobby to AwaitingResult', async () => {
         const host = await createVerifiedTestHarness();
         const blue1 = await createVerifiedTestHarness();
@@ -147,6 +149,7 @@ describe('leave_lobby during active match', () => {
         }
     }, 45000);
 
+    // S10: rewrite (A68(3): no automatic forfeit, so nothing to block; the lobby stays live and Red is away)
     it('auto-concede blocked when refereeExclusiveConcede + 3rd party referee', async () => {
         const host = await createVerifiedTestHarness();
         const blue1 = await createVerifiedTestHarness();
@@ -168,7 +171,7 @@ describe('leave_lobby during active match', () => {
 
             // Red should have voluntarilyLeft=true
             const redMember = lobbyMembers(host, lobbyId).find(m => m.userId === red.userId);
-            expect(redMember?.voluntarilyLeft).toBe(true);
+            expect(redMember?.voluntarilyLeft).toBe(true); // S10: rewrite (A68(2): voluntarilyLeft replaced by leftAt; the row is away, not banned)
         } finally {
             await host.disconnect();
             await blue1.disconnect();

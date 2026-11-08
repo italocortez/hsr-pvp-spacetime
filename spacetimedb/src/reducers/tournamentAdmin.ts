@@ -30,7 +30,9 @@ const ACTIVE_LOBBY_STAGES = new Set(['Drafting', 'Equipping', 'Scoring']);
 //     no open slot (a double-elimination loss routes it into the losers bracket first).
 //   - Live lobby of the team: Drafting / Equipping / Scoring -> force-concede on the last member (D-25; A54: the
 //     lobby's record becomes the Validated concede record, the bracket is already settled by the DQ, and the lobby
-//     parks until the finalize job); a member DQ'd from a team that plays on is kicked from an active lobby.
+//     parks until the finalize job). A68(6): a player DQ'd from a team that plays on is not removed from the live
+//     lobby (the D-25 kick is gone): the current game plays on with them, and the DQ bites from the next lobby
+//     (team membership gone, allowedSlotsFor seats nobody who is not on a team).
 //     A67(1): the between-games stages are gone, so the D-26 hard-delete branch is too.
 
 /** Settles every open bracket slot of a disqualified team (see dq_participant). */
@@ -153,14 +155,7 @@ export const dq_participant = spacetimedb.reducer(
             // A26 / A26a(3): before generation the team may drop below teamSize (Ready -> Forming); once the bracket
             // is generated a team that still has members keeps its status and plays with stand-ins.
             if (tournament.bracketGeneratedAt === undefined) refreshTeamStatus(ctx, tournament, teamId, user.id);
-            if (activeLobby && ACTIVE_LOBBY_STAGES.has(activeLobby.lobby.stage.tag)) {
-                // DQ'd player on a team that plays on: kick from the active lobby (D-25)
-                const lobbyMember = [...ctx.db.LobbyMember.lobby_id.filter(activeLobby.lobby.id)]
-                    .find((m: any) => m.userId === userId);
-                if (lobbyMember) {
-                    ctx.db.LobbyMember.delete(lobbyMember);
-                }
-            }
+            // A68(6): no kick from a live lobby; the game plays on and the DQ takes effect from the next lobby.
         }
     }
 );

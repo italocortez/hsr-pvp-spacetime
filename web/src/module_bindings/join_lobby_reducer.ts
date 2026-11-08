@@ -14,4 +14,5 @@ export default {
   lobbyId: __t.u32(),
   joinCode: __t.string(),
   password: __t.string(),
+  abandonCurrentMatch: __t.option(__t.bool()),
 };

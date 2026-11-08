@@ -1,10 +1,11 @@
 // T-S4(a): the referee-transfer and auto-pause tests moved from the lobby-rules prototype
 // (notes/migration/prototypes/lobby-rules/lobbyRules.test.ts). The allowedSlots tests stay with S8.
 import { describe, it, expect } from 'vitest';
-import { pickRefereeSuccessor, decideRefereeTransfer, decideAutoPause, type MemberLite } from './refereeTransfer';
+import { pickRefereeSuccessor, pickSuccessor, decideRefereeTransfer, decideAutoPause, type MemberLite } from './refereeTransfer';
 
+// T-S8f (A68(2)(4)): MemberLite.voluntarilyLeft is now hasLeft (the row carries leftAt or abandonedAt).
 const m = (userId: number, slot: MemberLite['slot'], joinOrder: number, over: Partial<MemberLite> = {}): MemberLite => ({
-    userId, slot, joinOrder, isOnline: true, voluntarilyLeft: false, isReferee: false, ...over,
+    userId, slot, joinOrder, isOnline: true, hasLeft: false, isReferee: false, ...over,
 });
 
 describe('pickRefereeSuccessor (A22 order)', () => {
@@ -35,14 +36,53 @@ describe('pickRefereeSuccessor (A22 order)', () => {
         const coachOnly = [m(41, 'RedCoach', 1), m(40, 'BlueCoach', 2)];
         expect(pickRefereeSuccessor(coachOnly, HOST, 99)).toBe(40); // Blue coach before Red coach
     });
-    it('skips offline members, the leaver and voluntarilyLeft', () => {
+    it('skips offline members, the leaver and hasLeft (away / abandoned) rows', () => {
         const ms = [
             m(HOST, 'Spectator', 0, { isOnline: false }),
-            m(10, 'BluePlayer', 1, { voluntarilyLeft: true }),
+            m(10, 'BluePlayer', 1, { hasLeft: true }),
             m(11, 'BluePlayer', 2),
         ];
         expect(pickRefereeSuccessor(ms, HOST, 11)).toBeNull();
         expect(pickRefereeSuccessor(ms, HOST, 99)).toBe(11);
+    });
+});
+
+// T-S8f: the generic successor of A68(7) (host, captain, referee on every removal): A22(5) order, online first, then
+// any remaining member; hasLeft rows and the leaver never; `onlineOnly` is the 15 s check's rule (A22a).
+describe('pickSuccessor (A68(7))', () => {
+    const HOST = 1;
+    it('online candidates first, in the A22(5) order', () => {
+        const ms = [
+            m(HOST, 'Spectator', 0, { isOnline: false }),
+            m(10, 'BluePlayer', 1, { isOnline: false }),
+            m(20, 'RedPlayer', 2),
+            m(30, 'Spectator', 3),
+        ];
+        expect(pickSuccessor(ms, HOST, 99)).toBe(20);
+    });
+    it('then any remaining member when nobody is online (host → Blue → Red → spectators → coaches)', () => {
+        const ms = [
+            m(40, 'BlueCoach', 0, { isOnline: false }),
+            m(30, 'Spectator', 1, { isOnline: false }),
+            m(20, 'RedPlayer', 2, { isOnline: false }),
+            m(11, 'BluePlayer', 4, { isOnline: false }),
+            m(10, 'BluePlayer', 3, { isOnline: false }),
+        ];
+        expect(pickSuccessor(ms, HOST, 99)).toBe(10);
+        expect(pickSuccessor([...ms, m(HOST, 'Spectator', 9, { isOnline: false })], HOST, 99)).toBe(HOST);
+    });
+    it('onlineOnly: nobody online → null (the 15 s check keeps the flag)', () => {
+        const ms = [m(10, 'BluePlayer', 1, { isOnline: false })];
+        expect(pickSuccessor(ms, HOST, 99, () => true, true)).toBeNull();
+        expect(pickSuccessor(ms, HOST, 99)).toBe(10);
+    });
+    it('hasLeft rows and the leaver are never candidates, even as the last resort', () => {
+        const ms = [m(10, 'BluePlayer', 1, { hasLeft: true, isOnline: false }), m(11, 'BluePlayer', 2)];
+        expect(pickSuccessor(ms, HOST, 11)).toBeNull();
+    });
+    it('a predicate narrows the set (the captain: same-team players only)', () => {
+        const ms = [m(10, 'BluePlayer', 1), m(20, 'RedPlayer', 0), m(21, 'RedPlayer', 2, { isOnline: false })];
+        expect(pickSuccessor(ms, HOST, 20, (x) => x.slot === 'RedPlayer')).toBe(21);
     });
 });
 

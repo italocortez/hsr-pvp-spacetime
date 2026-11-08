@@ -4,6 +4,7 @@ import { DraftMode, BanMode, GameMode, MatchType, RosterVisibility, DisconnectPo
 import { getAuthenticatedUser, isRoleAtLeast } from '../helpers/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '../helpers/auditHelpers';
 import { readAbuseConfig } from '../helpers/abuseControls';
+import { resolveMaxSpectators } from '../helpers/lobbyHelpers';
 
 import { ensureCostSetCovers, ensureCostSetUsable } from '../helpers/costSetGuards';
 
@@ -96,6 +97,7 @@ export const create_lobby_preset = spacetimedb.reducer(
         lineupFormat: LineupFormat.optional(),
         banRestriction: BanRestriction.optional(),
         hideMmr: t.bool().optional(),
+        maxSpectators: t.u8().optional(), // A68(8): 0-12; default 12 on create, unchanged on update
     },
     (ctx, args) => {
         const user = getAuthenticatedUser(ctx);
@@ -150,6 +152,7 @@ export const create_lobby_preset = spacetimedb.reducer(
             isAnonymousPlayers: args.isAnonymousPlayers,
             isAnonymousSpectators: args.isAnonymousSpectators,
             hideMmr: args.hideMmr ?? false,
+            maxSpectators: resolveMaxSpectators(args.maxSpectators, 12), // A68(8)
             rosterVisibility: args.rosterVisibility,
             requireOwnership: args.requireOwnership,
             costSetId: args.costSetId,
@@ -214,6 +217,7 @@ export const update_lobby_preset = spacetimedb.reducer(
         lineupFormat: LineupFormat.optional(),
         banRestriction: BanRestriction.optional(),
         hideMmr: t.bool().optional(),
+        maxSpectators: t.u8().optional(), // A68(8): 0-12; default 12 on create, unchanged on update
     },
     (ctx, args) => {
         const user = getAuthenticatedUser(ctx);
@@ -279,6 +283,7 @@ export const update_lobby_preset = spacetimedb.reducer(
             lineupFormat: args.lineupFormat ?? preset.lineupFormat,
             banRestriction: args.banRestriction ?? preset.banRestriction,
             hideMmr: args.hideMmr ?? preset.hideMmr,
+            maxSpectators: resolveMaxSpectators(args.maxSpectators, preset.maxSpectators), // A68(8)
         }, user.id));
 
         console.log(`[PRESET] Lobby preset #${args.presetId} updated by user #${user.id}`);

@@ -13,15 +13,16 @@ import {
     canKickOrBan,
     generateJoinCode,
     nextJoinSeq,
-    slotTeam,
     slotIsCoach,
     slotIsSpectator,
+    LIVE_STAGES,
+    memberHasLeft,
+    resolveMaxSpectators,
 } from '../helpers/lobbyHelpers';
 import { hardDeleteLobby } from './lobbyGc';
-import { transferCaptain, transferReferee, transferHost } from '../helpers/flagTransferHelpers';
+import { removeMemberRow } from '../helpers/memberRemoval';
 import { resolveUserLabel } from '../helpers/userLabel';
-import { isThirdPartyReferee } from '../helpers/disconnectHelpers';
-import { performConcede } from './concede';
+import { markMemberOffline } from '../helpers/disconnectHelpers';
 import { consumeLobbyCreateAllowance, readAbuseConfig, recordGuestLobbyCreation } from '../helpers/abuseControls';
 import { normalizeLobbyName } from '../helpers/seriesSettings';
 import { ensureCostSetUsable } from '../helpers/costSetGuards';
@@ -30,7 +31,7 @@ import { autoSeatSlot } from '../helpers/tournamentLobbySides';
 
 // ─── create_lobby ─────────────────────────────────────────────────────────────
 // Creates a new lobby and inserts the creator as the host/referee.
-// Per D-22: enforces one lobby per user.
+// Per D-22 / A68(4): enforces one lobby per user; an away membership is given up with abandonCurrentMatch.
 // Per D-23: guests cannot create Ranked lobbies.
 // Per D-24: host gets isReferee=true.
 // Per D-27: host joins as Spectator initially.
@@ -81,6 +82,8 @@ export const create_lobby = spacetimedb.reducer(
         lineupFormat: LineupFormat.optional(),         // A21: default Halves
         hideMmr: t.bool().optional(),                  // A40 mitigation (2): default false
         refereeExclusiveConcede: t.bool().optional(),  // A45(5): default true
+        maxSpectators: t.u8().optional(),              // A68(8): 0-12, default 12
+        abandonCurrentMatch: t.bool().optional(),      // A68(4): give up an away membership; default false
     },
     (ctx, args) => {
         const user = getAuthenticatedUser(ctx);
@@ -93,8 +96,11 @@ export const create_lobby = spacetimedb.reducer(
             }
         }
 
-        // D-22: one lobby at a time
-        ensureNotInLobby(ctx, user.id);
+        // D-22 / A68(4): one lobby at a time
+        ensureNotInLobby(ctx, user.id, args.abandonCurrentMatch ?? false);
+
+        // A68(8): spectator count
+        const maxSpectators = resolveMaxSpectators(args.maxSpectators, 12);
 
         // Server-generated join code (Jackbox-style, 5 chars, deterministic hash)
         const joinCode = generateJoinCode(ctx, user.id);
@@ -157,6 +163,7 @@ export const create_lobby = spacetimedb.reducer(
             deathPenalty: args.deathPenalty,
             matchType: args.matchType,
             currentPlayerCount: 1,
+            maxSpectators,
             characterBudget: args.characterBudget,
             lightconeBudget: args.lightconeBudget,
             minimumBidRaise: args.minimumBidRaise,
@@ -194,7 +201,8 @@ export const create_lobby = spacetimedb.reducer(
             isReferee: true,
             isConfirmed: false,
             isCaptain: false,
-            voluntarilyLeft: false,
+            leftAt: undefined,
+            abandonedAt: undefined,
             disconnectedAt: undefined,
             disconnectPoolRemainingMs: 0,
             joinSeq: nextJoinSeq(ctx, lobby.id), // R4: per-lobby join counter; A22(5) order and the S9 labels derive from it
@@ -217,10 +225,12 @@ export const create_lobby = spacetimedb.reducer(
 // ─── join_lobby ───────────────────────────────────────────────────────────────
 // Joins an existing lobby by lobbyId or joinCode.
 // Per D-03: accepts either lobbyId or joinCode.
-// Per D-22: enforces one lobby at a time.
+// Per D-22 / A68(4): enforces one lobby at a time (new joins; abandonCurrentMatch gives up an away membership).
 // Per D-23: guest restrictions.
 // Per D-21: ban check.
-// Per D-04: reconnect during Drafting, new spectators allowed.
+// Per D-04 / A68(8): reconnect in every stage; new joins in Waiting and, as Spectator, in Drafting / Equipping /
+// Scoring, up to lobby.maxSpectators.
+// Per A68(1)(2)(4): an away member returns through the reconnect branch; an abandoned one cannot.
 // Per D-02: password check for private lobbies.
 // Per D-27: join as Spectator.
 
@@ -229,6 +239,7 @@ export const join_lobby = spacetimedb.reducer(
         lobbyId: t.u32(),
         joinCode: t.string(),
         password: t.string(),
+        abandonCurrentMatch: t.bool().optional(), // A68(4): new joins only; the reconnect branch ignores it
     },
     (ctx, args) => {
         const user = getAuthenticatedUser(ctx);
@@ -249,7 +260,7 @@ export const join_lobby = spacetimedb.reducer(
         // F1: the reconnect branch runs BEFORE ensureNotInLobby, which counts the row of the lobby being
         // rejoined and would reject every reconnect. The guest and ban checks are not needed for an existing
         // member: they passed them at join time, and ban_member deletes the membership row.
-        // D-04, D-37, D-38, D-39, D-40: stage-specific join logic with extended reconnect
+        // D-04, D-37, D-39, D-40: stage-specific join logic with extended reconnect (A68(1): D-38's rejoin ban is gone)
         const existingMember = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, user.id])][0];
         if (existingMember) {
             // F1: Waiting included — a refresh in the waiting room is a reconnect too.
@@ -257,10 +268,12 @@ export const join_lobby = spacetimedb.reducer(
             if (!reconnectStages.includes(lobby.stage.tag)) {
                 throw new SenderError('Cannot rejoin this lobby in its current stage.');
             }
-            // Block reconnect if voluntarilyLeft (D-38)
-            if (existingMember.voluntarilyLeft) {
-                throw new SenderError('You voluntarily left this match and cannot rejoin.');
+            // A68(4): an abandoned row (the player took another lobby) never returns.
+            if (existingMember.abandonedAt !== undefined) {
+                throw new SenderError('You left this match for another lobby and cannot return.');
             }
+            // A68(1)(2): an away row (leftAt) returns here, the only path that clears leftAt.
+            const isReturn = existingMember.leftAt !== undefined;
             // Reconnect: set isOnline=true, clear disconnectedAt (D-39)
             // Compute pool decrement if disconnectedAt was set
             let newPool = existingMember.disconnectPoolRemainingMs;
@@ -272,9 +285,21 @@ export const join_lobby = spacetimedb.reducer(
             ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, user.id]);
             ctx.db.LobbyMember.insert(updateWithAudit(ctx, existingMember, {
                 isOnline: true,
+                leftAt: undefined,
                 disconnectedAt: undefined,
                 disconnectPoolRemainingMs: newPool,
             }, user.id));
+            if (isReturn) {
+                ctx.db.ChatMessage.insert(insertWithAudit(ctx, {
+                    id: 0,
+                    lobbyId,
+                    senderUserId: 0,
+                    senderType: { tag: 'System', value: {} } as any,
+                    content: user.displayName + ' is back.',
+                    metadata: undefined,
+                    anonymousLabel: undefined,
+                }, user.id));
+            }
             // Auto-resume if draft was auto-paused (D-11, D-39)
             if (lobby.stage.tag === 'Drafting') {
                 const session = ctx.db.MatchSession.lobbyId.find(lobbyId);
@@ -304,8 +329,8 @@ export const join_lobby = spacetimedb.reducer(
             return;
         }
 
-        // D-22: one lobby at a time (genuinely new joins only, F1)
-        ensureNotInLobby(ctx, user.id);
+        // D-22 / A68(4): one lobby at a time (genuinely new joins only, F1)
+        ensureNotInLobby(ctx, user.id, args.abandonCurrentMatch ?? false);
 
         // D-23: guest restrictions
         ensureGuestRestrictions(user, lobby.matchType);
@@ -313,8 +338,8 @@ export const join_lobby = spacetimedb.reducer(
         // D-21: ban check
         ensureNotBanned(ctx, lobbyId, user.id);
 
-        // New join: only allowed during Waiting or Drafting (as Spectator)
-        if (lobby.stage.tag !== 'Waiting' && lobby.stage.tag !== 'Drafting') {
+        // D-04 extended (A68(8)): new joins in Waiting and, as Spectator, in the live stages; AwaitingResult stays closed
+        if (lobby.stage.tag !== 'Waiting' && !LIVE_STAGES.includes(lobby.stage.tag)) {
             throw new SenderError('Cannot join a lobby in stage: ' + lobby.stage.tag);
         }
 
@@ -326,7 +351,7 @@ export const join_lobby = spacetimedb.reducer(
             }
         }
 
-        // Cap enforcement: max 20 members total, max 12 spectators
+        // Cap enforcement: max 20 members total; new Spectator joins capped by lobby.maxSpectators (A68(8))
         const allMembers = [...ctx.db.LobbyMember.lobby_id.filter(lobbyId)];
         if (allMembers.length >= 20) {
             throw new SenderError('Lobby is full (max 20 members).');
@@ -335,9 +360,13 @@ export const join_lobby = spacetimedb.reducer(
         // auto-seated on its team's first free player seat; everyone else, staff included, joins as Spectator.
         // join_lobby takes no slot argument; set_team_slot enforces allowedSlotsFor for every later move.
         const joinSlot = lobby.stage.tag === 'Waiting' ? autoSeatSlot(ctx, lobby, user.id) : 'Spectator';
+        // A68(8): maxSpectators caps watchers, not seat candidates. A join that can only be watching is counted: every
+        // live-stage join, and a Waiting join of a tournament lobby that auto-seated to Spectator. A casual Waiting
+        // joiner lands on Spectator as a seat candidate (D-27) and is not counted (the 20-member cap still applies).
+        const joinOnlyWatches = joinSlot === 'Spectator' && (lobby.stage.tag !== 'Waiting' || lobby.isTournamentControlled);
         const spectatorCount = allMembers.filter((m: any) => m.lobbySlot.tag === 'Spectator').length;
-        if (joinSlot === 'Spectator' && spectatorCount >= 12) {
-            throw new SenderError('Spectator slots are full (max 12).');
+        if (joinOnlyWatches && spectatorCount >= lobby.maxSpectators) {
+            throw new SenderError(`Spectator slots are full (max ${lobby.maxSpectators}).`);
         }
 
         // D-27: join as Spectator (casual lobbies; tournament lobbies: the auto-seat above)
@@ -349,7 +378,8 @@ export const join_lobby = spacetimedb.reducer(
             isReferee: false,
             isConfirmed: false,
             isCaptain: false,
-            voluntarilyLeft: false,
+            leftAt: undefined,
+            abandonedAt: undefined,
             disconnectedAt: undefined,
             disconnectPoolRemainingMs: 0,
             joinSeq: nextJoinSeq(ctx, lobby.id), // R4: per-lobby join counter; A22(5) order and the S9 labels derive from it
@@ -429,8 +459,13 @@ export const join_lobby = spacetimedb.reducer(
 );
 
 // ─── leave_lobby ─────────────────────────────────────────────────────────────
-// Removes the caller from a lobby, decrementing currentPlayerCount.
-// If lobby empties in Waiting stage, auto-closes the lobby.
+// A68(1): a player's Leave in Drafting / Equipping / Scoring is a disconnect (markMemberOffline, as
+// client_disconnected): isOnline = false, disconnectedAt under Standard / Deferred, the 15 s RefereeTransferCheck, plus
+// leftAt (A68(2), away). The row, its LobbyMemberAccount rows and currentPlayerCount are kept; the player may return
+// through join_lobby. No automatic concede (A68(3), D-31 / D-82 branch removed); the flags move only through the 15 s
+// check (A68(7)).
+// A68(5)(7): every other Leave (a player in Waiting / AwaitingResult, a spectator or coach in any stage) deletes the
+// row through removeMemberRow (flags transferred). An empty Waiting lobby is hard-deleted.
 
 export const leave_lobby = spacetimedb.reducer(
     {
@@ -448,64 +483,14 @@ export const leave_lobby = spacetimedb.reducer(
             throw new SenderError('Lobby not found.');
         }
 
-        // D-29, D-30, D-31, D-32, D-33: Active match leave handling
-        // A67(1): the live stages of the lobby's one game
-        const activeStages = ['Drafting', 'Equipping', 'Scoring'];
-        if (activeStages.includes(lobby.stage.tag)) {
-            // D-29: Spectators/Coaches get clean deletion even during active stages
-            if (slotIsSpectator(member.lobbySlot) || slotIsCoach(member.lobbySlot)) {
-                // D-29: Delete LobbyMemberAccount rows for departing member
-                for (const lma of [...ctx.db.LobbyMemberAccount.by_lobby_and_user.filter([lobbyId, user.id])]) {
-                    ctx.db.LobbyMemberAccount.delete(lma);
-                }
-                ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, user.id]);
-                ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
-                    currentPlayerCount: lobby.currentPlayerCount - 1,
-                    lastActivityAt: ctx.timestamp,
-                }, user.id));
-                console.log(`[LOBBY] Spectator/Coach #${user.id} cleanly left active lobby #${lobbyId}`);
-                return;
-            }
+        const isLiveStage = LIVE_STAGES.includes(lobby.stage.tag);
+        const isPlayer = !slotIsSpectator(member.lobbySlot) && !slotIsCoach(member.lobbySlot);
 
-            // D-31: Players — set voluntarilyLeft=true, keep row for finalization
-            // D-29: Delete LobbyMemberAccount rows for departing player (ephemeral, no preservation)
-            for (const lma of [...ctx.db.LobbyMemberAccount.by_lobby_and_user.filter([lobbyId, user.id])]) {
-                ctx.db.LobbyMemberAccount.delete(lma);
-            }
-            ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, user.id]);
-            ctx.db.LobbyMember.insert(updateWithAudit(ctx, member, {
-                voluntarilyLeft: true,
-                isOnline: false,
-            }, user.id));
+        if (isLiveStage && isPlayer) {
+            // A68(2): already away (or abandoned): a second Leave changes nothing, so the clock keeps its first stamp.
+            if (memberHasLeft(member)) return;
 
-            // Transfer flags (D-34, D-35, D-36)
-            transferCaptain(ctx, lobbyId, user.id);
-            transferReferee(ctx, lobbyId, user.id);
-            transferHost(ctx, lobbyId, lobby, user.id);
-            // F6: transferHost may have rewritten Lobby.hostUserId; every later Lobby write spreads the fresh
-            // row, or the stale `lobby` would hand the host flag back to the leaver.
-            const freshLobby = ctx.db.Lobby.id.find(lobbyId) ?? lobby;
-
-            // Check if last player on team — auto-concede (D-31)
-            // But NOT if refereeExclusiveConcede + 3rd party referee present (D-82)
-            let autoConcedeFired = false;
-            const teamMembers = [...ctx.db.LobbyMember.lobby_id.filter(lobbyId)]
-                .filter((m: any) => slotTeam(m.lobbySlot) === slotTeam(member.lobbySlot)
-                    && !slotIsCoach(m.lobbySlot)
-                    && !m.voluntarilyLeft
-                    && m.userId !== user.id);
-            if (teamMembers.length === 0) {
-                const thirdPartyRef = isThirdPartyReferee(ctx, lobbyId);
-                if (lobby.refereeExclusiveConcede && thirdPartyRef) {
-                    // D-82: Blocked — referee decides
-                    console.log(`[LOBBY] Last player on team left lobby #${lobbyId}, but referee exclusive concede active. Referee decides.`);
-                } else {
-                    // D-31: Auto-concede — conceding team = leaving player's team
-                    const losingTeam = slotTeam(member.lobbySlot)!;
-                    performConcede(ctx, freshLobby, losingTeam, user.id, { tag: 'VoluntaryLeave', value: {} });
-                    autoConcedeFired = true;
-                }
-            }
+            markMemberOffline(ctx, lobby, member, user.id, { leftAt: ctx.timestamp });
 
             // D-11: system message
             ctx.db.ChatMessage.insert(insertWithAudit(ctx, {
@@ -519,52 +504,28 @@ export const leave_lobby = spacetimedb.reducer(
             }, user.id));
 
             // Update activity (do NOT decrement currentPlayerCount — row is kept)
-            // Skip if auto-concede fired — performConcede already updated the lobby
-            // (spreading a stale lobby object here would overwrite AwaitingResult back to Drafting)
-            if (!autoConcedeFired) {
-                ctx.db.Lobby.id.update(updateWithAudit(ctx, freshLobby, {
-                    lastActivityAt: ctx.timestamp,
-                }, user.id));
-            }
+            ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
+                lastActivityAt: ctx.timestamp,
+            }, user.id));
 
-            console.log(`[LOBBY] User #${user.id} voluntarily left active match in lobby #${lobbyId}`);
+            console.log(`[LOBBY] User #${user.id} left the live match in lobby #${lobbyId} (away, A68(1))`);
             return;
         }
 
-        // Waiting/AwaitingResult: normal leave path
-        // D-29: Delete LobbyMemberAccount rows for departing member
-        for (const lma of [...ctx.db.LobbyMemberAccount.by_lobby_and_user.filter([lobbyId, user.id])]) {
-            ctx.db.LobbyMemberAccount.delete(lma);
+        if (!removeMemberRow(ctx, lobbyId, user.id, user.id)) return; // empty Waiting lobby deleted
+
+        // D-11: system message (a spectator's or coach's leave during the match stays silent, as before)
+        if (!isLiveStage) {
+            ctx.db.ChatMessage.insert(insertWithAudit(ctx, {
+                id: 0,
+                lobbyId,
+                senderUserId: 0,
+                senderType: { tag: 'System', value: {} } as any,
+                content: user.displayName + ' left the lobby.',
+                metadata: undefined,
+                anonymousLabel: undefined,
+            }, user.id));
         }
-        // Remove from lobby
-        ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, user.id]);
-
-        const newCount = lobby.currentPlayerCount > 0 ? lobby.currentPlayerCount - 1 : 0;
-
-        // Auto-close empty Waiting lobby
-        if (newCount === 0 && lobby.stage.tag === 'Waiting') {
-            hardDeleteLobby(ctx, lobby.id);
-            console.log(`[LOBBY] Lobby #${lobbyId} auto-closed after last member left`);
-            return;
-        }
-
-
-        // Update player count and activity
-        ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
-            currentPlayerCount: newCount,
-            lastActivityAt: ctx.timestamp,
-        }, user.id));
-
-        // D-11: system message
-        ctx.db.ChatMessage.insert(insertWithAudit(ctx, {
-            id: 0,
-            lobbyId,
-            senderUserId: 0,
-            senderType: { tag: 'System', value: {} } as any,
-            content: user.displayName + ' left the lobby.',
-            metadata: undefined,
-            anonymousLabel: undefined,
-        }, user.id));
 
         console.log(`[LOBBY] User #${user.id} left lobby #${lobbyId}`);
     }
@@ -603,9 +564,20 @@ export const close_lobby = spacetimedb.reducer(
     }
 );
 
+// A68(6): once the draft has started (Drafting / Equipping / Scoring) players are never removed; only spectators
+// and coaches may be kicked or banned. Waiting and AwaitingResult: any member (the host excepted).
+function ensureRemovableMember(lobby: any, targetMember: any): void {
+    if (!targetMember || !LIVE_STAGES.includes(lobby.stage.tag)) return;
+    if (!slotIsSpectator(targetMember.lobbySlot) && !slotIsCoach(targetMember.lobbySlot)) {
+        throw new SenderError('Players cannot be removed once the draft has started; the match ends by result, concede or forfeit.');
+    }
+}
+
 // ─── kick_member ──────────────────────────────────────────────────────────────
 // Removes a member from a lobby without banning them.
 // Permission: host, admin, moderator, or referee (if refereeCanKick=true).
+// A68(6)(7): stage rule above; the row and its LobbyMemberAccount rows are deleted and the flags transferred
+// (removeMemberRow).
 
 export const kick_member = spacetimedb.reducer(
     {
@@ -646,21 +618,14 @@ export const kick_member = spacetimedb.reducer(
             throw new SenderError('Target user is not a member of this lobby.');
         }
 
+        // A68(6): no player removal after the draft starts
+        ensureRemovableMember(lobby, targetMember);
+
         // Resolve target's display name for system message (D-12: falls back to DeletedUser archive)
         const { displayName: targetName } = resolveUserLabel(ctx, targetUserId);
 
-        // Remove target from lobby
-        ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, targetUserId]);
-
-        // Decrement currentPlayerCount
-        const currentLobby = ctx.db.Lobby.id.find(lobbyId);
-        if (currentLobby) {
-            const newCount = currentLobby.currentPlayerCount > 0 ? currentLobby.currentPlayerCount - 1 : 0;
-            ctx.db.Lobby.id.update(updateWithAudit(ctx, currentLobby, {
-                currentPlayerCount: newCount,
-                lastActivityAt: ctx.timestamp,
-            }, user.id));
-        }
+        // Remove target from lobby (A68(7): flags transferred; LobbyMemberAccount rows deleted; count decremented)
+        removeMemberRow(ctx, lobbyId, targetUserId, user.id);
 
         // D-11: system message
         ctx.db.ChatMessage.insert(insertWithAudit(ctx, {
@@ -680,6 +645,7 @@ export const kick_member = spacetimedb.reducer(
 // ─── ban_member ───────────────────────────────────────────────────────────────
 // Bans a user from a lobby. Creates a LobbyBan row and removes current membership.
 // Per D-21: banned users cannot rejoin.
+// A68(6)(7): a member target follows kick_member's stage rule and removal (removeMemberRow).
 
 export const ban_member = spacetimedb.reducer(
     {
@@ -714,6 +680,10 @@ export const ban_member = spacetimedb.reducer(
             throw new SenderError('Cannot ban the host.');
         }
 
+        // A68(6): no player removal after the draft starts
+        const targetMember = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, targetUserId])][0];
+        ensureRemovableMember(lobby, targetMember);
+
         // Resolve target's display name for system message (D-12: falls back to DeletedUser archive)
         const { displayName: targetName } = resolveUserLabel(ctx, targetUserId);
 
@@ -724,20 +694,9 @@ export const ban_member = spacetimedb.reducer(
             bannedByUserId: user.id,
         }, user.id));
 
-        // Remove from lobby if currently a member
-        const targetMember = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, targetUserId])][0];
+        // Remove from lobby if currently a member (A68(7): flags transferred; LobbyMemberAccount rows deleted)
         if (targetMember) {
-            ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, targetUserId]);
-
-            // Decrement currentPlayerCount
-            const currentLobby = ctx.db.Lobby.id.find(lobbyId);
-            if (currentLobby) {
-                const newCount = currentLobby.currentPlayerCount > 0 ? currentLobby.currentPlayerCount - 1 : 0;
-                ctx.db.Lobby.id.update(updateWithAudit(ctx, currentLobby, {
-                    currentPlayerCount: newCount,
-                    lastActivityAt: ctx.timestamp,
-                }, user.id));
-            }
+            removeMemberRow(ctx, lobbyId, targetUserId, user.id);
         }
 
         // D-11: system message

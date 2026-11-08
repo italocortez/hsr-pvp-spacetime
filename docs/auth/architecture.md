@@ -157,6 +157,10 @@ Note: `isPrivate` removed from schema (Phase 15.2 D-02 -- dead code, never gated
 
 ```
 performUserDeletion
+  ├─ A68(6)(7) (S8f fix pass 2): per LobbyMember row of the user: Waiting / AwaitingResult, spectator / coach,
+  │   or lobby gone → removeMemberRow (as a leave); a player row in Drafting / Equipping / Scoring → flags
+  │   transferred, row kept as away + abandoned (offline for the forfeit test, never a flag candidate).
+  │   See docs/lobby/architecture.md "User deletion".
   ├─ Cascade: hard-delete UserPrivate, calendar data, UserIdentity rows, HsrAccount + characters
   │
   ├─ [isGuest && !hasHistoryReferences(ctx, userId)]
@@ -302,6 +306,7 @@ Any new frontend subscription to a raw table (no projection view body) OR a per-
 | Phase 16 verify-work infrastructure fixes (no auth-API change, but prerequisites for the auth + SDK pipeline to function in prod): (a) CSP `script-src 'unsafe-eval'` required in BOTH dev AND prod — SpacetimeDB SDK generates BSATN codecs at runtime via `Function()` constructor (~7 call sites in `spacetimedb/dist/index.browser.mjs`); original WR-04 assumption that only dev needed it was wrong, prod builds crash at SDK init without it (commit `c6ce7e1`). (b) CSP `connect-src` extended with `https://*.ufs.sh` so the Service Worker's CDN-intercept fetch passes CSP — otherwise any authed page loading UploadThing-hosted profile assets fails the SW round-trip (commit `6ad7ba0`). Neither change touches auth logic; both are required for auth to render any profile picture or character art without errors | Phase 16 verify-work | 2026-04-19 |
 | Per-identity presence goes live: `client_connected` upserts `UserPresence`, restores lobby memberships (F1) and deletes pending `RefereeTransferCheck` rows; `client_disconnected` marks the identity offline and, only when no other device is live, marks memberships offline and schedules the 15 s check; `login_as_guest` writes the fresh guest's row; `server_link_provider` case 1b re-points the row; identity GC and `performUserDeletion` delete rows with the identity; staleness rule recorded (no heartbeat) | Phase S4 execution (DECISIONS.md A22a, A48, A16; S3 review L3/M3) | 2026-11-06 |
 | B-8 maintenance-mode rejection in `client_connected` (`AbuseConfig.maintenanceMode`, server identities exempt); inert until S5 seeds the row | Phase S4 execution (ACCESS-SECURITY-OPS §B.5) | 2026-11-06 |
+| `performUserDeletion` hands over the user's lobby flags first (A68(7)); `client_connected` / `client_disconnected` skip away / abandoned lobby rows (A68(2), details in `docs/lobby/architecture.md`) | Phase S8f execution (DECISIONS.md A68) | 2026-11-08 |
 
 ---
 

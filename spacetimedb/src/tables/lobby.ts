@@ -30,6 +30,9 @@ export const lobbyColumns = {
 
     // Player count (denormalized for browser view per D-07):
     currentPlayerCount: t.u8(),
+    // A68(8): the spectator count (0-12; 0 = no spectators). New joins into the Spectator slot are capped by it; a
+    // free-set setting (create_lobby / update_lobby_settings / presets; tournament lobbies copy it from the preset).
+    maxSpectators: t.u8(),
 
     // Budget (dual budgets per D-49, replaces auctionBudget):
     characterBudget: t.f32(),

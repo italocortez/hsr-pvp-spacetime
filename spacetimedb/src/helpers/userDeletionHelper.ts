@@ -1,4 +1,8 @@
 import { deleteAllCalendarDataForUser } from './calendarCascade';
+import { transferFlagsOnRemoval } from './flagTransferHelpers';
+import { removeMemberRow } from './memberRemoval';
+import { LIVE_STAGES, slotIsCoach, slotIsSpectator } from './lobbyHelpers';
+import { updateWithAudit } from './auditHelpers';
 
 /**
  * Returns true if the iterator yields at least one element.
@@ -47,6 +51,34 @@ export function performUserDeletion(ctx: any, userId: number, actorId: number): 
     const userPrivate = ctx.db.UserPrivate.userId.find(userId);
     if (userPrivate) {
         ctx.db.UserPrivate.userId.delete(userId);
+    }
+
+    // A68(7): user deletion is a row removal. Waiting / AwaitingResult, a spectator or coach in any stage (A68(5)),
+    // or an orphan row: removeMemberRow, as leave_lobby (flags transferred in the A22(5) order, online first then any;
+    // LobbyMemberAccount rows deleted, currentPlayerCount decremented, an emptied Waiting lobby hard-deleted).
+    // A player in Drafting / Equipping / Scoring (an admin deletion mid-match; delete_my_account refuses an away or
+    // live membership): A68(6) keeps the row, so the flags move and the row becomes away and abandoned (isOnline
+    // false, leftAt, abandonedAt, disconnectedAt under Standard / Deferred): an offline player for the forfeit test
+    // (A68(3)) and never a flag candidate again (A68(7) hasLeft). Stamps already on the row are kept (the grace clock
+    // does not restart).
+    for (const membership of [...ctx.db.LobbyMember.user_id.filter(userId)]) {
+        const lobby = ctx.db.Lobby.id.find(membership.lobbyId);
+        const isPlayer = !slotIsSpectator(membership.lobbySlot) && !slotIsCoach(membership.lobbySlot);
+        if (!lobby || !LIVE_STAGES.includes(lobby.stage.tag) || !isPlayer) {
+            removeMemberRow(ctx, membership.lobbyId, userId, actorId);
+            continue;
+        }
+        transferFlagsOnRemoval(ctx, membership.lobbyId, userId);
+        const row = [...ctx.db.LobbyMember.by_lobby_and_user.filter([membership.lobbyId, userId])][0];
+        if (!row) continue;
+        const tracksDisconnect = lobby.disconnectPolicy.tag !== 'NoAction';
+        ctx.db.LobbyMember.by_lobby_and_user.delete([membership.lobbyId, userId]);
+        ctx.db.LobbyMember.insert(updateWithAudit(ctx, row, {
+            isOnline: false,
+            leftAt: row.leftAt ?? ctx.timestamp,
+            abandonedAt: row.abandonedAt ?? ctx.timestamp,
+            disconnectedAt: tracksDisconnect ? (row.disconnectedAt ?? ctx.timestamp) : row.disconnectedAt,
+        }, actorId));
     }
 
     // Cascade: delete all calendar data (availability slots, saved calendars, events, invites) (D-23)

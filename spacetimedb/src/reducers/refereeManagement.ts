@@ -54,6 +54,7 @@ export const transfer_referee = spacetimedb.reducer(
 // Reclaims the referee flag from the current holder back to the lobby host.
 // Permission: lobby host only. D.8.4 (S8d): in a tournament lobby also a seated (member) staff member with the
 // `results` permission (canResolveResults assistant, organizer, Moderator+), who takes the flag themself.
+// A68(7): when no member holds the flag, any member who calls takes it (a lobby with members always has a referee).
 // NOTE: Auto-assignment of the referee flag at lobby creation is deferred to Phase 9.
 
 export const reclaim_referee = spacetimedb.reducer(
@@ -68,6 +69,20 @@ export const reclaim_referee = spacetimedb.reducer(
         if (!lobby) {
             throw new SenderError('Lobby not found.');
         }
+
+        // A68(7): nobody holds the referee flag: the calling member takes it.
+        const members = [...ctx.db.LobbyMember.lobby_id.filter(lobbyId)];
+        if (!members.some((m: any) => m.isReferee)) {
+            const callerMember = members.find((m: any) => m.userId === user.id);
+            if (!callerMember) {
+                throw new SenderError('You are not a member of this lobby.');
+            }
+            ctx.db.LobbyMember.delete(callerMember);
+            ctx.db.LobbyMember.insert(updateWithAudit(ctx, callerMember, { isReferee: true }, user.id));
+            console.log(`[LOBBY] Unheld referee flag taken by user #${user.id} in lobby #${lobbyId} (A68(7))`);
+            return;
+        }
+
         const isTournamentStaff = lobby.isTournamentControlled && lobby.tournamentId !== undefined
             && [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, user.id])].length > 0
             && (() => {
@@ -78,12 +93,10 @@ export const reclaim_referee = spacetimedb.reducer(
             throw new SenderError('Only the lobby host can reclaim the referee flag.');
         }
 
-        // Find the current referee (iterate lobby members to find the one with isReferee = true)
-        // Using lobby_id index for efficiency
-        const members = [...ctx.db.LobbyMember.lobby_id.filter(lobbyId)];
+        // Find the current referee (held: the A68(7) branch above handled the unheld flag)
         const currentReferee = members.find((m: any) => m.isReferee === true);
 
-        // No-op: if there is no current referee or the host is already the referee
+        // No-op: the caller is already the referee
         if (!currentReferee || currentReferee.userId === user.id) {
             return;
         }

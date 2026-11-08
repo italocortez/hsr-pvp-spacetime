@@ -316,6 +316,16 @@ finalize job of this tournament is still scheduled." Placements also count a wal
 - **dq_participant.** The force-concede of the DQ'd team's live lobby concedes the colour that team plays
   (`teamSideOf(match, teamId)`), not a fixed team1 = Blue.
 
+## Phase S8f execution (DECISIONS.md A68)
+
+- **dq_participant, player path (A68(6)).** A player DQ'd from a team that stays in the tournament is no longer removed
+  from a live lobby (the D-25 kick is gone): the current game plays on with them, and the DQ bites from the next
+  lobby of the match (no team membership, so `allowedSlotsFor` seats them as Spectator at most). The whole-team path
+  (team emptied or `dqWholeTeam`) is unchanged: bracket settlement, force-concede of the live lobby with the team's
+  colour, `writeMatchGames`.
+- **create_tournament_lobby.** Optional `abandonCurrentMatch` (A68(4), see [../lobby/architecture.md](../lobby/architecture.md)
+  "Phase S8f execution"); the lobby copies `maxSpectators` from the preset's free set (A68(8)).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -348,6 +358,7 @@ finalize job of this tournament is still scheduled." Placements also count a wal
 | `create_tournament_lobby`: D-45 = no unsettled lobby of the match, decided / capped matches rejected, no series settings copied; several records per bracket match in the finalize job, ordered by creation time; DQ settles with the derived tally (A67(2)(5)(7)(8)) | Phase S8e execution | 2026-11-08 |
 | `create_tournament_lobby` / stand-in seating and the DQ force-concede read the match's colour mapping (`helpers/matchSides.ts`) | Phase S8g execution (DECISIONS.md A70) | 2026-11-08 |
 | `set_match_sides(bracketMatchId, blueTeamId)`: the head start stays on team1 whatever the colours | Phase S8g execution (DECISIONS.md A71) | 2026-11-08 |
+| `dq_participant` no longer kicks a DQ'd player from a live lobby (whole-team path unchanged); `create_tournament_lobby` takes `abandonCurrentMatch` and copies `maxSpectators` | Phase S8f execution (DECISIONS.md A68) | 2026-11-08 |
 
 ---
 
