@@ -234,7 +234,7 @@ describe('D-18: resolveUserLabel three-path resolution', () => {
 
   it('returns live displayName with isDeleted: false when user is active', async () => {
     const { resolveUserLabel } = await import(
-      '../../../spacetimedb/src/helpers/userLabel'
+      '../../../spacetimedb/src/helpers/identity/userLabel'
     );
 
     const ctx = makeCtx({ liveUser: { displayName: 'Alice' } });
@@ -246,7 +246,7 @@ describe('D-18: resolveUserLabel three-path resolution', () => {
 
   it('returns archived displayName with isDeleted: true when user is in deleted_user archive', async () => {
     const { resolveUserLabel } = await import(
-      '../../../spacetimedb/src/helpers/userLabel'
+      '../../../spacetimedb/src/helpers/identity/userLabel'
     );
 
     // live User is null → falls through to DeletedUser lookup
@@ -262,7 +262,7 @@ describe('D-18: resolveUserLabel three-path resolution', () => {
 
   it('returns synthetic User #N fallback with isDeleted: true when userId is unknown', async () => {
     const { resolveUserLabel } = await import(
-      '../../../spacetimedb/src/helpers/userLabel'
+      '../../../spacetimedb/src/helpers/identity/userLabel'
     );
 
     // Both User and DeletedUser return null → fallback synthetic label

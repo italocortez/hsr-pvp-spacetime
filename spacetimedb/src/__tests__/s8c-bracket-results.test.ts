@@ -3,7 +3,7 @@
 // dq_participant. Builders in s8-fixtures.ts (liveField = seeded by team id, generated, InProgress). The record /
 // lobby side effects of resolve / rollback are S8d's and not covered here. Nothing reaches maincloud.
 import { describe, expect, it } from 'vitest';
-import { TOURNAMENT_PERM_MESSAGES } from '../helpers/tournamentPermissions';
+import { TOURNAMENT_PERM_MESSAGES } from '@module/helpers/tournament/tournamentPermissions';
 import { M, advance, expectReject, tx, type Actor, type Harness } from './s4-fixtures';
 import {
     AUDIT,

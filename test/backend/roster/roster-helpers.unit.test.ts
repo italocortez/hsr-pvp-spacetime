@@ -9,12 +9,12 @@ import { describe, it, expect, vi } from 'vitest';
 import { UIDS, INVALID_UIDS } from '../../shared/fixtures';
 
 // Mock auditColumns (imported by rosterHelpers but unused by validateUid/deriveRegion)
-vi.mock('../../../spacetimedb/src/helpers/auditColumns', () => ({
+vi.mock('../../../spacetimedb/src/helpers/admin/auditColumns', () => ({
   auditUpdate: vi.fn(() => ({})),
 }));
 
 const { validateUid, deriveRegion } = await import(
-  '../../../spacetimedb/src/helpers/rosterHelpers'
+  '../../../spacetimedb/src/helpers/roster/rosterHelpers'
 );
 
 describe('validateUid', () => {

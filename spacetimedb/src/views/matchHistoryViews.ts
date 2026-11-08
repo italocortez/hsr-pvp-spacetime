@@ -15,13 +15,13 @@
 // 7. view_my_match_session_step_history     — Pattern B, participant-first iteration
 // 8. view_my_match_result_game_history      — Pattern B, participant-first iteration
 
-import spacetimedb from '../schema';
+import spacetimedb from '@module/schema';
 import { t } from 'spacetimedb/server';
-import { MatchSessionHistory } from '../tables/matchSessionHistory';
-import { MatchParticipantHistory } from '../tables/matchParticipantHistory';
-import { MatchSessionStepHistory } from '../tables/matchSessionStepHistory';
-import { MatchResultGameHistory } from '../tables/matchResultGameHistory';
-import { MmrHistory } from '../tables/mmrHistory';
+import { MatchSessionHistory } from '@module/tables/draft/matchSessionHistory';
+import { MatchParticipantHistory } from '@module/tables/draft/matchParticipantHistory';
+import { MatchSessionStepHistory } from '@module/tables/draft/matchSessionStepHistory';
+import { MatchResultGameHistory } from '@module/tables/results/matchResultGameHistory';
+import { MmrHistory } from '@module/tables/stats/mmrHistory';
 
 // ---------------------------------------------------------------------------
 // 1. view_match_history (per D-93)

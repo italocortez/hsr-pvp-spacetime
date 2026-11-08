@@ -2,7 +2,7 @@
 // Restriction (A45(2)) and the three A45(3) reducers. Reuses the S4 builders; in-memory datastore on the TestClock.
 // Admin / TournamentHost calls run as the owner identity (TestAuth.internal()), which init links to SYSTEM (Admin).
 import { describe, expect, it } from 'vitest';
-import { computeAccountRating, computeMergedAccountRating } from '../helpers/accountRating';
+import { computeAccountRating, computeMergedAccountRating } from '@module/helpers/stats/accountRating';
 import {
     DEFAULT_LOBBY_ARGS,
     M,

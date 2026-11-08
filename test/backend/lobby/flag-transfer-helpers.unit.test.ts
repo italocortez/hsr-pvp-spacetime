@@ -14,7 +14,7 @@ import {
     transferReferee,
     transferHost,
     transferFlagsOnRemoval,
-} from '../../../spacetimedb/src/helpers/flagTransferHelpers';
+} from '../../../spacetimedb/src/helpers/lobby/flagTransferHelpers';
 
 // ── Mock helpers ──────────────────────────────────────────────────────────────
 

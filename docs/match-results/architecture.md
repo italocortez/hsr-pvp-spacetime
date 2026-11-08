@@ -229,7 +229,7 @@ Phase S7b follow-up (DECISIONS.md A63, amends A60(3)): `confirm_game` only sets 
 
 **Columns:** `MatchResultGame` gains `blueConfirmed: bool`, `redConfirmed: bool`, `closedAt: timestamp?` (closed ⇔ set), `closedById: u32?`; `ensureGame` initialises them (false / undefined). `MatchResultRecord.winnerOverride / winnerOverrideById / winnerOverrideReason` are now written by `closeGame` (the latest staff override; `runFinalization` copies them to `MatchSessionHistory`).
 
-**Helpers** (`helpers/scoringHelpers.ts` unless stated):
+**Helpers** (`helpers/results/scoringHelpers.ts` unless stated):
 
 | Helper | Does |
 |---|---|
@@ -239,13 +239,13 @@ Phase S7b follow-up (DECISIONS.md A63, amends A60(3)): `confirm_game` only sets 
 | `resetConfirmations(ctx, game, actorId)` | clears both flags on the game row (`replaceGame`), no-op when both are false |
 | `ensureAuctionSurchargeFits(ctx, lobby, session, gameNumber, side)` | Auction gate (A60(4)): `MatchLineup.synergySurcharge` ≤ `toHundredths(charBudget + lcBudget)` |
 | `seriesTally(ctx, record, lobby, seriesBestOf)` | wins over **closed** games + the A27 head start; `decided` = a side reached `ceil(seriesBestOf / 2)` |
-| `closeGame(...)` (`helpers/gameClose.ts`) | sets `closedAt`, `closedById`, both flags; applies a staff override (winner = override, `tieBreakLevel` stays 4, record `winnerOverride*`); writes `MatchSession.gamesWonBlue/Red`; logs one `ConfirmGame` step (`closed: true`); decided → `submitSeriesResult`, else lobby → BetweenGames + `Game N complete (b-r). Stage: BetweenGames`; rejects a level-4 tie without an override |
-| `submitSeriesResult(ctx, record, lobby, actorId)` (`helpers/gameClose.ts`) | every game closed with a result (defensive); winner from the tally (a level series is rejected); Casual → Validated + `runFinalization` inline (D-04 / D-37), otherwise Submitted; `winnerTeamSide`, `matchEndReason = Completed`, `refereeUserId` = the closer; lobby → AwaitingResult + `Series complete (b-r). Stage: AwaitingResult` (Bo1: `Match complete. Stage: AwaitingResult`) |
-| `recomputeSeriesAfterAdminEdit(ctx, lobby, record, actorId)` (`helpers/gameClose.ts`) | recompute the edited (current) game; a level-4 tie rejects the edit (`'The edit would leave the game tied; add an adjustment that decides it.'`) unless the game was already a tie closed with an override, whose winner is kept; rewrite the tally; Submitted: an undecided series rejects (`'The edit would undo the series result; void or force-finalize the match instead.'`), a changed winner updates `MatchResultRecord.winnerTeamSide`; Pending whose series becomes decided → `submitSeriesResult`; when the edit resolves a tie this game had closed with a staff override, `MatchResultRecord.winnerOverride*` is cleared so finalization does not copy a stale override (review fix) |
+| `closeGame(...)` (`helpers/results/gameClose.ts`) | sets `closedAt`, `closedById`, both flags; applies a staff override (winner = override, `tieBreakLevel` stays 4, record `winnerOverride*`); writes `MatchSession.gamesWonBlue/Red`; logs one `ConfirmGame` step (`closed: true`); decided → `submitSeriesResult`, else lobby → BetweenGames + `Game N complete (b-r). Stage: BetweenGames`; rejects a level-4 tie without an override |
+| `submitSeriesResult(ctx, record, lobby, actorId)` (`helpers/results/gameClose.ts`) | every game closed with a result (defensive); winner from the tally (a level series is rejected); Casual → Validated + `runFinalization` inline (D-04 / D-37), otherwise Submitted; `winnerTeamSide`, `matchEndReason = Completed`, `refereeUserId` = the closer; lobby → AwaitingResult + `Series complete (b-r). Stage: AwaitingResult` (Bo1: `Match complete. Stage: AwaitingResult`) |
+| `recomputeSeriesAfterAdminEdit(ctx, lobby, record, actorId)` (`helpers/results/gameClose.ts`) | recompute the edited (current) game; a level-4 tie rejects the edit (`'The edit would leave the game tied; add an adjustment that decides it.'`) unless the game was already a tie closed with an override, whose winner is kept; rewrite the tally; Submitted: an undecided series rejects (`'The edit would undo the series result; void or force-finalize the match instead.'`), a changed winner updates `MatchResultRecord.winnerTeamSide`; Pending whose series becomes decided → `submitSeriesResult`; when the edit resolves a tie this game had closed with a staff override, `MatchResultRecord.winnerOverride*` is cleared so finalization does not copy a stale override (review fix) |
 
-`helpers/gameClose.ts` is separate from `scoringHelpers.ts` because it calls `runFinalization`, and `finalizationHelpers.ts` already imports `scoringHelpers.ts` (a back-import closes a cycle the bundler warns about).
+`helpers/results/gameClose.ts` is separate from `scoringHelpers.ts` because it calls `runFinalization`, and `finalizationHelpers.ts` already imports `scoringHelpers.ts` (a back-import closes a cycle the bundler warns about).
 
-**Reducers** (`reducers/matchResultSubmission.ts`, `reducers/scoreEntry.ts`):
+**Reducers** (`reducers/results/matchResultSubmission.ts`, `reducers/results/scoreEntry.ts`):
 
 | Reducer | Arguments | Notes |
 |---|---|---|
@@ -291,14 +291,14 @@ parks in AwaitingResult until the finalize job ([../tournament/architecture.md](
 `MatchResultGameHistory` is keyed by `matchHistoryId`; `MatchLineupHistory` has no `gameNumber`. `MatchResultGame`
 stays a separate 1:1 table (A67(3), smallest diff).
 
-**Helpers** (`helpers/scoringHelpers.ts`): `findGame(ctx, matchResultId)`, `ensureGame(ctx, record, lobby, actorId)`,
+**Helpers** (`helpers/results/scoringHelpers.ts`): `findGame(ctx, matchResultId)`, `ensureGame(ctx, record, lobby, actorId)`,
 `recomputeGame(ctx, record, lobby, actorId)`, `ensureOpenGame(ctx, lobby, record, user)`, `teamDraft(ctx, lobbyId,
 side)`, `findLineup(ctx, lobbyId, side)`, `teamRosterCost(ctx, lobby, side, draft)`, `refreshLineupCosts(ctx, lobby,
 side, actorId)`, `ensureAuctionSurchargeFits(ctx, lobby, session, side)`, `equippedLightcones(ctx, lobbyId, side)`,
 `lobbyLineups(ctx, lobbyId)` (index `by_lobby`), `deleteScoringRows(ctx, matchResultId, lobbyId)`. Deleted:
 `lobbyGameNumbers`, `seriesTally`.
 
-**Game close (`helpers/gameClose.ts`).** `closeGame` closes the game (flags, `closedAt` / `closedById`, staff override
+**Game close (`helpers/results/gameClose.ts`).** `closeGame` closes the game (flags, `closedAt` / `closedById`, staff override
 on a level-4 tie, one `ConfirmGame` step) and always calls **`submitGameResult(ctx, record, lobby, actorId)`** (renamed
 from `submitSeriesResult`): the game must be closed with a result; the record's `winnerTeamSide` = the game's winner
 (ties: the A60 / A63 override already on the game row); Casual standalone → Validated + `runFinalization` inline;
@@ -313,7 +313,7 @@ always Submitted here (the close submits; a Validated record is no longer editab
 alone (the game is open, or the caller is an Admin and the record is Pending or Submitted, i.e. not yet validated;
 A60(7), A69(2)). **A69(2) (fix pass 2):** the window ends at validation. The status rule lives in one helper,
 `ensureEditableRecord(record, user)` (`findEditableResult(ctx, lobbyId, user)` wraps it; `resolveEditWindow` in
-`reducers/postDraft.ts` calls it in its fall-through, after the unchanged Admin closed-game branch and the stage
+`reducers/draft/postDraft.ts` calls it in its fall-through, after the unchanged Admin closed-game branch and the stage
 guard): Pending → editable; Submitted → editable by an Admin only; rejections `'No pending match result for this lobby.'` (no record), `'This game is closed.'` (Submitted record, caller not an Admin), `'This game can no longer be edited here; corrections go through override_match_result.'` (Validated, Finalized, Disputed, Rejected, Voided: everyone, Admins included). A Validated tournament
 record has already moved the bracket, so corrections go through `override_match_result` (A24 TD-13 / TD-14), which
 reverts and recomputes the tally (A67(4)). `ensureOpenGame` then only decides open / Admin closed-game edit. The four edit reducers of the session lose their trailing `gameNumber` (`docs/match-session/architecture.md`).
@@ -331,8 +331,8 @@ reaches ceil(bestOf / 2) or staff resolve it). Stage list: Drafting, Equipping, 
 
 ## Phase S8g execution (DECISIONS.md A70)
 
-- **Result credit by the match's colours (A70(1)).** `recordWinnerTeamId(match, record)` (`helpers/tournamentResults.ts`)
-  returns `sideTeamId(match, record.winnerTeamSide)` (`helpers/matchSides.ts`): the team that plays the winning colour
+- **Result credit by the match's colours (A70(1)).** `recordWinnerTeamId(match, record)` (`helpers/tournament/tournamentResults.ts`)
+  returns `sideTeamId(match, record.winnerTeamSide)` (`helpers/tournament/matchSides.ts`): the team that plays the winning colour
   in this bracket match (`BracketMatch.blueTeamId`, default team1 = Blue). The tally credits each Validated record the
   same way: [../brackets/architecture.md](../brackets/architecture.md) "Phase S8g execution". Records keep
   `winnerTeamSide` as a colour; nothing changes in the record schema.

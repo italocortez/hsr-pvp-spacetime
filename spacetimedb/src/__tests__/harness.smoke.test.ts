@@ -4,8 +4,8 @@
 import { describe, expect, it } from 'vitest';
 import { ConnectionId, ScheduleAt, TimeDuration, Timestamp } from 'spacetimedb';
 import { createModuleTestHarness, TestAuth, TestClock } from 'spacetimedb/server/test-utils';
-import spacetimedb from '../schema';
-import * as moduleExports from '../index';
+import spacetimedb from '@module/schema';
+import * as moduleExports from '@module/index';
 
 const START = Timestamp.fromDate(new Date('2026-01-01T00:00:00Z'));
 const SEVEN_DAYS_MICROS = 7n * 86_400_000_000n;

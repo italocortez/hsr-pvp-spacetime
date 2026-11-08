@@ -40,7 +40,7 @@ IdentityGcJob (scheduledId: u64 autoInc PK)  [PRIVATE]
 4. Seed the `AbuseConfig` singleton (id 1, D-B5 defaults, SYSTEM actor), only when absent, on every init (Phase S5 execution, A42; docs/admin/architecture.md "Abuse controls"). Phase S6 execution (A57): no breaker job; the guest-lobby breaker runs inline in `create_lobby`
 5. Seed the system lobby preset "Tournament default" (`isSystemPreset`, owner `SYSTEM_USER_ID`), only when absent, on every init (Phase S6 execution, A33a / CH-S4)
 
-### Guards (reducers/server.ts)
+### Guards (reducers/identity/server.ts)
 - `requireServer(ctx)`: `ctx.sender` has any `ServerIdentity` row (Owner or Delegate). Used by `server_link_provider`, `server_set_role`, `server_delete_user` and the test-only reducers.
 - `requireOwner(ctx)`: the row's `kind` is `Owner`. Used by the delegate reducers.
 - `requireTestDatabase(ctx)`: `ctx.env.STDB_TARGET === 'test'`, else "Not a test database." First line of `server_set_datetime`, `server_set_online`, `server_set_mmr`, `server_nuke_test_data` (default-deny: a database published without the value rejects too).

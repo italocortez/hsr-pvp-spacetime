@@ -10,7 +10,7 @@
 
 import { describe, it, expect } from 'vitest';
 
-import { validateCharacterOwnership } from '../../../spacetimedb/src/helpers/ownershipValidation';
+import { validateCharacterOwnership } from '../../../spacetimedb/src/helpers/draft/ownershipValidation';
 
 // ─── Mock ctx builder ─────────────────────────────────────────────────────────
 

@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { validateStageTransition } from '../../../spacetimedb/src/helpers/tournamentHelpers';
+import { validateStageTransition } from '../../../spacetimedb/src/helpers/tournament/tournamentHelpers';
 
 describe('validateStageTransition', () => {
     // ── Forward transitions ──

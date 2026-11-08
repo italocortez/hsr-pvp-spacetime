@@ -5,10 +5,10 @@
 // 2. view_my_roster_visibility  — rosters visible to caller per lobby (D-10..D-16, ANON-04)
 // 3. view_my_roster             — caller's own HsrAccounts + characters (D-20)
 
-import spacetimedb from '../schema';
+import spacetimedb from '@module/schema';
 import { t } from 'spacetimedb/server';
-import { PlayerRelationship } from '../tables/playerRelationship';
-import { slotTeam } from '../helpers/lobbyHelpers';
+import { PlayerRelationship } from '@module/tables/identity/playerRelationship';
+import { slotTeam } from '@module/helpers/lobby/lobbyHelpers';
 
 // ---------------------------------------------------------------------------
 // 1. My Relationships (per-user view) — returns caller's own

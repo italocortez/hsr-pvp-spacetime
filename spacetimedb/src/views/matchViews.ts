@@ -5,12 +5,12 @@
 // 1. view_my_match_steps        — anonymized MatchSessionStep rows (D-92)
 // 2. view_my_match_participants — anonymized MatchResultParticipant rows (D-92)
 
-import spacetimedb from '../schema';
+import spacetimedb from '@module/schema';
 import { t } from 'spacetimedb/server';
-import { TeamSide, ActionType } from '../types/enums';
-import { StepPayload } from '../types/structs';
-import { shouldAnonymize } from '../helpers/anonymousHelpers';
-import { computeAnonymousLabel } from '../helpers/anonymousLabels';
+import { TeamSide, ActionType } from '@module/types/enums';
+import { StepPayload } from '@module/types/structs';
+import { shouldAnonymize } from '@module/helpers/identity/anonymousHelpers';
+import { computeAnonymousLabel } from '@module/helpers/identity/anonymousLabels';
 
 // ---------------------------------------------------------------------------
 // 1. view_my_match_steps (per D-92)

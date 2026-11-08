@@ -3,7 +3,7 @@
 // T-S7b (A60): no lineup confirmation any more (confirm_lineup / MatchLineup.isConfirmed removed); the Auction surcharge
 // gate sits at confirm_game; equips reset the game confirmations.
 import { describe, expect, it } from 'vitest';
-import { hardDeleteLobby } from '../reducers/lobbyGc';
+import { hardDeleteLobby } from '@module/reducers/lobby/lobbyGc';
 import { M, advance, expectReject, lobbyRow, newHarness, session, setupLobby, steps, tx } from './s4-fixtures';
 import {
     H,

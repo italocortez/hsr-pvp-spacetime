@@ -13,7 +13,7 @@ import {
   calculateTeamEffective,
   calculateAccountModifier,
   type EloConfigValues,
-} from '../../../spacetimedb/src/helpers/eloCalculation';
+} from '../../../spacetimedb/src/helpers/stats/eloCalculation';
 
 const DEFAULT_CONFIG: EloConfigValues = {
   kFactorNew: 40,

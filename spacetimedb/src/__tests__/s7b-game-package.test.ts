@@ -53,7 +53,7 @@ import {
     setRole,
     side,
 } from './s7-fixtures';
-import { ensureEditableRecord } from '../helpers/scoringHelpers';
+import { ensureEditableRecord } from '@module/helpers/results/scoringHelpers';
 
 const NOT_READY = 'Both captains must confirm the game before it can be submitted.';
 const OVERRIDE = 'This game can no longer be edited here; corrections go through override_match_result.';

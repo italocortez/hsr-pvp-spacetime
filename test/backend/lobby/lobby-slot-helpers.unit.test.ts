@@ -13,7 +13,7 @@ import {
     slotIsSpectator,
     slotSameTeam,
     slotToTeamSide,
-} from '../../../spacetimedb/src/helpers/lobbyHelpers';
+} from '../../../spacetimedb/src/helpers/lobby/lobbyHelpers';
 
 const BluePlayer = { tag: 'BluePlayer' };
 const RedPlayer = { tag: 'RedPlayer' };

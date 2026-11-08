@@ -4,8 +4,8 @@
 import { expect } from 'vitest';
 import { ConnectionId, TimeDuration, Timestamp } from 'spacetimedb';
 import { createModuleTestHarness, TestAuth, TestClock } from 'spacetimedb/server/test-utils';
-import spacetimedb from '../schema';
-import * as M from '../index';
+import spacetimedb from '@module/schema';
+import * as M from '@module/index';
 
 export { M, TestAuth };
 export const START = Timestamp.fromDate(new Date('2026-01-01T00:00:00Z'));

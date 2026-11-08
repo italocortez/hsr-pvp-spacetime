@@ -1,17 +1,17 @@
 import spacetimedb from './schema';
 import { ScheduleAt } from 'spacetimedb';
-import { SYSTEM_USER_ID } from './helpers/auditColumns';
-import { insertWithAudit, updateWithAudit } from './helpers/auditHelpers';
-import { checkProviderBan } from './helpers/banHelper';
-import { handleDisconnectPoolUpdate, markMemberOffline } from './helpers/disconnectHelpers';
-import { hasLivePresence, markPresenceOnline } from './helpers/presenceHelpers';
-import { seedAbuseConfigDefaults } from './helpers/abuseControls';
-import { seedSystemLobbyPreset } from './helpers/systemPreset';
-import { memberHasLeft } from './helpers/lobbyHelpers';
+import { SYSTEM_USER_ID } from '@module/helpers/admin/auditColumns';
+import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
+import { checkProviderBan } from '@module/helpers/lobby/banHelper';
+import { handleDisconnectPoolUpdate, markMemberOffline } from '@module/helpers/lobby/disconnectHelpers';
+import { hasLivePresence, markPresenceOnline } from '@module/helpers/identity/presenceHelpers';
+import { seedAbuseConfigDefaults } from '@module/helpers/lobby/abuseControls';
+import { seedSystemLobbyPreset } from '@module/helpers/lobby/systemPreset';
+import { memberHasLeft } from '@module/helpers/lobby/lobbyHelpers';
 
 // Private auth tables — imported for schema registration
-import './tables/userPrivate';
-import './tables/banRecord';
+import '@module/tables/identity/userPrivate';
+import '@module/tables/admin/banRecord';
 
 // Phase 15 D-01/D-02: domain view barrel — each file holds views that match the `tables/` layout.
 // Every view must be named-re-exported here so [registerExport] fires during module init
@@ -22,32 +22,32 @@ export {
     view_my_lobbies,
     view_my_lobby_chat,
     view_my_lobby_members,
-} from './views/lobbyViews';
+} from '@module/views/lobbyViews';
 export {
     view_my_identity,
     view_my_profile,
     view_public_hsr_accounts,
     view_admin_user_private,
-} from './views/identityViews';
+} from '@module/views/identityViews';
 export {
     view_my_cost_sets,
     view_my_draft_character_costs,
     view_my_draft_lightcone_costs,
     view_my_draft_synergy_costs,
-} from './views/costSetViews';
+} from '@module/views/costSetViews';
 export {
     view_my_player_stats,
     view_my_character_stats,
-} from './views/statsViews';
+} from '@module/views/statsViews';
 export {
     view_my_relationships,
     view_my_roster_visibility,
     view_my_roster,
-} from './views/socialViews';
+} from '@module/views/socialViews';
 export {
     view_my_match_steps,
     view_my_match_participants,
-} from './views/matchViews';
+} from '@module/views/matchViews';
 export {
     view_match_history,
     view_match_participant_history,
@@ -57,7 +57,7 @@ export {
     view_my_match_participant_history,      // Phase 15 D-13
     view_my_mmr_history,                    // Phase 15 D-13
     view_my_match_result_game_history,      // Phase 15 D-13
-} from './views/matchHistoryViews';
+} from '@module/views/matchHistoryViews';
 export {
     view_my_tournaments,
     view_my_tournament_enrolled,
@@ -67,55 +67,55 @@ export {
     view_my_tournament_match_results,
     view_my_tournament_lobbies,
     view_tournament_registrant_accounts,
-} from './views/tournamentViews';
-export { broadcast_cursor } from './reducers/cursor';
-export { login_as_guest } from './reducers/auth';
-export { delete_my_account, update_display_name, update_username, update_avatar } from './reducers/profile';
-export { server_register_delegate, server_revoke_delegate, server_link_provider, server_set_role, server_delete_user, server_set_datetime, server_set_online, server_set_mmr, server_nuke_test_data } from './reducers/server';
-export { admin_ban_user, admin_unban_user } from './reducers/banAdmin';
-export { admin_delete_row, admin_bulk_upsert, admin_update_user } from './reducers/admin';
-export { admin_update_elo_config, admin_seed_elo_config } from './reducers/eloAdmin';
-export { admin_seed_rating_config, admin_update_rating_config, admin_recalculate_all_ratings } from './reducers/ratingAdmin';
-export { run_user_deletion } from './reducers/userDeletion';
-export { create_hsr_account, update_hsr_account, set_active_hsr_account, delete_hsr_account, batch_upsert_characters, batch_remove_characters, migrate_roster } from './reducers/roster';
-export { admin_create_hsr_account, admin_update_hsr_account, admin_delete_hsr_account, admin_batch_upsert_characters, admin_batch_remove_characters, admin_upsert_archetype, admin_delete_archetype, admin_assign_character_archetypes, admin_remove_character_archetypes } from './reducers/rosterAdmin';
-export { create_cost_set, edit_draft_character_cost, edit_draft_lightcone_cost, edit_draft_synergy_cost, publish_cost_set, lock_cost_set, unpublish_cost_set, delete_cost_set } from './reducers/costSetManagement';
-export { create_tournament, update_tournament, advance_tournament_stage, cancel_tournament, admin_cancel_idle_tournaments, admin_restart_tournament_finalize } from './reducers/tournamentManagement';
-export { check_in_tournament } from './reducers/tournamentCheckIn';
-export { register_for_tournament, withdraw_from_tournament, approve_participant, reject_participant, waitlist_promote, add_participant, set_anonymous_alias } from './reducers/tournamentRegistration';
-export { create_tournament_team, request_join_team, accept_team_request, reject_team_request, leave_tournament_team, disband_tournament_team, withdraw_tournament_team, add_team_member, rename_tournament_team, assign_team_group, clear_team_groups } from './reducers/tournamentTeams';
-export { transfer_referee, reclaim_referee } from './reducers/refereeManagement';
-export { confirm_game, close_game, dispute_match_result } from './reducers/matchResultSubmission';
-export { record_group_scores, set_score_adjustment } from './reducers/scoreEntry';
-export { dq_participant, override_match_result, assign_tournament_assistant, remove_tournament_assistant, mod_promote_to_host, mod_demote_from_host } from './reducers/tournamentAdmin';
-export { set_match_sides } from './reducers/bracketSides';
-export { generate_bracket, seed_bracket, set_seed_order } from './reducers/bracketGeneration';
-export { advance_group_stage, resolve_bracket_match, rollback_bracket_match } from './reducers/bracketAdvancement';
-export { finalize_match_result, validate_match_result } from './reducers/matchFinalization';
-export { create_season, set_active_season } from './reducers/seasonAdmin';
-export { create_achievement, update_achievement, delete_achievement, add_achievement_criteria, remove_achievement_criteria, manual_award_achievement, set_displayed_achievement } from './reducers/achievementManagement';
-export { create_availability_slot, update_availability_slot, delete_availability_slot } from './reducers/calendarAvailability';
-export { save_calendar, unsave_calendar, toggle_calendar_visibility } from './reducers/calendarSaved';
-export { create_calendar_event, update_calendar_event, delete_calendar_event, invite_to_event, remove_invite } from './reducers/calendarEvents';
-export { respond_to_invite } from './reducers/calendarInviteResponse';
-export { create_lobby, join_lobby, leave_lobby, close_lobby, kick_member, ban_member, unban_member } from './reducers/lobbyLifecycle';
-export { send_chat_message, delete_chat_message } from './reducers/chat';
-export { update_lobby_settings, set_team_slot, confirm_ready, unconfirm_ready, set_captain, shuffle_teams } from './reducers/lobbySettings';
-export { create_lobby_preset, update_lobby_preset, delete_lobby_preset } from './reducers/lobbyPresets';
-export { create_tournament_lobby, approve_stand_in, revoke_stand_in } from './reducers/tournamentLobby';
-export { run_lobby_gc, admin_gc_lobbies, seed_lobby_gc_job } from './reducers/lobbyGc';
-export { run_identity_gc, admin_gc_identities, seed_identity_gc_job } from './reducers/identityGc';
-export { run_referee_transfer_check } from './reducers/refereeTransfer';
-export { run_tournament_finalize } from './reducers/tournamentFinalize';
-export { admin_update_abuse_config, admin_set_guest_lobby_creation, admin_acknowledge_alert } from './reducers/abuse';
-export { start_draft, pick_character, ban_character, timer_expiry_classic } from './reducers/draftClassic';
-export { undo_last_step, pause_draft, resume_draft } from './reducers/draftControl';
-export { nominate_character, place_bid, pass_bid, timer_expiry_auction } from './reducers/draftAuction';
-export { equip_lightcone, unequip_lightcone, arrange_lineup, set_eidolon, advance_stage } from './reducers/postDraft';
-export { concede_match, claim_forfeit, defer_match } from './reducers/concede';
+} from '@module/views/tournamentViews';
+export { broadcast_cursor } from '@module/reducers/lobby/cursor';
+export { login_as_guest } from '@module/reducers/identity/auth';
+export { delete_my_account, update_display_name, update_username, update_avatar } from '@module/reducers/identity/profile';
+export { server_register_delegate, server_revoke_delegate, server_link_provider, server_set_role, server_delete_user, server_set_datetime, server_set_online, server_set_mmr, server_nuke_test_data } from '@module/reducers/identity/server';
+export { admin_ban_user, admin_unban_user } from '@module/reducers/admin/banAdmin';
+export { admin_delete_row, admin_bulk_upsert, admin_update_user } from '@module/reducers/admin/admin';
+export { admin_update_elo_config, admin_seed_elo_config } from '@module/reducers/stats/eloAdmin';
+export { admin_seed_rating_config, admin_update_rating_config, admin_recalculate_all_ratings } from '@module/reducers/stats/ratingAdmin';
+export { run_user_deletion } from '@module/reducers/identity/userDeletion';
+export { create_hsr_account, update_hsr_account, set_active_hsr_account, delete_hsr_account, batch_upsert_characters, batch_remove_characters, migrate_roster } from '@module/reducers/roster/roster';
+export { admin_create_hsr_account, admin_update_hsr_account, admin_delete_hsr_account, admin_batch_upsert_characters, admin_batch_remove_characters, admin_upsert_archetype, admin_delete_archetype, admin_assign_character_archetypes, admin_remove_character_archetypes } from '@module/reducers/roster/rosterAdmin';
+export { create_cost_set, edit_draft_character_cost, edit_draft_lightcone_cost, edit_draft_synergy_cost, publish_cost_set, lock_cost_set, unpublish_cost_set, delete_cost_set } from '@module/reducers/roster/costSetManagement';
+export { create_tournament, update_tournament, advance_tournament_stage, cancel_tournament, admin_cancel_idle_tournaments, admin_restart_tournament_finalize } from '@module/reducers/tournament/tournamentManagement';
+export { check_in_tournament } from '@module/reducers/tournament/tournamentCheckIn';
+export { register_for_tournament, withdraw_from_tournament, approve_participant, reject_participant, waitlist_promote, add_participant, set_anonymous_alias } from '@module/reducers/tournament/tournamentRegistration';
+export { create_tournament_team, request_join_team, accept_team_request, reject_team_request, leave_tournament_team, disband_tournament_team, withdraw_tournament_team, add_team_member, rename_tournament_team, assign_team_group, clear_team_groups } from '@module/reducers/tournament/tournamentTeams';
+export { transfer_referee, reclaim_referee } from '@module/reducers/lobby/refereeManagement';
+export { confirm_game, close_game, dispute_match_result } from '@module/reducers/results/matchResultSubmission';
+export { record_group_scores, set_score_adjustment } from '@module/reducers/results/scoreEntry';
+export { dq_participant, override_match_result, assign_tournament_assistant, remove_tournament_assistant, mod_promote_to_host, mod_demote_from_host } from '@module/reducers/tournament/tournamentAdmin';
+export { set_match_sides } from '@module/reducers/tournament/bracketSides';
+export { generate_bracket, seed_bracket, set_seed_order } from '@module/reducers/tournament/bracketGeneration';
+export { advance_group_stage, resolve_bracket_match, rollback_bracket_match } from '@module/reducers/tournament/bracketAdvancement';
+export { finalize_match_result, validate_match_result } from '@module/reducers/results/matchFinalization';
+export { create_season, set_active_season } from '@module/reducers/tournament/seasonAdmin';
+export { create_achievement, update_achievement, delete_achievement, add_achievement_criteria, remove_achievement_criteria, manual_award_achievement, set_displayed_achievement } from '@module/reducers/stats/achievementManagement';
+export { create_availability_slot, update_availability_slot, delete_availability_slot } from '@module/reducers/calendar/calendarAvailability';
+export { save_calendar, unsave_calendar, toggle_calendar_visibility } from '@module/reducers/calendar/calendarSaved';
+export { create_calendar_event, update_calendar_event, delete_calendar_event, invite_to_event, remove_invite } from '@module/reducers/calendar/calendarEvents';
+export { respond_to_invite } from '@module/reducers/calendar/calendarInviteResponse';
+export { create_lobby, join_lobby, leave_lobby, close_lobby, kick_member, ban_member, unban_member } from '@module/reducers/lobby/lobbyLifecycle';
+export { send_chat_message, delete_chat_message } from '@module/reducers/lobby/chat';
+export { update_lobby_settings, set_team_slot, confirm_ready, unconfirm_ready, set_captain, shuffle_teams } from '@module/reducers/lobby/lobbySettings';
+export { create_lobby_preset, update_lobby_preset, delete_lobby_preset } from '@module/reducers/lobby/lobbyPresets';
+export { create_tournament_lobby, approve_stand_in, revoke_stand_in } from '@module/reducers/tournament/tournamentLobby';
+export { run_lobby_gc, admin_gc_lobbies, seed_lobby_gc_job } from '@module/reducers/lobby/lobbyGc';
+export { run_identity_gc, admin_gc_identities, seed_identity_gc_job } from '@module/reducers/identity/identityGc';
+export { run_referee_transfer_check } from '@module/reducers/lobby/refereeTransfer';
+export { run_tournament_finalize } from '@module/reducers/tournament/tournamentFinalize';
+export { admin_update_abuse_config, admin_set_guest_lobby_creation, admin_acknowledge_alert } from '@module/reducers/admin/abuse';
+export { start_draft, pick_character, ban_character, timer_expiry_classic } from '@module/reducers/draft/draftClassic';
+export { undo_last_step, pause_draft, resume_draft } from '@module/reducers/draft/draftControl';
+export { nominate_character, place_bid, pass_bid, timer_expiry_auction } from '@module/reducers/draft/draftAuction';
+export { equip_lightcone, unequip_lightcone, arrange_lineup, set_eidolon, advance_stage } from '@module/reducers/draft/postDraft';
+export { concede_match, claim_forfeit, defer_match } from '@module/reducers/results/concede';
 
-export { admin_force_finalize, admin_void_match } from './reducers/adminMatchTools';
-export { select_match_account, deselect_match_account } from './reducers/accountSelection';
+export { admin_force_finalize, admin_void_match } from '@module/reducers/admin/adminMatchTools';
+export { select_match_account, deselect_match_account } from '@module/reducers/lobby/accountSelection';
 
 // Lifecycle hooks MUST be exported: the SDK only registers a hook when it walks the
 // module's exports. A bare `spacetimedb.clientConnected(...)` call is silently dropped

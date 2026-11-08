@@ -2,8 +2,8 @@
 // A27–A29, A32, A36a) and admin_cancel_idle_tournaments (A24(6)). Builders in s8-fixtures.ts. T-S8c: the bracket is
 // seeded and generated through seed_bracket + generate_bracket, which stamp bracketGeneratedAt and groupId themselves.
 import { describe, expect, it } from 'vitest';
-import { TOURNAMENT_PERM_MESSAGES } from '../helpers/tournamentPermissions';
-import { BEST_OF_ERROR } from '../helpers/seriesSettings';
+import { TOURNAMENT_PERM_MESSAGES } from '@module/helpers/tournament/tournamentPermissions';
+import { BEST_OF_ERROR } from '@module/helpers/tournament/seriesSettings';
 import { M, advance, expectReject, newHarness, tx, type Actor, type Harness } from './s4-fixtures';
 import {
     advanceStage,

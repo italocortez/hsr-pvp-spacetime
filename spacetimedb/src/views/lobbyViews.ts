@@ -6,15 +6,15 @@
 // 3. view_my_lobby_chat       — per-user, anonymized ChatMessage rows (D-92)
 // 4. view_my_lobby_members    — per-user, anonymized LobbyMember rows (D-92)
 
-import spacetimedb from '../schema';
+import spacetimedb from '@module/schema';
 import { t } from 'spacetimedb/server';
-import { Lobby } from '../tables/lobby';
-import { Tournament } from '../tables/tournament';
-import { CostSet } from '../tables/costSet';
-import { GameMode, DraftMode, MatchType, LobbyStage, ChatSenderType, LobbySlot } from '../types/enums';
-import { shouldAnonymize } from '../helpers/anonymousHelpers';
-import { computeAnonymousLabel } from '../helpers/anonymousLabels';
-import { resolveUserLabel } from '../helpers/userLabel';
+import { Lobby } from '@module/tables/lobby/lobby';
+import { Tournament } from '@module/tables/tournament/tournament';
+import { CostSet } from '@module/tables/roster/costSet';
+import { GameMode, DraftMode, MatchType, LobbyStage, ChatSenderType, LobbySlot } from '@module/types/enums';
+import { shouldAnonymize } from '@module/helpers/identity/anonymousHelpers';
+import { computeAnonymousLabel } from '@module/helpers/identity/anonymousLabels';
+import { resolveUserLabel } from '@module/helpers/identity/userLabel';
 
 // ---------------------------------------------------------------------------
 // 1. Lobby Browser (anonymous view) — projected subset of lobby columns

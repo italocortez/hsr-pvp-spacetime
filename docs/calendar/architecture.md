@@ -138,7 +138,7 @@ All cascades run in the same transaction as the triggering reducer:
 | `withdraw_from_tournament` | `deleteUserInvitesForTournament(ctx, userId, tournamentId)` | D-24 |
 | `performUserDeletion` | `deleteAllCalendarDataForUser(ctx, userId)` | D-23 |
 
-Cascade helper functions live in `spacetimedb/src/helpers/calendarCascade.ts`.
+Cascade helper functions live in `spacetimedb/src/helpers/calendar/calendarCascade.ts`.
 
 ## Phase History
 

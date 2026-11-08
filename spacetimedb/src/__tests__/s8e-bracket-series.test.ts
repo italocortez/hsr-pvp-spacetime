@@ -27,9 +27,9 @@ import {
     validate,
     type Field,
 } from './s8d-fixtures';
-import { matchGames } from '../helpers/bracketResults';
-import { tournamentRecordsInBracketOrder } from '../helpers/tournamentResults';
-import { ensureEditableRecord, ensureOpenGame } from '../helpers/scoringHelpers';
+import { matchGames } from '@module/helpers/tournament/bracketResults';
+import { tournamentRecordsInBracketOrder } from '@module/helpers/tournament/tournamentResults';
+import { ensureEditableRecord, ensureOpenGame } from '@module/helpers/results/scoringHelpers';
 
 const BO3 = { defaultBestOf: 3, grandFinalBestOf: 3 };
 const IN_PLAY = 'A lobby for this bracket match is still in play.';

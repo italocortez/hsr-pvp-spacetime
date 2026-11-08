@@ -6,7 +6,7 @@
 // finishGame closes the current game through the host referee's staff close (S4 / S6 / S7b suites).
 import { expect } from 'vitest';
 import { groupCount, type LineupFormatTag } from '@shared/scoring';
-import { teamDraft } from '../helpers/scoringHelpers';
+import { teamDraft } from '@module/helpers/results/scoringHelpers';
 import { M, advance, captainOf, lobbyRow, session, setupLobby, tx, type Actor, type Harness, type Lobby, type SetupOpts } from './s4-fixtures';
 
 /** Hundredths of a value (scores, costs and handicaps are fixed-point hundredths). */

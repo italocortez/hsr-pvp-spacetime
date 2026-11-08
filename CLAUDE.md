@@ -9,7 +9,7 @@ Migration in progress: `ROADMAP.md` lists which steps have landed; a path or scr
 | Path | Holds |
 |---|---|
 | `web/` | Vite + React 18 + TanStack Router app; `src/module_bindings/` is the one committed bindings copy (M3) |
-| `spacetimedb/` | the module: `src/`, in-memory tests (S10) |
+| `spacetimedb/` | the module: `src/{tables,reducers,helpers}/<domain>/` (identity, lobby, draft, results, tournament, stats, roster, calendar, admin), `src/views/`, `src/types/`; cross-folder imports use `@module/<kind>/<domain>/<file>`, declared per folder in `tsconfig.base.json` (mirrored in `test/tsconfig.json`) because the CLI bundler matches a paths wildcard against one segment, so a new domain folder needs its entries there; in-memory tests (S10) |
 | `shared/` | pure TS used by both sides: `stdb-targets.ts`, `scoring/`, `bracket/`, `lobby-rules/`; no runtime import of `spacetimedb` or `react` (M2, S7, S8) |
 | `api/auth/discord/` | the one Vercel function pair (M5) |
 | `scripts/stdb/` | publish, bootstrap, seed, generate, describe, manage-user, backup, restore; all take `--target test\|prod` (M2) |

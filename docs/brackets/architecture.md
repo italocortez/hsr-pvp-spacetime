@@ -45,8 +45,8 @@ The lobby-level series reducers are deleted; the bracket match is the only serie
 
 S8a lays the foundation of the tournament rewrite: a pure shared bracket module and the module helpers every
 later tournament reducer calls. **No reducer calls them yet**: the legacy generation and advancement code
-(`helpers/bracketGeneration.ts`, `helpers/bracketHelpers.ts`, `reducers/bracketGeneration.ts`,
-`reducers/bracketAdvancement.ts`) and the reducer flows above still run until S8c replaces them. No schema change.
+(`helpers/bracketGeneration.ts`, `helpers/bracketHelpers.ts`, `reducers/tournament/bracketGeneration.ts`,
+`reducers/tournament/bracketAdvancement.ts`) and the reducer flows above still run until S8c replaces them. No schema change.
 
 ### Shared module `shared/bracket/` (pure; imported as `@shared/bracket`, barrel `index.ts`)
 
@@ -133,7 +133,7 @@ be rolled back (the slot no longer holds the team).
 
 ## Phase S8d execution (DECISIONS.md A24(1)(3), A35, A38(1), A54; ACCESS-SECURITY-OPS §D.8.3)
 
-**Hand-off.** `helpers/tournamentResults.ts` `handOffToBracket(ctx, record, 'Played' | 'Concede')` is the one
+**Hand-off.** `helpers/tournament/tournamentResults.ts` `handOffToBracket(ctx, record, 'Played' | 'Concede')` is the one
 result path into `applyBracketResult`: winner team = team1 for Blue, team2 for Red (A35); series score from the
 session; actor `SYSTEM_USER_ID` (A37); only a Ready match of an InProgress tournament (idempotent and quiet otherwise).
 Callers: `performConcede` (Concede, A38(1)), `submitSeriesResult` (Played, a tournament without
@@ -153,11 +153,11 @@ uses `rollbackBracketResult` + `applyBracketResult` (Staff) directly. Callers of
 
 **The bracket match is the series.** `BracketMatch.bestOf` (A28 chain: `Tournament.defaultBestOf` /
 `grandFinalBestOf` → `BracketMatch.bestOf`) caps the games; a lobby hosts one game. `team1Games` / `team2Games` are
-the running tally, written only by `helpers/bracketResults.ts` (`bracketStore.insertBracket` inserts the head start, `team1Games = winnerAdvantage`, `team2Games = 0`, A69(1); `insertGroupBracket` inserts 0 / 0):
+the running tally, written only by `helpers/tournament/bracketResults.ts` (`bracketStore.insertBracket` inserts the head start, `team1Games = winnerAdvantage`, `team2Games = 0`, A69(1); `insertGroupBracket` inserts 0 / 0):
 
 | Helper (`bracketResults.ts`) | Does |
 |---|---|
-| `matchGames(ctx, match): { team1, team2 }` | **derives** the tally (A71(1)): `team1 = match.winnerAdvantage +` the Validated records of the match (`MatchResultRecord.bracket_match_id`) whose `winnerTeamSide` is the colour team1 plays; `team2 =` the Validated records whose `winnerTeamSide` is the colour team2 plays (colour mapping: `helpers/matchSides.ts`, default team1 = Blue, A35 / A70(1)). The head start is always team1's (slot 1, the WB finalist, A27), whatever the colours. Only `status = Validated` counts (a concede is Validated, A24(1)); Pending, Submitted, Disputed, Rejected, Voided do not. The head start is on the row from generation (A69(1)), so stored = derived from the insert on; no lobby or result record seeds it |
+| `matchGames(ctx, match): { team1, team2 }` | **derives** the tally (A71(1)): `team1 = match.winnerAdvantage +` the Validated records of the match (`MatchResultRecord.bracket_match_id`) whose `winnerTeamSide` is the colour team1 plays; `team2 =` the Validated records whose `winnerTeamSide` is the colour team2 plays (colour mapping: `helpers/tournament/matchSides.ts`, default team1 = Blue, A35 / A70(1)). The head start is always team1's (slot 1, the WB finalist, A27), whatever the colours. Only `status = Validated` counts (a concede is Validated, A24(1)); Pending, Submitted, Disputed, Rejected, Voided do not. The head start is on the row from generation (A69(1)), so stored = derived from the insert on; no lobby or result record seeds it |
 | `recordGameSettled(ctx, record, decidedBy, actorId)` | a game of the match settled. Not Ready → return (a match staff already settled stays as it is). Writes the derived tally; when a side reaches `winsNeededFor(bestOf) = ceil(bestOf / 2)` → `applyBracketResult(ctx, match.id, team, decidedBy, tally, actorId)` (routing, A30, A37 actor); otherwise only the tally changes |
 | `rollbackBracketResult(ctx, id, actorId, voidDeciding = true, redecide = true)` | the S8c revert (downstream unplaced, loser un-eliminated, Ready), then: when `voidDeciding` and the match was decided by play (`decidedBy` Played / Concede) the **deciding record** = the latest Validated record of the match by `settledAt` (id only as a tie-break) is marked Voided and its lobby hard-deleted (`keepResultRecord`); a Staff / Dq decision voids no record. The tally is recomputed from the remaining Validated records and written with the Ready state; with `redecide` (rollback_bracket_match only) a side that already has ceil(bestOf / 2) games is decided again as **Played** through `applyBracketResult` (e.g. 2-0 by play, resolved by staff for the other team, then rolled back). `resolve_bracket_match` and `override_match_result` pass `redecide = false` (they decide right after) |
 
@@ -187,7 +187,7 @@ team1 = Blue (the read-side fallback stays as a defence, A71(3)). `insertBracket
 column and the same reducer. Group standings (`tournamentStandings.ts`, `shared/bracket/standings.ts`) stay team-based and
 read no colour.
 
-| Helper (`helpers/matchSides.ts`, the one mapping) | Does |
+| Helper (`helpers/tournament/matchSides.ts`, the one mapping) | Does |
 |---|---|
 | `sideSlot(match, side): 1 \| 2 \| undefined` | the slot that plays `side` (`blueTeamId === team2Id` → Blue is slot 2; otherwise slot 1); undefined for a non-colour tag |
 | `sideTeamId(match, side)` / `matchSides(match)` | the team id playing a colour / both (`{ blueTeamId, redTeamId }`) |
@@ -236,7 +236,7 @@ to the derived one (a match whose slot changes has no counted game: `team1Games 
 | Bracket reducers rebuilt on the shared engine: `seed_bracket` (ctx.random), `set_seed_order`, `generate_bracket` (A26a Withdraw, manual / auto groups, `bracketGeneratedAt`), `advance_group_stage`, `resolve_bracket_match`, `rollback_bracket_match`, `dq_participant` through `applyBracketResult`; legacy generation / advancement and `admin_set_bracket_winner` deleted; single writer enforced (A23, A24, A25, A26a, A29, A30, A32, A36a, A38(1)) | Phase S8c execution | 2026-11-07 |
 | Result hand-off `handOffToBracket` (validation, concede; finalization step 17 removed); rollback voids the match's lobbies (record Voided and kept, lobby hard-deleted); resolve keeps a parked record that agrees with the staff winner and voids the rest (A24(1)(3), A38(1), D.8.3) | Phase S8d execution | 2026-11-07 |
 | The bracket match is the series: derived tally (`matchGames`: head start + Validated records), `recordGameSettled` decides at ceil(bestOf / 2), rollback voids the deciding record only, resolve keeps every Validated game, DQ applies the tally; `seriesGames` deleted (A67(4)(8)) | Phase S8e execution | 2026-11-08 |
-| `blueTeamId` on `BracketMatch`, `helpers/matchSides.ts` as the one colour mapping, result credit by colour, `set_match_sides` (group matches included) | Phase S8g execution (DECISIONS.md A70) | 2026-11-08 |
+| `blueTeamId` on `BracketMatch`, `helpers/tournament/matchSides.ts` as the one colour mapping, result credit by colour, `set_match_sides` (group matches included) | Phase S8g execution (DECISIONS.md A70) | 2026-11-08 |
 | Head start on team1 whatever the colours, `headStartSide` removed, `set_match_sides(bracketMatchId, blueTeamId)`, records checked before lobbies, `slotChangeReset` on every slot change | Phase S8g execution (DECISIONS.md A71) | 2026-11-08 |
 
 ---

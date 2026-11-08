@@ -9,7 +9,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
     transferTournamentCaptain,
-} from '../../../spacetimedb/src/helpers/tournamentHelpers';
+} from '../../../spacetimedb/src/helpers/tournament/tournamentHelpers';
 
 // ── Mock helpers ─────────────────────────────────────────────────────────────
 

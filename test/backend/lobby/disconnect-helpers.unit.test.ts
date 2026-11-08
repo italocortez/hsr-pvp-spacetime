@@ -13,7 +13,7 @@ import {
     handleDisconnectPoolUpdate,
     isForfeitEligible,
     isThirdPartyReferee,
-} from '../../../spacetimedb/src/helpers/disconnectHelpers';
+} from '../../../spacetimedb/src/helpers/lobby/disconnectHelpers';
 
 // ── Mock helpers ──────────────────────────────────────────────────────────────
 

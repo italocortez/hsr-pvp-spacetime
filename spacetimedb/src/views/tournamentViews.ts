@@ -17,15 +17,15 @@
 // all 9 are moved here verbatim (no rename, no drop). Tracked as a Rule 1
 // deviation in SUMMARY.md — fix is a comment/text correction, not a code change.
 
-import spacetimedb from '../schema';
+import spacetimedb from '@module/schema';
 import { t } from 'spacetimedb/server';
-import { Lobby } from '../tables/lobby';
-import { Tournament } from '../tables/tournament';
-import { BracketMatch } from '../tables/bracketMatch';
-import { MatchResultRecord } from '../tables/matchResult';
-import { TournamentEnrolled } from '../tables/tournamentEnrolled';
-import { TournamentTeam } from '../tables/tournamentTeam';
-import { TournamentTeamMember } from '../tables/tournamentTeamMember';
+import { Lobby } from '@module/tables/lobby/lobby';
+import { Tournament } from '@module/tables/tournament/tournament';
+import { BracketMatch } from '@module/tables/tournament/bracketMatch';
+import { MatchResultRecord } from '@module/tables/results/matchResult';
+import { TournamentEnrolled } from '@module/tables/tournament/tournamentEnrolled';
+import { TournamentTeam } from '@module/tables/tournament/tournamentTeam';
+import { TournamentTeamMember } from '@module/tables/tournament/tournamentTeamMember';
 
 // ---------------------------------------------------------------------------
 // Tournament Organizer Views (Phase 10.3)

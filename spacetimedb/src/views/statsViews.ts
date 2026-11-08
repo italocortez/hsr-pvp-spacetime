@@ -4,10 +4,10 @@
 // 1. view_my_player_stats    — caller's own PlayerStat rows (D-33)
 // 2. view_my_character_stats — caller's own PlayerCharacterStat rows (D-33)
 
-import spacetimedb from '../schema';
+import spacetimedb from '@module/schema';
 import { t } from 'spacetimedb/server';
-import { PlayerStat } from '../tables/playerStats';
-import { PlayerCharacterStat } from '../tables/characterStats';
+import { PlayerStat } from '@module/tables/stats/playerStats';
+import { PlayerCharacterStat } from '@module/tables/stats/characterStats';
 
 // ---------------------------------------------------------------------------
 // 1. My Player Stats (per-user view) — returns caller's own PlayerStat rows.

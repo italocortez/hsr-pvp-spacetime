@@ -17,10 +17,11 @@ export default defineConfig({
         testTimeout: 10000,
     },
     resolve: {
-        // Mirrors tsconfig.base.json `paths` (@shared/*, @bindings/*).
+        // Mirrors tsconfig.base.json `paths` (@shared/*, @bindings/*) and spacetimedb/tsconfig.json `@module/*`.
         alias: {
             '@shared': `${repoRoot}shared`,
             '@bindings': `${repoRoot}web/src/module_bindings`,
+            '@module': `${moduleRoot}src`,
         },
     },
 });

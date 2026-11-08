@@ -67,7 +67,7 @@ HsrCharacter (name: string PK)  -- admin-managed game data
 
 ## Rating Integration
 
-Archetypes feed the horizontal score component of account ratings (see `helpers/accountRating.ts`):
+Archetypes feed the horizontal score component of account ratings (see `helpers/stats/accountRating.ts`):
 
 ```
 per_archetype = min(sum(age_weight for owned chars in archetype) / archetypeThreshold, 1.0)

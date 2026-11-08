@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { computeAccountRating, computeMaxPossible } from '../../../spacetimedb/src/helpers/accountRating';
+import { computeAccountRating, computeMaxPossible } from '../../../spacetimedb/src/helpers/stats/accountRating';
 
 type ConfigType = {
     id: number;

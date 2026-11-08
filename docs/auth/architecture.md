@@ -192,7 +192,7 @@ Three-path lookup for display names at history render sites where the referenced
 2. `ctx.db.DeletedUser.id.find(userId)` → archived user → `{ displayName: archive.displayName, isDeleted: true }`
 3. Fallback → `{ displayName: \`User #${userId}\`, isDeleted: true }`
 
-**Location:** `spacetimedb/src/helpers/userLabel.ts`
+**Location:** `spacetimedb/src/helpers/identity/userLabel.ts`
 
 **Call sites (5):** `lobbyViews.ts:view_my_lobby_members`, `finalizationHelpers.ts:actorDisplayName`, `finalizationHelpers.ts:participantDisplayName`, `lobbyLifecycle.ts:kick_member`, `lobbyLifecycle.ts:ban_member`.
 

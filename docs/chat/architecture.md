@@ -37,7 +37,7 @@ Lobby (id: u32 autoInc PK)
 6. Otherwise: write `senderUserId=userId`, `anonymousLabel=undefined`
 7. Insert `ChatMessage` row with `senderType=Player`
 
-Rate limit (Phase S5 execution; DECISIONS.md A43, D-B5; ACCESS-SECURITY-OPS B-4), before the rolling-window delete, values read from `AbuseConfig` at call time (`consumeChatAllowance`, `helpers/abuseControls.ts`):
+Rate limit (Phase S5 execution; DECISIONS.md A43, D-B5; ACCESS-SECURITY-OPS B-4), before the rolling-window delete, values read from `AbuseConfig` at call time (`consumeChatAllowance`, `helpers/lobby/abuseControls.ts`):
 - Minimum interval: reject when the caller's newest `senderType=Player` message in this lobby is younger than `chatMinIntervalMs` (default 700 ms). A user is in one lobby at a time, so the lobby's messages (already loaded for the window) are the source; no extra column.
 - Per minute: a fixed one-minute window in `UserRateState` (`chatWindowStart`, `chatCount`; row created on first use); reject once `chatPerMinute` (default 30) messages fell in the window. No role is exempt.
 

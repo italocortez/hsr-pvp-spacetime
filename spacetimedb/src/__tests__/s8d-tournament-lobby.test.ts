@@ -5,7 +5,7 @@
 // by seated staff, and the locked integrity set of update_lobby_settings. Builders in s8d-fixtures.ts. Nothing
 // reaches maincloud. The A67(5) D-45 rule and the game cap are tested in s8e-bracket-series.test.ts.
 import { describe, expect, it } from 'vitest';
-import { TOURNAMENT_PERM_MESSAGES } from '../helpers/tournamentPermissions';
+import { TOURNAMENT_PERM_MESSAGES } from '@module/helpers/tournament/tournamentPermissions';
 import { M, expectReject, guest, lobbyRow, member, newHarness, setupLobby, tx, type Actor, type Harness } from './s4-fixtures';
 import {
     advanceStage,

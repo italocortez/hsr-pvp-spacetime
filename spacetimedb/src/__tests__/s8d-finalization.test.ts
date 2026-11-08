@@ -7,7 +7,7 @@
 // counted, MMR skipped). Scheduled ticks are driven by hand (`tick` in s8d-fixtures.ts). Nothing reaches maincloud.
 import { describe, expect, it } from 'vitest';
 import { M, expectReject, lobbyRow, tx, type Actor, type Harness } from './s4-fixtures';
-import { TOURNAMENT_PERM_MESSAGES } from '../helpers/tournamentPermissions';
+import { TOURNAMENT_PERM_MESSAGES } from '@module/helpers/tournament/tournamentPermissions';
 import { advanceStage, assignAssistant, bracketRows, liveField, matchRow, resolveMatch, tRow, teamRow, teams, verified } from './s8-fixtures';
 import {
     byKey,
@@ -22,7 +22,7 @@ import {
     validate,
     type Field,
 } from './s8d-fixtures';
-import { FINALIZE_BATCH_SIZE } from '../helpers/tournamentFinalization';
+import { FINALIZE_BATCH_SIZE } from '@module/helpers/tournament/tournamentFinalization';
 
 const BO1 = { defaultBestOf: 1, grandFinalBestOf: 1 };
 const complete = (f: Field) => advanceStage(f.test, f.org, f.id, 'Completed');

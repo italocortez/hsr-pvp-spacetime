@@ -6,12 +6,12 @@
 // 3. view_my_draft_lightcone_costs — draft lightcone cost rows for caller's sets
 // 4. view_my_draft_synergy_costs   — draft synergy cost rows for caller's sets
 
-import spacetimedb from '../schema';
+import spacetimedb from '@module/schema';
 import { t } from 'spacetimedb/server';
-import { CostSet } from '../tables/costSet';
-import { CostSetDraftCharacter } from '../tables/costSetDraftCharacter';
-import { CostSetDraftLightcone } from '../tables/costSetDraftLightcone';
-import { CostSetDraftSynergy } from '../tables/costSetDraftSynergy';
+import { CostSet } from '@module/tables/roster/costSet';
+import { CostSetDraftCharacter } from '@module/tables/roster/costSetDraftCharacter';
+import { CostSetDraftLightcone } from '@module/tables/roster/costSetDraftLightcone';
+import { CostSetDraftSynergy } from '@module/tables/roster/costSetDraftSynergy';
 
 // ---------------------------------------------------------------------------
 // 1. My Cost Sets (per-user view) — CostSet rows owned by the requesting user

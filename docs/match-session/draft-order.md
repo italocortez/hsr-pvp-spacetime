@@ -112,7 +112,7 @@
 
 ## Thirds (12 picks per team) — DECISIONS.md A59, Phase S7b execution
 
-Classic draft orders for `lineupFormat = Thirds`, one per ban mode (implemented in `spacetimedb/src/helpers/draftSequences.ts`, `THIRDS_ORDERS`). Notation: B / R = a Blue / Red pick, bans in brackets, a `·` at every colour change.
+Classic draft orders for `lineupFormat = Thirds`, one per ban mode (implemented in `spacetimedb/src/helpers/draft/draftSequences.ts`, `THIRDS_ORDERS`). Notation: B / R = a Blue / Red pick, bans in brackets, a `·` at every colour change.
 
 Rules the three orders share:
 

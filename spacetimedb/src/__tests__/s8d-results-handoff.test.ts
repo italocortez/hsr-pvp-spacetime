@@ -8,7 +8,7 @@
 // every Validated game (A67(8)); an override of a record of a Decided match reverts the decision (no game or lobby
 // voided), updates the record and re-decides from the new tally (A67(4), S8e review addendum).
 import { describe, expect, it } from 'vitest';
-import { TOURNAMENT_PERM_MESSAGES } from '../helpers/tournamentPermissions';
+import { TOURNAMENT_PERM_MESSAGES } from '@module/helpers/tournament/tournamentPermissions';
 import { M, expectReject, lobbyRow, newHarness, session, setupLobby, tx, type Harness, type Lobby } from './s4-fixtures';
 import { assignAssistant, liveField, matchRow, resolveMatch, verified } from './s8-fixtures';
 import {

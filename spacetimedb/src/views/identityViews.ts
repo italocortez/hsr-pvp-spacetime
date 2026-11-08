@@ -6,12 +6,12 @@
 // 3. view_public_hsr_accounts  — anonymous, HsrAccount rows where isRosterPublic=true (D-22; renamed Phase 15.5 D-04)
 // 4. view_admin_user_private   — admin/mod view, full UserPrivate rows (D-05)
 
-import spacetimedb from '../schema';
+import spacetimedb from '@module/schema';
 import { t } from 'spacetimedb/server';
-import { UserIdentity } from '../tables/userIdentity';
-import { UserPrivate } from '../tables/userPrivate';
-import { isRoleAtLeast } from '../helpers/ensurePermissions';
-import { Role } from '../types/enums';
+import { UserIdentity } from '@module/tables/identity/userIdentity';
+import { UserPrivate } from '@module/tables/identity/userPrivate';
+import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
+import { Role } from '@module/types/enums';
 
 // ---------------------------------------------------------------------------
 // 1. My Identity (per-user view) — only the caller's own identity mapping(s)

@@ -44,7 +44,7 @@ import {
     redNames,
     side,
 } from './s7-fixtures';
-import { teamDraft } from '../helpers/scoringHelpers';
+import { teamDraft } from '@module/helpers/results/scoringHelpers';
 import { draftGame } from './s8d-fixtures';
 
 const picksOf = (test: Harness, lobbyId: number) => steps(test, lobbyId).filter((x) => x.action.tag === 'Pick');

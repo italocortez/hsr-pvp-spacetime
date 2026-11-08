@@ -17,7 +17,37 @@
             ],
             "@/*": [
                 "../*"
-            ]
+            ],
+            "@module/tables/identity/*": ["../spacetimedb/src/tables/identity/*"],
+            "@module/tables/lobby/*": ["../spacetimedb/src/tables/lobby/*"],
+            "@module/tables/draft/*": ["../spacetimedb/src/tables/draft/*"],
+            "@module/tables/results/*": ["../spacetimedb/src/tables/results/*"],
+            "@module/tables/tournament/*": ["../spacetimedb/src/tables/tournament/*"],
+            "@module/tables/stats/*": ["../spacetimedb/src/tables/stats/*"],
+            "@module/tables/roster/*": ["../spacetimedb/src/tables/roster/*"],
+            "@module/tables/calendar/*": ["../spacetimedb/src/tables/calendar/*"],
+            "@module/tables/admin/*": ["../spacetimedb/src/tables/admin/*"],
+            "@module/reducers/identity/*": ["../spacetimedb/src/reducers/identity/*"],
+            "@module/reducers/lobby/*": ["../spacetimedb/src/reducers/lobby/*"],
+            "@module/reducers/draft/*": ["../spacetimedb/src/reducers/draft/*"],
+            "@module/reducers/results/*": ["../spacetimedb/src/reducers/results/*"],
+            "@module/reducers/tournament/*": ["../spacetimedb/src/reducers/tournament/*"],
+            "@module/reducers/stats/*": ["../spacetimedb/src/reducers/stats/*"],
+            "@module/reducers/roster/*": ["../spacetimedb/src/reducers/roster/*"],
+            "@module/reducers/calendar/*": ["../spacetimedb/src/reducers/calendar/*"],
+            "@module/reducers/admin/*": ["../spacetimedb/src/reducers/admin/*"],
+            "@module/helpers/identity/*": ["../spacetimedb/src/helpers/identity/*"],
+            "@module/helpers/lobby/*": ["../spacetimedb/src/helpers/lobby/*"],
+            "@module/helpers/draft/*": ["../spacetimedb/src/helpers/draft/*"],
+            "@module/helpers/results/*": ["../spacetimedb/src/helpers/results/*"],
+            "@module/helpers/tournament/*": ["../spacetimedb/src/helpers/tournament/*"],
+            "@module/helpers/stats/*": ["../spacetimedb/src/helpers/stats/*"],
+            "@module/helpers/roster/*": ["../spacetimedb/src/helpers/roster/*"],
+            "@module/helpers/calendar/*": ["../spacetimedb/src/helpers/calendar/*"],
+            "@module/helpers/admin/*": ["../spacetimedb/src/helpers/admin/*"],
+            "@module/views/*": ["../spacetimedb/src/views/*"],
+            "@module/types/*": ["../spacetimedb/src/types/*"],
+            "@module/schema": ["../spacetimedb/src/schema.ts"]
         }
     },
     "include": [

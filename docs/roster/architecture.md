@@ -78,7 +78,7 @@ Archetype (id: u32 autoInc PK)  [public: true]
 1. `ensureVerifiedUser(ctx)` -- ownership check
 2. Phase 12.3 D-G-01 (NARROW): rejects when the target `hsrAccountId` is bound to a live `LobbyMemberAccount`
 3. Parse JSON array of `{ characterName, eidolonLevel }` objects
-4. Phase 12.3 D-D-02: body is a thin wrapper delegating to `applyBatchUpsert` from `spacetimedb/src/helpers/rosterMutations.ts`
+4. Phase 12.3 D-D-02: body is a thin wrapper delegating to `applyBatchUpsert` from `spacetimedb/src/helpers/roster/rosterMutations.ts`
 5. Helper: Phase 1 validate ALL entries (`characterName` exists in `HsrCharacter`; `eidolonLevel` in 0-6 range), Phase 2 upsert ALL via composite-PK delete+insert, then call `updateAccountRating`
 6. Atomic: any validation failure rejects entire batch
 
@@ -86,7 +86,7 @@ Archetype (id: u32 autoInc PK)  [public: true]
 1. `ensureVerifiedUser(ctx)` -- ownership check
 2. Phase 12.3 D-G-01 (NARROW): rejects when the target `hsrAccountId` is bound to a live `LobbyMemberAccount`
 3. Parse JSON array of character name strings
-4. Phase 12.3 D-D-02: body is a thin wrapper delegating to `applyBatchRemove` from `spacetimedb/src/helpers/rosterMutations.ts`
+4. Phase 12.3 D-D-02: body is a thin wrapper delegating to `applyBatchRemove` from `spacetimedb/src/helpers/roster/rosterMutations.ts`
 5. Helper: Phase 1 validate ALL names exist on this account, Phase 2 delete ALL matching `HsrAccountCharacter` rows, then call `updateAccountRating`
 6. Atomic: any name not found rejects entire batch
 
@@ -107,7 +107,7 @@ All mirror user variants with `ensureAdmin(ctx)` and `targetUserId` parameter (n
 
 ### Phase 12.3: rosterMutations.ts helpers and lobby guards
 
-New file `spacetimedb/src/helpers/rosterMutations.ts` exports two helpers that
+New file `spacetimedb/src/helpers/roster/rosterMutations.ts` exports two helpers that
 centralize the "mutate characters + recompute accountRating" sequence previously
 duplicated across `batch_upsert_characters`, `batch_remove_characters`, and
 `migrate_roster`:
@@ -138,7 +138,7 @@ lobby id). The guards exist for UX clarity -- the snapshot from Phase 12.3's D-A
 capture already makes the MMR system correct even if every guard were bypassed
 by an admin reducer.
 
-### Phase S6 execution: rating over a character set (helpers/accountRating.ts, backlog #10)
+### Phase S6 execution: rating over a character set (helpers/stats/accountRating.ts, backlog #10)
 - `computeRosterRating(ctx, characters)` holds the Phase 11 formula over an explicit set of `{ characterName, eidolonLevel }` (vertical mean, archetype coverage, cached or on-the-fly `maxPossible` denominator, unchanged).
 - `computeAccountRating(ctx, hsrAccountId)` is the thin single-account wrapper (the account's own `HsrAccountCharacter` rows); every existing caller (`updateAccountRating`, `admin_recalculate_all_ratings`, roster mutations) gets the same number as before.
 - `computeMergedAccountRating(ctx, accountIds)`: union of the accounts' rosters, per character the max eidolon across them, rated by the same formula; no accounts → 0.

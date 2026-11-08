@@ -11,7 +11,7 @@ import {
     splitIntoGroups,
     type BracketSpec,
 } from '@shared/bracket';
-import { TOURNAMENT_PERM_MESSAGES } from '../helpers/tournamentPermissions';
+import { TOURNAMENT_PERM_MESSAGES } from '@module/helpers/tournament/tournamentPermissions';
 import { M, advance, expectReject, tx, type Harness } from './s4-fixtures';
 import {
     AUDIT,

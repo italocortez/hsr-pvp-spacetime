@@ -11,10 +11,10 @@ import {
     splitIntoGroups,
     type BracketSpec,
 } from '@shared/bracket';
-import { deleteBracket, insertBracket, insertGroupBracket } from '../helpers/bracketStore';
-import { applyBracketResult, rollbackBracketResult, matchGames } from '../helpers/bracketResults';
-import { groupStandings, qualifiersFor } from '../helpers/tournamentStandings';
-import { allowedSlotsFor } from '../helpers/tournamentLobbySides';
+import { deleteBracket, insertBracket, insertGroupBracket } from '@module/helpers/tournament/bracketStore';
+import { applyBracketResult, rollbackBracketResult, matchGames } from '@module/helpers/tournament/bracketResults';
+import { groupStandings, qualifiersFor } from '@module/helpers/tournament/tournamentStandings';
+import { allowedSlotsFor } from '@module/helpers/tournament/tournamentLobbySides';
 import { DEFAULT_LOBBY_ARGS, M, expectReject, guest, lobbyRow, newHarness, tx, type Harness } from './s4-fixtures';
 
 const ACTOR = 0; // SYSTEM

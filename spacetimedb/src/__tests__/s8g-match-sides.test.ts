@@ -31,11 +31,11 @@ import {
     type Field,
     type TeamEntry,
 } from './s8d-fixtures';
-import { matchGames } from '../helpers/bracketResults';
-import { slotChangeReset } from '../helpers/matchSides';
-import { allowedSlotsFor } from '../helpers/tournamentLobbySides';
-import { groupStandings } from '../helpers/tournamentStandings';
-import { bracketMatchColumns } from '../tables/bracketMatch';
+import { matchGames } from '@module/helpers/tournament/bracketResults';
+import { slotChangeReset } from '@module/helpers/tournament/matchSides';
+import { allowedSlotsFor } from '@module/helpers/tournament/tournamentLobbySides';
+import { groupStandings } from '@module/helpers/tournament/tournamentStandings';
+import { bracketMatchColumns } from '@module/tables/tournament/bracketMatch';
 
 const BO3 = { defaultBestOf: 3, grandFinalBestOf: 3 };
 const SEAT = 'This seat is not available to you in this tournament lobby.';

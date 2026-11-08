@@ -2,7 +2,7 @@
 // team edits in Registration only, Forming ↔ Ready, captain-only decisions, waitlisted members, rename / alias,
 // add_team_member, team-level check-in (A26) and manual groups (A32, A36a). Builders in s8-fixtures.ts.
 import { describe, expect, it } from 'vitest';
-import { TOURNAMENT_PERM_MESSAGES } from '../helpers/tournamentPermissions';
+import { TOURNAMENT_PERM_MESSAGES } from '@module/helpers/tournament/tournamentPermissions';
 import { M, advance, expectReject, newHarness, tx, type Harness } from './s4-fixtures';
 import {
     advanceStage,
