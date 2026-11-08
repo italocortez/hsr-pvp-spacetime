@@ -230,9 +230,9 @@ export const Task = table({
 Extract column definitions into a named object so other backend files (reducers, helpers, validators) can import the column shape without exposing data to all clients. This is useful when multiple tables share columns, or when you need type-safe access to column definitions in backend logic.
 
 ```typescript
-// tables/hsr_character.ts
+// tables/roster/hsrCharacter.ts
 import { table, t } from 'spacetimedb/server';
-import { Path, Element, CharRole } from '../types/enums';
+import { Path, Element, CharRole } from '@module/types/enums';
 
 // Export columns separately — other backend code can import this
 export const hsrCharacterColumns = {
@@ -258,7 +258,7 @@ export const HsrCharacter = table({
 }, hsrCharacterColumns);
 ```
 
-Other backend files can then `import { hsrCharacterColumns } from '../tables/hsr_character'` to reference the column types for validation, building related tables, or type-safe helpers — all without making the data public to clients.
+Other backend files can then `import { hsrCharacterColumns } from '@module/tables/roster/hsrCharacter'` to reference the column types for validation, building related tables, or type-safe helpers — all without making the data public to clients.
 
 ### Column types
 ```typescript
@@ -812,7 +812,7 @@ export const my_player = spacetimedb.view(
     return row ?? undefined;
   }
 );
-// Then in index.ts: export { my_data, my_player } from './views/myViews';
+// Then in index.ts: export { my_data, my_player } from '@module/views/myViews';
 ```
 
 ### Query builder view pattern (can scan)

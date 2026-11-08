@@ -207,7 +207,7 @@ conn.subscriptionBuilder()
 
 **Overlapping queries hurt performance:** Subscribing to datasets that overlap (e.g. `tables.user` AND `tables.user.where(r => r.id.ne(5))`) forces the server to serialize nearly all rows twice. Keep subscription queries disjoint. Subscribing to the *same* query more than once is fine — it's zero-copy with no additional processing overhead.
 
-**Views require export to register (CRITICAL):** Views must be **exported** from the module entry point — just like reducers. `spacetimedb.view()` returns a function with a `[registerExport]` symbol; the runtime only calls it when walking module exports. A side-effect import (`import './views/myViews'`) executes the code but discards the return value — the view never registers, `st_view` stays empty, and `spacetime generate` produces no bindings.
+**Views require export to register (CRITICAL):** Views must be **exported** from the module entry point — just like reducers. `spacetimedb.view()` returns a function with a `[registerExport]` symbol; the runtime only calls it when walking module exports. A side-effect import (`import '@module/views/myViews'`) executes the code but discards the return value — the view never registers, `st_view` stays empty, and `spacetime generate` produces no bindings.
 
 ```typescript
 // ❌ WRONG — view defined but never exported, [registerExport] never fires
@@ -215,7 +215,7 @@ spacetimedb.view({ name: 'view_my_profile', public: true }, ret, fn);
 
 // ✅ CORRECT — exported, runtime finds and registers it
 export const view_my_profile = spacetimedb.view({ name: 'view_my_profile', public: true }, ret, fn);
-// Then in index.ts: export { view_my_profile } from './views/securityViews';
+// Then in index.ts: export { view_my_profile } from '@module/views/identityViews';
 ```
 
 Once exported, `spacetime generate` creates typed view bindings (e.g. `view_my_profile_table.ts`). Views appear in `tablesSchema` alongside tables, accessible via `conn.db.view_my_profile` with `.count()`, `.iter()`, and row callbacks. View accessors use snake_case (matching the view name), not PascalCase like tables. **v2.7.0+ (PR #5286):** generated client handles become camelCase (`conn.db.viewMyProfile`, `conn.db.user`). The old spellings stay available as deprecated aliases, so existing code keeps compiling. Prefer the camelCase form in new code.
@@ -347,7 +347,7 @@ for (const m of [...ctx.db.LobbyMember.iter()]) ctx.db.LobbyMember.delete(m);
 
 Predicate filters (e.g. preserving the `username='SYSTEM'` row) MUST keep iter+filter+delete — `clear()` cannot skip rows. TS declarations do NOT surface a row count from `clear()`; use it as a statement, not as `const n = ctx.db.X.clear()` (n would be untyped).
 
-Reference: `spacetimedb/src/reducers/server.ts → server_nuke_test_data` (Phase 16.4 Plan 01) — 42 cleared sites + 3 SYSTEM-preserving filter blocks demonstrate both patterns.
+Reference: `spacetimedb/src/reducers/identity/server.ts → server_nuke_test_data` (Phase 16.4 Plan 01) — 42 cleared sites + 3 SYSTEM-preserving filter blocks demonstrate both patterns.
 
 ### Accessor types — verified runtime behavior (2026-03-18)
 
@@ -582,8 +582,8 @@ These are APIs that don't exist — LLMs hallucinate them frequently:
 
 When implementing a feature that spans backend and client:
 
-1. **Backend:** Define table(s) in `tables/` folder (one file per table), then import in `schema.ts`
-2. **Backend:** Define reducer(s) in `reducers/` folder (grouped by domain), then re-export in `index.ts`
+1. **Backend:** Define table(s) in `tables/<domain>/` (one file per table), then import in `schema.ts`
+2. **Backend:** Define reducer(s) in `reducers/<domain>/`, then re-export in `index.ts`
 3. **Backend:** Publish module to test (`npm run stdb:publish:test`; prod only via the §C.5 checklist)
 4. **Backend:** Generate bindings — `npm run stdb:generate` (local `spacetime generate` into `web/src/module_bindings`, no database contact), then review `git diff --stat web/src/module_bindings`
 5. **Client:** Subscribe to the table(s)
@@ -663,17 +663,30 @@ The CLI displays string values with double quotes (e.g., `"identity"`), but SQL 
 ```
 schema.ts              -> Imports all tables, exports spacetimedb via schema({...})
 index.ts               -> Imports all reducers, views, lifecycle hooks (clientConnected/Disconnected)
-tables/                -> One file per table (e.g. user.ts, lobby.ts, hsrCharacter.ts)
+tables/<domain>/       -> One file per table (e.g. identity/user.ts, lobby/lobby.ts, roster/hsrCharacter.ts)
   └── Each exports column definitions + table() call
-reducers/              -> One file per domain (e.g. auth.ts, admin.ts, roster.ts, rosterAdmin.ts)
-  └── Each imports spacetimedb from ../schema
-views/                 -> Security views limiting client data access (e.g. securityViews.ts)
-helpers/               -> Shared utilities (ensurePermissions.ts, auditColumns.ts, rosterHelpers.ts)
-types/
+reducers/<domain>/     -> Reducer files of that feature (e.g. identity/auth.ts, admin/admin.ts, roster/rosterAdmin.ts)
+  └── Each imports spacetimedb from '@module/schema'
+helpers/<domain>/      -> Shared utilities (identity/ensurePermissions.ts, admin/auditColumns.ts, roster/rosterHelpers.ts)
+views/                 -> Flat, one file per domain; views limiting client data access (e.g. identityViews.ts, lobbyViews.ts)
+types/                 -> Flat
   ├── enums.ts         -> All enum definitions (Path, Element, CharRole, GameMode, etc.)
   └── structs.ts       -> All struct/object type definitions (EidolonCost, LobbyConfig, etc.)
 docs/ (project root)   -> Feature architecture docs (one folder per domain with architecture.md and contract.md)
 ```
+
+**Domain folders (A72):** `tables/`, `reducers/` and `helpers/` share the same nine `<domain>` folders, mirroring `docs/<feature>/`: `identity`, `lobby`, `draft`, `results`, `tournament`, `stats`, `roster`, `calendar`, `admin`. `views/` and `types/` stay flat; `index.ts` and `schema.ts` stay at the root.
+
+**Imports (A72):** every cross-folder import inside `spacetimedb/src` (module files and `src/__tests__/`) uses the `@module` alias, never `../`:
+```typescript
+import spacetimedb from '@module/schema';
+import { Path } from '@module/types/enums';
+import { User } from '@module/tables/identity/user';
+import { ensureAdmin } from '@module/helpers/identity/ensurePermissions';
+import { view_my_lobbies } from '@module/views/lobbyViews';
+import * as moduleExports from '@module/index';   // tests / fixtures
+```
+Same-folder imports may stay `./x` (e.g. `index.ts` imports `./schema`). Code outside the module (`test/`, `scripts/`) keeps relative or `@shared` imports. The CLI bundler (Rolldown) matches a tsconfig `paths` wildcard against **one path segment only**, so `@module/*` cannot be a single entry: the alias is declared **per folder** in `tsconfig.base.json` (`"@module/<kind>/<domain>/*": ["./spacetimedb/src/<kind>/<domain>/*"]`, plus `@module/views/*`, `@module/types/*`, `@module/index`, `@module/schema`) and mirrored relative to `test/` in `test/tsconfig.json`; each vitest config has a single `'@module'` alias. **A new domain folder needs its entries in both tsconfigs**: a missing entry fails `npm run typecheck` and `spacetime build` (UNRESOLVED_IMPORT); vitest alone would not notice.
 
 ### Frontend
 ```
@@ -694,8 +707,10 @@ lib/                    -> Shared utilities and configuration
 ```
 
 ### Key conventions
-- **New tables** go in `spacetimedb/src/tables/` as individual files, then import in `schema.ts`
-- **New reducers** go in `spacetimedb/src/reducers/` grouped by domain, then import in `index.ts`
+- **New tables** go in `spacetimedb/src/tables/<domain>/` as individual files, then import in `schema.ts`
+- **New reducers** go in `spacetimedb/src/reducers/<domain>/`, then import in `index.ts`
+- **New helpers** go in `spacetimedb/src/helpers/<domain>/`
+- A new file goes into the folder of the feature whose contract describes it; a **new domain** gets a folder in `tables/`, `reducers/` and `helpers/` plus its `@module` entries in `tsconfig.base.json` and `test/tsconfig.json`
 - **New enums/structs** go in `spacetimedb/src/types/enums.ts` or `structs.ts`
 - **New views** go in `spacetimedb/src/views/`, then import in `index.ts`
 - **New frontend features** go in `components/features/<feature-name>/` with `components/` and `hooks/` subdirs
@@ -747,8 +762,8 @@ lastModifiedDate: t.timestamp(),
 
 **Rules:**
 - Each table defines its own audit columns inline — do NOT import/spread a shared object. SpacetimeDB's `table()` resolves column types at call time, so if tables share a column definition object, a change to that object silently alters every table that uses it — causing unintended schema migrations or `--clear-database` requirements.
-- Use `auditInsert(ctx, userId)` from `helpers/auditColumns.ts` when inserting a new row
-- Use `auditUpdate(ctx, existingRow, userId)` from `helpers/auditColumns.ts` when updating a row — this preserves original `createdById`/`createdDate`
+- Use `auditInsert(ctx, userId)` from `helpers/admin/auditColumns.ts` when inserting a new row
+- Use `auditUpdate(ctx, existingRow, userId)` from `helpers/admin/auditColumns.ts` when updating a row — this preserves original `createdById`/`createdDate`
 - `SYSTEM_USER_ID = 0` is the audit sentinel for bootstrap operations (e.g. `init` creating the SYSTEM user) and scheduled reducers; it is NOT the SYSTEM row's id (User.id is autoInc; find the row by `username = 'SYSTEM'`)
 - The SYSTEM user (role = Admin) is created by `init` as the first user; the Owner and every Delegate server identity are linked to it through `UserIdentity`
 - When upserting (delete + re-insert for composite PK tables), preserve audit fields from the deleted row: `...(existing ? auditUpdate(ctx, existing, userId) : auditInsert(ctx, userId))`
@@ -832,7 +847,7 @@ export const admin_create_thing = spacetimedb.reducer(
 );
 ```
 
-See `reducers/rosterAdmin.ts` for the full example (9 admin proxy reducers mirroring `roster.ts`).
+See `reducers/roster/rosterAdmin.ts` for the full example (9 admin proxy reducers mirroring `roster.ts`).
 
 ## Foreign keys
 
@@ -876,7 +891,7 @@ A reducer whose writes reach many subscribers costs **writes × subscribers** in
 - **Input bounds:** clamp or reject out-of-range values and cap payload sizes.
 - **Membership and state checks** before inserting.
 
-Example: `broadcast_cursor` (`reducers/cursor.ts`) checks lobby membership but has **no rate limit and no x/y bounds**, as of 2026-11-06. Put tunable thresholds (cursor Hz, spam limits) in a config singleton row the reducers read, like `elo_config`, so they change without a redeploy. Seed that row in `scripts/stdb/bootstrap.ts` (or idempotently in `init`, which only runs on first publish or a wipe).
+Example: `broadcast_cursor` (`reducers/lobby/cursor.ts`) checks lobby membership but has **no rate limit and no x/y bounds**, as of 2026-11-06. Put tunable thresholds (cursor Hz, spam limits) in a config singleton row the reducers read, like `elo_config`, so they change without a redeploy. Seed that row in `scripts/stdb/bootstrap.ts` (or idempotently in `init`, which only runs on first publish or a wipe).
 
 ### Measuring egress in the app (dev-only)
 
