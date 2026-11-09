@@ -445,12 +445,12 @@ describe('calendar events (organizer rules, caps, cleanup)', () => {
         for (const msg of [upd, del, inv]) expect(msg).toBe('Calendar event not found.');
     });
 
-    it('scenario "Event Cap Enforcement": the 41st event is rejected with "Maximum of 40 active calendar events reached." (D-06) (text per A76)', () => {
+    it('scenario "Event Cap Enforcement": the 41st active event is rejected with "Maximum of 40 active calendar events reached." (D-06) (text per A79)', () => {
         const { test, users: [a] } = world(1);
         for (let i = 0; i < 40; i++) createEvent(test, a, { title: `E${i}`, startMs: (i + 1) * HOUR_MS * 3 });
         const msg = rejection(test, a, (ctx) => M.create_calendar_event(ctx, eventArgs(test, { title: 'E40' })));
         expect(eventsOf(test, a)).toHaveLength(40);
-        expect(msg).toBe('Maximum 40 calendar events per user.');
+        expect(msg).toBe('Maximum 40 active calendar events per user.');
     });
 
     it('scenario "Lazy Cleanup of Old Events": an event that ended more than 90 days ago is deleted with its invites on the next create (D-07)', () => {

@@ -803,3 +803,48 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** user, 2026-11-09: "well contract then". The texts have been live since S3–S9b and are what the older in-memory suites assert; the contract strings predate the implementation and no decision row fixed them; changing the code would be cosmetic churn plus a re-alignment of passing suites.
 - **Supersedes:** the quoted rejection texts and the optional-parameter tables of the calendar and auth contracts (marked in place).
 - **Where implemented:** S10 (T-S10 align; Phase S10 execution rows in seven contracts)
+
+### A77 — `User` becomes a private table; `UserPrivate` merges into it
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:**
+  1. `User` is `public: false`. No client subscribes it. The admin Users tab reads a new Moderator+ view `view_admin_users`; the leaderboard gets its names through a labelled view (`view_leaderboard`) or denormalized columns (implementer's choice, recorded in the step log); a lookup by id (`view_user_by_id(userId)`) is added if a page needs one. `view_user_by_username` stays the exact-match search.
+  2. `UserPrivate` is merged into `User`: `loginMethod`, `providerId`, `providerUsername` and a `linkedAt` timestamp (the link time that `UserPrivate`'s audit columns carried) move onto the user row together with the two provider indexes; `hasDiscordLinked` is dropped and derived in the views that expose it. `view_my_profile` and `view_admin_user_private` keep their row shapes.
+  3. The live test harness (`test/shared/connection.ts`) resolves a guest's user id through `view_my_identity` instead of scanning `User`; the residue test "User is public today" asserts the refusal instead.
+- **Why:** user, 2026-11-09: "we can put user private and merge UserPrivate into User". PAGE-MAP D2 already moved every page off `User`; a public directory still lets any raw client enumerate every UID, role and soft-delete flag; the split into `UserPrivate` existed only because `User` was public.
+- **Supersedes:** PAGE-MAP D6 ("full `User` subscription is legitimate" on the admin Users tab), the "public today" note of the S10 residue, CR-01's two-table split (Phase 12), the CLAUDE.md §4 sentence naming the admin Users tab as the one `User` subscriber.
+- **Where implemented:** S11 (schema change, lands with the clear-publish; T-task for the identity suites and the live harness)
+
+### A78 — Game-package edits: captain or referee, with an explicit team side
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:**
+  1. `set_eidolon`, `equip_lightcone`, `unequip_lightcone` and `arrange_lineup` share one caller rule on the open game: the captain of that team or any lobby referee (`ensureCaptainOrReferee`). A non-captain teammate, a coach and a non-referee spectator are rejected. The Admin path on a closed game (A60(7), A69(2)) is unchanged.
+  2. `equip_lightcone` and `unequip_lightcone` take a `teamSide` argument (second, after `lobbyId`, as `set_eidolon`); the character must be in that team's draft. This removes the "first team that holds the character" lookup of the Admin path, which could not reach Red's copy under `allowMirrorPicks`.
+  3. `equip_lightcone` and `unequip_lightcone` use the lineup throttle (`AbuseConfig.lineupMinIntervalMs`) on the open path, like `set_eidolon` and `arrange_lineup`.
+- **Why:** user, 2026-11-09: "lightcone and eidolons should be captain or referee editable just like lineups". One rule for the whole package; the referee could fix eidolons and lineups but not light cones; every edit recomputes the game and resets both confirmations, so the unthrottled light-cone path was a fan-out gap (B-4).
+- **Supersedes:** A60(1) as implemented in S7b for the callers of `set_eidolon` ("a player seat of that team or any lobby referee"); the "any player seat of the team" rule of the light-cone reducers; closes the first open item of A76(4).
+- **Where implemented:** S10b
+
+### A79 — Calendar event cap: 40 not-yet-ended, 100 retained
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:**
+  1. `create_calendar_event` rejects when the caller organizes 40 events that have not ended (`endAt >= now`), counted after the lazy cleanup. Finished events no longer count against this cap.
+  2. A second ceiling: at most 100 events per organizer in total (ended or not, after the cleanup).
+  3. `create_calendar_event` rejects an `endAt` in the past. `update_calendar_event` rejects a changed `endAt` that lies in the past; an update that leaves `endAt` as it is stays allowed (editing a finished event's title or description).
+  4. The 90-day cleanup (D-07) and the one-week slot cleanup (D-27) are unchanged.
+- **Why:** user, 2026-11-09: "i agree with the second option" and "I agree on your event cap with 100 as ceiling". Phase 08 D-06 said "40 active events"; the code counted every event for 90 days after it ended, which blocks a tournament organizer on finished matches. The guards and the ceiling keep a caller from cycling short events to pile up retained rows in other players' calendar views.
+- **Supersedes:** A76's wording "counts every event the caller organizes after the 90-day cleanup" and the text "Maximum 40 calendar events per user."; closes the second open item of A76(4).
+- **Where implemented:** S10b
+
+### A80 — `start_draft` and `advance_stage` are referee powers
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:**
+  1. `start_draft` and `advance_stage` accept the lobby member who holds the referee flag, or a Moderator or Admin. The host as such no longer qualifies; a host who gave the flag away takes it back with `reclaim_referee` (unchanged), and an unheld flag is taken by any member (A68(7)).
+  2. No lobby setting gates these two (unlike `refereeCanPause` / `refereeCanUndo` / `refereeCanKick` / `refereeCanSetCaptain`): they are the referee's own job. Lobby settings, `close_lobby` and the other host actions stay with the host.
+  3. Everything else in the two reducers is unchanged (stage rules, D-50 rollover, readiness checks, A60(5): Equipping → Scoring has no gate).
+- **Why:** user, 2026-11-09: "start draft or advance stage should be referee powers". The referee already pauses, undoes, edits the package (A78), closes games (A60(4)) and triggers concedes; a referee who is not the host could run the whole match except starting it and moving it between stages.
+- **Supersedes:** the host rule of `start_draft` (D-era) and of `advance_stage` (D-58 / D-59; A60(5)'s wording "a host signal" becomes "a referee signal").
+- **Where implemented:** S10b

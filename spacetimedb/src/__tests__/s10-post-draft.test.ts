@@ -4,12 +4,12 @@
 // test (orchestrator ruling Q5: D-10 / D-11). Every `it` cites docs/match-session/contract.md. In-memory datastore on
 // the TestClock; nothing reaches maincloud.
 import { describe, expect, it } from 'vitest';
-import { M, expectReject, guest, joinAsSpectator, lobbyRow, newHarness, session, setupLobby, steps, tx, type Lobby } from './s4-fixtures';
+import { M, advance, expectReject, guest, joinAsSpectator, lobbyRow, newHarness, session, setupLobby, steps, tx, type Lobby } from './s4-fixtures';
 import { blueNames, captain, draftClassic, equip, insertLightconeCost, insertRoster, redNames, side } from './s7-fixtures';
 import { insertLightconeCostFor } from './s10-a1-fixtures';
 
 const stageMsg = (stage: string) => `This action is not allowed in the current lobby stage (${stage}).`;
-const HOST_OR_ABOVE = 'Only the host, moderators, or admins can perform this action.';
+const REFEREE_OR_ABOVE = 'Only the referee, moderators, or admins can perform this action.'; // A80
 const BLUE_ARRANGE = 'Only the Blue captain or a referee can arrange the lineup.';
 const GROUPS_JSON = 'groups must be a JSON array of arrays of character names.';
 
@@ -26,33 +26,37 @@ function equipping(lobby: Record<string, unknown> = {}): Lobby {
 }
 
 const equipSteps = (s: Lobby) => steps(s.test, s.lobbyId).filter((x) => x.action.tag === 'EquipLightcone');
+const BLUE_EQUIP = 'Only the Blue captain or a referee can equip lightcones.';
+/** T-S10b (A78(2)): equip_lightcone names the side; these tests edit Blue's copy. */
 const equipBody = (s: Lobby, characterName: string, lightconeName: string) =>
-    (ctx: any) => M.equip_lightcone(ctx, { lobbyId: s.lobbyId, characterName, lightconeName, superimposition: 1 });
+    (ctx: any) => M.equip_lightcone(ctx, { lobbyId: s.lobbyId, teamSide: side('Blue'), characterName, lightconeName, superimposition: 1 });
 
 // ─── equip_lightcone ──────────────────────────────────────────────────────────
 
 describe('equip_lightcone', () => {
-    it('a non-member is rejected (flow step 1)', () => {
+    it('a non-member is rejected (flow step 1; A78(1): "Only the Blue captain or a referee can equip lightcones.")', () => {
         const s = equipping();
         insertLightconeCost(s.test, 'lc-1', 1);
         const outsider = guest(s.test, 'outsider');
-        expectReject(s.test, outsider, equipBody(s, 'blue-1', 'lc-1'), 'You are not a member of this lobby.');
+        expectReject(s.test, outsider, equipBody(s, 'blue-1', 'lc-1'), BLUE_EQUIP);
         expect(equipSteps(s)).toHaveLength(0);
     });
 
-    it('a spectator (the host referee, and a plain spectator) is rejected: "Spectators cannot equip lightcones."', () => {
+    it('a plain spectator is rejected; the spectator referee (the host) may equip for Blue (A78(1))', () => {
         const s = equipping();
         insertLightconeCost(s.test, 'lc-1', 1);
-        expectReject(s.test, s.host, equipBody(s, 'blue-1', 'lc-1'), 'Spectators cannot equip lightcones.');
         const watcher = joinAsSpectator(s, 'watcher');
-        expectReject(s.test, watcher, equipBody(s, 'blue-1', 'lc-1'), 'Spectators cannot equip lightcones.');
+        expectReject(s.test, watcher, equipBody(s, 'blue-1', 'lc-1'), BLUE_EQUIP);
         expect(equipSteps(s)).toHaveLength(0);
+        tx(s.test, s.host, equipBody(s, 'blue-1', 'lc-1'));
+        expect(equipSteps(s)).toHaveLength(1);
+        expect(equipSteps(s)[0].actorUserId).toBe(s.host.userId);
     });
 
-    it('a coach is rejected: "Coaches cannot equip lightcones." (D-39)', () => {
+    it('a coach is rejected (D-39; A78(1): "Only the Blue captain or a referee can equip lightcones.")', () => {
         const s = equipping();
         insertLightconeCost(s.test, 'lc-1', 1);
-        expectReject(s.test, s.a.bc, equipBody(s, 'blue-1', 'lc-1'), 'Coaches cannot equip lightcones.');
+        expectReject(s.test, s.a.bc, equipBody(s, 'blue-1', 'lc-1'), BLUE_EQUIP);
         expect(equipSteps(s)).toHaveLength(0);
     });
 
@@ -61,7 +65,7 @@ describe('equip_lightcone', () => {
         insertLightconeCost(s.test, 'patience', 15);
         const blue = captain(s, 'Blue');
         expect(session(s.test, s.lobbyId).teamBlueLcBudget).toBe(20);
-        equip(s, blue, 'blue-1', 'patience');
+        equip(s, blue, 'Blue', 'blue-1', 'patience');
         const st = equipSteps(s);
         expect(st).toHaveLength(1);
         expect(st[0].actorUserId).toBe(blue.userId);
@@ -79,7 +83,8 @@ describe('equip_lightcone', () => {
         insertLightconeCost(s.test, 'patience', 15);
         insertLightconeCost(s.test, 'ten', 10);
         const blue = captain(s, 'Blue');
-        equip(s, blue, 'blue-1', 'patience');
+        equip(s, blue, 'Blue', 'blue-1', 'patience');
+        advance(s.test, 300); // A78(3): past the lineup throttle (AbuseConfig.lineupMinIntervalMs = 250)
         expectReject(s.test, blue, equipBody(s, 'blue-2', 'ten'), 'Not enough LC budget.');
         expect(session(s.test, s.lobbyId).teamBlueLcBudget).toBe(5);
         expect(equipSteps(s)).toHaveLength(1);
@@ -90,7 +95,7 @@ describe('equip_lightcone', () => {
         insertLightconeCostFor(s.test, 'auction-only', 'Auction', 30);
         const blue = captain(s, 'Blue');
         const start = session(s.test, s.lobbyId).teamBlueLcBudget;
-        equip(s, blue, 'blue-1', 'auction-only');
+        equip(s, blue, 'Blue', 'blue-1', 'auction-only');
         expect(equipSteps(s)[0].payload).toMatchObject({ value: { lightconeName: 'auction-only', costPaid: 0 } });
         expect(session(s.test, s.lobbyId).teamBlueLcBudget).toBe(start);
     });
@@ -133,9 +138,9 @@ describe('arrange_lineup guards (Lineup Groups, A21)', () => {
 // ─── advance_stage ────────────────────────────────────────────────────────────
 
 describe('advance_stage', () => {
-    it('a player who is not the host is rejected (Permission: ensureHostOrAbove)', () => {
+    it('a player who is not the referee is rejected (A80)', () => {
         const s = equipping();
-        expectReject(s.test, s.a.b1, (ctx) => M.advance_stage(ctx, { lobbyId: s.lobbyId }), HOST_OR_ABOVE);
+        expectReject(s.test, s.a.b1, (ctx) => M.advance_stage(ctx, { lobbyId: s.lobbyId }), REFEREE_OR_ABOVE);
         expect(lobbyRow(s.test, s.lobbyId).stage.tag).toBe('Equipping');
     });
 

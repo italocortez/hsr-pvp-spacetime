@@ -2,7 +2,7 @@ import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser } from '@module/helpers/identity/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
-import { ensureLobbyMember, ensureHostOrAbove, ensureStageIs, slotTeam, slotIsCoach, slotToTeamSide } from '@module/helpers/lobby/lobbyHelpers';
+import { ensureLobbyMember, ensureRefereeOrAbove, ensureStageIs, slotTeam, slotIsCoach, slotToTeamSide } from '@module/helpers/lobby/lobbyHelpers';
 import { resolveOwnedEidolon, validateCharacterOwnership } from '@module/helpers/draft/ownershipValidation';
 import { buildAuctionBanSequence, buildClassicSequence } from '@module/helpers/draft/draftSequences';
 import { computeLobbyMemberRating } from '@module/helpers/stats/accountRating';
@@ -30,8 +30,8 @@ export const start_draft = spacetimedb.reducer(
             throw new SenderError('Lobby not found.');
         }
 
-        // Only host/admin/moderator can start
-        ensureHostOrAbove(ctx, lobby, user);
+        // A80: only the referee (flag holder) or a moderator/admin can start
+        ensureRefereeOrAbove(ctx, lobby, user);
 
         // Must be in Waiting stage
         ensureStageIs(lobby, 'Waiting');

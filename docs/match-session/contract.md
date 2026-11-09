@@ -12,7 +12,7 @@ The match session system manages the entire draft lifecycle within a lobby: char
 
 **Purpose:** Creates the MatchSession, MatchResultRecord, and MatchResultParticipant rows, assigns auto-captains, and transitions the lobby from Waiting to Drafting.
 
-**Permission:** Host, Admin, or Moderator (ensureHostOrAbove)
+**Permission:** Host, Admin, or Moderator (ensureHostOrAbove) _Superseded in Phase S10b execution (DECISIONS.md A80)._
 
 **Parameters:**
 | Param | Type | Required | Description |
@@ -47,7 +47,7 @@ The match session system manages the entire draft lifecycle within a lobby: char
 | Condition | Error Message |
 |-----------|--------------|
 | Lobby not found | "Lobby not found." |
-| Caller not host/admin/mod | Permission error from ensureHostOrAbove |
+| Caller not host/admin/mod | Permission error from ensureHostOrAbove _Superseded in Phase S10b execution (DECISIONS.md A80)._ |
 | Not in Waiting stage | Stage assertion error |
 | Unconfirmed non-coach player exists | "All Blue and Red players must be confirmed before starting." |
 | Blue team has no non-coach players | "Blue team must have at least one non-coach player." |
@@ -537,7 +537,7 @@ The match session system manages the entire draft lifecycle within a lobby: char
 
 **Purpose:** Records a lightcone equip on a character during the Equipping stage. Deducts the LC cost from the team's LC budget.
 
-**Permission:** Captain (or sole player if no captain). Non-coach, non-spectator.
+**Permission:** Captain (or sole player if no captain). Non-coach, non-spectator. _Superseded in Phase S10b execution (DECISIONS.md A78)._
 
 **Parameters:**
 | Param | Type | Required | Description |
@@ -567,8 +567,8 @@ The match session system manages the entire draft lifecycle within a lobby: char
 | Lobby not found | "Lobby not found." |
 | Session not found | "Match session not found." |
 | Wrong stage | Stage assertion error |
-| Caller is coach | "Coaches cannot equip lightcones." |
-| Caller is spectator | "Spectators cannot equip lightcones." |
+| Caller is coach | "Coaches cannot equip lightcones." _Superseded in Phase S10b execution (DECISIONS.md A78)._ |
+| Caller is spectator | "Spectators cannot equip lightcones." _Superseded in Phase S10b execution (DECISIONS.md A78)._ |
 | Budget insufficient | "Not enough LC budget." |
 
 ---
@@ -646,7 +646,7 @@ The match session system manages the entire draft lifecycle within a lobby: char
 
 **Purpose:** Host manually transitions the lobby between sub-phases: Drafting to Equipping, or Equipping to Scoring. Scoring to Finished is blocked (must use finalize_match_result).
 
-**Permission:** Host, Admin, or Moderator (ensureHostOrAbove)
+**Permission:** Host, Admin, or Moderator (ensureHostOrAbove) _Superseded in Phase S10b execution (DECISIONS.md A80)._
 
 **Parameters:**
 | Param | Type | Required | Description |
@@ -791,7 +791,7 @@ Note: The globally-active account (HsrAccount.isActive=true) is NOT consulted. P
 
 **Given:** Blue coach slot member in an active draft
 **When:** Coach calls `pick_character`, `ban_character`, `nominate_character`, `place_bid`, `pass_bid`, `equip_lightcone`, `arrange_lineup`, or `confirm_lineup`
-**Then:** Each throws "Coaches cannot perform draft actions." (or the action-specific variant like "Coaches cannot equip lightcones.")
+**Then:** Each throws "Coaches cannot perform draft actions." (or the action-specific variant like "Coaches cannot equip lightcones.") _Superseded in Phase S10b execution (DECISIONS.md A78)._
 
 ### Referee Undo
 
@@ -835,7 +835,7 @@ Note: The globally-active account (HsrAccount.isActive=true) is NOT consulted. P
 ### Equipping: Lightcone Budget
 
 **Given:** Equipping stage, Blue's lcBudget=20, lightcone costs 15
-**When:** Blue captain calls `equip_lightcone(lobbyId, "Kafka", "Patience Is All You Need", 1)`
+**When:** Blue captain calls `equip_lightcone(lobbyId, "Kafka", "Patience Is All You Need", 1)` _Superseded in Phase S10b execution (DECISIONS.md A78)._
 **Then:** EquipLightcone step recorded with costPaid=15. teamBlueLcBudget reduced to 5.
 
 **When:** Blue captain tries to equip another LC costing 10
@@ -906,13 +906,13 @@ D-50 applies to ALL Drafting→Equipping transitions: auto (last Classic pick, l
 
 ### System Chat on Stage Transitions
 
-**Given:** Host calls `start_draft`
+**Given:** Host calls `start_draft` _Superseded in Phase S10b execution (DECISIONS.md A80)._
 **Then:** System chat message: "Draft has started!"
 
-**Given:** Host calls `advance_stage` from Drafting
+**Given:** Host calls `advance_stage` from Drafting _Superseded in Phase S10b execution (DECISIONS.md A80)._
 **Then:** System chat message: "Draft complete. Stage: Equipping"
 
-**Given:** Host calls `advance_stage` from Equipping
+**Given:** Host calls `advance_stage` from Equipping _Superseded in Phase S10b execution (DECISIONS.md A80)._
 **Then:** System chat message: "Lineups set. Stage: Scoring"
 
 ---
@@ -961,7 +961,7 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(1))._
 ### Series Head Start (Phase S6 execution, A27, backlog #7)
 _Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 **Given:** A casual lobby with `bestOf = 3`, `bestOfNAdvantage = Red`
-**When:** The host starts the draft; game 1 ends with no recorded game
+**When:** The host starts the draft; game 1 ends with no recorded game _Superseded in Phase S10b execution (DECISIONS.md A80)._
 **Then:** The session starts 0–1 (`gamesWonRed = 1`); after game 1 the recount in `advance_stage` keeps Red at 1. A Bo1 lobby always starts 0–0 (advantage stored as None).
 
 ### Ban Restriction (Phase S6 execution, A45(2))
@@ -978,7 +978,7 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 **Then:** rejected: "Lineup changes are too frequent. Please wait a moment."
 
 **When:** a Blue coach, a spectator who is not a referee, or a Red player sets a Blue eidolon
-**Then:** rejected: "Only a Blue player or a referee can set an eidolon for that team." A referee (seated or not) may set either team's eidolons.
+**Then:** rejected: "Only a Blue player or a referee can set an eidolon for that team." A referee (seated or not) may set either team's eidolons. _Superseded in Phase S10b execution (DECISIONS.md A78)._
 
 **When:** `requireOwnership = true` and Blue's selected accounts own Blue-1 only at E0 and E6, and a Blue player asks for E2
 **Then:** rejected: "Your team does not own that eidolon level on its selected accounts." E6 is accepted.
@@ -1012,7 +1012,7 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 
 ### advance_stage From Scoring (Phase S7b execution, A60(5)(8))
 **Given:** a lobby in Scoring
-**When:** the host calls `advance_stage`
+**When:** the host calls `advance_stage` _Superseded in Phase S10b execution (DECISIONS.md A80)._
 **Then:** rejected: "Games close through confirm_game or close_game; the stage moves on the close." Drafting → Equipping (D-50 rollover) and Equipping → Scoring (no gate) are unchanged.
 
 ### Auction Sale Resolves the Lowest Owned Eidolon (Phase S7b follow-up, A64)
@@ -1040,7 +1040,7 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 | Resume by different teammate (not original pauser, not referee) | Rejected | Only referee or original pauser |
 | Captain leaves mid-draft | No captain on team; any team member can now act | Captain check passes if no captain exists |
 | arrange_lineup with invalid JSON | Rejected | "positions must be a valid JSON array of strings." |
-| advance_stage from Waiting | Rejected | ensureHostOrAbove passes but stage check fails |
+| advance_stage from Waiting | Rejected | ensureHostOrAbove passes but stage check fails _Superseded in Phase S10b execution (DECISIONS.md A80)._ |
 | advance_stage from Finished | Rejected | "Cannot advance stage from Finished." |
 | Duplicate LobbyMember.isCaptain on same team | First captain wins captain check | Only one captain should exist per team |
 | Auction sold when only one team needs characters | Normal flow, no short circuit | Other team's won count already at 8, one team still filling |
@@ -1096,12 +1096,12 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 
 ### S8d-S4 Unequip a light cone (S7b hand-off)
 **Given** a light cone equipped on a drafted character in Equipping
-**When** that team's player calls `unequip_lightcone(lobbyId, characterName)`
+**When** that team's player calls `unequip_lightcone(lobbyId, characterName)` _Superseded in Phase S10b execution (DECISIONS.md A78)._
 **Then** an `UnequipLightcone` step is logged, the cost is refunded to the light-cone budget, the roster cost drops, both confirmations reset
 
 ### S8d-S5 Equip only on your own draft
 **When** a player equips a light cone on a character the other team drafted
-**Then** rejected: "X is not in your team's draft of this game."
+**Then** rejected: "X is not in your team's draft of this game." _Superseded in Phase S10b execution (DECISIONS.md A78)._
 
 
 ## Acceptance Scenarios (Phase S8e execution)
@@ -1177,7 +1177,10 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 | Scenarios S8d-S1..S5: steps kept for the series, undo within the game, archive of every game, `unequip_lightcone`, own-draft equip | Phase S8d execution (DECISIONS.md A65) | 2026-11-07 |
 | Scenarios S8e-S1..S4: one session per lobby, steps and edits without game numbers, step view without `gameNumber`; supersedes the A65 whole-series step rules and the S8d-S scenarios | Phase S8e execution (DECISIONS.md A67(3)) | 2026-11-08 |
 | `start_draft` D-08 gate text: "Player #<userId> has no account selected for this match. All players must select an account before starting a ranked or MMR-counted match." — Ranked lobbies and tournament lobbies whose tournament has `countTowardsMmr` (tests `s10-account-selection`) | Phase S10 execution (DECISIONS.md A76) | 2026-11-09 |
-| Open for the user (S10 port finding, not decided): `equip_lightcone` / `unequip_lightcone` "Permission: Captain (or sole player if no captain)" above vs the implementation, which accepts any player seat of that team (not a coach, not a spectator; an Admin on the A60(7) path); no test asserts either reading; the permission line stays unmarked until ruled | Phase S10 execution (open) | 2026-11-09 |
+| Open for the user (S10 port finding, not decided): `equip_lightcone` / `unequip_lightcone` "Permission: Captain (or sole player if no captain)" above vs the implementation, which accepts any player seat of that team (not a coach, not a spectator; an Admin on the A60(7) path); no test asserts either reading; the permission line stays unmarked until ruled | Phase S10 execution (open) | 2026-11-09 _Superseded in Phase S10b execution (DECISIONS.md A78)._ |
+| Game-package callers unified: `set_eidolon`, `equip_lightcone`, `unequip_lightcone` and `arrange_lineup` accept the captain of the named team or any lobby referee (seated or not); a non-captain teammate, a coach, a non-referee spectator and the other team's captain are rejected with "Only the <Side> captain or a referee can set an eidolon for that team." / "… can equip lightcones." / "… can unequip lightcones." / "… can arrange the lineup."; the caller check runs before the stage check. Admin edits of a closed game unchanged (A60(7), A69(2)). Scenarios that say "a Blue player" / "a Red player" for these edits read "the Blue captain" / "the Red captain" | Phase S10b execution (DECISIONS.md A78) | 2026-11-09 |
+| `equip_lightcone(lobbyId, teamSide, characterName, lightconeName, superimposition)` and `unequip_lightcone(lobbyId, teamSide, characterName)`: the team is named by `teamSide` ("teamSide must be Blue or Red."); the character must be in that team's draft ("<name> is not in the <Side> team's draft of this game."); budget, step and refund belong to that side, so under `allowMirrorPicks` each team's copy is edited separately, also on the Admin path. Both use the lineup throttle on the open game ("Lineup changes are too frequent. Please wait a moment.", shared per member with `set_eidolon` and `arrange_lineup`): a swap is an unequip and an equip at least `AbuseConfig.lineupMinIntervalMs` apart | Phase S10b execution (DECISIONS.md A78) | 2026-11-09 |
+| `start_draft` and `advance_stage` are referee powers: accepted from the lobby member holding the referee flag (any seat) or a Moderator / Admin; everyone else, the host included, gets "Only the referee, moderators, or admins can perform this action." with nothing changed. A host who gave the flag away takes it back with `reclaim_referee`. Scenarios that say "the host starts the draft" / "the host calls `advance_stage`" read "the referee" | Phase S10b execution (DECISIONS.md A80) | 2026-11-09 |
 
 ---
 

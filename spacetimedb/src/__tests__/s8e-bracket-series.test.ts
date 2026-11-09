@@ -576,8 +576,8 @@ describe('A60(7): ensureOpenGame on the lobby\'s one game', () => {
         const STAGE = 'This action is not allowed in the current lobby stage (AwaitingResult).';
         expectReject(f.test, admin, (ctx) => M.set_eidolon(ctx, { lobbyId, teamSide: blue, characterName: 'x', eidolon: 1 }), STAGE);
         expectReject(f.test, admin, (ctx) => M.arrange_lineup(ctx, { lobbyId, teamSide: blue, groups: '[[],[]]' }), STAGE);
-        expectReject(f.test, admin, (ctx) => M.equip_lightcone(ctx, { lobbyId, characterName: 'x', lightconeName: 'y', superimposition: 1 }), STAGE);
-        expectReject(f.test, admin, (ctx) => M.unequip_lightcone(ctx, { lobbyId, characterName: 'x' }), STAGE);
+        expectReject(f.test, admin, (ctx) => M.equip_lightcone(ctx, { lobbyId, teamSide: blue, characterName: 'x', lightconeName: 'y', superimposition: 1 }), STAGE);
+        expectReject(f.test, admin, (ctx) => M.unequip_lightcone(ctx, { lobbyId, teamSide: blue, characterName: 'x' }), STAGE);
         expect(recordsOfLobby(f.test, lobbyId)[0].status.tag).toBe('Validated');
         expect(tally(f.test, m.id)).toEqual(before);
     });

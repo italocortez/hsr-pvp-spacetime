@@ -723,6 +723,7 @@ _Superseded in part in Phase S8e execution (DECISIONS.md A69(2)): the window end
 | Scenarios S8e-R1..R3: the close submits the game, one game row per record, Admin edits without game numbers; supersedes A60(6) "the deciding close submits the series" and the A65(4) earlier-game edits | Phase S8e execution (DECISIONS.md A67(3)) | 2026-11-08 |
 | Scenarios S8e-R4, S8e-R5: the Admin edit window of a closed game ends at validation (Pending or Submitted only); precise rejections "This game is closed." (player on a Submitted game) and "This game can no longer be edited here; corrections go through override_match_result." (Validated and beyond, Admins included); S8e-R3 superseded in part | Phase S8e execution (DECISIONS.md A69(2)) | 2026-11-08 |
 | `select_match_account` snapshot ratchet removed (dead since selection is Waiting-only); the BetweenGames ratchet section and scenario superseded | Phase S8e execution (DECISIONS.md A69(3)) | 2026-11-08 |
+| Admin edits of a closed game: `equip_lightcone` and `unequip_lightcone` take `teamSide` and edit that team's copy of the character (was: the first team whose draft holds it, which could not reach Red under `allowMirrorPicks`) | Phase S10b execution (DECISIONS.md A78) | 2026-11-09 |
 
 ---
 

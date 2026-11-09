@@ -216,7 +216,7 @@ Index note: the (id, gameNumber) indexes are scanned per full key over `lobbyGam
 | `confirm_match_scores` | `matchResultId: u32` | unchanged |
 | `submit_match_result` | `matchResultId: u32, winnerOverride?: TeamSide, winnerOverrideReason?: string` | recomputes the current game; every game needs complete scores; override only on a level-4 tie (A39 routing in the contract); series winner = game wins + A27 head start |
 | `advance_stage` (Scoring) | unchanged | recomputes the current game before counting game winners |
-| `equip_lightcone` | unchanged signature | refreshes the side's `MatchLineup.rosterCost` / `synergySurcharge` (confirmation kept); Auction: rejects when the light cone plus a confirmed lineup's surcharge exceeds the LC budget (review fix, Phase S7 execution) (superseded, Phase S7b execution: see "Game package: confirmation, close, automatic submission (S7b)" below and docs/match-session/architecture.md "Phase S7b execution") |
+| `equip_lightcone` | unchanged signature | refreshes the side's `MatchLineup.rosterCost` / `synergySurcharge` (confirmation kept); Auction: rejects when the light cone plus a confirmed lineup's surcharge exceeds the LC budget (review fix, Phase S7 execution) (superseded, Phase S7b execution: see "Game package: confirmation, close, automatic submission (S7b)" below and docs/match-session/architecture.md "Phase S7b execution") _Superseded in Phase S10b execution (DECISIONS.md A78)._ |
 | `override_match_result` / `admin_force_finalize` | unchanged signatures | A31: no winner-less Validated result; `runFinalization` throws on a record without a winner |
 
 ## Game package: confirmation, close, automatic submission (S7b)

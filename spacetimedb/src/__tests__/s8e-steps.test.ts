@@ -43,6 +43,7 @@ import {
     recordScores,
     redNames,
     side,
+    unequip,
 } from './s7-fixtures';
 import { teamDraft } from '@module/helpers/results/scoringHelpers';
 import { draftGame } from './s8d-fixtures';
@@ -208,25 +209,25 @@ describe('S7b hand-offs: equip_lightcone checks the draft; unequip_lightcone', (
         return { test, s };
     }
 
-    it('equip_lightcone on a character outside the caller\'s team draft is rejected', () => {
+    it('equip_lightcone on a character outside the named team\'s draft is rejected (A78(2))', () => {
         const { test, s } = scoring();
         expectReject(test, captain(s, 'Blue'), (ctx) =>
-            M.equip_lightcone(ctx, { lobbyId: s.lobbyId, characterName: redNames()[0], lightconeName: 'lc-7', superimposition: 1 }),
-            `${redNames()[0]} is not in your team's draft of this game.`);
+            M.equip_lightcone(ctx, { lobbyId: s.lobbyId, teamSide: side('Blue'), characterName: redNames()[0], lightconeName: 'lc-7', superimposition: 1 }),
+            `${redNames()[0]} is not in the Blue team's draft of this game.`);
         expectReject(test, captain(s, 'Blue'), (ctx) =>
-            M.equip_lightcone(ctx, { lobbyId: s.lobbyId, characterName: 'nobody', lightconeName: 'lc-7', superimposition: 1 }),
-            "nobody is not in your team's draft of this game.");
+            M.equip_lightcone(ctx, { lobbyId: s.lobbyId, teamSide: side('Blue'), characterName: 'nobody', lightconeName: 'lc-7', superimposition: 1 }),
+            "nobody is not in the Blue team's draft of this game.");
         expect(steps(test, s.lobbyId).filter((x) => x.action.tag === 'EquipLightcone')).toHaveLength(0);
     });
 
-    it('unequip refunds the light-cone budget, logs UnequipLightcone, teamDraft drops the light cone, confirmations reset', () => {
+    it('unequip refunds the light-cone budget, logs UnequipLightcone, teamDraft drops the light cone, confirmations reset (A78)', () => {
         const { test, s } = scoring();
         const blue = captain(s, 'Blue');
         const c = blueNames()[0];
-        expectReject(test, blue, (ctx) => M.unequip_lightcone(ctx, { lobbyId: s.lobbyId, characterName: c }), `${c} has no light cone equipped.`);
+        expectReject(test, blue, (ctx) => M.unequip_lightcone(ctx, { lobbyId: s.lobbyId, teamSide: side('Blue'), characterName: c }), `${c} has no light cone equipped.`);
 
         const start = session(test, s.lobbyId).teamBlueLcBudget; // Classic: the light-cone budget plus the unspent character budget
-        equip(s, blue, c, 'lc-7');
+        equip(s, blue, 'Blue', c, 'lc-7');
         expect(session(test, s.lobbyId).teamBlueLcBudget).toBe(start - 7);
         expect(lineup(test, s.lobbyId, 'Blue').rosterCost).toBe(H(7));
         recordScores(s, s.host, 'Blue', [H(10), H(10)]);
@@ -235,8 +236,10 @@ describe('S7b hand-offs: equip_lightcone checks the draft; unequip_lightcone', (
         const recId = record(test, s.lobbyId).id;
         expect(gameRow(test, recId).blueConfirmed).toBe(true);
 
-        expectReject(test, captain(s, 'Red'), (ctx) => M.unequip_lightcone(ctx, { lobbyId: s.lobbyId, characterName: c }), `${c} is not in your team's draft of this game.`);
-        tx(test, blue, (ctx) => M.unequip_lightcone(ctx, { lobbyId: s.lobbyId, characterName: c }));
+        // A78(2): the Red captain names its own side; the character is not in Red's draft.
+        expectReject(test, captain(s, 'Red'), (ctx) => M.unequip_lightcone(ctx, { lobbyId: s.lobbyId, teamSide: side('Red'), characterName: c }), `${c} is not in the Red team's draft of this game.`);
+        advance(test, 300); // A78(3): the Blue captain's equip stamped the lineup throttle
+        unequip(s, blue, 'Blue', c);
         expect(session(test, s.lobbyId).teamBlueLcBudget).toBe(start);
         const un = steps(test, s.lobbyId).filter((x) => x.action.tag === 'UnequipLightcone');
         expect(un).toHaveLength(1);
@@ -247,7 +250,8 @@ describe('S7b hand-offs: equip_lightcone checks the draft; unequip_lightcone', (
         expect(lineup(test, s.lobbyId, 'Blue').rosterCost).toBe(0);
         const g = gameRow(test, recId);
         expect([g.blueConfirmed, g.redConfirmed]).toEqual([false, false]);
-        expectReject(test, blue, (ctx) => M.unequip_lightcone(ctx, { lobbyId: s.lobbyId, characterName: c }), `${c} has no light cone equipped.`);
+        advance(test, 300);
+        expectReject(test, blue, (ctx) => M.unequip_lightcone(ctx, { lobbyId: s.lobbyId, teamSide: side('Blue'), characterName: c }), `${c} has no light cone equipped.`);
     });
 
     it('unequip removes the latest of two equips on the same character (one at a time)', () => {
@@ -256,10 +260,12 @@ describe('S7b hand-offs: equip_lightcone checks the draft; unequip_lightcone', (
         const blue = captain(s, 'Blue');
         const c = blueNames()[1];
         const start = session(test, s.lobbyId).teamBlueLcBudget;
-        equip(s, blue, c, 'lc-7');
-        equip(s, blue, c, 'lc-3');
+        equip(s, blue, 'Blue', c, 'lc-7');
+        advance(test, 300); // A78(3): lineup throttle between two edits by the same member
+        equip(s, blue, 'Blue', c, 'lc-3');
         expect(session(test, s.lobbyId).teamBlueLcBudget).toBe(start - 10);
-        tx(test, blue, (ctx) => M.unequip_lightcone(ctx, { lobbyId: s.lobbyId, characterName: c }));
+        advance(test, 300);
+        unequip(s, blue, 'Blue', c);
         expect(session(test, s.lobbyId).teamBlueLcBudget).toBe(start - 7);
         const un = steps(test, s.lobbyId).filter((x) => x.action.tag === 'UnequipLightcone');
         expect(un[0].payload).toMatchObject({ value: { lightconeName: 'lc-3', refunded: 3 } });

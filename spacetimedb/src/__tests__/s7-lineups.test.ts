@@ -192,7 +192,8 @@ describe('review fix: light cones equipped after a confirmation (A60(2))', () =>
         confirmBoth(s);
         expect(game(test, rec.id).blueConfirmed && game(test, rec.id).redConfirmed).toBe(true);
 
-        equip(s, captain(s, 'Blue'), 'blue-1', 'lc-1'); // allowed in Scoring (A60(1))
+        advance(test, 300); // A78(3): the Blue captain's arrange_lineup stamped the lineup throttle
+        equip(s, captain(s, 'Blue'), 'Blue', 'blue-1', 'lc-1'); // allowed in Scoring (A60(1))
         expect(lineup(test, s.lobbyId, 'Blue').rosterCost).toBe(H(3));
         const g = game(test, rec.id);
         expect(g.blueConfirmed).toBe(false); // every edit resets both flags (A60(2))
@@ -223,7 +224,8 @@ describe('review fix: light cones equipped after a confirmation (A60(2))', () =>
         recordScores(s, s.host, 'Red', [H(6), H(6)]);
 
         // No reservation any more (A60(8)): the equip goes through and leaves 90 < the 100 surcharge.
-        equip(s, blueCap, 'blue-1', 'lc-60');
+        advance(test, 300); // A78(3): the Blue captain's arrange_lineup stamped the lineup throttle
+        equip(s, blueCap, 'Blue', 'blue-1', 'lc-60');
         expect(session(test, s.lobbyId).teamBlueLcBudget).toBe(90);
         expect(lineup(test, s.lobbyId, 'Blue').rosterCost).toBe(H(160));
         expectReject(test, blueCap, (ctx) => M.confirm_game(ctx, { lobbyId: s.lobbyId, teamSide: { tag: 'Blue' } }),

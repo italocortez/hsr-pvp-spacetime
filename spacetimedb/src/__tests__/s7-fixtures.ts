@@ -241,8 +241,15 @@ export function insertLightconeCost(test: Harness, lightconeName: string, cost: 
     });
 }
 
-export function equip(s: Lobby, who: Actor, characterName: string, lightconeName: string) {
-    tx(s.test, who, (ctx) => M.equip_lightcone(ctx, { lobbyId: s.lobbyId, characterName, lightconeName, superimposition: 1 }));
+/** T-S10b (A78(2)): equip_lightcone by `who` for `team`'s copy of the character (the caller names the side). */
+export function equip(s: Lobby, who: Actor, team: 'Blue' | 'Red', characterName: string, lightconeName: string) {
+    tx(s.test, who, (ctx) =>
+        M.equip_lightcone(ctx, { lobbyId: s.lobbyId, teamSide: side(team), characterName, lightconeName, superimposition: 1 }));
+}
+
+/** T-S10b (A78(2)): unequip_lightcone by `who` for `team`'s copy of the character. */
+export function unequip(s: Lobby, who: Actor, team: 'Blue' | 'Red', characterName: string) {
+    tx(s.test, who, (ctx) => M.unequip_lightcone(ctx, { lobbyId: s.lobbyId, teamSide: side(team), characterName }));
 }
 
 /** T-S7b: set_eidolon (A60(1)) by `who` for a character of `team`'s draft of the current game. */

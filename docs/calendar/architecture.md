@@ -94,6 +94,7 @@ User (id: u32 autoInc PK)
    - Verify TO/Admin/Mod/Assistant access for the bracket match's tournament (D-20)
    - Check no existing event for that `bracketMatchId` via `bracket_match_id` index (D-19)
 4. Validate cap: <=40 active CalendarEvents per user (D-06)
+   - Phase S10b execution (DECISIONS.md A79): `startAt < endAt`, then `endAt >= now` (`'Event end time must not be in the past.'`, now = `ctx.timestamp`). After the cleanup, two caps on the organizer's `CalendarEvent` rows (`organizer_id` index), checked in this order: events with `endAt >= now` < `MAX_ACTIVE_EVENTS_PER_USER` = 40 (`'Maximum 40 active calendar events per user.'`); all retained events < `MAX_RETAINED_EVENTS_PER_USER` = 100 (`'Maximum 100 calendar events per user.'`). Ended events count only against the 100 ceiling.
 5. Insert `CalendarEvent` row
 6. If tournament-linked: resolve `BracketMatch -> TournamentTeam -> TournamentTeamMember` for both teams; auto-insert `CalendarEventInvite` rows for all active participants (D-17, D-18)
 7. Add manual invitees from `inviteeUserIds` (excluding already-auto-invited users); enforce cap of 9 total invitees (D-04)
@@ -102,6 +103,7 @@ User (id: u32 autoInc PK)
 1. `getAuthenticatedUser(ctx)`
 2. Find event -- reject if not found; verify organizer OR Admin
 3. `CalendarEvent.id.update()` -- cannot change `bracketMatchId` (D-08)
+   - Phase S10b execution (DECISIONS.md A79): after `startAt < endAt`, a changed `endAt` must not lie in the past (`'Event end time must not be in the past.'`); an unchanged `endAt` passes (a finished event's title / description stays editable).
 
 ### delete_calendar_event(eventId)
 1. `getAuthenticatedUser(ctx)`
@@ -184,6 +186,7 @@ invitees of an event (an anonymous tournament's match event would otherwise list
 | Optional description on CalendarEvent appended at end for safe migration (D-26) | Phase 08 execution | 2026-03-28 |
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
 | Calendar views (five per-sender views, index-only, labels denormalized, `isVisible` filtered server-side, tournament match events visible to both teams' members, organizer sees the invite list) | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
+| Event caps: 40 not-yet-ended + 100 retained per organizer (after the cleanup); `endAt` in the past rejected on create and on a changed `endAt` in update | Phase S10b execution (DECISIONS.md A79) | 2026-11-09 |
 
 ---
 

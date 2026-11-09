@@ -120,7 +120,7 @@ Lobby (id: u32 autoInc PK)
 3. `resume_timer`: compute elapsed since pause; add to `timerResumedOffset`; clear `timerPausedAt`; set `timerStartedAt=ctx.timestamp`
 
 ### advance_stage(lobbyId, targetStage)
-1. Permission: host OR referee OR TO/Mod+
+1. Permission: host OR referee OR TO/Mod+ _Superseded in Phase S10b execution (DECISIONS.md A80)._
 2. Validate stage transition is legal from current `MatchSession.stage`
 3. Insert system `MatchSessionStep` with `stepType=SystemEvent`, payload indicating stage change
 4. Update `MatchSession.stage` and `Lobby.stage`
@@ -233,11 +233,11 @@ Behavior: [contract.md](contract.md) "Lineup Groups (Phase S7 execution)" and fo
 Behavior: [contract.md](contract.md) scenarios tagged "Phase S7b execution". Confirmation, close and series submission: `docs/match-results/architecture.md` "Phase S7b execution".
 - **Removed (A60(8)):** `confirm_lineup`, `MatchLineup.isConfirmed`, the `ConfirmLineup` step kind (`ActionType` / `StepPayload` / `ConfirmLineupPayload`), the S7 surcharge reservation in `equip_lightcone`, the Scoring branch of `advance_stage`. Replaced by the per-game confirmation on `MatchResultGame` (`confirm_game`, `close_game`).
 - **Edit window (`resolveEditWindow`, `reducers/draft/postDraft.ts`):** (S8e fix pass 2, A69(2): the window ends at validation; the fall-through's status rejections come from `ensureEditableRecord`: `'No pending match result for this lobby.'` (no record), `'This game is closed.'` (Submitted record, caller not an Admin), `'This game can no longer be edited here; corrections go through override_match_result.'` (Validated, Finalized, Disputed, Rejected, Voided: everyone, Admins included); see `docs/match-results/architecture.md` "Phase S8e execution".) reads the session and the lobby's record (Pending; for role Admin also Submitted). If the current game's `MatchResultGame` row is closed, `ensureOpenGame` (`helpers/results/scoringHelpers.ts`) rejects everyone but an Admin (`'This game is closed.'`) and the Admin path runs with `ensureNotConceded` only (no stage check, no throttle, confirmations untouched, `recomputeSeriesAfterAdminEdit` at the end, A60(7)). Otherwise `ensureStageIs(stages)` + `ensureMatchAlive` + a Pending record; after the edit the game is recomputed (if its row exists) and `resetConfirmations(ctx, game, actorId)` clears both flags (A60(2)).
-- **`equip_lightcone(lobbyId, characterName, lightconeName, superimposition)`:** stages Equipping, Scoring. Callers unchanged (non-coach team member). Strict `lcCost > currentLcBudget` reject kept; the step, `refreshLineupCosts`, the budget debit, then recompute + reset. Admin path: the team is the one whose draft of the current game holds `characterName`.
+- **`equip_lightcone(lobbyId, characterName, lightconeName, superimposition)`:** stages Equipping, Scoring. Callers unchanged (non-coach team member). Strict `lcCost > currentLcBudget` reject kept; the step, `refreshLineupCosts`, the budget debit, then recompute + reset. Admin path: the team is the one whose draft of the current game holds `characterName`. _Superseded in Phase S10b execution (DECISIONS.md A78)._
 - **`arrange_lineup(lobbyId, teamSide, groups)`:** stages Equipping, Scoring; callers unchanged (captain of that side or any referee); throttled (open path only); upsert without a confirmation column; recompute + reset.
-- **`set_eidolon(lobbyId: u32, teamSide: TeamSide, characterName: string, eidolon: u8)`** (new): stages Drafting, Equipping, Scoring; `ensureMatchAlive`; callers: a player seat of that team (not coach, not spectator) or any lobby referee (`ensureEidolonEditor`); throttled through `AbuseConfig.lineupMinIntervalMs` / `LobbyMember.lastLineupAt` like `arrange_lineup`. The character must be in that team's draft of the current game (`teamDraft`: Classic Pick by that side, Auction AuctionSold to that side); `EMPTY` rejected; 0..6; the same level as the current one is rejected. Under `requireOwnership` the level must be in `teamOwnedEidolons(ctx, lobbyId, side, characterName)` (`helpers/draft/ownershipValidation.ts`: distinct `HsrAccountCharacter.eidolonLevel` over the `LobbyMemberAccount` rows of the team's player seats). Classic: `costPaid` = the Classic cost row at the new level (0 without a row), no budget. Auction: `costPaid` = `auctionEidolonExtra(new)`; `delta = extra(new) − extra(current)`; `delta > 0` → `chargeExtra` (character budget first, rest from the light-cone budget; rejected `'Not enough budget for that eidolon.'` when `delta > char + lc`); `delta < 0` → refunded to the light-cone budget in every stage (S7b orchestrator rule: a refund never restores bidding power). Logs a `SetEidolon` step (`actorSlot` = the team), `refreshLineupCosts`, recompute + reset (open) or the Admin series recompute.
+- **`set_eidolon(lobbyId: u32, teamSide: TeamSide, characterName: string, eidolon: u8)`** (new): stages Drafting, Equipping, Scoring; `ensureMatchAlive`; callers: a player seat of that team (not coach, not spectator) or any lobby referee (`ensureEidolonEditor`); throttled through `AbuseConfig.lineupMinIntervalMs` / `LobbyMember.lastLineupAt` like `arrange_lineup`. The character must be in that team's draft of the current game (`teamDraft`: Classic Pick by that side, Auction AuctionSold to that side); `EMPTY` rejected; 0..6; the same level as the current one is rejected. Under `requireOwnership` the level must be in `teamOwnedEidolons(ctx, lobbyId, side, characterName)` (`helpers/draft/ownershipValidation.ts`: distinct `HsrAccountCharacter.eidolonLevel` over the `LobbyMemberAccount` rows of the team's player seats). Classic: `costPaid` = the Classic cost row at the new level (0 without a row), no budget. Auction: `costPaid` = `auctionEidolonExtra(new)`; `delta = extra(new) − extra(current)`; `delta > 0` → `chargeExtra` (character budget first, rest from the light-cone budget; rejected `'Not enough budget for that eidolon.'` when `delta > char + lc`); `delta < 0` → refunded to the light-cone budget in every stage (S7b orchestrator rule: a refund never restores bidding power). Logs a `SetEidolon` step (`actorSlot` = the team), `refreshLineupCosts`, recompute + reset (open) or the Admin series recompute. _Superseded in Phase S10b execution (DECISIONS.md A78)._
 - **`teamDraft` (A60(1), A61(7)):** the latest `SetEidolon` step per character of that side and game (highest `sequence`; for Classic only an edit after the pick counts, so an undone pick's edits are ignored) sets the eidolon (tie-break 3) and the cost: Classic = `SetEidolon.costPaid` else `Pick.costPaid`; Auction = `AuctionSold.winningAmount` + (`SetEidolon.costPaid` else `AuctionSold.eidolonCost`), hundredths.
-- **`advance_stage`:** Drafting → Equipping (D-50 rollover + chat) and Equipping → Scoring (host signal, no gate, A60(5)) unchanged; from Scoring it throws `'Games close through confirm_game or close_game; the stage moves on the close.'`.
+- **`advance_stage`:** Drafting → Equipping (D-50 rollover + chat) and Equipping → Scoring (host signal, no gate, A60(5)) unchanged; from Scoring it throws `'Games close through confirm_game or close_game; the stage moves on the close.'`. _Superseded in Phase S10b execution (DECISIONS.md A80)._
 - **Auction (A61, `reducers/draft/draftAuction.ts`):** `nominate_character(lobbyId, characterName)` (the `eidolon` argument is gone): base cost = the Auction cost row's `e0` (`getCharacterBaseCost`); under `requireOwnership` the nominating team must own the character on a selected account (`'Your team does not own this character on any selected account.'`, `EMPTY` exempt); guard `baseCost ≤ charBudget` (D-53) **and** `baseCost + extra(teamDefaultEidolon) ≤ charBudget + lcBudget` (`'Not enough total budget: the eidolon extra for this character would exceed it.'`). `place_bid(lobbyId, bidAmount)`: the same ownership check and total guard for the bidding team, bids still capped by the character budget. Helpers: `auctionCostAt`, `auctionEidolonExtra = max(0, cost[e] − cost[e0])`, `teamDefaultEidolon` (lowest owned level under ownership, A64(1) amending A61(3); else 0), `chargeExtra(session, side, extra)` (character budget first, floor 0; the light-cone remainder clamped at 0 with a log line). **Sale** (A61(3), A64: the default eidolon is the lowest owned level; higher owned levels are bought later through `set_eidolon`) (`resolveSale`, both `pass_bid` and the bidding branch of `timer_expiry_auction`): the winning team's default eidolon and extra are resolved at the sale (never from the Nominate step); `winningAmount` comes out of the character budget, then `chargeExtra`; the D-50 rollover at auction completion carries the non-negative leftovers. Payloads: `NominatePayload { characterName }`, `AuctionSoldPayload { characterName, winningAmount, winningTeam, eidolon, eidolonCost }`.
 - **Step kinds:** `SetEidolon` (`SetEidolonPayload { characterName, eidolon, previousEidolon, costPaid }`, `costPaid` in the mode's terms) and `ConfirmGame` (`ConfirmGamePayload { confirmedSide, closed, winnerOverride?, winnerOverrideReason? }`). `MatchSessionStepHistory.targetName` = the character for `SetEidolon`, none for `ConfirmGame`; the character-stats pass of `runFinalization` ignores both.
 - **Review fixes (Phase S7b execution, A61(4)/(5), A22(3)):** in Auction Drafting, while the team holds the current bid, `set_eidolon` treats the bid plus the extra the team would owe at the sale (`teamDefaultEidolon`) as reserved: a positive delta above (char + LC budget) − (bid + extra) is rejected (`'Not enough budget for that eidolon: your current bid is reserved.'`) and the character budget is charged only above the committed bid (the rest from the light-cone budget). `resolveSale` rejects a winning amount above the winner's character budget (`'Winning amount exceeds the <side> character budget.'`) instead of clamping. `set_eidolon` is rejected with `'Draft is paused.'` in a paused Drafting stage (open path; the reconnect auto-resume reads the last step for an auto-pause).
@@ -258,14 +258,14 @@ earlier game), `resume_draft` (latest Pause), the join auto-resume (latest Pause
 (tie-breaks, lineups, edits). Lobby-wide: `getNextSequence`, the user-deletion guard, the lobby GC, the finalization
 read. `view_my_match_steps` rows carry `gameNumber`.
 
-**unequip_lightcone(lobbyId, characterName, gameNumber?)** (new). Same callers and window as `equip_lightcone`.
+**unequip_lightcone(lobbyId, characterName, gameNumber?)** (new). Same callers and window as `equip_lightcone`. _Superseded in Phase S10b execution (DECISIONS.md A78)._
 Removes the latest light cone still equipped on the character for the side; refunds its `costPaid` to the side's
 light-cone budget (current game only); logs `UnequipLightcone` (`UnequipLightconePayload { characterName,
 lightconeName, refunded }`, new `ActionType` / `StepPayload` member); refreshes the lineup costs; recomputes and resets
 confirmations (A60(2)). `teamDraft.lightconeCosts` = the light cones still equipped (`equippedLightcones`).
 `MatchSessionStepHistory.targetName` = the light cone. "X has no light cone equipped." when none.
 
-**equip_lightcone** (S7b hand-off): on the open path the character must be in the caller's team draft of the game
+**equip_lightcone** (S7b hand-off): on the open path the character must be in the caller's team draft of the game _Superseded in Phase S10b execution (DECISIONS.md A78)._
 ("X is not in your team's draft of this game."); the sequence comes from `getNextSequence`.
 
 **Earlier-game Admin edits (A65(4)).** `set_eidolon`, `equip_lightcone`, `unequip_lightcone`, `arrange_lineup`
@@ -309,6 +309,43 @@ records its step (or lineup row) on that game and recomputes it; it does not cha
   `view_my_match_steps` and `view_my_match_participants` mask user ids through `hideUserId`; the participant row adds
   `accountRatingSnapshot?` per A40. Catalogue: [../views/architecture.md](../views/architecture.md).
 
+## Phase S10b execution (DECISIONS.md A78)
+
+One caller rule for the game-package edits on the open game; supersedes the caller lines of the S7b / S8d / S8e entries
+above for these reducers. The Admin path on a closed game (A60(7), A69(2)) is unchanged: no caller rule beyond the
+Admin role, no throttle, no confirmation reset.
+
+| Reducer | Signature | Caller (open path) | Throttle |
+|---|---|---|---|
+| `set_eidolon` | `(lobbyId, teamSide, characterName, eidolon)` | captain of `teamSide` or any lobby referee: `ensureCaptainOrReferee(ctx, lobbyId, userId, side, 'set an eidolon for that team')`; `ensureEidolonEditor` removed | lineup throttle (unchanged) |
+| `equip_lightcone` | `(lobbyId, teamSide, characterName, lightconeName, superimposition)` (**new `teamSide`**, second) | same rule, `'equip lightcones'` | lineup throttle (**new**) |
+| `unequip_lightcone` | `(lobbyId, teamSide, characterName)` (**new `teamSide`**, second) | same rule, `'unequip lightcones'` | lineup throttle (**new**) |
+| `arrange_lineup` | `(lobbyId, teamSide, groups)` | same rule (unchanged) | lineup throttle (unchanged) |
+
+- Caller rejection: `'Only the <side> captain or a referee can <what>.'` (`helpers/results/scoringHelpers.ts`). The check
+  runs before the edit window for a non-Admin (as `arrange_lineup` did), so a non-captain, non-referee caller gets it
+  before any stage / status rejection; a non-member gets it instead of `'You are not a member of this lobby.'`.
+- `teamSide` goes through `ensureTeamTag` (`'teamSide must be Blue or Red.'`). The light-cone budget, the step's
+  `actorSlot`, `refreshLineupCosts` and `equippedLightcones` all use that side (previously the caller's seat).
+- Light cones: the character must be in that side's draft of the game on both paths (`ensureInTeamDraft`:
+  `'<character> is not in the <side> team's draft of this game.'`). The Admin path's "first team whose draft holds the
+  character" lookup (`lightconeEditSide`) and the `'Coaches cannot … lightcones.'` / `'Spectators cannot …
+  lightcones.'` / `'… is not in your team's draft …'` / `'… is not in either team's draft …'` texts are gone.
+- Throttle (B-4): `ensureLineupThrottle(member)` before the edit and `stampLineupThrottle` after it on the open path,
+  against the caller's `LobbyMember.lastLineupAt` (`AbuseConfig.lineupMinIntervalMs`), shared by all four reducers.
+
+## Phase S10b execution (DECISIONS.md A80)
+
+`start_draft` (`reducers/draft/draftClassic.ts`) and `advance_stage` (`reducers/draft/postDraft.ts`) are referee powers:
+`ensureRefereeOrAbove(ctx, lobby, user)` (`helpers/lobby/lobbyHelpers.ts`) replaces `ensureHostOrAbove` in both. The
+caller's `LobbyMember` row in the lobby has `isReferee`, or the caller is Moderator+ (no membership needed); the host as
+such no longer qualifies. Rejection: `'Only the referee, moderators, or admins can perform this action.'`. No lobby
+setting gates it. Check order and everything else unchanged: `start_draft` checks the caller right after the lobby
+lookup, before the Waiting check; `advance_stage` checks it before `ensureMatchAlive`; Equipping → Scoring is a referee
+signal with no gate (A60(5)). `ensureHostOrAbove` keeps its other callers (`update_lobby_settings`, `set_team_slot`
+on another seat, `shuffle_teams`, `close_lobby`). Tournament lobbies: `create_tournament_lobby` seats the creator with
+`isReferee: true` (A34), so the creator starts and advances as before; no server-side path calls either reducer.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -342,6 +379,8 @@ records its step (or lineup row) on that game and recomputes it; it does not cha
 | Edit window ends at validation (`ensureEditableRecord`: three precise rejections); `select_match_account` ratchet removed | Phase S8e execution (DECISIONS.md A69(2)(3)) | 2026-11-08 |
 | A live-stage Leave runs the disconnect path (auto-pause via the 15 s check, forfeit clock); away rows offline for the check and the forfeit test; no automatic concede | Phase S8f execution (DECISIONS.md A68) | 2026-11-08 |
 | `refereeFullControl` write removed from `start_draft`; live views `view_my_match_session`, `view_my_lineups` (A60 flags), replay `view_my_match_lineup_history`; step / participant views mask ids via `hideUserId` | Phase S9a execution (DECISIONS.md A37, A40, A56, A60, A63) | 2026-11-08 |
+| Game-package edits: captain of that side or a referee (`ensureCaptainOrReferee`) for `set_eidolon`, `equip_lightcone`, `unequip_lightcone`; light-cone reducers take `teamSide` (second argument) and the lineup throttle; Admin path uses the given side | Phase S10b execution (DECISIONS.md A78) | 2026-11-09 |
+| `start_draft` and `advance_stage`: referee flag holder or Moderator+ (`ensureRefereeOrAbove`), host as such no longer | Phase S10b execution (DECISIONS.md A80) | 2026-11-09 |
 
 ---
 

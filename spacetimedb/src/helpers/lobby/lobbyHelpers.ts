@@ -146,6 +146,20 @@ export function ensureHostOrAbove(ctx: any, lobby: any, user: any): void {
 }
 
 /**
+ * A80: the caller holds the referee flag in this lobby (their LobbyMember row has `isReferee`) or has Moderator+ role.
+ * No lobby setting gates it. Callers: start_draft, advance_stage.
+ * Throws if neither condition is met.
+ */
+export function ensureRefereeOrAbove(ctx: any, lobby: any, user: any): void {
+    const member = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobby.id, user.id])][0];
+    const isReferee = member?.isReferee === true;
+    const isModOrAbove = isRoleAtLeast(user.role, 'Moderator');
+    if (!isReferee && !isModOrAbove) {
+        throw new SenderError('Only the referee, moderators, or admins can perform this action.');
+    }
+}
+
+/**
  * Ensures the user is not banned from the given lobby.
  * Per D-21: banned users cannot rejoin.
  * Throws if a ban record exists for this user in this lobby.

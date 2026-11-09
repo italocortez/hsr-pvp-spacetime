@@ -1109,7 +1109,7 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(2))._
 
 ### The Lineup Format Is the Character Count (Phase S7 execution, A21)
 **Given:** A lobby created with `lineupFormat = Thirds` (or Halves)
-**When:** The host starts the draft
+**When:** The host starts the draft _Superseded in Phase S10b execution (DECISIONS.md A80)._
 **Then:** Each team drafts 12 characters (Halves: 8), in Classic and in Auction, and arranges them in 3 groups of 4 (Halves: 2 groups of 4). See docs/match-session/contract.md "Thirds Lobbies Draft 12 per Team".
 
 ### Only the Captain or a Referee Arranges the Lineup (Phase S7 execution, A21, backlog #3)
@@ -1399,6 +1399,7 @@ _Superseded in Phase S8g execution (DECISIONS.md A70)._ Read "team1" as "the Blu
 | S9a fix pass (A37): join / leave / away / return / kick / ban System chat lines carry `metadata {event, subjectUserId}` and the subject's seat label; `view_my_lobby_chat` renders them per reader, so an anonymized member is never named (chat contract "S9a fix: System Line About a Hidden Member"); `view_my_lobby_bans` masks a hidden banned user (0, "Banned player") | Phase S9a execution (DECISIONS.md A37) | 2026-11-08 |
 | Scenarios S9c-L1..L4: `kick_member`, `ban_member`, `set_team_slot` (optional, omitted = self), `set_captain`, `transfer_referee` take `targetJoinSeq`, `unban_member` takes `bannedJoinSeq`; rejection "No member sits at seat N of this lobby." / "No ban is recorded for seat N of this lobby."; `LobbyBan.bannedJoinSeq`; `Lobby.lastJoinSeq` (seat numbers never reused; supersedes R4's max + 1); the `targetUserId` parameter rows and scenario calls and "Ban Non-Member" marked superseded | Phase S9c execution (DECISIONS.md A74) | 2026-11-08 |
 | `broadcast_cursor` by a Spectator seat or by a non-member returns silently (no event, no error); coaches broadcast (D-34, as implemented since Phase 10 and documented here for the first time; tests `s10-chat`) | Phase S10 execution (DECISIONS.md A76) | 2026-11-09 |
+| `start_draft` and `advance_stage` are referee powers: accepted from the lobby member holding the referee flag (any seat) or a Moderator / Admin; everyone else, the host included, gets "Only the referee, moderators, or admins can perform this action." with nothing changed. A host who gave the flag away takes it back with `reclaim_referee`. Scenarios that say "the host starts the draft" / "the host calls `advance_stage`" read "the referee" | Phase S10b execution (DECISIONS.md A80) | 2026-11-09 |
 
 ---
 

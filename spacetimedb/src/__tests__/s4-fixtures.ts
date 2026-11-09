@@ -201,8 +201,17 @@ export function setupLobby(test: Harness, opts: SetupOpts = {}): Lobby {
     }
     const s: Lobby = { test, lobbyId, host, a };
     opts.beforeStart?.(s);
-    if (!opts.noStart) tx(test, host, (ctx) => M.start_draft(ctx, { lobbyId }));
+    if (!opts.noStart) tx(test, refereeActor(s), (ctx) => M.start_draft(ctx, { lobbyId }));
     return s;
+}
+
+/**
+ * T-S10b (A80): the actor holding the lobby's referee flag (start_draft / advance_stage are referee powers); the host
+ * when no named actor holds it.
+ */
+export function refereeActor(s: Lobby): Actor {
+    const refId = refereeIds(s.test, s.lobbyId)[0];
+    return Object.values(s.a).find((x) => x.userId === refId) ?? s.host;
 }
 
 /** Adds a spectator after the draft started (new joins are allowed in Drafting as Spectator). */

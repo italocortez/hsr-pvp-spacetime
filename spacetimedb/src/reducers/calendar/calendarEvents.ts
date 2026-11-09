@@ -5,9 +5,12 @@
 //   - create: non-guest; tournament-linked events require the bracket permission (D-20, A25)
 //   - update/delete/invite/remove_invite: organizer OR Admin (D-08)
 //
-// Caps (D-04, D-06):
-//   - 40 events per user (MAX_EVENTS_PER_USER)
+// Caps (D-04, D-06, A79), counted on the organizer's events after the lazy cleanup:
+//   - 40 not-yet-ended events (endAt >= now) per user (MAX_ACTIVE_EVENTS_PER_USER)
+//   - 100 retained events per user, ended or not (MAX_RETAINED_EVENTS_PER_USER)
 //   - 9 invitees per event (MAX_INVITEES_PER_EVENT)
+// Guards (A79): create rejects an endAt in the past; update rejects a changed endAt in the past (an unchanged endAt
+// stays allowed, e.g. editing a finished event's title).
 //
 // Lazy cleanup (D-07): events older than 90 days are deleted on every call
 // One event per bracket match enforced (D-19)
@@ -22,7 +25,8 @@ import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHel
 import { cleanupOldEvents } from '@module/helpers/calendar/calendarCleanup';
 import { deleteCalendarEventWithInvites } from '@module/helpers/calendar/calendarCascade';
 
-const MAX_EVENTS_PER_USER = 40;
+const MAX_ACTIVE_EVENTS_PER_USER = 40;
+const MAX_RETAINED_EVENTS_PER_USER = 100;
 const MAX_INVITEES_PER_EVENT = 9;
 
 // ─── create_calendar_event ──────────────────────────────────────────────────
@@ -55,6 +59,8 @@ export const create_calendar_event = spacetimedb.reducer(
         const startMicros = BigInt(startAt);
         const endMicros = BigInt(endAt);
         if (startMicros >= endMicros) throw new SenderError('Start time must be before end time.');
+        const now = ctx.timestamp.microsSinceUnixEpoch;
+        if (endMicros < now) throw new SenderError('Event end time must not be in the past.');
 
         // Tournament-linked event path
         let autoInviteCount = 0;
@@ -107,10 +113,14 @@ export const create_calendar_event = spacetimedb.reducer(
         // Lazy cleanup
         cleanupOldEvents(ctx, user.id);
 
-        // Cap check (post-cleanup)
+        // Cap checks (post-cleanup, A79): not-yet-ended events first, then the retained ceiling
         const currentEvents = [...ctx.db.CalendarEvent.organizer_id.filter(user.id)];
-        if (currentEvents.length >= MAX_EVENTS_PER_USER) {
-            throw new SenderError(`Maximum ${MAX_EVENTS_PER_USER} calendar events per user.`);
+        const activeCount = currentEvents.filter((e: any) => e.endAt.microsSinceUnixEpoch >= now).length;
+        if (activeCount >= MAX_ACTIVE_EVENTS_PER_USER) {
+            throw new SenderError(`Maximum ${MAX_ACTIVE_EVENTS_PER_USER} active calendar events per user.`);
+        }
+        if (currentEvents.length >= MAX_RETAINED_EVENTS_PER_USER) {
+            throw new SenderError(`Maximum ${MAX_RETAINED_EVENTS_PER_USER} calendar events per user.`);
         }
 
         // Parse manual invitees
@@ -211,6 +221,10 @@ export const update_calendar_event = spacetimedb.reducer(
         const startMicros = BigInt(startAt);
         const endMicros = BigInt(endAt);
         if (startMicros >= endMicros) throw new SenderError('Start time must be before end time.');
+        // A79: a changed endAt must not lie in the past; an unchanged one stays allowed
+        if (endMicros !== event.endAt.microsSinceUnixEpoch && endMicros < ctx.timestamp.microsSinceUnixEpoch) {
+            throw new SenderError('Event end time must not be in the past.');
+        }
 
         ctx.db.CalendarEvent.id.update(updateWithAudit(ctx, event, {
             title: title.trim(),

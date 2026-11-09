@@ -191,7 +191,7 @@ Players can record recurring availability windows, bookmark other players' calen
    c. Verify no other CalendarEvent already links to this bracketMatchId (one event per match)
    d. Look up match participants: BracketMatch → TournamentTeam → TournamentTeamMember → TournamentEnrolled
    e. Auto-create CalendarEventInvite rows for all players (InviteStatus.Pending)
-5. Check cap: organizer has < 40 active CalendarEvents
+5. Check cap: organizer has < 40 active CalendarEvents _Superseded in Phase S10b execution (DECISIONS.md A79)._
 6. Insert CalendarEvent row with organizerId = caller
 7. If inviteeUserIds provided (manual invites):
    a. Validate total invitees (auto + manual) ≤ 9
@@ -588,7 +588,7 @@ The calendar tables are private (A37 calendar contexts; supersedes the Phase 08 
 | Cascade delete events → invites | Phase 08 CONTEXT.md (D-03) | 2026-03-28 |
 | 9-invitee cap (6 players + 2 coaches + 1 referee) | Phase 08 CONTEXT.md (D-04) | 2026-03-28 |
 | All CalendarEvent data fully public | Phase 08 CONTEXT.md (D-05) | 2026-03-28 |
-| 40-event cap per user | Phase 08 CONTEXT.md (D-06) | 2026-03-28 |
+| 40-event cap per user | Phase 08 CONTEXT.md (D-06) | 2026-03-28 _Superseded in Phase S10b execution (DECISIONS.md A79)._ |
 | 90-day auto-cleanup for events (lazy) | Phase 08 CONTEXT.md (D-07) | 2026-03-28 |
 | Organizer + Admin edit permissions only | Phase 08 CONTEXT.md (D-08) | 2026-03-28 |
 | Client-side availability computation | Phase 08 CONTEXT.md (D-09) | 2026-03-28 |
@@ -620,6 +620,8 @@ The calendar tables are private (A37 calendar contexts; supersedes the Phase 08 
 | A tournament-linked event stays visible to both teams' members whatever the invite rows: `remove_invite` on a match event deletes the RSVP row only and cannot hide the event from a removed team member; stand-ins see it only through an invite row | Phase S9b execution (DECISIONS.md A37, A40) | 2026-11-08 |
 | Rejection texts as implemented (tests `s10-calendar`). Availability: "Guests cannot manage availability slots.", "Availability slots cannot be scheduled more than 6 months in advance.", "Recurring slots require a recurrence type (Daily, Weekly, or Monthly).", "Maximum 10 availability slots per user.", "Availability slot not found.", "Not your availability slot." (update by a non-owner), "Forbidden: You can only delete your own availability slots.". Saved calendars: "Target user not found.", "Maximum 5 saved calendars per user.", "Already saved.". Events: "Bracket match not found.", "This action needs the bracket permission." (A25: an Assistant needs the bracket permission), "A calendar event already exists for this bracket match. Delete it first to reschedule.", "Maximum 40 calendar events per user." (counts every event the caller organizes after the 90-day cleanup), "Maximum 9 invitees per event.", "User <id> not found." (`create_calendar_event`), "Invitee user not found." (`invite_to_event`), "User is already invited to this event.", "Calendar event not found.", "Forbidden: Only the organizer or an Admin can update this event." / "… can delete this event." / "… can invite users to this event." / "… can remove invites from this event.", "Invite not found.". RSVP: "You have no invite for this event." | Phase S10 execution (DECISIONS.md A76) | 2026-11-09 |
 | Parameter shapes as implemented: `invite_to_event(eventId, inviteeUserId)` invites one user per call; `create_calendar_event(title, description, startAt, endAt, bracketMatchId, inviteeUserIds)` takes every field (`''` = no description, `0` = no bracket link, `inviteeUserIds` a comma-separated string whose non-numeric parts are ignored); `update_availability_slot` and `update_calendar_event` take every field and replace the row (no partial update) | Phase S10 execution (DECISIONS.md A76) | 2026-11-09 |
+| Event caps: `create_calendar_event` rejects when the caller organizes 40 events that have not ended (`endAt >= now`, after the lazy cleanup): "Maximum 40 active calendar events per user."; then when the caller organizes 100 events in total, ended or not: "Maximum 100 calendar events per user.". Finished events no longer count against the 40. This replaces the text "Maximum 40 calendar events per user." of the Phase S10 row above | Phase S10b execution (DECISIONS.md A79) | 2026-11-09 |
+| Past-date guards: `create_calendar_event` rejects an `endAt` in the past and `update_calendar_event` rejects a changed `endAt` in the past, both with "Event end time must not be in the past."; an update that keeps `endAt` (title or description of a finished event) is accepted. The 90-day event cleanup (D-07) and the one-week slot cleanup (D-27) are unchanged | Phase S10b execution (DECISIONS.md A79) | 2026-11-09 |
 
 ---
 
