@@ -9,7 +9,8 @@ backendEnv();
 
 export default defineConfig({
   test: {
-    include: ['test/backend/**/*.test.ts', '!test/backend/**/*.unit.test.ts'],
+    // T-S10: the live residue only (ACCESS-SECURITY-OPS §D.5); everything else runs in memory.
+    include: ['test/live/**/*.test.ts'],
     alias: {
       '@/src/module_bindings': path.resolve(__dirname, '../web/src/module_bindings'),
       '@/': path.resolve(__dirname, '../') + '/',

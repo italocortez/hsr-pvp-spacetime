@@ -13,9 +13,9 @@ Tournaments are multi-stage competitive events managed by Tournament Hosts and t
 | Reducer | Permission | Description |
 |---------|-----------|-------------|
 | `create_tournament` | TournamentHost+ | Create tournament in Draft stage with all settings |
-| `update_tournament` | TO/Assistant/Mod+ | Update settings (Draft or Registration stage only) |
+| `update_tournament` | TO/Assistant/Mod+ | Update settings (Draft or Registration stage only) _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 | `advance_tournament_stage` | TO/Assistant/Mod+ | Forward-only stage transition with validation |
-| `cancel_tournament` | TO/Assistant/Mod+ | Cancel from any non-terminal stage; cascade-deletes infrastructure; reveals match history (D-91) |
+| `cancel_tournament` | TO/Assistant/Mod+ | Cancel from any non-terminal stage; cascade-deletes infrastructure; reveals match history (D-91) _Superseded in Phase S8d execution (DECISIONS.md A24(5)): see the cancel-cascade row in Phase History (teams, members, assistants and bracket matches are kept; requests, calendar events and player-account locks are deleted; no D-91 reveal)._ |
 
 **Key validation for `create_tournament`:**
 - Name: 1-100 chars; description: max 2000 chars
@@ -224,12 +224,12 @@ Cross-reference: see `docs/match-results/contract.md` Phase 12.3 section.
 ### Cancel Tournament
 **Given:** Tournament in Registration stage with teams, assistants, and pending requests
 **When:** `cancel_tournament(id)`
-**Then:** Stage changes to Cancelled. Cascade deletes: TournamentTeamRequest, GroupPhaseRecord, BracketMatch, TournamentPlayerAccount, TournamentTeam, TournamentAssistant, CalendarEvent + CalendarEventInvite (for all linked bracket matches). TournamentEnrolled rows preserved (audit trail). MatchResultRecord rows preserved (player history).
+**Then:** Stage changes to Cancelled. Cascade deletes: TournamentTeamRequest, GroupPhaseRecord, BracketMatch, TournamentPlayerAccount, TournamentTeam, TournamentAssistant, CalendarEvent + CalendarEventInvite (for all linked bracket matches). TournamentEnrolled rows preserved (audit trail). MatchResultRecord rows preserved (player history). _Superseded in Phase S8d execution (DECISIONS.md A24(5)): see the cancel-cascade row in Phase History (teams, members, assistants and bracket matches are kept; requests, calendar events and player-account locks are deleted; no D-91 reveal)._
 
 ### Cancel InProgress Tournament
 **Given:** Tournament in InProgress with generated bracket, group standings, and match results
 **When:** `cancel_tournament(id)`
-**Then:** Stage=Cancelled. BracketMatch and GroupPhaseRecord rows deleted. CalendarEvent + CalendarEventInvite rows for linked bracket matches deleted. MatchResultRecord rows preserved. TournamentEnrolled rows preserved with their current status unchanged.
+**Then:** Stage=Cancelled. BracketMatch and GroupPhaseRecord rows deleted. CalendarEvent + CalendarEventInvite rows for linked bracket matches deleted. MatchResultRecord rows preserved. TournamentEnrolled rows preserved with their current status unchanged. _Superseded in Phase S8d execution (DECISIONS.md A24(5)): see the cancel-cascade row in Phase History (teams, members, assistants and bracket matches are kept; requests, calendar events and player-account locks are deleted; no D-91 reveal)._
 
 ### Player Registration
 **Given:** Tournament in Registration, verified user with active roster
@@ -269,12 +269,12 @@ Note: TournamentEnrolled row does NOT contain hsrAccountId — that column was r
 ### Account Selection in Tournament Lobby (Phase 10.4)
 **Given:** Player enrolled in tournament with 2 locked accounts (TPA rows), in Waiting stage tournament lobby
 **When:** `select_match_account(lobbyId, hsrAccountId)` called with a locked account
-**Then:** LobbyMemberAccount row created for [lobbyId, userId, hsrAccountId]. If maxAccountsPerPlayer=1 (default), replaces existing selection. If maxAccountsPerPlayer=2+, row added additively. (D-05, D-07, D-11, Phase 10.4 execution)
+**Then:** LobbyMemberAccount row created for [lobbyId, userId, hsrAccountId]. If maxAccountsPerPlayer=1 (default), replaces existing selection. If maxAccountsPerPlayer=2+, row added additively. (D-05, D-07, D-11, Phase 10.4 execution) _Superseded in Phase S10 execution (DECISIONS.md A76)._
 
 ### Account Selection Exceeds maxAccountsPerPlayer
 **Given:** Tournament with maxAccountsPerPlayer=1, player already has 1 LobbyMemberAccount row
 **When:** `select_match_account(lobbyId, anotherHsrAccountId)`
-**Then:** Throws error — player has reached the maximum number of accounts for this tournament. (D-11, Phase 10.4 execution)
+**Then:** Throws error — player has reached the maximum number of accounts for this tournament. (D-11, Phase 10.4 execution) _Superseded in Phase S10 execution (DECISIONS.md A76)._
 
 ### Account Selection Non-Tournament (Replace Behavior)
 **Given:** Non-tournament lobby, player with account A selected (LobbyMemberAccount row for account A)
@@ -509,13 +509,13 @@ Note: TournamentEnrolled row does NOT contain hsrAccountId — that column was r
 | Disband during InProgress | Throws "Teams can only be disbanded during Registration" |
 | Advance Draft → InProgress (skip) | Throws stage transition error |
 | Advance backward (Seeding → Registration) | Throws stage transition error |
-| Cancel completed tournament | Throws "Cannot cancel terminal state" |
-| Cancel already-cancelled tournament | Throws "Cannot cancel terminal state" |
+| Cancel completed tournament | Throws "Cannot cancel terminal state" _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| Cancel already-cancelled tournament | Throws "Cannot cancel terminal state" _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 | Advance Registration → Seeding with pending team requests | `cleanupTeamRequests()` deletes all pending TournamentTeamRequest rows for the tournament. Teams with no accepted members are NOT deleted — only requests are cleaned up. |
 | DQ already withdrawn participant | Throws "Cannot disqualify a participant who has already withdrawn" |
 | DQ already disqualified participant | Throws "Participant is already disqualified" |
-| Update tournament during InProgress | Throws "Can only update during Draft or Registration" |
-| Update cancelled tournament | Throws "Can only update during Draft or Registration" |
+| Update tournament during InProgress | Throws "Can only update during Draft or Registration" _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| Update cancelled tournament | Throws "Can only update during Draft or Registration" _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 | Withdraw when already withdrawn | Throws "Already withdrawn" |
 | Captain withdraws from tournament (team has other members) | Captaincy transfers to lowest-userId remaining member, captain marked Withdrawn |
 | Last member withdraws from team | Team destroyed (team row + all TournamentTeamMember rows deleted) |
@@ -707,6 +707,7 @@ Note: TournamentEnrolled row does NOT contain hsrAccountId — that column was r
 | Scenarios S8e-T1..T4: D-45 = one unsettled lobby per bracket match, decided / capped rejections, no series settings on the lobby, several records per match in the job; supersedes S8d-T1 (`bestOf` / `bestOfNAdvantage` copied) and the S8d-T2 duplicate-lobby message | Phase S8e execution (DECISIONS.md A67(2)(5)(7)(8)) | 2026-11-08 |
 | Scenarios S8f-T1..T2: a DQ'd player plays the live game on (D-25 mid-match kick removed); `create_tournament_lobby` with `abandonCurrentMatch` | Phase S8f execution (DECISIONS.md A68) | 2026-11-08 |
 | Scenario S9c-T1: a captain reads the requester's display name on a team request in every tournament (A37 clarification) | Phase S9c execution (DECISIONS.md A73) | 2026-11-08 |
+| Rejection texts as implemented (tests `s10-tournament`, `s10-account-selection`): `cancel_tournament` on a terminal stage — "Cannot cancel a tournament that is already Completed." / "… already Cancelled."; `update_tournament` outside Draft / Registration / CheckIn — "Tournament settings can only change before Seeding." (A36); `select_match_account` — "Account selection is only allowed during the Waiting stage.", "Spectators cannot select match accounts.", "Coaches cannot select match accounts.", "This account is not locked for this tournament. Use a registered tournament account.", "This account is already selected for this match.", "Maximum accounts per player reached for this tournament." (the tournament path is additive and rejects at the limit for every `maxAccountsPerPlayer`, including 1: no replacement); `deselect_match_account` — "Account deselection is only allowed during the Waiting stage.", "This account is not selected for this match." | Phase S10 execution (DECISIONS.md A76) | 2026-11-09 |
 
 ---
 

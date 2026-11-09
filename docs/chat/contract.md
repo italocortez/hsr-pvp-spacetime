@@ -124,12 +124,12 @@ Lobby chat provides ephemeral, per-lobby messaging for all lobby members. Messag
 
 ### System Message on Kick
 **Given:** Host and Player B are in the lobby
-**When:** Host calls `kick_member(lobbyId, playerB.userId)`
+**When:** Host calls `kick_member(lobbyId, playerB.userId)` _Superseded in Phase S10 execution (DECISIONS.md A76)._
 **Then:** ChatMessage inserted with senderType=System, senderUserId=0, content="{displayName} was kicked from the lobby."
 
 ### System Message on Ban
 **Given:** Host and Player B are in the lobby
-**When:** Host calls `ban_member(lobbyId, playerB.userId)`
+**When:** Host calls `ban_member(lobbyId, playerB.userId)` _Superseded in Phase S10 execution (DECISIONS.md A76)._
 **Then:** ChatMessage inserted with senderType=System, senderUserId=0, content="{displayName} was banned from the lobby."
 
 ### System Message on Draft Start
@@ -240,6 +240,7 @@ Lobby chat provides ephemeral, per-lobby messaging for all lobby members. Messag
 | Full hydration from codebase | Phase 13 normalization | 2026-04-09 |
 | Rate limit (`chatMinIntervalMs`, `chatPerMinute` from `AbuseConfig`, window in `UserRateState`); scenarios "Chat Too Fast", "Chat Per-Minute Cap" and three edge cases added | Phase S5 execution (DECISIONS.md A43, D-B5) | 2026-11-06 |
 | Member-event System lines rendered per reader in `view_my_lobby_chat` (scenario "S9a fix: System Line About a Hidden Member") | Phase S9a execution (DECISIONS.md A37) | 2026-11-08 |
+| Scenarios "System Message on Kick" / "System Message on Ban": `kick_member(lobbyId, targetJoinSeq)` / `ban_member(lobbyId, targetJoinSeq)` name the seat, not the user (A74); the System line text is unchanged (tests `s10-chat`) | Phase S10 execution (DECISIONS.md A74, A76) | 2026-11-09 |
 
 ---
 

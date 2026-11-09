@@ -1176,6 +1176,8 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 | Auction default eidolon at the sale = the lowest owned level (was the highest, A61(3)); higher levels bought through `set_eidolon`; scenario "Auction Sale Resolves the Lowest Owned Eidolon" added and "Auction Sale Charges the Eidolon Extra Across Both Budgets" marked superseded | Phase S7b follow-up (DECISIONS.md A64) | 2026-11-07 |
 | Scenarios S8d-S1..S5: steps kept for the series, undo within the game, archive of every game, `unequip_lightcone`, own-draft equip | Phase S8d execution (DECISIONS.md A65) | 2026-11-07 |
 | Scenarios S8e-S1..S4: one session per lobby, steps and edits without game numbers, step view without `gameNumber`; supersedes the A65 whole-series step rules and the S8d-S scenarios | Phase S8e execution (DECISIONS.md A67(3)) | 2026-11-08 |
+| `start_draft` D-08 gate text: "Player #<userId> has no account selected for this match. All players must select an account before starting a ranked or MMR-counted match." — Ranked lobbies and tournament lobbies whose tournament has `countTowardsMmr` (tests `s10-account-selection`) | Phase S10 execution (DECISIONS.md A76) | 2026-11-09 |
+| Open for the user (S10 port finding, not decided): `equip_lightcone` / `unequip_lightcone` "Permission: Captain (or sole player if no captain)" above vs the implementation, which accepts any player seat of that team (not a coach, not a spectator; an Admin on the A60(7) path); no test asserts either reading; the permission line stays unmarked until ruled | Phase S10 execution (open) | 2026-11-09 |
 
 ---
 

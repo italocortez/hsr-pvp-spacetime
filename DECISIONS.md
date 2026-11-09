@@ -791,3 +791,15 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** a seated referee could read the opponents' characters, eidolons and exact rating under `ClosedNoRating` through the roster view while the member row withheld the rating from the same caller (S9b review #1). User, 2026-11-08: "For 3, also agree."
 - **Supersedes:** D-14's "any referee" (narrowed).
 - **Where implemented:** S9c (one condition in the view, docs)
+
+### A76 — S10 triage: the contracts adopt the implementation's wording and shapes
+
+- **Date:** 2026-11-09 · **Status:** decided (user ruling on the S10 test failures)
+- **Decision:**
+  1. The 25 in-memory tests that failed at S10 (23 in `s10-calendar`, 2 in `s10-identity`) differed from the code in rejection text only; every state assertion passed. The tests assert the implementation's texts; `docs/calendar/contract.md` and `docs/auth/contract.md` record those texts as Phase S10 execution rows and mark the superseded lines in place. No module code changes.
+  2. The calendar parameter shapes stay as implemented: `invite_to_event(eventId, inviteeUserId)` invites one user per call; `create_calendar_event`, `update_availability_slot` and `update_calendar_event` take every field (`''` / `0` for "none", `inviteeUserIds` a comma-separated string) and the update reducers replace the row.
+  3. Applied by the orchestrator under the same rule to the other wording drift the S10 ports reported (the tests already follow the code; any row may be vetoed): tournament cancel / update texts and the Waiting-only, additive account-selection texts (`docs/tournament/contract.md`); the kick / ban scenarios by seat (A74, `docs/chat/contract.md`); the D-34 spectator cursor drop (`docs/lobby/contract.md`); the D-08 `start_draft` text (`docs/match-session/contract.md`); `server_link_discord` → `server_link_provider` (A46, `docs/admin/contract.md`).
+  4. Left open, contract lines unmarked: the `equip_lightcone` / `unequip_lightcone` permission (contract: captain or sole player; code: any player seat of the team) and the event cap counting every organized event after the 90-day cleanup rather than "active" events.
+- **Why:** user, 2026-11-09: "well contract then". The texts have been live since S3–S9b and are what the older in-memory suites assert; the contract strings predate the implementation and no decision row fixed them; changing the code would be cosmetic churn plus a re-alignment of passing suites.
+- **Supersedes:** the quoted rejection texts and the optional-parameter tables of the calendar and auth contracts (marked in place).
+- **Where implemented:** S10 (T-S10 align; Phase S10 execution rows in seven contracts)

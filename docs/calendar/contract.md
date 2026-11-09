@@ -40,11 +40,11 @@ Players can record recurring availability windows, bookmark other players' calen
 **Error Cases:**
 | Condition | Error Message |
 |-----------|--------------|
-| Guest caller | "Guests cannot create availability slots." |
+| Guest caller | "Guests cannot create availability slots." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 | startAt >= endAt | "Start time must be before end time." |
-| startAt > 6 months ahead | "Cannot create availability more than 6 months in the future." |
-| isRecurring but no recurrenceType | "Recurrence type is required for recurring slots." |
-| Slot cap reached (10) | "Maximum of 10 availability slots reached." |
+| startAt > 6 months ahead | "Cannot create availability more than 6 months in the future." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| isRecurring but no recurrenceType | "Recurrence type is required for recurring slots." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| Slot cap reached (10) | "Maximum of 10 availability slots reached." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 
 ### update_availability_slot
 
@@ -56,14 +56,14 @@ Players can record recurring availability windows, bookmark other players' calen
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
 | slotId | u32 | Yes | Target slot ID |
-| startAt | Timestamp? | No | New start time |
-| endAt | Timestamp? | No | New end time |
-| isRecurring | bool? | No | Change recurrence |
-| recurrenceType | RecurrenceType? | No | Change type |
-| interval | u8? | No | Change interval |
-| dayOfWeek | u8? | No | Change day of week |
-| dayOfMonth | u8? | No | Change day of month |
-| endDate | Timestamp? | No | Change recurrence end date |
+| startAt | Timestamp? | No | New start time _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| endAt | Timestamp? | No | New end time _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| isRecurring | bool? | No | Change recurrence _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| recurrenceType | RecurrenceType? | No | Change type _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| interval | u8? | No | Change interval _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| dayOfWeek | u8? | No | Change day of week _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| dayOfMonth | u8? | No | Change day of month _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| endDate | Timestamp? | No | Change recurrence end date _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 
 **Flow:**
 1. Find slot by ID
@@ -75,8 +75,8 @@ Players can record recurring availability windows, bookmark other players' calen
 **Error Cases:**
 | Condition | Error Message |
 |-----------|--------------|
-| Slot not found | "Availability slot #{id} not found." |
-| Not owner | "You can only edit your own availability slots." |
+| Slot not found | "Availability slot #{id} not found." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| Not owner | "You can only edit your own availability slots." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 | startAt >= endAt after update | "Start time must be before end time." |
 
 ### delete_availability_slot
@@ -93,8 +93,8 @@ Players can record recurring availability windows, bookmark other players' calen
 **Error Cases:**
 | Condition | Error Message |
 |-----------|--------------|
-| Slot not found | "Availability slot #{id} not found." |
-| Not owner and not Admin | "You can only delete your own availability slots." |
+| Slot not found | "Availability slot #{id} not found." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| Not owner and not Admin | "You can only delete your own availability slots." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 
 ### save_calendar
 
@@ -120,9 +120,9 @@ Players can record recurring availability windows, bookmark other players' calen
 |-----------|--------------|
 | Guest caller | "Guests cannot save calendars." |
 | Saving own calendar | "Cannot save your own calendar." |
-| Target user not found | "User #{id} not found." |
-| Cap reached (5) | "Maximum of 5 saved calendars reached." |
-| Already saved | "Calendar already saved." |
+| Target user not found | "User #{id} not found." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| Cap reached (5) | "Maximum of 5 saved calendars reached." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| Already saved | "Calendar already saved." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 
 ### unsave_calendar
 
@@ -175,11 +175,11 @@ Players can record recurring availability windows, bookmark other players' calen
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
 | title | string | Yes | Event title |
-| description | string? | No | Optional event notes |
+| description | string? | No | Optional event notes _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 | startAt | Timestamp | Yes | Event start (UTC) |
 | endAt | Timestamp | Yes | Event end (UTC) |
-| bracketMatchId | u32? | No | Optional link to bracket match |
-| inviteeUserIds | u32[] | No | Users to invite (max 9) |
+| bracketMatchId | u32? | No | Optional link to bracket match _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| inviteeUserIds | u32[] | No | Users to invite (max 9) _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 
 **Flow:**
 1. Verify caller is authenticated
@@ -205,12 +205,12 @@ Players can record recurring availability windows, bookmark other players' calen
 | Guest caller | "Guests cannot create calendar events." |
 | Empty title | "Event title must not be empty." |
 | startAt >= endAt | "Start time must be before end time." |
-| bracketMatchId not found | "Bracket match #{id} not found." |
-| Caller lacks tournament permission | "Forbidden: Requires Tournament Host, Admin, Moderator, or Assistant privileges for this tournament." |
-| Duplicate bracketMatchId | "A calendar event already exists for this bracket match." |
-| Event cap reached (40) | "Maximum of 40 active calendar events reached." |
-| Too many invitees (> 9) | "Maximum of 9 invitees per event." |
-| Invitee not found | "User #{id} not found." |
+| bracketMatchId not found | "Bracket match #{id} not found." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| Caller lacks tournament permission | "Forbidden: Requires Tournament Host, Admin, Moderator, or Assistant privileges for this tournament." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| Duplicate bracketMatchId | "A calendar event already exists for this bracket match." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| Event cap reached (40) | "Maximum of 40 active calendar events reached." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| Too many invitees (> 9) | "Maximum of 9 invitees per event." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| Invitee not found | "User #{id} not found." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 
 ### update_calendar_event
 
@@ -222,10 +222,10 @@ Players can record recurring availability windows, bookmark other players' calen
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
 | eventId | u32 | Yes | Target event ID |
-| title | string? | No | New title |
-| description | string? | No | New description |
-| startAt | Timestamp? | No | New start time |
-| endAt | Timestamp? | No | New end time |
+| title | string? | No | New title _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| description | string? | No | New description _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| startAt | Timestamp? | No | New start time _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| endAt | Timestamp? | No | New end time _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 
 **Flow:**
 1. Find event by ID
@@ -237,8 +237,8 @@ Players can record recurring availability windows, bookmark other players' calen
 **Error Cases:**
 | Condition | Error Message |
 |-----------|--------------|
-| Event not found | "Calendar event #{id} not found." |
-| Not organizer and not Admin | "Only the event organizer or an admin can edit this event." |
+| Event not found | "Calendar event #{id} not found." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| Not organizer and not Admin | "Only the event organizer or an admin can edit this event." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 | startAt >= endAt after update | "Start time must be before end time." |
 
 ### delete_calendar_event
@@ -256,8 +256,8 @@ Players can record recurring availability windows, bookmark other players' calen
 **Error Cases:**
 | Condition | Error Message |
 |-----------|--------------|
-| Event not found | "Calendar event #{id} not found." |
-| Not organizer and not Admin | "Only the event organizer or an admin can delete this event." |
+| Event not found | "Calendar event #{id} not found." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| Not organizer and not Admin | "Only the event organizer or an admin can delete this event." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 
 ### respond_to_invite
 
@@ -280,7 +280,7 @@ Players can record recurring availability windows, bookmark other players' calen
 **Error Cases:**
 | Condition | Error Message |
 |-----------|--------------|
-| Invite not found | "You have no invite for event #{id}." |
+| Invite not found | "You have no invite for event #{id}." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 | Status is Pending | "Cannot respond with Pending status." |
 
 ### invite_to_event
@@ -293,7 +293,7 @@ Players can record recurring availability windows, bookmark other players' calen
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
 | eventId | u32 | Yes | Target event |
-| inviteeUserIds | u32[] | Yes | Users to invite |
+| inviteeUserIds | u32[] | Yes | Users to invite _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 
 **Flow:**
 1. Find event by ID
@@ -308,11 +308,11 @@ Players can record recurring availability windows, bookmark other players' calen
 **Error Cases:**
 | Condition | Error Message |
 |-----------|--------------|
-| Event not found | "Calendar event #{id} not found." |
-| Not organizer and not Admin | "Only the event organizer or an admin can invite to this event." |
-| Total invites > 9 | "Maximum of 9 invitees per event." |
-| User not found | "User #{id} not found." |
-| Already invited | "User #{id} is already invited." |
+| Event not found | "Calendar event #{id} not found." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| Not organizer and not Admin | "Only the event organizer or an admin can invite to this event." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| Total invites > 9 | "Maximum of 9 invitees per event." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| User not found | "User #{id} not found." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| Already invited | "User #{id} is already invited." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 
 ### remove_invite
 
@@ -334,8 +334,8 @@ Players can record recurring availability windows, bookmark other players' calen
 **Error Cases:**
 | Condition | Error Message |
 |-----------|--------------|
-| Invite not found | "Invite not found for user #{id} on event #{eventId}." |
-| Not organizer and not Admin | "Only the event organizer or an admin can remove invites." |
+| Invite not found | "Invite not found for user #{id} on event #{eventId}." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| Not organizer and not Admin | "Only the event organizer or an admin can remove invites." _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 
 ## Cascade Cleanup (Cross-Feature)
 
@@ -380,7 +380,7 @@ When a user account is deleted, cascade-delete all calendar data:
 
 **Given:** User already has 10 availability slots
 **When:** User calls `create_availability_slot`
-**Then:** Rejected with "Maximum of 10 availability slots reached."
+**Then:** Rejected with "Maximum of 10 availability slots reached." _Superseded in Phase S10 execution (DECISIONS.md A76)._
 
 ### Update Availability Slot
 
@@ -412,7 +412,7 @@ When a user account is deleted, cascade-delete all calendar data:
 
 **Given:** User A already has 5 saved calendars
 **When:** User A calls `save_calendar` for a 6th user
-**Then:** Rejected with "Maximum of 5 saved calendars reached."
+**Then:** Rejected with "Maximum of 5 saved calendars reached." _Superseded in Phase S10 execution (DECISIONS.md A76)._
 
 ### Cannot Save Own Calendar
 
@@ -442,7 +442,7 @@ When a user account is deleted, cascade-delete all calendar data:
 
 **Given:** CalendarEvent already exists for bracketMatchId=42
 **When:** TO calls `create_calendar_event` with bracketMatchId=42
-**Then:** Rejected with "A calendar event already exists for this bracket match."
+**Then:** Rejected with "A calendar event already exists for this bracket match." _Superseded in Phase S10 execution (DECISIONS.md A76)._
 
 ### Non-TO Cannot Create Tournament Event
 
@@ -454,13 +454,13 @@ When a user account is deleted, cascade-delete all calendar data:
 
 **Given:** User has 40 active calendar events
 **When:** User calls `create_calendar_event`
-**Then:** Rejected with "Maximum of 40 active calendar events reached."
+**Then:** Rejected with "Maximum of 40 active calendar events reached." _Superseded in Phase S10 execution (DECISIONS.md A76)._
 
 ### Invite Cap Enforcement
 
 **Given:** Event exists with 8 invitees
 **When:** Organizer calls `invite_to_event` with 2 more userIds
-**Then:** Rejected with "Maximum of 9 invitees per event."
+**Then:** Rejected with "Maximum of 9 invitees per event." _Superseded in Phase S10 execution (DECISIONS.md A76)._
 
 ### Respond to Invite
 
@@ -484,7 +484,7 @@ When a user account is deleted, cascade-delete all calendar data:
 
 **Given:** User A organized event 1, User B is an invitee
 **When:** User B calls `update_calendar_event` on event 1
-**Then:** Rejected with "Only the event organizer or an admin can edit this event."
+**Then:** Rejected with "Only the event organizer or an admin can edit this event." _Superseded in Phase S10 execution (DECISIONS.md A76)._
 
 ### Delete Event Cascades Invites
 
@@ -618,6 +618,8 @@ The calendar tables are private (A37 calendar contexts; supersedes the Phase 08 
 | Full hydration from codebase | Phase 13 normalization | 2026-04-09 |
 | Scenarios S9b-C1..C4: the calendar tables are private (supersedes D-05) and read through five per-sender views; events visible to organizer, invitees, both teams of a linked match and visible savers; invite lists for organizers; availability and bookmarks with labels; exact username search | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 | A tournament-linked event stays visible to both teams' members whatever the invite rows: `remove_invite` on a match event deletes the RSVP row only and cannot hide the event from a removed team member; stand-ins see it only through an invite row | Phase S9b execution (DECISIONS.md A37, A40) | 2026-11-08 |
+| Rejection texts as implemented (tests `s10-calendar`). Availability: "Guests cannot manage availability slots.", "Availability slots cannot be scheduled more than 6 months in advance.", "Recurring slots require a recurrence type (Daily, Weekly, or Monthly).", "Maximum 10 availability slots per user.", "Availability slot not found.", "Not your availability slot." (update by a non-owner), "Forbidden: You can only delete your own availability slots.". Saved calendars: "Target user not found.", "Maximum 5 saved calendars per user.", "Already saved.". Events: "Bracket match not found.", "This action needs the bracket permission." (A25: an Assistant needs the bracket permission), "A calendar event already exists for this bracket match. Delete it first to reschedule.", "Maximum 40 calendar events per user." (counts every event the caller organizes after the 90-day cleanup), "Maximum 9 invitees per event.", "User <id> not found." (`create_calendar_event`), "Invitee user not found." (`invite_to_event`), "User is already invited to this event.", "Calendar event not found.", "Forbidden: Only the organizer or an Admin can update this event." / "… can delete this event." / "… can invite users to this event." / "… can remove invites from this event.", "Invite not found.". RSVP: "You have no invite for this event." | Phase S10 execution (DECISIONS.md A76) | 2026-11-09 |
+| Parameter shapes as implemented: `invite_to_event(eventId, inviteeUserId)` invites one user per call; `create_calendar_event(title, description, startAt, endAt, bracketMatchId, inviteeUserIds)` takes every field (`''` = no description, `0` = no bracket link, `inviteeUserIds` a comma-separated string whose non-numeric parts are ignored); `update_availability_slot` and `update_calendar_event` take every field and replace the row (no partial update) | Phase S10 execution (DECISIONS.md A76) | 2026-11-09 |
 
 ---
 

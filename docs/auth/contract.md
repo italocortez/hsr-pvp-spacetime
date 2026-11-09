@@ -51,7 +51,7 @@ Authentication manages how users connect to the SpacetimeDB module, create accou
 **Error Cases:**
 | Condition | Error Message |
 |-----------|--------------|
-| Provider is banned | "Discord ID \<id\> is banned" |
+| Provider is banned | "Discord ID \<id\> is banned" _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 | Identity not registered | "Identity not registered. Call login_as_guest first" |
 
 ### clientConnected (lifecycle hook)
@@ -95,8 +95,8 @@ Authentication manages how users connect to the SpacetimeDB module, create accou
 **Error Cases:**
 | Condition | Error Message |
 |-----------|--------------|
-| Caller is not Admin | Unauthorized |
-| Duplicate ban exists | "A ban for this provider ID already exists" |
+| Caller is not Admin | Unauthorized _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| Duplicate ban exists | "A ban for this provider ID already exists" _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 
 ### admin_unban_user
 
@@ -109,8 +109,8 @@ Authentication manages how users connect to the SpacetimeDB module, create accou
 **Error Cases:**
 | Condition | Error Message |
 |-----------|--------------|
-| BanRecord not found | "BanRecord \<id\> not found" |
-| Caller is not Admin | Unauthorized |
+| BanRecord not found | "BanRecord \<id\> not found" _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
+| Caller is not Admin | Unauthorized _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 
 ## Acceptance Scenarios
 
@@ -149,7 +149,7 @@ Authentication manages how users connect to the SpacetimeDB module, create accou
 ### Ban Enforcement at Link-Time — Phase 12
 **Given:** A BanRecord exists for a Discord ID
 **When:** `server_link_provider` called with the banned Discord ID
-**Then:** Reducer throws with "Discord ID \<id\> is banned". No UserPrivate written. User unchanged.
+**Then:** Reducer throws with "Discord ID \<id\> is banned". No UserPrivate written. User unchanged. _Superseded in Phase S10 execution (DECISIONS.md A76)._
 
 ### Ban Enforcement at Reconnect — Phase 12
 **Given:** A BanRecord exists for a Discord ID; user with that discordId in UserPrivate reconnects
@@ -300,3 +300,4 @@ _Superseded in Phase S8f execution (DECISIONS.md A68)._ The lobby guard is the D
 
 | `delete_my_account()` for every user (verified: lobby + live-tournament guards, cascades through `performUserDeletion`; guest: the old `delete_guest_account` behaviour); `delete_guest_account` removed | Phase S6 execution (DECISIONS.md A45(3)) | 2026-11-06 |
 | Scenario "Delete My Account While Away": the lobby guard is the D-22 test (away blocks, abandoned / AwaitingResult do not); `performUserDeletion` hands over the user's lobby flags | Phase S8f execution (DECISIONS.md A68) | 2026-11-08 |
+| Rejection texts as implemented (tests `s10-identity`): `admin_ban_user` on a provider id already banned — "Provider <BanType>:<providerId> is already banned."; unban of an unknown record — "BanRecord #<id> not found."; the Admin-only gates — "Forbidden: Requires Admin privileges."; link-time ban (SEC-03a, `server_link_provider`) — "This <provider> account is banned and cannot be linked." | Phase S10 execution (DECISIONS.md A76) | 2026-11-09 |

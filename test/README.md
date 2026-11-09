@@ -1,145 +1,95 @@
 # Test Suite
 
-Automated tests for the HSRPVP SpacetimeDB project. 47 integration files + 11 unit files = **58 files / 728 tests**, zero failures, zero skips on the current baseline.
+Three layers (CLAUDE.md §6). Counts as of S10 (2026-11-09):
+
+| Layer | Where | Runs against | Files / tests |
+|---|---|---|---|
+| Unit | `test/backend/**/*.unit.test.ts`, `shared/**/*.test.ts` | nothing (pure functions; `spacetimedb/server` mocked) | 18 / 395 |
+| In-memory module tests (the default verification layer) | `spacetimedb/src/__tests__/*.test.ts` | the module in-process, no network | 44 / 1041 (1024 pass, 1 skipped placeholder, 16 todo) |
+| Live residue | `test/live/*.test.ts` | `hsr-spacetimedb-test1` only, once per release | 7 / 25 (+ 12 todo, incl. the S11 outsider-isolation placeholder) |
+
+`npm test` runs the first two and never touches maincloud. The old live suite (61 integration files under `test/backend/`) was ported to the in-memory harness in S10 and deleted; see `docs/log/2026-11-09-s10.md` for the file-by-file map.
 
 ## Structure
 
 ```
 test/
-├── vitest.config.ts                  # Unit test config (no SpacetimeDB needed)
-├── vitest.integration.config.ts      # Integration test config — wires globalSetup
-├── tsconfig.json                     # TypeScript config for test files
-├── global-setup.ts                   # Vitest globalSetup: stdb publish --clear + bootstrap (test only)
+├── vitest.config.ts                  # unit config: test/backend/**/*.unit.test.ts + shared/**/*.test.ts; spacetimedb/server → shared/mocks
+├── vitest.integration.config.ts      # live residue config: test/live/**/*.test.ts; wires globalSetup (test1 wipe + bootstrap)
+├── tsconfig.json                     # mirrors the @module/<kind>/<domain> aliases of tsconfig.base.json (A72)
+├── global-setup.ts                   # vitest globalSetup: stdb publish --clear + bootstrap, test target only
 ├── shared/
-│   ├── env.ts                        # backendEnv(): STDB_TARGET=test + .env.test.local via shared/stdb-targets.ts
-│   ├── load-env.ts                   # Same, for standalone tmp/uat-*.ts scripts
-│   ├── connection.ts                 # SpacetimeDB WebSocket test harness (createTestHarness)
-│   ├── fixtures.ts                   # Test data factories and constants
-│   ├── helpers/                      # Cross-suite helpers (import from here, don't duplicate)
-│   │   ├── drafts.ts · hsrAccounts.ts · lobbies.ts · promoteUser.ts
-│   │   ├── queries.ts · scores.ts · seed.ts · tournaments.ts · users.ts
-│   └── mocks/
-│       └── spacetimedb-server.ts     # Mock for spacetimedb/server (unit tests only)
-│                                     # (game seed data lives in data/seed/, seeded by scripts/stdb/bootstrap.ts)
-├── data-templates/                   # Canonical templates + default configs
-│   ├── characters_template.json · lightcones_template.json · pairing_template.json
-│   ├── account-rating-config-defaults.json · elo-config-defaults.json
-├── backend/                          # 47 integration files + 11 unit files
-│   ├── achievements/                 # auto-award, management (+ checker unit)
-│   ├── anonymous-play/               # labels
-│   ├── auth/                         # views, security, ban-admin, server-link-provider
-│   ├── brackets/                     # advancement, group→elim (+ generation unit)
-│   ├── calendar/                     # events, availability, saved
-│   ├── chat/                         # messages
-│   ├── cost-sets/                    # lifecycle
-│   ├── garbage-collector/            # identity-gc
-│   ├── lobby/                        # lifecycle, settings, presets, tournament, account-selection,
-│   │                                 # disconnect {concede, gc, leave, admin-tools}
-│   │                                 # (+ disconnect/slot/flag/ownership unit helpers)
-│   ├── match-results/                # lifecycle, score-entry, mmr-stats, rating-admin, referee-coach
-│   │                                 # (+ account-rating, elo-calculation unit)
-│   ├── match-session/                # draft {classic, auction, control}, post-draft
-│   ├── roster/                       # accounts, characters, archetypes, migration, deletion-guard
-│   │                                 # (+ helpers unit)
-│   ├── season/                       # admin, tournament-player-account
-│   └── tournaments/                  # admin, registration, stages, teams, mmr,
-│                                     # management, cancel-cleanup
-│                                     # (+ helpers, stage-validation unit)
-└── frontend/                         # UI component tests (to be added in frontend phases)
+│   ├── env.ts                        # backendEnv(): STDB_TARGET=test + .env.test.local through shared/stdb-targets.ts
+│   ├── load-env.ts                   # same, for standalone tmp/uat-*.ts scripts
+│   ├── connection.ts                 # WebSocket harness for the residue: createTestHarness, expectReducerError, queryPrivateTable, hasServerToken
+│   ├── two-identity-harness.ts       # two connections in one test (lifecycle, smoke)
+│   ├── fixtures.ts                   # constants shared by the unit tests
+│   └── mocks/spacetimedb-server.ts   # mock of spacetimedb/server (unit tests only)
+├── data-templates/                   # canonical templates + default configs (verification never reads gitignored data)
+├── backend/<feature>/                # 11 *.unit.test.ts: achievements, lobby helpers (4), match-results (2), roster, seed round trip, tournaments (2)
+├── live/                             # the residue, 7 files + _helpers.ts (below)
+└── frontend/                         # screenshots per page (CLAUDE.md §4)
+
+spacetimedb/vitest.config.mts         # in-memory config (single '@module' alias, real spacetimedb/server)
+spacetimedb/src/__tests__/            # harness.smoke, s4…s9c suites, s10-* suites; fixtures: s4-, s7-, s8-, s8d-, s10-{a1,a2,c1,c2}-fixtures.ts
 ```
 
 ## Commands
 
-| Command | What it runs |
-|---------|-------------|
-| `npm test` | Unit tests only (fast, no deps, ~0.5s) |
-| `npm run test:watch` | Unit tests in watch mode |
-| `npm run test:integration` | Integration tests against test1 (sets `STDB_TARGET=test`, triggers globalSetup; refuses prod) |
+| Command | What it runs | Cost |
+|---|---|---|
+| `npm test` | unit + in-memory, in that order | ≈ 15 s, no network |
+| `npm run test:watch` | unit tests in watch mode | — |
+| `npx vitest run --config spacetimedb/vitest.config.mts <name filter>` | one in-memory suite, e.g. `s10-lobby` | seconds |
+| `npm run test:integration` | the live residue on test1; **globalSetup wipes and re-bootstraps test1 first** | ≈ 5 min nominal, ≤ 7 min worst, cap 15 min (§D.5) |
 
-Single file: `npm run test:integration -- <path>`
+`npm run test:integration` is a release step, never run unasked: it is a `spacetime publish --clear` of test1 (a user gate), it costs maincloud energy, and the residue's first run is S11 (test1 is stale until that clear-publish). Single residue file: `npm run test:integration -- test/live/smoke.test.ts`; `SKIP_DB_CLEAR=1` skips the wipe when test1 is known clean.
 
-## Prerequisites
+## In-memory harness (how the s*-suites work)
 
-### Unit tests
-None. `npm test` runs pure-function tests with a mocked `spacetimedb/server`.
+`createModuleTestHarness()` loads the module in-process. Facts that bite (full list: `docs/log/2026-11-06-s4.md`, helpers: `spacetimedb/src/__tests__/s4-fixtures.ts`):
 
-### Integration tests
-1. `spacetime login` as the account that owns `hsr-spacetimedb-test1` (the publisher becomes the Owner in `init`).
-2. Env scheme (ACCESS-SECURITY-OPS §C.2): the database name and host are committed constants in
-   `shared/stdb-targets.ts`; the target comes from `STDB_TARGET` (`npm run test:integration` sets `test`;
-   anything else is refused). Nothing reads `.env.local` or the legacy `SPACETIMEDB_*` keys.
-3. `.env.test.local` holds `STDB_SERVER_TOKEN` + `STDB_SERVER_IDENTITY`, written by
-   `npm run stdb:bootstrap:test` (globalSetup runs it, so the file appears after the first run).
+- Call reducers inside `withReducerTx(auth, ctx => M.reducer(ctx, args))`; read `test.db` only **outside** a transaction (reading inside crashes the datastore).
+- Views are functions: `(M as any).view_x(test.viewContext(auth), {})`.
+- `ctx.env` throws (`env_get` stub), so `server_set_datetime` / `_online` / `_mmr` / `_nuke_test_data` (gated by `requireTestDatabase`) cannot run in memory; that is the one skipped test in `harness.smoke`. `server_link_provider`, `server_delete_user`, `server_set_role` and `seed_identity_gc_job` run as `'internal'`.
+- Roles are set through `test.db` (`setUserRole` / `setRole`), never `server_set_role`; `'internal'` is Owner and passes the admin gates.
+- Scheduled reducers are fired by hand; the clock moves with `advance(test, ms)` (timers validate elapsed time; chat throttle = 2.1 s per send).
+- Seats, not user ids: `seatOf(src, lobbyId, userId)` for every `targetJoinSeq` / `bannedJoinSeq` (A74).
+- Two `Range` classes exist: never `new Range()`. A missing row's `find()` returns `null`.
+- Every `it` cites its contract clause or decision id. Failures are diagnostic: report them, the user triages (architecture bug vs direction change).
 
-## globalSetup behavior
+## Live residue (`test/live/`)
 
-`test/vitest.integration.config.ts` wires `test/global-setup.ts` as Vitest `globalSetup`. It runs **once per suite invocation** before any test file:
+What the in-memory harness cannot drive (ACCESS-SECURITY-OPS §D.5): subscriptions and their isolation, lifecycle hooks over the wire, scheduler timers actually firing, the module environment, the engine-level rejection of external calls to scheduled reducers.
 
-1. Requires `STDB_TARGET=test`; `assertNameMatchesTarget` + `assertWipeAllowed` refuse anything but the committed "-test" database.
-2. Runs `npx tsx scripts/stdb/publish.ts --target test --clear` (typecheck, then `--delete-data=always --yes=delete-data`, `STDB_TARGET=test` in the CLI environment).
-3. Runs `npx tsx scripts/stdb/bootstrap.ts --target test` (registers a fresh delegate, writes `STDB_SERVER_TOKEN` to `.env.test.local`, reseeds data/seed/, achievements, configs, GC jobs).
-4. Re-reads `.env.test.local` through `backendEnv()`. The harness reads the token lazily through the same function, so the rotated token is used. **This step is load-bearing** — a stale token fails every server-token call with `Forbidden: caller is not a registered server identity` (Phase 14 Round 9 debug session).
+| File | Covers |
+|---|---|
+| `isinternal-rejection` | the five `run_*` scheduled reducers reject an external low-level `callReducer` (guest harness) |
+| `auth-subscriptions` | anonymous `view_my_profile` = 0 rows, own row after `login_as_guest`; SEC-01b (private tables have no client accessor, raw subscriptions refused); own `User` row public today (PAGE-MAP D2) |
+| `lifecycle-grace` | A22a / A68: refresh inside the 15 s grace moves nothing; a drop past it moves referee and host; `leave_lobby` in Drafting = away |
+| `scheduler-chains` | `admin_delete_row('User')` → `run_user_deletion` fires on its own (D-17); one `identity_gc_job` and one `lobby_gc_job` row after bootstrap; finalize chain todo |
+| `server-reducers` | the four env-gated `server_*` reducers accepted with the server token, rejected for a plain client; nuke and prod-side rejection as todo |
+| `smoke` | bootstrap invariants (cost set 0, characters, achievements), a two-identity lobby with seats [1, 2], a cursor broadcast reaching the other member |
+| `outsider-isolation` | S11 placeholder (T-S11): per-sender views empty for an outsider over a real subscription, unmapped identity sees nothing, anonymized seats carry `userId 0` |
 
-Cost: **~11.5s per suite invocation** (<1% of a 48 min run).
+Prerequisites: `spacetime login` as the owner of test1; `.env.test.local` with `STDB_SERVER_TOKEN` (written by `npm run stdb:bootstrap:test`, which globalSetup runs). Key names only: never read or commit `.env*.local`. `it.skipIf(!hasServerToken())` guards the token-dependent tests.
 
-### Skipping globalSetup for single-file iteration
+globalSetup (`test/global-setup.ts`): requires `STDB_TARGET=test`, refuses anything but the committed "-test" database, runs `scripts/stdb/publish.ts --target test --clear` then `scripts/stdb/bootstrap.ts --target test`, re-reads the rotated token through `backendEnv()`. ≈ 12 s.
 
-Set `SKIP_DB_CLEAR=1` to bypass the clear+reseed when you're iterating on a single test file and know the DB is already in a clean state:
+## Adding tests
 
-```bash
-SKIP_DB_CLEAR=1 npm run test:integration -- test/backend/chat/chat-messages.test.ts
-```
+Test files change only under an explicit T-task of a step (CLAUDE.md §6).
 
-## Adding tests for new features
+1. Default: an in-memory suite `spacetimedb/src/__tests__/<step>-<topic>.test.ts`; import helpers from the existing fixtures files instead of copying them.
+2. Pure helpers: `test/backend/<feature>/<name>.unit.test.ts` or next to the code under `shared/`.
+3. Live only for the §D.5 categories, under `test/live/`, with a runtime estimate in the header; the residue stays ≤ 10 files / ≤ 15 min.
+4. Verification needs no gitignored data; use `test/data-templates/` or `data/seed/` (A18).
 
-1. Create a directory under `test/backend/{feature}/`
-2. Add `*.test.ts` for integration tests, `*.unit.test.ts` for pure-function tests with no DB
-3. Connect via `createTestHarness()` / `createVerifiedTestHarness()` from `test/shared/connection.ts`
-4. Use `test/shared/fixtures.ts` for shared constants
-5. **Reuse helpers from `test/shared/helpers/`** rather than duplicating query/setup logic — see `queries.ts`, `lobbies.ts`, `tournaments.ts`, etc.
+## Reset sequence (manual; each publish is a user gate)
 
-## Suite Runtime Baseline
-
-Historical measurements. The Phase 14 Round 9 entry is the current baseline — any future regression should be measured against it.
-
-| Baseline | Date | Wall-Clock | Files / Tests | Notes |
-|----------|------|-----------:|---------------|-------|
-| Phase 10.5 | 2026-04-05 | 54m38s | 41 int (486) + 11 unit (187) | SDK 2.0.3, pre-stabilization audit complete |
-| Phase 14 interim | 2026-04-09 | 56m57s | 47 int (531) + 11 unit (197) | onApplied + withConfirmedReads(false) + view refactor |
-| **Phase 14 Round 9 (current)** | **2026-04-10** | **48m31s** | **47 int (531) + 11 unit (197)** | **globalSetup clears+reseeds before every run; 728/728 pass, 0 skip. Faster than Phase 10.5 — clean DB keeps indexes small.** |
-
-Integration suite: **47 files / 531 tests**. Unit suite: **11 files / 197 tests**. Combined: **728 tests**.
-
-### Hotspot files (≥20 tests — 8 files / 202 tests / 38% of integration suite)
-
-`match-results/mmr-stats` (31), `brackets/bracket-advancement` (28), `lobby/lobby-lifecycle` (28), `achievements/achievement-management` (24), `match-results/match-lifecycle` (24), `match-session/post-draft` (24), `chat/chat-messages` (22), `lobby/lobby-settings` (21).
-
-### Intra-suite state accumulation
-
-Even with globalSetup starting from a clean DB, a single suite run leaks rows into tables that have no cleanup path. Measured on the Round 9 clean-baseline run (531 tests):
-
-| Category | Tables affected | Rate |
-|----------|-----------------|-----:|
-| Permanent identity leak (no delete on disconnect) | User, UserPrivate, UserIdentity | ~0.59 User/test |
-| `AwaitingResult` lobbies (D-48 skips GC) | Lobby, LobbyMember, MatchSession(+Step), MatchResultRecord(+Participant) | ~0.05 Lobby/test |
-| Cancelled tournaments (historical records, by design) | Tournament, TournamentEnrolled | ~0.07 Tournament/test |
-
-These are **rooted in backend design choices**, not test bugs. The suite passes cleanly at current scale. If test count doubles (or intra-suite flakes return), options are:
-1. Add `afterAll` cleanup hooks to rejection tests (blocked by test-file edit policy — needs explicit task)
-2. Call `server_nuke_test_data` reducer through a delegate connection from a periodic mid-suite hook (the old nuke script was removed in M2) (~500ms wipe, 23× faster than the globalSetup path)
-3. Move integration tests off maincloud to a local/staging instance
-
-Full root-cause investigation and per-table leak counts: `.planning/phases/14-test-harness-modern/14-DEBUG-SESSION.md`.
-
-## Reset sequence
-
-Normally unnecessary — `globalSetup` handles clear+reseed automatically. Only run manually if globalSetup itself is failing or you need a bare-metal reset outside of vitest:
-
-1. `npm run stdb:publish:test:clear` (test only; add `-- --dry-run` to print the command)
-2. `npm run stdb:bootstrap:test` (delegate + seed in one step, also rotates the server token)
+1. `npm run stdb:publish:test:clear` (test only; `-- --dry-run` prints the command)
+2. `npm run stdb:bootstrap:test` (delegate + seed, rotates the server token)
 3. `npm run stdb:generate` if the schema changed, then review `git diff --stat web/src/module_bindings`
 4. `SKIP_DB_CLEAR=1 npm run test:integration`
 
-Fast wipe of non-seed state (keeps characters/lightcones/configs intact):
-call the `server_nuke_test_data` reducer (`confirmation: 'NUKE_TEST_DATA'`) through a delegate connection;
-it rejects on any database whose `STDB_TARGET` is not `test`.
+Fast wipe of non-seed state: the `server_nuke_test_data` reducer (`confirmation: 'NUKE_TEST_DATA'`) through a delegate connection; it rejects on any database whose `STDB_TARGET` is not `test`.

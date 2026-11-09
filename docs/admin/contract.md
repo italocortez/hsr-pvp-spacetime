@@ -51,6 +51,8 @@ Admin and server operations handle privileged actions: server identity registrat
 
 ### server_link_discord
 
+> **Superseded (Phase S10 execution, DECISIONS.md A46, A76):** the reducer is `server_link_provider(callerIdentityHex, provider, providerId, providerName)` (`provider` = `discord` at launch); `UserPrivate.loginMethod` + `providerId` and the `BanRecord` key replace `discordId`. The purpose, parameter table, flow, error table and the two "Discord Link" scenarios below describe the old reducer; the implemented texts are in the S10 row of Phase History.
+
 **Purpose:** Link a Discord account to a user — upgrades guest to verified, re-points identity for returning users
 
 **Permission:** Server identity
@@ -58,7 +60,7 @@ Admin and server operations handle privileged actions: server identity registrat
 **Parameters:**
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
-| discordId | string | Yes | Discord user ID |
+| discordId | string | Yes | Discord user ID _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 | discordUsername | string | Yes | Discord username |
 | callerIdentityHex | string | Yes | Hex string of the client's SpacetimeDB identity |
 
@@ -73,7 +75,7 @@ Admin and server operations handle privileged actions: server identity registrat
 **Error Cases:**
 | Condition | Error Message |
 |-----------|--------------|
-| Missing discordId | "discordId is required" |
+| Missing discordId | "discordId is required" _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 | Missing discordUsername | "discordUsername is required" |
 | Missing callerIdentityHex | "callerIdentityHex is required" |
 | Caller identity not registered | "Identity not registered. Call login_as_guest first." |
@@ -240,12 +242,12 @@ Admin and server operations handle privileged actions: server identity registrat
 
 ### Discord Link (New User from Guest)
 **Given:** Guest user exists with identity matching callerIdentityHex
-**When:** `server_link_discord(discordId="123", discordUsername="player1", callerIdentityHex="{hex}")`
+**When:** `server_link_discord(discordId="123", discordUsername="player1", callerIdentityHex="{hex}")` _Superseded in Phase S10 execution (DECISIONS.md A76)._
 **Then:** Guest user upgraded: `discordId="123"`, `username="player1"`, `isGuest=false`
 
 ### Discord Link (Returning User)
 **Given:** Verified user exists with discordId="123", connecting from a new device (new identity)
-**When:** `server_link_discord(discordId="123", discordUsername="player1", callerIdentityHex="{newHex}")`
+**When:** `server_link_discord(discordId="123", discordUsername="player1", callerIdentityHex="{newHex}")` _Superseded in Phase S10 execution (DECISIONS.md A76)._
 **Then:** UserIdentity re-pointed to new identity. Old orphaned guest (if any) cleaned up.
 
 ### Role Assignment
@@ -346,7 +348,7 @@ _Superseded in Phase S6 execution (DECISIONS.md A57, A58): the scheduled reducer
 | Bulk upsert with empty array | No-op — no rows inserted or updated | jsonData="[]" is valid |
 | Bulk upsert with unknown fields | SenderError — EXPECTED_KEYS validation rejects | Per-table key allowlist |
 | Delete user who owns active lobby | Blocked — "Cannot delete lobby" guard | Must close lobby first |
-| server_link_discord for already-verified user | Re-links identity, updates discordUsername | Supports account migration |
+| server_link_discord for already-verified user | Re-links identity, updates discordUsername | Supports account migration _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 | run_user_deletion for non-existent job | No-op — UserDeletionJob not found | Race condition safe |
 
 ## Integration Points
@@ -356,7 +358,7 @@ _Superseded in Phase S6 execution (DECISIONS.md A57, A58): the scheduled reducer
 | `admin_bulk_upsert` | HsrCharacter, HsrLightcone, costs, archetypes | Direct table writes | writes |
 | `admin_bulk_upsert` (HsrCharacter) | accountRating recomputation | Auto-triggers rating update when maxPossible changes | writes |
 | `performUserDeletion` | HsrAccount, Calendar, UserIdentity | Cascade deletes | writes |
-| `server_link_discord` | Auth (User, UserIdentity) | Upgrades guest → verified | writes |
+| `server_link_discord` | Auth (User, UserIdentity) | Upgrades guest → verified | writes _Superseded in Phase S10 execution (DECISIONS.md A76)._ |
 | `server_set_mmr` | MMR (MmrRating) | Direct upsert | writes |
 | `ensureAdmin` / `ensureTournamentHost` | All privileged reducers | Permission gate | reads |
 
@@ -429,3 +431,4 @@ _Superseded in Phase S8e execution (S8e review, DECISIONS.md A67(4), TD-13/14): 
 | Scenario S8d-A1: admin tools redirect tournament lobbies to the bracket reducers | Phase S8d execution (D.8.3) | 2026-11-07 |
 | Scenarios S8e-A1..A3: override recomputes the derived tally, decided matches must be rolled back first, step-history key without a game number; supersedes the S8d override rule "rollback + re-apply" | Phase S8e execution (DECISIONS.md A67(3)(4)) | 2026-11-08 |
 | Scenarios S9b-AD1..AD3: admin views staff-only, per-identity presence rows, kill-switch state through `view_admin_abuse_config` | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
+| `server_link_discord` → `server_link_provider(callerIdentityHex, provider, providerId, providerName)` (A46): guest upgrade and returning-user re-point unchanged in substance; validation texts "providerId is required" etc.; link-time ban "This <provider> account is banned and cannot be linked." (tests `s10-identity`; residue `test/live/scheduler-chains`) | Phase S10 execution (DECISIONS.md A46, A76) | 2026-11-09 |
