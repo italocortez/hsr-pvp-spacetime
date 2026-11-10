@@ -164,6 +164,12 @@ Note: `isPrivate` removed from schema (Phase 15.2 D-02 -- dead code, never gated
 
 ```
 performUserDeletion
+  ├─ A94(2) (S10g): settleTournamentTiesForDeletion (helpers/tournament/disqualification.ts), first: per tournament
+  │   that is not Completed / Cancelled where the user holds a non-Disqualified enrolment, removeEnrolment (the
+  │   withdraw_from_tournament path) while bracketGeneratedAt is unset, disqualifyParticipant (the dq_participant path:
+  │   team, captaincy, bracket settlement, lobby voiding / force-concede) once it is set; then every TournamentTeamRequest,
+  │   TournamentAssistant, TournamentStandIn, TournamentPlayerAccount and TournamentWaitlistAccount row of the user.
+  │   Audit actor = the actorId passed in (the user, an admin, or SYSTEM_USER_ID). See docs/tournament/architecture.md.
   ├─ A68(6)(7) (S8f fix pass 2): per LobbyMember row of the user: Waiting / AwaitingResult, spectator / coach,
   │   or lobby gone → removeMemberRow (as a leave); a player row in Drafting / Equipping / Scoring → flags
   │   transferred, row kept as away + abandoned (offline for the forfeit test, never a flag candidate).
@@ -186,6 +192,15 @@ performUserDeletion
 | `admin_delete_row` | `admin.ts` | Set `User.deletedAt` | Insert `UserDeletionJob` (5s) |
 | `admin_ban_user` | `banAdmin.ts` | Set `User.deletedAt` | Insert `UserDeletionJob` (5s) ← D-10 R1 fix |
 | `clientConnected` ban-on-reconnect | `index.ts` | Set `User.deletedAt` | Insert `UserDeletionJob` (5s) ← D-10 R1 fix |
+
+**delete_my_account organizer guard (A94(1), Phase S10g execution).** Before either branch, the caller is rejected when
+they organize a tournament that is not Completed or Cancelled (`Tournament.organizer_id` index): "You organize a
+tournament that has not finished. Cancel it, or wait until it ends, before deleting your account." The verified
+branch keeps its lobby guard only ("Leave your lobby before deleting your account.", `membershipHold` not free); its
+old enrolment guard ("You are enrolled in a tournament that has not finished. Withdraw first, or wait until it ends.")
+is removed (S10g review F1, A94(2)): a live enrolment is settled by `performUserDeletion` (withdrawn before the
+bracket exists, disqualified once it exists), the same as for a guest. Admin, ban and server deletions have no organizer guard (A94 does not
+decide one): the tournament keeps its `organizerId`, and Moderator+ still hold every owner permission.
 
 Prior to Phase 15.2, `admin_ban_user` and `clientConnected` set `deletedAt` but never scheduled the cascade job — the `UserDeletionJob.insert` was missing at both sites (R1 latent bug).
 
@@ -317,6 +332,7 @@ Any new frontend subscription to a raw table (no projection view body) OR a per-
 | `view_my_profile` row re-shaped for the profile page (PK `id`; no presence, deletedAt or audit columns; provider fields per A46); `view_my_identity` = `{ identity, userId }`; `view_admin_user_private` a staff-only full read; new `view_user_by_username` | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 | Identity GC exempts server identities and SYSTEM mappings; provider link trims / caps the name and derives a free username on a collision; revoking a delegate deletes its presence row; `server_set_role` / `server_delete_user` reject the SYSTEM user ("The SYSTEM user cannot be changed." / "... cannot be deleted.") | Phase S10e execution (identity audit #1, #3, #5, #9) | 2026-11-09 |
 | Fix pass: `performUserDeletion` no longer releases an abandoned row's `LobbyMemberAccount` rows; `admin_delete_row('UserIdentity')` refuses server identities and SYSTEM mappings and runs the disconnect path for a user left with no live presence | Phase S10e execution (review F3, F5, N9) | 2026-11-09 |
+| `performUserDeletion` settles tournament ties first (withdrawal before the bracket, DQ after it; requests, assistant, stand-in, lock and waitlist-account rows deleted); `delete_my_account` rejects the organizer of a live tournament in both branches | Phase S10g execution (DECISIONS.md A94) | 2026-11-09 |
 
 ---
 

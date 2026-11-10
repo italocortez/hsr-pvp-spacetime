@@ -53,10 +53,12 @@ export function voidTournamentLobby(ctx: any, lobbyId: number, actorId: number):
  * A67(4)(8): voids every lobby of a bracket match (Lobby.bracket_match_id) that is not settled: a lobby without a
  * record or whose record is not Validated (Waiting or playing, or parked with a Pending / Submitted / Disputed
  * record). Settled lobbies (Validated record, parked in AwaitingResult) stay for the finalize job: every played game
- * of the match is kept. Used by resolve_bracket_match and rollback_bracket_match.
+ * of the match is kept. Used by resolve_bracket_match, rollback_bracket_match and (S10g, audit #2) the DQ settlement,
+ * which passes `exceptLobbyId` = the DQ'd team's live lobby, force-conceded right after instead.
  */
-export function voidMatchLobbies(ctx: any, bracketMatchId: number, actorId: number): void {
+export function voidMatchLobbies(ctx: any, bracketMatchId: number, actorId: number, exceptLobbyId?: number): void {
     for (const lobby of [...ctx.db.Lobby.bracket_match_id.filter(bracketMatchId)]) {
+        if (lobby.id === exceptLobbyId) continue;
         const record = findLobbyResult(ctx, lobby.id);
         if (record?.status.tag !== 'Validated') voidTournamentLobby(ctx, lobby.id, actorId);
     }

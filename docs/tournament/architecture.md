@@ -75,6 +75,9 @@ Tournament (id: u32 autoInc PK)  [public: true]
         hsrAccountId -> HsrAccount.id
         audit columns
         Indexes: by_tournament_and_user (btree, [tournamentId, userId]), by_user (btree, userId)
+
+TournamentWaitlistAccount (private; S10g, A104): same columns as TournamentPlayerAccount; a waitlisted registrant's chosen
+  accounts, locked at promotion. Indexes: tournament_id, by_tournament_and_user, by_user.
 ```
 
 ## Reducer Flows
@@ -130,7 +133,7 @@ Eligible team (`isEligibleTeam`, shared): status Forming or Ready, exactly `team
 
 Arguments (both): `name, description, format, teamSize, maxParticipants, rosterVisibility, isAnonymousDefault, disconnectPolicy, disconnectForfeitSeconds?, costSetId, defaultBestOf, grandFinalBestOf, winnerAdvantage, groupSize, groupAdvanceCount, groupAssignmentMode, has3rdPlaceMatch, checkInEnabled, requireResultValidation, requireOwnership, allowMirrorPicks, lineupFormat, lobbyPresetId?, requireVerified, requireRoster, minimumMmr?, requireApproval, waitlistEnabled, scheduledStartAt, registrationDeadline, maxAccountsPerPlayer`. `create_tournament` adds `defaultGameMode, countTowardsMmr`; `update_tournament` adds `tournamentId`.
 
-1. `create_tournament`: `ensureTournamentHost`. `update_tournament`: `owner`; stage Draft, Registration or CheckIn (`Tournament settings can only change before Seeding.`); `format` / `teamSize` differ from the row outside Draft → `Format and team size can only change in Draft.`; `maxParticipants` below the capacity count → rejected.
+1. `create_tournament`: `ensureTournamentHost`. `update_tournament`: `owner`; stage Draft, Registration or CheckIn (`Tournament settings can only change before Seeding.`); `format` / `teamSize` differ from the row outside Draft → `Format and team size can only change in Draft.`; `isAnonymousDefault` differs outside Draft → `The anonymous setting can only change in Draft.` (A103, S10g); `maxParticipants` below the capacity count → rejected.
 2. Validation (`validateSettings`): name 1–100, description ≤ 2000, teamSize 1–3, enum tags (`validateEnumTag`), both bestOf ∈ {1, 3}, `winnerAdvantage < ceil(grandFinalBestOf / 2)`, `has3rdPlaceMatch` only where `allowsThirdPlace(format)`, `groupSize ≥ 2` for group formats, `groupAdvanceCount ∈ {1, 2}`, `maxAccountsPerPlayer ≤ 10`, timestamps in the future and ordered.
 3. Derived: `requireResultValidation = countTowardsMmr || argument`; `allowMirrorPicks = false` when `countTowardsMmr` (D-42); `disconnectForfeitSeconds` / `minimumMmr` 0 → unset.
 4. `lobbyPresetId` (A33a, `ensureTournamentPreset`): omitted on create = the system preset; given = the system preset or one the organizer owns; omitted on update = unchanged. Cost-set guards as before (R2, D-D6).
@@ -144,12 +147,13 @@ Arguments (both): `name, description, format, teamSize, maxParticipants, rosterV
 1. Stage Registration only (`Tournament is not accepting registrations.`).
 2. Existing row: Disqualified → `You were disqualified from this tournament.` (A26a(2)); otherwise already registered.
 3. `requireVerified` rejects guests; `requireRoster` needs an active `HsrAccount`.
-4. `minimumMmr` (A36b): guests → `Guests cannot join a tournament with a minimum MMR.`; rating = `MmrRating.by_user_mode_season[userId, defaultGameMode, seasonId]?.rating ?? EloConfigTable(1).initialRating` (no config row → the finalization error); below → rejected.
+4. `minimumMmr` (A36b): guests → `Guests cannot join a tournament with a minimum MMR.`; rating = `MmrRating.by_user_mode_season[userId, defaultGameMode, <active season id>]?.rating ?? EloConfigTable(1).initialRating` (no config row → the finalization error); below → rejected. S10g (audit #6): the active season is the `Season` row with `isActive` (else 0), as the rating writer resolves it; `Tournament.seasonId` is not read.
 5. `anonymousAlias` only in anonymous tournaments, 1–32 characters trimmed.
 6. Capacity = rows neither waitlisted nor Disqualified (`capacityCount`, C-a11); full → waitlisted when `waitlistEnabled`, otherwise `Tournament is full.`
 7. Insert `TournamentEnrolled` (Registered; `approvedByToAt` unset when `requireApproval`).
 8. `teamSize = 1`: `createSoloTeam`, named by `soloTeamName` (A36a / A37): the display name in a non-anonymous tournament; in an anonymous one the alias, or a neutral `Player <n>` (n = the enrolment count, first free number) until `set_anonymous_alias`, so the display name never reaches the team name. Auto names are unique in the tournament (case-insensitive): a collision appends ` (2)`, ` (3)`, … (also for `add_participant`, whose target gets `Player <n>` in an anonymous tournament).
-9. Not waitlisted: `lockPlayerAccounts` (`hsrAccountIds` must be the player's own; omitted = all accounts). Waitlisted: locks at promotion (A26a(4)).
+9. Not waitlisted: `lockPlayerAccounts` (`hsrAccountIds` must be the player's own; omitted = all accounts). Waitlisted: locks at promotion (A26a(4)); S10g (A104): given `hsrAccountIds` are remembered in `TournamentWaitlistAccount` (`rememberWaitlistAccounts`).
+10. S10g (audit #13): `consumeTournamentAllowance` (see "Phase S10g execution").
 
 ### withdraw_from_tournament(tournamentId) / withdraw_tournament_team(teamId)
 1. `withdraw_from_tournament`: Registration or CheckIn (else `Registration is closed; ask staff.`); a Disqualified row cannot withdraw (T23). `removeEnrolment`: `removeTeamMember` (captain transfer, member deleted; when the team is left empty it is deleted in Registration and marked Withdrawn from CheckIn on, TD-18; otherwise its status is refreshed: T2 fix), the user's requests in this tournament (by `user_id`, orphans included: T24), calendar invites, account locks, then the enrolment row (A26a(1)).
@@ -162,14 +166,14 @@ CheckIn stage; `teamId` omitted = the caller's team and the caller must captain 
 All `participants`.
 1. `approve_participant`: sets `approvedByToAt`; refreshes the player's team.
 2. `reject_participant`: before generation (`ensureBeforeGeneration`); only a row awaiting approval or waitlisted (`Participant is already approved; disqualify them instead.`); `removeEnrolment`.
-3. `waitlist_promote` (D.8.6): Registration through Seeding until `bracketGeneratedAt` (`Bracket generated; use stand-ins.`); a free spot (`No free spot: the tournament is full.`); `isWaitlisted = false`, approval implied, `lockPlayerAccounts` (all accounts), team refreshed.
+3. `waitlist_promote` (D.8.6): Registration through Seeding until `bracketGeneratedAt` (`Bracket generated; use stand-ins.`); a free spot (`No free spot: the tournament is full.`); `isWaitlisted = false`, approval implied, `lockAccountsAtPromotion` (S10g, A104: the remembered accounts the player still owns, else all accounts; the remembered rows deleted), team refreshed.
 4. `add_participant`: same window; the target exists, is not deleted and is verified; not enrolled (Disqualified blocks); a free spot; inserts an approved, non-waitlisted Registered row; solo auto-team; account locks.
 
 ### add_team_member(teamId, userId) (A26a)
 `participants`; Registration, CheckIn or Seeding until `bracketGeneratedAt` (`ensureBeforeGeneration`: `Bracket generated; use stand-ins.`). The player is enrolled, not Disqualified, approved when required (`The player awaits approval.`), not waitlisted (`The player is on the waitlist; promote them first.`) and teamless (`The player is already on a team.`); the team is Forming or Ready (`Team is <status>.`) with room (`Team is already full.`). The player's pending requests are deleted; `refreshTeamStatus` afterwards.
 
 ### set_anonymous_alias(tournamentId, alias) (A36a)
-Enrolled caller; tournament anonymous; Registration or CheckIn; alias 1–32 trimmed; in a solo tournament the player's team is renamed to the alias (made unique with ` (2)`, ` (3)`, … on a collision).
+Enrolled caller; tournament anonymous; Registration or CheckIn; alias 1–32 trimmed; in a solo tournament the player's team is renamed to the alias (made unique with ` (2)`, ` (3)`, … on a collision). S10g: counted by `consumeTournamentAllowance` (audit #13).
 
 ### Teams: create / request_join / accept / reject / leave / disband / rename (A26, A26a, A36a)
 1. Registration only for every participant team edit (`ensureRegistration`), except `rename_tournament_team` (Registration or CheckIn).
@@ -178,8 +182,8 @@ Enrolled caller; tournament anonymous; Registration or CheckIn; alias 1–32 tri
 4. `request_join_team(teamId)`: team Forming and below `teamSize`; one request per team.
 5. `accept_team_request(teamId, userId)` / `reject_team_request`: captain only; accept re-checks room and the target, deletes all of the target's requests in the tournament, inserts the member, refreshes the status.
 6. `leave_tournament_team(teamId)`: Registration (T10); not in solo tournaments; `removeTeamMember`.
-7. `disband_tournament_team(teamId)`: captain; Registration; not in solo tournaments; `deleteTeam` (members, requests, team).
-8. `rename_tournament_team(teamId, name)`: captain; Registration or CheckIn; not solo; `normalizeTeamName` excluding itself.
+7. `disband_tournament_team(teamId)`: captain (S10g, audit #15: `captainUserId` and a membership of the team, so a DQ'd ex-captain is refused); Registration; not in solo tournaments; `deleteTeam` (members, requests, team).
+8. `rename_tournament_team(teamId, name)`: captain (same membership rule); Registration or CheckIn; not solo; `normalizeTeamName` excluding itself; a change is counted by `consumeTournamentAllowance` (S10g, audit #13).
 
 ### Manual groups: assign_team_group(tournamentId, teamId, groupIndex) / clear_team_groups(tournamentId) (A36a, A32)
 `bracket`; Seeding; group format; `groupAssignmentMode = Manual`. Assign: a Ready team of the tournament; `groupIndex < groupCount(readyTeams, groupSize)`; writes `TournamentTeam.groupId` (0-based, as `insertGroupBracket`). Clear: unsets every `groupId`. A change stamps `Tournament.lastSeedChangeAt`. Group sizes are validated by `generate_bracket` (S8c: every Ready team grouped, exactly `groupCount` groups, each ≥ `groupSize`, sizes within one); generation clears and rewrites every `groupId`.
@@ -188,7 +192,7 @@ Enrolled caller; tournament anonymous; Registration or CheckIn; alias 1–32 tri
 `owner`. Assign upserts the row with the three A25 flags (existing row updated in place, as before); assigning oneself is rejected (so an organizer cannot list themself; a Moderator may list the organizer, which grants nothing new). Remove deletes the row. `mod_promote_to_host` / `mod_demote_from_host` are unchanged (`ensureModerator`).
 
 ### dq_participant(tournamentId, userId, reason, dqWholeTeam?)
-`participants` (A25). **Phase S8c execution:** the enrolment becomes Disqualified (row kept, A26a(2)); the player (with `dqWholeTeam` every member, enrolments Disqualified too) leaves the team, captain transferred (D-21); a team left non-empty gets `refreshTeamStatus` only before generation (after it the team keeps its status and plays with stand-ins, A26a(3)); a team left empty becomes **Disqualified** (no longer deleted). In Seeding after generation `lastSeedChangeAt` is stamped (regenerate). InProgress: every open match of the team is settled through `applyBracketResult` (decidedBy Dq) or, while the opponent is unknown, its slot becomes a BYE; rule and messages in [brackets/architecture.md](../brackets/architecture.md) "Phase S8c execution". Live lobby handling unchanged (D-25 / D-26; S8d).
+`participants` (A25). **Phase S8c execution:** the enrolment becomes Disqualified (row kept, A26a(2)); the player (with `dqWholeTeam` every member, enrolments Disqualified too) leaves the team, captain transferred (D-21); a team left non-empty gets `refreshTeamStatus` only before generation (after it the team keeps its status and plays with stand-ins, A26a(3)); a team left empty becomes **Disqualified** (no longer deleted). In Seeding after generation `lastSeedChangeAt` is stamped (regenerate). InProgress: every open match of the team is settled through `applyBracketResult` (decidedBy Dq) or, while the opponent is unknown, its slot becomes a BYE; rule and messages in [brackets/architecture.md](../brackets/architecture.md) "Phase S8c execution". Live lobby handling unchanged (D-25 / D-26; S8d). **Phase S10g:** the body is `disqualifyParticipant` (`helpers/tournament/disqualification.ts`), shared with user deletion (A94(2)); Registration through InProgress only (`Tournament is <stage>; participants can be disqualified from Registration through InProgress only.`, audit #8); every match the DQ settles has its unsettled lobbies voided except the live one, which is force-conceded (audit #2, A68(6)).
 
 ### Bracket reducers (Phase S8c execution)
 Removed: `swap_seeds`, `advance_bracket_match`, `submit_and_advance_bracket`, `advance_group_to_elimination`, `admin_set_bracket_winner`. Added: `set_seed_order(tournamentId, teamIds)`, `advance_group_stage(tournamentId)`, `resolve_bracket_match(bracketMatchId, winnerTeamId, reason)`. Changed: `seed_bracket` (Ready teams, `ctx.random`), `generate_bracket` (A26a Withdraw, groups, `bracketGeneratedAt`), `rollback_bracket_match(bracketMatchId, reason)`. Reference: [brackets/architecture.md](../brackets/architecture.md).
@@ -352,6 +356,57 @@ finalize job of this tournament is still scheduled." Placements also count a wal
   before, and `update_lobby_settings` keeps them locked (A91(2)). Details: [../lobby/architecture.md](../lobby/architecture.md)
   "Phase S10d execution".
 
+## Phase S10g execution (DECISIONS.md A94, A103, A104, A105; tournament audit 2026-11-09)
+
+- **lock_tournament_accounts(tournamentId, hsrAccountIds: u32[])** (A104, audit #7). The caller holds an enrolment that
+  is not Disqualified (approved, awaiting approval or waitlisted); stage Registration through InProgress (`Accounts can be
+  locked from Registration until the tournament ends.`); `hsrAccountIds` not empty (`Name at least one account to
+  lock.`) and the caller's own (`HSR account #<id> is not one of your accounts.`); the player's first game has not
+  started (`Your first game of this tournament has started; accounts can no longer be locked.`); a waitlisted caller once
+  promotion is impossible (bracket generated, or InProgress) → `The bracket has been generated; waitlisted players can
+  no longer be promoted, so accounts cannot be locked.` (review F5).
+  "Started" (`hasPlayedTournamentGame`, review F3: the player's own game, not the team's): (1) a `MatchResultParticipant`
+  row of the player on a record of one of the tournament's bracket matches (`start_draft` writes one per non-coach Blue /
+  Red member), or (2) a `BluePlayer` / `RedPlayer` `LobbyMember` row in a lobby of such a match past Waiting, or (3) a
+  Voided record of a bracket match where the player's team sits in a slot or is the recorded winner / loser and that has
+  no participant rows left. (3) exists because voiding (`voidTournamentLobby` → `hardDeleteLobby(…, keepResultRecord)`)
+  keeps the record until the finalize job but deletes its participant and member rows: who played a voided or
+  rolled-back game is no longer known, so it counts for every member of the team (a member who sat out only a voided
+  game is locked out too). A member who sat out the team's other games can still lock. Effect: not waitlisted →
+  `lockPlayerAccounts` (adds, never removes); waitlisted → `rememberWaitlistAccounts` always (first call included,
+  review F5; ownership checked), applied by `lockAccountsAtPromotion`, which then locks the remembered accounts only.
+  Counted by `consumeTournamentAllowance`.
+- **Acting captain** (audit #15, review F4): `isActingCaptain` (`helpers/tournament/tournamentHelpers.ts`: `captainUserId`
+  and a `TournamentTeamMember` row of that team) gates every captain-only reducer: `accept_team_request`,
+  `reject_team_request`, `disband_tournament_team`, `withdraw_tournament_team`, `rename_tournament_team` and the captain
+  path of `check_in_tournament` (a non-acting caller with `teamId` falls through to the `participants` permission
+  check). A DQ'd ex-captain left on the team row is refused by all of them.
+- **TournamentWaitlistAccount** (new private table): written by `register_for_tournament` (waitlisted with
+  `hsrAccountIds`) and `lock_tournament_accounts`; read and deleted by `waitlist_promote` (`lockAccountsAtPromotion`);
+  deleted by `removeEnrolment`, `activateTeams` (Seeding → InProgress: promotion ends at generation), the cancel cascade
+  and user deletion. A waitlisted registrant with no row (no `hsrAccountIds` at registration and no later
+  `lock_tournament_accounts` call) gets every account at promotion.
+- **update_tournament** (A103, audit #9): `isAnonymousDefault` changes in Draft only.
+- **Throttle** (audit #13): `consumeTournamentAllowance` (`helpers/lobby/abuseControls.ts`; `UserRateState.tournamentWindowStart`
+  / `tournamentCount`): at most 10 tournament entry writes per fixed 60 s window per user, shared by
+  `register_for_tournament`, `set_anonymous_alias`, `rename_tournament_team` (a real rename only) and
+  `lock_tournament_accounts`; `You are changing your tournament entries too quickly. Please wait a minute.`
+  `withdraw_from_tournament` is never counted, so a register / withdraw loop is held to ten cycles a minute.
+- **User deletion** (A94): `delete_my_account` rejects the organizer of a tournament that is not Completed or Cancelled
+  in both branches (`You organize a tournament that has not finished. Cancel it, or wait until it ends, before deleting
+  your account.`). A live enrolment no longer blocks the verified branch (review F1); only its lobby guard stays.
+  `performUserDeletion` first runs `settleTournamentTiesForDeletion`: per non-terminal tournament with
+  a non-Disqualified enrolment, `removeEnrolment` before the bracket exists (`bracketGeneratedAt` unset) or
+  `disqualifyParticipant(…, 'account deleted', dqWholeTeam false)` once it exists; then the user's team requests,
+  assistant rows, stand-in rows, `TournamentPlayerAccount` and `TournamentWaitlistAccount` rows go. Audit actor: the
+  deleting user, the admin, or `SYSTEM_USER_ID`. Details: [../auth/architecture.md](../auth/architecture.md).
+- **Bracket corrections**: rollback after a Staff / Dq decision the tally gives (audit #3), override refused on a Dq
+  decision or a staff decision against the tally (audit #4), group matches locked once the elimination bracket exists
+  (audit #5): [../brackets/architecture.md](../brackets/architecture.md) "Phase S10g execution".
+- **Views** (A105, audit #10, #11): staff views non-terminal + Moderator+, Admin arg views `view_admin_tournament*`,
+  registrant accounts and matches-for-me narrowed: [../views/architecture.md](../views/architecture.md) "Phase S10g execution".
+- **update_display_name** (audit #16): the solo team name goes through `soloTeamName` (unique, ` (2)` …).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -387,10 +442,11 @@ finalize job of this tournament is still scheduled." Placements also count a wal
 | `dq_participant` no longer kicks a DQ'd player from a live lobby (whole-team path unchanged); `create_tournament_lobby` takes `abandonCurrentMatch` and copies `maxSpectators` | Phase S8f execution (DECISIONS.md A68) | 2026-11-08 |
 | Tournament arg views (participants, teams, team members, staff), per-sender enrollment / team requests / stand-ins / matches-for-me, `TournamentStandIn.user_id` index, colours on `view_my_tournament_lobbies` | Phase S9a execution (DECISIONS.md A37, A44(1), A26a(2), A70(1), A71) | 2026-11-08 |
 | `create_tournament` / `update_tournament` reject NoAction and a `disconnectForfeitSeconds` outside 30-600 | Phase S10d execution (DECISIONS.md A92(2)(3)) | 2026-11-09 |
+| User deletion settles tournament ties (withdraw before the bracket, DQ after) and an organizer of a live tournament cannot delete the account (A94); `isAnonymousDefault` Draft-only (A103); `lock_tournament_accounts` + `TournamentWaitlistAccount` (A104); staff views non-terminal + Moderator+, Admin arg views (A105); DQ stage guard and lobby voiding, minimum MMR on the active season, tournament entry throttle (audit #2, #6, #8, #13) | Phase S10g execution (DECISIONS.md A94, A103, A104, A105) | 2026-11-09 |
 
 ---
 
-*Last updated: 2026-11-08*
+*Last updated: 2026-11-09*
 *Feature owner: Phase 04 / Phase 06 / Phase 08 / Phase 10.1 / Phase 10.4 / Phase 12.3*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

@@ -2,62 +2,19 @@ import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { ensureModerator } from '@module/helpers/identity/ensurePermissions';
 import { ensureTournamentPermission } from '@module/helpers/tournament/tournamentPermissions';
-import { findEnrolled, findMembership, refreshTeamStatus, transferTournamentCaptain, updateEnrolled } from '@module/helpers/tournament/tournamentHelpers';
-import { applyBracketResult, matchGames, recordGameSettled, rollbackBracketResult, writeMatchGames } from '@module/helpers/tournament/bracketResults';
+import { ensureGroupMatchOpen, recordGameSettled, rollbackBracketResult, tallyWinner } from '@module/helpers/tournament/bracketResults';
 import { recordWinnerTeamId, voidTournamentLobby } from '@module/helpers/tournament/tournamentResults';
-import { setSlotBye, settle } from '@module/helpers/tournament/bracketStore';
-import { teamSideOf } from '@module/helpers/tournament/matchSides';
+import { disqualifyParticipant } from '@module/helpers/tournament/disqualification';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
-import { deleteCalendarEventForBracketMatch } from '@module/helpers/calendar/calendarCascade';
-import { performConcede } from '@module/reducers/results/concede';
 
 // Valid override status tags
 const VALID_OVERRIDE_STATUSES = ['Validated', 'Rejected'];
 
-// Active lobby stages where players are engaged in the match
-const ACTIVE_LOBBY_STAGES = new Set(['Drafting', 'Equipping', 'Scoring']);
-
 // ─── dq_participant ───────────────────────────────────────────────────────────
-// Disqualifies a tournament participant (A25 `participants`; A26, A26a(2), A23, D-21, D-25, D-26).
-//   - The enrolment becomes Disqualified (row kept: excluded from capacity, blocks re-registration).
-//   - The player leaves the team (captain transferred to the lowest remaining user id, D-21); with
-//     `dqWholeTeam` every member of the player's team is disqualified and leaves it.
-//   - A team left empty becomes Disqualified (the team row stays for the bracket record, TD-18). In Seeding
-//     after generation that stamps lastSeedChangeAt, so the bracket must be regenerated before InProgress.
-//   - InProgress: every open match of the disqualified team is settled through the single writer (A23):
-//     Ready -> applyBracketResult(opponent, decidedBy Dq, the derived tally, A67(4)); Pending (opponent not known yet) -> the team's
-//     slot becomes a BYE and `settle` walks the opponent over once it arrives. Repeated until the team holds
-//     no open slot (a double-elimination loss routes it into the losers bracket first).
-//   - Live lobby of the team: Drafting / Equipping / Scoring -> force-concede on the last member (D-25; A54: the
-//     lobby's record becomes the Validated concede record, the bracket is already settled by the DQ, and the lobby
-//     parks until the finalize job). A68(6): a player DQ'd from a team that plays on is not removed from the live
-//     lobby (the D-25 kick is gone): the current game plays on with them, and the DQ bites from the next lobby
-//     (team membership gone, allowedSlotsFor seats nobody who is not on a team).
-//     A67(1): the between-games stages are gone, so the D-26 hard-delete branch is too.
-
-/** Settles every open bracket slot of a disqualified team (see dq_participant). */
-function settleDisqualifiedTeam(ctx: any, tournamentId: number, teamId: number, actorId: number): void {
-    let changed = true;
-    while (changed) {
-        changed = false;
-        for (const snapshot of [...ctx.db.BracketMatch.tournament_id.filter(tournamentId)]) {
-            const row = ctx.db.BracketMatch.id.find(snapshot.id); // re-read: earlier settlements may have changed it
-            if (!row) continue;
-            const slot = row.team1Id === teamId ? 1 : row.team2Id === teamId ? 2 : 0;
-            if (slot === 0) continue;
-            if (row.state.tag === 'Ready') {
-                const opponent = slot === 1 ? row.team2Id : row.team1Id;
-                deleteCalendarEventForBracketMatch(ctx, row.id); // D-22
-                applyBracketResult(ctx, row.id, opponent, 'Dq', matchGames(ctx, row), actorId);
-                changed = true;
-            } else if (row.state.tag === 'Pending') {
-                setSlotBye(ctx, row.id, slot, actorId);
-                settle(ctx, tournamentId, actorId);
-                changed = true;
-            }
-        }
-    }
-}
+// Disqualifies a tournament participant (A25 `participants`; A26, A26a(2), A23, A68(6), D-21, D-25, D-26). The body
+// is disqualifyParticipant (helpers/tournament/disqualification.ts), shared with the user-deletion cascade (A94(2)).
+// S10g: Registration through InProgress only (audit #8: no DQ in Draft, Completed or Cancelled); the unsettled lobbies
+// of every match the DQ settles are voided (audit #2, A68(6)).
 
 export const dq_participant = spacetimedb.reducer(
     {
@@ -68,95 +25,7 @@ export const dq_participant = spacetimedb.reducer(
     },
     (ctx, { tournamentId, userId, reason, dqWholeTeam }) => {
         const { user, tournament } = ensureTournamentPermission(ctx, tournamentId, 'participants');
-
-        const enrolled = findEnrolled(ctx, tournamentId, userId);
-        if (!enrolled) {
-            throw new SenderError('Participant not found in this tournament.');
-        }
-        if (enrolled.status.tag === 'Disqualified') {
-            throw new SenderError('Participant is already disqualified.');
-        }
-        if (enrolled.status.tag === 'Withdrawn') {
-            throw new SenderError('Cannot disqualify a participant who has already withdrawn.');
-        }
-
-        updateEnrolled(ctx, enrolled, { status: { tag: 'Disqualified', value: {} } as any }, user.id);
-        console.log(`[TOURNAMENT] Participant #${userId} disqualified from tournament #${tournamentId}${dqWholeTeam ? ' with the whole team' : ''}: ${reason}`);
-
-        const ttm = findMembership(ctx, tournamentId, userId);
-        if (!ttm) return; // not on a team: nothing more to do
-
-        const teamId = ttm.teamId;
-        const team = ctx.db.TournamentTeam.id.find(teamId);
-
-        // Live lobby of this team (D-25, D-26)
-        let activeLobby: any = undefined;
-        if (team) {
-            for (const bm of ctx.db.BracketMatch.tournament_id.filter(tournamentId)) {
-                if (bm.team1Id !== teamId && bm.team2Id !== teamId) continue;
-                for (const lobby of ctx.db.Lobby.bracket_match_id.filter(bm.id)) {
-                    if (lobby.bracketMatchId === bm.id && ACTIVE_LOBBY_STAGES.has(lobby.stage.tag)) {
-                        activeLobby = { lobby, bracketMatch: bm };
-                        break;
-                    }
-                }
-                if (activeLobby) break;
-            }
-        }
-
-        // Members leaving the team: the DQ'd player, or every member with dqWholeTeam (their enrolments too)
-        const leaving = dqWholeTeam ? [...ctx.db.TournamentTeamMember.team_id.filter(teamId)] : [ttm];
-        for (const member of leaving) {
-            if (member.userId !== userId) {
-                const other = findEnrolled(ctx, tournamentId, member.userId);
-                if (other && other.status.tag !== 'Disqualified' && other.status.tag !== 'Withdrawn') {
-                    updateEnrolled(ctx, other, { status: { tag: 'Disqualified', value: {} } as any }, user.id);
-                }
-            }
-            if (!dqWholeTeam && team && team.captainUserId === member.userId) {
-                transferTournamentCaptain(ctx, teamId, member.userId, user.id); // D-21
-            }
-            ctx.db.TournamentTeamMember.delete(member);
-        }
-
-        const isTeamOut = [...ctx.db.TournamentTeamMember.team_id.filter(teamId)].length === 0;
-
-        if (isTeamOut && team) {
-            const current = ctx.db.TournamentTeam.id.find(teamId)!;
-            ctx.db.TournamentTeam.id.update(updateWithAudit(ctx, current, {
-                status: { tag: 'Disqualified', value: {} } as any,
-            }, user.id));
-
-            if (tournament.stage.tag === 'Seeding' && tournament.bracketGeneratedAt !== undefined) {
-                ctx.db.Tournament.id.update(updateWithAudit(ctx, tournament, { lastSeedChangeAt: ctx.timestamp }, user.id));
-            }
-            if (tournament.stage.tag === 'InProgress') {
-                settleDisqualifiedTeam(ctx, tournamentId, teamId, user.id);
-            }
-
-            if (activeLobby) {
-                const { lobby, bracketMatch } = activeLobby;
-                // DQ during active draft/scoring: force-concede (D-25); the bracket is already settled
-                // above, so the concede's hand-off is skipped (match no longer Ready).
-                const losingTeamSide = teamSideOf(bracketMatch, teamId)!; // A70(1): the colour the DQ'd team plays
-                performConcede(
-                    ctx,
-                    lobby,
-                    losingTeamSide,
-                    user.id,
-                    { tag: 'RefereeDecision', value: {} } as any,
-                    undefined
-                );
-                // A67(4): the concede's record is Validated after the Dq decision, so the stored tally is
-                // rewritten from the records (decidedBy stays Dq).
-                writeMatchGames(ctx, bracketMatch.id, user.id);
-            }
-        } else {
-            // A26 / A26a(3): before generation the team may drop below teamSize (Ready -> Forming); once the bracket
-            // is generated a team that still has members keeps its status and plays with stand-ins.
-            if (tournament.bracketGeneratedAt === undefined) refreshTeamStatus(ctx, tournament, teamId, user.id);
-            // A68(6): no kick from a live lobby; the game plays on and the DQ takes effect from the next lobby.
-        }
+        disqualifyParticipant(ctx, tournament, userId, reason, dqWholeTeam ?? false, user.id);
     }
 );
 
@@ -172,7 +41,9 @@ export const dq_participant = spacetimedb.reducer(
 //   - A Decided bracket match is reverted first (rollbackBracketResult without voiding: every Validated game record
 //     and its lobby stay; refused while a downstream match is Decided, "roll that back first"), then the record is
 //     overridden and recordGameSettled re-decides the match from the new tally (TD-13/14: override = rollback +
-//     re-apply through the single writer).
+//     re-apply through the single writer). S10g: a group match is refused once the elimination bracket exists
+//     (audit #5), and so is a match decided by DQ, or by staff for a team the tally does not give (audit #4: such a
+//     decision cannot be re-derived from the tally; "roll the match back first").
 //   - Validated(winner): the record becomes Validated (Completed, settledAt) for that side; the lobby stays parked.
 //     The derived tally is recomputed and the decide check re-runs (recordGameSettled, decidedBy Staff): the match
 //     is decided when a side reaches ceil(bestOf / 2).
@@ -265,9 +136,17 @@ export const override_match_result = spacetimedb.reducer(
             if (!ctx.db.Lobby.id.find(matchResult.lobbyId)) {
                 throw new SenderError('The match lobby no longer exists; use resolve_bracket_match.');
             }
+            ensureGroupMatchOpen(ctx, bracketMatch); // S10g (audit #5)
             // A67(4), TD-13/14: a decided match is reverted (no game voided) before any of its games is overridden;
             // recordGameSettled below re-decides it from the new tally.
+            // S10g (audit #4): only a decision the tally gives can be re-derived that way. A DQ decision, or a staff
+            // decision the tally does not give (resolve_bracket_match), is refused: the match is rolled back first.
             if (bracketMatch.state.tag === 'Decided') {
+                const tag = bracketMatch.decidedBy?.tag;
+                const fromTally = tallyWinner(ctx, bracketMatch) === bracketMatch.winnerTeamId;
+                if (tag === 'Dq' || (tag === 'Staff' && !fromTally)) {
+                    throw new SenderError('This match was decided by staff or a disqualification; roll the match back first (rollback_bracket_match).');
+                }
                 rollbackBracketResult(ctx, bracketMatch.id, actingUserId, false, false);
             }
         } else {

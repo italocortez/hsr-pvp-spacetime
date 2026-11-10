@@ -3,6 +3,7 @@ import { t, SenderError } from 'spacetimedb/server';
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { performUserDeletion } from '@module/helpers/identity/userDeletionHelper';
 import { membershipHold } from '@module/helpers/lobby/lobbyHelpers';
+import { soloTeamName } from '@module/helpers/tournament/tournamentHelpers';
 
 /**
  * Helper: resolve ctx.sender → UserIdentity → User.
@@ -22,8 +23,11 @@ function resolveUser(ctx: any) {
  * Guests keep the old delete_guest_account behaviour: the caller's UserIdentity mapping is removed, and the User row
  * too once no other identity points at it.
  *
- * Verified users: rejected while they sit in a lobby (as ensureNotInLobby counts it, an away membership included, A68(4)), or hold an enrollment in a
- * tournament that is not Completed / Cancelled (Withdrawn and Disqualified enrollments do not block). Otherwise the
+ * A94(1) (S10g): both branches reject the organizer of a tournament that is not Completed or Cancelled. A94(2): the
+ * cascade (performUserDeletion) settles every remaining tournament tie (withdrawal before the bracket, DQ after it).
+ *
+ * Verified users: rejected while they sit in a lobby (as ensureNotInLobby counts it, an away membership included, A68(4)).
+ * A live tournament enrolment does not block (A94(2), S10g review F1): the cascade withdraws or disqualifies. The
  * deletion cascades through performUserDeletion at once (UserPrivate, calendars, presence, rate state, identities,
  * HSR accounts; the User row is archived to DeletedUser when history references it).
  */
@@ -33,6 +37,14 @@ export const delete_my_account = spacetimedb.reducer((ctx) => {
         throw new SenderError('No account found for this identity.');
     }
     const user = resolved.user;
+
+    // A94(1): the organizer of a tournament that is not Completed or Cancelled cannot delete the account (guest and
+    // verified branch alike). Tournament.organizer_id btree index.
+    for (const tournament of ctx.db.Tournament.organizer_id.filter(user.id)) {
+        if (tournament.stage.tag !== 'Completed' && tournament.stage.tag !== 'Cancelled') {
+            throw new SenderError('You organize a tournament that has not finished. Cancel it, or wait until it ends, before deleting your account.');
+        }
+    }
 
     if (user.isGuest) {
         // Delete the UserIdentity mapping for this identity and its presence row (A48)
@@ -55,14 +67,8 @@ export const delete_my_account = spacetimedb.reducer((ctx) => {
             throw new SenderError('Leave your lobby before deleting your account.');
         }
     }
-    for (const enrollment of ctx.db.TournamentEnrolled.user_id.filter(user.id)) {
-        if (enrollment.status.tag === 'Withdrawn' || enrollment.status.tag === 'Disqualified') continue;
-        const tournament = ctx.db.Tournament.id.find(enrollment.tournamentId);
-        if (tournament && tournament.stage.tag !== 'Completed' && tournament.stage.tag !== 'Cancelled') {
-            throw new SenderError('You are enrolled in a tournament that has not finished. Withdraw first, or wait until it ends.');
-        }
-    }
-
+    // A94(2) (S10g review F1): a live tournament enrolment no longer blocks the deletion; performUserDeletion settles
+    // it (withdrawn before the bracket exists, disqualified once it exists), as for a guest.
     performUserDeletion(ctx, user.id, user.id);
     console.log(`[DELETE] User #${user.id} deleted their own account.`);
 });
@@ -101,9 +107,11 @@ export const update_display_name = spacetimedb.reducer({
         const isSolo = tournament.teamSize === 1;
         const isNotAnonymous = !tournament.isAnonymousDefault;
         if (isActive && isSolo && isNotAnonymous) {
-            ctx.db.TournamentTeam.id.update(updateWithAudit(ctx, team, {
-                name: trimmed,
-            }, resolved.user.id));
+            // Tournament audit #16 (S10g): the solo name goes through soloTeamName's uniqueness pass (" (2)" …).
+            const name = soloTeamName(ctx, tournament, trimmed, undefined, team.id);
+            if (name !== team.name) {
+                ctx.db.TournamentTeam.id.update(updateWithAudit(ctx, team, { name }, resolved.user.id));
+            }
         }
     }
 });

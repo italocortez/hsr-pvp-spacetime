@@ -7,7 +7,7 @@ import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser } from '@module/helpers/identity/ensurePermissions';
 import { hasTournamentPermission, TOURNAMENT_PERM_MESSAGES } from '@module/helpers/tournament/tournamentPermissions';
-import { findEnrolled, findMembership, isTeamCheckedIn, updateEnrolled } from '@module/helpers/tournament/tournamentHelpers';
+import { findEnrolled, findMembership, isActingCaptain, isTeamCheckedIn, updateEnrolled } from '@module/helpers/tournament/tournamentHelpers';
 
 // ─── check_in_tournament ─────────────────────────────────────────────────────
 // teamId omitted: the caller's own team, and the caller must be its captain.
@@ -38,7 +38,7 @@ export const check_in_tournament = spacetimedb.reducer(
         }
         const team = ctx.db.TournamentTeam.id.find(resolvedTeamId);
         if (!team || team.tournamentId !== tournamentId) throw new SenderError('Team not found in this tournament.');
-        if (team.captainUserId !== user.id) {
+        if (!isActingCaptain(ctx, team, user.id)) { // S10g review F4: captain id and still a member of the team
             if (teamId === undefined) throw new SenderError('Only the team captain can check the team in.');
             if (!hasTournamentPermission(ctx, user, tournament, 'participants')) {
                 throw new SenderError(TOURNAMENT_PERM_MESSAGES.participants);

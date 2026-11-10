@@ -1,14 +1,15 @@
 // ─── Tournament Views ─────────────────────────────────────────────────────────
 // Per-user views scoped to tournaments the caller organizes, assists, or is
-// enrolled in. Shared helper `getMyTournamentIds` resolves the caller's set.
+// enrolled in. The staff views resolve their set through `staffTournamentIds` (A105, S10g).
 //
-// 1. view_my_tournaments                 — Tournament rows for TO/assistant
+// 1. view_my_tournaments                 — Tournament rows for TO / assistant / Moderator+ (non-terminal, A105(1))
 // 2. view_my_tournament_enrolled         — TournamentEnrolled rows
 // 3. view_my_tournament_teams            — TournamentTeam rows
 // 4. view_my_tournament_team_members     — TournamentTeamMember rows
 // 5. view_my_tournament_matches          — BracketMatch rows
 // 6. view_my_tournament_match_results    — MatchResultRecord rows
 // 7. view_my_tournament_lobbies          — Lobby rows
+// 1a-7a. view_admin_tournament*(id)      — Admin-only arg twins of 1-7 for one tournament, terminal included (A105(2))
 // (8. view_my_tournament_group_standings removed in S3 with group_phase_record, A23: standings are computed client-side)
 // 9. view_tournament_registrant_accounts — locked-account rows for enrolled users
 //
@@ -20,12 +21,7 @@
 // 14. view_my_tournament_enrollment      — per-user: the caller's own TournamentEnrolled rows
 // 15. view_my_team_requests              — per-user: requests the caller sent or that target a team they captain
 // 16. view_my_stand_ins                  — per-user: stand-in rows for the caller or the caller's teams
-// 17. view_tournament_matches_for_me     — per-user: Ready / Pending bracket matches of the caller's teams
-//
-// Note (Phase 15): the phase plan referenced "7 tournament views" in the file
-// header text; the source god file actually held 9 tournament-scoped views and
-// all 9 are moved here verbatim (no rename, no drop). Tracked as a Rule 1
-// deviation in SUMMARY.md — fix is a comment/text correction, not a code change.
+// 17. view_tournament_matches_for_me     — per-user: Ready / Pending bracket matches of the caller's teams (InProgress)
 
 import spacetimedb from '@module/schema';
 import { t } from 'spacetimedb/server';
@@ -42,172 +38,125 @@ import { TournamentTeam } from '@module/tables/tournament/tournamentTeam';
 import { TournamentTeamMember } from '@module/tables/tournament/tournamentTeamMember';
 
 // ---------------------------------------------------------------------------
-// Tournament Organizer Views (Phase 10.3)
-// Shared helper resolves the calling user's tournament set via two paths:
-//   Path 1: Tournament.organizer_id btree -> tournaments where caller is organizer
-//   Path 2: TournamentAssistant.user_id btree -> tournaments where caller is assistant
-// Same two paths as ensureTournamentPermission in tournamentPermissions.ts (flags not read here).
+// Tournament staff views (Phase 10.3; A105, S10g)
+// A105(1): the seven staff views (1-7) return the tournaments that are not Completed or Cancelled where the caller
+// is the organizer (Tournament.organizer_id), an assistant (TournamentAssistant.user_id; any assistant row, whatever
+// its flags), or a Moderator / Admin (every non-terminal tournament, read through the Tournament.stage btree index one
+// stage at a time, never a full scan): the three paths of ensureTournamentPermission.
+// A105(2): the Admin-only arg views (1a-7a, `view_admin_tournament*(tournamentId)`) return the same rows for any one
+// tournament, terminal ones included. The caller's Admin role is checked before any tournament row is read; a
+// non-Admin caller (or an unknown tournament) gets no rows.
 // ---------------------------------------------------------------------------
-function getMyTournamentIds(ctx: any): { userId: number; tournamentIds: Set<number> } | null {
-    const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
-    if (!mapping) return null;
-    const userId = mapping.userId;
-    const tournamentIds = new Set<number>();
-    // Path 1: Organizer
-    for (const t of ctx.db.Tournament.organizer_id.filter(userId)) {
-        tournamentIds.add(t.id);
-    }
-    // Path 2: Assistant
-    for (const a of ctx.db.TournamentAssistant.user_id.filter(userId)) {
-        tournamentIds.add(a.tournamentId);
-    }
-    return { userId, tournamentIds };
+const STAFF_STAGES = ['Draft', 'Registration', 'CheckIn', 'Seeding', 'InProgress'];
+const isLiveTournament = (tournament: any): boolean =>
+    tournament.stage.tag !== 'Completed' && tournament.stage.tag !== 'Cancelled';
+
+/** The caller's user id from ctx.sender, or undefined. */
+function callerUserId(ctx: any): number | undefined {
+    return ctx.db.UserIdentity.identity.find(ctx.sender)?.userId;
 }
 
-// ---------------------------------------------------------------------------
-// 1. My Tournaments (per-user view) — Tournament rows where the caller is the
-//    organizer or an assistant. Resolves both paths via getMyTournamentIds.
-//    (TO-VIEW-01)
-// ---------------------------------------------------------------------------
-// Phase 15 D-01/D-02: moved from securityViews.ts
-export const view_my_tournaments = spacetimedb.view(
-    { name: 'view_my_tournaments', public: true },
-    t.array(Tournament.rowType),
-    (ctx) => {
-        const resolved = getMyTournamentIds(ctx);
-        if (!resolved || resolved.tournamentIds.size === 0) return [];
-        const results: any[] = [];
-        for (const tid of resolved.tournamentIds) {
-            const tournament = ctx.db.Tournament.id.find(tid);
-            if (tournament) results.push(tournament);
-        }
-        return results;
+/** A105(1): the non-terminal tournaments the caller organizes or assists (no role path). */
+function organizedOrAssistedLiveIds(ctx: any, userId: number): Set<number> {
+    const ids = new Set<number>();
+    for (const t of ctx.db.Tournament.organizer_id.filter(userId)) {
+        if (isLiveTournament(t)) ids.add(t.id);
     }
-);
-
-// ---------------------------------------------------------------------------
-// 2. My Tournament Enrolled (per-user view) — TournamentEnrolled rows for all
-//    tournaments where the caller is the organizer or an assistant.
-//    Direct tournament_id btree filter. (TO-VIEW-02)
-// ---------------------------------------------------------------------------
-// Phase 15 D-01/D-02: moved from securityViews.ts
-export const view_my_tournament_enrolled = spacetimedb.view(
-    { name: 'view_my_tournament_enrolled', public: true },
-    t.array(TournamentEnrolled.rowType),
-    (ctx) => {
-        const resolved = getMyTournamentIds(ctx);
-        if (!resolved || resolved.tournamentIds.size === 0) return [];
-        const results: any[] = [];
-        for (const tid of resolved.tournamentIds) {
-            for (const row of ctx.db.TournamentEnrolled.tournament_id.filter(tid)) {
-                results.push(row);
-            }
-        }
-        return results;
+    for (const a of ctx.db.TournamentAssistant.user_id.filter(userId)) {
+        const t = ctx.db.Tournament.id.find(a.tournamentId);
+        if (t && isLiveTournament(t)) ids.add(t.id);
     }
-);
+    return ids;
+}
 
-// ---------------------------------------------------------------------------
-// 3. My Tournament Teams (per-user view) — TournamentTeam rows for all
-//    tournaments where the caller is the organizer or an assistant.
-//    Direct tournament_id btree filter. (TO-VIEW-02)
-// ---------------------------------------------------------------------------
-// Phase 15 D-01/D-02: moved from securityViews.ts
-export const view_my_tournament_teams = spacetimedb.view(
-    { name: 'view_my_tournament_teams', public: true },
-    t.array(TournamentTeam.rowType),
-    (ctx) => {
-        const resolved = getMyTournamentIds(ctx);
-        if (!resolved || resolved.tournamentIds.size === 0) return [];
-        const results: any[] = [];
-        for (const tid of resolved.tournamentIds) {
-            for (const row of ctx.db.TournamentTeam.tournament_id.filter(tid)) {
-                results.push(row);
-            }
+/** A105(1): the tournament set of the seven staff views (organizer, assistant, Moderator+; non-terminal only). */
+function staffTournamentIds(ctx: any): Set<number> {
+    const userId = callerUserId(ctx);
+    if (userId === undefined) return new Set();
+    const user = ctx.db.User.id.find(userId);
+    if (user && isRoleAtLeast(user.role, 'Moderator')) {
+        const ids = new Set<number>();
+        for (const stage of STAFF_STAGES) {
+            for (const t of ctx.db.Tournament.stage.filter({ tag: stage, value: {} })) ids.add(t.id);
         }
-        return results;
+        return ids;
     }
-);
+    return organizedOrAssistedLiveIds(ctx, userId);
+}
 
-// ---------------------------------------------------------------------------
-// 4. My Tournament Team Members (per-user view) — TournamentTeamMember rows for
-//    all tournaments where the caller is the organizer or an assistant.
-//    Navigates via TournamentTeam.tournament_id -> TournamentTeamMember.team_id
-//    (no single-column tournament_id index on TournamentTeamMember). (TO-VIEW-02)
-// ---------------------------------------------------------------------------
-// Phase 15 D-01/D-02: moved from securityViews.ts
-export const view_my_tournament_team_members = spacetimedb.view(
-    { name: 'view_my_tournament_team_members', public: true },
-    t.array(TournamentTeamMember.rowType),
-    (ctx) => {
-        const resolved = getMyTournamentIds(ctx);
-        if (!resolved || resolved.tournamentIds.size === 0) return [];
-        const results: any[] = [];
-        for (const tid of resolved.tournamentIds) {
-            for (const team of ctx.db.TournamentTeam.tournament_id.filter(tid)) {
-                for (const member of ctx.db.TournamentTeamMember.team_id.filter(team.id)) {
-                    results.push(member);
-                }
-            }
+/** A105(2): `[tournamentId]` when the caller is an Admin and the tournament exists, else none (checked first). */
+function adminTournamentIds(ctx: any, tournamentId: number): number[] {
+    const userId = callerUserId(ctx);
+    if (userId === undefined) return [];
+    const user = ctx.db.User.id.find(userId);
+    if (!user || !isRoleAtLeast(user.role, 'Admin')) return [];
+    return ctx.db.Tournament.id.find(tournamentId) ? [tournamentId] : [];
+}
+
+// Row builders shared by the staff views and their Admin arg twins.
+function tournamentRows(ctx: any, ids: Iterable<number>): any[] {
+    const rows: any[] = [];
+    for (const tid of ids) {
+        const tournament = ctx.db.Tournament.id.find(tid);
+        if (tournament) rows.push(tournament);
+    }
+    return rows;
+}
+
+function enrolledRows(ctx: any, ids: Iterable<number>): any[] {
+    const rows: any[] = [];
+    for (const tid of ids) for (const row of ctx.db.TournamentEnrolled.tournament_id.filter(tid)) rows.push(row);
+    return rows;
+}
+
+function teamRows(ctx: any, ids: Iterable<number>): any[] {
+    const rows: any[] = [];
+    for (const tid of ids) for (const row of ctx.db.TournamentTeam.tournament_id.filter(tid)) rows.push(row);
+    return rows;
+}
+
+// Navigates TournamentTeam.tournament_id -> TournamentTeamMember.team_id.
+function teamMemberRows(ctx: any, ids: Iterable<number>): any[] {
+    const rows: any[] = [];
+    for (const tid of ids) {
+        for (const team of ctx.db.TournamentTeam.tournament_id.filter(tid)) {
+            for (const member of ctx.db.TournamentTeamMember.team_id.filter(team.id)) rows.push(member);
         }
-        return results;
     }
-);
+    return rows;
+}
 
-// ---------------------------------------------------------------------------
-// 5. My Tournament Matches (per-user view) — BracketMatch rows for all
-//    tournaments where the caller is the organizer or an assistant.
-//    Direct tournament_id btree filter. (TO-VIEW-03)
-// ---------------------------------------------------------------------------
-// Phase 15 D-01/D-02: moved from securityViews.ts
-export const view_my_tournament_matches = spacetimedb.view(
-    { name: 'view_my_tournament_matches', public: true },
-    t.array(BracketMatch.rowType),
-    (ctx) => {
-        const resolved = getMyTournamentIds(ctx);
-        if (!resolved || resolved.tournamentIds.size === 0) return [];
-        const results: any[] = [];
-        for (const tid of resolved.tournamentIds) {
-            for (const row of ctx.db.BracketMatch.tournament_id.filter(tid)) {
-                results.push(row);
-            }
+function matchRows(ctx: any, ids: Iterable<number>): any[] {
+    const rows: any[] = [];
+    for (const tid of ids) for (const row of ctx.db.BracketMatch.tournament_id.filter(tid)) rows.push(row);
+    return rows;
+}
+
+// Navigates BracketMatch.tournament_id -> MatchResultRecord.bracket_match_id (no tournament id on the record, D-07).
+function matchResultRows(ctx: any, ids: Iterable<number>): any[] {
+    const rows: any[] = [];
+    for (const tid of ids) {
+        for (const bm of ctx.db.BracketMatch.tournament_id.filter(tid)) {
+            for (const row of ctx.db.MatchResultRecord.bracket_match_id.filter(bm.id)) rows.push(row);
         }
-        return results;
     }
-);
+    return rows;
+}
 
-// ---------------------------------------------------------------------------
-// 6. My Tournament Match Results (per-user view) — MatchResultRecord rows for
-//    all tournaments where the caller is the organizer or an assistant.
-//    Navigates via BracketMatch.tournament_id -> MatchResultRecord.bracket_match_id
-//    (MatchResultRecord has no tournament_id column — D-07). (TO-VIEW-03)
-// ---------------------------------------------------------------------------
-// Phase 15 D-01/D-02: moved from securityViews.ts
-export const view_my_tournament_match_results = spacetimedb.view(
-    { name: 'view_my_tournament_match_results', public: true },
-    t.array(MatchResultRecord.rowType),
-    (ctx) => {
-        const resolved = getMyTournamentIds(ctx);
-        if (!resolved || resolved.tournamentIds.size === 0) return [];
-        const results: any[] = [];
-        for (const tid of resolved.tournamentIds) {
-            for (const bm of ctx.db.BracketMatch.tournament_id.filter(tid)) {
-                for (const row of ctx.db.MatchResultRecord.bracket_match_id.filter(bm.id)) {
-                    results.push(row);
-                }
-            }
+// S9a (A70(1), A71): each lobby row also carries its bracket match's colours (blueTeamId / redTeamId through
+// matchSides, the one colour mapping; unset or stale blueTeamId = team1 Blue). Staff see real ids (A37).
+function lobbyRows(ctx: any, ids: Iterable<number>): any[] {
+    const rows: any[] = [];
+    for (const tid of ids) {
+        for (const row of ctx.db.Lobby.tournament_id.filter(tid)) {
+            const match = row.bracketMatchId !== undefined ? ctx.db.BracketMatch.id.find(row.bracketMatchId) : undefined;
+            const sides = match ? matchSides(match) : { blueTeamId: undefined, redTeamId: undefined };
+            rows.push({ ...row, blueTeamId: sides.blueTeamId, redTeamId: sides.redTeamId });
         }
-        return results;
     }
-);
+    return rows;
+}
 
-// ---------------------------------------------------------------------------
-// 7. My Tournament Lobbies (per-user view) — Lobby rows for all tournaments
-//    where the caller is the organizer or an assistant.
-//    Uses direct Lobby.tournament_id btree index. (TO-VIEW-03)
-//    S9a (A70(1), A71): each row also carries its bracket match's colours (blueTeamId / redTeamId through
-//    matchSides, the one colour mapping; unset or stale blueTeamId = team1 Blue). Staff see real ids (A37).
-// ---------------------------------------------------------------------------
 const TournamentLobbyRow = t.row('TournamentLobbyRow', {
     ...lobbyColumns,
     id: t.u32().primaryKey(),
@@ -216,23 +165,97 @@ const TournamentLobbyRow = t.row('TournamentLobbyRow', {
     redTeamId: t.u32().optional(),
 });
 
-// Phase 15 D-01/D-02: moved from securityViews.ts
+// 1-7: the staff views (A105(1)). Phase 15 D-01/D-02: moved from securityViews.ts.
+export const view_my_tournaments = spacetimedb.view(
+    { name: 'view_my_tournaments', public: true },
+    t.array(Tournament.rowType),
+    (ctx) => tournamentRows(ctx, staffTournamentIds(ctx)),
+);
+
+export const view_my_tournament_enrolled = spacetimedb.view(
+    { name: 'view_my_tournament_enrolled', public: true },
+    t.array(TournamentEnrolled.rowType),
+    (ctx) => enrolledRows(ctx, staffTournamentIds(ctx)),
+);
+
+export const view_my_tournament_teams = spacetimedb.view(
+    { name: 'view_my_tournament_teams', public: true },
+    t.array(TournamentTeam.rowType),
+    (ctx) => teamRows(ctx, staffTournamentIds(ctx)),
+);
+
+export const view_my_tournament_team_members = spacetimedb.view(
+    { name: 'view_my_tournament_team_members', public: true },
+    t.array(TournamentTeamMember.rowType),
+    (ctx) => teamMemberRows(ctx, staffTournamentIds(ctx)),
+);
+
+export const view_my_tournament_matches = spacetimedb.view(
+    { name: 'view_my_tournament_matches', public: true },
+    t.array(BracketMatch.rowType),
+    (ctx) => matchRows(ctx, staffTournamentIds(ctx)),
+);
+
+export const view_my_tournament_match_results = spacetimedb.view(
+    { name: 'view_my_tournament_match_results', public: true },
+    t.array(MatchResultRecord.rowType),
+    (ctx) => matchResultRows(ctx, staffTournamentIds(ctx)),
+);
+
 export const view_my_tournament_lobbies = spacetimedb.view(
     { name: 'view_my_tournament_lobbies', public: true },
     t.array(TournamentLobbyRow),
-    (ctx) => {
-        const resolved = getMyTournamentIds(ctx);
-        if (!resolved || resolved.tournamentIds.size === 0) return [];
-        const results: any[] = [];
-        for (const tid of resolved.tournamentIds) {
-            for (const row of ctx.db.Lobby.tournament_id.filter(tid)) {
-                const match = row.bracketMatchId !== undefined ? ctx.db.BracketMatch.id.find(row.bracketMatchId) : undefined;
-                const sides = match ? matchSides(match) : { blueTeamId: undefined, redTeamId: undefined };
-                results.push({ ...row, blueTeamId: sides.blueTeamId, redTeamId: sides.redTeamId });
-            }
-        }
-        return results;
-    }
+    (ctx) => lobbyRows(ctx, staffTournamentIds(ctx)),
+);
+
+// 1a-7a: the Admin-only arg views (A105(2)); subscribe as `SELECT * FROM view_admin_tournament_enrolled(42)`.
+export const view_admin_tournament = spacetimedb.view(
+    { name: 'view_admin_tournament', public: true },
+    { tournamentId: t.u32() },
+    t.array(Tournament.rowType),
+    (ctx, { tournamentId }) => tournamentRows(ctx, adminTournamentIds(ctx, tournamentId)),
+);
+
+export const view_admin_tournament_enrolled = spacetimedb.view(
+    { name: 'view_admin_tournament_enrolled', public: true },
+    { tournamentId: t.u32() },
+    t.array(TournamentEnrolled.rowType),
+    (ctx, { tournamentId }) => enrolledRows(ctx, adminTournamentIds(ctx, tournamentId)),
+);
+
+export const view_admin_tournament_teams = spacetimedb.view(
+    { name: 'view_admin_tournament_teams', public: true },
+    { tournamentId: t.u32() },
+    t.array(TournamentTeam.rowType),
+    (ctx, { tournamentId }) => teamRows(ctx, adminTournamentIds(ctx, tournamentId)),
+);
+
+export const view_admin_tournament_team_members = spacetimedb.view(
+    { name: 'view_admin_tournament_team_members', public: true },
+    { tournamentId: t.u32() },
+    t.array(TournamentTeamMember.rowType),
+    (ctx, { tournamentId }) => teamMemberRows(ctx, adminTournamentIds(ctx, tournamentId)),
+);
+
+export const view_admin_tournament_matches = spacetimedb.view(
+    { name: 'view_admin_tournament_matches', public: true },
+    { tournamentId: t.u32() },
+    t.array(BracketMatch.rowType),
+    (ctx, { tournamentId }) => matchRows(ctx, adminTournamentIds(ctx, tournamentId)),
+);
+
+export const view_admin_tournament_match_results = spacetimedb.view(
+    { name: 'view_admin_tournament_match_results', public: true },
+    { tournamentId: t.u32() },
+    t.array(MatchResultRecord.rowType),
+    (ctx, { tournamentId }) => matchResultRows(ctx, adminTournamentIds(ctx, tournamentId)),
+);
+
+export const view_admin_tournament_lobbies = spacetimedb.view(
+    { name: 'view_admin_tournament_lobbies', public: true },
+    { tournamentId: t.u32() },
+    t.array(TournamentLobbyRow),
+    (ctx, { tournamentId }) => lobbyRows(ctx, adminTournamentIds(ctx, tournamentId)),
 );
 
 // ---------------------------------------------------------------------------
@@ -243,6 +266,10 @@ export const view_my_tournament_lobbies = spacetimedb.view(
 //    S9a fix (A37): in an isAnonymousDefault tournament a non-staff reader gets the other participants' rows with
 //    userId 0 / hsrAccountId 0 and the participant's `seat`; staff (TO, assistants, Moderator+) and the caller's own
 //    rows keep real ids.
+//    S10g (tournament audit #10): a hidden row carries a neutral `Seat-<n> account <k>` label instead of the owner's
+//    displayLabel; Completed and Cancelled tournaments are skipped; a non-staff reader gets the other participants'
+//    rows only while the reader is in the field (not Disqualified, not waitlisted, approved) and only for participants
+//    in the field; the caller's own rows always (any enrolment), staff every registrant.
 // ---------------------------------------------------------------------------
 const TournamentRegistrantAccountRow = t.object('TournamentRegistrantAccountRow', {
     tournamentId: t.u32(),
@@ -255,118 +282,81 @@ const TournamentRegistrantAccountRow = t.object('TournamentRegistrantAccountRow'
     eidolonLevel: t.u8().optional(),
 });
 
+/** S10g (audit #10a): a hidden row's label never carries the owner's free-text `displayLabel`. */
+const neutralAccountLabel = (seat: number, index: number): string => `Seat-${seat} account ${index}`;
+
+/** S10g (audit #10c): an enrolment that is in the field: not Disqualified, not waitlisted, approved. */
+const isFieldEnrolment = (e: any): boolean =>
+    e.status.tag !== 'Disqualified' && !e.isWaitlisted && e.approvedByToAt !== undefined;
+
 // Phase 15 D-01/D-02: moved from securityViews.ts
 export const view_tournament_registrant_accounts = spacetimedb.view(
     { name: 'view_tournament_registrant_accounts', public: true },
     t.array(TournamentRegistrantAccountRow),
     (ctx) => {
-        const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
-        if (!mapping) return [];
-        const myUserId = mapping.userId;
+        const myUserId = callerUserId(ctx);
+        if (myUserId === undefined) return [];
         const results: any[] = [];
         const me = ctx.db.User.id.find(myUserId);
         const isModerator = me ? isRoleAtLeast(me.role, 'Moderator') : false;
 
-        // Collect tournaments: (a) caller is enrolled in, (b) caller is TO/assistant
-        const myTournamentIds = new Set<number>();
-        const toTournamentIds = new Set<number>();
-
-        // Path 1: Enrolled tournaments
+        // Tournaments: (a) the caller is enrolled in (any enrolment: a player outside the field still sees their own
+        // rows), (b) the caller organizes or assists. S10g (audit #10b): Completed and Cancelled tournaments are skipped.
+        const toTournamentIds = organizedOrAssistedLiveIds(ctx, myUserId);
+        const myTournamentIds = new Set<number>(toTournamentIds);
+        const myEnrolment = new Map<number, any>();
         for (const enrolled of ctx.db.TournamentEnrolled.user_id.filter(myUserId)) {
             myTournamentIds.add(enrolled.tournamentId);
-        }
-
-        // Path 2: TO/assistant tournaments (always see all)
-        const resolved = getMyTournamentIds(ctx);
-        if (resolved) {
-            for (const tid of resolved.tournamentIds) {
-                toTournamentIds.add(tid);
-                myTournamentIds.add(tid);
-            }
+            myEnrolment.set(enrolled.tournamentId, enrolled);
         }
 
         for (const tournamentId of myTournamentIds) {
             const tournament = ctx.db.Tournament.id.find(tournamentId);
-            if (!tournament) continue;
+            if (!tournament || !isLiveTournament(tournament)) continue;
 
             const isTOOrAssistant = toTournamentIds.has(tournamentId);
             const vis = tournament.rosterVisibility.tag;
             // S9a fix (A37): staff (organizer, assistants, Moderator+) read real ids; in an anonymous tournament any
             // other reader gets another participant's rows with userId 0 and hsrAccountId 0, keyed by `seat`.
             const isStaff = isTOOrAssistant || isModerator;
+            // S10g (audit #10c): a non-staff reader sees the other participants' rows only while the reader is in the
+            // field, and only the rows of participants in the field. Staff see every registrant (they approve them).
+            const mine = myEnrolment.get(tournamentId);
+            const readerInField = isStaff || (mine !== undefined && isFieldEnrolment(mine));
             const seats = enrollmentSeats(ctx, tournamentId);
 
-            // For each enrolled user in this tournament, get their TPA entries
-            const enrolledUsers = [...ctx.db.TournamentEnrolled.tournament_id.filter(tournamentId)];
-
-            for (const enrolled of enrolledUsers) {
+            for (const enrolled of ctx.db.TournamentEnrolled.tournament_id.filter(tournamentId)) {
                 const isMe = enrolled.userId === myUserId;
+                if (!isMe && !isStaff && (!readerInField || !isFieldEnrolment(enrolled))) continue;
                 const hide = tournament.isAnonymousDefault && !isStaff && !isMe;
                 const seat = seats.get(enrolled.userId) ?? 0;
-                const tpaForUser = [...ctx.db.TournamentPlayerAccount.by_tournament_and_user.filter([tournamentId, enrolled.userId])];
+                let accountIndex = 0;
 
-                for (const tpa of tpaForUser) {
+                for (const tpa of ctx.db.TournamentPlayerAccount.by_tournament_and_user.filter([tournamentId, enrolled.userId])) {
                     const account = ctx.db.HsrAccount.id.find(tpa.hsrAccountId);
                     if (!account) continue;
+                    accountIndex++;
 
-                    let showRoster = false;
-                    let showRating = false;
+                    const own = isTOOrAssistant || isMe;
+                    const showRoster = own || vis === 'OpenRoster';
+                    const showRating = own || vis === 'OpenRoster' || vis === 'ClosedWithRating';
+                    if (!showRoster && !showRating) continue; // ClosedNoRating
 
-                    if (isTOOrAssistant || isMe) {
-                        showRoster = true;
-                        showRating = true;
-                    } else if (vis === 'OpenRoster') {
-                        showRoster = true;
-                        showRating = true;
-                    } else if (vis === 'ClosedWithRating') {
-                        showRoster = false;
-                        showRating = true;
+                    const base = {
+                        tournamentId,
+                        userId: hide ? 0 : enrolled.userId,
+                        seat,
+                        hsrAccountId: hide ? 0 : account.id,
+                        displayLabel: hide ? neutralAccountLabel(seat, accountIndex) : account.displayLabel,
+                        accountRating: showRating ? account.accountRating : undefined,
+                    };
+                    const characters = showRoster ? [...ctx.db.HsrAccountCharacter.hsr_account_id.filter(account.id)] : [];
+                    if (characters.length === 0) {
+                        results.push({ ...base, characterName: undefined, eidolonLevel: undefined });
                     } else {
-                        // ClosedNoRating
-                        showRoster = false;
-                        showRating = false;
-                    }
-
-                    if (!showRoster && !showRating) continue;
-
-                    if (showRoster) {
-                        const characters = [...ctx.db.HsrAccountCharacter.hsr_account_id.filter(account.id)];
-                        if (characters.length === 0) {
-                            results.push({
-                                tournamentId,
-                                userId: hide ? 0 : enrolled.userId,
-                                seat,
-                                hsrAccountId: hide ? 0 : account.id,
-                                displayLabel: account.displayLabel,
-                                accountRating: showRating ? account.accountRating : undefined,
-                                characterName: undefined,
-                                eidolonLevel: undefined,
-                            });
-                        } else {
-                            for (const char of characters) {
-                                results.push({
-                                    tournamentId,
-                                    userId: hide ? 0 : enrolled.userId,
-                                    seat,
-                                    hsrAccountId: hide ? 0 : account.id,
-                                    displayLabel: account.displayLabel,
-                                    accountRating: showRating ? account.accountRating : undefined,
-                                    characterName: char.characterName,
-                                    eidolonLevel: char.eidolonLevel,
-                                });
-                            }
+                        for (const char of characters) {
+                            results.push({ ...base, characterName: char.characterName, eidolonLevel: char.eidolonLevel });
                         }
-                    } else if (showRating) {
-                        results.push({
-                            tournamentId,
-                            userId: hide ? 0 : enrolled.userId,
-                            seat,
-                            hsrAccountId: hide ? 0 : account.id,
-                            displayLabel: account.displayLabel,
-                            accountRating: account.accountRating,
-                            characterName: undefined,
-                            eidolonLevel: undefined,
-                        });
                     }
                 }
             }
@@ -671,7 +661,7 @@ export const view_my_stand_ins = spacetimedb.view(
 
 // ---------------------------------------------------------------------------
 // 17. view_tournament_matches_for_me (PAGE-MAP D9; A70(1), A71) — the Ready / Pending BracketMatch rows of the
-//     tournaments the caller is enrolled in where one slot is the caller's team: the opponent's name, the colours
+//     InProgress tournaments (S10g, audit #11) the caller is enrolled in where one slot is the caller's team: the opponent's name, the colours
 //     (matchSides: unset / stale blueTeamId = team1 Blue), the tally (head start on team1, A71) and scheduledAt.
 //     Team ids only (BracketMatch is public).
 // ---------------------------------------------------------------------------
@@ -704,6 +694,8 @@ export const view_tournament_matches_for_me = spacetimedb.view(
         const me = mapping.userId;
         const rows: any[] = [];
         for (const enrolled of ctx.db.TournamentEnrolled.user_id.filter(me)) {
+            // S10g (audit #11): running tournaments only (a cancelled or completed bracket keeps its rows for good).
+            if (ctx.db.Tournament.id.find(enrolled.tournamentId)?.stage.tag !== 'InProgress') continue;
             const myTeamId = teamOf(ctx, enrolled.tournamentId, me);
             if (myTeamId === undefined) continue;
             for (const match of ctx.db.BracketMatch.tournament_id.filter(enrolled.tournamentId)) {

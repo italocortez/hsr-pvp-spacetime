@@ -109,7 +109,7 @@ All rejections are `SenderError`s. Permissions per A25 (`ensureTournamentPermiss
 | `advance_group_stage(tournamentId)` | `bracket`; InProgress | GroupInto* only; every group match Decided / Walkover / Void; no elimination row yet (checked by `bracketSide`, since `GF` also starts with G); qualifiers = `qualifiersFor` (A30 ranking, Withdrawn / Disqualified / Eliminated dropped, T7 placement); `generateSingleElim(n, { thirdPlace })` / `generateDoubleElim(n, { winnerAdvantage })` + `insertBracket`; grouped teams that did not qualify and are still Active -> Eliminated | "Tournament is not in progress." · "A group-only tournament has no elimination stage." · "This tournament has no group stage." · "Generate the bracket first." · "The elimination bracket already exists." · "N group match(es) are not settled." · "At least 2 teams must qualify." |
 | `resolve_bracket_match(bracketMatchId, winnerTeamId, reason)` | `results`; InProgress | match Ready -> calendar event deleted (D-22), `applyBracketResult(…, 'Staff', 0-0)`; Decided with another winner -> `rollbackBracketResult` (refused while anything downstream is Decided) then apply; Decided with the same winner -> no-op. Replaces `admin_set_bracket_winner`; the D.8.3 "force-finalize" tool for a tournament match | "Bracket match not found." · "Tournament is not in progress." · "Reason must be at most 1000 characters." · "<key> is <state>; only a Ready or Decided match can be resolved." · "Team N does not play <key>." · "<key> is decided; roll that back first." |
 | `rollback_bracket_match(bracketMatchId, reason)` | `results`; InProgress | match Decided; `rollbackBracketResult` (refused while a downstream match is Decided); deletes the match's calendar event (D-22). The D.8.3 "void" tool for a tournament match | "<key> is <state>; only a decided match can be rolled back." · "<key> is decided; roll that back first." |
-| `dq_participant(tournamentId, userId, reason, dqWholeTeam?)` | `participants`; any stage | enrolment -> Disqualified (row kept, A26a(2)); the player (with `dqWholeTeam`: every member, their enrolments Disqualified too) leaves the team, captain transferred (D-21); a team left non-empty gets `refreshTeamStatus` only before generation (Ready -> Forming possible); after generation it keeps its status and plays with stand-ins (A26a(3)); a team left empty -> **Disqualified** (row kept). Seeding after generation: stamps `lastSeedChangeAt` (regenerate). InProgress: every open match of the team is settled (rule below). Live lobby handling unchanged (D-25 / D-26) | "Participant not found in this tournament." · "Participant is already disqualified." · "Cannot disqualify a participant who has already withdrawn." |
+| `dq_participant(tournamentId, userId, reason, dqWholeTeam?)` | `participants`; Registration through InProgress (S10g) | enrolment -> Disqualified (row kept, A26a(2)); the player (with `dqWholeTeam`: every member, their enrolments Disqualified too) leaves the team, captain transferred (D-21); a team left non-empty gets `refreshTeamStatus` only before generation (Ready -> Forming possible); after generation it keeps its status and plays with stand-ins (A26a(3)); a team left empty -> **Disqualified** (row kept). Seeding after generation: stamps `lastSeedChangeAt` (regenerate). InProgress: every open match of the team is settled (rule below). Live lobby handling unchanged (D-25 / D-26) | "Tournament is <stage>; participants can be disqualified from Registration through InProgress only." (S10g) · "Participant not found in this tournament." · "Participant is already disqualified." (the "already withdrawn" text is gone with S10g: no writer of the Withdrawn enrolment status) |
 
 `reason` (resolve, rollback, dq) has no column: it is written to the module log (resolve / rollback: trimmed, at
 most 1000 characters); the actor lands in the audit columns (`lastModifiedById`). S8d may add an audit table.
@@ -235,6 +235,29 @@ back whole. Staff clear the downstream match with existing reducers, so the refu
 downstream match with resolve-then-rollback (third path), which also clears a Waiting lobby (`voidMatchLobbies` voids
 every lobby without a Validated record) and deletes that match's calendar event (not restored by the rollback).
 
+## Phase S10g execution (tournament audit 2026-11-09: #2, #3, #4, #5, #8; DECISIONS.md A94)
+
+- **dq_participant** (`helpers/tournament/disqualification.ts` `disqualifyParticipant`, also run by the user-deletion
+  cascade, A94(2)): Registration through InProgress only (`ensureDqStage`, audit #8). In `settleDisqualifiedTeam`, every
+  Ready match decided for the opponent is followed by `voidMatchLobbies(ctx, matchId, actorId, exceptLobbyId)` (audit #2,
+  A68(6) "unsettled lobby voided"): a Waiting lobby, a playing one, or one parked with a Pending / Submitted / Disputed
+  record is voided; the team's live lobby (Drafting / Equipping / Scoring) is skipped and force-conceded as before.
+  `voidMatchLobbies` gains the optional `exceptLobbyId`.
+- **rollbackBracketResult** (audit #3): the deciding record is voided when `decidedBy` is Played / Concede **or** the
+  derived tally already gives the recorded winner (`tallyWinner(ctx, match)`, new export: the team with ceil(bestOf / 2)
+  games, else undefined), which covers a match decided through `override_match_result` (Staff) and a DQ whose
+  force-conceded lobby settled the series. A staff decision against the tally still voids nothing, and the games
+  re-decide the match (the S8e rule). So a rollback of an override-decided Bo1 voids that record and returns the match to
+  Ready (before: re-decided at once as Played).
+- **override_match_result** (audit #4): on a Decided match, refused when `decidedBy` is Dq, or Staff while the tally does
+  not give the recorded winner: `This match was decided by staff or a disqualification; roll the match back first
+  (rollback_bracket_match).` A staff decision the tally gives (an earlier override) is still reverted and re-derived as
+  before.
+- **Group lock** (audit #5): `ensureGroupMatchOpen(ctx, match)` (new export) refuses a Group match once any non-Group
+  row of the tournament exists: `Group results are locked: the elimination bracket already exists.` Called by
+  `ensureResultsMatch` (`resolve_bracket_match`, `rollback_bracket_match`) and by `override_match_result` (tournament
+  branch).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -261,10 +284,11 @@ every lobby without a Validated record) and deletes that match's calendar event 
 | `blueTeamId` on `BracketMatch`, `helpers/tournament/matchSides.ts` as the one colour mapping, result credit by colour, `set_match_sides` (group matches included) | Phase S8g execution (DECISIONS.md A70) | 2026-11-08 |
 | Head start on team1 whatever the colours, `headStartSide` removed, `set_match_sides(bracketMatchId, blueTeamId)`, records checked before lobbies, `slotChangeReset` on every slot change | Phase S8g execution (DECISIONS.md A71) | 2026-11-08 |
 | `unplaceEntrant` also refuses a downstream match with a lobby or a Pending / Submitted / Disputed / Validated record | Phase S10c execution (DECISIONS.md A84) | 2026-11-09 |
+| DQ voids the unsettled lobbies of the matches it settles and needs Registration through InProgress; rollback voids the deciding record of a Staff / Dq decision the tally gives; override refused on a Dq decision or a staff decision against the tally; group matches locked once the elimination bracket exists | Phase S10g execution (tournament audit #2, #3, #4, #5, #8) | 2026-11-09 |
 
 ---
 
-*Last updated: 2026-11-08*
+*Last updated: 2026-11-09*
 *Feature owner: Phase 04 / Phase 10.1*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

@@ -94,7 +94,8 @@ export function transferTournamentCaptain(ctx: any, teamId: number, leavingUserI
  * Voids:     every other tournament lobby (Waiting, playing, or parked with a Pending /
  *            Submitted / Disputed record): the record (if any) is marked Voided and the lobby hard-deleted
  *            (voidTournamentLobby); the job deletes the Voided records without effect.
- * Deletes:   TournamentTeamRequest, the calendar events of the bracket matches (D-21), TournamentPlayerAccount.
+ * Deletes:   TournamentTeamRequest, the calendar events of the bracket matches (D-21), TournamentPlayerAccount,
+ *            TournamentWaitlistAccount (A104, S10g).
  */
 export function cascadeCleanupTournament(ctx: any, tournamentId: number, actorId: number): void {
     // 1. Team requests (via teams — no tournamentId on request table)
@@ -127,6 +128,7 @@ export function cascadeCleanupTournament(ctx: any, tournamentId: number, actorId
             ctx.db.TournamentPlayerAccount.delete(tpa);
         }
     }
+    deleteTournamentWaitlistAccounts(ctx, tournamentId); // A104 (S10g): no promotion is left
 
     // 6-8. (S8d) Team members, teams and assistants are kept (display).
 }
@@ -156,6 +158,15 @@ export function findEnrolled(ctx: any, tournamentId: number, userId: number): an
 
 export function findMembership(ctx: any, tournamentId: number, userId: number): any {
     return [...ctx.db.TournamentTeamMember.by_tournament_and_user.filter([tournamentId, userId])][0];
+}
+
+/**
+ * Tournament audit #15 (S10g; review F4 for every captain-only reducer): the captain check also needs the caller's
+ * membership of the team. After a DQ the team row may keep the disqualified user as captainUserId; that user is no
+ * longer a member and cannot act as captain.
+ */
+export function isActingCaptain(ctx: any, team: any, userId: number): boolean {
+    return team.captainUserId === userId && findMembership(ctx, team.tournamentId, userId)?.teamId === team.id;
 }
 
 /** A26a / C-a11: capacity counts the rows that are neither waitlisted nor Disqualified. */
@@ -273,6 +284,7 @@ export function removeEnrolment(ctx: any, tournament: any, enrolled: any, actorI
     for (const tpa of [...ctx.db.TournamentPlayerAccount.by_tournament_and_user.filter([tournament.id, enrolled.userId])]) {
         ctx.db.TournamentPlayerAccount.delete(tpa);
     }
+    deleteWaitlistAccounts(ctx, tournament.id, enrolled.userId);
     ctx.db.TournamentEnrolled.delete(enrolled);
 }
 
@@ -299,6 +311,103 @@ export function lockPlayerAccounts(ctx: any, tournamentId: number, userId: numbe
         if (locked.has(id)) continue;
         ctx.db.TournamentPlayerAccount.insert(insertWithAudit(ctx, { tournamentId, userId, hsrAccountId: id }, actorId));
     }
+}
+
+// ─── A104 (S10g): waitlisted registrants' chosen accounts and late locking ───────────────────────────────────
+
+/** Deletes the remembered account choice of one waitlisted registrant (TournamentWaitlistAccount). */
+export function deleteWaitlistAccounts(ctx: any, tournamentId: number, userId: number): void {
+    for (const row of [...ctx.db.TournamentWaitlistAccount.by_tournament_and_user.filter([tournamentId, userId])]) {
+        ctx.db.TournamentWaitlistAccount.delete(row);
+    }
+}
+
+/** Deletes every remembered account choice of a tournament (bracket activation, cancellation: no promotion is left). */
+export function deleteTournamentWaitlistAccounts(ctx: any, tournamentId: number): void {
+    for (const row of [...ctx.db.TournamentWaitlistAccount.tournament_id.filter(tournamentId)]) {
+        ctx.db.TournamentWaitlistAccount.delete(row);
+    }
+}
+
+/**
+ * A104: remembers the accounts a waitlisted registrant chose (they must be the player's own); kept rows stay
+ * (idempotent). Applied by lockAccountsAtPromotion.
+ */
+export function rememberWaitlistAccounts(ctx: any, tournamentId: number, userId: number, accountIds: number[], actorId: number): void {
+    const ownedIds = new Set([...ctx.db.HsrAccount.user_id.filter(userId)].map((a: any) => a.id));
+    const ids = [...new Set(accountIds)];
+    for (const id of ids) {
+        if (!ownedIds.has(id)) throw new SenderError(`HSR account #${id} is not one of your accounts.`);
+    }
+    const kept = new Set([...ctx.db.TournamentWaitlistAccount.by_tournament_and_user.filter([tournamentId, userId])]
+        .map((r: any) => r.hsrAccountId));
+    for (const id of ids) {
+        if (kept.has(id)) continue;
+        ctx.db.TournamentWaitlistAccount.insert(insertWithAudit(ctx, { tournamentId, userId, hsrAccountId: id }, actorId));
+    }
+}
+
+/**
+ * A104 / A26a(4): the locks of a promoted waitlisted player. The remembered choice when there is one (only the
+ * accounts the player still owns; an account deleted since is skipped), else every account the player owns (no
+ * choice remembered = the registration named none). The remembered rows are deleted.
+ */
+export function lockAccountsAtPromotion(ctx: any, tournamentId: number, userId: number, actorId: number): void {
+    const remembered = [...ctx.db.TournamentWaitlistAccount.by_tournament_and_user.filter([tournamentId, userId])];
+    if (remembered.length === 0) {
+        lockPlayerAccounts(ctx, tournamentId, userId, undefined, actorId);
+        return;
+    }
+    const ownedIds = new Set([...ctx.db.HsrAccount.user_id.filter(userId)].map((a: any) => a.id));
+    const ids = remembered.map((r: any) => r.hsrAccountId as number).filter((id: number) => ownedIds.has(id));
+    lockPlayerAccounts(ctx, tournamentId, userId, ids, actorId);
+    deleteWaitlistAccounts(ctx, tournamentId, userId);
+}
+
+/** True when the bracket match exists and belongs to the tournament. */
+function isMatchOfTournament(ctx: any, bracketMatchId: number | undefined, tournamentId: number): boolean {
+    if (bracketMatchId === undefined) return false;
+    const match = ctx.db.BracketMatch.id.find(bracketMatchId);
+    return !!match && match.tournamentId === tournamentId;
+}
+
+/**
+ * A104: "their first game of the tournament has started" is the player's own game (S10g review F3), not the team's.
+ * True when:
+ * 1. the player is a participant of a result record of one of the tournament's bracket matches (start_draft writes a
+ *    MatchResultParticipant row for every non-coach Blue / Red member and creates the record, A54), or
+ * 2. the player sits in a player seat (non-coach Blue / Red) of a lobby of such a match that is past Waiting, or
+ * 3. a Voided record of a bracket match on which the player's team played (slot 1 or 2, or its recorded winner /
+ *    loser) has no participant rows left. Voiding (voidTournamentLobby → hardDeleteLobby) keeps the record for audit
+ *    until the finalize job but deletes its participant and member rows, so who sat in that game is no longer known:
+ *    a voided or rolled-back game counts for every member of the team (conservative; a member who sat out only a
+ *    voided game is treated as having played it).
+ * A team member who sat out the team's games otherwise has played nothing.
+ */
+export function hasPlayedTournamentGame(ctx: any, tournamentId: number, userId: number): boolean {
+    for (const participant of ctx.db.MatchResultParticipant.user_id.filter(userId)) {
+        const record = ctx.db.MatchResultRecord.id.find(participant.matchResultId);
+        if (record && isMatchOfTournament(ctx, record.bracketMatchId, tournamentId)) return true;
+    }
+    for (const member of ctx.db.LobbyMember.user_id.filter(userId)) {
+        const tag: string = member.lobbySlot.tag;
+        if (tag !== 'BluePlayer' && tag !== 'RedPlayer') continue;
+        const lobby = ctx.db.Lobby.id.find(member.lobbyId);
+        if (!lobby || lobby.stage.tag === 'Waiting') continue;
+        if (isMatchOfTournament(ctx, lobby.bracketMatchId, tournamentId)) return true;
+    }
+    const teamId = findMembership(ctx, tournamentId, userId)?.teamId;
+    if (teamId === undefined) return false;
+    for (const match of ctx.db.BracketMatch.tournament_id.filter(tournamentId)) {
+        if (match.team1Id !== teamId && match.team2Id !== teamId && match.winnerTeamId !== teamId && match.loserTeamId !== teamId) continue;
+        for (const record of ctx.db.MatchResultRecord.bracket_match_id.filter(match.id)) {
+            if (record.status.tag !== 'Voided') continue;
+            let hasParticipants = false;
+            for (const _ of ctx.db.MatchResultParticipant.match_result_id.filter(record.id)) { hasParticipants = true; break; }
+            if (!hasParticipants) return true;
+        }
+    }
+    return false;
 }
 
 // ─── Naming (A36a, phase 4 04-CONTEXT.md:59-63) ─────────────────────────────────────────────────────────────
@@ -482,8 +591,12 @@ export function validateSeedingToInProgress(ctx: any, tournament: any): void {
     }
 }
 
-/** Seeding → InProgress effects: Ready teams → Active, their members' enrolments Registered / CheckedIn → Active. */
+/**
+ * Seeding → InProgress effects: Ready teams → Active, their members' enrolments Registered / CheckedIn → Active.
+ * A104 (S10g): the remembered account choices of players still waitlisted are deleted (promotion ends at generation).
+ */
 export function activateTeams(ctx: any, tournament: any, actorId: number): void {
+    deleteTournamentWaitlistAccounts(ctx, tournament.id);
     for (const team of [...ctx.db.TournamentTeam.tournament_id.filter(tournament.id)]) {
         if (team.status.tag !== 'Ready') continue;
         ctx.db.TournamentTeam.id.update(updateWithAudit(ctx, team, { status: unit('Active') }, actorId));
@@ -498,7 +611,7 @@ export function activateTeams(ctx: any, tournament: any, actorId: number): void 
 
 /**
  * The one cancel path (cancel_tournament, advance_tournament_stage → Cancelled, admin_cancel_idle_tournaments):
- * not from a terminal stage, cascade cleanup as before (S8d revisits finalization on Cancelled, A24(5)).
+ * not from a terminal stage, cascade cleanup, then the A24(5) finalization (S8d).
  */
 export function cancelTournament(ctx: any, tournament: any, actorId: number): void {
     validateStageTransition(tournament.stage.tag, 'Cancelled');

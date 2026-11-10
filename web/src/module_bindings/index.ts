@@ -124,6 +124,7 @@ import KickMemberReducer from "./kick_member_reducer";
 import LeaveLobbyReducer from "./leave_lobby_reducer";
 import LeaveTournamentTeamReducer from "./leave_tournament_team_reducer";
 import LockCostSetReducer from "./lock_cost_set_reducer";
+import LockTournamentAccountsReducer from "./lock_tournament_accounts_reducer";
 import LoginAsGuestReducer from "./login_as_guest_reducer";
 import ManualAwardAchievementReducer from "./manual_award_achievement_reducer";
 import MigrateRosterReducer from "./migrate_roster_reducer";
@@ -234,6 +235,13 @@ import ViewAdminDeletedUsersRow from "./view_admin_deleted_users_table";
 import ViewAdminLobbyBansRow from "./view_admin_lobby_bans_table";
 import ViewAdminPresenceRow from "./view_admin_presence_table";
 import ViewAdminStuckGamesRow from "./view_admin_stuck_games_table";
+import ViewAdminTournamentRow from "./view_admin_tournament_table";
+import ViewAdminTournamentEnrolledRow from "./view_admin_tournament_enrolled_table";
+import ViewAdminTournamentLobbiesRow from "./view_admin_tournament_lobbies_table";
+import ViewAdminTournamentMatchResultsRow from "./view_admin_tournament_match_results_table";
+import ViewAdminTournamentMatchesRow from "./view_admin_tournament_matches_table";
+import ViewAdminTournamentTeamMembersRow from "./view_admin_tournament_team_members_table";
+import ViewAdminTournamentTeamsRow from "./view_admin_tournament_teams_table";
 import ViewAdminUserIdentitiesRow from "./view_admin_user_identities_table";
 import ViewAdminUserPrivateRow from "./view_admin_user_private_table";
 import ViewLobbyBrowserRow from "./view_lobby_browser_table";
@@ -672,6 +680,55 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, ViewAdminStuckGamesRow),
+  viewAdminTournament: __table({
+    name: 'view_admin_tournament',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, ViewAdminTournamentRow),
+  viewAdminTournamentEnrolled: __table({
+    name: 'view_admin_tournament_enrolled',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, ViewAdminTournamentEnrolledRow),
+  viewAdminTournamentLobbies: __table({
+    name: 'view_admin_tournament_lobbies',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, ViewAdminTournamentLobbiesRow),
+  viewAdminTournamentMatchResults: __table({
+    name: 'view_admin_tournament_match_results',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, ViewAdminTournamentMatchResultsRow),
+  viewAdminTournamentMatches: __table({
+    name: 'view_admin_tournament_matches',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, ViewAdminTournamentMatchesRow),
+  viewAdminTournamentTeamMembers: __table({
+    name: 'view_admin_tournament_team_members',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, ViewAdminTournamentTeamMembersRow),
+  viewAdminTournamentTeams: __table({
+    name: 'view_admin_tournament_teams',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, ViewAdminTournamentTeamsRow),
   viewAdminUserIdentities: __table({
     name: 'view_admin_user_identities',
     indexes: [
@@ -1165,6 +1222,7 @@ const reducersSchema = __reducers(
   __reducerSchema("leave_lobby", LeaveLobbyReducer),
   __reducerSchema("leave_tournament_team", LeaveTournamentTeamReducer),
   __reducerSchema("lock_cost_set", LockCostSetReducer),
+  __reducerSchema("lock_tournament_accounts", LockTournamentAccountsReducer),
   __reducerSchema("login_as_guest", LoginAsGuestReducer),
   __reducerSchema("manual_award_achievement", ManualAwardAchievementReducer),
   __reducerSchema("migrate_roster", MigrateRosterReducer),
@@ -1306,6 +1364,20 @@ type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "ta
     readonly "view_admin_presence": Omit<typeof tablesSchema.schemaType.tables["viewAdminPresence"], "accessorName"> & { readonly accessorName: "view_admin_presence" };
     /** @deprecated Use `viewAdminStuckGames` instead. This alias will be removed in the next major version. */
     readonly "view_admin_stuck_games": Omit<typeof tablesSchema.schemaType.tables["viewAdminStuckGames"], "accessorName"> & { readonly accessorName: "view_admin_stuck_games" };
+    /** @deprecated Use `viewAdminTournament` instead. This alias will be removed in the next major version. */
+    readonly "view_admin_tournament": Omit<typeof tablesSchema.schemaType.tables["viewAdminTournament"], "accessorName"> & { readonly accessorName: "view_admin_tournament" };
+    /** @deprecated Use `viewAdminTournamentEnrolled` instead. This alias will be removed in the next major version. */
+    readonly "view_admin_tournament_enrolled": Omit<typeof tablesSchema.schemaType.tables["viewAdminTournamentEnrolled"], "accessorName"> & { readonly accessorName: "view_admin_tournament_enrolled" };
+    /** @deprecated Use `viewAdminTournamentLobbies` instead. This alias will be removed in the next major version. */
+    readonly "view_admin_tournament_lobbies": Omit<typeof tablesSchema.schemaType.tables["viewAdminTournamentLobbies"], "accessorName"> & { readonly accessorName: "view_admin_tournament_lobbies" };
+    /** @deprecated Use `viewAdminTournamentMatchResults` instead. This alias will be removed in the next major version. */
+    readonly "view_admin_tournament_match_results": Omit<typeof tablesSchema.schemaType.tables["viewAdminTournamentMatchResults"], "accessorName"> & { readonly accessorName: "view_admin_tournament_match_results" };
+    /** @deprecated Use `viewAdminTournamentMatches` instead. This alias will be removed in the next major version. */
+    readonly "view_admin_tournament_matches": Omit<typeof tablesSchema.schemaType.tables["viewAdminTournamentMatches"], "accessorName"> & { readonly accessorName: "view_admin_tournament_matches" };
+    /** @deprecated Use `viewAdminTournamentTeamMembers` instead. This alias will be removed in the next major version. */
+    readonly "view_admin_tournament_team_members": Omit<typeof tablesSchema.schemaType.tables["viewAdminTournamentTeamMembers"], "accessorName"> & { readonly accessorName: "view_admin_tournament_team_members" };
+    /** @deprecated Use `viewAdminTournamentTeams` instead. This alias will be removed in the next major version. */
+    readonly "view_admin_tournament_teams": Omit<typeof tablesSchema.schemaType.tables["viewAdminTournamentTeams"], "accessorName"> & { readonly accessorName: "view_admin_tournament_teams" };
     /** @deprecated Use `viewAdminUserIdentities` instead. This alias will be removed in the next major version. */
     readonly "view_admin_user_identities": Omit<typeof tablesSchema.schemaType.tables["viewAdminUserIdentities"], "accessorName"> & { readonly accessorName: "view_admin_user_identities" };
     /** @deprecated Use `viewAdminUserPrivate` instead. This alias will be removed in the next major version. */
@@ -1429,7 +1501,7 @@ const REMOTE_MODULE = {
     cliVersion: "2.14.1" as const,
   },
   tables: tablesSchema.schemaType.tables as __SchemaWithTableAccessorAliases["tables"],
-  viewsWithArgs: ["view_tournament_participants", "view_tournament_staff", "view_tournament_team_members", "view_tournament_teams", "view_user_achievements", "view_user_by_username"],
+  viewsWithArgs: ["view_admin_tournament", "view_admin_tournament_enrolled", "view_admin_tournament_lobbies", "view_admin_tournament_match_results", "view_admin_tournament_matches", "view_admin_tournament_team_members", "view_admin_tournament_teams", "view_tournament_participants", "view_tournament_staff", "view_tournament_team_members", "view_tournament_teams", "view_user_achievements", "view_user_by_username"],
   reducers: reducersSchema.reducersType.reducers,
   ...proceduresSchema,
 } satisfies __RemoteModule<
@@ -1466,6 +1538,13 @@ const tableAccessorAliases = {
   "view_admin_lobby_bans": "viewAdminLobbyBans",
   "view_admin_presence": "viewAdminPresence",
   "view_admin_stuck_games": "viewAdminStuckGames",
+  "view_admin_tournament": "viewAdminTournament",
+  "view_admin_tournament_enrolled": "viewAdminTournamentEnrolled",
+  "view_admin_tournament_lobbies": "viewAdminTournamentLobbies",
+  "view_admin_tournament_match_results": "viewAdminTournamentMatchResults",
+  "view_admin_tournament_matches": "viewAdminTournamentMatches",
+  "view_admin_tournament_team_members": "viewAdminTournamentTeamMembers",
+  "view_admin_tournament_teams": "viewAdminTournamentTeams",
   "view_admin_user_identities": "viewAdminUserIdentities",
   "view_admin_user_private": "viewAdminUserPrivate",
   "view_lobby_browser": "viewLobbyBrowser",
@@ -1597,6 +1676,20 @@ export type DbView = __DbViewBase & {
   readonly "view_admin_presence": __DbViewBase["viewAdminPresence"];
   /** @deprecated Use `viewAdminStuckGames` instead. This alias will be removed in the next major version. */
   readonly "view_admin_stuck_games": __DbViewBase["viewAdminStuckGames"];
+  /** @deprecated Use `viewAdminTournament` instead. This alias will be removed in the next major version. */
+  readonly "view_admin_tournament": __DbViewBase["viewAdminTournament"];
+  /** @deprecated Use `viewAdminTournamentEnrolled` instead. This alias will be removed in the next major version. */
+  readonly "view_admin_tournament_enrolled": __DbViewBase["viewAdminTournamentEnrolled"];
+  /** @deprecated Use `viewAdminTournamentLobbies` instead. This alias will be removed in the next major version. */
+  readonly "view_admin_tournament_lobbies": __DbViewBase["viewAdminTournamentLobbies"];
+  /** @deprecated Use `viewAdminTournamentMatchResults` instead. This alias will be removed in the next major version. */
+  readonly "view_admin_tournament_match_results": __DbViewBase["viewAdminTournamentMatchResults"];
+  /** @deprecated Use `viewAdminTournamentMatches` instead. This alias will be removed in the next major version. */
+  readonly "view_admin_tournament_matches": __DbViewBase["viewAdminTournamentMatches"];
+  /** @deprecated Use `viewAdminTournamentTeamMembers` instead. This alias will be removed in the next major version. */
+  readonly "view_admin_tournament_team_members": __DbViewBase["viewAdminTournamentTeamMembers"];
+  /** @deprecated Use `viewAdminTournamentTeams` instead. This alias will be removed in the next major version. */
+  readonly "view_admin_tournament_teams": __DbViewBase["viewAdminTournamentTeams"];
   /** @deprecated Use `viewAdminUserIdentities` instead. This alias will be removed in the next major version. */
   readonly "view_admin_user_identities": __DbViewBase["viewAdminUserIdentities"];
   /** @deprecated Use `viewAdminUserPrivate` instead. This alias will be removed in the next major version. */
@@ -1769,6 +1862,20 @@ export type Tables = __TablesBase & {
   readonly "view_admin_presence": __TablesBase["viewAdminPresence"];
   /** @deprecated Use `viewAdminStuckGames` instead. This alias will be removed in the next major version. */
   readonly "view_admin_stuck_games": __TablesBase["viewAdminStuckGames"];
+  /** @deprecated Use `viewAdminTournament` instead. This alias will be removed in the next major version. */
+  readonly "view_admin_tournament": __TablesBase["viewAdminTournament"];
+  /** @deprecated Use `viewAdminTournamentEnrolled` instead. This alias will be removed in the next major version. */
+  readonly "view_admin_tournament_enrolled": __TablesBase["viewAdminTournamentEnrolled"];
+  /** @deprecated Use `viewAdminTournamentLobbies` instead. This alias will be removed in the next major version. */
+  readonly "view_admin_tournament_lobbies": __TablesBase["viewAdminTournamentLobbies"];
+  /** @deprecated Use `viewAdminTournamentMatchResults` instead. This alias will be removed in the next major version. */
+  readonly "view_admin_tournament_match_results": __TablesBase["viewAdminTournamentMatchResults"];
+  /** @deprecated Use `viewAdminTournamentMatches` instead. This alias will be removed in the next major version. */
+  readonly "view_admin_tournament_matches": __TablesBase["viewAdminTournamentMatches"];
+  /** @deprecated Use `viewAdminTournamentTeamMembers` instead. This alias will be removed in the next major version. */
+  readonly "view_admin_tournament_team_members": __TablesBase["viewAdminTournamentTeamMembers"];
+  /** @deprecated Use `viewAdminTournamentTeams` instead. This alias will be removed in the next major version. */
+  readonly "view_admin_tournament_teams": __TablesBase["viewAdminTournamentTeams"];
   /** @deprecated Use `viewAdminUserIdentities` instead. This alias will be removed in the next major version. */
   readonly "view_admin_user_identities": __TablesBase["viewAdminUserIdentities"];
   /** @deprecated Use `viewAdminUserPrivate` instead. This alias will be removed in the next major version. */

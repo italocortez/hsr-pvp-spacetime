@@ -1083,3 +1083,17 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** user, 2026-11-09: "for the auto picker on classic, yes, credit every player on the team that got it". S10f review F5: the timer pick has no picker, so nobody received the played stat.
 - **Supersedes:** nothing; fills the case A82 left open.
 - **Where implemented:** S10h
+
+### A107 — Cost sets: completeness at publish, patch in place
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:**
+  1. Every character and light-cone price is read from the lobby's own cost set, game mode and draft mode. Nothing is read from the default set as a substitute (A101).
+  2. Completeness is settled when a cost set goes live. For each draft mode the set already prices, publishing checks the draft against the reference tables (`HsrCharacter`, `HsrLightcone`). The owner sees the missing entries first (a view of the draft's missing rows, for the "push cost set live" dialog). `publish_cost_set` takes a confirmation flag: with gaps and no confirmation it is refused with the counts; with confirmation the missing entries are written at cost 0 in the draft and the live copy. A draft mode the set does not price at all is not filled, and lobbies of that mode cannot select the set (coverage guard unchanged in intent, reading the same rows as the lookups).
+  3. A published set can be patched in place: its draft copy stays editable and publishing again upserts the draft rows into the live rows under the same id, with the same missing-rows confirmation. Tournaments, presets and lobbies that point at the set get the new prices without being changed.
+  4. A patch is refused while any lobby using that set is in Drafting, Equipping or Scoring, with a text giving the count. Waiting rooms and tournaments between games do not block it.
+  5. A character or light cone added to the reference data after a set went live is not filled automatically. Until the owner patches the set, picking, nominating or equipping it in a lobby on that set is refused with a text saying it has no cost in this lobby's cost set, and the timer's auto-pick never draws it.
+  6. History is unaffected: finished and closed games keep the costs stored on their steps and lineups (`costPaid`, `rosterCost`, `synergySurcharge`); nothing in the history tables or views reads the cost tables.
+- **Why:** user, 2026-11-09: "characters and lightcones should always be read from its cost set."; "before we publish it, it needs to confirm we have every character and lightcone in it and if it doesn't, thats when we fill it out with cost 0 but we need to show that to whoever clicks the \"push cost set live\" button"; "would prefer character scannot be picked in lobbies on olrder sets"; "I agree with you recommendation on filling" (only the draft modes the set prices); on patching in place with the live-match guard: "updating the cost set wont damage the history right? that's snapshot. If so, yes I agree with your suggestion".
+- **Supersedes:** A101's "a missing row rejects the action" as the general rule (it remains only for entries added after publish, clause 5); the frozen-after-publish rule of `publish_cost_set` ("clone to make a new draft" stays available but is no longer the only way to change a live set).
+- **Where implemented:** S10h

@@ -9,12 +9,14 @@ import {
     deleteUserTeamRequests,
     findEnrolled,
     findMembership,
+    isActingCaptain,
     isGroupFormat,
     normalizeTeamName,
     refreshTeamStatus,
     removeTeamMember,
 } from '@module/helpers/tournament/tournamentHelpers';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
+import { consumeTournamentAllowance } from '@module/helpers/lobby/abuseControls';
 
 // Team edits by participants stop when registration closes (A26a): every reducer below except rename (Registration
 // or CheckIn) and the staff group assignment (Seeding) runs in Registration only. Participants never set the team
@@ -141,7 +143,7 @@ export const accept_team_request = spacetimedb.reducer(
     (ctx, { teamId, userId }) => {
         const caller = getAuthenticatedUser(ctx);
         const { team, tournament } = loadTeam(ctx, teamId);
-        if (team.captainUserId !== caller.id) {
+        if (!isActingCaptain(ctx, team, caller.id)) { // S10g review F4
             throw new SenderError('Only the team captain can accept join requests.');
         }
         ensureRegistration(tournament, 'be joined');
@@ -176,7 +178,7 @@ export const reject_team_request = spacetimedb.reducer(
     (ctx, { teamId, userId }) => {
         const caller = getAuthenticatedUser(ctx);
         const { team, tournament } = loadTeam(ctx, teamId);
-        if (team.captainUserId !== caller.id) {
+        if (!isActingCaptain(ctx, team, caller.id)) { // S10g review F4
             throw new SenderError('Only the team captain can reject join requests.');
         }
         ensureRegistration(tournament, 'be edited');
@@ -223,7 +225,7 @@ export const disband_tournament_team = spacetimedb.reducer(
     (ctx, { teamId }) => {
         const user = getAuthenticatedUser(ctx);
         const { team, tournament } = loadTeam(ctx, teamId);
-        if (team.captainUserId !== user.id) {
+        if (!isActingCaptain(ctx, team, user.id)) {
             throw new SenderError('Only the team captain can disband the team.');
         }
         ensureRegistration(tournament, 'be disbanded');
@@ -245,7 +247,7 @@ export const withdraw_tournament_team = spacetimedb.reducer(
     (ctx, { teamId }) => {
         const user = getAuthenticatedUser(ctx);
         const { team, tournament } = loadTeam(ctx, teamId);
-        if (team.captainUserId !== user.id) {
+        if (!isActingCaptain(ctx, team, user.id)) { // S10g review F4
             throw new SenderError('Only the team captain can withdraw the team.');
         }
         if (tournament.stage.tag !== 'Registration' && tournament.stage.tag !== 'CheckIn') {
@@ -302,6 +304,8 @@ export const add_team_member = spacetimedb.reducer(
 // ─── rename_tournament_team ───────────────────────────────────────────────────
 // A36a: the captain renames the team in Registration or CheckIn (1–40 characters, unique case-insensitive).
 // A solo team is named after its player (display name, or the alias in an anonymous tournament: set_anonymous_alias).
+// S10g: a rename that changes the name is counted by consumeTournamentAllowance (audit #13); the captain must still be
+// a member of the team (audit #15, also for disband_tournament_team).
 
 export const rename_tournament_team = spacetimedb.reducer(
     {
@@ -311,7 +315,7 @@ export const rename_tournament_team = spacetimedb.reducer(
     (ctx, { teamId, name }) => {
         const user = getAuthenticatedUser(ctx);
         const { team, tournament } = loadTeam(ctx, teamId);
-        if (team.captainUserId !== user.id) {
+        if (!isActingCaptain(ctx, team, user.id)) {
             throw new SenderError('Only the team captain can rename the team.');
         }
         if (tournament.stage.tag !== 'Registration' && tournament.stage.tag !== 'CheckIn') {
@@ -322,6 +326,7 @@ export const rename_tournament_team = spacetimedb.reducer(
         }
         const trimmed = normalizeTeamName(ctx, team.tournamentId, name, teamId);
         if (trimmed !== team.name) {
+            consumeTournamentAllowance(ctx, user.id); // S10g (audit #13)
             ctx.db.TournamentTeam.id.update(updateWithAudit(ctx, team, { name: trimmed }, user.id));
         }
     }

@@ -2681,6 +2681,17 @@ export const TournamentTeamRequest = __t.object("TournamentTeamRequest", {
 });
 export type TournamentTeamRequest = __Infer<typeof TournamentTeamRequest>;
 
+export const TournamentWaitlistAccount = __t.object("TournamentWaitlistAccount", {
+  tournamentId: __t.u32(),
+  userId: __t.u32(),
+  hsrAccountId: __t.u32(),
+  createdById: __t.u32(),
+  createdDate: __t.timestamp(),
+  lastModifiedById: __t.u32(),
+  lastModifiedDate: __t.timestamp(),
+});
+export type TournamentWaitlistAccount = __Infer<typeof TournamentWaitlistAccount>;
+
 export const UndoPayload = __t.object("UndoPayload", {
   originalSequenceId: __t.u32(),
 });
@@ -2796,6 +2807,8 @@ export const UserRateState = __t.object("UserRateState", {
   membershipCount: __t.u32(),
   resultEntryWindowStart: __t.timestamp(),
   resultEntryCount: __t.u32(),
+  tournamentWindowStart: __t.timestamp(),
+  tournamentCount: __t.u32(),
   createdById: __t.u32(),
   createdDate: __t.timestamp(),
   lastModifiedById: __t.u32(),
@@ -2828,6 +2841,41 @@ export type ViewAdminPresence = __Infer<typeof ViewAdminPresence>;
 
 export const ViewAdminStuckGames = __t.object("ViewAdminStuckGames", {});
 export type ViewAdminStuckGames = __Infer<typeof ViewAdminStuckGames>;
+
+export const ViewAdminTournament = __t.object("ViewAdminTournament", {
+  tournamentId: __t.u32(),
+});
+export type ViewAdminTournament = __Infer<typeof ViewAdminTournament>;
+
+export const ViewAdminTournamentEnrolled = __t.object("ViewAdminTournamentEnrolled", {
+  tournamentId: __t.u32(),
+});
+export type ViewAdminTournamentEnrolled = __Infer<typeof ViewAdminTournamentEnrolled>;
+
+export const ViewAdminTournamentLobbies = __t.object("ViewAdminTournamentLobbies", {
+  tournamentId: __t.u32(),
+});
+export type ViewAdminTournamentLobbies = __Infer<typeof ViewAdminTournamentLobbies>;
+
+export const ViewAdminTournamentMatchResults = __t.object("ViewAdminTournamentMatchResults", {
+  tournamentId: __t.u32(),
+});
+export type ViewAdminTournamentMatchResults = __Infer<typeof ViewAdminTournamentMatchResults>;
+
+export const ViewAdminTournamentMatches = __t.object("ViewAdminTournamentMatches", {
+  tournamentId: __t.u32(),
+});
+export type ViewAdminTournamentMatches = __Infer<typeof ViewAdminTournamentMatches>;
+
+export const ViewAdminTournamentTeamMembers = __t.object("ViewAdminTournamentTeamMembers", {
+  tournamentId: __t.u32(),
+});
+export type ViewAdminTournamentTeamMembers = __Infer<typeof ViewAdminTournamentTeamMembers>;
+
+export const ViewAdminTournamentTeams = __t.object("ViewAdminTournamentTeams", {
+  tournamentId: __t.u32(),
+});
+export type ViewAdminTournamentTeams = __Infer<typeof ViewAdminTournamentTeams>;
 
 export const ViewAdminUserIdentities = __t.object("ViewAdminUserIdentities", {});
 export type ViewAdminUserIdentities = __Infer<typeof ViewAdminUserIdentities>;

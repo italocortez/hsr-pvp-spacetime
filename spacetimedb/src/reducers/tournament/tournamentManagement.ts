@@ -232,7 +232,8 @@ export const create_tournament = spacetimedb.reducer(
 
 // ─── update_tournament ────────────────────────────────────────────────────────
 // Updates tournament settings. Permission: owner (A25).
-// format / teamSize change in Draft only; the rest until Seeding (Draft, Registration, CheckIn).
+// format / teamSize / isAnonymousDefault (A103, S10g) change in Draft only; the rest until Seeding (Draft, Registration,
+// CheckIn).
 // defaultGameMode and countTowardsMmr stay fixed after creation (unchanged).
 
 export const update_tournament = spacetimedb.reducer(
@@ -248,6 +249,10 @@ export const update_tournament = spacetimedb.reducer(
         }
         if (stage !== 'Draft' && (args.format !== tournament.format.tag || args.teamSize !== tournament.teamSize)) {
             throw new SenderError('Format and team size can only change in Draft.');
+        }
+        // A103 (S10g, audit #9): solo team names and the views' anonymity follow isAnonymousDefault from enrolment on.
+        if (stage !== 'Draft' && args.isAnonymousDefault !== tournament.isAnonymousDefault) {
+            throw new SenderError('The anonymous setting can only change in Draft.');
         }
         const v = validateSettings(ctx, args);
 

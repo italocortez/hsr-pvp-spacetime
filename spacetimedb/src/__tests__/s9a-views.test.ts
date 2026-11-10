@@ -317,21 +317,25 @@ describe('A37 outsider isolation: per-sender views', () => {
         expect(view(test, 'view_admin_stuck_games', ghost())).toEqual([]);
     });
 
-    it('tournament per-sender views: [] for an outsider, an unmapped identity and a non-staff Moderator; a participant / staff reads rows', () => {
+    it('tournament per-sender views: [] for an outsider, an unmapped identity and a non-staff Moderator (personal views); a participant / staff reads rows; T-S10g (A105(1)): a Moderator reads the running tournaments through the staff view', () => {
         const { test, org, f, sub, cap, outsider, mod } = tournamentWorld();
-        const views: Array<[string, Actor]> = [
+        const personal: Array<[string, Actor]> = [
             ['view_my_tournament_enrollment', f.ts[0].captain],
             ['view_my_team_requests', cap],
             ['view_my_stand_ins', sub],
             ['view_tournament_matches_for_me', f.ts[0].captain],
-            ['view_my_tournament_lobbies', org],
         ];
+        const views: Array<[string, Actor]> = [...personal, ['view_my_tournament_lobbies', org]];
         for (const [name, reader] of views) {
             expect(view(test, name, reader).length, `${name}: reader`).toBeGreaterThan(0);
             expect(view(test, name, outsider), `${name}: outsider`).toEqual([]);
             expect(view(test, name, ghost()), `${name}: unmapped identity`).toEqual([]);
+        }
+        for (const [name] of personal) {
             expect(view(test, name, mod), `${name}: non-staff Moderator`).toEqual([]);
         }
+        // A105(1): a Moderator who is not staff of the tournament reads its (running) lobbies like the organizer
+        expect(view(test, 'view_my_tournament_lobbies', mod)).toEqual(view(test, 'view_my_tournament_lobbies', org));
         // a player is not staff: no tournament lobbies through the staff view
         expect(view(test, 'view_my_tournament_lobbies', f.ts[0].captain)).toEqual([]);
     });

@@ -5,7 +5,7 @@ import { ensureTournamentPermission } from '@module/helpers/tournament/tournamen
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { deleteCalendarEventForBracketMatch } from '@module/helpers/calendar/calendarCascade';
 import { insertBracket } from '@module/helpers/tournament/bracketStore';
-import { applyBracketResult, matchGames, rollbackBracketResult } from '@module/helpers/tournament/bracketResults';
+import { applyBracketResult, ensureGroupMatchOpen, matchGames, rollbackBracketResult } from '@module/helpers/tournament/bracketResults';
 import { qualifiersFor } from '@module/helpers/tournament/tournamentStandings';
 import { voidMatchLobbies } from '@module/helpers/tournament/tournamentResults';
 
@@ -24,12 +24,13 @@ function normalizeReason(reason: string): string {
     return trimmed;
 }
 
-/** `results` permission on the match's tournament, which must be InProgress. */
+/** `results` permission on the match's tournament, which must be InProgress; a group match must still be open. */
 function ensureResultsMatch(ctx: any, bracketMatchId: number): { user: any; tournament: any; match: any } {
     const match = ctx.db.BracketMatch.id.find(bracketMatchId);
     if (!match) throw new SenderError('Bracket match not found.');
     const { user, tournament } = ensureTournamentPermission(ctx, match.tournamentId, 'results');
     if (tournament.stage.tag !== 'InProgress') throw new SenderError('Tournament is not in progress.');
+    ensureGroupMatchOpen(ctx, match); // S10g (audit #5): group results lock once the elimination bracket exists
     return { user, tournament, match };
 }
 

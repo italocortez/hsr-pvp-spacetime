@@ -114,6 +114,8 @@ function writeRateState(ctx: any, userId: number, existing: any, changes: Record
             membershipCount: 0,
             resultEntryWindowStart: EPOCH,
             resultEntryCount: 0,
+            tournamentWindowStart: EPOCH,
+            tournamentCount: 0,
             ...changes,
         }, userId));
     }
@@ -196,6 +198,35 @@ export function consumeResultEntryAllowance(ctx: any, userId: number): void {
         writeRateState(ctx, userId, state, { resultEntryCount: state.resultEntryCount + 1 });
     } else {
         writeRateState(ctx, userId, state, { resultEntryWindowStart: ctx.timestamp, resultEntryCount: 1 });
+    }
+}
+
+/**
+ * Tournament audit #13 (S10g): the per-user rate of tournament entry writes (register_for_tournament,
+ * set_anonymous_alias, rename_tournament_team, lock_tournament_accounts). Each rewrites rows the shared tournament arg
+ * views (view_tournament_participants / _teams / _team_members) send to every viewer of the tournament page, and a
+ * register / withdraw cycle inserts and deletes the enrolment, the solo team, the membership and the lock rows. At most
+ * TOURNAMENT_CHANGES_PER_WINDOW writes per fixed TOURNAMENT_WINDOW_MS window (one minute): registering, setting an
+ * alias, renaming the team and adding an account never come close; a script loop is held to ten writes a minute, so a
+ * register / withdraw cycle runs at most ten times a minute. withdraw_from_tournament is never counted nor rejected (a
+ * user at the cap can always leave, like leave_lobby). Constants, not AbuseConfig columns. A rejected call consumes
+ * nothing (the reducer rolls back).
+ */
+export const TOURNAMENT_WINDOW_MS = 60_000;
+export const TOURNAMENT_CHANGES_PER_WINDOW = 10;
+
+/** Counts one tournament entry write of the user, rejecting it once the current window is full. */
+export function consumeTournamentAllowance(ctx: any, userId: number): void {
+    const now: bigint = ctx.timestamp.microsSinceUnixEpoch;
+    const state = ctx.db.UserRateState.userId.find(userId);
+    const windowOpen = state && now - state.tournamentWindowStart.microsSinceUnixEpoch < BigInt(TOURNAMENT_WINDOW_MS) * 1000n;
+    if (windowOpen) {
+        if (state.tournamentCount >= TOURNAMENT_CHANGES_PER_WINDOW) {
+            throw new SenderError('You are changing your tournament entries too quickly. Please wait a minute.');
+        }
+        writeRateState(ctx, userId, state, { tournamentCount: state.tournamentCount + 1 });
+    } else {
+        writeRateState(ctx, userId, state, { tournamentWindowStart: ctx.timestamp, tournamentCount: 1 });
     }
 }
 

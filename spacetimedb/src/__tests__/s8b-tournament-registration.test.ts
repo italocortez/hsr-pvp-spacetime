@@ -200,7 +200,7 @@ describe('account locks (A26a(4), D-21)', () => {
         expect(locks(test, id, q.userId)).toEqual([b1]);
     });
 
-    it('waitlisted: no locks at registration; waitlist_promote locks every account', () => {
+    it('waitlisted: no locks at registration; waitlist_promote locks the chosen accounts, or every account when none were named (T-S10g: A104)', () => {
         const test = newHarness();
         const org = host(test);
         const id = openTournament(test, org, { maxParticipants: 1, waitlistEnabled: true });
@@ -214,7 +214,17 @@ describe('account locks (A26a(4), D-21)', () => {
         tx(test, first, (ctx) => M.withdraw_from_tournament(ctx, { tournamentId: id }));
         tx(test, org, (ctx) => M.waitlist_promote(ctx, { tournamentId: id, userId: w.userId }));
         expect(enrolled(test, id, w.userId).isWaitlisted).toBe(false);
-        expect(locks(test, id, w.userId)).toEqual(acc); // addendum: a promoted player gets all accounts locked
+        expect(locks(test, id, w.userId)).toEqual([acc[0]]); // A104: the remembered choice
+        expect([...test.db.TournamentWaitlistAccount.by_tournament_and_user.filter([id, w.userId])]).toHaveLength(0);
+
+        // none named: every account is locked at promotion
+        const id2 = openTournament(test, org, { name: 'second', maxParticipants: 1, waitlistEnabled: true });
+        const [first2] = enrollMany(test, id2, 1, 'f');
+        register(test, w, id2);
+        expect(enrolled(test, id2, w.userId).isWaitlisted).toBe(true);
+        tx(test, first2, (ctx) => M.withdraw_from_tournament(ctx, { tournamentId: id2 }));
+        tx(test, org, (ctx) => M.waitlist_promote(ctx, { tournamentId: id2, userId: w.userId }));
+        expect(locks(test, id2, w.userId)).toEqual(acc);
     });
 });
 

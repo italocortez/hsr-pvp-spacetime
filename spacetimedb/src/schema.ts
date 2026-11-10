@@ -104,6 +104,7 @@ import { GlobalCharacterStat } from '@module/tables/stats/globalCharacterStat';
 
 // Tournament Player Accounts
 import { TournamentPlayerAccount } from '@module/tables/tournament/tournamentPlayerAccount';
+import { TournamentWaitlistAccount } from '@module/tables/tournament/tournamentWaitlistAccount';
 
 // Match Result Game History
 import { MatchResultGameHistory } from '@module/tables/results/matchResultGameHistory';
@@ -238,6 +239,7 @@ const spacetimedb = schema({
 
     // Tournament Player Accounts
     TournamentPlayerAccount,
+    TournamentWaitlistAccount, // A104 (S10g): a waitlisted registrant's chosen accounts, private
 
     // GC Audit
     GcResult,

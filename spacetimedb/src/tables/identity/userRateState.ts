@@ -8,6 +8,9 @@ import { table, t } from 'spacetimedb/server';
  * changes (join / return / seat move; a leave is not counted; consumeMembershipAllowance); the window starts at the epoch.
  * S10f follow-up (results audit #7): `resultEntryWindowStart` / `resultEntryCount` are the fixed window of the user's
  * result writes (record_group_scores, set_score_adjustment, confirm_game; consumeResultEntryAllowance), same shape.
+ * S10g (tournament audit #13): `tournamentWindowStart` / `tournamentCount` are the fixed window of the user's tournament
+ * entry writes (register_for_tournament, set_anonymous_alias, rename_tournament_team, lock_tournament_accounts;
+ * consumeTournamentAllowance), same shape.
  */
 export const userRateStateColumns = {
     userId: t.u32().primaryKey(),
@@ -19,6 +22,8 @@ export const userRateStateColumns = {
     membershipCount: t.u32(),
     resultEntryWindowStart: t.timestamp(),
     resultEntryCount: t.u32(),
+    tournamentWindowStart: t.timestamp(),
+    tournamentCount: t.u32(),
     createdById: t.u32(),
     createdDate: t.timestamp(),
     lastModifiedById: t.u32(),

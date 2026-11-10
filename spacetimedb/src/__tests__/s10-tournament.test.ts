@@ -114,19 +114,22 @@ describe('mod_promote_to_host / mod_demote_from_host (Moderator+; User <-> Tourn
 // ─── update_tournament ────────────────────────────────────────────────────────
 
 describe('update_tournament outside Draft (A36)', () => {
-    it('contract "Tournament Update (Registration)": rosterVisibility, isAnonymousDefault and disconnectPolicy change in Registration; stage kept', () => {
+    it('contract "Tournament Update (Registration)" (T-S10g: isAnonymousDefault Draft-only, A103): rosterVisibility and disconnectPolicy change in Registration; isAnonymousDefault stays; stage kept', () => {
         const test = newHarness();
         const org = host(test);
         const id = openTournament(test, org);
         tx(test, org, updateBody(test, id, {
-            name: 'Reg Update', rosterVisibility: 'ClosedWithRating', isAnonymousDefault: true, disconnectPolicy: 'Deferred',
+            name: 'Reg Update', rosterVisibility: 'ClosedWithRating', disconnectPolicy: 'Deferred',
         }));
         const t = tRow(test, id);
         expect(t.name).toBe('Reg Update');
         expect(t.rosterVisibility.tag).toBe('ClosedWithRating');
-        expect(t.isAnonymousDefault).toBe(true);
+        expect(t.isAnonymousDefault).toBe(false);
         expect(t.disconnectPolicy.tag).toBe('Deferred');
         expect(t.stage.tag).toBe('Registration');
+        // A103: a flip of isAnonymousDefault outside Draft is rejected (the s10g suite covers every stage).
+        expectReject(test, org, updateBody(test, id, { isAnonymousDefault: true }), 'The anonymous setting can only change in Draft.');
+        expect(tRow(test, id).isAnonymousDefault).toBe(false);
     });
 
     it('A36 (contract S8b scenario "update_tournament takes the same set; … the rest until Seeding"): rejected in Seeding and on a Cancelled tournament with the current text', () => {

@@ -296,9 +296,9 @@ describe('A67(4): rollback of a decided Bo3 voids the deciding record only', () 
         expect([replay.team1Games, replay.team2Games]).toEqual([1, 2]);
     });
 
-    // S8e review rule: a match decided through an override (decidedBy Staff) keeps its records on rollback, and the
-    // recomputed tally re-decides it as Played.
-    it('rollback of a match decided through override_match_result keeps the record and re-decides from the tally (Played)', () => {
+    // T-S10g (tournament audit #3): a match decided through an override (decidedBy Staff) whose winner the tally gives
+    // is rolled back like a played decision: the deciding record is voided and the match returns to Ready.
+    it('rollback of a match decided through override_match_result voids the deciding record and returns the match to Ready (audit #3)', () => {
         const f = liveField(2, { defaultBestOf: 1, grandFinalBestOf: 1, requireResultValidation: true });
         const m = byKey(f.test, f.id, 'W-R1-M1');
         const s = playMatch(f, m.id, 'Blue');
@@ -307,11 +307,12 @@ describe('A67(4): rollback of a decided Bo3 voids the deciding record only', () 
         expect(matchRow(f.test, m.id).decidedBy?.tag).toBe('Staff');
         rollback(f, m.id);
         const after = matchRow(f.test, m.id);
-        expect(after.state.tag).toBe('Decided');
-        expect(after.decidedBy?.tag).toBe('Played');
-        expect(after.winnerTeamId).toBe(m.team1Id);
-        expect(f.test.db.MatchResultRecord.id.find(r.id)!.status.tag).toBe('Validated');
-        expect(lobbyRow(f.test, s.lobbyId).stage.tag).toBe('AwaitingResult');
+        expect(after.state.tag).toBe('Ready');
+        expect(after.decidedBy).toBeUndefined();
+        expect(after.winnerTeamId).toBeUndefined();
+        expect([after.team1Games, after.team2Games]).toEqual([0, 0]);
+        expect(f.test.db.MatchResultRecord.id.find(r.id)!.status.tag).toBe('Voided');
+        expect(f.test.db.Lobby.id.find(s.lobbyId)).toBeFalsy();
     });
 });
 

@@ -4,6 +4,7 @@ import { removeMemberRow } from '@module/helpers/lobby/memberRemoval';
 import { LIVE_STAGES, slotIsCoach, slotIsSpectator } from '@module/helpers/lobby/lobbyHelpers';
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { recalcDuplicateUid } from '@module/helpers/roster/rosterHelpers';
+import { settleTournamentTiesForDeletion } from '@module/helpers/tournament/disqualification';
 
 /**
  * Returns true if the iterator yields at least one element.
@@ -36,7 +37,7 @@ export function hasHistoryReferences(ctx: any, userId: number): boolean {
 /**
  * Cascade-delete active-state rows, then remove the User row.
  *
- * Cascade: UserPrivate, lobby memberships (below), calendar data, UserPresence, UserRateState, UserIdentity,
+ * Cascade: tournament ties first (A94(2), settleTournamentTiesForDeletion), UserPrivate, lobby memberships (below), calendar data, UserPresence, UserRateState, UserIdentity,
  * HsrAccount, HsrAccountCharacter.
  * Guest users with no history references → hard-delete (row removed entirely).
  * All others → the User row is hard-deleted and archived to DeletedUser (id, displayName, isGuest, deletedAt), which
@@ -48,6 +49,10 @@ export function hasHistoryReferences(ctx: any, userId: number): boolean {
 export function performUserDeletion(ctx: any, userId: number, actorId: number): void {
     const user = ctx.db.User.id.find(userId);
     if (!user) return;
+
+    // A94(2) (S10g): tournament ties are settled first (withdrawal before the bracket exists, DQ once it exists;
+    // requests, assistant rows, stand-in rows, account locks and remembered waitlist accounts deleted).
+    settleTournamentTiesForDeletion(ctx, userId, actorId);
 
     // D-09 audit (Phase 12.1): UserPrivate cascade verified complete -- hard-deleted here
     // Cascade: hard-delete UserPrivate (D-03: BanRecord retains discordId independently)

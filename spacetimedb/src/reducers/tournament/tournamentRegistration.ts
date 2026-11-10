@@ -9,22 +9,32 @@ import {
     ensureNotEnrolled,
     findEnrolled,
     findMembership,
+    hasPlayedTournamentGame,
+    lockAccountsAtPromotion,
     lockPlayerAccounts,
     normalizeAlias,
     refreshTeamOf,
+    rememberWaitlistAccounts,
     removeEnrolment,
     soloTeamName,
     updateEnrolled,
 } from '@module/helpers/tournament/tournamentHelpers';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
+import { consumeTournamentAllowance } from '@module/helpers/lobby/abuseControls';
 
 const unit = (tag: string) => ({ tag, value: {} }) as any;
 
-/** A36b: the player's MmrRating for the tournament's game mode in the active season, else EloConfig.initialRating. */
+/**
+ * A36b: the player's MmrRating for the tournament's game mode in the active season, else EloConfig.initialRating.
+ * S10g (audit #6): the active season is resolved the way the rating writer does (finalizationHelpers: the Season row
+ * with isActive, else 0); Tournament.seasonId (always 0) is not read.
+ */
 function ensureMinimumMmr(ctx: any, tournament: any, user: any): void {
     if (!tournament.minimumMmr) return;
     if (user.isGuest) throw new SenderError('Guests cannot join a tournament with a minimum MMR.');
-    const row = [...ctx.db.MmrRating.by_user_mode_season.filter([user.id, tournament.defaultGameMode, tournament.seasonId])][0];
+    const activeSeason = [...ctx.db.Season.is_active.filter(true)][0];
+    const seasonId = activeSeason ? activeSeason.id : 0;
+    const row = [...ctx.db.MmrRating.by_user_mode_season.filter([user.id, tournament.defaultGameMode, seasonId])][0];
     let rating: number;
     if (row) {
         rating = row.rating;
@@ -47,6 +57,8 @@ function ensureMinimumMmr(ctx: any, tournament: any, user: any): void {
 // ones (A26a(4)). Solo tournaments (teamSize = 1) auto-create the player's team (named per A36a).
 // Optional: hsrAccountIds (the accounts to lock; omitted = all), anonymousAlias (anonymous tournaments only),
 // allowRandomTeamAssignment (A36a opt-in for random team formation at registration close).
+// A104 (S10g): a waitlisted registrant's hsrAccountIds are remembered (TournamentWaitlistAccount) and locked at
+// promotion. Audit #13 (S10g): counted by consumeTournamentAllowance (10 tournament entry writes a minute).
 
 export const register_for_tournament = spacetimedb.reducer(
     {
@@ -108,7 +120,10 @@ export const register_for_tournament = spacetimedb.reducer(
 
         if (!isWaitlisted) {
             lockPlayerAccounts(ctx, tournamentId, user.id, hsrAccountIds, user.id);
+        } else if (hsrAccountIds !== undefined) {
+            rememberWaitlistAccounts(ctx, tournamentId, user.id, hsrAccountIds, user.id); // A104: applied at promotion
         }
+        consumeTournamentAllowance(ctx, user.id); // S10g (audit #13)
     }
 );
 
@@ -189,7 +204,8 @@ export const reject_participant = spacetimedb.reducer(
 
 // ─── waitlist_promote ─────────────────────────────────────────────────────────
 // D.8.6: Registration through Seeding until the bracket is generated; needs a free spot (capacity = rows neither
-// waitlisted nor Disqualified); implies approval; creates the account locks now (A26a(4)).
+// waitlisted nor Disqualified); implies approval; creates the account locks now (A26a(4)): the accounts the player
+// chose while waitlisted (A104, S10g), or all of them when they named none.
 // Permission: participants (A25).
 
 export const waitlist_promote = spacetimedb.reducer(
@@ -214,7 +230,7 @@ export const waitlist_promote = spacetimedb.reducer(
             isWaitlisted: false,
             approvedByToAt: enrolled.approvedByToAt ?? ctx.timestamp, // promotion implies approval (A26)
         }, user.id);
-        lockPlayerAccounts(ctx, tournamentId, userId, undefined, user.id);
+        lockAccountsAtPromotion(ctx, tournamentId, userId, user.id); // A104: the remembered choice, else every account
         refreshTeamOf(ctx, tournament, userId, user.id);
     }
 );
@@ -260,7 +276,8 @@ export const add_participant = spacetimedb.reducer(
 
 // ─── set_anonymous_alias ──────────────────────────────────────────────────────
 // A36a: the enrolled player sets their alias (1–32 characters) while the tournament is anonymous and before
-// Seeding. In a solo tournament the player's team takes the alias as its name.
+// Seeding. In a solo tournament the player's team takes the alias as its name. Audit #13 (S10g): counted by
+// consumeTournamentAllowance.
 
 export const set_anonymous_alias = spacetimedb.reducer(
     {
@@ -279,6 +296,7 @@ export const set_anonymous_alias = spacetimedb.reducer(
         if (!enrolled) throw new SenderError('You are not registered for this tournament.');
 
         const trimmed = normalizeAlias(alias);
+        consumeTournamentAllowance(ctx, user.id); // S10g (audit #13)
         updateEnrolled(ctx, enrolled, { anonymousAlias: trimmed }, user.id);
 
         if (tournament.teamSize === 1) {
@@ -289,5 +307,51 @@ export const set_anonymous_alias = spacetimedb.reducer(
                 if (team.name !== name) ctx.db.TournamentTeam.id.update(updateWithAudit(ctx, team, { name }, user.id));
             }
         }
+    }
+);
+
+// ─── lock_tournament_accounts ─────────────────────────────────────────────────
+// A104 (S10g; tournament audit #7): a registered player (any enrolment that is not Disqualified: approved, awaiting
+// approval or waitlisted) adds account locks for the tournament until their first game of it has started
+// (hasPlayedTournamentGame, S10g review F3: the caller's own game: a result-record participant of one of the
+// tournament's bracket matches, or a player seat in such a lobby past Waiting; a game the team played without them
+// does not count). Registration through InProgress. Locks are only added, never removed. The accounts must be the
+// caller's own. A waitlisted player's accounts are always remembered (TournamentWaitlistAccount, first call included,
+// review F5) and locked at promotion; once promotion is impossible (bracket generated or InProgress) a waitlisted
+// caller is refused. Counted by consumeTournamentAllowance (audit #13).
+
+export const lock_tournament_accounts = spacetimedb.reducer(
+    {
+        tournamentId: t.u32(),
+        hsrAccountIds: t.array(t.u32()),
+    },
+    (ctx, { tournamentId, hsrAccountIds }) => {
+        const user = getAuthenticatedUser(ctx);
+        const tournament = ctx.db.Tournament.id.find(tournamentId);
+        if (!tournament) throw new SenderError('Tournament not found.');
+        const stage = tournament.stage.tag;
+        if (stage !== 'Registration' && stage !== 'CheckIn' && stage !== 'Seeding' && stage !== 'InProgress') {
+            throw new SenderError('Accounts can be locked from Registration until the tournament ends.');
+        }
+        if (hsrAccountIds.length === 0) throw new SenderError('Name at least one account to lock.');
+        const enrolled = findEnrolled(ctx, tournamentId, user.id);
+        if (!enrolled) throw new SenderError('You are not registered for this tournament.');
+        if (enrolled.status.tag === 'Disqualified') throw new SenderError('You were disqualified from this tournament.');
+        // S10g review F5: a waitlisted player can only be promoted while waitlist_promote works (ensureBeforeGeneration:
+        // Registration through Seeding, bracket not generated); after that a remembered choice would never be applied.
+        if (enrolled.isWaitlisted && (stage === 'InProgress' || tournament.bracketGeneratedAt !== undefined)) {
+            throw new SenderError('The bracket has been generated; waitlisted players can no longer be promoted, so accounts cannot be locked.');
+        }
+        if (hasPlayedTournamentGame(ctx, tournamentId, user.id)) {
+            throw new SenderError('Your first game of this tournament has started; accounts can no longer be locked.');
+        }
+
+        if (!enrolled.isWaitlisted) {
+            lockPlayerAccounts(ctx, tournamentId, user.id, hsrAccountIds, user.id);
+        } else {
+            // S10g review F5: always remembered (first call included), applied by lockAccountsAtPromotion.
+            rememberWaitlistAccounts(ctx, tournamentId, user.id, hsrAccountIds, user.id);
+        }
+        consumeTournamentAllowance(ctx, user.id);
     }
 );

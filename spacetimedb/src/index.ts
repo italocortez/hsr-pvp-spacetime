@@ -93,6 +93,13 @@ export {
     view_my_tournament_matches,
     view_my_tournament_match_results,
     view_my_tournament_lobbies,
+    view_admin_tournament,                  // S10g (A105(2)): Admin-only arg views (tournamentId)
+    view_admin_tournament_enrolled,
+    view_admin_tournament_teams,
+    view_admin_tournament_team_members,
+    view_admin_tournament_matches,
+    view_admin_tournament_match_results,
+    view_admin_tournament_lobbies,
     view_tournament_registrant_accounts,
     view_tournament_participants,           // S9a: arg views (tournamentId)
     view_tournament_teams,
@@ -117,7 +124,7 @@ export { admin_create_hsr_account, admin_update_hsr_account, admin_delete_hsr_ac
 export { create_cost_set, edit_draft_character_cost, edit_draft_lightcone_cost, edit_draft_synergy_cost, publish_cost_set, lock_cost_set, unpublish_cost_set, delete_cost_set } from '@module/reducers/roster/costSetManagement';
 export { create_tournament, update_tournament, advance_tournament_stage, cancel_tournament, admin_cancel_idle_tournaments, admin_restart_tournament_finalize } from '@module/reducers/tournament/tournamentManagement';
 export { check_in_tournament } from '@module/reducers/tournament/tournamentCheckIn';
-export { register_for_tournament, withdraw_from_tournament, approve_participant, reject_participant, waitlist_promote, add_participant, set_anonymous_alias } from '@module/reducers/tournament/tournamentRegistration';
+export { register_for_tournament, withdraw_from_tournament, approve_participant, reject_participant, waitlist_promote, add_participant, set_anonymous_alias, lock_tournament_accounts } from '@module/reducers/tournament/tournamentRegistration';
 export { create_tournament_team, request_join_team, accept_team_request, reject_team_request, leave_tournament_team, disband_tournament_team, withdraw_tournament_team, add_team_member, rename_tournament_team, assign_team_group, clear_team_groups } from '@module/reducers/tournament/tournamentTeams';
 export { transfer_referee, reclaim_referee, transfer_host } from '@module/reducers/lobby/refereeManagement';
 export { confirm_game, close_game, dispute_match_result } from '@module/reducers/results/matchResultSubmission';

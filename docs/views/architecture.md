@@ -40,6 +40,7 @@ Views are server-side read reducers that return filtered data to authenticated o
 - **Auth:** Authenticated; TO/Assistant/Mod+ for the tournament
 - **Returns:** `TournamentPlayerAccount[]` + associated `HsrAccount` rows for a tournament
 - **Purpose:** Tournament organizer views locked player account selections
+- **S10g:** non-terminal tournaments only; neutral label when hidden; field-only rows for non-staff readers (see "Phase S10g execution")
 
 #### view_my_roster_visibility
 - **Auth:** Authenticated
@@ -302,6 +303,21 @@ public table of at most 20 rows per category. The catalogue is 63 views: Appendi
 views, plus `view_admin_stuck_games` (A60), `view_my_match_lineup_history` (A56), `view_my_mmr_ratings` and
 `view_user_by_username` (A44(1) D1 / D7; Appendix B predates them).
 
+## Phase S10g execution (DECISIONS.md A105; tournament audit #10, #11)
+
+`views/tournamentViews.ts`. Shared helpers: `staffTournamentIds` (replaces `getMyTournamentIds`), `organizedOrAssistedLiveIds`,
+`adminTournamentIds`, and one row builder per staff view, used by both sets below.
+
+| View | Auth | Rows | Indexes |
+|---|---|---|---|
+| `view_my_tournaments`, `view_my_tournament_enrolled`, `_teams`, `_team_members`, `_matches`, `_match_results`, `_lobbies` (modified, A105(1)) | per-sender: organizer, assistant (any row, flags not read), **Moderator / Admin** (new) | as before, for tournaments that are **not Completed or Cancelled** only; a Moderator+ caller gets every such tournament | Moderator+: `Tournament.stage` btree, one filter per non-terminal stage (Draft, Registration, CheckIn, Seeding, InProgress); others: `Tournament.organizer_id`, `TournamentAssistant.user_id` + `Tournament.id`; then the per-view indexes as before |
+| `view_admin_tournament(tournamentId)`, `view_admin_tournament_enrolled(tournamentId)`, `view_admin_tournament_teams(tournamentId)`, `view_admin_tournament_team_members(tournamentId)`, `view_admin_tournament_matches(tournamentId)`, `view_admin_tournament_match_results(tournamentId)`, `view_admin_tournament_lobbies(tournamentId)` (new, A105(2)) | per-sender arg views (`spacetimedb.view(opts, { tournamentId: u32 }, …)`); **Admin** only: the role is checked (`UserIdentity.identity` → `User.id`) before any tournament row is read; anyone else, or an unknown id, gets `[]` | the same row types as the seven staff views, for that one tournament, terminal stages included | `Tournament.id` + the per-view indexes |
+| `view_tournament_registrant_accounts` (modified, audit #10) | per-sender | (a) a hidden row (`isAnonymousDefault`, non-staff reader, not the caller's own) carries `displayLabel = Seat-<seat> account <k>` (k = 1-based order among that player's locked accounts) instead of the owner's free-text label; (b) Completed and Cancelled tournaments are skipped for every reader; (c) a non-staff reader gets another participant's rows only while the reader's own enrolment is in the field (not Disqualified, not waitlisted, approved) and only for participants in the field; the caller's own rows always; staff (organizer, assistant, Moderator+) every registrant | the organizer / assistant path now reads non-terminal tournaments only (`organizedOrAssistedLiveIds`) |
+| `view_tournament_matches_for_me` (modified, audit #11) | per-sender | only tournaments in **InProgress** (a cancelled or completed tournament keeps its Ready / Pending rows for good) | + `Tournament.id` |
+
+Egress: the staff views no longer grow with an organizer's finished tournaments; a Moderator+ subscriber receives every
+live tournament's rows (A105(1)). The Admin arg views are subscribed one tournament at a time.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -330,10 +346,11 @@ views, plus `view_admin_stuck_games` (A60), `view_my_match_lineup_history` (A56)
 | S9c: `view_my_roster_visibility` full access for the spectator referee only (D-14 narrowed; `ratingVisible` and `hideUserId` already used the spectator test) | Phase S9c execution (DECISIONS.md A75) | 2026-11-08 |
 | S9c: `view_my_team_requests` labels a request to the caller's team with the requester's display name in every tournament | Phase S9c execution (DECISIONS.md A73) | 2026-11-08 |
 | S10d: `view_my_lobby_members` gains the last column `disconnectActionAt?` (timestamp): for a seated player whose row is offline, away or abandoned (`isMemberRowAway`, the reducers' row test) in a live stage under Standard / Deferred, the instant the forfeit claim / defer becomes available on that seat (`disconnectThresholdMicros`); no user id, so anonymity is unchanged; details in [../lobby/architecture.md](../lobby/architecture.md) "Phase S10d execution" | Phase S10d execution (DECISIONS.md A92(9)) | 2026-11-09 |
+| S10g: staff views non-terminal + Moderator+, seven Admin-only arg views `view_admin_tournament*(tournamentId)`, registrant accounts neutral label / terminal skip / field-only rows, matches-for-me InProgress only | Phase S10g execution (DECISIONS.md A105; tournament audit #10, #11) | 2026-11-09 |
 
 ---
 
-*Last updated: 2026-11-08*
+*Last updated: 2026-11-09*
 *Feature owner: Phase 03 / Phase 06 / Phase 08 / Phase 09 / Phase 10.4 / Phase 15*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

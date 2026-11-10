@@ -125,9 +125,9 @@ function unplaceEntrant(ctx: any, matchId: number, slot: BracketSlot, expected: 
  * ("roll that back first"); takes this match's winner and loser out of the downstream slots (those go back to
  * Pending, unwinding any walkover they had settled into), clears winner / loser / `decidedBy`, returns the match
  * to Ready and un-eliminates the loser (Eliminated → Active).
- * A67(4): with `voidDeciding` (rollback_bracket_match) a match decided by play (Played / Concede) also voids its
- * deciding record only (voidDecidingRecord; earlier games stay); a staff or DQ decision has no deciding record, so
- * nothing is voided. resolve_bracket_match and override_match_result pass false (they keep every Validated game).
+ * A67(4): with `voidDeciding` (rollback_bracket_match) a match decided by play (Played / Concede), or by staff / DQ
+ * for the team the tally already gives (S10g, audit #3), also voids its deciding record only (voidDecidingRecord;
+ * earlier games stay); a staff or DQ decision the tally does not give voids nothing. resolve_bracket_match and override_match_result pass false (they keep every Validated game).
  * Then the tally is recomputed from the remaining Validated records (head start on team1, A71(1);
  * games credited through the match's colour mapping, A70(1)) and written.
  * A67(4) (S8e review): with `redecide` (rollback_bracket_match) a Ready match whose tally already gives a side
@@ -143,8 +143,12 @@ export function rollbackBracketResult(ctx: any, bracketMatchId: number, actorId:
     else if (row.bracketSide.tag !== 'Group' && row.loserTeamId !== undefined) {
         setTeamStatus(ctx, row.loserTeamId, 'Eliminated', 'Active', actorId);
     }
+    // S10g (tournament audit #3): the deciding record is voided whenever the games decided the match: decidedBy Played /
+    // Concede, or a Staff / Dq decision whose winner the tally already gives (an override to Validated, a DQ whose
+    // force-conceded lobby settled the series). A staff decision against the tally voids nothing (the games re-decide it).
     const byPlay = row.decidedBy?.tag === 'Played' || row.decidedBy?.tag === 'Concede';
-    if (voidDeciding && byPlay) voidDecidingRecord(ctx, row, actorId);
+    const byTally = row.winnerTeamId !== undefined && tallyWinner(ctx, row) === row.winnerTeamId;
+    if (voidDeciding && (byPlay || byTally)) voidDecidingRecord(ctx, row, actorId);
     const fresh = ctx.db.BracketMatch.id.find(bracketMatchId);
     const games = matchGames(ctx, fresh);
     ensureGames(games);
@@ -162,6 +166,29 @@ export function rollbackBracketResult(ctx: any, bracketMatchId: number, actorId:
     if (winnerTeamId !== undefined) applyBracketResult(ctx, bracketMatchId, winnerTeamId, 'Played', games, actorId);
 }
 
+
+/**
+ * S10g (tournament audit #3, #4): the team the derived tally decides the match for (a side with ceil(bestOf / 2)
+ * games), or undefined when the games do not decide it.
+ */
+export function tallyWinner(ctx: any, match: any): number | undefined {
+    const games = matchGames(ctx, match);
+    const need = winsNeededFor(match.bestOf);
+    return games.team1 >= need ? match.team1Id : games.team2 >= need ? match.team2Id : undefined;
+}
+
+/**
+ * S10g (tournament audit #5): a group match is locked once the elimination bracket exists (any non-Group row of the
+ * tournament): the qualifiers seeded into it are never recomputed, so a group result may not change any more.
+ */
+export function ensureGroupMatchOpen(ctx: any, match: any): void {
+    if (match.bracketSide.tag !== 'Group') return;
+    for (const row of ctx.db.BracketMatch.tournament_id.filter(match.tournamentId)) {
+        if (row.bracketSide.tag !== 'Group') {
+            throw new SenderError('Group results are locked: the elimination bracket already exists.');
+        }
+    }
+}
 
 /**
  * A67(4), A27, A70(1), A71(1): the derived tally of a bracket match. team1 (slot 1, the WB finalist) starts at
