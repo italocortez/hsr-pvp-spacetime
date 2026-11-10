@@ -78,10 +78,7 @@ export const BanPayload = t.object('BanPayload', {
 export const BidPayload = t.object('BidPayload', {
     amount: t.f32(),
     targetCharacter: t.string(),
-    // S10t (A127): the highest bid before this one (MatchSession.currentBidAmount: the previous bid of the nomination,
-    // else its opening amount, the E0 cost at the nomination), restored by undo_last_step. The previous holder is the
-    // other team (bids alternate, D-48), so it is not stored.
-    previousAmount: t.f32(),
+    // S10u (A134): the S10t field previousAmount is removed (no undo restores an earlier holder; S11 clear-publish list).
 });
 
 export const AuctionSoldPayload = t.object('AuctionSoldPayload', {

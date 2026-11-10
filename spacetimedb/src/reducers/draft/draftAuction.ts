@@ -76,10 +76,45 @@ export function teamDefaultEidolon(ctx: any, lobby: any, side: string, character
     return owned.length > 0 ? owned[0] : 0; // ascending list: the lowest owned level (A64)
 }
 
+/** S10u (A133): set_eidolon's refusal of a raise when the team has no character budget available for it. */
+export const raiseAtZeroText = 'Not enough character budget: an eidolon cost can use the light-cone budget only while character budget remains.';
+/** S10u fix pass (A133, review F1): set_eidolon's refusal of a holder's raise that does not fit its free character budget. */
+export const holderFitText = 'Not enough character budget: while you hold the bid, an eidolon cost must fit your free character budget.';
+/** S10u (A133(1)): the nomination / bid refusal of a character whose default extra a team at 0 character budget cannot pay. */
+export const takeAtZeroText = 'Not enough character budget: at 0 character budget your team cannot take a character whose eidolon costs extra.';
+/** S10u: chargeExtra's defensive refusal of a real shortfall (no reachable path; see chargeExtra). */
+export const extraShortfallText = 'Not enough budget for the eidolon extra.';
+
+/**
+ * S10u (review 3 F2): double-precision noise between a guard (which sums the stored budgets) and a charge (which
+ * subtracts them in another order): at most 1e-9 of the amounts involved, far below one f32 unit (1.2e-7 relative).
+ */
+const EXTRA_NOISE_REL = 1e-9;
+const extraNoise = (lcBudget: number, extra: number) => EXTRA_NOISE_REL * Math.max(1, Math.abs(lcBudget), Math.abs(extra));
+
+/**
+ * S10u fix pass (A133, review F3): the tolerance under which a character budget counts as 0 for A133, relative to the
+ * lobby's starting character budget: ZERO_BUDGET_REL * max(1, Lobby.characterBudget), with ZERO_BUDGET_REL = 2^-20
+ * (9.5e-7; 8 f32 units of the start). A budget that should be exactly 0 can keep an f32 residue of a few units in the
+ * last place of the amounts subtracted from it (0.3 - 0.1 - 0.2 leaves 1.49e-8), and those amounts are at most the start
+ * budget, so the residue stays well under 8 units of the start. Values: 9.5e-7 up to a start of 1, 9.5e-5 at 100, 0.095
+ * at the 100000 cap. It is a thousand times the noise threshold above and below the resolution of the budget itself: an
+ * f32 near the start S has a unit of S * 2^-23, so no price finer than one unit can be charged exactly from it, and
+ * 8 units is below any price step a lobby can use at that scale (0.01 at a start of 100 is about 10000 units).
+ */
+const ZERO_BUDGET_REL = 2 ** -20;
+export function charBudgetIsZero(lobby: any, charBudget: number): boolean {
+    return charBudget <= ZERO_BUDGET_REL * Math.max(1, lobby.characterBudget);
+}
+
 /**
  * A61(5)/(6): charges an eidolon extra to a team: the character budget first (floored at 0, so EMPTY nominations at
- * cost 0 stay possible), the remainder from the light-cone budget. Returns the new budgets. Callers guard
- * extra ≤ character + light-cone budget first; the light-cone clamp is defensive and logs a warning.
+ * cost 0 stay possible), the remainder from the light-cone budget. Returns the new budgets. Callers make sure the
+ * extra fits first, under A133 in Auction Drafting: resolveSale picks the level whose extra fits (a spill only from a
+ * character budget above 0 before the sale); set_eidolon checks the total, the A133 availability and the holder rule.
+ * S10u: a light-cone result below 0 by at most extraNoise (double-precision noise between those checks and this
+ * subtraction) is clamped to 0; a larger shortfall is refused instead of being hidden (extraShortfallText). No path
+ * reaches the refusal: the sale's level choice uses the same noise bound, and set_eidolon refuses first.
  */
 export function chargeExtra(session: any, side: string, extra: number): { charBudget: number; lcBudget: number } {
     const charBudget = side === 'Blue' ? session.teamBlueCharBudget : session.teamRedCharBudget;
@@ -87,7 +122,7 @@ export function chargeExtra(session: any, side: string, extra: number): { charBu
     const fromChar = Math.min(Math.max(charBudget, 0), Math.max(extra, 0));
     let newLc = lcBudget - (Math.max(extra, 0) - fromChar);
     if (newLc < 0) {
-        console.log(`[AUCTION] chargeExtra: ${side} light-cone budget would go negative (${newLc}); clamped to 0`);
+        if (-newLc > extraNoise(lcBudget, extra)) throw new SenderError(extraShortfallText);
         newLc = 0;
     }
     return { charBudget: Math.max(0, charBudget - fromChar), lcBudget: newLc };
@@ -101,39 +136,62 @@ function ensureTeamOwnsCharacter(ctx: any, lobby: any, side: string, characterNa
     }
 }
 
-/** A61(4): amount + the team's eidolon extra must fit the total remaining budget (character + light cones). */
+/**
+ * A61(4): amount + the team's eidolon extra must fit the total remaining budget (character + light cones).
+ * S10u (A133(1)): the sale is one charge (amount + default extra) and its extra may spill into the light-cone budget
+ * only when the team's character budget is above 0 (charBudgetIsZero) before the sale. A team at 0 character budget
+ * therefore cannot nominate or bid on a character whose default extra is above 0. These guards make the default extra
+ * payable at the sale while nothing outside the draft changes; when something does (an admin cost-row change, a roster
+ * change, a seated player's deletion raising the team's lowest owned level), resolveSale sells at a lower level.
+ */
 function ensureTotalBudgetFits(ctx: any, lobby: any, session: any, side: string, characterName: string, amount: number): void {
     const extra = auctionEidolonExtra(ctx, lobby, characterName, teamDefaultEidolon(ctx, lobby, side, characterName));
+    const charBudget = side === 'Blue' ? session.teamBlueCharBudget : session.teamRedCharBudget;
     const total = side === 'Blue'
         ? session.teamBlueCharBudget + session.teamBlueLcBudget
         : session.teamRedCharBudget + session.teamRedLcBudget;
     if (amount + extra > total) {
         throw new SenderError('Not enough total budget: the eidolon extra for this character would exceed it.');
     }
+    // S10u review 2 G3: refused only when the charge would need the light-cone budget (amount + extra above what is left).
+    if (extra > 0 && charBudgetIsZero(lobby, charBudget) && amount + extra > charBudget) throw new SenderError(takeAtZeroText);
 }
 
 /**
  * A61(3)(5): the sale. The winning team's default eidolon and its extra are resolved now (never from the Nominate
  * step); the winning amount comes out of the character budget (bids are capped by it), then the extra through
  * chargeExtra. Returns the AuctionSold payload values and the winner's new budgets.
+ * S10u fix pass (A133(1), review F2): a sale is never refused for its extra. The payable extra is what is left of the
+ * character budget after the bid, plus the light-cone budget when the character budget before the sale is above 0
+ * (A133). When the default level's extra does not fit (it grew after the bid guard: an admin cost-row change, a roster
+ * change, a seated player's deletion), the character is sold at the highest level from the default down to E0 whose
+ * extra fits (E0 has extra 0, so one always does); exactly that extra is charged and that level is recorded in the
+ * AuctionSold payload (eidolon, eidolonCost). Under ownership that level may be one the team does not own; the team may
+ * move to an owned level later through set_eidolon, if it owns a level it can pay for (S10u review 2 G2: otherwise it
+ * stays at the applied level, which scoring uses).
  */
 function resolveSale(ctx: any, lobby: any, session: any, winningSide: string, characterName: string, winningAmount: number) {
-    const eidolon = winningSide === 'Blue' || winningSide === 'Red' ? teamDefaultEidolon(ctx, lobby, winningSide, characterName) : 0;
-    const eidolonCost = auctionEidolonExtra(ctx, lobby, characterName, eidolon);
-    // A61(4)/(5): bids are capped by the character budget, so the winning amount always fits; a winning amount above
-    // it means the budget backing the bid was spent elsewhere: reject instead of clamping.
-    if (winningSide === 'Blue' || winningSide === 'Red') {
+    const team = winningSide === 'Blue' || winningSide === 'Red';
+    let eidolon = team ? teamDefaultEidolon(ctx, lobby, winningSide, characterName) : 0;
+    let eidolonCost = auctionEidolonExtra(ctx, lobby, characterName, eidolon);
+    if (team) {
         const charBudget = winningSide === 'Blue' ? session.teamBlueCharBudget : session.teamRedCharBudget;
+        const lcBudget = winningSide === 'Blue' ? session.teamBlueLcBudget : session.teamRedLcBudget;
+        // A61(4)/(5): bids are capped by the character budget and set_eidolon never takes a holder below its bid, so the
+        // winning amount always fits. Defensive only: no reducer path reaches it.
         if (winningAmount > charBudget) throw new SenderError(`Winning amount exceeds the ${winningSide} character budget.`);
+        const payable = (charBudget - winningAmount) + (charBudgetIsZero(lobby, charBudget) ? 0 : lcBudget);
+        while (eidolon > 0 && eidolonCost - payable > extraNoise(lcBudget, eidolonCost)) {
+            eidolon -= 1;
+            eidolonCost = auctionEidolonExtra(ctx, lobby, characterName, eidolon);
+        }
     }
     const afterBid = {
         ...session,
         teamBlueCharBudget: winningSide === 'Blue' ? session.teamBlueCharBudget - winningAmount : session.teamBlueCharBudget,
         teamRedCharBudget: winningSide === 'Red' ? session.teamRedCharBudget - winningAmount : session.teamRedCharBudget,
     };
-    const budgets = winningSide === 'Blue' || winningSide === 'Red'
-        ? chargeExtra(afterBid, winningSide, eidolonCost)
-        : undefined;
+    const budgets = team ? chargeExtra(afterBid, winningSide, eidolonCost) : undefined;
     return {
         eidolon,
         eidolonCost,
@@ -277,6 +335,23 @@ function completeSale(
     // A131: with confirmWindowSeconds 0 the last sale moves the lobby to Equipping in the same call.
     if (auctionComplete) finishDraftWithoutWindow(ctx, lobbyId, auditUserId);
     return { nextNominatorTeam, auctionComplete };
+}
+
+/** S10u review 2 G4: the smallest f32 above a non-negative f32 value. */
+function nextF32Above(x: number): number {
+    const v = new Float32Array([x]);
+    new Uint32Array(v.buffer)[0] += 1;
+    return v[0];
+}
+
+/** S10u review 2 G4: an f32 value as its shortest decimal that reads back as the same f32 (3.0999999 → "3.1"). */
+function f32Text(x: number): string {
+    const target = Math.fround(x);
+    for (let p = 1; p <= 9; p++) {
+        const s = Number(target.toPrecision(p));
+        if (Math.fround(s) === target) return String(s);
+    }
+    return String(target);
 }
 
 // ─── nominate_character ──────────────────────────────────────────────────────
@@ -530,9 +605,17 @@ export const place_bid = spacetimedb.reducer(
         // Per D-53: Minimum raise check
         const currentBid = session.currentBidAmount ?? 0;
         const minimumBid = currentBid + lobby.minimumBidRaise;
-        if (bidAmount < minimumBid) {
+        // S10u fix pass (review F6): the bid and the minimum are f32 values; compare them as f32, so a bid of exactly
+        // current + minimum raise (3.1 on 3 with a raise of 0.1) is accepted. Below the minimum is still refused.
+        // S10u review 2 G4: with a minimum raise above 0 the bid must also be above the current bid in f32 (a raise below
+        // half an f32 unit of the bid would otherwise round to an equal bid); with a minimum raise of 0 an equal bid stays
+        // legal. The text prints the f32 values in their shortest form (3.1, not 3.100000001490116).
+        const minimumF32 = lobby.minimumBidRaise > 0
+            ? Math.max(Math.fround(minimumBid), nextF32Above(Math.fround(currentBid)))
+            : Math.fround(minimumBid);
+        if (Math.fround(bidAmount) < minimumF32) {
             throw new SenderError(
-                `Bid must be at least ${minimumBid} (current bid ${currentBid} + minimum raise ${lobby.minimumBidRaise}).`
+                `Bid must be at least ${f32Text(minimumF32)} (current bid ${f32Text(currentBid)} + minimum raise ${f32Text(lobby.minimumBidRaise)}).`
             );
         }
 
@@ -566,8 +649,8 @@ export const place_bid = spacetimedb.reducer(
             action: { tag: 'Bid', value: {} } as any,
             payload: {
                 tag: 'Bid',
-                // S10t (A127): previousAmount = the highest bid this one replaces, for undo_last_step.
-                value: { amount: bidAmount, targetCharacter: session.currentNomination, previousAmount: currentBid },
+                // S10u (A134): previousAmount (S10t) removed: no undo restores an earlier holder.
+                value: { amount: bidAmount, targetCharacter: session.currentNomination },
             } as any,
             timestamp: ctx.timestamp,
         }, user.id));

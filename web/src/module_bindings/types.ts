@@ -352,7 +352,6 @@ export type BanRestriction = __Infer<typeof BanRestriction>;
 export const BidPayload = __t.object("BidPayload", {
   amount: __t.f32(),
   targetCharacter: __t.string(),
-  previousAmount: __t.f32(),
 });
 export type BidPayload = __Infer<typeof BidPayload>;
 

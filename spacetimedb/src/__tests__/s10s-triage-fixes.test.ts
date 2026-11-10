@@ -790,26 +790,27 @@ describe('A125: in Auction the undo cancels an open first nomination until the f
         expect(stepsOf(s, 'Nominate')).toHaveLength(1);
     });
 
-    // T-S10t re-alignment (A127): the refusal after the first bid is gone; the undo removes the bid and restores the
-    // nomination's opening state (the nominator holds it at the opening amount).
-    it('A125 / A127: once a bid exists the undo removes that bid and the nomination stays open at its opening state', () => {
+    // T-S10t re-alignment (A127): the refusal after the first bid is gone. T-S10u re-alignment (A134): the undo removes
+    // the whole round (the bid and its nomination) and returns to the state before the nomination.
+    it('A125 / A127 / A134: once a bid exists the undo removes the bid with its nomination: the state before the nomination', () => {
         const s = auctionReady();
         const nominator = nominatorOf(s);
+        const before = snapshot(s);
         nominate(s, 'nominee');
-        const opened = snapshot(s);
         tx(s.test, captain(s, otherSide(nominator)), (ctx) => M.place_bid(ctx, { lobbyId: s.lobbyId, bidAmount: 5 }));
         tx(s.test, s.host, undoBody(s));
-        expect(snapshot(s)).toEqual(opened);
+        expect(snapshot(s)).toEqual(before);
         expect(stepsOf(s, 'Bid')).toHaveLength(0);
-        expect(stepsOf(s, 'Nominate')).toHaveLength(1);
+        expect(stepsOf(s, 'Nominate')).toHaveLength(0);
     });
 
-    // T-S10t re-alignment (A127): a sale is undone too; the next nomination goes first, then the sale.
-    it('A125 / A127: once a sale exists the undo removes the open next nomination, then the sale', () => {
+    // T-S10t re-alignment (A127): a sale is undone too; the next nomination goes first, then the sale. T-S10u
+    // re-alignment (A134): the sale goes with its nomination: the state before that nomination.
+    it('A125 / A127 / A134: once a sale exists the undo removes the open next nomination, then the sale with its nomination', () => {
         const s = auctionReady();
         const nominator = nominatorOf(s);
+        const opened = snapshot(s); // before the nomination
         nominate(s, 'nominee');
-        const opened = snapshot(s);
         tx(s.test, captain(s, otherSide(nominator)), (ctx) => M.pass_bid(ctx, { lobbyId: s.lobbyId }));
         expect(stepsOf(s, 'AuctionSold')).toHaveLength(1);
         const sold = snapshot(s);
@@ -819,6 +820,6 @@ describe('A125: in Auction the undo cancels an open first nomination until the f
         tx(s.test, s.host, undoBody(s));
         expect(snapshot(s)).toEqual(opened);
         expect(stepsOf(s, 'AuctionSold')).toHaveLength(0);
-        expect(stepsOf(s, 'Nominate')).toHaveLength(1);
+        expect(stepsOf(s, 'Nominate')).toHaveLength(0);
     });
 });

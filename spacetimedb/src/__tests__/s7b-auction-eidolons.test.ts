@@ -217,7 +217,7 @@ describe('A61(6): set_eidolon in Auction pays or refunds the difference', () => 
 });
 
 describe('A61(4)/(5) review fix: set_eidolon reserves the bid the team currently holds', () => {
-    it('a raise that would eat into the held bid is rejected; a smaller one keeps the character budget at the bid; the sale goes through', () => {
+    it('a raise that would eat into the held bid is rejected; a raise that does not fit the free character budget is rejected (A133, no spill while holding); a fitting one is charged; the sale goes through', () => {
         const test = newHarness();
         insertAuctionCost(test, 'a', [10, 20, 30, 40, 50, 110, 130]); // extras: E5 100, E6 120
         insertAuctionCost(test, 'b', [30, 30, 30, 30, 30, 30, 30]);
@@ -237,14 +237,18 @@ describe('A61(4)/(5) review fix: set_eidolon reserves the bid the team currently
             'Not enough budget for that eidolon: your current bid is reserved.');
         expect(budgets(test, s.lobbyId)).toMatchObject({ blueChar: 90, blueLc: 50 });
 
-        // E5 costs +100: 60 from the character budget (90 - the 30 bid), the remaining 40 from the light cones.
-        setEidolon(s, blueCap, 'Blue', 'a', 5);
-        expect(budgets(test, s.lobbyId)).toMatchObject({ blueChar: 30, blueLc: 10 });
+        // T-S10u re-alignment (A133, S10u review F1): a team holding the bid may not spill into the light cones, so E5
+        // (+100, more than the 60 free) is refused; E3 (+30) fits the free 60 and comes from the character budget only.
+        expectReject(test, blueCap, (ctx) =>
+            M.set_eidolon(ctx, { lobbyId: s.lobbyId, teamSide: { tag: 'Blue' }, characterName: 'a', eidolon: 5 }),
+            'Not enough character budget: while you hold the bid, an eidolon cost must fit your free character budget.');
+        setEidolon(s, blueCap, 'Blue', 'a', 3);
+        expect(budgets(test, s.lobbyId)).toMatchObject({ blueChar: 60, blueLc: 50 });
 
         // The sale takes the bid from the character budget it was reserved in: no clamp, no invariant throw.
         tx(test, captain(s, 'Red'), pass(s));
         expect(lastSold(test, s.lobbyId)).toMatchObject({ characterName: 'b', winningAmount: 30, eidolonCost: 0 });
-        expect(budgets(test, s.lobbyId)).toMatchObject({ blueChar: 0, blueLc: 10 });
+        expect(budgets(test, s.lobbyId)).toMatchObject({ blueChar: 30, blueLc: 50 });
     });
 });
 

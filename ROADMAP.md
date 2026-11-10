@@ -52,6 +52,7 @@ Each executed step writes its log to `docs/log/<date>-<step>.md` (goal, decision
 | S10s | Closing triage fixes, batch 2: 14 items in tournament, calendar, roster, scripts (A122); organizer hand-over and server cancel (A121, A124); Auction undo to the first bid (A125); alias correction (A126); A123 and A127 recorded | S10r | done 2026-11-10 (`docs/log/2026-11-10-s10s.md`) |
 | S10t | Undo removes the last character step of any kind (A127, A132); confirm window before equipping as a lobby setting (A129 to A131); a disqualified player cannot be a stand-in (A128). Schema: step payload fields and `confirmWindowSeconds` join the S11 clear-publish list | S10s | done 2026-11-10 (`docs/log/2026-11-10-s10t.md`) |
 | S10q | T-task: 29 tests for the gaps the S10k to S10t reviews named; one diagnostic (A113(2) and disqualified guests) and eight pins for the user; A133 and A134 recorded | S10t | done 2026-11-10 (`docs/log/2026-11-10-s10q.md`) |
+| S10u | Auction undo removes the whole nomination round (A134); no light-cone dip at 0 character budget (A133); repairs a deadlock and a budget gain of the S10t undo | S10q | done 2026-11-10 (`docs/log/2026-11-10-s10u.md`) |
 | M3 | Vite shell: tokens, base and media CSS, fonts, standby/404 | S10 | pending |
 | M4 | Router and guards (TanStack Router, typed links) | M3 | pending |
 | M9 | Test strategy wiring and CI workflow | M4 | pending |

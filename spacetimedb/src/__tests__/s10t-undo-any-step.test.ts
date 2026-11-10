@@ -128,32 +128,32 @@ const budgets = (s: Lobby, side: Side) => {
 // Bids
 // ════════════════════════════════════════════════════════════════════════════
 
-describe('A127: undo of a bid restores the previous holder and amount', () => {
-    it('A127: the first bid: the nominator holds the nomination again at its opening amount', () => {
+// T-S10u re-alignment (A134): in the auction phase an undo removes the whole nomination round; no undo restores an
+// earlier bidder as holder. The sale tests below now expect the state before the nomination.
+describe('A127 / A134: undo of a bid removes the whole round', () => {
+    it('A134: the first bid: the bid and the nomination go; nobody holds a bid; the nominator nominates again', () => {
         const s = lobby(AUCTION);
+        const before = world(s);
         nominate(s, 'x', 10); // Blue nominates at the E0 cost 10
-        const opened = world(s);
         bid(s, 'Red', 15);
         undo(s);
-        expect(world(s)).toEqual(opened);
-        expect(session(s.test, s.lobbyId)).toMatchObject({ currentNomination: 'x', currentBidAmount: 10, currentBidTeam: { tag: 'Blue' } });
+        expect(world(s)).toEqual(before);
+        expect(session(s.test, s.lobbyId)).toMatchObject({ currentNomination: undefined, currentBidAmount: undefined, currentBidTeam: { tag: 'Spectator' } });
         expect(stepsOf(s, 'Bid')).toHaveLength(0);
         expect((stepsOf(s, 'Undo')[0].payload.value as any).originalSequenceId).toBeGreaterThan(0);
     });
 
-    it('A127: a bid over an earlier bid: the earlier holder and amount come back; a second undo reaches the opening state', () => {
+    it('A134: a bid over an earlier bid: one undo removes both bids and the nomination; the round then plays again', () => {
         const s = lobby(AUCTION);
+        const before = world(s);
         nominate(s, 'x', 10);
-        const opened = world(s);
         bid(s, 'Red', 15);
-        const afterFirst = world(s);
         bid(s, 'Blue', 20.5);
         undo(s);
-        expect(world(s)).toEqual(afterFirst);
-        expect(session(s.test, s.lobbyId)).toMatchObject({ currentBidAmount: 15, currentBidTeam: { tag: 'Red' } });
-        undo(s);
-        expect(world(s)).toEqual(opened);
-        // The bidding goes on normally after the undo: the other team bids again.
+        expect(world(s)).toEqual(before);
+        expect(stepsOf(s, 'Undo')).toHaveLength(1);
+        // The nominator nominates again and the bidding goes on normally.
+        nominate(s, 'x', 10);
         bid(s, 'Red', 12);
         expect(session(s.test, s.lobbyId)).toMatchObject({ currentBidAmount: 12, currentBidTeam: { tag: 'Red' } });
     });
@@ -163,28 +163,30 @@ describe('A127: undo of a bid restores the previous holder and amount', () => {
 // Sales
 // ════════════════════════════════════════════════════════════════════════════
 
-describe('A127: undo of a sale reopens the nomination as it stood before the sale', () => {
-    it('A127: a sale by pass: nomination, highest bid and holder, budgets, won count and next nominator restored; the replay sells again the same way', () => {
+describe('A127 / A134: undo of a sale returns to the state before its nomination', () => {
+    it('A134: a sale by pass: the round goes; budgets, won count and next nominator restored; the replay sells again the same way', () => {
         const s = lobby(AUCTION);
+        const beforeSale = world(s); // T-S10u: the state before the nomination
         nominate(s, 'x', 10);
         bid(s, 'Red', 15);
-        const beforeSale = world(s);
         pass(s, 'Blue'); // Red wins at 15 (a steal: Blue nominates again)
         const sold = world(s);
         expect(budgets(s, 'Red')).toEqual({ char: 85, lc: 50, won: 1 });
         undo(s);
         expect(world(s)).toEqual(beforeSale);
         expect(budgets(s, 'Red')).toEqual({ char: 100, lc: 50, won: 0 });
+        nominate(s, 'x', 10);
+        bid(s, 'Red', 15);
         pass(s, 'Blue');
         expect(world(s).session).toEqual(sold.session);
         expect(world(s).lobby).toEqual(sold.lobby);
     });
 
-    it('A127: a sale made by the timer (actor 0) is undone the same way', () => {
+    it('A134: a sale made by the timer (actor 0) is undone the same way', () => {
         const s = lobby(AUCTION);
+        const beforeSale = world(s); // T-S10u: the state before the nomination
         nominate(s, 'x', 10);
         bid(s, 'Red', 15);
-        const beforeSale = world(s);
         expireAuction(s);
         const sale = stepsOf(s, 'AuctionSold')[0];
         expect([sale.actorUserId, sale.actorSlot.tag]).toEqual([0, 'Spectator']);
@@ -196,10 +198,10 @@ describe('A127: undo of a sale reopens the nomination as it stood before the sal
         const s = lobby({ ...AUCTION, requireOwnership: true });
         selectAccount(s.test, s.lobbyId, s.a.b1.userId, 9001, { spill: 2 }); // Blue owns E2 only: default eidolon 2
         selectAccount(s.test, s.lobbyId, s.a.r1.userId, 9002, { spill: 0 });
+        const beforeSale = world(s); // T-S10u: the state before the nomination
         nominate(s, 'spill', [10, 20, 40, 40, 40, 40, 40]); // extra at E2 = 30
         bid(s, 'Red', 11);
         bid(s, 'Blue', 90);
-        const beforeSale = world(s);
         pass(s, 'Red');
         // 100 - 90 = 10 left; the extra 30 takes those 10, then 20 from the light-cone budget.
         expect(budgets(s, 'Blue')).toEqual({ char: 0, lc: 30, won: 1 });
@@ -210,10 +212,10 @@ describe('A127: undo of a sale reopens the nomination as it stood before the sal
 
     it('A127: a sale that leaves the character budget at 0 is restored exactly', () => {
         const s = lobby(AUCTION);
+        const beforeSale = world(s); // T-S10u: the state before the nomination
         nominate(s, 'all', 0);
         bid(s, 'Red', 1);
         bid(s, 'Blue', 100);
-        const beforeSale = world(s);
         pass(s, 'Red');
         expect(budgets(s, 'Blue')).toEqual({ char: 0, lc: 50, won: 1 });
         undo(s);
@@ -261,27 +263,25 @@ describe('A127 / A81: undo with a full team', () => {
         expect(world(s)).toEqual(full);
     });
 
-    it('A127 / A81(1): undoing the sale that filled a team: won counts, next nominator and the open nomination come back; the replay fills it again and A81 holds', () => {
+    // T-S10u re-alignment (A134): the undo of the filling sale removes its round too (no reopened nomination).
+    it('A127 / A81(1) / A134: undoing the sale that filled a team: won counts and next nominator come back, no nomination is open; the replay fills it again and A81 holds', () => {
         const s = lobby(AUCTION);
         blueOneShortOfFull(s);
-        const beforeFill = world(s);
         expect(session(s.test, s.lobbyId)).toMatchObject({ currentBidTeam: { tag: 'Blue' }, currentBidAmount: 1 });
+        const lastName = (session(s.test, s.lobbyId).currentNomination)!;
         pass(s, 'Red');
         const full = world(s);
         expect(budgets(s, 'Blue').won).toBe(8);
         nominate(s, 'late'); // immediate sale to Red
         undo(s); // the immediate sale and its nomination
         expect(world(s)).toEqual(full);
-        undo(s); // the sale that filled Blue
-        expect(world(s)).toEqual(beforeFill);
+        undo(s); // the sale that filled Blue, with its nomination and bid
         expect(budgets(s, 'Blue').won).toBe(7);
         expect(nominatorOf(s)).toBe('Red');
-        // Blue is no longer full: Red may outbid it on the reopened nomination, and Blue may bid back.
-        bid(s, 'Red', 2);
-        bid(s, 'Blue', 3);
-        undo(s);
-        undo(s);
-        expect(world(s)).toEqual(beforeFill);
+        expect(session(s.test, s.lobbyId)).toMatchObject({ currentNomination: undefined, currentBidTeam: { tag: 'Spectator' } });
+        // Blue is no longer full: Red nominates again and Blue may bid on it.
+        nominate(s, lastName);
+        bid(s, 'Blue', 1);
         pass(s, 'Red'); // fills Blue again
         expect(world(s).session).toEqual(full.session);
         // A full team sits out again: Red's nomination sells at once.
@@ -370,10 +370,10 @@ describe('A132: an eidolon selection goes with its character', () => {
 
     it('A132: undoing a sale gives back exactly what the character cost, its own edits included (a raise spilling into light cones and a lowering refund)', () => {
         const s = lobby(AUCTION);
+        const beforeSale = world(s); // T-S10u (A134): the state before the nomination
         nominate(s, 'eid', [0, 0, 0, 30, 30, 30, 30]);
         bid(s, 'Red', 1);
         bid(s, 'Blue', 95);
-        const beforeSale = world(s);
         pass(s, 'Red'); // Blue: char 5, lc 50
         setEidolon(s, captain(s, 'Blue'), 'Blue', 'eid', 3); // extra 30: 5 from the character budget, 25 from light cones
         expect(budgets(s, 'Blue')).toMatchObject({ char: 0, lc: 25 });
@@ -389,21 +389,23 @@ describe('A132: an eidolon selection goes with its character', () => {
         expectBudgetInvariant(s, 'Blue');
     });
 
-    it('A132: an edit on another character keeps its charge: character budget 10, light cones 50, buy A for 10, raise B for 5 (from light cones), undo the sale of A → 10 / 45', () => {
+    // T-S10u re-alignment (A133): a raise at character budget 0 is refused now, so A costs 8 and the raise of B spills
+    // (2 from the character budget, 3 from light cones); (A134) the undo leaves no nomination open.
+    it('A132: an edit on another character keeps its charge: character budget 10, light cones 50, buy A for 8, raise B for 5 (2 + 3 from light cones), undo the sale of A → 8 / 47', () => {
         const s = lobby({ ...AUCTION, characterBudget: 10, lightconeBudget: 50 });
         nominate(s, 'B', [0, 5, 5, 5, 5, 5, 5]); // Blue
         pass(s, 'Red'); // Blue owns B at 0; Red nominates next
         nominate(s, 'rx', 0); // Red
         pass(s, 'Blue'); // Red owns rx; Blue nominates next
-        nominate(s, 'A', 10); // Blue at its E0 cost 10
-        pass(s, 'Red'); // Blue buys A for 10
-        expect(budgets(s, 'Blue')).toMatchObject({ char: 0, lc: 50 });
-        setEidolon(s, captain(s, 'Blue'), 'Blue', 'B', 1); // +5, the character budget is 0: from light cones
-        expect(budgets(s, 'Blue')).toMatchObject({ char: 0, lc: 45 });
+        nominate(s, 'A', 8); // Blue at its E0 cost 8
+        pass(s, 'Red'); // Blue buys A for 8
+        expect(budgets(s, 'Blue')).toMatchObject({ char: 2, lc: 50 });
+        setEidolon(s, captain(s, 'Blue'), 'Blue', 'B', 1); // +5: 2 from the character budget, 3 from light cones
+        expect(budgets(s, 'Blue')).toMatchObject({ char: 0, lc: 47 });
         expectBudgetInvariant(s, 'Blue');
         undo(s); // the sale of A; the edit of B stays as charged
-        expect(budgets(s, 'Blue')).toEqual({ char: 10, lc: 45, won: 1 });
-        expect(session(s.test, s.lobbyId)).toMatchObject({ currentNomination: 'A', currentBidAmount: 10, currentBidTeam: { tag: 'Blue' } });
+        expect(budgets(s, 'Blue')).toEqual({ char: 8, lc: 47, won: 1 });
+        expect(session(s.test, s.lobbyId)).toMatchObject({ currentNomination: undefined, currentBidTeam: { tag: 'Spectator' }, nextNominatorTeam: { tag: 'Blue' } });
         expect(stepsOf(s, 'SetEidolon')).toHaveLength(1);
         expect(teamDraft(s.test as any, s.lobbyId, 'Blue').eidolons).toEqual([{ name: 'B', eidolon: 1 }]);
         expectBudgetInvariant(s, 'Blue');
@@ -434,7 +436,7 @@ describe('A132: an eidolon selection goes with its character', () => {
 });
 
 describe('A127 / A132: a chain of steps undone one by one back to the first step', () => {
-    it('A127 / A132: Auction with bans: bans, nominations, bids and sales undone in reverse against the snapshots taken on the way (an edit goes with its sale); the draft then finishes normally', () => {
+    it('A127 / A132 / A134: Auction with bans: rounds and bans undone in reverse against the snapshots taken on the way (an edit goes with its sale); the draft then finishes normally', () => {
         const s = lobby({ ...AUCTION, banMode: { tag: 'Four' } });
         const { test, lobbyId } = s;
         const snaps: Array<ReturnType<typeof world>> = [];
@@ -465,14 +467,17 @@ describe('A127 / A132: a chain of steps undone one by one back to the first step
         expect(budgets(s, 'Blue')).toEqual({ char: 100 - 30 - 15 - 6, lc: 50, won: 2 });
         expectBudgetInvariant(s, 'Blue');
 
-        for (let i = snaps.length - 1; i >= 0; i--) {
+        // T-S10u re-alignment (A134): one undo per round in the auction phase (back to the snapshot before its
+        // nomination: steps 11, 8 and 4), then one per ban.
+        const targets = [11, 8, 4, 3, 2, 1, 0];
+        for (const i of targets) {
             undo(s);
-            expect(world(s), `after undoing step ${i}`).toEqual(snaps[i]);
+            expect(world(s), `after undoing back to step ${i}`).toEqual(snaps[i]);
             expectBudgetInvariant(s, 'Blue');
             expectBudgetInvariant(s, 'Red');
         }
         expect(rejection(test, s.host, undoBody(s))).toBe(NO_STEPS);
-        expect(stepsOf(s, 'Undo')).toHaveLength(snaps.length);
+        expect(stepsOf(s, 'Undo')).toHaveLength(targets.length);
         expect(end.steps.length).toBe(snaps.length + 1); // the edit row was removed with the sale of n1
 
         // Forward again: the bans, one priced sale, then the rest of the draft at cost 0.
@@ -1024,7 +1029,8 @@ describe('S10t review F3 (A130): the move to Equipping ends a pause that held th
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('A132 / S10t review 2 G1: a sale undo never leaves a budget below 0', () => {
-    it('A132 G1: buy B for 5 and A for 5.5, raise A +30, lower A (refund 30 to light cones), raise B +139, undo the sale of A → 6 / 0 (the shortfall comes from the character budget); Red outbids on A, Blue buys C for 1 → 5 / 0', () => {
+    // T-S10u re-alignment (A134): the undo leaves no nomination open; Blue nominates again.
+    it('A132 G1: buy B for 5 and A for 5.5, raise A +30, lower A (refund 30 to light cones), raise B +139, undo the sale of A → 6 / 0 (the shortfall comes from the character budget); Blue nominates again and buys C for 1 → 5 / 0', () => {
         const s = lobby(AUCTION); // budgets 100 / 50
         nominate(s, 'B', [5, 5, 5, 5, 5, 5, 144]); // Blue
         pass(s, 'Red'); // Blue buys B for 5; Red nominates next
@@ -1044,10 +1050,8 @@ describe('A132 / S10t review 2 G1: a sale undo never leaves a budget below 0', (
         expectBudgetInvariant(s, 'Blue');
         undo(s); // the sale of A with both of its edits: back 35.5 / -30, the light-cone shortfall 29.5 from the character budget
         expect(budgets(s, 'Blue')).toEqual({ char: 6, lc: 0, won: 1 });
-        expect(session(s.test, s.lobbyId)).toMatchObject({ currentNomination: 'A', currentBidAmount: 5.5, currentBidTeam: { tag: 'Blue' } });
+        expect(session(s.test, s.lobbyId)).toMatchObject({ currentNomination: undefined, currentBidTeam: { tag: 'Spectator' }, nextNominatorTeam: { tag: 'Blue' } });
         expectBudgetInvariant(s, 'Blue');
-        bid(s, 'Red', 6.5);
-        pass(s, 'Blue'); // Red wins A (a steal: Blue nominates again)
         nominate(s, 'C', 1);
         pass(s, 'Red'); // Blue buys C for 1
         expect(budgets(s, 'Blue')).toEqual({ char: 5, lc: 0, won: 2 });
@@ -1056,8 +1060,9 @@ describe('A132 / S10t review 2 G1: a sale undo never leaves a budget below 0', (
     });
 });
 
-describe('A127 / S10t review 2 G2: a bid undo is refused when the previous bidder can no longer cover their bid', () => {
-    const CANNOT = 'Cannot undo this bid: the previous bidder can no longer cover their bid.';
+// T-S10u re-alignment (A134): the G2 refusal ("Cannot undo this bid: ...") is removed: the undo removes the whole round,
+// so no earlier bidder is restored as holder, and the draft goes on from "before the nomination".
+describe('A134 (formerly S10t review 2 G2): the round is undone even when the outbid team can no longer cover its bid', () => {
     /** Budgets 20 / 10. Red buys R for 1; Blue nominates N; Red bids 12, Blue bids 13; Red raises R by `raise`. */
     function outbidThenRaise(raise: number): Lobby {
         const s = lobby({ ...AUCTION, characterBudget: 20, lightconeBudget: 10 });
@@ -1071,30 +1076,35 @@ describe('A127 / S10t review 2 G2: a bid undo is refused when the previous bidde
         return s;
     }
 
-    it('A127 G2: Red raised R by 20 (character budget 19 → 0): the undo of Blue\'s bid is refused, nothing changes, and the draft goes on with Blue holding 13', () => {
+    it('A134: Red raised R by 20 (character budget 19 → 0): the undo removes the round; Blue nominates N again, Red cannot bid, Blue wins N at 0', () => {
         const s = outbidThenRaise(20);
         expect(budgets(s, 'Red')).toMatchObject({ char: 0, lc: 9 });
-        const before = world(s);
-        expect(rejection(s.test, s.host, undoBody(s))).toBe(CANNOT);
-        expect(world(s)).toEqual(before);
-        pass(s, 'Red'); // Blue wins N at 13
-        expect(budgets(s, 'Blue')).toMatchObject({ char: 7, won: 1 });
+        undo(s);
+        expect(session(s.test, s.lobbyId)).toMatchObject({ currentNomination: undefined, currentBidTeam: { tag: 'Spectator' }, nextNominatorTeam: { tag: 'Blue' } });
+        expect(stepsOf(s, 'Bid').filter((x) => (x.payload.value as any).targetCharacter === 'N')).toHaveLength(0);
+        nominate(s, 'N', 0);
+        expect(rejection(s.test, captain(s, 'Red'), (ctx) => M.place_bid(ctx, { lobbyId: s.lobbyId, bidAmount: 1 }))).toBe('Bid exceeds your remaining character budget.');
+        pass(s, 'Red'); // Blue wins N at 0
+        expect(budgets(s, 'Blue')).toMatchObject({ char: 20, won: 1 });
         expectBudgetInvariant(s, 'Blue');
         expectBudgetInvariant(s, 'Red');
     });
 
-    it('A127 G2: the timer path also goes on after the refusal (Blue holds 13; the timer sells to Blue)', () => {
+    it('A134: the timer path also goes on after the undo (Blue nominates N again; the timer sells it to Blue at 0)', () => {
         const s = outbidThenRaise(20);
-        expect(rejection(s.test, s.host, undoBody(s))).toBe(CANNOT);
+        undo(s);
+        nominate(s, 'N', 0);
         expireAuction(s, 'Red');
-        expect(budgets(s, 'Blue')).toMatchObject({ char: 7, won: 1 });
+        expect(budgets(s, 'Blue')).toMatchObject({ char: 20, won: 1 });
     });
 
-    it('A127 G2 neighbour: Red raised R by 5 (character budget 19 → 14 ≥ 12): the undo of Blue\'s bid works, Red holds 12 again', () => {
+    it('A134: Red raised R by 5 (character budget 19 → 14): the undo removes the round; Red bids 12 again and wins N at 12', () => {
         const s = outbidThenRaise(5);
         expect(budgets(s, 'Red')).toMatchObject({ char: 14, lc: 10 });
         undo(s);
-        expect(session(s.test, s.lobbyId)).toMatchObject({ currentNomination: 'N', currentBidAmount: 12, currentBidTeam: { tag: 'Red' } });
+        expect(session(s.test, s.lobbyId)).toMatchObject({ currentNomination: undefined, nextNominatorTeam: { tag: 'Blue' } });
+        nominate(s, 'N', 0);
+        bid(s, 'Red', 12);
         pass(s, 'Blue'); // Red wins N at 12
         expect(budgets(s, 'Red')).toMatchObject({ char: 2, lc: 10, won: 2 });
         expectBudgetInvariant(s, 'Red');

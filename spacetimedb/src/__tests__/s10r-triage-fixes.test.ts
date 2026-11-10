@@ -515,8 +515,9 @@ describe('A122(9), L34: the last ban of the Auction ban phase can be undone', ()
 
     // S10s re-alignment (A125): the window now ends at the first bid, not the first nomination; this test bids first.
     // T-S10t re-alignment (A127): there is no window any more; with a bid placed, undo removes the bid, then the
-    // nomination, then the fourth ban (one step per call).
-    it('A122(9) L34 / A127: with a bid placed, undo walks back the bid, the nomination and then the last ban', () => {
+    // nomination, then the fourth ban (one step per call). T-S10u re-alignment (A134): the bid and the nomination are one
+    // round and go in one call; the next undo removes the fourth ban.
+    it('A122(9) L34 / A127 / A134: with a bid placed, undo walks back the round (bid and nomination) and then the last ban', () => {
         const test = newHarness();
         const s = setupLobby(test, { lobby: AUCTION_FOUR });
         banAll(s, ['ban-a', 'ban-b', 'ban-c', 'ban-d']);
@@ -528,8 +529,6 @@ describe('A122(9), L34: the last ban of the Auction ban phase can be undone', ()
         tx(test, captain(s, nominator === 'Blue' ? 'Red' : 'Blue'), (ctx) => M.place_bid(ctx, { lobbyId: s.lobbyId, bidAmount: 5 }));
         tx(test, s.host, undoBody(s));
         expect(steps(test, s.lobbyId).filter((x) => x.action.tag === 'Bid')).toHaveLength(0);
-        expect(session(test, s.lobbyId)).toMatchObject({ currentNomination: 'nominee', currentBidAmount: 0, currentBidTeam: { tag: nominator } });
-        tx(test, s.host, undoBody(s));
         expect(session(test, s.lobbyId)).toMatchObject({ currentNomination: undefined, isAuctionPhase: true });
         expect(steps(test, s.lobbyId).filter((x) => x.action.tag === 'Ban')).toHaveLength(4);
         tx(test, s.host, undoBody(s));

@@ -707,7 +707,9 @@ describe('Gap 7, A125 / A127: Auction undo with no bans configured; undo by a no
     };
     const auctionNoBans = () => setupLobby(newHarness(), { lobby: { draftMode: { tag: 'Auction' }, banMode: { tag: 'None' } } });
 
-    it('A127, A125 (N5: no bans): with nothing done the undo is refused; nomination, bid and sale are then undone one per call back to the start, each restoring the state before it; a further undo is refused', () => {
+    // T-S10u re-alignment (A134): in the auction phase the unit of undo is the round; two rounds (one sold, one open
+    // with a bid) are undone in two calls, each back to the state before its nomination.
+    it('A127, A125, A134 (N5: no bans): with nothing done the undo is refused; a sold round and an open round are undone one round per call back to the start; a further undo is refused', () => {
         const s = auctionNoBans();
         expect(session(s.test, s.lobbyId).isAuctionPhase).toBe(true);
         const start = snapshot(s);
@@ -715,26 +717,27 @@ describe('Gap 7, A125 / A127: Auction undo with no bans configured; undo by a no
 
         const nominator = nominatorOf(s);
         nominate(s, 'lot-1');
-        const opened = snapshot(s);
         tx(s.test, captain(s, otherSide(nominator)), (ctx) => M.place_bid(ctx, { lobbyId: s.lobbyId, bidAmount: 5 }));
-        const bid = snapshot(s);
         tx(s.test, captain(s, nominator), (ctx) => M.pass_bid(ctx, { lobbyId: s.lobbyId }));
         expect(stepsOf(s, 'AuctionSold')).toHaveLength(1);
+        const sold = snapshot(s);
+        nominate(s, 'lot-2');
+        tx(s.test, captain(s, nominatorOf(s) === 'Blue' ? 'Red' : 'Blue'), (ctx) => M.place_bid(ctx, { lobbyId: s.lobbyId, bidAmount: 5 }));
 
-        tx(s.test, s.host, undoBody(s)); // the sale
-        expect(snapshot(s)).toEqual(bid);
-        tx(s.test, s.host, undoBody(s)); // the bid
-        expect(snapshot(s)).toEqual(opened);
-        tx(s.test, s.host, undoBody(s)); // the nomination
+        tx(s.test, s.host, undoBody(s)); // the open round: lot-2 and its bid
+        expect(snapshot(s)).toEqual(sold);
+        tx(s.test, s.host, undoBody(s)); // the sold round: the sale, its bid and lot-1
         expect(snapshot(s)).toEqual(start);
         expect(stepsOf(s, 'Nominate')).toEqual([]);
-        expect(stepsOf(s, 'Undo')).toHaveLength(3);
+        expect(stepsOf(s, 'Undo')).toHaveLength(2);
         expectReject(s.test, s.host, undoBody(s), NO_STEPS_TEXT);
     });
 
-    it('A127, D-60 (N5: a non-referee): in the auction phase a captain without the referee flag is refused for an open nomination and for a sale; nothing changes; the referee then undoes', () => {
+    // T-S10u re-alignment (A134): the referee's undo of the sale returns to the state before the nomination.
+    it('A127, D-60, A134 (N5: a non-referee): in the auction phase a captain without the referee flag is refused for an open nomination and for a sale; nothing changes; the referee then undoes', () => {
         const s = auctionNoBans();
         const nominator = nominatorOf(s);
+        const start = snapshot(s);
         nominate(s, 'lot-a');
         const opened = snapshot(s);
         for (const who of [captain(s, 'Blue'), captain(s, 'Red')]) {
@@ -748,7 +751,7 @@ describe('Gap 7, A125 / A127: Auction undo with no bans configured; undo by a no
         expect(snapshot(s)).toEqual(sold);
         expect(stepsOf(s, 'Undo')).toEqual([]);
         tx(s.test, s.host, undoBody(s));
-        expect(snapshot(s)).toEqual(opened);
+        expect(snapshot(s)).toEqual(start);
     });
 });
 

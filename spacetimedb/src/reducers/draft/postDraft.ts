@@ -37,7 +37,7 @@ import {
     type TeamTag,
 } from '@module/helpers/results/scoringHelpers';
 import { recomputeAfterAdminEdit } from '@module/helpers/results/gameClose';
-import { auctionEidolonExtra, chargeExtra, teamDefaultEidolon } from './draftAuction';
+import { auctionEidolonExtra, chargeExtra, charBudgetIsZero, holderFitText, raiseAtZeroText, teamDefaultEidolon } from './draftAuction';
 import { finishDraft } from '@module/helpers/draft/draftComplete';
 import { TeamSide } from '@module/types/enums';
 import { charactersPerTeam, lineupError, type LineupFormatTag } from '@shared/scoring';
@@ -338,7 +338,12 @@ export const arrange_lineup = spacetimedb.reducer(
 // Level: 0..6; under requireOwnership only a level the team owns on its selected accounts (teamOwnedEidolons).
 // Cost: Classic → costPaid = the lobby's cost row at the new level (A107: no row → rejected), no budget. Auction → the
 // difference of the eidolon extras: a positive delta is charged character budget first, then the light-cone budget
-// (rejected when it exceeds both); a negative delta is refunded to the light-cone budget in every stage
+// (rejected when it exceeds both). S10u, A133, in Drafting (the confirm window included): rejected when no character
+// budget is available (the character budget minus a held bid counts as 0, charBudgetIsZero); a team holding the bid may
+// not spill at all (the raise must fit its free character budget); a team not holding it spills only with the charge
+// that empties its character budget. So a team dips into the light-cone budget at most once per stretch of the draft
+// without an undo that gives character budget back. After the dip a lowering is one-way until Equipping: its refund
+// lands in the light-cone budget and a new raise is refused at character budget 0. A negative delta is refunded to the light-cone budget in every stage
 // (orchestrator rule, S7b: a refund never restores bidding power, otherwise a team could overdraw its character
 // budget more than once, which A61 rules out; the two budgets merge at the D-50 rollover anyway); costPaid = the
 // extra at the new level. Logs a SetEidolon step (actorSlot = the team), refreshes the lineup row, then recomputes the
@@ -400,15 +405,37 @@ export const set_eidolon = spacetimedb.reducer(
                 ? auctionEidolonExtra(ctx, lobby, session.currentNomination, teamDefaultEidolon(ctx, lobby, side, session.currentNomination))
                 : 0;
             if (delta > 0) {
+                const reservedText = 'Not enough budget for that eidolon: your current bid is reserved.';
                 if (holdsBid && delta > charBudget + lcBudget - (reservedBid + reservedExtra)) {
-                    throw new SenderError('Not enough budget for that eidolon: your current bid is reserved.');
+                    throw new SenderError(reservedText);
                 }
                 if (delta > charBudget + lcBudget) throw new SenderError('Not enough budget for that eidolon.');
                 const spendableChar = Math.max(0, charBudget - reservedBid);
+                // S10u (A133): during the Auction draft (Drafting, the confirm window included) a raise needs character
+                // budget available for it: the character budget minus the held bid (the bid is reserved, A61(4)). At 0
+                // (within charBudgetIsZero's tolerance, review F3) it is refused. In Equipping and later (holdsBid false,
+                // budgets merged by the D-50 roll-over) the pool rule is unchanged.
+                // S10u review 2 G3: refused only when the raise would need the light-cone budget (it does not fit what
+                // is left), so a raise that fits a budget inside the tolerance is still accepted.
+                if (lobby.stage.tag === 'Drafting' && charBudgetIsZero(lobby, spendableChar) && delta > spendableChar) throw new SenderError(raiseAtZeroText);
+                // S10u fix pass (A133, review F1): a holder may not spill: its raise must fit the free character budget,
+                // so the one dip (a spill that empties the character budget) is never made with budget still reserved.
+                if (holdsBid && delta > spendableChar) throw new SenderError(holderFitText);
+                // Not holding: the free part first, the rest from the light-cone budget; a spill empties the character budget.
                 const fromChar = Math.min(spendableChar, delta);
+                // S10u (A133(1)): a held bid of 0 that owes a default extra needs a character budget above 0 at the sale,
+                // so the edit may not empty it (with a bid above 0 the character budget stays at least the bid).
+                // S10u review 2 G3: consistent with the sale's spill test (resolveSale): refused only when the extra would
+                // then need the light-cone budget.
+                if (holdsBid && reservedExtra > 0 && charBudgetIsZero(lobby, charBudget - fromChar) && reservedExtra > charBudget - fromChar) throw new SenderError(reservedText);
                 // chargeExtra over the spendable part only: it takes fromChar from it, the rest from the LC budget.
                 const charged = chargeExtra({ ...session, teamBlueCharBudget: fromChar, teamRedCharBudget: fromChar }, side, delta);
                 next = { charBudget: charBudget - fromChar + charged.charBudget, lcBudget: charged.lcBudget };
+                // S10u (review 3 F2): the reservation must hold on the stored f32 values, not only before rounding, or the
+                // sale's chargeExtra would meet a shortfall of half a unit in the last place.
+                if (holdsBid && Math.fround(next.charBudget) + Math.fround(next.lcBudget) < reservedBid + reservedExtra) {
+                    throw new SenderError(reservedText);
+                }
             } else if (delta < 0) {
                 next = { charBudget, lcBudget: lcBudget - delta }; // refund to the light-cone budget (see header)
             }

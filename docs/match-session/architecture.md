@@ -618,9 +618,9 @@ the next sequence the draw keys on).
 |---|---|---|
 | Ban (`ban_character`, `timer_expiry_classic`) | the step; `turnIndex` + 1; on the last Auction ban `isAuctionPhase` true; fresh clock | step deleted; `turnIndex` - 1; `isAuctionPhase` false when set; fresh clock |
 | Pick (`pick_character`, `timer_expiry_classic`) | the step; `turnIndex` + 1; fresh clock. Later `set_eidolon` calls of that side on that character add SetEidolon steps (Classic: no budget) | the pick and every SetEidolon step of the picking side on that character after it deleted (one Undo row); `turnIndex` - 1; fresh clock |
-| Nominate (`nominate_character`, the timer's `EMPTY` nomination) | the step; `currentNomination`, `currentBidAmount` (E0 cost), `currentBidTeam` (nominator); fresh clock | step deleted; nomination unset, `currentBidTeam` Spectator; fresh clock (`nextNominatorTeam` never moved) |
-| Bid (`place_bid`) | the step (with `previousAmount`); `currentBidAmount`, `currentBidTeam`; fresh clock | step deleted; `currentBidAmount` = `previousAmount` (the earlier bid, else the opening amount); `currentBidTeam` = the other team (bids alternate); fresh clock. Refused when that team's character budget is below `previousAmount` (review 2 G2, below) |
-| AuctionSold by pass / timer (`pass_bid`, `timer_expiry_auction` → `completeSale`) | the step (with `charCharged` / `lcCharged`: what it took from the winner's character and light-cone budget); nomination cleared; winner's two budgets; won count + 1; `nextNominatorTeam`; fresh clock | the sale and every SetEidolon step of the winner on that character after it deleted (one Undo row); nomination reopened (`currentNomination` = character, `currentBidAmount` = `winningAmount`, `currentBidTeam` = `winningTeam`); each winner budget += the sale's charge to it + each removed edit's charge to it (a lowering edit's negative charge takes its refund back); won count - 1; `nextNominatorTeam` = the nomination's `Nominate.actorSlot`; fresh clock. Nominate / Bid steps stay |
+| Nominate (`nominate_character`, the timer's `EMPTY` nomination) | the step; `currentNomination`, `currentBidAmount` (E0 cost), `currentBidTeam` (nominator); fresh clock | step deleted; nomination unset, `currentBidTeam` Spectator; fresh clock (`nextNominatorTeam` never moved). _Since Phase S10u execution (A134): the whole open round goes (this step and its bids)._ |
+| Bid (`place_bid`) | the step (with `previousAmount`); `currentBidAmount`, `currentBidTeam`; fresh clock | step deleted; `currentBidAmount` = `previousAmount` (the earlier bid, else the opening amount); `currentBidTeam` = the other team (bids alternate); fresh clock. Refused when that team's character budget is below `previousAmount` (review 2 G2, below). _Superseded in Phase S10u execution (DECISIONS.md A134): a bid is never undone on its own; the undo removes the whole round and no earlier bidder is restored; the refusal and `previousAmount` are removed._ |
+| AuctionSold by pass / timer (`pass_bid`, `timer_expiry_auction` → `completeSale`) | the step (with `charCharged` / `lcCharged`: what it took from the winner's character and light-cone budget); nomination cleared; winner's two budgets; won count + 1; `nextNominatorTeam`; fresh clock | the sale and every SetEidolon step of the winner on that character after it deleted (one Undo row); nomination reopened (`currentNomination` = character, `currentBidAmount` = `winningAmount`, `currentBidTeam` = `winningTeam`); each winner budget += the sale's charge to it + each removed edit's charge to it (a lowering edit's negative charge takes its refund back); won count - 1; `nextNominatorTeam` = the nomination's `Nominate.actorSlot`; fresh clock. Nominate / Bid steps stay. _Superseded in Phase S10u execution (DECISIONS.md A134): the Nominate and Bid steps go with the sale and no nomination reopens (the state before the nomination)._ |
 | AuctionSold, A81(2) immediate (`nominate_character` or the timer nomination while the other team is full; always the case for the last sale) | Nominate and AuctionSold in one call; budgets, won count, `nextNominatorTeam` as above, no open nomination | Nominate, AuctionSold and the character's SetEidolon steps deleted with one Undo row (`originalSequenceId` = the sale); no nomination; budgets as above, won count, `nextNominatorTeam` = the nominator; fresh clock. Detected by "the team other than the nominator was full before the sale" (won counts move only at sales) |
 | SetEidolon during Drafting (`set_eidolon`) | the step (with `charCharged` / `lcCharged`: what it took from each budget, negative = refund; 0 in Classic); Auction: the team's two budgets; the editor's `lastLineupAt` throttle stamp | never undone on its own (A132); removed with its character's pick or sale. An edit on another character keeps its row and its charge, even when made after the sale being undone |
 
@@ -632,15 +632,21 @@ A for 10, raise B for 5 from the light-cone budget, undo the sale of A: characte
 result is rounded from a different f32 value, so a residue of one unit in the last place can remain (review 2 L1; bounded
 by the 300 Undo cap, integer and dyadic prices are exact). Invariant (tested): a team's two budgets add up to its
 starting budgets minus the cost of what it still holds (the remaining sales' and edits' charges), and neither budget is
-ever below 0 (review 2 G1, `restoredBudgets` in `draftControl.ts`): a lowering edit refunds to the light-cone budget,
+ever below 0 (review 2 G1, `restoredBudgets` in `draftControl.ts`; _corrected in Phase S10u execution: as built in S10t
+the second move could store a light-cone budget of minus one unit in the last place, review 3 F3; S10u clamps both
+values at 0 at the end_): a lowering edit refunds to the light-cone budget,
 and if the team spent that refund on another character, taking it back would leave the light-cone budget negative (a
 later `chargeExtra` clamp would then create budget). The undo moves that shortfall to the character budget and stores
 0, so the total is unchanged and nothing is dropped (budgets 100 / 50: buy B for 5 and A for 5.5, raise A by 30, lower
 it again, raise B by 139, undo the sale of A: 6 / 0). The mirror case cannot occur (everything given back to the
 character budget was taken from it) and is clamped the same way. The reopened bid stays backed: the character budget
-after the move is at least the winning amount.
+after the move is at least the winning amount. _Superseded in Phase S10u execution (DECISIONS.md A134; review 3 F1, F3):
+"the reopened bid stays backed" held only in exact arithmetic (the f32 restore could leave the holder a few units in the
+last place short, and the sale was then refused: a deadlock with the G2 refusal); a sale undo no longer reopens any bid.
+"Clamped the same way" was the move that stored the negative ulp; see "Phase S10u execution" below._
 
-**The one refusal inside the draft (review 2 G2).** Undoing a bid is refused with "Cannot undo this bid: the previous
+**The one refusal inside the draft (review 2 G2).** _Superseded in Phase S10u execution (DECISIONS.md A134): the refusal
+is removed together with the bid-by-bid undo; the text below describes S10t._ Undoing a bid is refused with "Cannot undo this bid: the previous
 bidder can no longer cover their bid." when the restored holder's character budget is below `previousAmount`.
 `set_eidolon` reserves the bid only for the team that holds it, so an outbid team may spend its character budget on an
 eidolon raise, and A132 does not walk that edit back; restoring its hold would leave a bid no sale can settle
@@ -649,7 +655,8 @@ with the current holder (pass, timer or a new bid). The per-side edit cap (`ensu
 character free their slots; undo no longer spends Undo rows on edits (review F1: a captain can no longer bury the last
 pick under edits; `set_eidolon` stays allowed in the confirm window and one undo still removes the last pick).
 
-**Payload fields added (S11 clear-publish list).** `BidPayload.previousAmount: f32`; `AuctionSoldPayload.charCharged: f64`,
+**Payload fields added (S11 clear-publish list).** `BidPayload.previousAmount: f32` (_removed again in Phase S10u
+execution, A134_); `AuctionSoldPayload.charCharged: f64`,
 `lcCharged: f64` (the winner's); `SetEidolonPayload.charCharged: f64`, `lcCharged: f64` (the edited team's, written by
 every `set_eidolon` call, 0 in Classic or for a delta of 0). Appended at the end of each struct. The bid's opening amount
 is logged because an admin cost-row import can change a price during a live draft. `MatchSessionStepHistory.payload` is
@@ -711,6 +718,127 @@ confirm window) → Equipping → Scoring → AwaitingResult.
 - **After the move**, `undo_last_step` refuses with "The draft is finished: undo works only while the lobby is in the
   draft stage." (Equipping, Scoring, AwaitingResult; Waiting keeps the stage text).
 
+## Phase S10u execution (DECISIONS.md A133, A134)
+
+**A134: in the auction phase an undo removes the whole nomination round.** `undo_last_step`
+(`reducers/draft/draftControl.ts`) still targets the last character step (Ban, Pick, Nominate, Bid, AuctionSold;
+SetEidolon, Pause and Undo rows are skipped, A132), but the unit it removes depends on that step. Rounds never overlap (a
+nomination ends only with a sale), so the round of an auction step is the latest Nominate step at or before it and the
+Bid steps after that Nominate (`roundOf`). Every call writes exactly one Undo row (`originalSequenceId` = the last
+character step removed), checks the cap of 300 first (A122(10)) and stamps `Lobby.lastActivityAt`. The referee rule,
+A98 and the pause refusal are unchanged.
+
+| Last character step | What one undo removes | What it restores |
+|---|---|---|
+| Ban / Pick | that step (a Pick with the picking side's SetEidolon steps on that character, A132) | as in S10t: `turnIndex` - 1, `isAuctionPhase` false after the last Auction ban (A123), fresh clock |
+| Nominate or Bid (a round is open: `nominate_character`, the timer's `EMPTY` nomination, `place_bid`) | the round's Nominate step and every Bid step of it | no open nomination (`currentNomination`, `currentBidAmount` unset, `currentBidTeam` Spectator); `nextNominatorTeam` = the round's nominator (unchanged); fresh turn clock. No budget moves (bids charge nothing) |
+| AuctionSold (`pass_bid`, the timer's sale, the A81(2) immediate sale) | the sale, its Nominate and Bid steps, and the winner's SetEidolon steps on that character after the sale (A132) | the winner's budgets get back what the sale and those edits charged, per budget (`restoredBudgets`, below); won count - 1; `nextNominatorTeam` = the round's nominator; no open nomination; fresh turn clock. With no edit on another character in between, the state equals the one before the nomination bit for bit |
+
+- No undo path restores a team as the holder of a bid. The S10t Bid branch, its refusal "Cannot undo this bid: the
+  previous bidder can no longer cover their bid." and `BidPayload.previousAmount` are removed (nothing else read the
+  field; payload change on the S11 clear-publish list, `docs/ERD.md`). This removes review 3 F1 (a reopened bid the
+  holder could not pay by f32 rounding, which with the G2 refusal deadlocked the draft), F2 (the G2 check ignored the
+  eidolon extra, so the sale's `chargeExtra` clamp created budget) and F4 (the refusal as a wall).
+- Eidolon selections on other characters, including ones made while the round was open, keep their rows and costs (A132).
+- Bans and everything in Classic stay one step per call. After the first round is undone, the next undo removes the last
+  ban (A123).
+- The confirm window (A129 to A131): the last sale is always an A81(2) immediate sale; undoing it returns to "before that
+  nomination" with that nominator to act on a standard turn clock (the draft is no longer complete); finishing again
+  starts a fresh window. A117 is unaffected (the Undo row raises the next sequence).
+- **`restoredBudgets` (review 3 F3).** The light-cone shortfall moves to the character budget, or (`else`) a character
+  shortfall to the light-cone budget, then both values are clamped at 0. The total is unchanged except when it is itself
+  negative, which in exact arithmetic it never is (it equals the start minus what the team still holds): the value dropped
+  is f32 noise, at most one unit in the last place of the larger budget (9.5e-7 at 33.3 / 12.7 in the review's probe).
+  `Math.fround` of a value `>= 0` is `>= 0`, so no stored budget is negative.
+
+**A133: no light-cone dip at 0 character budget (Auction, while the lobby is in Drafting).** During the draft an eidolon
+cost may spill from the character budget into the light-cone budget only when the team's character budget is above 0
+before the charge, and a spill always empties the character budget (fix pass: a team holding the bid may not spill at
+all). So a team dips into the light-cone budget at most once per stretch of the draft without an undo that gives
+character budget back (a sale undo returns the sale's and its edits' charges, so the undone dip can be made again).
+The random-game test counts this: at most one dip per team per such stretch (observed maximum 1; 47 dips and 23
+restarts after an undo in 24 games).
+
+- **"0" (fix pass, review F3).** `charBudgetIsZero(lobby, value)` (`reducers/draft/draftAuction.ts`): a character
+  budget counts as 0 when it is at most `ZERO_BUDGET_REL * max(1, Lobby.characterBudget)`, `ZERO_BUDGET_REL = 2^-20`
+  (9.5e-7, 8 f32 units of the starting budget): 9.5e-7 up to a start of 1, 9.5e-5 at 100, 0.095 at the 100000 cap. A
+  budget that should be exactly 0 can keep an f32 residue of a few units in the last place of the amounts subtracted
+  from it (budgets 0.3: buy at 0.1 and 0.2, 1.49e-8 is left), and those amounts are at most the start, so the residue
+  stays under the tolerance. It is a thousand times the double-precision noise bound (`extraNoise`, 1e-9 relative) and
+  below the budget's own resolution times 8 (an f32 near the start S has a unit of S * 2^-23; 0.01 at a start of 100 is
+  about 10000 units). Used at four places: the raise and the held-bid-of-0 check (`postDraft.ts`), the nominate / bid
+  guard and the sale's spill test (`draftAuction.ts`). Review 2 G3: each refuses only when the charge would need the
+  light-cone budget (the raise: `delta` above the available character budget; the guard: amount + extra above the
+  character budget; the held-bid-of-0 check: the owed extra above what the edit leaves; the sale: the light-cone budget
+  is left out of the payable extra), so a charge that fits what is left of a budget inside the tolerance is accepted
+  (start 100000, 0.046875 left: a raise of 0.04 is accepted from the character budget, one of 0.05 is refused).
+- **`set_eidolon` raise** (`reducers/draft/postDraft.ts`). "Available" character budget = the character budget minus
+  the bid the team holds (the held bid is reserved and not spendable, A61(4); a team that does not hold the bid has its
+  whole character budget available). At 0 available the raise is refused: "Not enough character budget: an eidolon cost
+  can use the light-cone budget only while character budget remains." A team holding the bid: the raise must fit the
+  available character budget, else "Not enough character budget: while you hold the bid, an eidolon cost must fit your
+  free character budget." (fix pass, review F1; before it a holder's raise spilled while its character budget stayed at
+  the bid, so a later charge could spill again). A team not holding the bid: the available character budget first, the
+  rest from the light-cone budget; a spill empties the character budget. Two further refusals keep a held sale payable,
+  both with the existing text "Not enough budget for that eidolon: your current bid is reserved.": a held bid of 0 that
+  owes a default extra above 0 may not have its character budget emptied, and the stored f32 budgets after the edit
+  must still cover bid + extra. Lowering is unchanged: the refund goes to the light-cone budget (A133(2)). The confirm
+  window is still Drafting with two budgets, so A133 applies there. In Equipping and later (budgets merged by the D-50
+  roll-over) the pool rule is unchanged.
+- **After the dip a lowering is one-way until Equipping (review F4).** Its refund lands in the light-cone budget and a
+  new raise is then refused at character budget 0, so a lowering made by mistake after the dip (in the confirm window
+  too) can be raised back only from the pool once the lobby is in Equipping.
+- **The sale is one charge** (A133(1)): the winning amount plus the default eidolon extra. The extra may spill even when the
+  bid alone empties the character budget, if the budget was above 0 before the sale. Example: budgets 33.3 / 12.7, Blue's
+  default eidolon for S costs 0.7 extra; Blue buys S with a bid of 33.3: character 0, light cones 12.7 - 0.7 = 12.0. A
+  later raise of another character is then refused (character budget 0), a lowering refunds to the light cones.
+- **A sale is never refused for its extra (fix pass, review F2).** `resolveSale` computes the payable extra: what is left
+  of the character budget after the bid, plus the light-cone budget when the character budget before the sale is not
+  0. When the default level's extra does not fit, the character is sold at the highest level from the default down to
+  E0 whose extra fits (E0 has none), exactly that extra is charged, and the level applied is the AuctionSold `eidolon` /
+  `eidolonCost`. This happens only when something outside the draft raised the extra after the bid guard: an admin
+  cost-row change, a roster change, or the deletion of a seated player's user (its account rows go while the seat stays,
+  so the team's lowest owned level can rise). Example: 2v2 under ownership, budgets 10 / 2, X costs 10 / 11.5 / 15 at
+  E0 / E1 / E2; Blue holds X at 10 with its default E0; the E0 owner's rows go, the default becomes E2 (extra 5 > 2): X is
+  sold at E1 (extra 1.5), Blue 0 / 0.5. Under ownership the level applied may be one the team does not own; it may move
+  to an owned level later through `set_eidolon`, if it owns a level it can pay for (the delta is computed from the
+  applied level). `pass_bid`, the timer's sale and the A81(2) immediate sale all go
+  through `completeSale` → `resolveSale`. The one refusal left in `resolveSale`, "Winning amount exceeds the <side>
+  character budget.", is defensive: bids are capped by the character budget and `set_eidolon` never takes a holder
+  below its bid. (A cost row deleted outright during the draft still refuses, through the A107 "has no cost" check.)
+- **Known limitation (S10u review 2 G2, for the owner to rule).** After a step-down sale under ownership a team can sit
+  at a level it does not own and cannot leave: the owned levels above cost more than it has (in the example above E2
+  needs 3.5 more, in Drafting and in Equipping alike) and the levels below are not owned. Scoring uses the recorded
+  level (`teamDraft`, `lineupCosts`, the 5-star eidolon tie-break), not the one the team fields. Three routes outside
+  the draft can cause it: an Admin roster or cost edit, the deletion of a seated user (its account rows go while the
+  seat stays), and the roster of a member who abandoned the match (A68(4): their rows stay in the team's pool but the
+  roster lock is gone). In every route the step-down only follows a rise of the default, so the team never pays less
+  than it would have without the change. Options recorded by the review: keep; step down through owned levels only and
+  void the round when none fits; owned levels only with the unowned E0 as the last fallback.
+- **Guards** (`ensureTotalBudgetFits`, used by `nominate_character` (so also the A81(2) immediate sale) and
+  `place_bid`): after the A61(4) total check, a team whose character budget is 0 (`charBudgetIsZero`) cannot take a
+  character whose default extra is above 0: "Not enough character budget: at 0 character budget your team cannot take a
+  character whose eidolon costs extra." The timer's paths need no guard of their own: its nomination is always `EMPTY`
+  (cost 0, no extra) and its sale sells to the holder, whose bid passed these guards.
+- **`chargeExtra` (review 3 F2).** The light-cone result can fall below 0 only by double-precision noise between a check
+  (which sums the stored values) and the charge (which subtracts them in another order); that noise, at most
+  `extraNoise` = 1e-9 of the amounts (far below one f32 unit), is clamped to 0. A larger shortfall is refused ("Not
+  enough budget for the eidolon extra.") instead of being hidden. No path reaches the refusal: the sale's level choice
+  uses the same noise bound, and `set_eidolon` checks the total, the A133 availability and the holder rule first. It
+  stays as a defensive check inside `chargeExtra`.
+- **What a team at character budget 0 can still do:** nominate `EMPTY` or any character whose E0 cost is 0 and whose
+  default extra is 0 (without ownership every extra is 0 at the sale; under ownership the default is the lowest owned
+  level, A64); bid 0 on such a character when the minimum raise is 0; pass; fire the timer; lower an eidolon (refund to
+  the light-cone budget). It cannot nominate or bid on anything with an E0 cost or a default extra above 0, and cannot
+  raise an eidolon.
+- **Minimum raise (fix pass, review F6, pre-existing).** `place_bid` compares the bid and current bid + minimum raise as
+  f32 (`Math.fround` on both sides): a bid of exactly current + minimum raise is accepted (3.1 on 3 with a raise of 0.1,
+  0.8 on 0.7); a bid below it, one f32 unit below included, is still refused. Review 2 G4: with a minimum raise above 0
+  the bid must also be above the current bid in f32 (budget 100000, current 50000, raise 0.001: 50000 is refused, the
+  next f32 50000.004 accepted); with a minimum raise of 0 an equal bid stays legal. The text "Bid must be at least <min>
+  (current bid <bid> + minimum raise <raise>)." prints each f32 value as its shortest round-trip decimal (3.1, not
+  3.100000001490116).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -764,10 +892,15 @@ confirm window) → Equipping → Scoring → AwaitingResult.
 | `undo_last_step` removes the last character step (ban, pick, nomination, bid, sale incl. the A81 immediate sale in one call) with an exact restore; refused once the stage left Drafting ("The draft is finished: ...", A129: after `advance_stage` or the window); the auction-phase refusal is removed; payload field `BidPayload.previousAmount` added | Phase S10t execution (DECISIONS.md A127) | 2026-11-10 |
 | Review 2: a sale undo never leaves a budget below 0 (a light-cone shortfall moves to the character budget); a bid undo is refused when the previous bidder can no longer cover its bid | Phase S10t execution (DECISIONS.md A127, A132; review 2 G1, G2) | 2026-11-10 |
 | Eidolon selections are not undo steps: a pick or sale is undone together with its own SetEidolon steps (one Undo row); the budgets get back exactly what the sale and those edits charged; edits on other characters keep their charges; payload fields `AuctionSoldPayload` / `SetEidolonPayload` `charCharged`, `lcCharged` (f64). Fix pass: `finishDraft` clears a pause; a Ranked concede in the window counts character stats | Phase S10t execution (DECISIONS.md A132; review F1, F2, F3) | 2026-11-10 |
+| In the auction phase `undo_last_step` removes the whole nomination round (open: the Nominate and its Bid steps; sold: the sale, its Nominate and Bid steps and the winner's selections on that character, with the charges given back); no nomination is left open and the round's nominator acts with a fresh clock; one Undo row; the bid branch, its refusal and `BidPayload.previousAmount` are removed | Phase S10u execution (DECISIONS.md A134; review 3 F1, F2, F4) | 2026-11-10 |
+| `restoredBudgets` clamps both budgets at 0 after the shortfall move (no stored negative ulp) | Phase S10u execution (DECISIONS.md A134; review 3 F3) | 2026-11-10 |
+| Auction, Drafting: an eidolon raise needs available character budget (character budget minus a held bid) above 0; nomination and bid refuse a character with a default extra above 0 for a team at 0 character budget; `resolveSale` refuses the same defensively (_superseded by the fix-pass row below: the sale is never refused for its extra_); `chargeExtra` refuses a shortfall above double-precision noise instead of clamping it | Phase S10u execution (DECISIONS.md A133; review 3 F2) | 2026-11-10 |
+| Fix pass: a holder's raise must fit its free character budget (no spill while holding: one dip per team per stretch without a character-budget-restoring undo); "0" for A133 is `charBudgetIsZero` (2^-20 of the starting character budget, floor 1); a sale whose default extra no longer fits sells at the highest affordable level down to E0 (never refused for its extra); `place_bid`'s minimum raise compared as f32 | Phase S10u execution (DECISIONS.md A133; S10u review F1, F2, F3, F6) | 2026-11-10 |
+| Final pass: the A133 zero tolerance refuses only a charge that needs the light-cone budget (raise, guard, held-bid-of-0 check; the sale already excluded light cones); with a minimum raise above 0 a bid must be above the current bid in f32, and the refusal prints f32 values in their shortest form; the step-down limitation documented | Phase S10u execution (DECISIONS.md A133; S10u review 2 G1, G2, G3, G4) | 2026-11-10 |
 
 ---
 
-*Last updated: 2026-11-10 (S10t)*
+*Last updated: 2026-11-10 (S10u)*
 *Feature owner: Phase 07 / Phase 09 / Phase 12.3 / Phase 15.4 / Phase 15.3*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)
