@@ -17,6 +17,8 @@ import {
     fireCheck,
     guest,
     joinAsSpectator,
+    advanceToEquipping,
+    draftDone,
     lobbyRow,
     newHarness,
     pendingCheck,
@@ -327,6 +329,7 @@ describe('A81: a team holding charactersPerTeam characters sits out of the Aucti
             const w = won(test, lobbyId);
             expect(w.Blue).toBeLessThanOrEqual(8);
             expect(w.Red).toBe(8);
+            if (draftDone(test, lobbyId)) advanceToEquipping(s); // T-S10t re-alignment (A129): the last step leaves the lobby in Drafting; the referee advances it.
         }
         expect(lobbyRow(test, lobbyId).stage.tag).toBe('Equipping');
         expect(won(test, lobbyId)).toEqual({ Blue: 8, Red: 8 });
@@ -361,6 +364,7 @@ describe('A81: a team holding charactersPerTeam characters sits out of the Aucti
                 const w = won(test, lobbyId);
                 expect(w.Blue).toBeLessThanOrEqual(perTeam);
                 expect(w.Red).toBeLessThanOrEqual(perTeam);
+                if (draftDone(test, lobbyId)) advanceToEquipping(s); // T-S10t re-alignment (A129): the last step leaves the lobby in Drafting; the referee advances it.
             }
             expect(lobbyRow(test, lobbyId).stage.tag).toBe('Equipping');
             expect(won(test, lobbyId)).toEqual({ Blue: perTeam, Red: perTeam });

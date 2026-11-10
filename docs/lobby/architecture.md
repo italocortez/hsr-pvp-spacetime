@@ -25,6 +25,7 @@ Lobby (id: u32 autoInc PK)  [PRIVATE; view_my_lobby / view_lobby_browser; staff 
   +-- draftMode: DraftMode (Classic | Auction)
   +-- banMode: BanMode
   +-- standardTurnSeconds: u32 / reserveBankSeconds: u32
+  +-- confirmWindowSeconds: u32  (S10t, A130 / A131: 0-300, default 60; the confirm window after the last pick or sale; 0 = none)
   +-- rosterDiffAdvantage / rosterThreshold / underThresholdAdvantage / aboveThresholdPenalty / deathPenalty: f32
   +-- matchType: MatchType (Casual | Ranked)
   +-- currentPlayerCount: u8  (denormalized for browser view per D-07; away / abandoned rows still count, A68(1)(4))
@@ -129,10 +130,10 @@ TournamentStandIn (PK: [bracketMatchId, userId])  [public: true]
 
 Lobby-owned reducers live in `reducers/lobby/lobbyLifecycle.ts`, `lobbySettings.ts`, `lobbyPresets.ts`, `refereeManagement.ts`, `cursor.ts`, `lobbyGc.ts`, `accountSelection.ts`, `concede.ts` (concede / claim_forfeit / defer), `refereeTransfer.ts` (the A22a scheduled check), the lifecycle hooks in `index.ts`, and (tournament-linked) `tournamentLobby.ts`. Draft-stage transitions (`start_draft`, picks/bans) live in the draft feature, not here.
 
-### create_lobby(config fields..., password, name?, banRestriction?, lineupFormat?, hideMmr?, refereeExclusiveConcede?, maxSpectators?, abandonCurrentMatch?)
+### create_lobby(config fields..., password, name?, banRestriction?, lineupFormat?, hideMmr?, refereeExclusiveConcede?, maxSpectators?, confirmWindowSeconds?, abandonCurrentMatch?)
 1. `getAuthenticatedUser(ctx)` -- reject guests.
 2. (S10n, A116: the `presetId` argument and its existence check are removed; the lobby form fills the arguments from the chosen preset.)
-3. D-22 / A68(4): `ensureNotInLobby(ctx, userId, abandonCurrentMatch ?? false)` (see "Phase S8f execution" below). A68(8): `maxSpectators` (default 12) must be 0-12 ("maxSpectators must be between 0 and 12."); stored on the Lobby row.
+3. D-22 / A68(4): `ensureNotInLobby(ctx, userId, abandonCurrentMatch ?? false)` (see "Phase S8f execution" below). A68(8): `maxSpectators` (default 12) must be 0-12 ("maxSpectators must be between 0 and 12."); stored on the Lobby row. Phase S10t execution (A131): `confirmWindowSeconds` (default 60) must be an integer 0-300 ("confirmWindowSeconds must be between 0 and 300.", `resolveConfirmWindowSeconds` in `helpers/lobby/lobbyConfigBounds.ts`); stored on the Lobby row.
 4. Generate a server-side `joinCode` (`generateJoinCode`, 6 uppercase alnum, up to 10 retries; S10n, A114(2): there is no `joinCode` argument).
 5. D-23: reject guest + `matchType=Ranked`; force `rosterVisibility=ClosedNoRating` for guests.
 6. D-42: if `matchType=Ranked`, force `allowMirrorPicks=false`. Resolve `disconnectForfeitSeconds` (0 sentinel -> undefined).
@@ -214,6 +215,7 @@ Phase S6 execution (backlog #2, #6, #7, #9; DECISIONS.md A28, A33, A38(2)/(4), A
 - Cost set: a changed `costSetId` runs `ensureSelectableCostSet`; a change of `costSetId`, `gameMode` or `draftMode` runs `ensureCostSetCovers` on the resulting tuple.
 - Step 7 (confirmation reset) covers every change, the new fields included.
 - Phase S8f execution (A68(8)): optional `maxSpectators` (0-12, omitted = unchanged; "maxSpectators must be between 0 and 12."), a free-set field, editable in tournament lobbies too. A lower value never evicts a member already in the Spectator slot; it caps later joins.
+- Phase S10t execution (A131): optional `confirmWindowSeconds` (0-300, omitted = unchanged; "confirmWindowSeconds must be between 0 and 300."), a free-set timer setting like `standardTurnSeconds` (editable in tournament lobbies too), Waiting only like every setting (D-28).
 
 ### set_team_slot(lobbyId, targetJoinSeq?, lobbySlot)
 1. `getAuthenticatedUser(ctx)`; load lobby; when `targetJoinSeq` is given and the caller holds no `LobbyMember` row here, `ensureHostOrAbove` first (a non-member can only be moving someone else); then A74(1) `targetJoinSeq` omitted = the caller (self-move), else `resolveSeat` (a seat that resolves to the caller is the self-move too); D-28 `ensureStageIs(Waiting)`. Guard order: lobby → caller checks → seat.
@@ -242,6 +244,7 @@ Phase S6 execution (backlog #2, #6, #7, #9; DECISIONS.md A28, A33, A38(2)/(4), A
 6. Phase S6 execution (backlog #6, #2; A28, A45(2)) — the three series arguments are removed in S8e (A67(2)): optional arguments `bestOf`, `refereeControlsShelving`, `bestOfNAdvantage`, `lineupFormat`, `banRestriction`, `hideMmr` (create: defaults 1 / true / None / Halves / NoRestriction / false; update: omitted keeps the stored value). `ensureBestOf` and the None-for-Bo1 rule as in `create_lobby`. Cost set: `create` runs `ensureCostSetUsable`; `update` runs it when `costSetId` changes, else `ensureCostSetCovers` when gameMode / draftMode change.
 7. Phase S6 execution (A33a): `delete_lobby_preset` rejects the system preset for everyone, Admins included ("The system lobby preset cannot be deleted."); `update_lobby_preset` on it stays Admin-only (`ensureCanMutatePreset`).
 8. Phase S8f execution (A68(8)): optional `maxSpectators` (create: default 12; update: omitted keeps the stored value), validated 0-12 ("maxSpectators must be between 0 and 12."). The system preset carries 12.
+9. Phase S10t execution (A131): optional `confirmWindowSeconds` (create: default 60; update: omitted keeps the stored value), validated 0-300. The system preset carries 60; `create_tournament_lobby` copies the preset's value (free set); `MatchSessionHistory.snapshotConfig` (`LobbyConfigSnapshot`) archives it with the other timer settings (fallback 60). No seed file carries presets (the system preset is written by code), so `data/seed` and the seed script need no change. What the window does: [../match-session/architecture.md](../match-session/architecture.md) "Phase S10t execution".
 
 ### System lobby preset (helpers/lobby/systemPreset.ts; Phase S6 execution, A33a / CH-S4)
 `seedSystemLobbyPreset(ctx)` runs in `init` (and after `server_nuke_test_data` clears `LobbyPreset`), idempotent: one row with `isSystemPreset = true`, `creatorUserId = SYSTEM_USER_ID (0)` (so it never counts against a user's preset cap), name "Tournament default". Free-set values = the constants `create_tournament_lobby` hardcodes (reducers/tournament/tournamentLobby.ts): Classic, ban mode Four, NoRestriction, turn 60 s, reserve 120 s, handicaps 0, character / light-cone budget 0, minimum raise 20, autoRandomPick false, referee may undo / pause / set captain, not kick, player pause on, exclusive concede on, referee controls shelving on, hideMmr false. Integrity-set columns are placeholders the tournament overrides in a tournament lobby: teamSize 1, MemoryOfChaos, Casual, public, not anonymous, OpenRoster, no ownership, cost set 0, Standard disconnect, no forfeit timer, no mirror picks, Halves, bestOf 1, advantage None. `create_tournament` points `Tournament.lobbyPresetId` at it; S8's `create_tournament_lobby` copies the free set from the pointed preset.
@@ -732,6 +735,7 @@ Membership lifecycle after A68 (details in the reducer flows above):
 | `shuffle_teams` RandomSwap: `fairShuffle` keyed by the transaction time, `SHUFFLE_DOMAIN.RandomSwap` and the lobby id replaces `ctx.random.shuffle`; join order, dealing, coaches and captain clearing unchanged | Phase S10p execution (DECISIONS.md A120) | 2026-11-10 |
 | `confirm_ready`, `unconfirm_ready`, `shuffle_teams`, `transfer_host` count on the membership allowance; a Moderator edits only Moderator and host presets; user deletion removes the user's unreferenced presets | Phase S10r execution (DECISIONS.md A122) | 2026-11-10 |
 | The membership allowance also counts the calendar reducers and the player roster writes | Phase S10s execution (DECISIONS.md A122) | 2026-11-10 |
+| `confirmWindowSeconds` (0-300, default 60) on `Lobby`, `LobbyPreset` and the history config snapshot: optional argument of `create_lobby`, `update_lobby_settings` (Waiting, free set), `create_lobby_preset` / `update_lobby_preset`; the system preset carries 60; tournament lobbies copy it from the preset | Phase S10t execution (DECISIONS.md A131) | 2026-11-10 |
 
 ---
 

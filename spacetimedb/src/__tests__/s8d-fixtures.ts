@@ -4,7 +4,7 @@
 // accounts, roles and the EloConfig row are written straight into the in-memory datastore (or through the internal
 // owner), like the earlier suites. `test.db` is read only outside `tx` bodies. Nothing reaches maincloud.
 import { expect } from 'vitest';
-import { M, advance, disconnect, guest, lobbyRow, priceBanNames, priceCharacters, session, tx, type Actor, type Harness, type Lobby } from './s4-fixtures';
+import { M, advance, advanceToEquipping, disconnect, draftDone, guest, lobbyRow, priceBanNames, priceCharacters, session, tx, type Actor, type Harness, type Lobby } from './s4-fixtures';
 import { finishGame } from './s7-fixtures';
 import { bracketByKey, insertHsrAccount, liveField, matchRow, type TournamentArgs } from './s8-fixtures';
 
@@ -85,7 +85,7 @@ export function captainActor(s: Lobby, team: 'Blue' | 'Red'): Actor {
 export function draftGame(s: Lobby, prefix = 'c') {
     const game = 1; // T-S8e (A67(3)): no game number; the name shape of S8d is kept
     let guard = 0;
-    while (lobbyRow(s.test, s.lobbyId).stage.tag === 'Drafting' && guard++ < 60) {
+    while (lobbyRow(s.test, s.lobbyId).stage.tag === 'Drafting' && !draftDone(s.test, s.lobbyId) && guard++ < 60) {
         const sess = session(s.test, s.lobbyId);
         const step = sess.draftSequence[sess.turnIndex];
         const who = captainActor(s, step.teamTurn.tag as 'Blue' | 'Red');
@@ -98,6 +98,7 @@ export function draftGame(s: Lobby, prefix = 'c') {
             tx(s.test, who, (ctx) => M.ban_character(ctx, { lobbyId: s.lobbyId, characterName }));
         }
     }
+    advanceToEquipping(s); // T-S10t (A129): the last step leaves the lobby in Drafting; the referee advances it to Equipping.
     expect(lobbyRow(s.test, s.lobbyId).stage.tag).toBe('Equipping');
 }
 

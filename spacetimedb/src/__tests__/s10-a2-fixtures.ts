@@ -4,7 +4,7 @@
 // (outside any reducer), like the earlier suites. `test.db` is read only outside `tx` bodies. Nothing reaches maincloud.
 // seedRatingData is copied from s6-rules.test.ts (a local helper there, not exported).
 import { expect } from 'vitest';
-import { M, lobbyRow, priceBanNames, priceCharacters, session, setupLobby, tx, type Actor, type Harness, type Lobby, type SetupOpts } from './s4-fixtures';
+import { M, advanceToEquipping, draftDone, lobbyRow, priceBanNames, priceCharacters, session, setupLobby, tx, type Actor, type Harness, type Lobby, type SetupOpts } from './s4-fixtures';
 import { H, arrange, blueNames, captain, closeGame, halves, redNames, side } from './s7-fixtures';
 import { AUDIT, insertHsrAccount } from './s8-fixtures';
 
@@ -99,7 +99,7 @@ export function draftWithBans(s: Lobby, blue: string[], red: string[], bans: str
     const queue = { Blue: [...blue], Red: [...red] };
     const banQueue = [...bans];
     let guard = 0;
-    while (lobbyRow(s.test, s.lobbyId).stage.tag === 'Drafting' && guard++ < 64) {
+    while (lobbyRow(s.test, s.lobbyId).stage.tag === 'Drafting' && !draftDone(s.test, s.lobbyId) && guard++ < 64) {
         const sess = session(s.test, s.lobbyId);
         const step = sess.draftSequence[sess.turnIndex];
         const team = step.teamTurn.tag as 'Blue' | 'Red';
@@ -112,6 +112,7 @@ export function draftWithBans(s: Lobby, blue: string[], red: string[], bans: str
             tx(s.test, who, (ctx) => M.ban_character(ctx, { lobbyId: s.lobbyId, characterName }));
         }
     }
+    advanceToEquipping(s); // T-S10t (A129): the last step leaves the lobby in Drafting; the referee advances it to Equipping.
     expect(lobbyRow(s.test, s.lobbyId).stage.tag).toBe('Equipping');
 }
 

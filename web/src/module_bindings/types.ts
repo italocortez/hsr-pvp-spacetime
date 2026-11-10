@@ -292,6 +292,8 @@ export const AuctionSoldPayload = __t.object("AuctionSoldPayload", {
   },
   eidolon: __t.u8(),
   eidolonCost: __t.f32(),
+  charCharged: __t.f64(),
+  lcCharged: __t.f64(),
 });
 export type AuctionSoldPayload = __Infer<typeof AuctionSoldPayload>;
 
@@ -350,6 +352,7 @@ export type BanRestriction = __Infer<typeof BanRestriction>;
 export const BidPayload = __t.object("BidPayload", {
   amount: __t.f32(),
   targetCharacter: __t.string(),
+  previousAmount: __t.f32(),
 });
 export type BidPayload = __Infer<typeof BidPayload>;
 
@@ -954,6 +957,7 @@ export const Lobby = __t.object("Lobby", {
   },
   standardTurnSeconds: __t.u32(),
   reserveBankSeconds: __t.u32(),
+  confirmWindowSeconds: __t.u32(),
   rosterDiffAdvantage: __t.i32(),
   rosterThreshold: __t.u32(),
   underThresholdAdvantage: __t.i32(),
@@ -1088,6 +1092,7 @@ export const LobbyConfigSnapshot = __t.object("LobbyConfigSnapshot", {
   },
   standardTurnSeconds: __t.u32(),
   reserveBankSeconds: __t.u32(),
+  confirmWindowSeconds: __t.u32(),
   characterBudget: __t.f32(),
   lightconeBudget: __t.f32(),
   rosterDiffAdvantage: __t.i32(),
@@ -1205,6 +1210,7 @@ export const LobbyPreset = __t.object("LobbyPreset", {
   },
   standardTurnSeconds: __t.u32(),
   reserveBankSeconds: __t.u32(),
+  confirmWindowSeconds: __t.u32(),
   characterBudget: __t.f32(),
   lightconeBudget: __t.f32(),
   minimumBidRaise: __t.f32(),
@@ -1268,6 +1274,7 @@ export const LobbyPresetViewRow = __t.object("LobbyPresetViewRow", {
   },
   standardTurnSeconds: __t.u32(),
   reserveBankSeconds: __t.u32(),
+  confirmWindowSeconds: __t.u32(),
   characterBudget: __t.f32(),
   lightconeBudget: __t.f32(),
   minimumBidRaise: __t.f32(),
@@ -2313,6 +2320,8 @@ export const SetEidolonPayload = __t.object("SetEidolonPayload", {
   eidolon: __t.u8(),
   previousEidolon: __t.u8(),
   costPaid: __t.f32(),
+  charCharged: __t.f64(),
+  lcCharged: __t.f64(),
 });
 export type SetEidolonPayload = __Infer<typeof SetEidolonPayload>;
 
@@ -2569,6 +2578,7 @@ export const TournamentLobbyRow = __t.object("TournamentLobbyRow", {
   },
   standardTurnSeconds: __t.u32(),
   reserveBankSeconds: __t.u32(),
+  confirmWindowSeconds: __t.u32(),
   rosterDiffAdvantage: __t.i32(),
   rosterThreshold: __t.u32(),
   underThresholdAdvantage: __t.i32(),

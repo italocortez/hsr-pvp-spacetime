@@ -18,6 +18,8 @@ import { slotIsCoach, slotIsSpectator, slotToTeamSide } from '@module/helpers/lo
 import { resolveUserLabel } from '@module/helpers/identity/userLabel';
 import { hardDeleteLobby } from '@module/reducers/lobby/lobbyGc';
 import { deleteScoringRows, lobbyLineups, netHandicapApplied } from './scoringHelpers';
+import { CONFIRM_WINDOW_SECONDS_DEFAULT } from '@module/helpers/lobby/lobbyConfigBounds';
+import { isDraftComplete } from '@module/helpers/draft/draftComplete';
 
 // ─── Internal: getOrCreateRating ─────────────────────────────────────────────
 // Returns existing MmrRating row for user+mode+season, or creates a new one.
@@ -286,7 +288,10 @@ export function runFinalization(
         const isTournament = matchResult.isTournamentControlled;
         const concedeStage = matchResult.concedeAtStage ?? 'Scoring'; // fallback
         const isCasualNonTournament = !isRanked && !isTournament;
-        const isDrafting = concedeStage === 'Drafting';
+        // S10t review F2 (A129): a concede in the confirm window (Drafting, draft complete) counts as an Equipping concede
+        // for the D-79 stats matrix, as the same moment did before A129; concedeAtStage stays the literal stage. The
+        // session and lobby rows still exist here (finalization deletes them later in this function).
+        const isDrafting = concedeStage === 'Drafting' && !(lobby && session && isDraftComplete(lobby, session));
 
         concedeFlags = {
             doArchiveSteps: !isCasualNonTournament,           // T2/T3: archive what exists
@@ -337,6 +342,7 @@ export function runFinalization(
             lineupFormat: lobby.lineupFormat,
             standardTurnSeconds: lobby.standardTurnSeconds,
             reserveBankSeconds: lobby.reserveBankSeconds,
+            confirmWindowSeconds: lobby.confirmWindowSeconds, // S10t (A131)
             characterBudget: lobby.characterBudget,
             lightconeBudget: lobby.lightconeBudget,
             rosterDiffAdvantage: lobby.rosterDiffAdvantage,
@@ -351,6 +357,7 @@ export function runFinalization(
             lineupFormat: { tag: 'Halves', value: {} } as any,
             standardTurnSeconds: 60,
             reserveBankSeconds: 120,
+            confirmWindowSeconds: CONFIRM_WINDOW_SECONDS_DEFAULT, // S10t (A131)
             characterBudget: 0,
             lightconeBudget: 0,
             rosterDiffAdvantage: 0,

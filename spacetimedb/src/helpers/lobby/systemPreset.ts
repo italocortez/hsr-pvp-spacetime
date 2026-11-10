@@ -42,6 +42,7 @@ export const SYSTEM_PRESET_VALUES = {
     banRestriction: { tag: 'NoRestriction' as const },
     standardTurnSeconds: 60,
     reserveBankSeconds: 120,
+    confirmWindowSeconds: 60, // S10t (A131): the default
     rosterDiffAdvantage: 0,
     rosterThreshold: 0,
     underThresholdAdvantage: 0,

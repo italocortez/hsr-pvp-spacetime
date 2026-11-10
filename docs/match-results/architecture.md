@@ -451,6 +451,10 @@ reaches ceil(bestOf / 2) or staff resolve it). Stage list: Drafting, Equipping, 
 - **Seated referee concede (A122(15), L52).** `concede_match`: `concedeTrigger` is `RefereeDecision` only when the caller holds the referee flag and the losing team is not the caller's own seated team; a referee seated on a team who concedes that team is a surrender (`VoluntaryLeave`), like any player. The exclusive (Spectator) referee stays `RefereeDecision`.
 - **System chat (A122(3)).** The concede and defer lines go through `postSystemChat` (the 50-message trim); [../chat/architecture.md](../chat/architecture.md) "Phase S10r execution".
 
+## Phase S10t execution (DECISIONS.md A129; S10t review F2)
+
+- **Concede in the confirm window (S10t review F2, A129).** The D-79 matrix in `finalizationHelpers.ts` treats a concede or forfeit made while the draft is complete but the lobby still in Drafting (the confirm window, A129 / A130) like an Equipping concede: for a Ranked match the character stats (`PlayerCharacterStat`, `GlobalCharacterStat`) are counted, as they were for the same moment before A129, when a complete draft was already in Equipping. The test is `concedeAtStage === 'Drafting' && !isDraftComplete(lobby, session)` (`helpers/draft/draftComplete.ts`; the session and lobby rows still exist at that point of finalization). `concedeAtStage` stays the literal stage ("Drafting"). A concede mid-draft still skips them.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -484,6 +488,7 @@ reaches ceil(bestOf / 2) or staff resolve it). Stage list: Drafting, Equipping, 
 | A Classic timer pick credits every player of the acting team (one `playedCredit` function shared with the Auction sale); history reads no cost table | Phase S10i execution (DECISIONS.md A106, A107(6)) | 2026-11-10 |
 | Played stat follows ownership for a manual pick, a timer pick and a sale (`playedCredit` + per-finalization `ownedCharacters` cache over `HsrAccount.user_id` / `HsrAccountCharacter.hsr_account_id`); lone player credited when nobody owns it, nobody in a 2+ side | Phase S10k execution (DECISIONS.md A110) | 2026-11-10 |
 | Finalization step 7 stores the record's `matchType` and final `winnerTeamSide` on `MatchSessionHistory` | Phase S10n execution (S10n review F1 / F2; DECISIONS.md A115) | 2026-11-10 |
+| A Ranked concede in the confirm window (draft complete, stage Drafting) counts the character stats like an Equipping concede | Phase S10t execution (DECISIONS.md A129, review F2) | 2026-11-10 |
 | Spent budget = starting budgets minus both remaining budgets; `finalize_match_result` for Moderator+ or the lobby's current referee; a seated referee conceding their own team is `VoluntaryLeave`; concede and defer chat lines trimmed | Phase S10r execution (DECISIONS.md A122) | 2026-11-10 |
 
 ---

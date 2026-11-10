@@ -247,7 +247,7 @@ execution"; bracket side effects: [../brackets/architecture.md](../brackets/arch
 | Reducer | Permission; stage | Behaviour |
 |---|---|---|
 | `create_tournament_lobby(bracketMatchId, abandonCurrentMatch?)` | a member of team1 / team2 of the match or an approved stand-in of either (A34), or `bracket`; InProgress; match Ready; S8e (A67(5)): every lobby of the match settled (record Validated) and the Validated games below `bestOf` (`Lobby.bracket_match_id`) | Integrity set from the tournament (A33: teamSize, gameMode, matchType from countTowardsMmr, both anonymity flags, rosterVisibility, requireOwnership, costSetId, disconnectPolicy + disconnectForfeitSeconds, allowMirrorPicks (false when ranked, D-42), lineupFormat). Free set from the preset at `lobbyPresetId`, the system preset when that row is gone (A33a). name = tournament name + position key (≤ 50). Creator = host and referee (A34): a participant on its team's player seat (`autoSeatSlot`), staff on Spectator; `ensureNotInLobby` for both; `isCaptain` false (start_draft assigns). `joinCode` is ignored (server-generated, as before) |
-| `approve_stand_in(bracketMatchId, teamId, userId)` | `participants`; Phase S10s execution (A122(19)): InProgress | `teamId` ∈ {team1Id, team2Id} and not Disqualified (S10s); the user exists, is not a guest, and is not a member of the other team; one approval per (match, user); the row carries `teamId` (A35) |
+| `approve_stand_in(bracketMatchId, teamId, userId)` | `participants`; Phase S10s execution (A122(19)): InProgress | `teamId` ∈ {team1Id, team2Id} and not Disqualified (S10s); the user exists, is not a guest, is not Disqualified in the tournament (Phase S10t execution, A128), and is not a member of the other team; one approval per (match, user); the row carries `teamId` (A35) |
 | `revoke_stand_in(bracketMatchId, userId)` | `participants` | deletes the approval; a seat already held is not changed |
 | `advance_tournament_stage(…, Completed)` | `owner`; InProgress | `ensureCanComplete`: format check (GroupInto*: elimination rows exist; GroupOnly: group rows only), then `canComplete` (every row Decided / Walkover / Void, no tournament lobby outside AwaitingResult); `assignFinalPlacements`; stage Completed; `startTournamentFinalization` |
 | `advance_tournament_stage(…, Cancelled)` / `cancel_tournament` / `admin_cancel_idle_tournaments` | `owner` / Moderator+ | `cancelTournament`: `cascadeCleanupTournament` (below), stage Cancelled, `startTournamentFinalization` |
@@ -579,6 +579,14 @@ Triage batch 2 (`notes/audit-2026-11-09/low-findings-triage.md` L63 to L71), the
   seven staff views and `view_tournament_registrant_accounts`; `reducers/admin/adminMatchTools.ts` still accepts any
   assistant row, flags not read, and is left as is).
 
+## Phase S10t execution (DECISIONS.md A128)
+
+- **A disqualified player is no stand-in (A128).** `approve_stand_in` (`reducers/tournament/tournamentLobby.ts`), after
+  the guest check, reads the user's `TournamentEnrolled` row of the match's tournament (`by_tournament_and_user`) and
+  refuses a Disqualified one (`A disqualified player cannot be a stand-in.`), for either team of the match. Every other
+  status (Registered, CheckedIn, Active, Eliminated, Withdrawn) and no enrolment at all are accepted, as before. The
+  A122(19) checks (InProgress, team not Disqualified) and the other-team membership check are unchanged.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -621,6 +629,7 @@ Triage batch 2 (`notes/audit-2026-11-09/low-findings-triage.md` L63 to L71), the
 | `reject_participant` also removes a guest's approved, non-Disqualified entry before the bracket exists (withdrawal path, no Disqualified row); verified players and post-generation unchanged | Phase S10o execution (DECISIONS.md A118) | 2026-11-10 |
 | A36a random team formation: `fairShuffle` keyed by the transaction time, `SHUFFLE_DOMAIN.TeamFormation` and the tournament id replaces `ctx.random.shuffle`; pool order (user id), team building and leftovers unchanged; `seed_bracket` random likewise (brackets) | Phase S10p execution (DECISIONS.md A120) | 2026-11-10 |
 | Promotion in Seeding re-opens a solo player's Withdrawn team; `update_tournament` keeps unchanged past dates, digits-only dates, at least 2 participants; stand-in approvals need InProgress and a non-Disqualified team and end (with the stand-ins' locks) at Completed / Cancelled; aliases unique and not another entrant's display name; a staff deletion or ban of the organizer hands the tournament to the longest-serving full assistant or the acting staff member; no-permission assistants read no staff view | Phase S10s execution (DECISIONS.md A121, A122) | 2026-11-10 |
+| `approve_stand_in` refuses a user whose enrolment in the tournament is Disqualified | Phase S10t execution (DECISIONS.md A128) | 2026-11-10 |
 | Fix pass: alias uniqueness among aliases only (display-name comparison withdrawn, A37 / A103); the 2-participant floor on create too; a server deletion or ban of an organizer cancels the unfinished tournaments through the cancel path (A124) | Phase S10s execution (DECISIONS.md A122, A124) | 2026-11-10 |
 
 ---

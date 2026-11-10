@@ -9,7 +9,7 @@ import { charactersPerTeam, groupCount, type LineupFormatTag } from '@shared/sco
 import { teamDraft } from '@module/helpers/results/scoringHelpers';
 import {
     priceBanNames,
-    M, advance, captainOf, lobbyRow, priceLightconeAt as priceLightconeAtKey, priceCharacters, priceLightcones, session, setupLobby, tx,
+    M, advance, advanceToEquipping, captainOf, draftDone, lobbyRow, priceLightconeAt as priceLightconeAtKey, priceCharacters, priceLightcones, session, setupLobby, tx,
     type Actor, type Harness, type Lobby, type SetupOpts,
 } from './s4-fixtures';
 
@@ -103,13 +103,14 @@ export function draftClassic(s: Lobby, blue: string[], red: string[], eidolons: 
     for (;;) {
         const sess = session(s.test, s.lobbyId);
         const step = sess.draftSequence[sess.turnIndex];
-        if (!step) break;
+        if (!step) break; // T-S10t (A129): the last step leaves the lobby in Drafting; the referee advances it to Equipping.
         expect(step.actionRequired.tag).toBe('Pick');
         const team = step.teamTurn.tag as 'Blue' | 'Red';
         const characterName = queue[team].shift()!;
         tx(s.test, captain(s, team), (ctx) =>
             M.pick_character(ctx, { lobbyId: s.lobbyId, characterName, eidolon: eidolons[characterName] ?? 0 }));
     }
+    advanceToEquipping(s);
     expect(lobbyRow(s.test, s.lobbyId).stage.tag).toBe('Equipping');
 }
 
@@ -121,7 +122,7 @@ export function draftAuction(s: Lobby, blue: string[], red: string[]) {
     priceCharacters(s.test, s.lobbyId, [...blue, ...red]); // T-S10i (A107(5)): every nominated name has a cost row
     const queue = { Blue: [...blue], Red: [...red] };
     const perTeam = charactersPerTeam(lobbyRow(s.test, s.lobbyId).lineupFormat.tag as LineupFormatTag);
-    while (lobbyRow(s.test, s.lobbyId).stage.tag === 'Drafting') {
+    while (lobbyRow(s.test, s.lobbyId).stage.tag === 'Drafting' && !draftDone(s.test, s.lobbyId)) {
         const sess = session(s.test, s.lobbyId);
         const team = sess.nextNominatorTeam.tag as 'Blue' | 'Red';
         const other = team === 'Blue' ? 'Red' : 'Blue';
@@ -130,6 +131,7 @@ export function draftAuction(s: Lobby, blue: string[], red: string[]) {
             M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: queue[team].shift()! }));
         if (!otherFull) tx(s.test, captain(s, other), (ctx) => M.pass_bid(ctx, { lobbyId: s.lobbyId }));
     }
+    advanceToEquipping(s); // T-S10t (A129): the last step leaves the lobby in Drafting; the referee advances it to Equipping.
     expect(lobbyRow(s.test, s.lobbyId).stage.tag).toBe('Equipping');
 }
 
@@ -277,8 +279,8 @@ export function setRole(test: Harness, userId: number, role: 'Moderator' | 'Admi
 }
 
 /**
- * T-S10i (A100): finishes the lobby's draft through the reducers, from wherever it stands, so the lobby reaches
- * Equipping by the automatic end-of-draft transition (advance_stage no longer leaves an unfinished draft). Classic: each
+ * T-S10i (A100): finishes the lobby's draft through the reducers, from wherever it stands; T-S10t (A129): the complete
+ * draft then waits in Drafting and the referee's advance_stage moves it to Equipping (the D-50 roll-over). Classic: each
  * remaining Pick turn's captain picks the next filler name of its team (`<prefix>-blue-<n>` / `<prefix>-red-<n>`, priced
  * at 0 in the lobby's cost set, game mode and draft mode unless already priced), each Ban turn bans a filler name.
  * Auction: ban turns as in Classic, then each nomination by the nominator's captain, passed by the other captain unless
@@ -290,7 +292,7 @@ export function completeDraft(s: Lobby, prefix = 'fill') {
     const counter = { Blue: 0, Red: 0, ban: 0 };
     const next = (team: 'Blue' | 'Red') => (prefix === 'EMPTY' ? 'EMPTY' : `${prefix}-${team.toLowerCase()}-${++counter[team]}`);
     let guard = 0;
-    while (lobbyRow(test, lobbyId).stage.tag === 'Drafting' && guard++ < 200) {
+    while (lobbyRow(test, lobbyId).stage.tag === 'Drafting' && !draftDone(test, lobbyId) && guard++ < 200) {
         const sess = session(test, lobbyId);
         const step = sess.draftSequence[sess.turnIndex];
         if (step && !sess.isAuctionPhase) {
@@ -315,6 +317,7 @@ export function completeDraft(s: Lobby, prefix = 'fill') {
         tx(test, captain(s, team), (ctx) => M.nominate_character(ctx, { lobbyId, characterName }));
         if (!otherFull) tx(test, captain(s, other), (ctx) => M.pass_bid(ctx, { lobbyId }));
     }
+    if (lobbyRow(test, lobbyId).stage.tag === 'Drafting') advanceToEquipping(s); // T-S10t (A129): the last step leaves the lobby in Drafting; the referee advances it to Equipping.
     expect(lobbyRow(test, lobbyId).stage.tag).toBe('Equipping');
 }
 

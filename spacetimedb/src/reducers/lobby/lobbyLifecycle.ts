@@ -35,7 +35,7 @@ import {
     markMemberOffline,
 } from '@module/helpers/lobby/disconnectHelpers';
 import { consumeLobbyCreateAllowance, consumeMembershipAllowance, readAbuseConfig, recordGuestLobbyCreation } from '@module/helpers/lobby/abuseControls';
-import { ensureLobbyConfigInRange, ensureTeamAliases } from '@module/helpers/lobby/lobbyConfigBounds';
+import { CONFIRM_WINDOW_SECONDS_DEFAULT, ensureLobbyConfigInRange, ensureTeamAliases, resolveConfirmWindowSeconds } from '@module/helpers/lobby/lobbyConfigBounds';
 import { normalizeLobbyName } from '@module/helpers/tournament/seriesSettings';
 import { ensureCostSetUsable } from '@module/helpers/draft/costSetGuards';
 import { autoSeatSlot } from '@module/helpers/tournament/tournamentLobbySides';
@@ -94,6 +94,7 @@ export const create_lobby = spacetimedb.reducer(
         hideMmr: t.bool().optional(),                  // A40 mitigation (2): default false
         refereeExclusiveConcede: t.bool().optional(),  // A45(5): default true
         maxSpectators: t.u8().optional(),              // A68(8): 0-12, default 12
+        confirmWindowSeconds: t.u32().optional(),      // S10t (A131): 0-300, default 60
         abandonCurrentMatch: t.bool().optional(),      // A68(4): give up an away membership; default false
     },
     (ctx, args) => {
@@ -109,6 +110,8 @@ export const create_lobby = spacetimedb.reducer(
 
         // A68(8): spectator count
         const maxSpectators = resolveMaxSpectators(args.maxSpectators, 12);
+        // S10t (A131): the confirm window, default 60 s
+        const confirmWindowSeconds = resolveConfirmWindowSeconds(args.confirmWindowSeconds, CONFIRM_WINDOW_SECONDS_DEFAULT);
 
         // Server-generated join code (Jackbox-style, 6 chars, deterministic hash)
         const joinCode = generateJoinCode(ctx, user.id);
@@ -173,6 +176,7 @@ export const create_lobby = spacetimedb.reducer(
             lineupFormat: args.lineupFormat ?? { tag: 'Halves' },
             standardTurnSeconds: args.standardTurnSeconds,
             reserveBankSeconds: args.reserveBankSeconds,
+            confirmWindowSeconds, // S10t (A131)
             rosterDiffAdvantage: args.rosterDiffAdvantage,
             rosterThreshold: args.rosterThreshold,
             underThresholdAdvantage: args.underThresholdAdvantage,

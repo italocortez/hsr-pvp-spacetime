@@ -17,6 +17,7 @@ export const LobbyConfigSnapshot = t.object('LobbyConfigSnapshot', {
     lineupFormat: LineupFormat,     // A21: halves or thirds, needed to replay the group arrangement
     standardTurnSeconds: t.u32(),
     reserveBankSeconds: t.u32(),
+    confirmWindowSeconds: t.u32(),  // S10t (A131): the lobby's confirm window, archived with the timer settings
     characterBudget: t.f32(),
     lightconeBudget: t.f32(),
 
@@ -77,6 +78,10 @@ export const BanPayload = t.object('BanPayload', {
 export const BidPayload = t.object('BidPayload', {
     amount: t.f32(),
     targetCharacter: t.string(),
+    // S10t (A127): the highest bid before this one (MatchSession.currentBidAmount: the previous bid of the nomination,
+    // else its opening amount, the E0 cost at the nomination), restored by undo_last_step. The previous holder is the
+    // other team (bids alternate, D-48), so it is not stored.
+    previousAmount: t.f32(),
 });
 
 export const AuctionSoldPayload = t.object('AuctionSoldPayload', {
@@ -85,6 +90,11 @@ export const AuctionSoldPayload = t.object('AuctionSoldPayload', {
     winningTeam: TeamSide,    // Who actually got it
     eidolon: t.u8(),          // A61(3): the winning team's default eidolon (lowest owned, A64; E0 without ownership)
     eidolonCost: t.f32(),     // A61(5): the extra charged at the sale, max(0, cost[eidolon] - cost[e0])
+    // S10t (A127, A132): what the sale took from the winning team's character budget (winningAmount + the part of
+    // eidolonCost it covered) and from its light-cone budget (the rest of eidolonCost), as the exact difference of the
+    // stored f32 budgets (f64 holds it without rounding). undo_last_step gives these back.
+    charCharged: t.f64(),
+    lcCharged: t.f64(),
 });
 
 // A61(1): nominations are at E0; the eidolon is resolved for the winning team at the sale.
@@ -129,6 +139,11 @@ export const SetEidolonPayload = t.object('SetEidolonPayload', {
     eidolon: t.u8(),
     previousEidolon: t.u8(),
     costPaid: t.f32(),
+    // S10t (A132): what this edit took from the team's character and light-cone budgets (Auction; negative = a refund,
+    // which a lowering edit gives to the light-cone budget; 0 in Classic), as the exact difference of the stored f32
+    // budgets. undo_last_step gives them back when it removes the character's pick or sale with its edits.
+    charCharged: t.f64(),
+    lcCharged: t.f64(),
 });
 
 // A60(3)/(4): a game confirmation or close. confirmedSide = the side whose flag this step set (on a close: the closer's

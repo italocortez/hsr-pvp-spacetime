@@ -1316,3 +1316,45 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** user, 2026-11-10: "wait, after the bids are set, why would the undo not work? undo is always remove the last action ... cant undo just do step by step?" and "yeah i want undo to work on any step to go to the previous one, it would stop working after draft is finished, since the equiping part and eidolon selection is indant of it".
 - **Supersedes:** the refusal "Undo is not available during the auction phase." (S4 contract entry F9), and the window ends of A122(9), A123 and A125.
 - **Where implemented:** S10t
+
+### A128 — A disqualified player cannot be a stand-in
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** `approve_stand_in` refuses a user whose own enrolment in that tournament is Disqualified. The checks of A122(19) (tournament in progress, team not disqualified) stay.
+- **Why:** user, 2026-11-10: "a disqualifier player cannot be a stadn in for a team". S10s hand-off: only the team was checked.
+- **Where implemented:** S10t
+
+### A129 — The move from the draft to equipping is a manual step
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** the last pick (Classic) or the last sale (Auction) no longer moves the lobby to Equipping. The lobby stays in Drafting with the draft complete, no turn running and no turn timer, until `advance_stage` is called by whoever holds that power today (the referee, A80); the budget roll-over happens at that call. While the lobby waits there, `undo_last_step` works as on any other step (A127), so a wrong last pick or sale can be taken back. Timer picks and timer sales follow the same rule.
+- **Why:** user, 2026-11-10: "what if we make moving to equipping a manual click, so if players are good with their picks, they have the opportunity to undo".
+- **Supersedes:** the automatic Drafting → Equipping transition of the last pick and the last sale (D-50 roll-over at the last step); completes A127 ("undo stops when the draft is finished": the draft is finished when the stage is advanced).
+- **Where implemented:** S10t
+
+### A130 — A 60-second confirm window after the last draft step, then equipping starts by itself
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** after the last pick or the last sale the lobby stays in Drafting for a confirm window of 60 seconds. During the window the referee can undo (A127) or move to Equipping at once with `advance_stage`. When the 60 seconds have passed, the move to Equipping happens by itself, with the same budget roll-over. Like the turn timers, the expiry is a client-called reducer that the server validates against the elapsed time. An undo of the last step ends the window; finishing the draft again starts a fresh one. A paused draft holds the window as it holds a turn.
+- **Why:** user, 2026-11-10: "we could put a small timer of like 60s that auto moves to equipping but you can click the a button to move automatically to equipping, better?". It removes the stall of A129 when the referee is away.
+- **Orchestrator's reading (not the user's words):** 60 seconds is a constant, not a lobby setting; the pause rule and the fresh window after an undo.
+- **Supersedes:** the "until `advance_stage` is called" clause of A129 (the wait is now bounded).
+- **Where implemented:** S10t
+
+### A131 — The confirm window is a lobby setting, default 60 seconds
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** the length of the confirm window of A130 is a lobby setting, stored and edited where the lobby's turn timer settings are (lobby settings, presets, tournament lobbies through their preset), default 60 seconds.
+- **Why:** user, 2026-11-10: "the timer could be a setting for a lobby, default 60s".
+- **Orchestrator's reading (not the user's words):** allowed range 0 to 300 seconds; 0 means no window (equipping starts with the last step, as before A129); the setting is locked once the draft has started, like the other timer settings.
+- **Supersedes:** the fixed constant of A130.
+- **Schema:** one new settings column wherever the turn timer settings live (joins the S11 clear-publish list).
+- **Where implemented:** S10t
+
+### A132 — Undo removes character steps; an eidolon choice goes with its character
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** the steps `undo_last_step` walks are the character steps of the draft: ban, pick, nomination, bid, sale. An eidolon selection made during the draft is not a step of its own for undo. Undoing the pick or the sale of a character removes that character together with every eidolon selection made on it, and gives back what those selections cost. An eidolon selection on another character is neither undone nor disturbed by an undo, even when it is the most recent action.
+- **Why:** user, 2026-11-10: "undo is removing steps in the draft, undo would remove a character, it doenst have to remove eidolons selections that happen during draft. If a character was selected and set to eidolon 5 and we undo, we are removing the step of selecting the character, which in consequence also removes the eidolon selected."
+- **Supersedes:** the SetEidolon entry of A127's step list as built first in S10t.
+- **Where implemented:** S10t

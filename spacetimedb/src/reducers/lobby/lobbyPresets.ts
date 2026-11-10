@@ -6,7 +6,7 @@ import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHel
 import { readAbuseConfig } from '@module/helpers/lobby/abuseControls';
 import { resolveMaxSpectators } from '@module/helpers/lobby/lobbyHelpers';
 import { ensureForfeitSecondsInRange, ensureNotDeferredOutsideTournament } from '@module/helpers/lobby/disconnectHelpers';
-import { ensureLobbyConfigInRange } from '@module/helpers/lobby/lobbyConfigBounds';
+import { CONFIRM_WINDOW_SECONDS_DEFAULT, ensureLobbyConfigInRange, resolveConfirmWindowSeconds } from '@module/helpers/lobby/lobbyConfigBounds';
 
 import { ensureCostSetCovers, ensureCostSetUsable } from '@module/helpers/draft/costSetGuards';
 
@@ -101,6 +101,7 @@ export const create_lobby_preset = spacetimedb.reducer(
         banRestriction: BanRestriction.optional(),
         hideMmr: t.bool().optional(),
         maxSpectators: t.u8().optional(), // A68(8): 0-12; default 12 on create, unchanged on update
+        confirmWindowSeconds: t.u32().optional(), // S10t (A131): 0-300; default 60 on create, unchanged on update
     },
     (ctx, args) => {
         const user = getAuthenticatedUser(ctx);
@@ -162,6 +163,7 @@ export const create_lobby_preset = spacetimedb.reducer(
             isAnonymousSpectators: args.isAnonymousSpectators,
             hideMmr: args.hideMmr ?? false,
             maxSpectators: resolveMaxSpectators(args.maxSpectators, 12), // A68(8)
+            confirmWindowSeconds: resolveConfirmWindowSeconds(args.confirmWindowSeconds, CONFIRM_WINDOW_SECONDS_DEFAULT), // S10t (A131)
             rosterVisibility: args.rosterVisibility,
             requireOwnership: args.requireOwnership,
             costSetId: args.costSetId,
@@ -227,6 +229,7 @@ export const update_lobby_preset = spacetimedb.reducer(
         banRestriction: BanRestriction.optional(),
         hideMmr: t.bool().optional(),
         maxSpectators: t.u8().optional(), // A68(8): 0-12; default 12 on create, unchanged on update
+        confirmWindowSeconds: t.u32().optional(), // S10t (A131): 0-300; default 60 on create, unchanged on update
     },
     (ctx, args) => {
         const user = getAuthenticatedUser(ctx);
@@ -299,6 +302,7 @@ export const update_lobby_preset = spacetimedb.reducer(
             banRestriction: args.banRestriction ?? preset.banRestriction,
             hideMmr: args.hideMmr ?? preset.hideMmr,
             maxSpectators: resolveMaxSpectators(args.maxSpectators, preset.maxSpectators), // A68(8)
+            confirmWindowSeconds: resolveConfirmWindowSeconds(args.confirmWindowSeconds, preset.confirmWindowSeconds), // S10t (A131)
         }, user.id));
 
         console.log(`[PRESET] Lobby preset #${args.presetId} updated by user #${user.id}`);

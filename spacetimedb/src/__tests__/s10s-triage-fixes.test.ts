@@ -790,26 +790,35 @@ describe('A125: in Auction the undo cancels an open first nomination until the f
         expect(stepsOf(s, 'Nominate')).toHaveLength(1);
     });
 
-    it('A125: once a bid exists the undo is refused with the existing text and nothing changes', () => {
+    // T-S10t re-alignment (A127): the refusal after the first bid is gone; the undo removes the bid and restores the
+    // nomination's opening state (the nominator holds it at the opening amount).
+    it('A125 / A127: once a bid exists the undo removes that bid and the nomination stays open at its opening state', () => {
         const s = auctionReady();
         const nominator = nominatorOf(s);
         nominate(s, 'nominee');
+        const opened = snapshot(s);
         tx(s.test, captain(s, otherSide(nominator)), (ctx) => M.place_bid(ctx, { lobbyId: s.lobbyId, bidAmount: 5 }));
-        const before = snapshot(s);
-        expect(rejection(s.test, s.host, undoBody(s))).toBe('Undo is not available during the auction phase.');
-        expect(snapshot(s)).toEqual(before);
+        tx(s.test, s.host, undoBody(s));
+        expect(snapshot(s)).toEqual(opened);
+        expect(stepsOf(s, 'Bid')).toHaveLength(0);
         expect(stepsOf(s, 'Nominate')).toHaveLength(1);
     });
 
-    it('A125: once a sale exists the undo is refused, also with a new nomination open', () => {
+    // T-S10t re-alignment (A127): a sale is undone too; the next nomination goes first, then the sale.
+    it('A125 / A127: once a sale exists the undo removes the open next nomination, then the sale', () => {
         const s = auctionReady();
         const nominator = nominatorOf(s);
         nominate(s, 'nominee');
+        const opened = snapshot(s);
         tx(s.test, captain(s, otherSide(nominator)), (ctx) => M.pass_bid(ctx, { lobbyId: s.lobbyId }));
         expect(stepsOf(s, 'AuctionSold')).toHaveLength(1);
-        expect(rejection(s.test, s.host, undoBody(s))).toBe('Undo is not available during the auction phase.');
+        const sold = snapshot(s);
         nominate(s, 'next');
-        expect(rejection(s.test, s.host, undoBody(s))).toBe('Undo is not available during the auction phase.');
-        expect(stepsOf(s, 'Nominate')).toHaveLength(2);
+        tx(s.test, s.host, undoBody(s));
+        expect(snapshot(s)).toEqual(sold);
+        tx(s.test, s.host, undoBody(s));
+        expect(snapshot(s)).toEqual(opened);
+        expect(stepsOf(s, 'AuctionSold')).toHaveLength(0);
+        expect(stepsOf(s, 'Nominate')).toHaveLength(1);
     });
 });

@@ -38,6 +38,7 @@ import {
 } from '@module/helpers/results/scoringHelpers';
 import { recomputeAfterAdminEdit } from '@module/helpers/results/gameClose';
 import { auctionEidolonExtra, chargeExtra, teamDefaultEidolon } from './draftAuction';
+import { finishDraft } from '@module/helpers/draft/draftComplete';
 import { TeamSide } from '@module/types/enums';
 import { charactersPerTeam, lineupError, type LineupFormatTag } from '@shared/scoring';
 
@@ -364,9 +365,9 @@ export const set_eidolon = spacetimedb.reducer(
             member ??= ensureCaptainOrReferee(ctx, lobbyId, user.id, side, 'set an eidolon for that team');
             ensureLineupThrottle(ctx, member);
             ensureEditStepRoom(ctx, lobbyId, side, 'edit');
-            // A22(3): no edit while the draft is paused. Drafting only (Equipping may carry isPaused across
-            // advance_stage); client_connected's auto-resume looks at the last step for an auto-pause, so a SetEidolon
-            // step logged during a pause would block it.
+            // A22(3): no edit while the draft is paused. Drafting only (S10t review F3: the move to Equipping clears the
+            // pause, so the stage test is a guard, not a carried pause); client_connected's auto-resume looks at the
+            // last step for an auto-pause, so a SetEidolon step logged during a pause would block it.
             if (lobby.stage.tag === 'Drafting' && session.timerState.isPaused) throw new SenderError('Draft is paused.');
         }
 
@@ -382,6 +383,8 @@ export const set_eidolon = spacetimedb.reducer(
         }
 
         let costPaid: number;
+        let charCharged = 0;
+        let lcCharged = 0;
         if (lobby.draftMode.tag === 'Auction') {
             costPaid = auctionEidolonExtra(ctx, lobby, characterName, eidolon);
             const delta = costPaid - auctionEidolonExtra(ctx, lobby, characterName, current.eidolon);
@@ -410,6 +413,8 @@ export const set_eidolon = spacetimedb.reducer(
                 next = { charBudget, lcBudget: lcBudget - delta }; // refund to the light-cone budget (see header)
             }
             if (delta !== 0) {
+                charCharged = charBudget - Math.fround(next.charBudget);
+                lcCharged = lcBudget - Math.fround(next.lcBudget);
                 ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, side === 'Blue'
                     ? { teamBlueCharBudget: next.charBudget, teamBlueLcBudget: next.lcBudget }
                     : { teamRedCharBudget: next.charBudget, teamRedLcBudget: next.lcBudget }, user.id));
@@ -428,7 +433,9 @@ export const set_eidolon = spacetimedb.reducer(
             action: { tag: 'SetEidolon', value: {} } as any,
             payload: {
                 tag: 'SetEidolon',
-                value: { characterName, eidolon, previousEidolon: current.eidolon, costPaid },
+                // S10t (A132): what this edit charged each budget (stored before minus stored after; 0 in Classic),
+                // given back by undo_last_step when it removes the character's pick or sale.
+                value: { characterName, eidolon, previousEidolon: current.eidolon, costPaid, charCharged, lcCharged },
             } as any,
             timestamp: ctx.timestamp,
         }, user.id));
@@ -466,7 +473,11 @@ export const advance_stage = spacetimedb.reducer(
         const currentStage = lobby.stage.tag;
 
         if (currentStage === 'Drafting') {
-            // S10i review F7: past the A100 check this is reachable only through engineered state (every path that fills both teams already moves to Equipping).
+            // S10t (A129): the normal end of every draft. The last pick or sale leaves the lobby in Drafting with the
+            // draft complete; this call (the referee, A80, or a Moderator+) moves it to Equipping with the D-50 roll-over
+            // the last step used to make (the S10i review F7 note, "reachable only through engineered state", no longer
+            // holds). Until then undo_last_step can take the last step back (A127). A130: the confirm window's expiry
+            // makes the same move when nobody advances.
             // Transition: Drafting → Equipping
             // Per D-50: Carry over leftover character budget to LC budget
             const session = ctx.db.MatchSession.lobbyId.find(lobbyId);
@@ -474,8 +485,7 @@ export const advance_stage = spacetimedb.reducer(
 
             // A100: no advance out of an unfinished draft. A team holds the characters of its draft (teamDraft: its
             // Pick steps in Classic, the AuctionSold steps it won in Auction; EMPTY counts); both must hold
-            // charactersPerTeam. The automatic transitions at the end of a draft (pick_character, timer_expiry_classic,
-            // the Auction sale) do not pass through here and are unchanged.
+            // charactersPerTeam. Since S10t (A129) there is no automatic transition: this is the only way out of Drafting.
             const target = charactersPerTeam(lobby.lineupFormat.tag as LineupFormatTag);
             const blueHeld = teamDraft(ctx, lobbyId, 'Blue').characters.length;
             const redHeld = teamDraft(ctx, lobbyId, 'Red').characters.length;
@@ -485,23 +495,10 @@ export const advance_stage = spacetimedb.reducer(
                 );
             }
 
-            const newBlueLcBudget = session.teamBlueLcBudget + session.teamBlueCharBudget;
-            const newRedLcBudget = session.teamRedLcBudget + session.teamRedCharBudget;
-
-            ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
-                teamBlueLcBudget: newBlueLcBudget,
-                teamRedLcBudget: newRedLcBudget,
-                teamBlueCharBudget: 0,
-                teamRedCharBudget: 0,
-            }, user.id));
-
-            ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
-                stage: { tag: 'Equipping', value: {} } as any,
-                lastActivityAt: ctx.timestamp,
-            }, user.id));
-
-            // System chat message for stage change (D-11); S10r (A122(3)): the shared 50-message trim.
-            postSystemChat(ctx, lobbyId, 'Draft complete. Stage: Equipping', user.id);
+            // S10t (A130): the shared move (finishDraft, helpers/draft/draftComplete.ts): the D-50 roll-over, stage
+            // Equipping, lastActivityAt and the system chat line (D-11; the A122(3) 50-message trim), the same write as the
+            // confirm-window expiry. Allowed at any time in the window (an early advance).
+            finishDraft(ctx, lobby, session, user.id);
 
         } else if (currentStage === 'Equipping') {
             // Transition: Equipping → Scoring

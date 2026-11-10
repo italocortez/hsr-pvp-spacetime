@@ -724,6 +724,7 @@ Note: TournamentEnrolled row does NOT contain hsrAccountId — that column was r
 | A solo player promoted from the waitlist during Seeding, before the bracket exists, gets the team re-opened and Ready; team tournaments unchanged | Phase S10s execution (DECISIONS.md A122(16)) | 2026-11-10 |
 | `approve_stand_in` needs a tournament in progress and a team that is not disqualified; stand-in rows, and the locks of stand-ins who are not enrolled, are removed when the tournament completes or is cancelled | Phase S10s execution (DECISIONS.md A122(19)) | 2026-11-10 |
 | When staff delete or ban the organizer of an unfinished tournament, the longest-serving assistant holding all three permissions becomes the organizer, else the acting Moderator or Admin; when the server identity does it, the tournament is cancelled | Phase S10s execution (DECISIONS.md A121, A124) | 2026-11-10 |
+| `approve_stand_in` refuses a user whose own enrolment in the tournament is Disqualified ("A disqualified player cannot be a stand-in.") | Phase S10t execution (DECISIONS.md A128) | 2026-11-10 |
 
 ---
 

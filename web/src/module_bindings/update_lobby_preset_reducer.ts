@@ -75,4 +75,5 @@ export default {
   },
   hideMmr: __t.option(__t.bool()),
   maxSpectators: __t.option(__t.u8()),
+  confirmWindowSeconds: __t.option(__t.u32()),
 };

@@ -9,6 +9,7 @@ import {
     priceBanNames,
     M,
     advance,
+    advanceToEquipping,
     connect,
     disconnect,
     expectReject,
@@ -485,6 +486,7 @@ describe('Results #3: finalization step 16 skips EMPTY, SKIP and the system user
             }
         }
         expect(skipDone).toBe(true);
+        advanceToEquipping(s); // T-S10t re-alignment (A129): the last step leaves the lobby in Drafting; the referee advances it.
         finishGame(s, 'Blue');
         expect(test.db.MatchSessionHistory.count()).toBe(1n); // casual: finalized at the close
 

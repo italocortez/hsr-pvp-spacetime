@@ -129,6 +129,10 @@ the system user. Ownership is read at finalization, so later roster edits do not
 A82(2), A82(4) and A106 for the played stat (S10i above: whole team on a timer pick). Details, including the index
 reads: `docs/match-results/architecture.md`, "Phase S10k execution".
 
+## Phase S10t execution (DECISIONS.md A129; S10t review F2)
+
+- **Concede in the confirm window (S10t review F2, A129).** The D-79 matrix in `finalizationHelpers.ts` treats a concede or forfeit made while the draft is complete but the lobby still in Drafting (the confirm window, A129 / A130) like an Equipping concede: for a Ranked match the character stats (`PlayerCharacterStat`, `GlobalCharacterStat`) are counted, as they were for the same moment before A129, when a complete draft was already in Equipping. The test is `concedeAtStage === 'Drafting' && !isDraftComplete(lobby, session)` (`helpers/draft/draftComplete.ts`; the session and lobby rows still exist at that point of finalization). `concedeAtStage` stays the literal stage ("Drafting"). A concede mid-draft still skips them. Details: [../match-results/architecture.md](../match-results/architecture.md) "Phase S10t execution".
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -144,6 +148,7 @@ reads: `docs/match-results/architecture.md`, "Phase S10k execution".
 | Stat views without userId / audit ids; GlobalCharacterStat SYSTEM actor; relationships with the other player's card and MMR | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 | No stat rows for `EMPTY`, `SKIP` or the system picker | Phase S10f execution (results audit #3) | 2026-11-09 |
 | A Classic timer pick credits the whole acting team with "played" | Phase S10i execution (DECISIONS.md A106) | 2026-11-10 |
+| A Ranked concede in the confirm window counts the character stats (the complete draft is treated like Equipping) | Phase S10t execution (DECISIONS.md A129, review F2) | 2026-11-10 |
 | "Played" follows ownership (owners on the owning side; lone player when nobody owns it; nobody in a 2+ side) for picks, timer picks and sales | Phase S10k execution (DECISIONS.md A110) | 2026-11-10 |
 
 ---

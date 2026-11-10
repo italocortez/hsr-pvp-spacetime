@@ -17,6 +17,7 @@ export const lobbyColumns = {
     lineupFormat: LineupFormat,         // A21: halves (8 characters) or thirds (12); integrity set in tournament lobbies (A33)
     standardTurnSeconds: t.u32(),
     reserveBankSeconds: t.u32(),
+    confirmWindowSeconds: t.u32(),       // S10t (A130, A131): the confirm window after the last pick or sale, 0-300 s, default 60; 0 = none
     // A21 handicaps: fixed-point hundredths of the game mode's unit (cycles or points), never floats.
     // rosterThreshold is a roster cost in hundredths; 0 disables the threshold pair.
     rosterDiffAdvantage: t.i32(),

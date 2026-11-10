@@ -8,6 +8,8 @@ import { SenderError } from 'spacetimedb/server';
 //   teamSize               1, 2 or 3 (the contract's values; create_tournament uses the same rule and text)
 //   standardTurnSeconds    10 - 600   (a 0 s turn expires the moment it starts)
 //   reserveBankSeconds     0 - 1800
+//   confirmWindowSeconds   0 - 300, default 60 (S10t, A131; 0 = no confirm window: the last pick or sale moves the
+//                          lobby to Equipping in the same call); resolveConfirmWindowSeconds, an optional argument
 //   characterBudget, lightconeBudget, minimumBidRaise   finite, 0 - 100000 (f32 arguments: NaN / ±Infinity rejected)
 //   rosterDiffAdvantage, underThresholdAdvantage, aboveThresholdPenalty, deathPenalty
 //                          -1000000 - 1000000 hundredths (A21 fixed point, i32 columns; S10e review N1: negative
@@ -17,6 +19,8 @@ import { SenderError } from 'spacetimedb/server';
 export const TURN_SECONDS_MIN = 10;
 export const TURN_SECONDS_MAX = 600;
 export const RESERVE_SECONDS_MAX = 1800;
+export const CONFIRM_WINDOW_SECONDS_DEFAULT = 60;
+export const CONFIRM_WINDOW_SECONDS_MAX = 300;
 export const BUDGET_MAX = 100_000;
 export const HANDICAP_MAX_HUNDREDTHS = 1_000_000;
 
@@ -60,6 +64,16 @@ export function ensureLobbyConfigInRange(c: LobbyConfigNumbers): void {
         ensureIntRange(name, c[name], -HANDICAP_MAX_HUNDREDTHS, HANDICAP_MAX_HUNDREDTHS, ' (hundredths)');
     }
     ensureIntRange('rosterThreshold', c.rosterThreshold, 0, HANDICAP_MAX_HUNDREDTHS, ' (hundredths)');
+}
+
+/**
+ * S10t (A131): the confirm window of an optional argument: omitted = `fallback` (the default 60 on create, the stored
+ * value on update); an integer 0-300 ("confirmWindowSeconds must be between 0 and 300.").
+ */
+export function resolveConfirmWindowSeconds(value: number | undefined, fallback: number): number {
+    const resolved = value ?? fallback;
+    ensureIntRange('confirmWindowSeconds', resolved, 0, CONFIRM_WINDOW_SECONDS_MAX);
+    return resolved;
 }
 
 /** S10e (lobby audit #5): team aliases are capped (the lobby name is 0-50, D-A8); they ride on every Lobby row update. */

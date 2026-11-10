@@ -8,7 +8,7 @@ import { normalizeLobbyName } from '@module/helpers/tournament/seriesSettings';
 import { ensureCostSetCovers, ensureSelectableCostSet } from '@module/helpers/draft/costSetGuards';
 import { ensureSeatAllowed } from '@module/helpers/tournament/tournamentLobbySides';
 import { ensureForfeitSecondsInRange, ensureNoActionAllowed, ensureNotDeferredOutsideTournament } from '@module/helpers/lobby/disconnectHelpers';
-import { ensureLobbyConfigInRange, ensureTeamAliases } from '@module/helpers/lobby/lobbyConfigBounds';
+import { ensureLobbyConfigInRange, ensureTeamAliases, resolveConfirmWindowSeconds } from '@module/helpers/lobby/lobbyConfigBounds';
 import { MEMBERSHIP_ACTION_TEXT, consumeMembershipAllowance } from '@module/helpers/lobby/abuseControls';
 import { fairShuffle, SHUFFLE_DOMAIN, shuffleKeyAt } from '@shared/lobby-rules';
 
@@ -74,6 +74,7 @@ export const update_lobby_settings = spacetimedb.reducer(
         hideMmr: t.bool().optional(),
         name: t.string().optional(),
         maxSpectators: t.u8().optional(), // A68(8): 0-12, free set (tournament lobbies too); omitted = unchanged
+        confirmWindowSeconds: t.u32().optional(), // S10t (A131): 0-300, a free-set timer setting; omitted = unchanged
     },
     (ctx, args) => {
         const user = getAuthenticatedUser(ctx);
@@ -190,6 +191,7 @@ export const update_lobby_settings = spacetimedb.reducer(
             banMode: args.banMode,
             standardTurnSeconds: args.standardTurnSeconds,
             reserveBankSeconds: args.reserveBankSeconds,
+            confirmWindowSeconds: resolveConfirmWindowSeconds(args.confirmWindowSeconds, lobby.confirmWindowSeconds), // S10t (A131)
             characterBudget: args.characterBudget,
             lightconeBudget: args.lightconeBudget,
             minimumBidRaise: args.minimumBidRaise,

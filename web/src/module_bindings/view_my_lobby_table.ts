@@ -44,6 +44,7 @@ export default __t.row({
   },
   standardTurnSeconds: __t.u32().name("standard_turn_seconds"),
   reserveBankSeconds: __t.u32().name("reserve_bank_seconds"),
+  confirmWindowSeconds: __t.u32().name("confirm_window_seconds"),
   rosterDiffAdvantage: __t.i32().name("roster_diff_advantage"),
   rosterThreshold: __t.u32().name("roster_threshold"),
   underThresholdAdvantage: __t.i32().name("under_threshold_advantage"),

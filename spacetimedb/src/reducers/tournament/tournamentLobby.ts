@@ -134,6 +134,7 @@ export const create_tournament_lobby = spacetimedb.reducer(
             banRestriction: preset.banRestriction,
             standardTurnSeconds: preset.standardTurnSeconds,
             reserveBankSeconds: preset.reserveBankSeconds,
+            confirmWindowSeconds: preset.confirmWindowSeconds, // S10t (A131): free set, from the preset
             rosterDiffAdvantage: preset.rosterDiffAdvantage,
             rosterThreshold: preset.rosterThreshold,
             underThresholdAdvantage: preset.underThresholdAdvantage,
@@ -236,6 +237,12 @@ export const approve_stand_in = spacetimedb.reducer(
         }
         if (targetUser.isGuest) {
             throw new SenderError('A stand-in must be a verified user.');
+        }
+        // S10t (A128): a player disqualified from this tournament cannot stand in for any team. Any other enrolment
+        // status (Withdrawn, Eliminated, ...) and no enrolment at all stay accepted, as before.
+        const enrolment = [...ctx.db.TournamentEnrolled.by_tournament_and_user.filter([bracketMatch.tournamentId, args.userId])][0];
+        if (enrolment?.status.tag === 'Disqualified') {
+            throw new SenderError('A disqualified player cannot be a stand-in.');
         }
         const otherTeamId = args.teamId === bracketMatch.team1Id ? bracketMatch.team2Id : bracketMatch.team1Id;
         const membership = [...ctx.db.TournamentTeamMember.by_tournament_and_user.filter([bracketMatch.tournamentId, args.userId])][0];

@@ -44,7 +44,6 @@ const MOD_PRESET_TEXT = 'Moderators can only modify presets created by moderator
 const EMPTY_BAN_TEXT = 'EMPTY is not a character and cannot be banned.';
 const NO_COST = (name: string) => `${name} has no cost in this lobby's cost set.`;
 const COACH_PAUSE_TEXT = 'Coaches cannot pause the draft.';
-const AUCTION_UNDO_TEXT = 'Undo is not available during the auction phase.';
 const UNDO_CAP_TEXT = 'This game has reached the limit of 300 undo steps.';
 const NO_AUTHORITY_TEXT = 'You do not have authority to finalize this match result.';
 const HOST_AWARD_TEXT = 'Tournament hosts can only award manual achievements without an award limit.';
@@ -515,7 +514,9 @@ describe('A122(9), L34: the last ban of the Auction ban phase can be undone', ()
     });
 
     // S10s re-alignment (A125): the window now ends at the first bid, not the first nomination; this test bids first.
-    it('A122(9) L34 / A125: once a bid exists the undo is refused and the bans stay', () => {
+    // T-S10t re-alignment (A127): there is no window any more; with a bid placed, undo removes the bid, then the
+    // nomination, then the fourth ban (one step per call).
+    it('A122(9) L34 / A127: with a bid placed, undo walks back the bid, the nomination and then the last ban', () => {
         const test = newHarness();
         const s = setupLobby(test, { lobby: AUCTION_FOUR });
         banAll(s, ['ban-a', 'ban-b', 'ban-c', 'ban-d']);
@@ -525,9 +526,15 @@ describe('A122(9), L34: the last ban of the Auction ban phase can be undone', ()
             return M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: 'nominee' });
         });
         tx(test, captain(s, nominator === 'Blue' ? 'Red' : 'Blue'), (ctx) => M.place_bid(ctx, { lobbyId: s.lobbyId, bidAmount: 5 }));
-        expectReject(test, s.host, undoBody(s), AUCTION_UNDO_TEXT);
+        tx(test, s.host, undoBody(s));
+        expect(steps(test, s.lobbyId).filter((x) => x.action.tag === 'Bid')).toHaveLength(0);
+        expect(session(test, s.lobbyId)).toMatchObject({ currentNomination: 'nominee', currentBidAmount: 0, currentBidTeam: { tag: nominator } });
+        tx(test, s.host, undoBody(s));
+        expect(session(test, s.lobbyId)).toMatchObject({ currentNomination: undefined, isAuctionPhase: true });
         expect(steps(test, s.lobbyId).filter((x) => x.action.tag === 'Ban')).toHaveLength(4);
-        expect(session(test, s.lobbyId).isAuctionPhase).toBe(true);
+        tx(test, s.host, undoBody(s));
+        expect(steps(test, s.lobbyId).filter((x) => x.action.tag === 'Ban')).toHaveLength(3);
+        expect(session(test, s.lobbyId)).toMatchObject({ isAuctionPhase: false, turnIndex: 3 });
     });
 });
 

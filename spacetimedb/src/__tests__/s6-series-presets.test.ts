@@ -8,6 +8,8 @@ import {
     captainOf,
     expectReject,
     guest,
+    advanceToEquipping,
+    draftDone,
     lobbyRow,
     member,
     newHarness,
@@ -164,6 +166,7 @@ function draftClassicGame(s: Lobby, game: number) {
         } else {
             tx(s.test, who, (ctx) => M.ban_character(ctx, { lobbyId: s.lobbyId, characterName }));
         }
+        if (draftDone(s.test, s.lobbyId)) advanceToEquipping(s); // T-S10t re-alignment (A129): the last step leaves the lobby in Drafting; the referee advances it.
     }
 }
 
@@ -179,6 +182,7 @@ function draftAuctionGame(s: Lobby, game: number) {
         tx(s.test, captain(s, nominator), (ctx) =>
             (priceCharacters(ctx, s.lobbyId, [`a${game}_${guard}`]), M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: `a${game}_${guard}` })));
         if (!otherFull) tx(s.test, captain(s, other), (ctx) => M.pass_bid(ctx, { lobbyId: s.lobbyId }));
+        if (draftDone(s.test, s.lobbyId)) advanceToEquipping(s); // T-S10t re-alignment (A129): the last step leaves the lobby in Drafting; the referee advances it.
     }
 }
 

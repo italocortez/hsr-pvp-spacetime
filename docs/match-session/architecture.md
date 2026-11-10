@@ -208,7 +208,7 @@ Decisions: DECISIONS.md A22(3), A22(4), A22a; bug review F3, F5, F8, F9.
 
 **Step sequences (F9).** Every `MatchSessionStep` writer takes `sequence` from `helpers/draft/stepSequence.ts::getNextSequence(ctx, lobbyId)` (max existing sequence in the lobby + 1, 0 for the first step): Classic Pick/Ban (`draftClassic.ts`, including the timer-expiry auto-steps), every auction step (`draftAuction.ts`), the manual Pause (`pause_draft`), the auto-Pause (`run_referee_transfer_check`) and the Undo record (`undo_last_step`). `MatchSession.turnIndex` is Classic turn progress, not a sequence number, so Pause/Undo rows never collide with a draft step and the history key `[matchHistoryId, gameNumber, sequence]` stays unique. `postDraft.ts` already computed max + 1 inline (unchanged). Until the first pause or undo the Classic sequences still equal 0, 1, 2, ... as before.
 
-**undo_last_step (F9).** Rejects while paused ("Nothing to undo right now.") and during the auction phase ("Undo is not available during the auction phase."; Phase S10r execution, A122(9): only once a nomination exists, see "Phase S10r execution"; Phase S10s execution, A125: only once a bid or a sale exists, a first undo cancelling an open nomination, see "Phase S10s execution"). It deletes the highest-sequence **Pick or Ban** step (never a Pause / Undo row), inserts the Undo record with `originalSequenceId = <deleted step's sequence>` and its own sequence, and decrements `turnIndex`. The old "undo crosses back out of the auction phase" branch is gone: unreachable under the auction-phase rejection.
+**undo_last_step (F9).** *Superseded by Phase S10t execution (A127): undo removes the last draft step of any kind; see that section.* Rejects while paused ("Nothing to undo right now.") and during the auction phase ("Undo is not available during the auction phase."; Phase S10r execution, A122(9): only once a nomination exists, see "Phase S10r execution"; Phase S10s execution, A125: only once a bid or a sale exists, a first undo cancelling an open nomination, see "Phase S10s execution"). It deletes the highest-sequence **Pick or Ban** step (never a Pause / Undo row), inserts the Undo record with `originalSequenceId = <deleted step's sequence>` and its own sequence, and decrements `turnIndex`. The old "undo crosses back out of the auction phase" branch is gone: unreachable under the auction-phase rejection.
 
 **Auto-pause (A22a, F5).** The disconnect hook no longer pauses. `run_referee_transfer_check` (`reducers/lobby/refereeTransfer.ts`, bound with `onSchedule`) fires 15 s after a user's last device disconnected and inserts the auto-Pause step (`actorUserId = 0`, `isAutoPause = true`, `timeRemainingMs` computed like `pause_draft`) and sets `timerState.isPaused` only when `decideAutoPause` (`shared/lobby-rules`) says so: the subject is still offline, a team player (not a spectator, coach or spectator-referee), the lobby is Drafting under Standard/Deferred and the draft is not already paused. `join_lobby`'s auto-resume on reconnect is unchanged. Details: `docs/lobby/architecture.md`.
 Phase S8f execution (A68(1)(2)(3)): a player's Leave in a live stage is a disconnect (row kept away with `leftAt`, clock stamped, the same 15 s check, so it auto-pauses a Drafting lobby like a disconnect); an away row counts as offline for the check and for `isForfeitEligible` whatever the presence rows say; no reducer concedes automatically.
@@ -237,7 +237,7 @@ Behavior: [contract.md](contract.md) scenarios tagged "Phase S7b execution". Con
 - **`arrange_lineup(lobbyId, teamSide, groups)`:** stages Equipping, Scoring; callers unchanged (captain of that side or any referee); throttled (open path only); upsert without a confirmation column; recompute + reset.
 - **`set_eidolon(lobbyId: u32, teamSide: TeamSide, characterName: string, eidolon: u8)`** (new): stages Drafting, Equipping, Scoring; `ensureMatchAlive`; callers: a player seat of that team (not coach, not spectator) or any lobby referee (`ensureEidolonEditor`); throttled through `AbuseConfig.lineupMinIntervalMs` / `LobbyMember.lastLineupAt` like `arrange_lineup`. The character must be in that team's draft of the current game (`teamDraft`: Classic Pick by that side, Auction AuctionSold to that side); `EMPTY` rejected; 0..6; the same level as the current one is rejected. Under `requireOwnership` the level must be in `teamOwnedEidolons(ctx, lobbyId, side, characterName)` (`helpers/draft/ownershipValidation.ts`: distinct `HsrAccountCharacter.eidolonLevel` over the `LobbyMemberAccount` rows of the team's player seats). Classic: `costPaid` = the Classic cost row at the new level (0 without a row), no budget. Auction: `costPaid` = `auctionEidolonExtra(new)`; `delta = extra(new) − extra(current)`; `delta > 0` → `chargeExtra` (character budget first, rest from the light-cone budget; rejected `'Not enough budget for that eidolon.'` when `delta > char + lc`); `delta < 0` → refunded to the light-cone budget in every stage (S7b orchestrator rule: a refund never restores bidding power). Logs a `SetEidolon` step (`actorSlot` = the team), `refreshLineupCosts`, recompute + reset (open) or the Admin series recompute. _Superseded in Phase S10b execution (DECISIONS.md A78)._
 - **`teamDraft` (A60(1), A61(7)):** the latest `SetEidolon` step per character of that side and game (highest `sequence`; for Classic only an edit after the pick counts, so an undone pick's edits are ignored) sets the eidolon (tie-break 3) and the cost: Classic = `SetEidolon.costPaid` else `Pick.costPaid`; Auction = `AuctionSold.winningAmount` + (`SetEidolon.costPaid` else `AuctionSold.eidolonCost`), hundredths.
-- **`advance_stage`:** Drafting → Equipping (D-50 rollover + chat) and Equipping → Scoring (host signal, no gate, A60(5)) unchanged; from Scoring it throws `'Games close through confirm_game or close_game; the stage moves on the close.'`. _Superseded in Phase S10b execution (DECISIONS.md A80)._
+- **`advance_stage`:** Drafting → Equipping (D-50 rollover + chat; since Phase S10t, A129 / A130, through `finishDraft`, also reached by the confirm-window expiry) and Equipping → Scoring (host signal, no gate, A60(5)) unchanged; from Scoring it throws `'Games close through confirm_game or close_game; the stage moves on the close.'`. _Superseded in Phase S10b execution (DECISIONS.md A80)._
 - **Auction (A61, `reducers/draft/draftAuction.ts`):** `nominate_character(lobbyId, characterName)` (the `eidolon` argument is gone): base cost = the Auction cost row's `e0` (`getCharacterBaseCost`); under `requireOwnership` the nominating team must own the character on a selected account (`'Your team does not own this character on any selected account.'`, `EMPTY` exempt); guard `baseCost ≤ charBudget` (D-53) **and** `baseCost + extra(teamDefaultEidolon) ≤ charBudget + lcBudget` (`'Not enough total budget: the eidolon extra for this character would exceed it.'`). `place_bid(lobbyId, bidAmount)`: the same ownership check and total guard for the bidding team, bids still capped by the character budget. Helpers: `auctionCostAt`, `auctionEidolonExtra = max(0, cost[e] − cost[e0])`, `teamDefaultEidolon` (lowest owned level under ownership, A64(1) amending A61(3); else 0), `chargeExtra(session, side, extra)` (character budget first, floor 0; the light-cone remainder clamped at 0 with a log line). **Sale** (A61(3), A64: the default eidolon is the lowest owned level; higher owned levels are bought later through `set_eidolon`) (`resolveSale`, both `pass_bid` and the bidding branch of `timer_expiry_auction`): the winning team's default eidolon and extra are resolved at the sale (never from the Nominate step); `winningAmount` comes out of the character budget, then `chargeExtra`; the D-50 rollover at auction completion carries the non-negative leftovers. Payloads: `NominatePayload { characterName }`, `AuctionSoldPayload { characterName, winningAmount, winningTeam, eidolon, eidolonCost }`.
 - **Step kinds:** `SetEidolon` (`SetEidolonPayload { characterName, eidolon, previousEidolon, costPaid }`, `costPaid` in the mode's terms) and `ConfirmGame` (`ConfirmGamePayload { confirmedSide, closed, winnerOverride?, winnerOverrideReason? }`). `MatchSessionStepHistory.targetName` = the character for `SetEidolon`, none for `ConfirmGame`; the character-stats pass of `runFinalization` ignores both.
 - **Review fixes (Phase S7b execution, A61(4)/(5), A22(3)):** in Auction Drafting, while the team holds the current bid, `set_eidolon` treats the bid plus the extra the team would owe at the sale (`teamDefaultEidolon`) as reserved: a positive delta above (char + LC budget) − (bid + extra) is rejected (`'Not enough budget for that eidolon: your current bid is reserved.'`) and the character budget is charged only above the committed bid (the rest from the light-cone budget). `resolveSale` rejects a winning amount above the winner's character budget (`'Winning amount exceeds the <side> character budget.'`) instead of clamping. `set_eidolon` is rejected with `'Draft is paused.'` in a paused Drafting stage (open path; the reconnect auto-resume reads the last step for an auto-pause).
@@ -254,7 +254,7 @@ exits. Sequences stay lobby-wide (`getNextSequence`; game 2 continues after game
 **Game-scoped readers** go through `currentGameSteps(ctx, lobbyId, gameNumber)` (`helpers/draft/stepSequence.ts`): the
 ban restriction, Classic availability / auto-random pick, the Auction won / banned sets and the nomination lookup,
 `undo_last_step` ("Nothing to undo in this game." when the current game has no Pick / Ban; it never crosses into an
-earlier game), `resume_draft` (latest Pause), the join auto-resume (latest Pause of the current game), `teamDraft`
+earlier game; _superseded in Phase S10t execution (A127): the text is gone, "No steps to undo." when no character step is left_), `resume_draft` (latest Pause), the join auto-resume (latest Pause of the current game), `teamDraft`
 (tie-breaks, lineups, edits). Lobby-wide: `getNextSequence`, the user-deletion guard, the lobby GC, the finalization
 read. `view_my_match_steps` rows carry `gameNumber`.
 
@@ -485,7 +485,9 @@ AuctionSold steps it won in Auction, `EMPTY` included. Both must reach `characte
 12 Thirds), else "The draft is not finished: Blue holds b of N characters and Red holds r of N." Nothing changes on
 a rejection. The automatic transitions at the end of a draft (`pick_character` / `timer_expiry_classic` on the last
 Classic step, the Auction sale that fills both teams) do not go through `advance_stage` and are unchanged; in practice
-the manual Drafting branch now only passes for a draft that is already complete.
+the manual Drafting branch now only passes for a draft that is already complete. _Superseded in Phase S10t execution
+(A129, A130): there is no automatic transition at the last step; `advance_stage` and the confirm-window expiry share
+`finishDraft`._
 
 **A101 / A107(1)(5): every price from the lobby's own cost rows.** All lookups go through
 `helpers/draft/costSetGuards.ts` (lobby cost set + game mode + **lobby draft mode**; no default-set fallback):
@@ -568,11 +570,12 @@ execution").
 
 - **Ban names (A122(7), L32).** `ban_character` checks the name after the captain check and before availability: `EMPTY` is refused ("EMPTY is not a character and cannot be banned."); any other name needs the lobby's cost row (`characterCostRow`: cost set, game mode, draft mode, the pool the timer draws from and the check `pick_character` makes through `characterCostAt`), else "<name> has no cost in this lobby's cost set." (`costMissingText`). No system path writes an `EMPTY` ban: the timer's empty ban is the `SKIP` sentinel (`timer_expiry_classic`), which never blocks an `EMPTY` pick. A manual `SKIP` ban has no cost row and is refused by the same check.
 - **Coaches do not pause (A122(8), L33).** `pause_draft`: on the non-referee path a coach is refused ("Coaches cannot pause the draft.") before the `allowPlayerPause` and team-pause checks, so a coach uses none of the team's three pauses. A coach holding the referee flag with `refereeCanPause` pauses as referee, as before. `resume_draft` needs no change: a coach is never the original pauser now, and the auto-pause path already refuses coaches (A85(2)).
-- **Undo of the last Auction ban (A122(9), L34).** `undo_last_step` accepts the call while `isAuctionPhase` is true as long as the auction has not begun: `currentNomination` unset and no `Nominate`, `Bid` or `AuctionSold` step in the lobby. The window is from the last ban (which set `isAuctionPhase`) to the first nomination (manual or the timer's `EMPTY` auto-nomination). The undo then deletes that `Ban` step, writes the `Undo` row, sets `turnIndex` back to the ban turn, `isAuctionPhase = false` and resets the turn timer. Nothing else changed when the phase opened, so nothing else is restored. Once a nomination exists, the old text "Undo is not available during the auction phase." stands. **Window end superseded by Phase S10s execution (A125):** the window now closes at the first bid or sale.
+- **Undo of the last Auction ban (A122(9), L34).** `undo_last_step` accepts the call while `isAuctionPhase` is true as long as the auction has not begun: `currentNomination` unset and no `Nominate`, `Bid` or `AuctionSold` step in the lobby. The window is from the last ban (which set `isAuctionPhase`) to the first nomination (manual or the timer's `EMPTY` auto-nomination). The undo then deletes that `Ban` step, writes the `Undo` row, sets `turnIndex` back to the ban turn, `isAuctionPhase = false` and resets the turn timer. Nothing else changed when the phase opened, so nothing else is restored. Once a nomination exists, the old text "Undo is not available during the auction phase." stands. **Window end superseded by Phase S10s execution (A125):** the window now closes at the first bid or sale. **Window superseded by Phase S10t execution (A127):** there is no window; undo walks back any draft step.
 - **Undo cap (A122(10), L35).** `undo_last_step` calls `ensureUndoStepRoom` (`helpers/draft/stepSequence.ts`, next to `ensureEditStepRoom`, same constant `MAX_EDIT_STEPS_PER_LOBBY` = 300) before deleting the step: at 300 `Undo` rows in the lobby's game the call is refused ("This game has reached the limit of 300 undo steps."). The count is per lobby, not per side: undo is the referee's power over the whole draft.
 
 ## Phase S10s execution (DECISIONS.md A125)
 
+- **Superseded by Phase S10t execution (A127):** the window and its refusal text are gone; the nomination undo described below is kept as one case of the general undo.
 - **Auction undo window until the first bid (A125).** `undo_last_step` (`reducers/draft/draftControl.ts`) refuses in the
   auction phase only once a `Bid` or `AuctionSold` step exists in the lobby's game ("Undo is not available during the
   auction phase.", unchanged text). Inside the window at most one nomination exists (a nomination ends only with a sale).
@@ -596,6 +599,117 @@ execution").
   `turnIndex` back on it, `isAuctionPhase` false. The "No steps to undo." check no longer blocks a nomination undo in an
   Auction without bans (`turnIndex` 0). The A117 re-roll is unaffected: the Undo row raises the next sequence, which the
   timer draw keys on (the Auction timer nomination itself is always `EMPTY`, no draw).
+
+## Phase S10t execution (DECISIONS.md A127, A129, A130, A131, A132)
+
+`undo_last_step` (`reducers/draft/draftControl.ts`) removes the last character step of the lobby's game and restores
+the state before it, one step per call, in every draft mode and phase, while the lobby stage is Drafting. "Last step" =
+the highest-sequence Ban, Pick, Nominate, Bid or AuctionSold step. A132: an eidolon selection (SetEidolon, written by
+`set_eidolon` during Drafting) is not a step of its own for undo: it is never the target and never blocks one, even as
+the most recent step; it goes with its character. Pause and Undo rows are skipped and kept, as before. No other step
+kind is written during Drafting. Unchanged: the referee rule (D-60, `refereeCanUndo`), A98 (present caller), the pause
+refusal ("Nothing to undo right now."), "No steps to undo." when no character step is left, the 300-row cap (A122(10):
+every undo inserts exactly one Undo row, `originalSequenceId` = the undone character step, and checks the cap first;
+removed SetEidolon steps add no Undo row). The refusal "Undo is not available during the auction phase." is removed
+(nothing can reach it). Every undo stamps `Lobby.lastActivityAt`; the A117 re-roll still works (the Undo row raises
+the next sequence the draw keys on).
+
+| Step kind (writer) | What the step's call writes | What the undo restores |
+|---|---|---|
+| Ban (`ban_character`, `timer_expiry_classic`) | the step; `turnIndex` + 1; on the last Auction ban `isAuctionPhase` true; fresh clock | step deleted; `turnIndex` - 1; `isAuctionPhase` false when set; fresh clock |
+| Pick (`pick_character`, `timer_expiry_classic`) | the step; `turnIndex` + 1; fresh clock. Later `set_eidolon` calls of that side on that character add SetEidolon steps (Classic: no budget) | the pick and every SetEidolon step of the picking side on that character after it deleted (one Undo row); `turnIndex` - 1; fresh clock |
+| Nominate (`nominate_character`, the timer's `EMPTY` nomination) | the step; `currentNomination`, `currentBidAmount` (E0 cost), `currentBidTeam` (nominator); fresh clock | step deleted; nomination unset, `currentBidTeam` Spectator; fresh clock (`nextNominatorTeam` never moved) |
+| Bid (`place_bid`) | the step (with `previousAmount`); `currentBidAmount`, `currentBidTeam`; fresh clock | step deleted; `currentBidAmount` = `previousAmount` (the earlier bid, else the opening amount); `currentBidTeam` = the other team (bids alternate); fresh clock. Refused when that team's character budget is below `previousAmount` (review 2 G2, below) |
+| AuctionSold by pass / timer (`pass_bid`, `timer_expiry_auction` → `completeSale`) | the step (with `charCharged` / `lcCharged`: what it took from the winner's character and light-cone budget); nomination cleared; winner's two budgets; won count + 1; `nextNominatorTeam`; fresh clock | the sale and every SetEidolon step of the winner on that character after it deleted (one Undo row); nomination reopened (`currentNomination` = character, `currentBidAmount` = `winningAmount`, `currentBidTeam` = `winningTeam`); each winner budget += the sale's charge to it + each removed edit's charge to it (a lowering edit's negative charge takes its refund back); won count - 1; `nextNominatorTeam` = the nomination's `Nominate.actorSlot`; fresh clock. Nominate / Bid steps stay |
+| AuctionSold, A81(2) immediate (`nominate_character` or the timer nomination while the other team is full; always the case for the last sale) | Nominate and AuctionSold in one call; budgets, won count, `nextNominatorTeam` as above, no open nomination | Nominate, AuctionSold and the character's SetEidolon steps deleted with one Undo row (`originalSequenceId` = the sale); no nomination; budgets as above, won count, `nextNominatorTeam` = the nominator; fresh clock. Detected by "the team other than the nominator was full before the sale" (won counts move only at sales) |
+| SetEidolon during Drafting (`set_eidolon`) | the step (with `charCharged` / `lcCharged`: what it took from each budget, negative = refund; 0 in Classic); Auction: the team's two budgets; the editor's `lastLineupAt` throttle stamp | never undone on its own (A132); removed with its character's pick or sale. An edit on another character keeps its row and its charge, even when made after the sale being undone |
+
+**Budgets (A132).** Undoing a sale gives back exactly what that character cost, per budget, and nothing is recomputed
+or replayed. The charges are the exact differences of the stored f32 budgets (`before - Math.fround(after)`), kept in
+f64 fields, so with no edit on another character in between the undo restores the budgets bit for bit; with one, the
+state is "before the sale, with that other edit's charges applied" (for example character budget 10, light cones 50, buy
+A for 10, raise B for 5 from the light-cone budget, undo the sale of A: character 10, light cones 45). In that case the
+result is rounded from a different f32 value, so a residue of one unit in the last place can remain (review 2 L1; bounded
+by the 300 Undo cap, integer and dyadic prices are exact). Invariant (tested): a team's two budgets add up to its
+starting budgets minus the cost of what it still holds (the remaining sales' and edits' charges), and neither budget is
+ever below 0 (review 2 G1, `restoredBudgets` in `draftControl.ts`): a lowering edit refunds to the light-cone budget,
+and if the team spent that refund on another character, taking it back would leave the light-cone budget negative (a
+later `chargeExtra` clamp would then create budget). The undo moves that shortfall to the character budget and stores
+0, so the total is unchanged and nothing is dropped (budgets 100 / 50: buy B for 5 and A for 5.5, raise A by 30, lower
+it again, raise B by 139, undo the sale of A: 6 / 0). The mirror case cannot occur (everything given back to the
+character budget was taken from it) and is clamped the same way. The reopened bid stays backed: the character budget
+after the move is at least the winning amount.
+
+**The one refusal inside the draft (review 2 G2).** Undoing a bid is refused with "Cannot undo this bid: the previous
+bidder can no longer cover their bid." when the restored holder's character budget is below `previousAmount`.
+`set_eidolon` reserves the bid only for the team that holds it, so an outbid team may spend its character budget on an
+eidolon raise, and A132 does not walk that edit back; restoring its hold would leave a bid no sale can settle
+(`resolveSale` refuses it, so the pass and the timer sale would fail). Nothing changes on the refusal; the draft goes on
+with the current holder (pass, timer or a new bid). The per-side edit cap (`ensureEditStepRoom`) counts live SetEidolon steps, so the edits removed with a
+character free their slots; undo no longer spends Undo rows on edits (review F1: a captain can no longer bury the last
+pick under edits; `set_eidolon` stays allowed in the confirm window and one undo still removes the last pick).
+
+**Payload fields added (S11 clear-publish list).** `BidPayload.previousAmount: f32`; `AuctionSoldPayload.charCharged: f64`,
+`lcCharged: f64` (the winner's); `SetEidolonPayload.charCharged: f64`, `lcCharged: f64` (the edited team's, written by
+every `set_eidolon` call, 0 in Classic or for a delta of 0). Appended at the end of each struct. The bid's opening amount
+is logged because an admin cost-row import can change a price during a live draft. `MatchSessionStepHistory.payload` is
+the JSON of the live payload (`finalizationHelpers.ts`), so the history copy carries the new fields without a change.
+
+**The end of the draft (A129, A130, A131; supersedes the automatic move).** The last Classic pick (`pick_character`,
+`timer_expiry_classic`) and the last Auction sale (`completeSale`, by pass, by the timer or, always in practice, the
+A81(2) immediate sale: before the last sale one team is full and a full team never nominates) no longer move the lobby
+to Equipping and no longer roll the budgets over. The lobby stays in Drafting with the draft complete
+(`isDraftComplete`, `helpers/draft/draftComplete.ts`: Classic `turnIndex >= draftSequence.length`; Auction
+`isAuctionPhase` and both won counts at `charactersPerTeam`). Stage flow: Waiting → Drafting (turns … last step →
+confirm window) → Equipping → Scoring → AwaitingResult.
+
+- **No turn runs.** `pick_character`, `ban_character`, `nominate_character`, `place_bid` and `pass_bid` refuse with
+  "The draft is complete. It moves to Equipping when the referee advances it or the confirm window ends." (after their
+  pause / coach guards). Neither expiry reducer auto-picks, auto-bans, nominates or sells.
+- **The confirm window** (`Lobby.confirmWindowSeconds`, 0-300, default 60, A131) runs on the session's turn clock:
+  the last step wrote `timerState.turnStartAt` = its time and `accumulatedPauseMs` = 0. `turnFullMs(lobby, session)`
+  (`helpers/draft/turnClock.ts`) returns `confirmWindowSeconds * 1000` while the draft is complete in Drafting, else
+  `standardTurnSeconds * 1000`; `pause_draft`, the disconnect auto-pause (`run_referee_transfer_check`) and
+  `resume_draft` pass it, so a pause freezes the window's remaining time in `accumulatedPauseMs` exactly as for a turn.
+  **Client countdown:** when `isDraftComplete` holds (computed from `view_my_match_session` and the lobby's
+  `draftMode` / `lineupFormat`), remaining = `isPaused ? budget : max(0, budget - (now - turnStartAt))` with
+  budget = `accumulatedPauseMs > 0 ? accumulatedPauseMs : confirmWindowSeconds * 1000`. The client must derive "whose
+  turn" from the same test, not from the stage: in the window `draftSequence[turnIndex]` is undefined (Classic) and
+  `nextNominatorTeam` names a full team (Auction).
+- **Ways out.** (1) `advance_stage` by whoever A80 allows (the referee, or a Moderator+), at any time in the window,
+  after the A100 check. (2) The expiry: `timer_expiry_classic` or `timer_expiry_auction`, called by any present member
+  (A98) once the window has elapsed (refused before with "The confirm window has not yet expired."; "Draft is paused."
+  while paused). The Classic expiry also serves an Auction lobby in the window (its complete-draft branch is not
+  mode-gated); the Auction expiry refuses a Classic lobby earlier ("Auction phase not active."). Both call
+  `finishDraft(ctx, lobby, session, actorId)`: the D-50 roll-over (each leftover character budget added to the
+  light-cone budget, character budgets 0), stage Equipping, `lastActivityAt`, the system chat line "Draft complete.
+  Stage: Equipping". The expiry's audit actor is 0 (system), as for the timer steps. (3) `undo_last_step`: the
+  last pick or sale is undone like any other step (no roll-over to reverse); its turn reopens with a fresh clock, and
+  the next completing step starts a fresh window.
+- **No window (`confirmWindowSeconds` = 0).** `finishDraftWithoutWindow` runs after the last pick / sale: the lobby
+  moves to Equipping in that same call through `finishDraft`, and that last step cannot be undone. One difference from
+  the automatic move before A129: `finishDraft` also posts the system chat line "Draft complete. Stage: Equipping"
+  (the old automatic move posted none; `advance_stage` always did).
+- **Other rules in the window.** `set_eidolon` works (stage Drafting, the character is drafted) and does not touch the
+  clock. The disconnect rules are unchanged: the stage is Drafting, so the 15 s check may auto-pause (which holds the
+  window), the forfeit clock and pool run (A85, A92), and a concede or forfeit is stored with `concedeAtStage` Drafting
+  but counted like an Equipping one for the stats (review F2, below).
+- **The move ends a pause (review F3).** `finishDraft` writes `isPaused` false, `accumulatedPauseMs` 0 and `turnStartAt` now, so a
+  window held by a manual pause or a disconnect auto-pause never leaves the lobby paused in Equipping (`resume_draft` is
+  Drafting-only). The pause counters (`pausesUsedBlue` / `pausesUsedRed`) keep the pauses spent; the Pause step rows stay
+  (the log; no resume row exists in any case).
+- **Concede in the window (review F2).** A concede or forfeit there is stored with `concedeAtStage` Drafting, but the D-79
+  stats matrix treats a complete draft like Equipping: Ranked character stats are counted
+  ([../match-results/architecture.md](../match-results/architecture.md) "Phase S10t execution").
+- **The window is as soft as a turn timer (review F6).** Nothing ends it on its own: if no client calls an expiry reducer
+  the lobby stays in Drafting and undo keeps working (any present member's client ends it, as for turns). A player's
+  manual pause holds the window, and only that player or the referee can resume it (D-62); with the referee away a
+  paused window stays paused, the same exposure as any paused turn.
+- **Roll-over rounding (review F7).** The Auction roll-over used to add the leftover character budget to the light-cone
+  budget in double precision before the f32 store; `finishDraft` now adds the two stored f32 values. For prices that are
+  not exact in f32 the result can differ by one f32 unit in the last place; integer and dyadic prices are unchanged.
+- **After the move**, `undo_last_step` refuses with "The draft is finished: undo works only while the lobby is in the
+  draft stage." (Equipping, Scoring, AwaitingResult; Waiting keeps the stage text).
 
 ## Phase History
 
@@ -646,10 +760,14 @@ execution").
 | No module code draws with `ctx.random`: the three remaining shuffles (seeding, RandomSwap, A36a formation) use `fairShuffle` (`shared/lobby-rules/timerDraw.ts`); timer draw unchanged | Phase S10p execution (DECISIONS.md A120) | 2026-11-10 |
 | `ban_character` needs a priced name of the lobby's pool, `EMPTY` refused; coaches cannot pause; the last Auction ban is undoable until the first nomination; Undo rows capped at 300 per game | Phase S10r execution (DECISIONS.md A122) | 2026-11-10 |
 | `undo_last_step` in Auction: the window stays open until the first Bid / AuctionSold step; a first undo cancels the open nomination (manual or the timer's `EMPTY`) and restores the no-nomination state with a fresh turn for the nominator; a further undo removes the last ban | Phase S10s execution (DECISIONS.md A125) | 2026-11-10 |
+| The last pick / sale leaves the lobby in Drafting with the draft complete (no roll-over, draft actions refused); a confirm window (`Lobby.confirmWindowSeconds`, 0-300, default 60, on the turn clock fields) ends through `advance_stage` or either timer expiry reducer once elapsed, both via `finishDraft` (roll-over, Equipping, chat line); 0 = the last step moves at once | Phase S10t execution (DECISIONS.md A129, A130, A131) | 2026-11-10 |
+| `undo_last_step` removes the last character step (ban, pick, nomination, bid, sale incl. the A81 immediate sale in one call) with an exact restore; refused once the stage left Drafting ("The draft is finished: ...", A129: after `advance_stage` or the window); the auction-phase refusal is removed; payload field `BidPayload.previousAmount` added | Phase S10t execution (DECISIONS.md A127) | 2026-11-10 |
+| Review 2: a sale undo never leaves a budget below 0 (a light-cone shortfall moves to the character budget); a bid undo is refused when the previous bidder can no longer cover its bid | Phase S10t execution (DECISIONS.md A127, A132; review 2 G1, G2) | 2026-11-10 |
+| Eidolon selections are not undo steps: a pick or sale is undone together with its own SetEidolon steps (one Undo row); the budgets get back exactly what the sale and those edits charged; edits on other characters keep their charges; payload fields `AuctionSoldPayload` / `SetEidolonPayload` `charCharged`, `lcCharged` (f64). Fix pass: `finishDraft` clears a pause; a Ranked concede in the window counts character stats | Phase S10t execution (DECISIONS.md A132; review F1, F2, F3) | 2026-11-10 |
 
 ---
 
-*Last updated: 2026-11-10 (S10s)*
+*Last updated: 2026-11-10 (S10t)*
 *Feature owner: Phase 07 / Phase 09 / Phase 12.3 / Phase 15.4 / Phase 15.3*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

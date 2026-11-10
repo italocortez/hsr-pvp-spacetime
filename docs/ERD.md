@@ -2,6 +2,8 @@
 
 76 tables. Updated 2026-11-06 (S3 backend reset: 27 tables public → private per A37 / ACCESS-SECURITY-OPS Appendix A, 10 new, `group_phase_record` dropped per A23). Visibility: **21 public** (reference data, aggregates, `user`, `tournament`, `bracket_match`, `admin_alert`, the `lobby_cursor_event` event table); every other table is PRIVATE and read through views (S9). Paste into [mermaid.live](https://mermaid.live) to preview.
 
+Phase S10t execution (DECISIONS.md A127, A131, A132): `lobby`, `lobby_preset` and the `LobbyConfigSnapshot` struct (`match_session_history.snapshotConfig`) gain `confirmWindowSeconds` (u32, 0-300, default 60; the confirm window after the last pick or sale) after `reserveBankSeconds`; the `match_session_step.payload` structs gain `BidPayload.previousAmount`, `AuctionSoldPayload.charCharged` / `lcCharged` and `SetEidolonPayload.charCharged` / `lcCharged` (f64, A132: what the sale or the edit took from each budget; `previousAmount` is f32; all appended; the history copy is the payload JSON). No index change. S11 clear-publish.
+
 Phase S9c execution (DECISIONS.md A74): `lobby` gains `lastJoinSeq` (the seat counter, replacing the `max(joinSeq) + 1` scan) and `lobby_ban` gains `bannedJoinSeq` (the banned member's seat). No index change.
 Phase S9b execution (DECISIONS.md A37, A40, A44): `hsr_account` gains an `is_roster_public` btree index (`view_public_hsr_accounts` reads through it); `leaderboard` is rewritten with at most 20 rows per category and SYSTEM audit columns, as are the `global_character_stat` writes and automatic `user_achievement` awards (data rule, no column change). Views only change otherwise.
 Phase S9a execution (DECISIONS.md A37, A63; user 2026-11-07): `match_result_record` loses `refereeFullControl` (no reducer read it since A63; the live seat decides neutrality); `lobby_preset` is private (read through `view_lobby_presets`); `tournament_stand_in` gains a `user_id` btree index (`view_my_stand_ins`). Views only change otherwise.
@@ -231,6 +233,7 @@ erDiagram
         string banRestriction "A45"
         bool hideMmr "A40"
         u8 maxSpectators "A68(8): 0-12, caps new Spectator joins"
+        u32 confirmWindowSeconds "A131: 0-300 s, default 60; 0 = no confirm window"
         u32 lastJoinSeq "A74(3): last seat number handed out; host = 1; never reused"
     }
     lobby_member_account {
@@ -266,6 +269,7 @@ erDiagram
         u32 creatorUserId FK
         u32 costSetId FK
         u8 maxSpectators "A68(8): 0-12, system preset 12"
+        u32 confirmWindowSeconds "A131: 0-300 s, default 60, system preset 60"
     }
     lobby_password {
         u32 lobbyId PK_FK

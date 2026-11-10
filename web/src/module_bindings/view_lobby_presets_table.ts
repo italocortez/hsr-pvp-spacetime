@@ -47,6 +47,7 @@ export default __t.row({
   },
   standardTurnSeconds: __t.u32().name("standard_turn_seconds"),
   reserveBankSeconds: __t.u32().name("reserve_bank_seconds"),
+  confirmWindowSeconds: __t.u32().name("confirm_window_seconds"),
   characterBudget: __t.f32().name("character_budget"),
   lightconeBudget: __t.f32().name("lightcone_budget"),
   minimumBidRaise: __t.f32().name("minimum_bid_raise"),

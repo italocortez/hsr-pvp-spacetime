@@ -9,7 +9,8 @@ import { computeLobbyMemberRating } from '@module/helpers/stats/accountRating';
 import { banRestrictionError, isBanLegal } from '@module/helpers/lobby/banRestriction';
 import { ensureMatchAlive, scheduleChecksForOfflineStaff } from '@module/helpers/lobby/disconnectHelpers';
 import { lobbySteps, getNextSequence } from '@module/helpers/draft/stepSequence';
-import { turnRemainingMs } from '@module/helpers/draft/turnClock';
+import { turnFullMs, turnRemainingMs } from '@module/helpers/draft/turnClock';
+import { confirmWindowOpenText, draftCompleteText, finishDraft, finishDraftWithoutWindow, isDraftComplete } from '@module/helpers/draft/draftComplete';
 import { characterCostAt, characterCostRow, costMissingText, pricedCharacterNames } from '@module/helpers/draft/costSetGuards';
 import { trimChatForInsert } from '@module/helpers/lobby/chatWindow';
 import { microsWords, timerDrawIndex as drawPoolIndex } from '@shared/lobby-rules';
@@ -339,6 +340,9 @@ export const pick_character = spacetimedb.reducer(
             throw new SenderError('Coaches cannot perform draft actions.');
         }
 
+        // S10t (A129): a complete draft waits for advance_stage; no turn runs.
+        if (isDraftComplete(lobby, session)) throw new SenderError(draftCompleteText);
+
         // Turn validation
         const currentStep = session.draftSequence[session.turnIndex];
         if (!currentStep) {
@@ -419,35 +423,15 @@ export const pick_character = spacetimedb.reducer(
         }, user.id));
 
         // Advance turn and update MatchSession
+        // S10t (A129): the last Classic pick no longer moves the lobby to Equipping nor rolls the budgets over: the
+        // turn index reaches the end of the sequence (the draft is complete, isDraftComplete) and the referee's
+        // advance_stage makes the move with the D-50 roll-over. The last pick takes the plain branch below.
         const newTurnIndex = session.turnIndex + 1;
-        const isClassicComplete =
-            lobby.draftMode.tag === 'Classic' &&
-            newTurnIndex >= session.draftSequence.length;
         const isAuctionBansComplete =
             lobby.draftMode.tag === 'Auction' &&
             newTurnIndex >= session.draftSequence.length;
 
-        if (isClassicComplete) {
-            // Classic draft complete — transition to Equipping
-            // D-50: Budget rollover — carry leftover charBudget into lcBudget
-            ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
-                turnIndex: newTurnIndex,
-                teamBlueLcBudget: session.teamBlueLcBudget + session.teamBlueCharBudget,
-                teamRedLcBudget: session.teamRedLcBudget + session.teamRedCharBudget,
-                teamBlueCharBudget: 0,
-                teamRedCharBudget: 0,
-                timerState: {
-                    ...session.timerState,
-                    turnStartAt: ctx.timestamp,
-                    accumulatedPauseMs: 0,
-                },
-            }, user.id));
-
-            ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
-                stage: { tag: 'Equipping', value: {} } as any,
-                lastActivityAt: ctx.timestamp,
-            }, user.id));
-        } else if (isAuctionBansComplete) {
+        if (isAuctionBansComplete) {
             // Auction ban phase complete — transition to auction phase
             ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
                 turnIndex: newTurnIndex,
@@ -476,6 +460,9 @@ export const pick_character = spacetimedb.reducer(
                 lastActivityAt: ctx.timestamp,
             }, user.id));
         }
+
+        // A131: with confirmWindowSeconds 0 the pick that completes the draft moves the lobby to Equipping now.
+        finishDraftWithoutWindow(ctx, lobbyId, user.id);
 
         console.log(`[DRAFT] pick_character: User #${user.id} picked '${characterName}' (E${eidolon}) in lobby #${lobbyId}, turn ${session.turnIndex}`);
     }
@@ -518,6 +505,9 @@ export const ban_character = spacetimedb.reducer(
         if (slotIsCoach(member.lobbySlot)) {
             throw new SenderError('Coaches cannot perform draft actions.');
         }
+
+        // S10t (A129): a complete draft waits for advance_stage; no turn runs.
+        if (isDraftComplete(lobby, session)) throw new SenderError(draftCompleteText);
 
         // Turn validation
         const currentStep = session.draftSequence[session.turnIndex];
@@ -666,6 +656,17 @@ export const timer_expiry_classic = spacetimedb.reducer(
             throw new SenderError('Draft is paused.');
         }
 
+        // S10t (A129, A130, A131): a complete draft runs no turn but the lobby's confirm window, on the same clock fields
+        // (turnFullMs). Before it has elapsed the call is refused; once it has, the lobby moves to Equipping (finishDraft,
+        // the same write as advance_stage). Never an auto-pick, auto-ban, nomination or sale.
+        if (isDraftComplete(lobby, session)) {
+            if (turnRemainingMs(lobby, session.timerState, ctx.timestamp.microsSinceUnixEpoch, turnFullMs(lobby, session)) > 0) {
+                throw new SenderError(confirmWindowOpenText);
+            }
+            finishDraft(ctx, lobby, session, 0);
+            return;
+        }
+
         // Server-side timer validation (S10f, F10): the turn's remaining time (helpers/draft/turnClock.ts) must be 0
         if (turnRemainingMs(lobby, session.timerState, ctx.timestamp.microsSinceUnixEpoch) > 0) {
             throw new SenderError('Turn timer has not yet expired.');
@@ -808,34 +809,14 @@ export const timer_expiry_classic = spacetimedb.reducer(
         }
 
         // Advance turn
+        // S10t (A129): as in pick_character, the last timer pick leaves the lobby in Drafting with the draft complete;
+        // the move to Equipping and the D-50 roll-over are advance_stage's.
         const newTurnIndex = session.turnIndex + 1;
-        const isClassicComplete =
-            lobby.draftMode.tag === 'Classic' &&
-            newTurnIndex >= session.draftSequence.length;
         const isAuctionBansComplete =
             lobby.draftMode.tag === 'Auction' &&
             newTurnIndex >= session.draftSequence.length;
 
-        if (isClassicComplete) {
-            // D-50: Budget rollover — carry leftover charBudget into lcBudget
-            ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
-                turnIndex: newTurnIndex,
-                teamBlueLcBudget: session.teamBlueLcBudget + session.teamBlueCharBudget,
-                teamRedLcBudget: session.teamRedLcBudget + session.teamRedCharBudget,
-                teamBlueCharBudget: 0,
-                teamRedCharBudget: 0,
-                timerState: {
-                    ...session.timerState,
-                    turnStartAt: ctx.timestamp,
-                    accumulatedPauseMs: 0,
-                },
-            }, 0));
-
-            ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
-                stage: { tag: 'Equipping', value: {} } as any,
-                lastActivityAt: ctx.timestamp,
-            }, 0));
-        } else if (isAuctionBansComplete) {
+        if (isAuctionBansComplete) {
             ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
                 turnIndex: newTurnIndex,
                 isAuctionPhase: true,
@@ -863,6 +844,9 @@ export const timer_expiry_classic = spacetimedb.reducer(
                 lastActivityAt: ctx.timestamp,
             }, 0));
         }
+
+        // A131: with confirmWindowSeconds 0 the timer pick that completes the draft moves the lobby to Equipping now.
+        finishDraftWithoutWindow(ctx, lobbyId, 0);
 
         console.log(`[DRAFT] timer_expiry_classic: Auto-action at turn ${session.turnIndex} in lobby #${lobbyId}`);
     }

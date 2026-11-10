@@ -141,7 +141,7 @@ describe('A61(5): the extra is charged at the sale, character budget first', () 
         tx(test, captain(s, 'Blue'), nominate(s, 'Blue', 'EMPTY')); // cost 0 ≤ character budget 0
         tx(test, captain(s, 'Red'), pass(s));
 
-        // T-S10i (A100): the auction is finished (EMPTY sales at 0) instead of advanced; its end makes the D-50 rollover.
+        // T-S10i (A100): the auction is finished (EMPTY sales at 0); T-S10t (A129): the fixture's advance_stage makes the D-50 rollover.
         completeDraft(s, 'EMPTY');
         expect(budgets(test, s.lobbyId)).toEqual({ blueChar: 0, blueLc: 40, redChar: 0, redLc: 150 });
     });
@@ -270,7 +270,7 @@ describe('A64: the sale eidolon is the lowest level the winning team owns', () =
         advance(test, 300);
         setEidolon(s, blueCap, 'Blue', 'a', 2); // -50 refunded to the light-cone budget
         expect(budgets(test, s.lobbyId)).toMatchObject({ blueChar: 25, blueLc: 100 });
-        completeDraft(s, 'EMPTY'); // T-S10i (A100): finished (EMPTY sales at 0), not advanced; D-50 rollover: 100 + 25
+        completeDraft(s, 'EMPTY'); // T-S10i (A100): finished (EMPTY sales at 0); T-S10t (A129): advanced by the fixture; D-50 rollover: 100 + 25
         expect(budgets(test, s.lobbyId)).toMatchObject({ blueChar: 0, blueLc: 125 });
         advance(test, 300);
         setEidolon(s, blueCap, 'Blue', 'a', 6); // +50 from the light cones

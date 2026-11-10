@@ -5,7 +5,8 @@ import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHel
 import { ensurePresentMember, ensureStageIs, slotTeam, slotIsCoach, slotToTeamSide } from '@module/helpers/lobby/lobbyHelpers';
 import { ensureMatchAlive } from '@module/helpers/lobby/disconnectHelpers';
 import { lobbySteps, getNextSequence } from '@module/helpers/draft/stepSequence';
-import { turnRemainingMs } from '@module/helpers/draft/turnClock';
+import { turnFullMs, turnRemainingMs } from '@module/helpers/draft/turnClock';
+import { confirmWindowOpenText, draftCompleteText, finishDraft, finishDraftWithoutWindow, isDraftComplete } from '@module/helpers/draft/draftComplete';
 import { teamOwnedEidolons } from '@module/helpers/draft/ownershipValidation';
 import { characterCostAt } from '@module/helpers/draft/costSetGuards';
 import { charactersPerTeam, type LineupFormatTag } from '@shared/scoring';
@@ -143,19 +144,39 @@ function resolveSale(ctx: any, lobby: any, session: any, winningSide: string, ch
     };
 }
 
+/**
+ * S10t (A132): the amounts the sale took from the winner's two budgets: the stored f32 value before minus the f32 value
+ * the session row will hold (Math.fround of the computed one), exact in an f64 payload field.
+ */
+function saleCharges(session: any, budgets: any, side: string): { charCharged: number; lcCharged: number } {
+    if (side === 'Blue') {
+        return {
+            charCharged: session.teamBlueCharBudget - Math.fround(budgets.teamBlueCharBudget),
+            lcCharged: session.teamBlueLcBudget - Math.fround(budgets.teamBlueLcBudget),
+        };
+    }
+    if (side === 'Red') {
+        return {
+            charCharged: session.teamRedCharBudget - Math.fround(budgets.teamRedCharBudget),
+            lcCharged: session.teamRedLcBudget - Math.fround(budgets.teamRedLcBudget),
+        };
+    }
+    return { charCharged: 0, lcCharged: 0 };
+}
+
 // ─── Helper: Check auction end condition ────────────────────────────────────
 // Per D-48, as amended by A21: each team drafts charactersPerTeam(lineupFormat) characters, 8 for Halves
 // and 12 for Thirds ("the character count is the format"), not teamSize.
 // teamSize only controls how many human players share the draft.
 
 /** A81(1): a team is full once it holds charactersPerTeam characters in the current game. */
-function teamIsFull(session: any, lobby: any, side: string): boolean {
+export function teamIsFull(session: any, lobby: any, side: string): boolean {
     const targetCount = charactersPerTeam(lobby.lineupFormat.tag as LineupFormatTag);
     const won = side === 'Blue' ? session.blueCharactersWon : side === 'Red' ? session.redCharactersWon : 0;
     return won >= targetCount;
 }
 
-function otherTeamTag(side: string): 'Blue' | 'Red' {
+export function otherTeamTag(side: string): 'Blue' | 'Red' {
     return side === 'Blue' ? 'Red' : 'Blue';
 }
 
@@ -167,7 +188,7 @@ function isAuctionComplete(session: any, lobby: any): boolean {
 /**
  * The sale of the active nomination, shared by pass_bid, the timer sale and the A81(2) immediate sale: the AuctionSold
  * step, the winner's budgets (resolveSale), the won counts, the D-46 rotation (A81(1): a full team is skipped), the end
- * check with the D-50 rollover, and the session / lobby writes. Returns the next nominator and whether the auction ended.
+ * check (S10t, A129: no roll-over and no stage move here; advance_stage does both), and the session / lobby writes. Returns the next nominator and whether the auction ended.
  */
 function completeSale(
     ctx: any,
@@ -205,6 +226,9 @@ function completeSale(
                 winningTeam,
                 eidolon: budgets.eidolon,
                 eidolonCost: budgets.eidolonCost,
+                // S10t (A127, A132): what the sale charged each of the winner's budgets (0 for a non-team winner,
+                // which the reducers never produce: the bid holder is always Blue or Red).
+                ...saleCharges(session, budgets, winningTeam.tag),
             },
         } as any,
         timestamp: ctx.timestamp,
@@ -225,15 +249,16 @@ function completeSale(
     if (!auctionComplete && teamIsFull(counts, lobby, nextTag)) nextTag = otherTeamTag(nextTag);
     const nextNominatorTeam = { tag: nextTag, value: {} } as any;
 
-    // D-50: on completion the leftover character budget rolls over into the light-cone budget.
+    // S10t (A129): the last sale no longer rolls the budgets over (D-50) nor moves the lobby to Equipping: the lobby
+    // waits in Drafting with the draft complete (isDraftComplete) until the referee's advance_stage does both.
     ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
         currentNomination: undefined,
         currentBidAmount: undefined,
         currentBidTeam: { tag: 'Spectator', value: {} } as any,
-        teamBlueCharBudget: auctionComplete ? 0 : budgets.teamBlueCharBudget,
-        teamRedCharBudget: auctionComplete ? 0 : budgets.teamRedCharBudget,
-        teamBlueLcBudget: budgets.teamBlueLcBudget + (auctionComplete ? budgets.teamBlueCharBudget : 0),
-        teamRedLcBudget: budgets.teamRedLcBudget + (auctionComplete ? budgets.teamRedCharBudget : 0),
+        teamBlueCharBudget: budgets.teamBlueCharBudget,
+        teamRedCharBudget: budgets.teamRedCharBudget,
+        teamBlueLcBudget: budgets.teamBlueLcBudget,
+        teamRedLcBudget: budgets.teamRedLcBudget,
         blueCharactersWon,
         redCharactersWon,
         nextNominatorTeam,
@@ -244,13 +269,13 @@ function completeSale(
         },
     }, auditUserId));
 
-    ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, auctionComplete
-        ? { stage: { tag: 'Equipping', value: {} } as any, lastActivityAt: ctx.timestamp }
-        : { lastActivityAt: ctx.timestamp }, auditUserId));
+    ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, { lastActivityAt: ctx.timestamp }, auditUserId));
 
     if (auctionComplete) {
-        console.log(`[AUCTION] Auction complete! Both teams reached target count. Lobby #${lobbyId} → Equipping.`);
+        console.log(`[AUCTION] Auction complete! Both teams reached target count. Lobby #${lobbyId} waits for advance_stage (A129).`);
     }
+    // A131: with confirmWindowSeconds 0 the last sale moves the lobby to Equipping in the same call.
+    if (auctionComplete) finishDraftWithoutWindow(ctx, lobbyId, auditUserId);
     return { nextNominatorTeam, auctionComplete };
 }
 
@@ -292,6 +317,9 @@ export const nominate_character = spacetimedb.reducer(
         if (slotIsCoach(member.lobbySlot)) {
             throw new SenderError('Coaches cannot perform draft actions.');
         }
+
+        // S10t (A129): a complete draft runs no turn: no nomination, bid or pass (draftComplete.ts).
+        if (isDraftComplete(lobby, session)) throw new SenderError(draftCompleteText);
 
         // Must be in auction phase
         if (!session.isAuctionPhase) {
@@ -461,6 +489,9 @@ export const place_bid = spacetimedb.reducer(
             throw new SenderError('Coaches cannot perform draft actions.');
         }
 
+        // S10t (A129): a complete draft runs no turn: no nomination, bid or pass (draftComplete.ts).
+        if (isDraftComplete(lobby, session)) throw new SenderError(draftCompleteText);
+
         // Must be in auction phase with an active nomination
         if (!session.isAuctionPhase) {
             throw new SenderError('Auction phase not active.');
@@ -535,7 +566,8 @@ export const place_bid = spacetimedb.reducer(
             action: { tag: 'Bid', value: {} } as any,
             payload: {
                 tag: 'Bid',
-                value: { amount: bidAmount, targetCharacter: session.currentNomination },
+                // S10t (A127): previousAmount = the highest bid this one replaces, for undo_last_step.
+                value: { amount: bidAmount, targetCharacter: session.currentNomination, previousAmount: currentBid },
             } as any,
             timestamp: ctx.timestamp,
         }, user.id));
@@ -596,6 +628,9 @@ export const pass_bid = spacetimedb.reducer(
         if (slotIsCoach(member.lobbySlot)) {
             throw new SenderError('Coaches cannot perform draft actions.');
         }
+
+        // S10t (A129): a complete draft runs no turn: no nomination, bid or pass (draftComplete.ts).
+        if (isDraftComplete(lobby, session)) throw new SenderError(draftCompleteText);
 
         // Must be in auction phase with an active nomination
         if (!session.isAuctionPhase) {
@@ -698,6 +733,17 @@ export const timer_expiry_auction = spacetimedb.reducer(
 
         if (!session.isAuctionPhase) {
             throw new SenderError('Auction phase not active.');
+        }
+
+        // S10t (A129, A130, A131): a complete draft runs no turn but the lobby's confirm window, on the same clock fields
+        // (turnFullMs). Before it has elapsed the call is refused; once it has, the lobby moves to Equipping (finishDraft,
+        // the same write as advance_stage). Never an auto-pick, auto-ban, nomination or sale.
+        if (isDraftComplete(lobby, session)) {
+            if (turnRemainingMs(lobby, session.timerState, ctx.timestamp.microsSinceUnixEpoch, turnFullMs(lobby, session)) > 0) {
+                throw new SenderError(confirmWindowOpenText);
+            }
+            finishDraft(ctx, lobby, session, 0);
+            return;
         }
 
         // Server-side timer validation (S10f, F10): the turn's remaining time (helpers/draft/turnClock.ts) must be 0

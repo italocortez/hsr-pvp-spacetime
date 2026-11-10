@@ -82,14 +82,14 @@ The match session system manages the entire draft lifecycle within a lobby: char
 9. Look up cost from `HsrCharacterCost` table using (characterName, eidolon, costSetId, gameMode) -- EMPTY costs 0
 10. Insert `MatchSessionStep` with action=Pick, payload includes costPaid
 11. Advance `turnIndex` by 1; reset timer
-12. If Classic draft complete (newTurnIndex >= sequence length): transition lobby to `Equipping`
+12. If Classic draft complete (newTurnIndex >= sequence length): transition lobby to `Equipping` _Superseded in Phase S10t execution (DECISIONS.md A129, A130, A131): the last pick or sale leaves the lobby in Drafting for the confirm window (`confirmWindowSeconds`, default 60, 0 = none); Equipping starts at `advance_stage` or when the window ends._
 13. If Auction ban phase complete: set `isAuctionPhase=true`
 
 **Expected State Changes:**
 - `MatchSessionStep` inserted (Pick action)
 - `MatchSession.turnIndex` incremented
 - `MatchSession.timerState.turnStartAt` reset
-- `Lobby.stage` = Equipping (if Classic draft complete)
+- `Lobby.stage` = Equipping (if Classic draft complete) _Superseded in Phase S10t execution (DECISIONS.md A129, A130, A131): the last pick or sale leaves the lobby in Drafting for the confirm window (`confirmWindowSeconds`, default 60, 0 = none); Equipping starts at `advance_stage` or when the window ends._
 - `MatchSession.isAuctionPhase` = true (if Auction bans complete)
 
 **Error Cases:**
@@ -184,13 +184,13 @@ The match session system manages the entire draft lifecycle within a lobby: char
    - If `autoRandomPick=true`: same deterministic hash from available pool (same LobbyMemberAccount-based pool when requireOwnership=true)
    - Insert Ban step with `actorUserId=0` (system)
 7. Advance `turnIndex` by 1; reset timer
-8. If Classic draft complete: transition to `Equipping`
+8. If Classic draft complete: transition to `Equipping` _Superseded in Phase S10t execution (DECISIONS.md A129, A130, A131): the last pick or sale leaves the lobby in Drafting for the confirm window (`confirmWindowSeconds`, default 60, 0 = none); Equipping starts at `advance_stage` or when the window ends._
 9. If Auction bans complete: set `isAuctionPhase=true`
 
 **Expected State Changes:**
 - `MatchSessionStep` inserted (system actor, userId=0)
 - `MatchSession.turnIndex` incremented
-- `Lobby.stage` = Equipping (if Classic complete)
+- `Lobby.stage` = Equipping (if Classic complete) _Superseded in Phase S10t execution (DECISIONS.md A129, A130, A131): the last pick or sale leaves the lobby in Drafting for the confirm window (`confirmWindowSeconds`, default 60, 0 = none); Equipping starts at `advance_stage` or when the window ends._
 - `MatchSession.isAuctionPhase` = true (if Auction bans complete)
 
 **Error Cases:**
@@ -339,7 +339,7 @@ The match session system manages the entire draft lifecycle within a lobby: char
     - If nominating team == winning team: other team nominates next (normal rotation)
     - If nominating team != winning team: nominating team keeps their turn (steal -- opponent "spent" the nominator's slot)
 13. Clear auction state: `currentNomination=null`, `currentBidAmount=null`, `currentBidTeam=Spectator`
-14. If both teams reached 8 characters won: transition to `Equipping`
+14. If both teams reached 8 characters won: transition to `Equipping` _Superseded in Phase S10t execution (DECISIONS.md A129, A130, A131): the last pick or sale leaves the lobby in Drafting for the confirm window (`confirmWindowSeconds`, default 60, 0 = none); Equipping starts at `advance_stage` or when the window ends._
 
 **Expected State Changes:**
 - `MatchSessionStep` inserted (AuctionSold action)
@@ -347,7 +347,7 @@ The match session system manages the entire draft lifecycle within a lobby: char
 - `MatchSession.blue/redCharactersWon` incremented by 1
 - `MatchSession.currentNomination` cleared
 - `MatchSession.nextNominatorTeam` updated per steal-skip logic
-- `Lobby.stage` = Equipping (if both teams reached 8 characters)
+- `Lobby.stage` = Equipping (if both teams reached 8 characters) _Superseded in Phase S10t execution (DECISIONS.md A129, A130, A131): the last pick or sale leaves the lobby in Drafting for the confirm window (`confirmWindowSeconds`, default 60, 0 = none); Equipping starts at `advance_stage` or when the window ends._
 
 **Error Cases:**
 | Condition | Error Message |
@@ -391,13 +391,13 @@ The match session system manages the entire draft lifecycle within a lobby: char
    - Deduct budget, increment won count
    - Apply steal-skip logic (D-46)
    - Clear auction state; check if auction complete (both teams at 8 characters)
-   - If complete: transition to `Equipping`
+   - If complete: transition to `Equipping` _Superseded in Phase S10t execution (DECISIONS.md A129, A130, A131): the last pick or sale leaves the lobby in Drafting for the confirm window (`confirmWindowSeconds`, default 60, 0 = none); Equipping starts at `advance_stage` or when the window ends._
 
 **Expected State Changes:**
 - `MatchSessionStep` inserted (system actor, userId=0)
 - If nomination: `MatchSession` auction state set for EMPTY
 - If bidding: `MatchSession` budget decremented, characters won incremented, auction cleared
-- `Lobby.stage` = Equipping (if auction complete)
+- `Lobby.stage` = Equipping (if auction complete) _Superseded in Phase S10t execution (DECISIONS.md A129, A130, A131): the last pick or sale leaves the lobby in Drafting for the confirm window (`confirmWindowSeconds`, default 60, 0 = none); Equipping starts at `advance_stage` or when the window ends._
 
 **Error Cases:**
 | Condition | Error Message |
@@ -450,7 +450,7 @@ The match session system manages the entire draft lifecycle within a lobby: char
 | No steps to undo (turnIndex=0) | "No steps to undo." |
 | No step rows found | "No steps to undo." |
 
-**Phase S4 execution (F9, DECISIONS.md A22(2)):** steps 5–8 are superseded. After the `turnIndex=0` check the reducer throws "Nothing to undo right now." while `timerState.isPaused` and "Undo is not available during the auction phase." when `isAuctionPhase`. It deletes the highest-sequence **Pick or Ban** step (Pause and Undo audit rows are skipped; "Nothing to undo right now." if none), inserts the Undo record with `originalSequenceId = <deleted step's sequence>` and `sequence = getNextSequence(lobbyId)`, decrements `turnIndex` and resets the timer. `isAuctionPhase` is never reverted by undo.
+**Phase S4 execution (F9, DECISIONS.md A22(2)):** steps 5–8 are superseded. After the `turnIndex=0` check the reducer throws "Nothing to undo right now." while `timerState.isPaused` and "Undo is not available during the auction phase." when `isAuctionPhase`. It deletes the highest-sequence **Pick or Ban** step (Pause and Undo audit rows are skipped; "Nothing to undo right now." if none), inserts the Undo record with `originalSequenceId = <deleted step's sequence>` and `sequence = getNextSequence(lobbyId)`, decrements `turnIndex` and resets the timer. `isAuctionPhase` is never reverted by undo. _Superseded in Phase S10t execution (DECISIONS.md A127, A132): undo removes the last character step of any kind (ban, pick, nomination, bid, sale) while the lobby is in Drafting._
 
 ---
 
@@ -696,7 +696,7 @@ The match session system manages the entire draft lifecycle within a lobby: char
 **Then:** Ban step recorded at sequence 1. turnIndex advances to 2.
 
 **When:** Players complete all 22 turns (6 bans + 16 picks in BanMode Six pattern)
-**Then:** After last pick, lobby automatically transitions to Equipping.
+**Then:** After last pick, lobby automatically transitions to Equipping. _Superseded in Phase S10t execution (DECISIONS.md A129, A130, A131): the last pick or sale leaves the lobby in Drafting for the confirm window (`confirmWindowSeconds`, default 60, 0 = none); Equipping starts at `advance_stage` or when the window ends._
 
 ### Classic Draft: Timer Expiry Auto-Pick
 
@@ -763,7 +763,7 @@ Note: The globally-active account (HsrAccount.isActive=true) is NOT consulted. P
 
 **Given:** Auction phase, blueCharactersWon=7, redCharactersWon=8
 **When:** Blue's 8th character is sold (AuctionSold)
-**Then:** Both teams at 8+. Lobby transitions to Equipping.
+**Then:** Both teams at 8+. Lobby transitions to Equipping. _Superseded in Phase S10t execution (DECISIONS.md A129, A130, A131): the last pick or sale leaves the lobby in Drafting for the confirm window (`confirmWindowSeconds`, default 60, 0 = none); Equipping starts at `advance_stage` or when the window ends._
 
 ### Auction Draft: Budget Enforcement
 
@@ -945,7 +945,7 @@ D-50 applies to ALL Drafting→Equipping transitions: auto (last Classic pick, l
 ### Undo During the Auction Phase (Phase S4 execution, F9)
 **Given:** Auction lobby, ban phase complete, isAuctionPhase=true
 **When:** Referee calls `undo_last_step`
-**Then:** Throws "Undo is not available during the auction phase." Supersedes "Referee Undo: Reverts Auction Phase Transition" above. _Superseded in Phase S10r execution (DECISIONS.md A122(9)): undo works after the last ban until the first nomination and restores the ban turn; it is refused once a nomination exists._
+**Then:** Throws "Undo is not available during the auction phase." Supersedes "Referee Undo: Reverts Auction Phase Transition" above. _Superseded in Phase S10r execution (DECISIONS.md A122(9)): undo works after the last ban until the first nomination and restores the ban turn; it is refused once a nomination exists._ _Superseded in Phase S10t execution (DECISIONS.md A127, A132): undo removes the last character step of any kind (ban, pick, nomination, bid, sale) while the lobby is in Drafting._
 
 ### Auto-Pause Comes From the Grace Check (Phase S4 execution, A22a, F5)
 **Given:** Lobby #10 in Drafting (Standard), Blue player #10 connected on one device
@@ -1045,7 +1045,7 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 | Duplicate LobbyMember.isCaptain on same team | First captain wins captain check | Only one captain should exist per team |
 | Auction sold when only one team needs characters | Normal flow, no short circuit | Other team's won count already at 8, one team still filling _Superseded in Phase S10c execution (DECISIONS.md A81)._ |
 | Timer expiry with paused timer (Phase S4 execution, F3) | Rejected: "Draft is paused." Supersedes the "Not validated" row above | Non-members rejected too |
-| Undo auction phase boundary (Phase S4 execution, F9) | Rejected: "Undo is not available during the auction phase." Supersedes the "isAuctionPhase reverts" row above | No budget / won-count rollback exists | _Superseded in Phase S10r execution (DECISIONS.md A122(9)): undo works after the last ban until the first nomination and restores the ban turn; it is refused once a nomination exists._
+| Undo auction phase boundary (Phase S4 execution, F9) | Rejected: "Undo is not available during the auction phase." Supersedes the "isAuctionPhase reverts" row above | No budget / won-count rollback exists | _Superseded in Phase S10r execution (DECISIONS.md A122(9)): undo works after the last ban until the first nomination and restores the ban turn; it is refused once a nomination exists._ _Superseded in Phase S10t execution (DECISIONS.md A127, A132): undo removes the last character step of any kind (ban, pick, nomination, bid, sale) while the lobby is in Drafting._
 | Undo when the highest-sequence row is a Pause or Undo record (Phase S4 execution, F9) | The last Pick/Ban is undone; audit rows are skipped | Audit rows carry their own sequence |
 | arrange_lineup with invalid JSON (Phase S7 execution) | Rejected: "groups must be a JSON array of arrays of character names." Supersedes the `positions` row above | `groups` capped at 2000 characters |
 | confirm_lineup before any arrangement (Phase S7 execution) | Rejected: "Arrange the lineup before confirming it." | |
@@ -1087,7 +1087,7 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 _Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 **Given** game 2 has no Pick or Ban yet
 **When** the referee calls `undo_last_step`
-**Then** rejected ("No steps to undo." at turnIndex 0, "Nothing to undo in this game." otherwise); game 1's steps are untouched
+**Then** rejected ("No steps to undo." at turnIndex 0, "Nothing to undo in this game." otherwise); game 1's steps are untouched _Superseded in Phase S10t execution (DECISIONS.md A127, A132): undo removes the last character step of any kind (ban, pick, nomination, bid, sale) while the lobby is in Drafting._
 
 ### S8d-S3 The archive holds every game (A65(3))
 _Superseded in Phase S8e execution (DECISIONS.md A67(3))._
@@ -1190,13 +1190,15 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 | `start_draft` account rejections name the seat, never the user id: "The player at seat N has no account selected for this match. …", "The player at seat N has no account selected. autoRandomPick requires …", "The player at seat N has no characters on their selected account(s). …" | Phase S10e execution (backend audit 2026-11-09, lobby finding 9) | 2026-11-09 |
 | Turn clock, one definition for pause, auto-pause, resume, both auto-pause lift paths and both timer expiry reducers (Classic and Auction): the turn budget is `accumulatedPauseMs` when it is above 0, otherwise `standardTurnSeconds * 1000`; the remaining time is the budget while paused, otherwise the budget minus the time since `turnStartAt`, never below 0. A pause stores the remaining time (at least 1 ms) as the budget; a resume keeps it and restarts `turnStartAt`; a new turn resets the budget to 0. After any pause and resume a turn has exactly the time it had left, and expiry is accepted only at 0 remaining | Phase S10f execution (backend audit 2026-11-09, draft finding 5 (bug F10)) | 2026-11-09 |
 | Post-draft edit steps are capped per team side: 300 `SetEidolon` / `EquipLightcone` / `UnequipLightcone` steps per edited side and 300 `ConfirmGame` steps per confirming side ("The <Side> side of this game has reached the limit of 300 edit steps; the referee or staff can still close it." / "… confirmation steps; …"); `close_game`, the Admin closed-game edit and concede are not capped. A manual `pause_draft` is rejected within 10 s of the same party's previous manual pause (Blue, Red, or the referee); auto-pauses are neither counted nor rejected | Phase S10f execution (backend audit 2026-11-09, draft finding 8) | 2026-11-09 |
-| `advance_stage` from Drafting is rejected until both teams hold all their characters, `EMPTY` placeholders included ("The draft is not finished: Blue holds b of N characters and Red holds r of N."); the automatic end-of-draft transitions are unchanged | Phase S10i execution (DECISIONS.md A100) | 2026-11-10 |
+| `advance_stage` from Drafting is rejected until both teams hold all their characters, `EMPTY` placeholders included ("The draft is not finished: Blue holds b of N characters and Red holds r of N."); the automatic end-of-draft transitions are unchanged | Phase S10i execution (DECISIONS.md A100) | 2026-11-10 | _Superseded in Phase S10t execution (DECISIONS.md A129, A130, A131): the last pick or sale leaves the lobby in Drafting for the confirm window (`confirmWindowSeconds`, default 60, 0 = none); Equipping starts at `advance_stage` or when the window ends._
 | `equip_lightcone` reads the light-cone row of the lobby's cost set, game mode and draft mode (Auction rows in an Auction lobby), with no fallback to the default set; character prices in `pick_character`, the timer auto-pick, Auction nomination, bid and sale, and `set_eidolon` follow the same rule. A cost row that exists but lacks the requested level is rejected ("The cost row of <name> has no <field> value.") | Phase S10i execution (DECISIONS.md A107) | 2026-11-10 |
 | `start_draft`: the `autoRandomPick` account check (every seated player has a selected game account with characters) applies only when the lobby requires ownership; without it the draft starts with guests and players who have no game account, and the timer draws from every character priced in the lobby's cost set. The Ranked and rated-tournament account check is unchanged | Phase S10o execution (DECISIONS.md A117) | 2026-11-10 |
 | Timer auto-pick and auto-ban draw: a well-mixed hash of the transaction time, the lobby, the turn and the next step sequence, reduced to the pool size; even over the pool, reproducible for a given transaction, not aimable by the member who fires the expired turn, and different after the referee undoes the auto step and the turn expires again (a pool of one entry always gives that entry). This replaces the fixed formula of the turn and the lobby | Phase S10o execution (DECISIONS.md A117) | 2026-11-10 |
 | `undo_last_step` in Auction: after the last ban and before the first nomination (manual or the timer's) the last ban is undone, `turnIndex` returns to the ban turn, `isAuctionPhase` becomes false and the timer resets; once a Nominate step exists: "Undo is not available during the auction phase." | Phase S10r execution (DECISIONS.md A122(9)) | 2026-11-10 |
 | A coach cannot pause ("Coaches cannot pause the draft."); a manual ban must name a character priced in the lobby's cost set and `EMPTY` cannot be banned; Undo rows are capped at 300 per game ("This game has reached the limit of 300 undo steps.") | Phase S10r execution (DECISIONS.md A122(7), (8), (10)) | 2026-11-10 |
 | `undo_last_step` in Auction: with the first nomination open and no Bid or AuctionSold step in the game, the undo cancels the nomination and returns the turn to the nominator with a fresh timer; the next undo removes the last ban; once a bid or a sale exists it is refused (to be replaced by A127 in S10t) | Phase S10s execution (DECISIONS.md A123, A125) | 2026-11-10 |
+| `undo_last_step` removes the last character step of the game (Ban, Pick, Nominate, Bid, AuctionSold; the A81 immediate sale goes with its nomination), one per call, while the stage is Drafting and the draft is not paused; an eidolon selection is never undone by itself and never blocks an undo; undoing a pick or a sale removes that character's eidolon selections and, in Auction, gives back per budget what the sale and those selections charged (neither budget is stored below 0). One refusal: "Cannot undo this bid: the previous bidder can no longer cover their bid." Cap: 300 Undo rows per game. After Equipping starts: "The draft is finished: undo works only while the lobby is in the draft stage." | Phase S10t execution (DECISIONS.md A127, A132) | 2026-11-10 |
+| After the last pick or sale the lobby stays in Drafting for the confirm window: draft actions are refused ("The draft is complete. It moves to Equipping when the referee advances it or the confirm window ends."), the referee may undo or call `advance_stage`, and once the window has elapsed either expiry reducer called by any present member moves to Equipping with the D-50 roll-over ("The confirm window has not yet expired." before that); a pause holds the window and is cleared by the move; a concede or forfeit in the window counts like an Equipping concede for Ranked character stats | Phase S10t execution (DECISIONS.md A129, A130) | 2026-11-10 |
 
 ---
 

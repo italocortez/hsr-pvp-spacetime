@@ -262,6 +262,25 @@ export function refereeActor(s: Lobby): Actor {
     return Object.values(s.a).find((x) => x.userId === refId) ?? s.host;
 }
 
+/**
+ * T-S10t (A129): the lobby's draft is complete while the stage is still Drafting (the last pick or sale no longer moves
+ * the lobby): Classic, every turn of the sequence played; Auction, the auction phase open and both teams holding
+ * charactersPerTeam characters (8 Halves, 12 Thirds).
+ */
+export function draftDone(test: Harness, lobbyId: number): boolean {
+    const sess = test.db.MatchSession.lobbyId.find(lobbyId);
+    const l = test.db.Lobby.id.find(lobbyId);
+    if (!sess || !l || l.stage.tag !== 'Drafting') return false;
+    if (l.draftMode.tag === 'Classic') return sess.turnIndex >= sess.draftSequence.length;
+    const perTeam = l.lineupFormat.tag === 'Thirds' ? 12 : 8;
+    return sess.isAuctionPhase && sess.blueCharactersWon >= perTeam && sess.redCharactersWon >= perTeam;
+}
+
+/** T-S10t (A129): after the last pick or sale, the referee's advance_stage moves the complete draft to Equipping. */
+export function advanceToEquipping(s: Lobby, who: Actor = refereeActor(s)) {
+    tx(s.test, who, (ctx) => M.advance_stage(ctx, { lobbyId: s.lobbyId }));
+}
+
 // ─── T-S10i (A107(1)(5), A108): prices for the names a test drafts ────────────────────────────────────────────────
 // Every pick, nomination, bid, set_eidolon and equip reads the lobby's own cost set, game mode and draft mode, and an
 // entry with no row there is rejected ("<name> has no cost in this lobby's cost set."). The drivers seed the reference

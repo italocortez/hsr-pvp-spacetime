@@ -17,6 +17,7 @@ export const lobbyPresetColumns = {
     matchType: MatchType,
     standardTurnSeconds: t.u32(),
     reserveBankSeconds: t.u32(),
+    confirmWindowSeconds: t.u32(),       // S10t (A130, A131): the confirm window after the last pick or sale, 0-300 s, default 60; 0 = none
     characterBudget: t.f32(),
     lightconeBudget: t.f32(),
     minimumBidRaise: t.f32(),
