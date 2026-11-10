@@ -15,11 +15,11 @@ _Amended in Phase S9a execution: peers are ordered by `LobbyMember.joinSeq` (ste
 
 | LobbySlot category | Label format | Example |
 |-------------------|-------------|---------|
-| Blue team player | `Blue-{joinOrder}` | Blue-1, Blue-2 |
-| Red team player | `Red-{joinOrder}` | Red-1, Red-2 |
-| Blue coach | `Coach-Blue` | Coach-Blue |
-| Red coach | `Coach-Red` | Coach-Red |
-| Spectator | `Spectator-{joinOrder}` | Spectator-1, Spectator-2 |
+| Blue team player | `Blue-{joinOrder}` | Blue-1, Blue-2 _Superseded in Phase S10h execution (DECISIONS.md A97)._ |
+| Red team player | `Red-{joinOrder}` | Red-1, Red-2 _Superseded in Phase S10h execution (DECISIONS.md A97)._ |
+| Blue coach | `Coach-Blue` | Coach-Blue _Superseded in Phase S10h execution (DECISIONS.md A97)._ |
+| Red coach | `Coach-Red` | Coach-Red _Superseded in Phase S10h execution (DECISIONS.md A97)._ |
+| Spectator | `Spectator-{joinOrder}` | Spectator-1, Spectator-2 _Superseded in Phase S10h execution (DECISIONS.md A97)._ |
 
 ### Computation Algorithm
 
@@ -35,7 +35,7 @@ _Amended in Phase S9a execution: peers are ordered by `LobbyMember.joinSeq` (ste
 
 Anonymous mode applies at write-time in these reducers:
 - `send_chat_message` — `isAnonymousPlayers` or `isAnonymousSpectators` checked
-- `broadcast_cursor` — `isAnonymousPlayers` or `isAnonymousSpectators` checked
+- `broadcast_cursor` — `isAnonymousPlayers` or `isAnonymousSpectators` checked _Superseded in Phase S10h execution (DECISIONS.md A96)._
 - MatchSessionStep inserts — `isAnonymousPlayers` checked
 
 At read-time, the view `view_my_lobby_chat` re-applies `shouldAnonymize()` per viewer, hiding real senderUserId from opposing team members.
@@ -256,6 +256,8 @@ included. The anonymity rules apply to opponents and spectators once the bracket
 | Seat targeting: no user id in the arguments or rejections of the member-targeting lobby reducers; scenario S9c-A1 | Phase S9c execution (DECISIONS.md A74) | 2026-11-08 |
 | Only the spectator referee sees every roster; scenario S9c-A2 | Phase S9c execution (DECISIONS.md A75) | 2026-11-08 |
 | Team requests identify the requester to the captain in every tournament (A37 clarification); scenario S9c-A3 | Phase S9c execution (DECISIONS.md A73) | 2026-11-08 |
+| Anonymous labels come from the member's own seat: "<seat kind> #<seat number>" ("Blue Player #3", "Red Player #4", "Blue Coach #5", "Red Coach #6", "Spectator #7"). The seat number (`joinSeq`) never changes and is never reused, so a label names one membership for the lobby's lifetime and does not shift when another member leaves or moves. A chat line and a member-event line keep the label stored when they were written (shown in preference to the live label), so a member who leaves and rejoins on a new seat does not relabel their old lines | Phase S10h execution (DECISIONS.md A97) | 2026-11-10 |
+| Cursor events carry `senderJoinSeq` (the seat), never a user id or a label, in every lobby; the reader maps the seat through `view_my_lobby_members`. The event table stays public: SpacetimeDB 2.14.1 has no stable way to restrict an event table to lobby members (views cannot read event tables; row-level security exists but is experimental and barred by the repo skill) | Phase S10h execution (DECISIONS.md A96) | 2026-11-10 |
 
 ---
 

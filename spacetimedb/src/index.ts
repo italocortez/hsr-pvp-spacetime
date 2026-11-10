@@ -149,7 +149,7 @@ export { run_lobby_gc, admin_gc_lobbies, seed_lobby_gc_job } from '@module/reduc
 export { run_identity_gc, admin_gc_identities, seed_identity_gc_job } from '@module/reducers/identity/identityGc';
 export { run_referee_transfer_check } from '@module/reducers/lobby/refereeTransfer';
 export { run_tournament_finalize } from '@module/reducers/tournament/tournamentFinalize';
-export { admin_update_abuse_config, admin_set_guest_lobby_creation, admin_acknowledge_alert } from '@module/reducers/admin/abuse';
+export { admin_update_abuse_config, admin_set_guest_lobby_creation, admin_set_guest_creation, admin_acknowledge_alert } from '@module/reducers/admin/abuse';
 export { start_draft, pick_character, ban_character, timer_expiry_classic } from '@module/reducers/draft/draftClassic';
 export { undo_last_step, pause_draft, resume_draft } from '@module/reducers/draft/draftControl';
 export { nominate_character, place_bid, pass_bid, timer_expiry_auction } from '@module/reducers/draft/draftAuction';

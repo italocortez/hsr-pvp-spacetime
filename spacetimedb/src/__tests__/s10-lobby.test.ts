@@ -127,7 +127,8 @@ describe('create_lobby', () => {
         expect(lobbyRow(test, lobbyId).allowMirrorPicks).toBe(false);
     });
 
-    it('Private Lobby with Password: LobbyPassword row holds the password; an empty password inserts no row (D-02, edge case)', () => {
+    // T-S10h (A99): the "empty password inserts no row" edge case is now a rejection; the with-password part is kept.
+    it('Private Lobby with Password: LobbyPassword row holds the password (D-02); A99: a private lobby with an empty password is rejected and creates nothing', () => {
         const test = newHarness();
         const host = guest(test, 'host');
         const lobbyId = createLobby(test, host, { isPublic: false, password: 'secret' });
@@ -135,8 +136,11 @@ describe('create_lobby', () => {
         expect(test.db.LobbyPassword.lobbyId.find(lobbyId)!.passwordHash).toBe('secret');
 
         const other = guest(test, 'other');
-        const openId = createLobby(test, other, { isPublic: false, password: '' });
-        expect(test.db.LobbyPassword.lobbyId.find(openId)).toBeNull();
+        const lobbiesBefore = [...test.db.Lobby.iter()].length;
+        expect(() => tx(test, other, (ctx) => M.create_lobby(ctx, { ...DEFAULT_LOBBY_ARGS, isPublic: false, password: '' } as any)))
+            .toThrow('A private lobby needs a password.');
+        expect([...test.db.Lobby.iter()]).toHaveLength(lobbiesBefore);
+        expect([...test.db.LobbyMember.user_id.filter(other.userId)]).toHaveLength(0);
     });
 });
 

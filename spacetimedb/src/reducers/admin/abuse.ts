@@ -3,14 +3,15 @@ import { t, SenderError } from 'spacetimedb/server';
 import { SYSTEM_USER_ID } from '@module/helpers/admin/auditColumns';
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { ensureAdmin } from '@module/helpers/identity/ensurePermissions';
-import { resetGuestLobbyCounter, seedAbuseConfigDefaults } from '@module/helpers/lobby/abuseControls';
+import { resetGuestCreationCounter, resetGuestLobbyCounter, seedAbuseConfigDefaults } from '@module/helpers/lobby/abuseControls';
 
 // ─── Abuse controls: admin reducers (DECISIONS A42; ACCESS-SECURITY-OPS §B.5) ──────────────────────────────
 // The guest-lobby circuit breaker runs inline in create_lobby (A57): helpers/abuseControls.ts
-// recordGuestLobbyCreation. There is no scheduled breaker any more.
+// recordGuestLobbyCreation. There is no scheduled breaker any more. A95(2): the guest creation breaker runs inline in
+// login_as_guest (recordGuestCreation) on the same model.
 
 // Tunables where 0 would switch a guard off (no throttle interval, an empty breaker window) must stay > 0.
-const POSITIVE_FIELDS = ['cursorMinIntervalMs', 'chatMinIntervalMs', 'lineupMinIntervalMs', 'guestLobbyBurstWindowMinutes'] as const;
+const POSITIVE_FIELDS = ['cursorMinIntervalMs', 'chatMinIntervalMs', 'lineupMinIntervalMs', 'guestLobbyBurstWindowMinutes', 'guestCreationBurstWindowMinutes'] as const;
 
 // ─── admin_update_abuse_config ────────────────────────────────────────────────
 // Edits any AbuseConfig column; omitted fields keep their value. Admin only. Audit actor: the admin.
@@ -27,6 +28,9 @@ export const admin_update_abuse_config = spacetimedb.reducer(
         guestLobbyCreationEnabled: t.bool().optional(),
         guestLobbyBurstThreshold: t.u32().optional(),
         guestLobbyBurstWindowMinutes: t.u32().optional(),
+        guestCreationEnabled: t.bool().optional(),           // A95(2)
+        guestCreationBurstThreshold: t.u32().optional(),     // A95(2)
+        guestCreationBurstWindowMinutes: t.u32().optional(), // A95(2)
     },
     (ctx, args) => {
         const admin = ensureAdmin(ctx);
@@ -43,6 +47,7 @@ export const admin_update_abuse_config = spacetimedb.reducer(
 
         const existing = seedAbuseConfigDefaults(ctx);
         if (changes.guestLobbyCreationEnabled === true && !existing.guestLobbyCreationEnabled) resetGuestLobbyCounter(ctx);
+        if (changes.guestCreationEnabled === true && !existing.guestCreationEnabled) resetGuestCreationCounter(ctx);
         ctx.db.AbuseConfig.id.update(updateWithAudit(ctx, existing, changes, admin.id));
         console.log(`[ABUSE] AbuseConfig updated by admin #${admin.id}: ${Object.keys(changes).join(', ')}`);
     }
@@ -59,6 +64,21 @@ export const admin_set_guest_lobby_creation = spacetimedb.reducer(
         if (enabled && !existing.guestLobbyCreationEnabled) resetGuestLobbyCounter(ctx);
         ctx.db.AbuseConfig.id.update(updateWithAudit(ctx, existing, { guestLobbyCreationEnabled: enabled }, admin.id));
         console.log(`[ABUSE] Guest lobby creation ${enabled ? 'enabled' : 'disabled'} by admin #${admin.id}`);
+    }
+);
+
+// ─── admin_set_guest_creation ─────────────────────────────────────────────────
+// A95(2): the switch of the guest creation breaker (login_as_guest for a new identity), as admin_set_guest_lobby_creation
+// is for guest lobbies. Re-enabling after a trip is the same call with `true`; it drops the breaker's window counter so the
+// next new guest starts a new window. Returning guests are never blocked by this switch.
+export const admin_set_guest_creation = spacetimedb.reducer(
+    { enabled: t.bool() },
+    (ctx, { enabled }) => {
+        const admin = ensureAdmin(ctx);
+        const existing = seedAbuseConfigDefaults(ctx);
+        if (enabled && !existing.guestCreationEnabled) resetGuestCreationCounter(ctx);
+        ctx.db.AbuseConfig.id.update(updateWithAudit(ctx, existing, { guestCreationEnabled: enabled }, admin.id));
+        console.log(`[ABUSE] Guest creation ${enabled ? 'enabled' : 'disabled'} by admin #${admin.id}`);
     }
 );
 

@@ -3,7 +3,7 @@ import { t, SenderError } from 'spacetimedb/server';
 import { DraftMode, BanMode, GameMode, MatchType, RosterVisibility, DisconnectPolicy, LobbySlot, BanRestriction, LineupFormat, ShuffleMode } from '@module/types/enums';
 import { getAuthenticatedUser, isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
-import { ensureLobbyMember, ensureHostOrAbove, ensureStageIs, resolveSeat, slotTeam, slotIsCoach, slotIsSpectator, slotToTeamSide, resolveMaxSpectators } from '@module/helpers/lobby/lobbyHelpers';
+import { ensureLobbyMember, ensurePresentMember, ensurePresentIfMember, ensureMemberPresentUnlessStaff, memberHasLeft, ensureHostOrAbove,PRIVATE_LOBBY_PASSWORD_TEXT, ensureStageIs, resolveSeat, slotTeam, slotIsCoach, slotIsSpectator, slotToTeamSide, resolveMaxSpectators } from '@module/helpers/lobby/lobbyHelpers';
 import { normalizeLobbyName } from '@module/helpers/tournament/seriesSettings';
 import { ensureCostSetCovers, ensureSelectableCostSet } from '@module/helpers/draft/costSetGuards';
 import { ensureSeatAllowed } from '@module/helpers/tournament/tournamentLobbySides';
@@ -88,6 +88,12 @@ export const update_lobby_settings = spacetimedb.reducer(
 
         // D-28: settings locked once Drafting begins
         ensureStageIs(lobby, 'Waiting');
+
+        // A99: a private lobby needs a password. An empty `password` means 'no new password': a lobby that already
+        // has a LobbyPassword row keeps it; one without a row cannot become (or stay) private.
+        if (!args.isPublic && args.password.length === 0 && !ctx.db.LobbyPassword.lobbyId.find(lobbyId)) {
+            throw new SenderError(PRIVATE_LOBBY_PASSWORD_TEXT);
+        }
 
         // D-65: tournament-controlled lobbies lock integrity fields,
         // but allow referee/match QoL fields to change
@@ -272,8 +278,11 @@ export const set_team_slot = spacetimedb.reducer(
 
         // A74(1): a caller with no LobbyMember row here can only be moving someone else, which needs host-or-above;
         // checked before the seat is resolved so a stranger learns nothing about the lobby's seats
+        // A98: a caller who holds a row must be present (not away, not abandoned); review F8: a Moderator+ caller is
+        // exempt (ensureHostOrAbove admits them whatever their row).
         if (args.targetJoinSeq !== undefined
-            && [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, user.id])].length === 0) {
+            && !isRoleAtLeast(user.role, 'Moderator')
+            && ensurePresentIfMember(ctx, lobbyId, user.id) === undefined) {
             ensureHostOrAbove(ctx, lobby, user);
         }
 
@@ -291,7 +300,10 @@ export const set_team_slot = spacetimedb.reducer(
         }
 
         // Find target member (a self-move by a non-member is rejected here: "You are not a member of this lobby.")
-        const targetMember = ensureLobbyMember(ctx, lobbyId, targetUserId);
+        // A98: a self-move needs a present row (the caller's row was checked above when a seat was given).
+        const targetMember = targetUserId === user.id
+            ? ensurePresentMember(ctx, lobbyId, targetUserId)
+            : ensureLobbyMember(ctx, lobbyId, targetUserId);
 
         // S10e (lobby audit #6): per-user membership rate, counted on the caller
         consumeMembershipAllowance(ctx, user.id);
@@ -384,7 +396,7 @@ export const confirm_ready = spacetimedb.reducer(
         // Can only confirm during Waiting
         ensureStageIs(lobby, 'Waiting');
 
-        const member = ensureLobbyMember(ctx, lobbyId, user.id);
+        const member = ensurePresentMember(ctx, lobbyId, user.id); // A98
 
         ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, user.id]);
         ctx.db.LobbyMember.insert(updateWithAudit(ctx, member, {
@@ -420,7 +432,7 @@ export const unconfirm_ready = spacetimedb.reducer(
         // If the stage is still Waiting, start_draft hasn't fired yet — stage check suffices.
         ensureStageIs(lobby, 'Waiting');
 
-        const member = ensureLobbyMember(ctx, lobbyId, user.id);
+        const member = ensurePresentMember(ctx, lobbyId, user.id); // A98
 
         ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, user.id]);
         ctx.db.LobbyMember.insert(updateWithAudit(ctx, member, {
@@ -434,7 +446,7 @@ export const unconfirm_ready = spacetimedb.reducer(
 // ─── set_captain ──────────────────────────────────────────────────────────────
 // Assigns the captain designation on a team member.
 // Per D-30: host, referee (when refereeCanSetCaptain=true), or admin can assign captains.
-// Target must be on a team (Blue or Red) and not a coach.
+// Target must be on a team (Blue or Red), not a coach, and present (A98, review F5: not away, not abandoned).
 // Existing captain on same team is demoted.
 // A74(1): the target is a seat number (`targetJoinSeq`), resolved to the member row.
 // Guard order: lobby -> the caller's membership and permission -> seat.
@@ -454,7 +466,8 @@ export const set_captain = spacetimedb.reducer(
         }
 
         // Permission: host OR (referee with refereeCanSetCaptain) OR admin
-        const callerMember = ensureLobbyMember(ctx, lobbyId, user.id);
+        // A98: present, not away or abandoned; review F8: a Moderator+ caller is exempt from the presence check
+        const callerMember = ensureMemberPresentUnlessStaff(ctx, lobbyId, user);
         const isHost = lobby.hostUserId === user.id;
         const isRefereeWithPower = callerMember.isReferee && lobby.refereeCanSetCaptain;
         const isAdmin = isRoleAtLeast(user.role, 'Admin');
@@ -473,6 +486,10 @@ export const set_captain = spacetimedb.reducer(
         }
         if (slotIsCoach(targetMember.lobbySlot)) {
             throw new SenderError('A coach cannot be assigned as captain.');
+        }
+        // A98 (S10h review F5): an away or abandoned member cannot act, so cannot receive the captain flag
+        if (memberHasLeft(targetMember)) {
+            throw new SenderError(`The member at seat ${args.targetJoinSeq} has left the match and cannot become a captain.`);
         }
 
         const targetTeam = slotTeam(targetMember.lobbySlot);

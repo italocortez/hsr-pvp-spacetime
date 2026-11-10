@@ -7,7 +7,7 @@ import { table, t } from 'spacetimedb/server';
  * and the audit columns are always written with SYSTEM_USER_ID (0) on insert and on acknowledge (S3 review M1:
  * the skill's audit policy exempts only ServerIdentity and event tables). The acknowledgement trace is the
  * timestamp; the admin reducer logs the actor to the module log.
- * `kind` is a string ('guest_lobby_burst' today) so a new alert kind is a value, not an enum change.
+ * `kind` is a string ('guest_lobby_burst', and 'guest_create_burst' since A95(2)) so a new alert kind is a value, not an enum change.
  */
 export const adminAlertColumns = {
     id: t.u32().primaryKey().autoInc(),

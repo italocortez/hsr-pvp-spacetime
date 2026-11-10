@@ -25,6 +25,7 @@ import {
 } from './s4-fixtures';
 import { host as tournamentHost, insertHsrAccount, liveField, moderator, openTournament, register, verified, AUDIT } from './s8-fixtures';
 import { byKey, createTournamentLobby, join } from './s8d-fixtures';
+import { seatLabel } from './s10h-fixtures';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -358,19 +359,28 @@ describe('A74(3): Lobby.lastJoinSeq; a departed seat number is never handed out 
         expect(lobbyRow(f.test, lobbyId).lastJoinSeq).toBe(2);
     });
 
-    it('A74(3) / S9a: anonymous labels still follow joinSeq order after a departure', () => {
+    // T-S10h (A97): was "labels still follow joinSeq order after a departure" (position labels); a seat label never
+    // shifts, so after a departure every remaining member keeps exactly the label they had.
+    it('A74(3) / A97: after a departure every remaining member keeps exactly the label they had; a later joiner gets its own seat label', () => {
         const { test, s, seat } = waiting({ lobby: { isAnonymousPlayers: true } });
+        const labelsBy = () => new Map(view<LobbyMemberViewRow>(test, 'view_my_lobby_members', s.a.r1).map((r) => [r.joinSeq, r.label]));
+        const before = labelsBy();
+        const b1Seat = seat(s.a.b1);
         tx(test, s.a.b1, (ctx) => M.leave_lobby(ctx, { lobbyId: s.lobbyId }));
         const late = guest(test, 'late');
         join_(test, late, s.lobbyId);
         tx(test, late, (ctx) => M.set_team_slot(ctx, { lobbyId: s.lobbyId, lobbySlot: { tag: 'BluePlayer' } }));
         expect(seat(late)).toBe(6);
-        const rows = view<LobbyMemberViewRow>(test, 'view_my_lobby_members', s.a.r1);
-        const label = (n: number) => rows.find((r) => r.joinSeq === n)!.label;
-        expect(label(seat(s.a.b2))).toBe('Blue-1');
-        expect(label(seat(late))).toBe('Blue-2');
-        expect(label(seat(s.a.r1))).toBe(displayName(test, s.a.r1)); // self identified
-        expect(label(seat(s.a.r2))).toBe(displayName(test, s.a.r2)); // teammate identified
+        const after = labelsBy();
+        expect(after.has(b1Seat)).toBe(false);
+        for (const [joinSeq, label] of before) {
+            if (joinSeq === b1Seat) continue;
+            expect(after.get(joinSeq), `seat ${joinSeq}`).toBe(label);
+        }
+        expect(after.get(seat(s.a.b2))).toBe(`Blue Player #${seat(s.a.b2)}`);
+        expect(after.get(seat(late))).toBe('Blue Player #6');
+        expect(after.get(seat(s.a.r1))).toBe(displayName(test, s.a.r1)); // self identified
+        expect(after.get(seat(s.a.r2))).toBe(displayName(test, s.a.r2)); // teammate identified
     });
 });
 
@@ -442,13 +452,13 @@ describe('A74(4): no user id in the arguments or rejections; an anonymized host 
             if (r.joinSeq !== 1) expect(r.userId).toBe(0);
         }
 
-        // set_captain: Red-2 becomes the Red captain
-        const red2 = seatByLabel('Red-2');
+        // set_captain: the second Red player becomes the Red captain (T-S10h, A97: labels are "Red Player #<joinSeq>")
+        const red2 = seatByLabel(seatLabel(test, L, s.a.r2.userId));
         tx(test, s.host, (ctx) => M.set_captain(ctx, { lobbyId: L, targetJoinSeq: red2 }));
         expect(captainOf(test, L, 'RedPlayer')!.joinSeq).toBe(red2);
 
-        // set_team_slot: Red-1 moves to Spectator
-        const red1 = seatByLabel('Red-1');
+        // set_team_slot: the first Red player moves to Spectator
+        const red1 = seatByLabel(seatLabel(test, L, s.a.r1.userId));
         tx(test, s.host, (ctx) => M.set_team_slot(ctx, { lobbyId: L, targetJoinSeq: red1, lobbySlot: { tag: 'Spectator' } }));
         expect(members(test, L).find((m) => m.joinSeq === red1)!.lobbySlot.tag).toBe('Spectator');
 

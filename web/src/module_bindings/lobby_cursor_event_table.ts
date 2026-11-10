@@ -12,8 +12,7 @@ import {
 
 export default __t.row({
   lobbyId: __t.u32().name("lobby_id"),
-  senderUserId: __t.u32().name("sender_user_id"),
-  anonymousLabel: __t.option(__t.string()).name("anonymous_label"),
+  senderJoinSeq: __t.u32().name("sender_join_seq"),
   x: __t.f32(),
   y: __t.f32(),
   timestamp: __t.timestamp(),

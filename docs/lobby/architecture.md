@@ -10,7 +10,7 @@ Key membership model (D-24 / D-27): the host is inserted as a `LobbyMember` with
 
 Seats (A74, S9c): every membership gets a seat number `LobbyMember.joinSeq` at insert (host = 1, then `Lobby.lastJoinSeq + 1`). A seat number names exactly one membership for the lobby's lifetime and is never reused. It is the only member key an anonymized caller sees (`view_my_lobby_members.joinSeq`), so the member-targeting reducers (`kick_member`, `ban_member`, `set_team_slot`, `set_captain`, `transfer_referee`) take `targetJoinSeq` and resolve it server-side with `resolveSeat(ctx, lobbyId, joinSeq)` (`helpers/lobby/lobbyHelpers.ts`, through `LobbyMember.lobby_id`; "No member sits at seat N of this lobby."), then run their existing logic on the resolved user id. `unban_member` takes the ban's `bannedJoinSeq`. No argument or rejection of these reducers names a user id (A74(4)).
 
-Passwords live in the private `LobbyPassword` table (never broadcast). Anonymous play zeroes `senderUserId` at write time on cursor/chat events. `LobbyPreset` stores a full flat copy of the lobby config fields for save/restore. `LobbyMemberAccount` records which HSR account(s) each member uses for the match (private, D-02). Stand-ins (`TournamentStandIn`) track approved substitutes per bracket match.
+Passwords live in the private `LobbyPassword` table (never broadcast). Cursor events name the sender by seat (`senderJoinSeq`, A96); chat stores the real sender and the views anonymize it. `LobbyPreset` stores a full flat copy of the lobby config fields for save/restore. `LobbyMemberAccount` records which HSR account(s) each member uses for the match (private, D-02). Stand-ins (`TournamentStandIn`) track approved substitutes per bracket match.
 
 Presence and disconnects (Phase S4 execution; A22a, A48): a member's `isOnline` follows the user's `UserPresence` rows (one per device, see `docs/auth/architecture.md`), so closing one device while another is connected changes nothing. `client_disconnected` only marks the member offline, stamps `disconnectedAt` (Standard/Deferred) and inserts a `RefereeTransferCheck` 15 s out; `run_referee_transfer_check` then moves the referee / captain / host flags and auto-pauses the draft only if the user is still offline. A reconnect (`client_connected`, or the explicit `join_lobby`) restores the member and cancels the pending check, so a page refresh moves no flag and pauses nothing.
 
@@ -89,10 +89,9 @@ Lobby (id: u32 autoInc PK)  [PRIVATE; view_my_lobby / view_lobby_browser; staff 
   |
   +-- LobbyCursorEvent  [public: true, event: true -- broadcasts onInsert, then deletes immediately]
   |     lobbyId -> Lobby.id
-  |     senderUserId: u32 -> User.id (0 = anonymous sentinel)
-  |     anonymousLabel: string?
+  |     senderJoinSeq: u32 -> LobbyMember.joinSeq (A96: the seat, never the user id)
   |     x: f32 / y: f32 / timestamp: Timestamp
-  |     audit columns
+  |     no audit columns (A19)
   |
   +-- LobbyPreset (id: u32 autoInc PK)  [PRIVATE; read through view_lobby_presets (system preset + own), S9a]
         name: string / isSystemPreset: bool
@@ -139,7 +138,7 @@ Lobby-owned reducers live in `reducers/lobby/lobbyLifecycle.ts`, `lobbySettings.
 6. D-42: if `matchType=Ranked`, force `allowMirrorPicks=false`. Resolve `disconnectForfeitSeconds` (0 sentinel -> undefined).
 7. Insert `Lobby` (`insertWithAudit`) with `stage=Waiting`, `currentPlayerCount=1`, `hostUserId`, `isTournamentControlled=false`, `lastActivityAt=now`, `lastJoinSeq=1` (A74(3)).
 8. D-24 / D-27: insert host as `LobbyMember` with `lobbySlot=Spectator`, `isReferee=true`, `isConfirmed=false`, `isOnline=true`, `joinSeq=1` (R4, S4).
-9. D-02: if `!isPublic` and password provided, insert `LobbyPassword` row.
+9. D-02: if `!isPublic` and password provided, insert `LobbyPassword` row (A99: an empty password on a private lobby is rejected first, see "Phase S10h execution").
 
 Series settings and cost-set guards (Phase S6 execution; DECISIONS.md A27, A28, A38(2), A40, A45(2)/(5), D-A8; backlog #2, #6-#9), before the insert:
 - The six new arguments are optional (an omitted key takes the default): `name` (trimmed, 0-50 chars, default '' — the lobby browser view labels an empty name in S9; no host name is stored, so anonymous lobbies leak nothing), `banRestriction` (NoRestriction), `lineupFormat` (Halves), `hideMmr` (false), `bestOfNAdvantage` (None), `refereeExclusiveConcede` (true, A45(5); it was hardcoded true before).
@@ -258,9 +257,9 @@ Phase S6 execution (backlog #2, #6, #7, #9; DECISIONS.md A28, A33, A38(2)/(4), A
 - There is no `assign_referee`/`remove_referee` reducer -- the host starts as referee (D-24) and the flag moves via transfer/reclaim/the A68(7) transfers.
 
 ### broadcast_cursor(lobbyId, x, y)
-1. Map `ctx.sender` -> `UserIdentity`; silently return if unregistered. Look up caller's `LobbyMember`; silently return if not a member.
+1. Map `ctx.sender` -> `UserIdentity`; silently return if unregistered. Look up caller's `LobbyMember`; silently return if not a member, or (A98) if the row is away or abandoned.
 2. D-34: silently return if caller's slot is Spectator (coaches hold Blue/Red slots, so they still broadcast).
-3. Insert `LobbyCursorEvent` (event table): `senderUserId = isAnonymousPlayers ? 0 : userId`, `anonymousLabel` set when anonymous, plus x/y/timestamp. No SenderErrors -- all failure modes are silent returns.
+3. Insert `LobbyCursorEvent` (event table): `senderJoinSeq = member.joinSeq` (A96, every lobby), plus x/y/timestamp. No SenderErrors -- all failure modes are silent returns.
 
 B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3:
 - Bounds: silently return unless `0 <= x <= 1` and `0 <= y <= 1` (NaN fails the test too).
@@ -551,6 +550,98 @@ Membership lifecycle after A68 (details in the reducer flows above):
   `set_team_slot`'s spectator cap (the reducer is Waiting-only), the second `ensureLobbyMember` in `set_team_slot` /
   `set_captain`, the Admin line of `canKickOrBan`; `create_lobby` logs the generated join code.
 
+## Phase S10h execution (DECISIONS.md A96, A97, A98, A99)
+
+- **A98: away and abandoned members cannot act.** Helpers in `helpers/lobby/lobbyHelpers.ts`:
+  `ensureMemberPresent(member)` (abandoned first, since an abandoned row keeps its `leftAt`),
+  `ensurePresentMember(ctx, lobbyId, userId)` (`ensureLobbyMember` + presence) and
+  `ensurePresentIfMember(ctx, lobbyId, userId)` (the caller's row, when they hold one, must be present; for reducers a
+  non-member may call). Texts: away "You are away from this lobby. Return to it before acting." (`AWAY_MEMBER_TEXT`),
+  abandoned "You left this match for another lobby and can no longer act in it." (`ABANDONED_MEMBER_TEXT`). An away
+  member regains everything through `join_lobby`; an abandoned one never does. Moderator / Admin powers that do not
+  depend on membership are unaffected: `ensureHostOrAbove` checks the host's row only when the caller is not
+  Moderator+; `ensureRefereeOrAbove` checks the referee's row only when the caller is not Moderator+; the result staff
+  set (`resultAuthority`: Moderator+, tournament organizer, results assistant) is not checked. Review F8 (fix pass):
+  Moderator and Admin powers never depend on presence. `ensureMemberPresentUnlessStaff(ctx, lobbyId, user)` returns
+  the caller's row (which must exist, "You are not a member of this lobby.", as before) and checks presence only when
+  the caller is not Moderator+; `kick_member`, `ban_member` and `set_captain` use it, so a Moderator / Admin who holds
+  an away or abandoned row keeps those powers (in `set_captain` the staff power is the Admin's, D-30).
+  `set_team_slot` skips the caller's presence check for Moderator+ when a seat is given (`ensureHostOrAbove` admits
+  them). The A85(2) `resume_draft` test no longer repeats the presence check (`ensurePresentMember` already ran).
+  Guarded (caller): `select_match_account`, `deselect_match_account`; `send_chat_message`, `delete_chat_message`
+  (host / referee path); `broadcast_cursor` (dropped silently, like every other cursor rejection: the stream is
+  fire-and-forget at up to 20 Hz); `close_lobby`, `update_lobby_settings`, `shuffle_teams` (through
+  `ensureHostOrAbove`); `kick_member`, `ban_member` (`ensureMemberPresentUnlessStaff`); `unban_member` (host / referee path);
+  `set_team_slot` (the caller's row; a self-move by `ensurePresentMember`); `confirm_ready`, `unconfirm_ready`,
+  `set_captain`; `transfer_referee`, `reclaim_referee` (both branches), `transfer_host` (host path); `start_draft`,
+  `advance_stage` (through `ensureRefereeOrAbove`); `pick_character`, `ban_character`, `timer_expiry_classic`,
+  `nominate_character`, `place_bid`, `pass_bid`, `timer_expiry_auction`, `undo_last_step`, `pause_draft`,
+  `resume_draft`; `equip_lightcone`, `unequip_lightcone`, `arrange_lineup`, `set_eidolon`, `record_group_scores`
+  (through `ensureCaptainOrReferee`; the A60(7) Admin path is unaffected); `set_score_adjustment`, `close_game`
+  (through `resultAuthority`); `confirm_game`; `concede_match`, `claim_forfeit`, `defer_match` (the A92(4)
+  `ensureSeatPresent` check and its texts, now run right after the membership check for every caller, a referee
+  or coach row included).
+  Not guarded, on purpose: `join_lobby`, `leave_lobby` (A98); `create_lobby`, `create_tournament_lobby` (no row
+  in the lobby; `ensureNotInLobby` governs them); `dispute_match_result` (a right of the match participant on the
+  submitted record, `MatchResultParticipant`, not a lobby membership power; it stays unguarded on purpose: a
+  participant who left the lobby, or was moved out of it, keeps the right to contest a record that names them, and
+  the reducer neither reads nor needs a `LobbyMember` row; this is a deviation from "every action reducer" for the
+  user to confirm); `validate_match_result`, `approve_stand_in`, `revoke_stand_in`, `set_match_sides` (tournament
+  staff, not membership); the preset reducers (no lobby); the scheduled and admin reducers
+  (`run_referee_transfer_check`, `run_lobby_gc`, `admin_*`).
+  `finalize_match_result` (review F9, corrected): it rejects tournament records and admits Moderator+ or the
+  record's `refereeUserId` (the referee snapshot taken at the start of the draft). The referee path is a membership
+  power: a caller who is not Moderator+ and holds an away or abandoned `LobbyMember` row in the record's lobby is
+  rejected with the A98 texts (`ensurePresentIfMember`); a referee with no row left keeps the snapshot authority, as
+  before; the staff path is unchanged.
+  Targets (review F5): `transfer_referee` and `set_captain` reject an away or abandoned target with the
+  `transfer_host` text shape: "The member at seat N has left the match and cannot become the referee." / "... cannot
+  become a captain." (`memberHasLeft`, after the seat is resolved; `set_captain` after its spectator / coach checks);
+  `transfer_host` keeps its A93(3) target rule ("... cannot become the host.").
+  In Waiting a Leave deletes the row (A68(5)), so away and abandoned rows exist only from Drafting on; the Waiting-only
+  reducers carry the guard for consistency.
+- **A99: a private lobby needs a password.** `create_lobby` rejects `isPublic = false` with an empty `password`
+  ("A private lobby needs a password.", `PRIVATE_LOBBY_PASSWORD_TEXT`), before any other check of the call.
+  `update_lobby_settings` rejects `isPublic = false` with an empty `password` when the lobby has no `LobbyPassword`
+  row. An empty `password` argument means "no new password": a lobby that already has a row keeps it (the upsert
+  runs only for a non-empty argument, as before). A switch to public still deletes the row. Presets cannot produce
+  a private lobby: `create_lobby` copies nothing from `presetId` (the client fills the arguments, so the check above
+  applies) and `create_tournament_lobby` always writes `isPublic = true`.
+- **A96: cursor events carry the seat.** `LobbyCursorEvent` columns: `lobbyId`, `senderJoinSeq` (the sender's
+  `LobbyMember.joinSeq`), `x`, `y`, `timestamp`; `senderUserId` and `anonymousLabel` are gone, in anonymous and
+  identified lobbies alike. A member's client maps the seat to a name or seat label through `view_my_lobby_members`
+  (`joinSeq`, `label`). The table stays `public: true`: the restriction to members is not implemented (below).
+  Schema note (review F10): the cursor event drops two columns (fine for an event table, which holds no rows), and
+  the three A95(2) `AbuseConfig` columns (`docs/admin/architecture.md`) sit before the audit columns with no column
+  defaults; neither is an additive migration, so both ship with the S11 clear-publish.
+- **A96: restricting the stream to members, what 2.14.1 offers.** Checked: the installed SDK
+  (`node_modules/spacetimedb` 2.14.1), the `spacetimedb` skill and `docs/research/`. (1) Views: a view reads committed
+  state, and an event table's rows are deleted in the transaction that wrote them, so a view over
+  `LobbyCursorEvent` always sees nothing (skill `references/how-to-guides.md` "Event Tables": "views can't wrap event
+  tables"). (2) Row-level security: `spacetimedb.clientVisibilityFilter.sql(sql)` exists in the SDK
+  (`dist/server/schema.d.ts:289`, `dist/server/index.mjs:9147`; it pushes `rowLevelSecurity` entries into the module
+  definition). Upstream, at the commit the skill pins (v2.14.1), the event tables page says row-level security
+  applies to event tables with the same semantics as regular tables, but the RLS page labels the feature
+  experimental and unstable ("the API may change or be removed") and to be used only where views cannot help; this
+  repo's skill forbids it (`references/how-to-guides.md` "Row Level Security", `references/api-guide.md` §7). (3)
+  Nothing else in the SDK filters an event table per client. So a mechanism exists but it is experimental and
+  forbidden here, and no stable mechanism exists: the stream stays public and carries only the lobby id, the seat
+  number and the position (x, y, timestamp). The route is the user's call (A96).
+- **A97: anonymous labels from the seat.** `anonymousSeatLabel(member)` (`helpers/identity/anonymousLabels.ts`):
+  `<kind> #<joinSeq>` with kind `Blue Player`, `Red Player`, `Blue Coach`, `Red Coach` or `Spectator`, for example
+  "Spectator #7", "Blue Player #3", "Blue Coach #5". `computeAnonymousLabel(ctx, lobbyId, userId)` returns it for the
+  user's row (no peer is read any more). The number never changes and is never reused, so the label survives
+  departures; it changes only when the member changes seat kind in Waiting. Chat and view details:
+  `docs/chat/architecture.md`, `docs/anonymous-play/architecture.md`.
+  Review F6 / F7 (fix pass): a stored chat line keeps the label of the membership it was written under.
+  `view_my_lobby_chat` (sender label) and the member-event rendering (`renderSystemChat`) prefer the label stored with
+  the line and read the live seat label only when none was stored (`storedOrLiveLabel`,
+  `helpers/identity/viewAnonymity.ts`); a member who left and rejoined holds a new seat, and their old lines keep the
+  old label. `memberEventLabel` (`helpers/lobby/memberEventChat.ts`) stores the subject's seat label in every lobby,
+  as `send_chat_message` does for Player messages, so a line written while the lobby was identified still has a
+  label after it turns anonymous in Waiting. Cost: a Waiting seat-kind move shows "Spectator #3" on older lines and
+  "Blue Player #3" on newer ones (the number ties them).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -598,10 +689,12 @@ Membership lifecycle after A68 (details in the reducer flows above):
 | Fix pass: `maxSpectators` caps watchers, not seat candidates (casual Waiting joins and `set_team_slot` moves into Spectator are not counted; live-stage joins and tournament Waiting spectators are); `ensureNotInLobby` runs `transferFlagsOnRemoval` on the away row before writing `abandonedAt` | Phase S8f execution (DECISIONS.md A68(4)(7)(8)) | 2026-11-08 |
 | Waiting disconnect moves the referee flag only; `transfer_host`; captain flag cleared on a team / coach / spectator move; alias cap 30; member-event and start lines inside the chat window; membership rate (20 changes / 10 s, `UserRateState`); `start_draft` names seats and rejects teams over `teamSize`; `ensureLobbyConfigInRange` in create / update / presets; Ranked rejected with a guest seated; abandon releases `LobbyMemberAccount` rows; admin row deletes through `hardDeleteLobby` / `removeMemberRow` | Phase S10e execution (DECISIONS.md A93; audit 2026-11-09) | 2026-11-09 |
 | Fix pass: abandoned rows keep their `LobbyMemberAccount` rows and the roster guards ignore them (`accountLobbyLocks`); `start_draft` schedules the 15 s check for an offline host or referee; `leave_lobby` outside the membership rate; signed handicaps -1000000 to 1000000 again (`rosterThreshold` 0-1000000); admin lobby / member deletes guarded | Phase S10e execution (review F1-F5, N1, N8; DECISIONS.md A93(4), A68(6)) | 2026-11-09 |
+| A98 present-member guard on every lobby action reducer (`ensurePresentMember` / `ensurePresentIfMember`, two texts); A99 a private lobby needs a password (create and the switch to private); A96 `LobbyCursorEvent.senderJoinSeq` replaces `senderUserId` / `anonymousLabel` (member restriction not available on 2.14.1, reported); A97 seat labels | Phase S10h execution (DECISIONS.md A96, A97, A98, A99) | 2026-11-09 |
+| Fix pass: `transfer_referee` / `set_captain` refuse an away or abandoned target (F5); stored chat labels preferred over live ones, member-event lines store the label in every lobby (F6, F7); `ensureMemberPresentUnlessStaff` for kick / ban / captain and the `set_team_slot` staff exemption (F8); `finalize_match_result` referee path guarded, `dispute_match_result` unguarded on purpose (F9); A96 RLS statement corrected (F2); `AbuseConfig` clear-publish note (F10) | Phase S10h execution (S10h review F2, F5-F10; DECISIONS.md A96, A97, A98) | 2026-11-10 |
 
 ---
 
-*Last updated: 2026-11-09*
+*Last updated: 2026-11-09 (S10h)*
 *Feature owner: Phase 05 / Phase 09 / Phase 10.1 / Phase 10.4 / Phase 12.1 / Phase 16*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

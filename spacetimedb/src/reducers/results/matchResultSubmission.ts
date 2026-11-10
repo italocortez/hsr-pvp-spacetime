@@ -3,7 +3,7 @@ import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser } from '@module/helpers/identity/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { ensureMatchAlive } from '@module/helpers/lobby/disconnectHelpers';
-import { ensureStageIs, slotIsCoach, slotIsSpectator, slotTeam } from '@module/helpers/lobby/lobbyHelpers';
+import { ensureMemberPresent, ensureStageIs, slotIsCoach, slotIsSpectator, slotTeam } from '@module/helpers/lobby/lobbyHelpers';
 import { ensureEditStepRoom, getNextSequence } from '@module/helpers/draft/stepSequence';
 import { consumeResultEntryAllowance } from '@module/helpers/lobby/abuseControls';
 import { closeGame } from '@module/helpers/results/gameClose';
@@ -76,6 +76,7 @@ export const confirm_game = spacetimedb.reducer(
         if (!member || !member.isCaptain || slotIsCoach(member.lobbySlot) || slotIsSpectator(member.lobbySlot)) {
             throw new SenderError('Only the team captain can confirm the game.');
         }
+        ensureMemberPresent(member); // A98: present, not away or abandoned
         const side = ensureTeamTag(teamSide);
         if (slotTeam(member.lobbySlot) !== side) {
             throw new SenderError(`Only the team captain can confirm the ${side} side of the game.`);

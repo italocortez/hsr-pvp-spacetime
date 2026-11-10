@@ -6,6 +6,7 @@ import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHel
 import { performUserDeletion } from '@module/helpers/identity/userDeletionHelper';
 import { rejectIfBanned, DISCORD_LOGIN_METHOD } from '@module/helpers/lobby/banHelper';
 import { seedSystemLobbyPreset } from '@module/helpers/lobby/systemPreset';
+import { uniqueUsername, USERNAME_MAX_LENGTH } from '@module/helpers/identity/usernames';
 
 /**
  * Guard: the caller is a registered server identity (Owner or Delegate, §C.4).
@@ -52,24 +53,8 @@ function parseIdentityHex(identityHex: string, argName = 'identityHex'): Identit
     }
 }
 
-/** Usernames are at most 32 characters (update_username, update_display_name). */
-const USERNAME_MAX_LENGTH = 32;
-
-/**
- * S10e (identity audit #3): `base` when no other user holds it, else the first free `base_2`, `base_3`, ... (the base
- * shortened so the result stays within USERNAME_MAX_LENGTH). User.username is unique; a collision would otherwise
- * abort the transaction on the index instead of linking the provider.
- */
-function uniqueUsername(ctx: any, base: string, selfUserId: number): string {
-    const holder = ctx.db.User.username.find(base);
-    if (!holder || holder.id === selfUserId) return base;
-    for (let n = 2; ; n++) {
-        const suffix = `_${n}`;
-        const candidate = base.slice(0, USERNAME_MAX_LENGTH - suffix.length) + suffix;
-        const other = ctx.db.User.username.find(candidate);
-        if (!other || other.id === selfUserId) return candidate;
-    }
-}
+// USERNAME_MAX_LENGTH and uniqueUsername (S10e, identity audit #3) live in helpers/identity/usernames.ts (S10h: shared
+// with login_as_guest).
 
 /**
  * Owner-only: register a delegate server identity (e.g. the bootstrap script's fresh token,

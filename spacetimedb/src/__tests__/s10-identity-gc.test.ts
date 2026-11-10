@@ -8,7 +8,7 @@
 // vacuous with one identity). Nothing reaches maincloud.
 import { describe, expect, it } from 'vitest';
 import { ScheduleAt } from 'spacetimedb';
-import { M, advance, connect, disconnect, expectReject, guest, linkDiscord, newHarness, now, tx, type Actor, type Harness } from './s4-fixtures';
+import { DEFAULT_LOBBY_ARGS, M, advance, connect, disconnect, expectReject, guest, linkDiscord, newHarness, now, tx, type Actor, type Harness } from './s4-fixtures';
 import { AUDIT, moderator, setUserRole, verified } from './s8-fixtures';
 import { freshAuth, identitiesOf } from './s10-c1-fixtures';
 
@@ -59,7 +59,7 @@ describe('admin_gc_identities / admin_gc_lobbies: role guard and GcResult audit 
         expect(identity).toMatchObject({ itemsDeleted: 0, createdById: mod.userId });
         expect(identity.ranAt.microsSinceUnixEpoch).toBe(now(test));
         expect(identity.itemsScanned).toBe([...test.db.UserIdentity.iter()].length);
-        expect(JSON.parse(identity.details)).toEqual({ orphaned: 0, stale: 0, triggeredBy: 'admin' });
+        expect(JSON.parse(identity.details)).toEqual({ orphaned: 0, stale: 0, guests: 0, triggeredBy: 'admin' }); // T-S10h: + guests (A95(1))
         expect(gcRows(test, 'lobby')).toEqual([expect.objectContaining({ itemsDeleted: 0, createdById: mod.userId })]);
         expect(JSON.parse(gcRows(test, 'lobby')[0].details).triggeredBy).toBe('admin');
         expect([...test.db.IdentityGcJob.iter()]).toHaveLength(0);
@@ -111,22 +111,66 @@ describe('identity GC guards (D-06, D-07, D-08, D-11, D-12)', () => {
         expect(hasIdentity(test, second)).toBe(true);
     });
 
-    it('D-06: a guest\'s stale second identity is never collected, while a verified user in the same state loses it', () => {
-        const test = newHarness();
-        const mod = moderator(test);
+    // T-S10h (A95(1)): D-06 now holds for a guest with match history or a live membership; an idle, history-free guest
+    // is deleted whole (s10h-lobby-rulings.test.ts covers the rule in full).
+    /** A guest on two devices (the second an older offline identity), offline, plus a verified control user. */
+    function staleGuest(test: Harness) {
         const g = guest(test, 'guesty');
         const extra = freshAuth(test, 'guesty-old-device');
-        // A second (older) identity mapped to the same guest user, offline.
         test.db.UserIdentity.insert({ identity: extra.identity, userId: g.userId, lastSeenAt: test.clock.now(), ...AUDIT(test) });
+        return { g, extra };
+    }
+    function expectGuestKept(test: Harness, g: Actor, extra: { identity: any }) {
+        expect(identitiesOf(test, g.userId)).toHaveLength(2);
+        expect(test.db.UserIdentity.identity.find(extra.identity)).toBeTruthy();
+        expect(test.db.User.id.find(g.userId)!.isGuest).toBe(true);
+    }
+
+    it('D-06 / A95(1): a guest with match history keeps its stale second identity, while a verified user in the same state loses it', () => {
+        const test = newHarness();
+        const mod = moderator(test);
+        const { g, extra } = staleGuest(test);
+        test.db.MatchParticipantHistory.insert({
+            userId: g.userId, matchHistoryId: 1, teamSide: { tag: 'Blue' } as any, displayName: 'guesty',
+            isReferee: false, isCoach: false, isCaptain: false, ...AUDIT(test),
+        });
         const control = twoDeviceUser(test, 'control');
         disconnect(test, g);
         advance(test, 120 * DAY_MS);
         gcIdentities(test, mod);
 
-        expect(identitiesOf(test, g.userId)).toHaveLength(2);
-        expect(test.db.UserIdentity.identity.find(extra.identity)).toBeTruthy();
+        expectGuestKept(test, g, extra);
         expect(hasIdentity(test, control.first)).toBe(false);
-        expect(test.db.User.id.find(g.userId)!.isGuest).toBe(true);
+    });
+
+    it('D-06 / A95(1): a guest holding a lobby membership keeps its stale second identity and its user row', () => {
+        const test = newHarness();
+        const mod = moderator(test);
+        const { g, extra } = staleGuest(test);
+        const h = verified(test, 'lobbyhost');
+        tx(test, h, (ctx) => M.create_lobby(ctx, { ...DEFAULT_LOBBY_ARGS } as any));
+        const lobbyId = [...test.db.Lobby.iter()].find((l) => l.hostUserId === h.userId)!.id;
+        tx(test, g, (ctx) => M.join_lobby(ctx, { lobbyId, joinCode: '', password: '' }));
+        disconnect(test, g);
+        advance(test, 120 * DAY_MS);
+        gcIdentities(test, mod);
+
+        expectGuestKept(test, g, extra);
+        expect([...test.db.LobbyMember.user_id.filter(g.userId)]).toHaveLength(1);
+    });
+
+    it('A95(1) (supersedes D-06 for this case): an idle guest with no match history and no membership is deleted, both identities with it', () => {
+        const test = newHarness();
+        const mod = moderator(test);
+        const { g, extra } = staleGuest(test);
+        disconnect(test, g);
+        advance(test, 120 * DAY_MS);
+        gcIdentities(test, mod);
+
+        expect(test.db.User.id.find(g.userId)).toBeFalsy();
+        expect(identitiesOf(test, g.userId)).toHaveLength(0);
+        expect(test.db.UserIdentity.identity.find(extra.identity)).toBeFalsy();
+        expect(JSON.parse(gcRows(test, 'identity')[0].details)).toMatchObject({ guests: 1 });
     });
 
     it('D-12: an identity whose user row is missing is deleted at once, whatever its age; the user\'s single identity past the TTL is kept (D-07)', () => {
@@ -166,9 +210,46 @@ describe('identity GC guards (D-06, D-07, D-08, D-11, D-12)', () => {
         const rows = gcRows(test, 'identity');
         expect(rows).toHaveLength(1);
         expect(rows[0]).toMatchObject({ itemsDeleted: 1, createdById: 0 });
-        expect(JSON.parse(rows[0].details)).toEqual({ orphaned: 1, stale: 0 });
+        expect(JSON.parse(rows[0].details)).toEqual({ orphaned: 1, stale: 0, guests: 0 }); // T-S10h: + guests (A95(1))
         expect([...test.db.IdentityGcJob.iter()]).toHaveLength(1);
     });
+
+    // S10h review F4: a scheduled run that reached the 500-guest cap requeues one hour out (the backlog drains in hourly
+    // runs); a run under the cap keeps the weekly interval. Exactly one job is queued either way. The 501 idle guests are
+    // inserted as rows (User + UserIdentity, no presence row = offline), as in s10h-lobby-rulings.test.ts.
+    it('review F4: a scheduled run that hits the 500-guest cap requeues itself one hour out; the next run, under the cap, requeues 7 days out', () => {
+        const test = newHarness();
+        const ONE_HOUR_MICROS = 3_600_000_000n;
+        const fire = () => {
+            const jobs = [...test.db.IdentityGcJob.iter()];
+            for (const j of jobs) test.db.IdentityGcJob.scheduledId.delete(j.scheduledId);
+            const arg = jobs[0] ?? { scheduledId: 1n, scheduledAt: ScheduleAt.time(now(test)) };
+            tx(test, 'internal', (ctx) => M.run_identity_gc(ctx, { arg }));
+        };
+        const ids: number[] = [];
+        for (let i = 0; i < 501; i++) {
+            const u = test.db.User.insert({
+                id: 0, username: `cap_${i}`, displayName: `cap_${i}`, isGuest: true, role: { tag: 'User' } as any,
+                hasDiscordLinked: false, avatarCharacterName: 'march7th', displayedAchievementId: undefined, deletedAt: undefined,
+                ...AUDIT(test),
+            } as any);
+            test.db.UserIdentity.insert({ identity: freshAuth(test, `cap-${i}`).identity, userId: u.id, lastSeenAt: test.clock.now(), ...AUDIT(test) });
+            ids.push(u.id);
+        }
+        const left = () => ids.filter((id) => test.db.User.id.find(id)).length;
+        advance(test, 30 * DAY_MS);
+
+        fire();
+        expect(left()).toBe(1);
+        expect(JSON.parse(gcRows(test, 'identity')[0].details)).toMatchObject({ guests: 500 });
+        expect([...test.db.IdentityGcJob.iter()].map((j) => j.scheduledAt)).toEqual([ScheduleAt.time(now(test) + ONE_HOUR_MICROS)]);
+
+        advance(test, 60 * 60 * 1000);
+        fire();
+        expect(left()).toBe(0);
+        expect(JSON.parse(gcRows(test, 'identity')[1].details)).toMatchObject({ guests: 1 });
+        expect([...test.db.IdentityGcJob.iter()].map((j) => j.scheduledAt)).toEqual([ScheduleAt.time(now(test) + SEVEN_DAYS_MICROS)]);
+    }, 120_000);
 });
 
 describe('seed_identity_gc_job (scenario "Seed Identity GC Job Idempotency")', () => {

@@ -3,11 +3,12 @@ import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser, isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { hasTournamentPermission } from '@module/helpers/tournament/tournamentPermissions';
-import { memberHasLeft, resolveSeat } from '@module/helpers/lobby/lobbyHelpers';
+import { ensureMemberPresent, ensurePresentIfMember, memberHasLeft, resolveSeat } from '@module/helpers/lobby/lobbyHelpers';
 
 // ─── transfer_referee ─────────────────────────────────────────────────────────
 // Transfers the referee flag from the caller to another lobby member.
-// Permission: current referee of the lobby.
+// Permission: current referee of the lobby. A98: the caller and the target must both be present (not away, not
+// abandoned; target rule: S10h review F5, the transfer_host text shape).
 // A74(1): the target is a seat number (`targetJoinSeq`), resolved to the member row. The reducer has no Lobby
 // lookup; the seat is resolved after the caller's membership and referee checks, so a non-referee learns nothing
 // about the lobby's seats.
@@ -30,6 +31,7 @@ export const transfer_referee = spacetimedb.reducer(
         if (!senderMember.isReferee) {
             throw new SenderError('You are not the referee of this lobby.');
         }
+        ensureMemberPresent(senderMember); // A98
 
         // A74(1): seat -> member row ("No member sits at seat N of this lobby.")
         const targetMember = resolveSeat(ctx, lobbyId, targetJoinSeq);
@@ -38,6 +40,10 @@ export const transfer_referee = spacetimedb.reducer(
         // Validate target is different from caller
         if (targetUserId === user.id) {
             throw new SenderError('You are already the referee.');
+        }
+        // A98 (S10h review F5): an away or abandoned member cannot act, so cannot receive the referee flag
+        if (memberHasLeft(targetMember)) {
+            throw new SenderError(`The member at seat ${targetJoinSeq} has left the match and cannot become the referee.`);
         }
 
         // Remove referee flag from caller
@@ -79,6 +85,7 @@ export const reclaim_referee = spacetimedb.reducer(
             if (!callerMember) {
                 throw new SenderError('You are not a member of this lobby.');
             }
+            ensureMemberPresent(callerMember); // A98
             ctx.db.LobbyMember.delete(callerMember);
             ctx.db.LobbyMember.insert(updateWithAudit(ctx, callerMember, { isReferee: true }, user.id));
             console.log(`[LOBBY] Unheld referee flag taken by user #${user.id} in lobby #${lobbyId} (A68(7))`);
@@ -94,6 +101,8 @@ export const reclaim_referee = spacetimedb.reducer(
         if (lobby.hostUserId !== user.id && !isTournamentStaff) {
             throw new SenderError('Only the lobby host can reclaim the referee flag.');
         }
+        // A98: the caller takes the flag onto their own row, which must be present.
+        ensurePresentIfMember(ctx, lobbyId, user.id);
 
         // Find the current referee (held: the A68(7) branch above handled the unheld flag)
         const currentReferee = members.find((m: any) => m.isReferee === true);
@@ -144,6 +153,8 @@ export const transfer_host = spacetimedb.reducer(
         if (lobby.hostUserId !== user.id && !isRoleAtLeast(user.role, 'Moderator')) {
             throw new SenderError('Only the host, moderators, or admins can hand over the host role.');
         }
+        // A98: the host role is a membership power: a host who is not Moderator+ must be present.
+        if (!isRoleAtLeast(user.role, 'Moderator')) ensurePresentIfMember(ctx, lobbyId, user.id);
 
         // A74(1): seat -> member row ("No member sits at seat N of this lobby.")
         const target = resolveSeat(ctx, lobbyId, targetJoinSeq);

@@ -220,7 +220,7 @@ interface TestHarness {
 **When:** `run_identity_gc` fires (scheduled reducer)
 **Then:** Scans all UserIdentity rows, applies guard logic (skip guests, skip online, preserve newest, delete orphans), deletes qualifying rows, writes `GcResult` (gcType='identity') only when items deleted, self-requeues 7 days out via new `IdentityGcJob` row.
 
-### GC Guard: Skip Guests (D-06)
+### GC Guard: Skip Guests (D-06) _Superseded in Phase S10h execution (DECISIONS.md A95)._
 **Given:** A guest user (isGuest=true) with an identity whose `lastSeenAt` is older than 90 days
 **When:** Identity GC runs
 **Then:** Guest's identity is NOT deleted — guest users are excluded from GC regardless of staleness.
@@ -344,3 +344,4 @@ interface TestHarness {
 
 *Last updated: 2026-04-09*
 | Env scheme (`shared/stdb-targets.ts`, `STDB_TARGET` / `VITE_STDB_TARGET`, `.env.<t>.local`); `init` registers the Owner + SYSTEM; owner-only `server_register_delegate` / `server_revoke_delegate`; `scripts/stdb/*` with `--target` and `--dry-run`; test-only reducers gated by module env `STDB_TARGET` | Phase M2 execution | 2026-11-06 |
+| Identity clean-up and guests: the weekly run also deletes a guest user that has been idle for 30 days (no live presence, every identity last seen 30 days ago or more), holds no lobby membership, is not enrolled in an unfinished tournament and has no match history at all (no participant, history, stat, rating, relationship, leaderboard, enrolment or achievement row). At most 500 guests per run; when the cap is reached the next run is one hour later instead of seven days. `GcResult.details` carries a `guests` count | Phase S10h execution (DECISIONS.md A95) | 2026-11-10 |

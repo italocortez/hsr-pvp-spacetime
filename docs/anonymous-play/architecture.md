@@ -22,16 +22,15 @@ Tournament (id: u32 autoInc PK)
 
 Real-time tables with write-layer anonymization:
   LobbyCursorEvent
-    +-- senderUserId: u32  (0 when anonymous)
-    +-- anonymousLabel: string?  (computed label e.g. "Blue-1")
+    +-- senderJoinSeq: u32  (A96, S10h: the sender's seat, never the user id, in every lobby)
 
   MatchSessionStep
     +-- actorUserId: u32  (0 when anonymous)
     +-- anonymousLabel: string?
 
   ChatMessage
-    +-- senderUserId: u32  (0 when anonymous)
-    +-- anonymousLabel: string?
+    +-- senderUserId: u32  (the real sender; view_my_lobby_chat masks it)
+    +-- anonymousLabel: string?  (A97 seat label at send time, every Player message)
 
 History tables (real userIds preserved -- gated by views):
   MatchParticipantHistory
@@ -45,19 +44,15 @@ History tables (real userIds preserved -- gated by views):
 
 ## Reducer Flows
 
-### broadcast_cursor(lobbyId, x, y, pageId)
+### broadcast_cursor(lobbyId, x, y)
 1. Resolve caller from `ctx.sender` via UserIdentity
-2. Find `LobbyMember` for caller in this lobby
-3. If `lobby.isAnonymousPlayers || lobby.isAnonymousSpectators`:
-   - Compute `computeAnonymousLabel(ctx, lobbyId, userId)` from LobbyMember join order
-   - Write `senderUserId=0`, `anonymousLabel=computedLabel`
-4. Otherwise: write `senderUserId=userId`, `anonymousLabel=undefined`
-5. Insert `LobbyCursorEvent` row
+2. Find `LobbyMember` for caller in this lobby (silent return when absent, away or abandoned, A98)
+3. A96 (S10h): insert `LobbyCursorEvent` with `senderJoinSeq = member.joinSeq` in every lobby; no user id and no label (the client resolves the seat through `view_my_lobby_members`). The table is still public. Row-level security (`clientVisibilityFilter`) exists in the installed 2.14.1 SDK and upstream says it applies to event tables, but upstream labels it experimental and unstable and this repo's skill forbids it; views cannot read event tables; so no stable mechanism exists and the stream stays public, carrying only the lobby id, the seat number and the position (A96; the route is the user's call; details in `docs/lobby/architecture.md` "Phase S10h execution").
 
 ### send_chat_message(lobbyId, content, metadata?)
 1. Resolve caller, find lobby, find LobbyMember
 2. Validate content length (<=500 chars) and metadata JSON
-3. If lobby anonymous settings active: compute label, write `senderUserId=0`, `anonymousLabel`
+3. Store the real `senderUserId` and the A97 seat label (`anonymousLabel`, every message); `view_my_lobby_chat` masks per reader
 4. Rolling window: delete oldest if >50 messages per lobby
 5. Insert `ChatMessage` row
 
@@ -66,17 +61,13 @@ History tables (real userIds preserved -- gated by views):
 2. If `lobby.isAnonymousPlayers`: compute label, write `actorUserId=0`, `anonymousLabel`
 3. Insert `MatchSessionStep` row with sentinel or real userId
 
-### computeAnonymousLabel(ctx, lobbyId, userId) -- helper
-1. Look up the caller's `LobbyMember` row for the given lobbyId
-2. Determine role from `lobbySlot`: BlueCoach/RedCoach -> Coach, BluePlayer/RedPlayer -> Player, Spectator
-3. Check `isReferee` flag
-4. Compute label from slot + join order among peers with same slot:
-   - BluePlayer -> "Blue-{N}" (N = join order among BluePlayer members)
-   - RedPlayer -> "Red-{N}"
-   - BlueCoach -> "Coach-Blue"
-   - RedCoach -> "Coach-Red"
-   - Spectator -> "Spectator-{N}"
-5. Return label string (deterministic, stable across reconnects)
+### computeAnonymousLabel(ctx, lobbyId, userId) -- helper (A97, S10h)
+1. Look up the user's `LobbyMember` row for the given lobbyId (`by_lobby_and_user`); none -> "Unknown"
+2. `anonymousSeatLabel(member)`: seat kind from `lobbySlot` + the seat number `joinSeq`:
+   - BluePlayer -> "Blue Player #{joinSeq}", RedPlayer -> "Red Player #{joinSeq}"
+   - BlueCoach -> "Blue Coach #{joinSeq}", RedCoach -> "Red Coach #{joinSeq}"
+   - Spectator -> "Spectator #{joinSeq}"
+3. The seat number never changes and is never reused (A74(3)), so a label names one membership for the lobby's lifetime: a departure never shifts another member's label (the old position-among-peers label did). It changes only when the member changes seat kind in Waiting. No peer row is read; no user id appears.
 
 ## View Definitions
 
@@ -84,7 +75,7 @@ History tables (real userIds preserved -- gated by views):
 
 | View | Source Table | Anonymizes |
 |------|-------------|------------|
-| `view_my_lobby_chat` | ChatMessage | senderUserId, uses stored anonymousLabel |
+| `view_my_lobby_chat` | ChatMessage | senderUserId; label = the label stored with the message, else (nothing stored) the live seat label while the sender holds a row, else "A player" (A97; S10h review F6: one label per membership, a rejoin does not relabel old lines). Member-event lines follow the same rule and store the subject's label in every lobby (review F7) |
 | `view_my_lobby_members` | LobbyMember | userId, resolves displayName or label |
 | `view_my_match_steps` | MatchSessionStep | actorUserId |
 | `view_my_match_participants` | MatchResultParticipant | userId |
@@ -126,6 +117,8 @@ SELECT * FROM view_match_step_history
 | Bracket anonymization is client-side courtesy only -- not a security boundary (D-09) | Phase 06 CONTEXT.md | 2026-03-07 |
 | Real-time views (D-92) and history views (D-93) added; frontend subscribes to views, not raw tables | Phase 06 execution | 2026-03-07 |
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
+| A96: cursor events carry `senderJoinSeq`, never a user id; A97: labels from seat kind + seat number ("Blue Player #3"), chat stores the label on every message and the chat view prefers the live seat label | Phase S10h execution (DECISIONS.md A96, A97) | 2026-11-09 |
+| Fix pass: the chat view and member-event lines prefer the stored label (live only when none was stored; review F6); member-event lines store the label in every lobby (F7); the A96 restriction statement corrected: RLS exists but is experimental and forbidden here, no stable mechanism (F2) | Phase S10h execution (S10h review F2, F6, F7; DECISIONS.md A96, A97) | 2026-11-10 |
 
 ---
 

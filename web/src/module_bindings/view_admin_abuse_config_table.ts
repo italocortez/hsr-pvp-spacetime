@@ -23,4 +23,7 @@ export default __t.row({
   guestLobbyCreationEnabled: __t.bool().name("guest_lobby_creation_enabled"),
   guestLobbyBurstThreshold: __t.u32().name("guest_lobby_burst_threshold"),
   guestLobbyBurstWindowMinutes: __t.u32().name("guest_lobby_burst_window_minutes"),
+  guestCreationEnabled: __t.bool().name("guest_creation_enabled"),
+  guestCreationBurstThreshold: __t.u32().name("guest_creation_burst_threshold"),
+  guestCreationBurstWindowMinutes: __t.u32().name("guest_creation_burst_window_minutes"),
 });

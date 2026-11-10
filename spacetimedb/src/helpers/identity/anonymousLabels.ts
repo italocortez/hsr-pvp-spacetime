@@ -1,36 +1,23 @@
-import { slotTeam, slotIsCoach, slotSameTeam } from '@module/helpers/lobby/lobbyHelpers';
+import { slotTeam, slotIsCoach } from '@module/helpers/lobby/lobbyHelpers';
 
 /**
- * Computes anonymous label for a lobby member based on team side and join order.
- * Labels: "Blue-1", "Blue-2", "Red-1", "Red-2", "Spectator-1", "Coach-Blue", "Coach-Red"
- * Deterministic: same LobbyMember data always produces same label.
+ * A97 (S10h): the anonymous label of a member row, from the seat kind and the seat number (`joinSeq`, A74(3)):
+ * "Blue Player #3", "Red Player #4", "Blue Coach #5", "Red Coach #6", "Spectator #7". The seat number never changes
+ * and is never reused, so a label names one membership for the lobby's lifetime; it changes only when the member
+ * changes seat kind (a Waiting-stage move), never because another member left. Never contains a user id (A37).
+ */
+export function anonymousSeatLabel(member: any): string {
+    const team = slotTeam(member.lobbySlot);
+    const kind = team === null ? 'Spectator' : `${team} ${slotIsCoach(member.lobbySlot) ? 'Coach' : 'Player'}`;
+    return `${kind} #${member.joinSeq}`;
+}
+
+/**
+ * The A97 label of `userId`'s row in the lobby (anonymousSeatLabel), or 'Unknown' when the user holds no row.
+ * Deterministic: the same LobbyMember row always produces the same label; no other member's row is read.
  */
 export function computeAnonymousLabel(ctx: any, lobbyId: number, userId: number): string {
-    // Look up the target member
     const member = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, userId])][0];
     if (!member) return 'Unknown';
-
-    // Coaches get a special label: "Coach-Blue", "Coach-Red"
-    if (slotIsCoach(member.lobbySlot)) {
-        return `Coach-${slotTeam(member.lobbySlot)}`;
-    }
-
-    // Spectators: label among other spectators
-    const isSpectator = member.lobbySlot.tag === 'Spectator';
-
-    // Get peers: same-team non-coach players, or fellow spectators
-    const peers = [...ctx.db.LobbyMember.lobby_id.filter(lobbyId)]
-        .filter((m: any) => isSpectator
-            ? m.lobbySlot.tag === 'Spectator'
-            : slotSameTeam(m.lobbySlot, member.lobbySlot) && !slotIsCoach(m.lobbySlot));
-
-    // Sort by joinSeq ascending (R4 / A37: the per-lobby join counter is the join order; never the user id).
-    // S9a: was createdDate (ms), which ties within one millisecond; joinSeq is unique among the lobby's members.
-    peers.sort((a: any, b: any) => a.joinSeq - b.joinSeq);
-
-    // Find the index of the target userId in the sorted list
-    const index = peers.findIndex((m: any) => m.userId === userId);
-    const prefix = isSpectator ? 'Spectator' : slotTeam(member.lobbySlot);
-
-    return `${prefix}-${index + 1}`;
+    return anonymousSeatLabel(member);
 }

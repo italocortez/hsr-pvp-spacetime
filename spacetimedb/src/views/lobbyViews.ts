@@ -24,7 +24,7 @@ import { computeAnonymousLabel } from '@module/helpers/identity/anonymousLabels'
 import { resolveUserLabel } from '@module/helpers/identity/userLabel';
 import { hasLivePresence } from '@module/helpers/identity/presenceHelpers';
 import {
-    callerMemberships, hideUserId, maskLobbyRow, lobbyAnonymousFor, ratingVisible, renderSystemChat, anonymousLabelOr,
+    callerMemberships, hideUserId, maskLobbyRow, lobbyAnonymousFor, ratingVisible, renderSystemChat, anonymousLabelOr, storedOrLiveLabel,
 } from '@module/helpers/identity/viewAnonymity';
 import { isSeatedPlayer, LIVE_STAGES, slotIsSpectator } from '@module/helpers/lobby/lobbyHelpers';
 import { disconnectThresholdMicros, isMemberRowAway } from '@module/helpers/lobby/disconnectHelpers';
@@ -183,8 +183,8 @@ export const view_my_lobby = spacetimedb.view(
 );
 
 // ---------------------------------------------------------------------------
-// 4. view_my_lobby_chat (D-92, A37): senderUserId 0 + the stored label when the sender is anonymized for the caller
-//    (a sender who is no longer a member of an anonymous lobby included); System messages have no sender to mask,
+// 4. view_my_lobby_chat (D-92, A37, A97): senderUserId 0 + the sender's seat label when the sender is anonymized for
+//    the caller (the label stored at send time; the live one only when none was stored, review F6); System messages have no sender to mask,
 //    but a member-event line ("{member} joined the lobby.") is rendered per reader (S9a fix, renderSystemChat).
 // ---------------------------------------------------------------------------
 const AnonymousChatRow = t.row('AnonymousChatRow', {
@@ -220,7 +220,11 @@ export const view_my_lobby_chat = spacetimedb.view(
                     senderType: msg.senderType,
                     content: shown.content,
                     metadata: shown.metadata,
-                    anonymousLabel: anonymize ? msg.anonymousLabel : undefined,
+                    // A97 (S10h review F6): the label stored at send time (one label per membership: a rejoin's
+                    // new seat does not relabel old lines); the live seat label only when none was stored
+                    anonymousLabel: anonymize
+                        ? storedOrLiveLabel(ctx, lobby.id, msg.senderUserId, msg.anonymousLabel)
+                        : undefined,
                     createdDate: msg.createdDate,
                 });
             }
@@ -232,7 +236,7 @@ export const view_my_lobby_chat = spacetimedb.view(
 // ---------------------------------------------------------------------------
 // 5. view_my_lobby_members (PAGE-MAP lobbyroom "after S9"; §A.4 P1; A37, A40, A48, A68(10); R3 / R4)
 //    One row per member of each of the caller's lobbies; the only source of the seat cards and the peek card.
-//    Anonymized seat (shouldAnonymize): userId 0, label from computeAnonymousLabel (slot + joinSeq), no avatar /
+//    Anonymized seat (shouldAnonymize): userId 0, label from computeAnonymousLabel (A97: seat kind + joinSeq), no avatar /
 //    title / MMR. MMR only when identified and the lobby does not hide it (A40 (2)); the account rating (merged over
 //    the member's selected accounts, backlog #10) and the account count per ratingVisible (A40: anonymized seats too).
 //    Never the cursor / lineup throttle stamps (S5 finding 2) nor audit columns.

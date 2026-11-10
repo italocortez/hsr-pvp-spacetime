@@ -21,7 +21,7 @@ import {
 import { auditUpdate } from '@module/helpers/admin/auditColumns';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
-import { slotIsCoach, slotTeam } from '@module/helpers/lobby/lobbyHelpers';
+import { ensureMemberPresent, slotIsCoach, slotTeam } from '@module/helpers/lobby/lobbyHelpers';
 import { lobbySteps } from '@module/helpers/draft/stepSequence';
 
 export type TeamTag = 'Blue' | 'Red';
@@ -54,6 +54,7 @@ export function ensureTeamTag(teamSide: any): TeamTag {
 /**
  * Backlog #3 / #11: the captain of that team (a player seat, not a coach) or any lobby referee (either team,
  * seated or not; A34a keeps referee powers unconditional). Returns the caller's LobbyMember row.
+ * A98: the row must be present (not away, not abandoned).
  */
 export function ensureCaptainOrReferee(ctx: any, lobbyId: number, userId: number, side: TeamTag, what: string): any {
     const member = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, userId])][0];
@@ -61,6 +62,7 @@ export function ensureCaptainOrReferee(ctx: any, lobbyId: number, userId: number
     if (!member || !(member.isReferee || isCaptain)) {
         throw new SenderError(`Only the ${side} captain or a referee can ${what}.`);
     }
+    ensureMemberPresent(member); // A98
     return member;
 }
 
@@ -133,7 +135,11 @@ export function ensureResultAuthority(ctx: any, lobby: any, user: any, message: 
     return authority;
 }
 
-/** The non-throwing lookup behind ensureResultAuthority (close_game also admits captains, A63). */
+/**
+ * The lookup behind ensureResultAuthority (close_game also admits captains, A63). A98: it throws only for a caller who
+ * is not staff and holds an away or abandoned row (their referee and captain powers come from the membership; the
+ * staff powers do not).
+ */
 export function resultAuthority(ctx: any, lobby: any, user: any): { member: any; isReferee: boolean; isStaff: boolean } {
     const member = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobby.id, user.id])][0];
     const isReferee = !!member?.isReferee;
@@ -144,6 +150,7 @@ export function resultAuthority(ctx: any, lobby: any, user: any): { member: any;
         const assistant = [...ctx.db.TournamentAssistant.by_tournament_and_user.filter([lobby.tournamentId, user.id])][0];
         if (assistant?.canResolveResults) isStaff = true; // A25
     }
+    if (!isStaff && member) ensureMemberPresent(member); // A98
     return { member, isReferee, isStaff };
 }
 

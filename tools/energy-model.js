@@ -161,8 +161,8 @@ const TABLES = [
   // --- System ---
   { name: 'server_identity', vis: 'private', bytes: 32 + 8, growth: 'static', category: 'system' },
   { name: 'user_deletion_job', vis: 'private', bytes: 8 + 9 + 4 + AUDIT_BYTES, growth: 'transient', category: 'system' },
-  // lobby_cursor_event: added anonymousLabel optional string
-  { name: 'lobby_cursor_event', vis: 'public_event', bytes: 4 + 4 + 35 + 4 + 4 + 8 + AUDIT_BYTES, growth: 'transient', category: 'system' },
+  // lobby_cursor_event (A19 no audit columns; A96, S10h): lobbyId u32, senderJoinSeq u32, x f32, y f32, timestamp
+  { name: 'lobby_cursor_event', vis: 'public_event', bytes: 4 + 4 + 4 + 4 + 8, growth: 'transient', category: 'system' },
 ];
 
 // ─── Scenarios ──────────────────────────────────────────────────────────────
@@ -389,7 +389,7 @@ function estimateMonthlyEgress(s, rowCounts) {
 
   const cursorDutyCycle = Math.min(1, (monthlyMatches * s.avgLobbyDurationMinutes * draftingFraction) / (30 * 24 * 60));
   const cursorBroadcasts = activeLobies * cursorEventsPerLobbyPerSec * 60 * s.avgLobbyDurationMinutes * draftingFraction * 30 * cursorDutyCycle * recipientsPerLobby;
-  const cursorEventSize = 4 + 4 + 35 + 4 + 4 + 8 + AUDIT_BYTES; // lobbyId + userId + anonymousLabel + x + y + timestamp + audit
+  const cursorEventSize = 4 + 4 + 4 + 4 + 8; // lobbyId + senderJoinSeq + x + y + timestamp (A19: no audit; A96, S10h)
   details['Cursor events'] = cursorBroadcasts * cursorEventSize;
   totalEgressBytes += cursorBroadcasts * cursorEventSize;
 

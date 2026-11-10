@@ -518,6 +518,7 @@ All in `reducers/draft/draftClassic.ts`:
 | `start_draft` rejections name the seat; a team over `teamSize` is rejected; the start line respects the chat window | Phase S10e execution (lobby audit #6, #9, #10) | 2026-11-09 |
 | Fix pass: `start_draft` schedules the 15 s check for an offline host or referee; abandoned players stay in the team's ownership and auto-pick pools | Phase S10e execution (review F2, F3; DECISIONS.md A93(4)) | 2026-11-09 |
 | One turn clock (`turnClock.ts`): pause freezes the remaining time in `accumulatedPauseMs`, resume and the automatic lift restore it, expiry needs remaining 0; edit-step cap 300 per team side (edits and confirmations counted separately, review F1); manual pause throttle 10 s per pausing party (Blue, Red, Referee; review F3) | Phase S10f execution (draft audit #5, #8; BACKEND-BUGS F10; policy review G10) | 2026-11-09 |
+| A98: `pick_character`, `ban_character`, `timer_expiry_classic`, the Auction reducers, `undo_last_step`, `pause_draft`, `resume_draft` reject an away / abandoned caller (`ensurePresentMember`); `start_draft` / `advance_stage` through `ensureRefereeOrAbove` (Moderator+ exempt). Full list: [../lobby/architecture.md](../lobby/architecture.md) "Phase S10h execution" | Phase S10h execution (DECISIONS.md A98) | 2026-11-10 |
 
 ---
 

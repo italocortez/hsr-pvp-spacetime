@@ -1,7 +1,7 @@
 import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser } from '@module/helpers/identity/ensurePermissions';
-import { slotIsCoach, slotIsSpectator } from '@module/helpers/lobby/lobbyHelpers';
+import { ensureMemberPresent, slotIsCoach, slotIsSpectator } from '@module/helpers/lobby/lobbyHelpers';
 
 // ─── select_match_account ─────────────────────────────────────────────────────
 // Sets the HSR account a lobby member will use for the current match.
@@ -31,6 +31,7 @@ export const select_match_account = spacetimedb.reducer(
         // Look up lobby member
         const member = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, user.id])][0];
         if (!member) throw new SenderError('You are not a member of this lobby.');
+        ensureMemberPresent(member); // A98
 
         // Stage guard (D-06): Waiting only (A67(1))
         if (lobby.stage.tag !== 'Waiting') {
@@ -111,6 +112,7 @@ export const deselect_match_account = spacetimedb.reducer(
         // Look up lobby member
         const member = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, user.id])][0];
         if (!member) throw new SenderError('You are not a member of this lobby.');
+        ensureMemberPresent(member); // A98
 
         // Stage guard (D-06): Waiting only (A67(1))
         if (lobby.stage.tag !== 'Waiting') {

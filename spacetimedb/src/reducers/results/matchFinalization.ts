@@ -5,6 +5,7 @@ import { ensureTournamentPermission } from '@module/helpers/tournament/tournamen
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { runFinalization } from '@module/helpers/results/finalizationHelpers';
 import { handOffToBracket } from '@module/helpers/tournament/tournamentResults';
+import { ensurePresentIfMember } from '@module/helpers/lobby/lobbyHelpers';
 
 // ─── finalize_match_result ──────────────────────────────────────────────────
 // Simplified: auth check, validate, authority check, delegate to runFinalization.
@@ -34,10 +35,16 @@ export const finalize_match_result = spacetimedb.reducer(
         }
 
         // 3. Authority check (Mod+ or the match referee)
-        const hasAuthority = isRoleAtLeast(user.role, 'Moderator') || matchResult.refereeUserId === user.id;
+        const isStaff = isRoleAtLeast(user.role, 'Moderator');
+        const hasAuthority = isStaff || matchResult.refereeUserId === user.id;
         if (!hasAuthority) {
             throw new SenderError('You do not have authority to finalize this match result.');
         }
+        // A98 (S10h review F9): the referee authority is a membership power: a referee who is not staff and whose
+        // LobbyMember row in the match's lobby is away or abandoned is rejected (AWAY_MEMBER_TEXT /
+        // ABANDONED_MEMBER_TEXT). A referee with no row left (the row removed, the lobby gone) keeps the snapshot
+        // authority, as before. Staff are unaffected.
+        if (!isStaff) ensurePresentIfMember(ctx, matchResult.lobbyId, user.id);
 
         // 4. Run the 19-step finalization pipeline
         runFinalization(ctx, matchResult, user.id);

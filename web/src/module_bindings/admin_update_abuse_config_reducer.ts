@@ -22,4 +22,7 @@ export default {
   guestLobbyCreationEnabled: __t.option(__t.bool()),
   guestLobbyBurstThreshold: __t.option(__t.u32()),
   guestLobbyBurstWindowMinutes: __t.option(__t.u32()),
+  guestCreationEnabled: __t.option(__t.bool()),
+  guestCreationBurstThreshold: __t.option(__t.u32()),
+  guestCreationBurstWindowMinutes: __t.option(__t.u32()),
 };

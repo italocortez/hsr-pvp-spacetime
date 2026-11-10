@@ -29,7 +29,7 @@ Lobby chat provides ephemeral, per-lobby messaging for all lobby members. Messag
    - Empty string -> resolves to `{"type":"text"}`
    - Non-empty -> parse as JSON, require `type` field with value `"text"`, `"reply"`, or `"emoji_only"`; reject on parse failure or invalid type
 5. Enforce rolling window: query all `ChatMessage` rows for `lobbyId`, sort by `createdDate` ascending; if count >= 50, delete the oldest row
-6. Compute `anonymousLabel` if lobby has `isAnonymousPlayers` or `isAnonymousSpectators` enabled
+6. Compute `anonymousLabel` if lobby has `isAnonymousPlayers` or `isAnonymousSpectators` enabled _Superseded in Phase S10h execution (DECISIONS.md A97)._
 7. Insert `ChatMessage` row with `senderType: Player`, `senderUserId: user.id`, resolved metadata, computed anonymousLabel, and audit columns
 8. Update `Lobby.lastActivityAt` to current timestamp
 
@@ -242,6 +242,7 @@ Lobby chat provides ephemeral, per-lobby messaging for all lobby members. Messag
 | Member-event System lines rendered per reader in `view_my_lobby_chat` (scenario "S9a fix: System Line About a Hidden Member") | Phase S9a execution (DECISIONS.md A37) | 2026-11-08 |
 | Scenarios "System Message on Kick" / "System Message on Ban": `kick_member(lobbyId, targetJoinSeq)` / `ban_member(lobbyId, targetJoinSeq)` name the seat, not the user (A74); the System line text is unchanged (tests `s10-chat`) | Phase S10 execution (DECISIONS.md A74, A76) | 2026-11-09 |
 | Chat `metadata` is capped at 200 characters ("Message metadata exceeds 200 character limit."). Member-event system lines and the "Draft has started!" line respect the 50-message rolling window; the row removed is the oldest by creation time | Phase S10e execution (backend audit 2026-11-09, lobby findings 5, 6) | 2026-11-09 |
+| `send_chat_message` stores the sender's seat label on every message, in identified lobbies too; member-event system lines store the subject's seat label. `view_my_lobby_chat` shows the stored label first, the live seat label only when none was stored, then "A player". An away or abandoned member cannot send or delete messages | Phase S10h execution (DECISIONS.md A97, DECISIONS.md A98) | 2026-11-10 |
 
 ---
 

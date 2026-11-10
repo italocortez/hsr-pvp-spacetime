@@ -10,8 +10,8 @@ import { handOffToBracket } from '@module/helpers/tournament/tournamentResults';
 
 /**
  * A92(4): a seated player whose row is away (leftAt) cannot concede, claim a forfeit or defer until they return
- * through join_lobby; an abandoned row (abandonedAt, A68(4)) never can. Called after the spectator / coach guards,
- * so only player seats reach it (the exclusive spectator referee is never away: isThirdPartyReferee skips such rows).
+ * through join_lobby; an abandoned row (abandonedAt, A68(4)) never can. A98 (S10h): called right after the membership
+ * check, so it covers every caller (a referee or coach row included); the A92(4) texts are kept for these three reducers.
  */
 function ensureSeatPresent(member: any): void {
     if (member.abandonedAt !== undefined) {
@@ -106,6 +106,7 @@ export const concede_match = spacetimedb.reducer(
     (ctx, { lobbyId, losingTeamSide }) => {
         const user = getAuthenticatedUser(ctx);
         const member = ensureLobbyMember(ctx, lobbyId, user.id);
+        ensureSeatPresent(member); // A92(4), A98: every caller, the referee path included
 
         const lobby = ctx.db.Lobby.id.find(lobbyId);
         if (!lobby) {
@@ -139,7 +140,6 @@ export const concede_match = spacetimedb.reducer(
             if (slotIsCoach(member.lobbySlot)) {
                 throw new SenderError('Coaches cannot concede.');
             }
-            ensureSeatPresent(member); // A92(4)
         }
 
         // Determine losing team: referee specifies via losingTeamSide, players derive from slot
@@ -181,6 +181,7 @@ export const claim_forfeit = spacetimedb.reducer(
     (ctx, { lobbyId, forfeitingTeamSide }) => {
         const user = getAuthenticatedUser(ctx);
         const member = ensureLobbyMember(ctx, lobbyId, user.id);
+        ensureSeatPresent(member); // A92(4), A98: every caller, the referee path included
 
         const lobby = ctx.db.Lobby.id.find(lobbyId);
         if (!lobby) {
@@ -213,7 +214,6 @@ export const claim_forfeit = spacetimedb.reducer(
             if (slotIsCoach(member.lobbySlot)) {
                 throw new SenderError('Coaches cannot claim forfeit.');
             }
-            ensureSeatPresent(member); // A92(4)
         }
 
         // D-15: Standard policy only
@@ -263,7 +263,7 @@ export const claim_forfeit = spacetimedb.reducer(
 // ─── defer_match ─────────────────────────────────────────────────────────────
 // Defer the match to AwaitingResult for TO / admin resolution (Deferred, A22a).
 // Deferred policy only. Per D-18, D-19, D-20, D-63; A91(1): needs a seated player disconnected past the grace or the
-// live pool (the exclusive spectator referee is exempt); A92(4): an away or abandoned caller is rejected.
+// live pool (the exclusive spectator referee is exempt); A92(4) / A98: an away or abandoned caller is rejected.
 
 export const defer_match = spacetimedb.reducer(
     {
@@ -272,6 +272,7 @@ export const defer_match = spacetimedb.reducer(
     (ctx, { lobbyId }) => {
         const user = getAuthenticatedUser(ctx);
         const member = ensureLobbyMember(ctx, lobbyId, user.id);
+        ensureSeatPresent(member); // A92(4), A98: every caller, the referee path included
 
         const lobby = ctx.db.Lobby.id.find(lobbyId);
         if (!lobby) {
@@ -304,7 +305,6 @@ export const defer_match = spacetimedb.reducer(
             if (slotIsCoach(member.lobbySlot)) {
                 throw new SenderError('Coaches cannot defer a match.');
             }
-            ensureSeatPresent(member); // A92(4)
         }
 
         // D-18: Deferred policy only

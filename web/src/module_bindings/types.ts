@@ -23,6 +23,9 @@ export const AbuseConfig = __t.object("AbuseConfig", {
   guestLobbyCreationEnabled: __t.bool(),
   guestLobbyBurstThreshold: __t.u32(),
   guestLobbyBurstWindowMinutes: __t.u32(),
+  guestCreationEnabled: __t.bool(),
+  guestCreationBurstThreshold: __t.u32(),
+  guestCreationBurstWindowMinutes: __t.u32(),
   createdById: __t.u32(),
   createdDate: __t.timestamp(),
   lastModifiedById: __t.u32(),
@@ -143,6 +146,9 @@ export const AdminAbuseConfigRow = __t.object("AdminAbuseConfigRow", {
   guestLobbyCreationEnabled: __t.bool(),
   guestLobbyBurstThreshold: __t.u32(),
   guestLobbyBurstWindowMinutes: __t.u32(),
+  guestCreationEnabled: __t.bool(),
+  guestCreationBurstThreshold: __t.u32(),
+  guestCreationBurstWindowMinutes: __t.u32(),
 });
 export type AdminAbuseConfigRow = __Infer<typeof AdminAbuseConfigRow>;
 
@@ -1084,8 +1090,7 @@ export type LobbyConfigSnapshot = __Infer<typeof LobbyConfigSnapshot>;
 
 export const LobbyCursorEvent = __t.object("LobbyCursorEvent", {
   lobbyId: __t.u32(),
-  senderUserId: __t.u32(),
-  anonymousLabel: __t.option(__t.string()),
+  senderJoinSeq: __t.u32(),
   x: __t.f32(),
   y: __t.f32(),
   timestamp: __t.timestamp(),

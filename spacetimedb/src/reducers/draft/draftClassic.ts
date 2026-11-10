@@ -2,7 +2,7 @@ import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser } from '@module/helpers/identity/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
-import { anySeatedPlayerAway, ensureLobbyMember, ensureRefereeOrAbove, ensureStageIs, slotTeam, slotIsCoach, slotToTeamSide } from '@module/helpers/lobby/lobbyHelpers';
+import { anySeatedPlayerAway, ensurePresentMember, ensureRefereeOrAbove, ensureStageIs, slotTeam, slotIsCoach, slotToTeamSide } from '@module/helpers/lobby/lobbyHelpers';
 import { resolveOwnedEidolon, validateCharacterOwnership } from '@module/helpers/draft/ownershipValidation';
 import { buildAuctionBanSequence, buildClassicSequence } from '@module/helpers/draft/draftSequences';
 import { computeLobbyMemberRating } from '@module/helpers/stats/accountRating';
@@ -305,7 +305,7 @@ export const pick_character = spacetimedb.reducer(
         ensureStageIs(lobby, 'Drafting');
         ensureMatchAlive(ctx, lobby);
 
-        const member = ensureLobbyMember(ctx, lobbyId, user.id);
+        const member = ensurePresentMember(ctx, lobbyId, user.id); // A98: present, not away or abandoned
 
         // A22(3): no draft action while the draft is paused
         if (session.timerState.isPaused) {
@@ -485,7 +485,7 @@ export const ban_character = spacetimedb.reducer(
         ensureStageIs(lobby, 'Drafting');
         ensureMatchAlive(ctx, lobby);
 
-        const member = ensureLobbyMember(ctx, lobbyId, user.id);
+        const member = ensurePresentMember(ctx, lobbyId, user.id); // A98: present, not away or abandoned
 
         // A22(3): no draft action while the draft is paused
         if (session.timerState.isPaused) {
@@ -628,7 +628,7 @@ export const timer_expiry_classic = spacetimedb.reducer(
         ensureMatchAlive(ctx, lobby);
 
         // F3: only a lobby member may fire the expiry (contract :162), and never while the draft is paused
-        ensureLobbyMember(ctx, lobbyId, user.id);
+        ensurePresentMember(ctx, lobbyId, user.id); // A98: present, not away or abandoned
         if (session.timerState.isPaused) {
             throw new SenderError('Draft is paused.');
         }

@@ -433,6 +433,7 @@ reaches ceil(bestOf / 2) or staff resolve it). Stage list: Drafting, Equipping, 
 | Finalization step 16: `AuctionSold` stats follow `winningTeam` (played for every player of that side, faced for the other, one global row), never the step actor | Phase S10c execution (DECISIONS.md A82) | 2026-11-09 |
 | `view_my_match_result.concedeSummary` only for Moderator / Admin callers | Phase S10c execution (DECISIONS.md A83) | 2026-11-09 |
 | No stats for `EMPTY` / `SKIP` / the system picker; result reducers share a per-user result-entry window (30 writes per 10 s, `UserRateState`); at most 20 adjustments per record and a bounded per-team sum, checked on every team the call changes (review F2); standalone `override_match_result` needs Submitted / Disputed / Validated and an AwaitingResult lobby | Phase S10f execution (results audit #3, #7, #8) | 2026-11-09 |
+| A98: away / abandoned callers rejected by `ensureCaptainOrReferee` (`record_group_scores`, the game-package edits), `resultAuthority` (`set_score_adjustment`, `close_game`; staff exempt) and `confirm_game`; `concede_match` / `claim_forfeit` / `defer_match` run the A92(4) check for every caller; `dispute_match_result` unchanged (participant right). Full list: [../lobby/architecture.md](../lobby/architecture.md) "Phase S10h execution" | Phase S10h execution (DECISIONS.md A98) | 2026-11-10 |
 
 ---
 

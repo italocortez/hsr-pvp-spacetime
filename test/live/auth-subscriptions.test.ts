@@ -4,7 +4,7 @@
  * empty cache for a table it never subscribed) plus SEC-01b from test/backend/auth/auth-security.test.ts.
  *
  *   1. view_my_profile is per sender: an anonymous connection receives 0 rows; after login_as_guest exactly its own
- *      row arrives (docs/auth/contract.md "Guest Login (First Time)": username Guest_{hex8}, isGuest).
+ *      row arrives (docs/auth/contract.md "Guest Login (First Time)": username Guest_{last hex8}, `_N` on a collision, isGuest).
  *   2. SEC-01b: private tables never reach a client, even one that subscribes everything it can. Type level: the
  *      generated bindings have no accessor for UserPrivate, UserIdentity, HsrAccount, LobbyMember (A37); a
  *      `@ts-expect-error` turns a regression into a compile error. Runtime: subscribeToAllTables delivers none of them
@@ -47,7 +47,9 @@ describe('Auth subscriptions over the wire (§D.5)', () => {
         const rows = [...c.conn.db.viewMyProfile.iter()];
         expect(rows).toHaveLength(1);
         expect(row.isGuest).toBe(true);
-        expect(row.username).toBe(`Guest_${c.identity.slice(0, 8)}`);
+        // S10h: "Guest_" + the LAST 8 hex characters of the identity (guestUsernameBase); test1 accumulates guests, so
+        // a 32-bit collision is possible and login_as_guest then appends `_2`, `_3`, ... (uniqueUsername).
+        expect(row.username).toMatch(new RegExp(`^Guest_${c.identity.slice(-8)}(_\\d+)?$`));
     }, 30_000);
 
     it('SEC-01b: UserPrivate, UserIdentity, HsrAccount and LobbyMember never reach a client that subscribes everything (A37)', async () => {

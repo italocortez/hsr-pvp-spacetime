@@ -272,7 +272,7 @@ erDiagram
     }
     lobby_cursor_event {
         u32 lobbyId FK
-        u32 senderUserId FK "0 when anonymized; no audit columns (A19)"
+        u32 senderJoinSeq "the sender's lobby seat (A96); no user id, no audit columns (A19)"
     }
     lobby_gc_job {
         u64 scheduledId PK
@@ -537,7 +537,7 @@ erDiagram
     lobby_preset }o--o| cost_set : "costSetId (many-to-one, optional)"
     lobby_password ||--|| lobby : "lobbyId (one-to-one)"
     lobby_cursor_event }o--|| lobby : "lobbyId (many-to-one)"
-    lobby_cursor_event }o--|| user : "senderUserId (many-to-one)"
+    lobby_cursor_event }o--|| lobby_member : "lobbyId + senderJoinSeq (many-to-one, A96)"
     match_session ||--|| lobby : "lobbyId (one-to-one)"
     match_session_step }o--|| lobby : "lobbyId (many-to-one)"
     match_session_step }o--|| user : "actorUserId (many-to-one)"

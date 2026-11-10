@@ -106,11 +106,12 @@ function createHarnessInternal(opts: { verify: boolean }): Promise<TestHarness> 
               const idRows = [...connInner.db.view_my_identity.iter()];
               userId = idRows.length > 0 ? (idRows[0] as any).userId : 0;
             } else {
-              // Guest path: match Guest_<shortId> in subscription cache
-              const shortId = identityHex.slice(0, 8);
-              const guestUsername = `Guest_${shortId}`;
+              // Guest path: match Guest_<last 8 hex of the identity> in subscription cache (S10h guestUsernameBase),
+              // with the `_2`, `_3`, ... suffix login_as_guest appends on a collision (uniqueUsername).
+              const shortId = identityHex.slice(-8);
+              const guestUsername = new RegExp(`^Guest_${shortId}(_\\d+)?$`);
               const allUsers = [...connInner.db.User.iter()];
-              const myUser = allUsers.find((u: any) => u.username === guestUsername);
+              const myUser = allUsers.find((u: any) => guestUsername.test(u.username));
               if (myUser) {
                 userId = (myUser as any).id;
               }

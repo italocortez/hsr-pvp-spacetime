@@ -19,7 +19,7 @@ Authentication manages how users connect to the SpacetimeDB module, create accou
 **Flow:**
 1. Look up `ctx.sender` in UserIdentity table
 2. If found → find linked User → update `lastLoginAt`, `isOnline=true`, `lastSeenAt` → return
-3. If not found → generate guest username from identity hex (`Guest_{first8chars}`)
+3. If not found → generate guest username from identity hex (`Guest_{first8chars}`) _Superseded in Phase S10h execution (S10h review, guest name collision)._
 4. Insert new User row (isGuest=true, isOnline=true, role=User, avatarCharacterName='march7th', hasDiscordLinked=false)
 5. Insert UserIdentity row linking `ctx.sender` → new User
 
@@ -117,7 +117,7 @@ Authentication manages how users connect to the SpacetimeDB module, create accou
 ### Guest Login (First Time)
 **Given:** No UserIdentity exists for the caller's SpacetimeDB identity
 **When:** `login_as_guest` is called
-**Then:** User row inserted with `isGuest=true`, `role=User`, `username=Guest_{hex8}`, `avatarCharacterName='march7th'`, `hasDiscordLinked=false`. UserIdentity row inserted linking identity to user.
+**Then:** User row inserted with `isGuest=true`, `role=User`, `username=Guest_{hex8}`, `avatarCharacterName='march7th'`, `hasDiscordLinked=false`. UserIdentity row inserted linking identity to user. _Superseded in Phase S10h execution (S10h review, guest name collision)._
 
 ### Guest Login (Reconnect)
 **Given:** UserIdentity exists for caller, linked to User with id=5
@@ -303,3 +303,5 @@ _Superseded in Phase S8f execution (DECISIONS.md A68)._ The lobby guard is the D
 | Rejection texts as implemented (tests `s10-identity`): `admin_ban_user` on a provider id already banned — "Provider <BanType>:<providerId> is already banned."; unban of an unknown record — "BanRecord #<id> not found."; the Admin-only gates — "Forbidden: Requires Admin privileges."; link-time ban (SEC-03a, `server_link_provider`) — "This <provider> account is banned and cannot be linked." | Phase S10 execution (DECISIONS.md A76) | 2026-11-09 |
 | Provider link, guest upgrade: `providerName` is trimmed and cut to 32 characters (empty: "providerName is required"); when the name is taken the username becomes the first free `name_2`, `name_3`, … within 32 characters, so the link never fails on a name collision | Phase S10e execution (backend audit 2026-11-09, identity finding 3) | 2026-11-09 |
 | Account deletion and tournaments: the organizer of a tournament that is not Completed or Cancelled cannot delete their own account ("You organize a tournament that has not finished. Cancel it, or wait until it ends, before deleting your account."), verified or guest. A live enrolment no longer blocks `delete_my_account`: every deletion path first settles the user's tournament ties (withdrawn while the bracket does not exist, disqualified once it does) and deletes their team requests, assistant rows, stand-in approvals, account locks and waitlist choices. The verified branch keeps its lobby guard ("Leave your lobby before deleting your account.") | Phase S10g execution (DECISIONS.md A94) | 2026-11-09 |
+| Guest names: a new guest is "Guest_" plus the last 8 hex characters of the identity (the first 4 are a fixed tag on every identity), with a `_2`, `_3`, … suffix when taken, so a guest login never fails on the unique username. An orphan identity mapping is repointed to the new guest user | Phase S10h execution (S10h review, identity LOW 10) | 2026-11-10 |
+| Guest creation limit: new guest users are counted per window (`AbuseConfig.guestCreationBurstThreshold` 100, `guestCreationBurstWindowMinutes` 10); the creation that crosses the threshold succeeds, turns `guestCreationEnabled` off and writes one `guest_create_burst` admin alert; while off, a new guest is refused ("New guest accounts are temporarily disabled. Please try again later.") and a returning guest still logs in. `admin_set_guest_creation(true)` or `admin_update_abuse_config` re-enables it and resets the counter | Phase S10h execution (DECISIONS.md A95) | 2026-11-10 |

@@ -79,10 +79,21 @@ export function anonymousLabelOr(ctx: any, lobbyId: number, userId: number, fall
 }
 
 /**
+ * A97 (S10h review F6): the label of a stored chat line (a Player message or a member-event line) for a reader who may
+ * not see its subject: the label stored with the line, so a label names the membership the line was written under (a
+ * member who left and rejoined holds a new seat; their old lines keep the old label). The live seat label is used only
+ * when nothing was stored (lines written before S10h), then "A player".
+ */
+export function storedOrLiveLabel(ctx: any, lobbyId: number, userId: number, stored: string | undefined): string {
+    return stored ?? anonymousLabelOr(ctx, lobbyId, userId, 'A player');
+}
+
+/**
  * S9a fix (A37): the content / metadata of a System chat message as `caller` reads it. A member-event line
  * (helpers/lobby/memberEventChat.ts) is rendered from its template with the subject's label for this reader: the
- * display name when the subject is visible (resolveUserLabel), else the seat label (anonymousLabelOr, falling back to
- * the label stored at write time, then "A player"); its metadata goes out with subjectUserId 0 for a hidden subject.
+ * display name when the subject is visible (resolveUserLabel), else the seat label (storedOrLiveLabel: the label
+ * stored at write time, else the live one, then "A player"); its metadata goes out with subjectUserId 0 for a hidden
+ * subject.
  * Any other System line passes through unchanged.
  */
 export function renderSystemChat(ctx: any, lobby: any, caller: any, msg: any): { content: string; metadata: string | undefined } {
@@ -90,7 +101,7 @@ export function renderSystemChat(ctx: any, lobby: any, caller: any, msg: any): {
     if (!ev) return { content: msg.content, metadata: msg.metadata };
     const hidden = hideUserId(ctx, lobby, caller, ev.subjectUserId);
     const label = hidden
-        ? anonymousLabelOr(ctx, lobby.id, ev.subjectUserId, msg.anonymousLabel ?? 'A player')
+        ? storedOrLiveLabel(ctx, lobby.id, ev.subjectUserId, msg.anonymousLabel)
         : resolveUserLabel(ctx, ev.subjectUserId).displayName;
     return {
         content: renderMemberEvent(ev.event, label),

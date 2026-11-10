@@ -57,6 +57,7 @@ import AdminRemoveCharacterArchetypesReducer from "./admin_remove_character_arch
 import AdminRestartTournamentFinalizeReducer from "./admin_restart_tournament_finalize_reducer";
 import AdminSeedEloConfigReducer from "./admin_seed_elo_config_reducer";
 import AdminSeedRatingConfigReducer from "./admin_seed_rating_config_reducer";
+import AdminSetGuestCreationReducer from "./admin_set_guest_creation_reducer";
 import AdminSetGuestLobbyCreationReducer from "./admin_set_guest_lobby_creation_reducer";
 import AdminUnbanUserReducer from "./admin_unban_user_reducer";
 import AdminUpdateAbuseConfigReducer from "./admin_update_abuse_config_reducer";
@@ -1155,6 +1156,7 @@ const reducersSchema = __reducers(
   __reducerSchema("admin_restart_tournament_finalize", AdminRestartTournamentFinalizeReducer),
   __reducerSchema("admin_seed_elo_config", AdminSeedEloConfigReducer),
   __reducerSchema("admin_seed_rating_config", AdminSeedRatingConfigReducer),
+  __reducerSchema("admin_set_guest_creation", AdminSetGuestCreationReducer),
   __reducerSchema("admin_set_guest_lobby_creation", AdminSetGuestLobbyCreationReducer),
   __reducerSchema("admin_unban_user", AdminUnbanUserReducer),
   __reducerSchema("admin_update_abuse_config", AdminUpdateAbuseConfigReducer),

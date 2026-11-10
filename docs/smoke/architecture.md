@@ -69,8 +69,8 @@ IdentityGcJob (scheduledId: u64 autoInc PK)  [PRIVATE]
 
 ### run_identity_gc() -- scheduled reducer
 1. Fired by SpacetimeDB scheduler from `IdentityGcJob.scheduledAt`
-2. Scan all `UserIdentity` rows; find identities where the SpacetimeDB connection is disconnected
-3. For disconnected guest identities with no match history references: delete `UserIdentity` row and associated `User` row (soft or hard based on `hasHistoryReferences`)
+2. Scan all `UserIdentity` rows grouped by user; orphan mappings are deleted; a verified user loses identities idle 90 days (never the newest, never while online, never server identities or SYSTEM mappings)
+3. Guest users (Phase S10h execution, A95(1)): a guest idle 30 days with no match history at all is deleted through `performUserDeletion`, at most 500 per run (a scheduled run that reaches the cap requeues in one hour, not seven days: S10h review F4); full rule in `docs/auth/architecture.md`
 4. Insert `GcResult` row: `gcType=Identity`, counts of checked and deleted rows
 5. Reschedule: insert new `IdentityGcJob` row with `scheduledAt = ctx.timestamp + intervalMs`
 
@@ -100,6 +100,7 @@ IdentityGcJob (scheduledId: u64 autoInc PK)  [PRIVATE]
 | `init` registers the Owner + SYSTEM user; owner-only `server_register_delegate` / `server_revoke_delegate`; module env `STDB_TARGET` gates the test-only reducers; `scripts/stdb/bootstrap.ts` replaces post-publish.ts | Phase M2 execution | 2026-11-06 |
 | `init` seeds `AbuseConfig` and the `AbuseBreakerJob` chain (no bootstrap call needed); `server_nuke_test_data` clears `UserRateState` / `AdminAlert` and keeps the `AbuseBreakerJob` chain and keeps `AbuseConfig` | Phase S5 execution (DECISIONS.md A42, A43) | 2026-11-06 |
 | `init` no longer seeds a breaker job (inline breaker, A57) and seeds the system lobby preset (A33a); `server_nuke_test_data` clears `AbuseCounter` and re-seeds the system preset after clearing `LobbyPreset` | Phase S6 execution (DECISIONS.md A57, A33a) | 2026-11-06 |
+| `run_identity_gc` / `admin_gc_identities` delete guest users idle 30 days with no match history (A95(1), 500 per run; `GcResult.details.guests`); the run description above corrected to the code | Phase S10h execution (DECISIONS.md A95) | 2026-11-10 |
 
 ---
 

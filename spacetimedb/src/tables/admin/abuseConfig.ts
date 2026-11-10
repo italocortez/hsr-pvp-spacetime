@@ -7,6 +7,10 @@ import { table, t } from 'spacetimedb/server';
  * A42: guestLobbyCreationEnabled is the kill switch; the inline circuit breaker (A57: create_lobby, AbuseCounter) trips it when more
  * than guestLobbyBurstThreshold guest lobby creations fall in one guestLobbyBurstWindowMinutes window and writes
  * an AdminAlert row. B-8: maintenanceMode makes client_connected reject every non-server identity.
+ * A95(2) (S10h): the guest creation breaker, the same model for login_as_guest: guestCreationEnabled is its switch,
+ * tripped when more than guestCreationBurstThreshold new guest users are created in one guestCreationBurstWindowMinutes
+ * window (AbuseCounter 'guest_create'). A returning guest (an identity already mapped to a user) is never counted or
+ * blocked.
  */
 export const abuseConfigColumns = {
     id: t.u32().primaryKey(),
@@ -21,6 +25,9 @@ export const abuseConfigColumns = {
     guestLobbyCreationEnabled: t.bool(),
     guestLobbyBurstThreshold: t.u32(),
     guestLobbyBurstWindowMinutes: t.u32(),
+    guestCreationEnabled: t.bool(),           // A95(2)
+    guestCreationBurstThreshold: t.u32(),     // A95(2)
+    guestCreationBurstWindowMinutes: t.u32(), // A95(2)
     createdById: t.u32(),
     createdDate: t.timestamp(),
     lastModifiedById: t.u32(),

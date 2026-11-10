@@ -89,6 +89,7 @@ import {
 } from './s8-fixtures';
 import { duel, openMatchLobby, playMatch, seedElo, sidesOf } from './s8d-fixtures';
 import { parkedLobby } from './s10-a2-fixtures';
+import { seatLabel } from './s10h-fixtures';
 
 // ─── Reading views ───────────────────────────────────────────────────────────
 
@@ -383,9 +384,9 @@ describe('A37 anonymous lobby: view_my_lobby_members', () => {
         expect(mate.label).toBe(displayName(test, s.a.r2));
         expect(mate.displayedAchievementId).toBe(7);
 
-        // opponents: b1 joined before b2 (joinSeq order), labels never derived from the id or the name
-        const blue1 = rowFor(rows, 'Blue-1');
-        const blue2 = rowFor(rows, 'Blue-2');
+        // opponents: T-S10h (A97): the seat label "Blue Player #<joinSeq>", never derived from the id or the name
+        const blue1 = rowFor(rows, seatLabel(test, s.lobbyId, s.a.b1.userId));
+        const blue2 = rowFor(rows, seatLabel(test, s.lobbyId, s.a.b2.userId));
         for (const [row, who] of [[blue1, s.a.b1], [blue2, s.a.b2]] as const) {
             expect(row.userId).toBe(0);
             expect(row.label).not.toContain(displayName(test, who));
@@ -398,7 +399,7 @@ describe('A37 anonymous lobby: view_my_lobby_members', () => {
         expect(hostRow.userId).toBe(s.host.userId);
         expect(hostRow.label).toBe(displayName(test, s.host));
         expect(hostRow.isReferee).toBe(true);
-        expect(rows.filter((r) => /^Spectator-/.test(r.label))).toEqual([]);
+        expect(rows.filter((r) => /^Spectator #/.test(r.label))).toEqual([]);
         // no id of a hidden member anywhere in the caller's rows
         const hidden = [s.a.b1.userId, s.a.b2.userId];
         expect(rows.filter((r) => hidden.includes(r.userId))).toEqual([]);
@@ -413,7 +414,9 @@ describe('A37 anonymous lobby: view_my_lobby_members', () => {
         const players = specRows.filter((r) => r.lobbySlot.tag === 'BluePlayer' || r.lobbySlot.tag === 'RedPlayer');
         expect(players).toHaveLength(4);
         expect(players.every((r) => r.userId === 0)).toBe(true);
-        expect(players.map((r) => r.label).sort()).toEqual(['Blue-1', 'Blue-2', 'Red-1', 'Red-2']);
+        // T-S10h (A97): seat labels from the seat number
+        expect(players.map((r) => r.label).sort())
+            .toEqual([s.a.b1, s.a.b2, s.a.r1, s.a.r2].map((w) => seatLabel(test, s.lobbyId, w.userId)).sort());
     });
 
     it('a non-anonymous lobby shows real ids and display names to everyone', () => {
@@ -427,7 +430,7 @@ describe('A37 anonymous lobby: view_my_lobby_members', () => {
         }
     });
 
-    it('S9a-V3: Alice (host, Blue) is masked for Bob (Red) in view_my_lobby; her seat keeps isHost with userId 0 and label Blue-1', () => {
+    it('S9a-V3: Alice (host, Blue) is masked for Bob (Red) in view_my_lobby; her seat keeps isHost with userId 0 and her seat label (A97)', () => {
         const test = newHarness();
         const s = setupLobby(test, {
             lobby: ANON,
@@ -443,7 +446,7 @@ describe('A37 anonymous lobby: view_my_lobby_members', () => {
         expect(aliceLobby.hostUserId).toBe(s.host.userId);
         const hostSeat = view<LobbyMemberViewRow>(test, 'view_my_lobby_members', s.a.r1).find((r) => r.isHost)!;
         expect(hostSeat.userId).toBe(0);
-        expect(hostSeat.label).toBe('Blue-1');
+        expect(hostSeat.label).toBe(seatLabel(test, s.lobbyId, s.host.userId)); // T-S10h (A97): "Blue Player #1"
         // a teammate of the host reads her real id
         expect(view<LobbyBinding>(test, 'view_my_lobby', s.a.b2)[0].hostUserId).toBe(s.host.userId);
     });
@@ -456,7 +459,7 @@ describe('A37 anonymous lobby: chat, steps, participants, result games', () => {
         chat(test, s.a.b1, s.lobbyId, 'gl hf');
         const find = (who: Actor) => view<AnonymousChatRow>(test, 'view_my_lobby_chat', who).find((c) => c.content === 'gl hf')!;
         expect(find(s.a.r1).senderUserId).toBe(0);
-        expect(find(s.a.r1).anonymousLabel).toBe('Blue-1');
+        expect(find(s.a.r1).anonymousLabel).toBe(seatLabel(test, s.lobbyId, s.a.b1.userId)); // T-S10h (A97)
         expect(find(s.a.b2).senderUserId).toBe(s.a.b1.userId);
         expect(find(s.a.b2).anonymousLabel).toBeUndefined();
         expect(find(s.host).senderUserId).toBe(s.a.b1.userId);
@@ -465,12 +468,13 @@ describe('A37 anonymous lobby: chat, steps, participants, result games', () => {
     it('S9a-A2: a Blue coach who wrote in chat and left stays hidden from Red (senderUserId 0, label stored at write time)', () => {
         const test = newHarness();
         const s = setupLobby(test, { lobby: ANON, seats: [...seatsOf(''), ['c1', 'BlueCoach']] });
+        const coachLabel = seatLabel(test, s.lobbyId, s.a.c1.userId); // T-S10h (A97): "Blue Coach #<joinSeq>"
         chat(test, s.a.c1, s.lobbyId, 'coach says hi');
         leave(test, s.a.c1, s.lobbyId); // A68(5): a coach's leave deletes the row
         expect(member(test, s.lobbyId, s.a.c1.userId)).toBeUndefined();
         const row = view<AnonymousChatRow>(test, 'view_my_lobby_chat', s.a.r1).find((c) => c.content === 'coach says hi')!;
         expect(row.senderUserId).toBe(0);
-        expect(row.anonymousLabel).toBe('Coach-Blue');
+        expect(row.anonymousLabel).toBe(coachLabel);
     });
 
     // Module finding (A37 leak): join_lobby / leave_lobby write System messages "<displayName> joined the lobby." /
@@ -507,18 +511,18 @@ describe('A37 anonymous lobby: chat, steps, participants, result games', () => {
 
     // Module finding (not a leak; contract gap): the view emits the label stored on the step at write time, and the
     // draft writers (pick_character, ...) store none, so an anonymized actor reads `actorUserId 0` with no label,
-    // where S9a-A1 / view comment 2 promise "actorUserId 0 + the stored label" (e.g. "Blue-1").
-    it('S9a-A1: an anonymized step actor carries a seat label (Blue-n), never the display name', () => {
+    // where S9a-A1 / view comment 2 promise "actorUserId 0 + the stored label" (e.g. "Blue Player #2", A97).
+    it('S9a-A1: an anonymized step actor carries a seat label (Blue Player #n, A97), never the display name', () => {
         const test = newHarness();
         const s = scoringOf(test, '', { lobby: ANON });
         const masked = view<AnonymousMatchStepRow>(test, 'view_my_match_steps', s.a.r1).filter((r) => r.actorUserId === 0);
         expect(masked.length).toBeGreaterThan(0);
         for (const r of masked) {
-            expect(r.anonymousLabel).toMatch(/^Blue-\d$/);
+            expect(r.anonymousLabel).toMatch(/^Blue (Player|Coach) #\d+$/); // T-S10h (A97)
         }
     });
 
-    it('view_my_match_participants: Red reads Blue participants as 0 with Blue-n labels; Red participants with real ids', () => {
+    it('view_my_match_participants: Red reads Blue participants as 0 with their seat labels (A97); Red participants with real ids', () => {
         const test = newHarness();
         const s = scoringOf(test, '', { lobby: ANON });
         const rows = view<AnonymousMatchParticipantRow>(test, 'view_my_match_participants', s.a.r1);
@@ -526,7 +530,8 @@ describe('A37 anonymous lobby: chat, steps, participants, result games', () => {
         const blue = rows.filter((r) => r.teamSide.tag === 'Blue');
         const red = rows.filter((r) => r.teamSide.tag === 'Red');
         expect(blue.every((r) => r.userId === 0)).toBe(true);
-        expect(blue.map((r) => r.anonymousLabel).sort()).toEqual(['Blue-1', 'Blue-2']);
+        expect(blue.map((r) => r.anonymousLabel).sort())
+            .toEqual([s.a.b1, s.a.b2].map((w) => seatLabel(test, s.lobbyId, w.userId)).sort()); // T-S10h (A97)
         expect(red.map((r) => r.userId).sort()).toEqual([s.a.r1.userId, s.a.r2.userId].sort());
         expect(red.every((r) => r.anonymousLabel === undefined)).toBe(true);
         // a Blue player reads its own team with real ids
@@ -599,21 +604,21 @@ describe('A40 ratings on member rows', () => {
     it('OpenRoster: accountRating / accountCount on every seat (anonymized included) equal computeLobbyMemberRating and the selected-account count', () => {
         const { test, s, rows } = rated({ ...ANON, rosterVisibility: { tag: 'OpenRoster' } });
         const red = rows(s.a.r1);
-        for (const [label, who, count] of [['Blue-1', s.a.b1, 1], ['Blue-2', s.a.b2, 2]] as const) {
-            const row = rowFor(red, label);
+        for (const [who, count] of [[s.a.b1, 1], [s.a.b2, 2]] as const) {
+            const row = rowFor(red, seatLabel(test, s.lobbyId, who.userId)); // T-S10h (A97)
             expect(row.userId).toBe(0);
             expect(row.mmrByMode).toBeUndefined(); // anonymized: no MMR (A40)
             expect(row.accountRating).toBe(ratingOf(test, s.lobbyId, who.userId));
             expect(row.accountCount).toBe(count);
         }
-        expect(rowFor(red, 'Blue-1').accountRating).toBe(1234);
+        expect(rowFor(red, seatLabel(test, s.lobbyId, s.a.b1.userId)).accountRating).toBe(1234);
         const r2 = red.find((r) => r.userId === s.a.r2.userId)!;
         expect(r2.accountCount).toBe(0);
     });
 
     it('S9a-A3 / S9a-V5: ClosedWithRating shows the exact rating and count on an anonymized seat, without MMR, avatar or title', () => {
         const { test, s, rows } = rated({ ...ANON, rosterVisibility: { tag: 'ClosedWithRating' } });
-        const blue1 = rowFor(rows(s.a.r1), 'Blue-1');
+        const blue1 = rowFor(rows(s.a.r1), seatLabel(test, s.lobbyId, s.a.b1.userId)); // T-S10h (A97)
         expect(blue1.userId).toBe(0);
         expect(blue1.accountRating).toBe(1234);
         expect(blue1.accountRating).toBe(ratingOf(test, s.lobbyId, s.a.b1.userId));
@@ -1357,20 +1362,22 @@ describe('D-07 / A37: isAnonymousSpectators is its own toggle (review #1)', () =
     }
     const spectatorIds = (s: Lobby) => [s.host.userId, s.a.s1.userId, s.a.s2.userId];
 
-    it('S9a-A4: spectators anonymous, players not: a player reads every spectator (the host included) as userId 0 with a Spectator-n label; every player is identified', () => {
+    it('S9a-A4: spectators anonymous, players not: a player reads every spectator (the host included) as userId 0 with a Spectator #n label (A97); every player is identified', () => {
         const { test, s } = specWorld(SPEC_ANON);
         const rows = view<LobbyMemberViewRow>(test, 'view_my_lobby_members', s.a.b1);
         expect(rows).toHaveLength(7);
         const specs = rows.filter((r) => r.lobbySlot.tag === 'Spectator');
         expect(specs).toHaveLength(3);
         expect(specs.every((r) => r.userId === 0)).toBe(true);
-        expect(specs.map((r) => r.label).sort()).toEqual(['Spectator-1', 'Spectator-2', 'Spectator-3']);
+        // T-S10h (A97): "Spectator #<joinSeq>"
+        expect(specs.map((r) => r.label).sort())
+            .toEqual(spectatorIds(s).map((id) => seatLabel(test, s.lobbyId, id)).sort());
         for (const r of specs) {
             expect(r.avatarCharacterName).toBeUndefined();
             expect(r.displayedAchievementId).toBeUndefined();
             expect(r.mmrByMode).toBeUndefined();
         }
-        expect(specs.find((r) => r.isHost)!.label).toBe('Spectator-1'); // the host joined first
+        expect(specs.find((r) => r.isHost)!.label).toBe(seatLabel(test, s.lobbyId, s.host.userId)); // "Spectator #1"
         for (const who of [s.a.b1, s.a.b2, s.a.r1, s.a.r2]) {
             expect(rows.find((r) => r.userId === who.userId)?.label, who.sub).toBe(displayName(test, who));
         }
@@ -1384,13 +1391,13 @@ describe('D-07 / A37: isAnonymousSpectators is its own toggle (review #1)', () =
         const rows = view<AnonymousChatRow>(test, 'view_my_lobby_chat', s.a.b1);
         const spec = rows.find((c) => c.content === 'spec says hi')!;
         expect(spec.senderUserId).toBe(0);
-        expect(spec.anonymousLabel).toBe('Spectator-2');
+        expect(spec.anonymousLabel).toBe(seatLabel(test, s.lobbyId, s.a.s1.userId)); // T-S10h (A97)
         const red = rows.find((c) => c.content === 'red says hi')!;
         expect(red.senderUserId).toBe(s.a.r1.userId);
         expect(red.anonymousLabel).toBeUndefined();
 
         const joined = chatRowById(test, s.a.b1, memberEventRow(test, s.lobbyId, 'joined', s.a.s1.userId).id);
-        expect(joined.content).toBe('Spectator-2 joined the lobby.');
+        expect(joined.content).toBe(`${seatLabel(test, s.lobbyId, s.a.s1.userId)} joined the lobby.`);
         expect(JSON.parse(joined.metadata!)).toEqual({ event: 'joined', subjectUserId: 0 });
         const redJoined = chatRowById(test, s.a.b1, memberEventRow(test, s.lobbyId, 'joined', s.a.r1.userId).id);
         expect(redJoined.content).toBe(`${displayName(test, s.a.r1)} joined the lobby.`);
@@ -1405,7 +1412,7 @@ describe('D-07 / A37: isAnonymousSpectators is its own toggle (review #1)', () =
         const { test, s } = specWorld(ANON);
         const rows = view<LobbyMemberViewRow>(test, 'view_my_lobby_members', s.a.r1);
         expect(rows.filter((r) => r.lobbySlot.tag === 'BluePlayer').map((r) => [r.userId, r.label]).sort())
-            .toEqual([[0, 'Blue-1'], [0, 'Blue-2']]);
+            .toEqual([s.a.b1, s.a.b2].map((w) => [0, seatLabel(test, s.lobbyId, w.userId)]).sort()); // T-S10h (A97)
         for (const who of [s.host, s.a.s1, s.a.s2]) {
             expect(rows.find((r) => r.userId === who.userId)?.label, who.sub).toBe(displayName(test, who));
         }
@@ -1448,7 +1455,7 @@ describe('D-07 / A37: isAnonymousSpectators is its own toggle (review #1)', () =
 });
 
 describe('S9a fix: member-event System lines rendered per reader (A37, D-70, D-71; S9a-A5)', () => {
-    it('"joined" about Blue player P: P, a teammate and the spectator referee read P\'s name and real subject id; an opponent reads "Blue-1 joined the lobby." with subjectUserId 0', () => {
+    it('"joined" about Blue player P: P, a teammate and the spectator referee read P\'s name and real subject id; an opponent reads "<seat label> joined the lobby." (A97) with subjectUserId 0', () => {
         const test = newHarness();
         const s = setupLobby(test, { lobby: ANON, noStart: true });
         const raw = memberEventRow(test, s.lobbyId, 'joined', s.a.b1.userId);
@@ -1462,31 +1469,37 @@ describe('S9a fix: member-event System lines rendered per reader (A37, D-70, D-7
         }
         const opp = chatRowById(test, s.a.r1, raw.id);
         expect(keysOf(opp)).toEqual([...COLS.chat].sort());
-        expect(opp.content).toBe('Blue-1 joined the lobby.');
+        // T-S10h (A97; S10h review F6): the label stored when the line was written. P joined as a spectator and then took
+        // the Blue seat, so the line keeps "Spectator #<seat>"; the seat number still ties it to P's current label.
+        const seat = seatOf(test, s.lobbyId, s.a.b1.userId);
+        expect(seatLabel(test, s.lobbyId, s.a.b1.userId)).toBe(`Blue Player #${seat}`);
+        expect(opp.content).toBe(`Spectator #${seat} joined the lobby.`);
         expect(opp.content).not.toContain(displayName(test, s.a.b1));
         expect(JSON.parse(opp.metadata!)).toEqual({ event: 'joined', subjectUserId: 0 });
     });
 
-    it('away / back: Red reads "Blue-2 left the match." and "Blue-2 is back."; Blue-2\'s teammate reads the name', () => {
+    it('away / back: Red reads "<seat label> left the match." and "<seat label> is back." (A97); Blue-2\'s teammate reads the name', () => {
         const test = newHarness();
         const s = setupLobby(test, { lobby: ANON }); // Drafting: a leave is an away
         leave(test, s.a.b2, s.lobbyId);
         tx(test, s.a.b2, (ctx) => M.join_lobby(ctx, { lobbyId: s.lobbyId, joinCode: '', password: '' }));
         const away = memberEventRow(test, s.lobbyId, 'away', s.a.b2.userId);
         const back = memberEventRow(test, s.lobbyId, 'back', s.a.b2.userId);
-        expect(chatRowById(test, s.a.r1, away.id).content).toBe('Blue-2 left the match.');
-        expect(chatRowById(test, s.a.r1, back.id).content).toBe('Blue-2 is back.');
+        const b2Label = seatLabel(test, s.lobbyId, s.a.b2.userId); // T-S10h (A97): the seat survives the away / back
+        expect(chatRowById(test, s.a.r1, away.id).content).toBe(`${b2Label} left the match.`);
+        expect(chatRowById(test, s.a.r1, back.id).content).toBe(`${b2Label} is back.`);
         expect(chatRowById(test, s.a.b1, away.id).content).toBe(`${displayName(test, s.a.b2)} left the match.`);
         expect(chatRowById(test, s.a.b1, back.id).content).toBe(`${displayName(test, s.a.b2)} is back.`);
     });
 
-    it('kick: a kicked Blue player (no longer a member) reads "Blue-2 was kicked from the lobby." for Red, with subjectUserId 0; the spectator referee reads the name', () => {
+    it('kick: a kicked Blue player (no longer a member) reads "<seat label> was kicked from the lobby." (A97) for Red, with subjectUserId 0; the spectator referee reads the name', () => {
         const test = newHarness();
         const s = setupLobby(test, { lobby: ANON, noStart: true });
+        const b2Label = seatLabel(test, s.lobbyId, s.a.b2.userId); // T-S10h (A97): captured before the row goes
         tx(test, s.host, (ctx) => M.kick_member(ctx, { lobbyId: s.lobbyId, targetJoinSeq: seatOf(ctx, s.lobbyId, s.a.b2.userId) }));
         const raw = memberEventRow(test, s.lobbyId, 'kicked', s.a.b2.userId);
         const opp = chatRowById(test, s.a.r1, raw.id);
-        expect(opp.content).toBe('Blue-2 was kicked from the lobby.');
+        expect(opp.content).toBe(`${b2Label} was kicked from the lobby.`);
         expect(JSON.parse(opp.metadata!).subjectUserId).toBe(0);
         expect(chatRowById(test, s.host, raw.id).content).toBe(`${displayName(test, s.a.b2)} was kicked from the lobby.`);
     });
@@ -1496,10 +1509,12 @@ describe('S9a fix: member-event System lines rendered per reader (A37, D-70, D-7
         const s = setupLobby(test, { lobby: ANON, noStart: true });
         const target = guest(test, 'target');
         tx(test, target, (ctx) => M.join_lobby(ctx, { lobbyId: s.lobbyId, joinCode: '', password: '' }));
+        const targetLabel = seatLabel(test, s.lobbyId, target.userId); // T-S10h (A97): "Spectator #<joinSeq>"
         tx(test, s.host, (ctx) => M.ban_member(ctx, { lobbyId: s.lobbyId, targetJoinSeq: seatOf(ctx, s.lobbyId, target.userId) }));
         const raw = memberEventRow(test, s.lobbyId, 'banned', target.userId);
         const opp = chatRowById(test, s.a.r1, raw.id);
-        expect(opp.content).toMatch(/^Spectator-\d was banned from the lobby\.$/);
+        expect(opp.content).toMatch(/^Spectator #\d+ was banned from the lobby\.$/); // T-S10h (A97)
+        expect(opp.content).toBe(`${targetLabel} was banned from the lobby.`);
         expect(opp.content).not.toContain(displayName(test, target));
         expect(JSON.parse(opp.metadata!).subjectUserId).toBe(0);
     });
@@ -1559,14 +1574,14 @@ describe('view_tournament_registrant_accounts scope (S9a fix; A37, D-22)', () =>
 });
 
 describe('step labels (S9a-A1, review #2) and the step history reveal (A37)', () => {
-    it('Blue reads every masked Red actor with a Red-n label; a plain spectator reads masked actors of both sides as Blue-n / Red-n', () => {
+    it('Blue reads every masked Red actor with a Red seat label; a plain spectator reads masked actors of both sides with Blue / Red seat labels (A97)', () => {
         const test = newHarness();
         const s = scoringOf(test, '', { lobby: ANON });
         const blueRows = view<AnonymousMatchStepRow>(test, 'view_my_match_steps', s.a.b1).filter((r) => r.actorUserId === 0);
         expect(blueRows.length).toBeGreaterThan(0);
         for (const r of blueRows) {
             expect(r.actorSlot.tag).toBe('Red');
-            expect(r.anonymousLabel).toMatch(/^Red-\d$/);
+            expect(r.anonymousLabel).toMatch(/^Red (Player|Coach) #\d+$/); // T-S10h (A97)
         }
         const spec = guest(test, 'spec');
         tx(test, spec, (ctx) => M.join_lobby(ctx, { lobbyId: s.lobbyId, joinCode: '', password: '' })); // A68(8)
@@ -1575,7 +1590,7 @@ describe('step labels (S9a-A1, review #2) and the step history reveal (A37)', ()
         expect(specRows.filter((r) => players.includes(r.actorUserId))).toEqual([]);
         const masked = specRows.filter((r) => r.actorUserId === 0);
         expect(new Set(masked.map((r) => r.actorSlot.tag))).toEqual(new Set(['Blue', 'Red']));
-        for (const r of masked) expect(r.anonymousLabel).toMatch(new RegExp(`^${r.actorSlot.tag}-\\d$`));
+        for (const r of masked) expect(r.anonymousLabel).toMatch(new RegExp(`^${r.actorSlot.tag} (Player|Coach) #\\d+$`)); // T-S10h (A97)
     });
 
     // The fix pass kept the step history unlabelled: A37 reveals the match's real identities to its participants after

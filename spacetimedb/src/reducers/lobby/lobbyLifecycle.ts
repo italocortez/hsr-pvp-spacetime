@@ -7,6 +7,8 @@ import {
     ensureNotInLobby,
     ensureGuestRestrictions,
     ensureLobbyMember,
+    ensureMemberPresentUnlessStaff,
+    ensurePresentIfMember,
     ensureHostOrAbove,
     ensureNotBanned,
     ensureStageIs,
@@ -19,6 +21,7 @@ import {
     LIVE_STAGES,
     memberHasLeft,
     resolveMaxSpectators,
+    PRIVATE_LOBBY_PASSWORD_TEXT,
 } from '@module/helpers/lobby/lobbyHelpers';
 import { hardDeleteLobby } from './lobbyGc';
 import { removeMemberRow } from '@module/helpers/lobby/memberRemoval';
@@ -102,6 +105,11 @@ export const create_lobby = spacetimedb.reducer(
             if (!preset) {
                 throw new SenderError('Preset not found.');
             }
+        }
+
+        // A99: a private lobby needs a password (join_lobby rejects every caller of a private lobby without one).
+        if (!args.isPublic && args.password.length === 0) {
+            throw new SenderError(PRIVATE_LOBBY_PASSWORD_TEXT);
         }
 
         // D-22 / A68(4): one lobby at a time
@@ -575,8 +583,9 @@ export const kick_member = spacetimedb.reducer(
             throw new SenderError('Lobby not found.');
         }
 
-        // Get caller's LobbyMember row for permission check
-        const callerMember = ensureLobbyMember(ctx, lobbyId, user.id);
+        // Get caller's LobbyMember row for permission check (A98: present, not away or abandoned; review F8: a
+        // Moderator+ caller is exempt from the presence check)
+        const callerMember = ensureMemberPresentUnlessStaff(ctx, lobbyId, user);
 
         // Permission check
         if (!canKickOrBan(ctx, lobby, user, callerMember)) {
@@ -640,8 +649,9 @@ export const ban_member = spacetimedb.reducer(
             throw new SenderError('Lobby not found.');
         }
 
-        // Get caller's LobbyMember row for permission check
-        const callerMember = ensureLobbyMember(ctx, lobbyId, user.id);
+        // Get caller's LobbyMember row for permission check (A98: present, not away or abandoned; review F8: a
+        // Moderator+ caller is exempt from the presence check)
+        const callerMember = ensureMemberPresentUnlessStaff(ctx, lobbyId, user);
 
         // Permission check
         if (!canKickOrBan(ctx, lobby, user, callerMember)) {
@@ -714,9 +724,13 @@ export const unban_member = spacetimedb.reducer(
             throw new SenderError('Lobby not found.');
         }
 
-        const callerMember = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, user.id])][0];
+        const isModOrAbove = isRoleAtLeast(user.role, 'Moderator');
+        // A98: the host and referee powers come from the membership: a caller who holds a row must be present.
+        const callerMember = isModOrAbove
+            ? [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, user.id])][0]
+            : ensurePresentIfMember(ctx, lobbyId, user.id);
         const allowed = lobby.hostUserId === user.id
-            || isRoleAtLeast(user.role, 'Moderator')
+            || isModOrAbove
             || (callerMember !== undefined && callerMember.isReferee && lobby.refereeCanKick);
         if (!allowed) {
             throw new SenderError('Only the host, moderators, admins, or an authorized referee can lift a lobby ban.');

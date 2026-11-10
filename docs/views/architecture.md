@@ -194,7 +194,9 @@ fan out from the caller's memberships with abandoned rows excluded (`callerMembe
 anonymity flag and the caller is not a spectator referee, D-71), `hideUserId` / `maskUserId` (a current member
 follows `shouldAnonymize`; in a lobby whose anonymity applies to the caller, an id that is no longer a member is
 withheld too), `maskLobbyRow` (host and audit ids), `ratingVisible` (A40). `computeAnonymousLabel` now orders peers
-by `joinSeq` (R4) instead of `createdDate`; same order, no millisecond ties.
+by `joinSeq` (R4) instead of `createdDate`; same order, no millisecond ties. S10h (A97): superseded, the label is the
+seat kind and seat number ("Blue Player #3", "Spectator #7"), computed from the member's own row
+(`anonymousSeatLabel`, `docs/anonymous-play/architecture.md`).
 
 ### Catalogue (S9a)
 
@@ -204,7 +206,7 @@ by `joinSeq` (R4) instead of `createdDate`; same order, no millisecond ties.
 | `view_my_lobbies` (modified) | lobbyViews | per-sender | `MyLobbyListRow` (PK `id`): joinCode, name, stage, isAway | no user id | `UserIdentity.identity`, `LobbyMember.user_id`, `Lobby.id` |
 | `view_my_lobby` (new) | lobbyViews | per-sender | `Lobby` row | hostUserId / createdById / lastModifiedById 0 when hidden for the caller | as above |
 | `view_my_lobby_members` (modified) | lobbyViews | per-sender | `LobbyMemberViewRow` (PK `memberKey` = lobbyId << 32 \| joinSeq): lobbyId, joinSeq, userId, label, lobbySlot, presence, isHost, isReferee, isCaptain, isConfirmed, avatarCharacterName?, displayedAchievementId?, mmrByMode?, accountRating?, accountCount?, disconnectActionAt? (A92(9)) | anonymized seat: userId 0, `computeAnonymousLabel`, no avatar / title / MMR; ratings per `ratingVisible` | + `LobbyMember.lobby_id`, `User.id`, `UserPresence.user_id`, `Season.is_active`, `EloConfigTable.id`, `MmrRating.by_user_mode_season`, `LobbyMemberAccount.by_lobby_and_user`, `HsrAccount.id` |
-| `view_my_lobby_chat` (kept) | lobbyViews | per-sender | `AnonymousChatRow` (PK `id`) | senderUserId 0 + stored label via `hideUserId`; System never | `ChatMessage.lobby_id` |
+| `view_my_lobby_chat` (kept) | lobbyViews | per-sender | `AnonymousChatRow` (PK `id`) | senderUserId 0 via `hideUserId` + the seat label (S10h, A97: `storedOrLiveLabel`, the label stored with the message, else the live one while the sender holds a row, else "A player"; review F6); System never | `ChatMessage.lobby_id`, `LobbyMember.by_lobby_and_user` |
 | `view_my_lobby_bans` (new) | lobbyViews | per-sender, host or referee of the lobby | `LobbyBanViewRow`: lobbyId, bannedUserId, bannedJoinSeq, label, bannedByUserId?, createdDate | bannedByUserId withheld when the lobby's anonymity applies; `bannedJoinSeq` (S9c, A74(2)) is the seat `unban_member` takes | `LobbyBan.lobby_id` |
 | `view_lobby_presets` (new) | lobbyViews | per-sender | `LobbyPresetViewRow` (PK `id`): every `LobbyPreset` column but the audit ones | system preset (SYSTEM) + own | `LobbyPreset.creator_user_id` ×2 |
 | `view_my_match_session` (new) | matchViews | per-sender | `MatchSessionViewRow` (PK `lobbyId`): every `MatchSession` column but the audit ones | no user id | `MatchSession.lobbyId` |
@@ -243,7 +245,7 @@ member with one account reads the stored `HsrAccount.accountRating`. `views/iden
 |---|---|
 | every lobby view (through `shouldAnonymize`) | the target's seat kind picks the toggle: spectator target `isAnonymousSpectators`, player / coach target `isAnonymousPlayers` (spectator callers included) |
 | `view_lobby_browser` | "Anonymous host" when the host's own seat kind is anonymous (+ `LobbyMember.by_lobby_and_user`) |
-| `view_my_lobby_chat` | System member-event lines (`metadata {event, subjectUserId}`) rendered per reader by `renderSystemChat`: subject label = display name if visible, else live seat label / stored label / "A player"; metadata `subjectUserId = 0` when hidden (+ `LobbyMember.by_lobby_and_user`, `User.id`) |
+| `view_my_lobby_chat` | System member-event lines (`metadata {event, subjectUserId}`) rendered per reader by `renderSystemChat`: subject label = display name if visible, else stored label / live seat label (only when none was stored) / "A player" (review F6); metadata `subjectUserId = 0` when hidden (+ `LobbyMember.by_lobby_and_user`, `User.id`) |
 | `view_my_lobby_bans` | `bannedUserId = 0`, label "Banned player" when `hideUserId` holds for the banned user (a banned user holds no member row while banned) |
 | `view_my_lobby_members` | no-op `Math.round` on `accountRating` removed |
 | `view_my_match_steps` | `anonymousLabel` computed at read time (`anonymousLabelOr`: live seat label, else the stored label, else "<Side> player") |
@@ -347,6 +349,8 @@ live tournament's rows (A105(1)). The Admin arg views are subscribed one tournam
 | S9c: `view_my_team_requests` labels a request to the caller's team with the requester's display name in every tournament | Phase S9c execution (DECISIONS.md A73) | 2026-11-08 |
 | S10d: `view_my_lobby_members` gains the last column `disconnectActionAt?` (timestamp): for a seated player whose row is offline, away or abandoned (`isMemberRowAway`, the reducers' row test) in a live stage under Standard / Deferred, the instant the forfeit claim / defer becomes available on that seat (`disconnectThresholdMicros`); no user id, so anonymity is unchanged; details in [../lobby/architecture.md](../lobby/architecture.md) "Phase S10d execution" | Phase S10d execution (DECISIONS.md A92(9)) | 2026-11-09 |
 | S10g: staff views non-terminal + Moderator+, seven Admin-only arg views `view_admin_tournament*(tournamentId)`, registrant accounts neutral label / terminal skip / field-only rows, matches-for-me InProgress only | Phase S10g execution (DECISIONS.md A105; tournament audit #10, #11) | 2026-11-09 |
+| S10h: every anonymous label a view emits (`view_my_lobby_members.label`, `view_my_lobby_chat.anonymousLabel`, the member-event System lines, `view_my_match_steps` / `view_my_match_participants` / `view_my_lobby_bans` through `anonymousLabelOr`) is the A97 seat label "<Seat kind> #<joinSeq>"; `view_my_lobby_chat` uses `anonymousLabelOr` (live seat label, else stored, else "A player") instead of the stored label alone; `view_admin_abuse_config` gains the three A95(2) columns through the spread `AbuseConfig` columns. The leaver fallbacks ("<Side> player", "Banned player") are unchanged | Phase S10h execution (DECISIONS.md A95, A97) | 2026-11-10 |
+| Fix pass: `view_my_lobby_chat` (sender label and member-event lines) prefers the stored label and reads the live seat label only when none was stored (`storedOrLiveLabel`), so a rejoin does not relabel a former membership's lines | Phase S10h execution (S10h review F6; DECISIONS.md A97) | 2026-11-10 |
 
 ---
 

@@ -22,6 +22,7 @@ import {
     closeAll,
     connectGuest,
     lobbyMembers,
+    memberAs,
     openConnection,
     subscribe,
     waitFor,
@@ -97,7 +98,12 @@ describe('Smoke: bootstrap invariants and a lobby round trip (§D.5)', () => {
         await host.conn.reducers.setTeamSlot({ lobbyId, lobbySlot: { tag: 'BluePlayer' } });
         await watcher.conn.reducers.joinLobby({ lobbyId, joinCode: '', password: '' });
 
-        const received: Array<{ senderUserId: number; x: number; y: number }> = [];
+        // A96: the event row names its sender by seat number (senderJoinSeq), not by user id.
+        const hostSeat = await waitFor(
+            () => memberAs(watcher.conn, lobbyId, host.userId)?.joinSeq,
+            'watcher sees the host seat',
+        );
+        const received: Array<{ senderJoinSeq: number; x: number; y: number }> = [];
         watcher.conn.db.lobbyCursorEvent.onInsert((_ctx, row) => {
             if (row.lobbyId === lobbyId) received.push(row);
         });
@@ -105,7 +111,7 @@ describe('Smoke: bootstrap invariants and a lobby round trip (§D.5)', () => {
 
         await host.conn.reducers.broadcastCursor({ lobbyId, x: 0.25, y: 0.75 });
         const event = await waitFor(() => received[0], 'cursor event delivered to the other member', 10_000);
-        expect(event.senderUserId).toBe(host.userId);
+        expect(event.senderJoinSeq).toBe(hostSeat);
         expect(event.x).toBeCloseTo(0.25);
         expect(event.y).toBeCloseTo(0.75);
 

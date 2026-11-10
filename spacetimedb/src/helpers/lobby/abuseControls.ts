@@ -25,6 +25,9 @@ export const ABUSE_CONFIG_DEFAULTS = {
     guestLobbyCreationEnabled: true,
     guestLobbyBurstThreshold: 50,     // A58 (A42 example was 20)
     guestLobbyBurstWindowMinutes: 10,
+    guestCreationEnabled: true,       // A95(2)
+    guestCreationBurstThreshold: 100, // A95(2): new guest users per window
+    guestCreationBurstWindowMinutes: 10,
 };
 
 export type AbuseConfigValues = typeof ABUSE_CONFIG_DEFAULTS;
@@ -48,6 +51,42 @@ export function seedAbuseConfigDefaults(ctx: any) {
 export const GUEST_LOBBY_COUNTER_KEY = 'guest_lobby_create';
 export const GUEST_LOBBY_BURST_ALERT = 'guest_lobby_burst';
 
+/** A95(2): the AbuseCounter key of the guest creation breaker, and the AdminAlert kind it writes. */
+export const GUEST_CREATE_COUNTER_KEY = 'guest_create';
+export const GUEST_CREATE_BURST_ALERT = 'guest_create_burst';
+
+/**
+ * Bumps the fixed window of AbuseCounter[key] (a new window opens when the previous one is windowMinutes old) and
+ * returns the counter row. SYSTEM audit actor: the row aggregates many users and names none.
+ */
+function bumpWindowCounter(ctx: any, key: string, windowMinutes: number): any {
+    const now: bigint = ctx.timestamp.microsSinceUnixEpoch;
+    const windowMicros = BigInt(windowMinutes) * MINUTE_MICROS;
+    const existing = ctx.db.AbuseCounter.key.find(key);
+    if (!existing) {
+        return ctx.db.AbuseCounter.insert(insertWithAudit(ctx, { key, windowStart: ctx.timestamp, count: 1 }, SYSTEM_USER_ID));
+    }
+    if (now - existing.windowStart.microsSinceUnixEpoch >= windowMicros) {
+        return ctx.db.AbuseCounter.key.update(updateWithAudit(ctx, existing, { windowStart: ctx.timestamp, count: 1 }, SYSTEM_USER_ID));
+    }
+    return ctx.db.AbuseCounter.key.update(updateWithAudit(ctx, existing, { count: existing.count + 1 }, SYSTEM_USER_ID));
+}
+
+/** Writes one count-only AdminAlert (no user ids, SYSTEM audit actor; tables/admin/adminAlert.ts). */
+function writeBurstAlert(ctx: any, kind: string, counter: any, threshold: number): void {
+    ctx.db.AdminAlert.insert(insertWithAudit(ctx, {
+        id: 0,
+        kind,
+        windowStartAt: counter.windowStart,
+        windowEndAt: ctx.timestamp,
+        count: counter.count,
+        threshold,
+        isAcknowledged: false,
+        createdAt: ctx.timestamp,
+        acknowledgedAt: undefined,
+    }, SYSTEM_USER_ID));
+}
+
 /**
  * A57 / A58 inline circuit breaker. create_lobby calls it for a **guest** caller once the kill-switch check has
  * passed. It bumps the fixed window in AbuseCounter['guest_lobby_create'] (a new window opens when the previous one
@@ -58,43 +97,40 @@ export const GUEST_LOBBY_BURST_ALERT = 'guest_lobby_burst';
  */
 export function recordGuestLobbyCreation(ctx: any): void {
     const cfg = seedAbuseConfigDefaults(ctx);
-    const now: bigint = ctx.timestamp.microsSinceUnixEpoch;
-    const windowMicros = BigInt(cfg.guestLobbyBurstWindowMinutes) * MINUTE_MICROS;
-
-    const existing = ctx.db.AbuseCounter.key.find(GUEST_LOBBY_COUNTER_KEY);
-    let counter: any;
-    if (!existing) {
-        counter = ctx.db.AbuseCounter.insert(insertWithAudit(ctx, {
-            key: GUEST_LOBBY_COUNTER_KEY,
-            windowStart: ctx.timestamp,
-            count: 1,
-        }, SYSTEM_USER_ID));
-    } else if (now - existing.windowStart.microsSinceUnixEpoch >= windowMicros) {
-        counter = ctx.db.AbuseCounter.key.update(updateWithAudit(ctx, existing, {
-            windowStart: ctx.timestamp,
-            count: 1,
-        }, SYSTEM_USER_ID));
-    } else {
-        counter = ctx.db.AbuseCounter.key.update(updateWithAudit(ctx, existing, {
-            count: existing.count + 1,
-        }, SYSTEM_USER_ID));
-    }
-
+    const counter = bumpWindowCounter(ctx, GUEST_LOBBY_COUNTER_KEY, cfg.guestLobbyBurstWindowMinutes);
     if (counter.count <= cfg.guestLobbyBurstThreshold || !cfg.guestLobbyCreationEnabled) return;
 
     ctx.db.AbuseConfig.id.update(updateWithAudit(ctx, cfg, { guestLobbyCreationEnabled: false }, SYSTEM_USER_ID));
-    ctx.db.AdminAlert.insert(insertWithAudit(ctx, {
-        id: 0,
-        kind: GUEST_LOBBY_BURST_ALERT,
-        windowStartAt: counter.windowStart,
-        windowEndAt: ctx.timestamp,
-        count: counter.count,
-        threshold: cfg.guestLobbyBurstThreshold,
-        isAcknowledged: false,
-        createdAt: ctx.timestamp,
-        acknowledgedAt: undefined,
-    }, SYSTEM_USER_ID));
+    writeBurstAlert(ctx, GUEST_LOBBY_BURST_ALERT, counter, cfg.guestLobbyBurstThreshold);
     console.warn(`[ABUSE] Breaker tripped: ${counter.count} guest lobby creations in ${cfg.guestLobbyBurstWindowMinutes} min (threshold ${cfg.guestLobbyBurstThreshold}); guest lobby creation disabled`);
+}
+
+/** A95(2): the rejection of login_as_guest for a new guest while the guest creation switch is off. */
+export const GUEST_CREATION_DISABLED_TEXT = 'New guest accounts are temporarily disabled. Please try again later.';
+
+/**
+ * A95(2): the guest creation breaker, on the A57 / A58 model. login_as_guest calls it before it creates a **new** guest
+ * user (an identity already mapped to a user returns earlier and is never counted or blocked, so a returning guest can
+ * always log back in). While AbuseConfig.guestCreationEnabled is off the creation is rejected. Otherwise the creation
+ * is counted in AbuseCounter['guest_create']; the creation that pushes the count past guestCreationBurstThreshold inside
+ * guestCreationBurstWindowMinutes still succeeds (a throw would roll the trip back), turns the switch off and writes one
+ * count-only AdminAlert ('guest_create_burst'), all in the caller's transaction. An admin re-enables it with
+ * admin_set_guest_creation(true) or admin_update_abuse_config, which also drops the window.
+ */
+export function recordGuestCreation(ctx: any): void {
+    const cfg = seedAbuseConfigDefaults(ctx);
+    if (!cfg.guestCreationEnabled) throw new SenderError(GUEST_CREATION_DISABLED_TEXT);
+    const counter = bumpWindowCounter(ctx, GUEST_CREATE_COUNTER_KEY, cfg.guestCreationBurstWindowMinutes);
+    if (counter.count <= cfg.guestCreationBurstThreshold) return;
+
+    ctx.db.AbuseConfig.id.update(updateWithAudit(ctx, cfg, { guestCreationEnabled: false }, SYSTEM_USER_ID));
+    writeBurstAlert(ctx, GUEST_CREATE_BURST_ALERT, counter, cfg.guestCreationBurstThreshold);
+    console.warn(`[ABUSE] Breaker tripped: ${counter.count} new guest users in ${cfg.guestCreationBurstWindowMinutes} min (threshold ${cfg.guestCreationBurstThreshold}); guest creation disabled`);
+}
+
+/** A95(2): re-enabling guest creation drops its window, as resetGuestLobbyCounter does for the lobby breaker. */
+export function resetGuestCreationCounter(ctx: any): void {
+    if (ctx.db.AbuseCounter.key.find(GUEST_CREATE_COUNTER_KEY)) ctx.db.AbuseCounter.key.delete(GUEST_CREATE_COUNTER_KEY);
 }
 
 const EPOCH = new Timestamp(0n);

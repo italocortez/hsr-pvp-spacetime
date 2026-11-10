@@ -41,11 +41,11 @@ export function parseMemberEvent(metadata: string | undefined): { event: MemberE
 }
 
 /**
- * The subject's seat label in an anonymous lobby, read while they still hold their LobbyMember row; undefined in a
- * lobby without anonymity or for a non-member (a ban of someone who is not in the lobby).
+ * The subject's seat label (A97), read while they still hold their LobbyMember row, in every lobby (S10h review F7, as
+ * send_chat_message stores it on every Player message: a lobby made anonymous later in Waiting still has a label for
+ * the line); undefined for a non-member (a ban of someone who is not in the lobby).
  */
 export function memberEventLabel(ctx: any, lobby: any, subjectUserId: number): string | undefined {
-    if (!lobby.isAnonymousPlayers && !lobby.isAnonymousSpectators) return undefined;
     const isMember = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobby.id, subjectUserId])].length > 0;
     return isMember ? computeAnonymousLabel(ctx, lobby.id, subjectUserId) : undefined;
 }

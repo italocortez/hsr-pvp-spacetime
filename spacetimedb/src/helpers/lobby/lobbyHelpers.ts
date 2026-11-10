@@ -34,6 +34,9 @@ export const LIVE_STAGES: readonly string[] = ['Drafting', 'Equipping', 'Scoring
 // memberHasLeft (A68(2)(4)) and slotTeam live in memberPredicates (no imports) and are re-exported here.
 export { memberHasLeft, slotTeam } from './memberPredicates';
 
+/** A99: create_lobby and update_lobby_settings reject a private lobby that would have no password. */
+export const PRIVATE_LOBBY_PASSWORD_TEXT = 'A private lobby needs a password.';
+
 /** A68(8): the spectator count setting, 0-12; `value` omitted takes `fallback`. */
 export function resolveMaxSpectators(value: number | undefined, fallback: number): number {
     const resolved = value ?? fallback;
@@ -160,9 +163,57 @@ export function ensureLobbyMember(ctx: any, lobbyId: number, userId: number): an
     return member;
 }
 
+// ─── A98: away and abandoned members cannot act ──────────────────────────────
+/** A98: the rejection for an away row (`leftAt`, A68(2)); join_lobby is the way back. */
+export const AWAY_MEMBER_TEXT = 'You are away from this lobby. Return to it before acting.';
+/** A98: the rejection for an abandoned row (`abandonedAt`, A68(4)); it never returns. */
+export const ABANDONED_MEMBER_TEXT = 'You left this match for another lobby and can no longer act in it.';
+
+/**
+ * A98: throws when the member row is abandoned (checked first: an abandoned row keeps its `leftAt`) or away.
+ * A no-op for a present row.
+ */
+export function ensureMemberPresent(member: any): void {
+    if (member.abandonedAt !== undefined) throw new SenderError(ABANDONED_MEMBER_TEXT);
+    if (member.leftAt !== undefined) throw new SenderError(AWAY_MEMBER_TEXT);
+}
+
+/**
+ * A98: the caller's LobbyMember row, which must exist ("You are not a member of this lobby.") and be present (not
+ * away, not abandoned). The guard of every lobby action reducer whose power comes from the membership.
+ */
+export function ensurePresentMember(ctx: any, lobbyId: number, userId: number): any {
+    const member = ensureLobbyMember(ctx, lobbyId, userId);
+    ensureMemberPresent(member);
+    return member;
+}
+
+/**
+ * A98: for reducers a non-member may call (Moderator+ powers, a host without a row): when the caller holds a row, it
+ * must be present. Returns the row or undefined.
+ */
+export function ensurePresentIfMember(ctx: any, lobbyId: number, userId: number): any | undefined {
+    const member = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, userId])][0];
+    if (member) ensureMemberPresent(member);
+    return member;
+}
+
+/**
+ * A98 (S10h review F8): the caller's LobbyMember row, which must exist ("You are not a member of this lobby."); it must
+ * be present unless the caller is Moderator+, whose powers never depend on presence (as in ensureHostOrAbove).
+ * Callers: kick_member, ban_member, set_captain.
+ */
+export function ensureMemberPresentUnlessStaff(ctx: any, lobbyId: number, user: any): any {
+    const member = ensureLobbyMember(ctx, lobbyId, user.id);
+    if (!isRoleAtLeast(user.role, 'Moderator')) ensureMemberPresent(member);
+    return member;
+}
+
 /**
  * Checks that the user is the lobby host or has Moderator+ role.
  * Per D-21: host, admin, moderator can perform administrative lobby actions.
+ * A98: a host who is not Moderator+ acts through the host role, so their row (when they hold one) must be present;
+ * a Moderator+ power does not depend on membership and is unaffected.
  * Throws if neither condition is met.
  */
 export function ensureHostOrAbove(ctx: any, lobby: any, user: any): void {
@@ -171,11 +222,13 @@ export function ensureHostOrAbove(ctx: any, lobby: any, user: any): void {
     if (!isHost && !isModOrAbove) {
         throw new SenderError('Only the host, moderators, or admins can perform this action.');
     }
+    if (!isModOrAbove) ensurePresentIfMember(ctx, lobby.id, user.id);
 }
 
 /**
  * A80: the caller holds the referee flag in this lobby (their LobbyMember row has `isReferee`) or has Moderator+ role.
  * No lobby setting gates it. Callers: start_draft, advance_stage.
+ * A98: a referee who is not Moderator+ must be present (not away, not abandoned).
  * Throws if neither condition is met.
  */
 export function ensureRefereeOrAbove(ctx: any, lobby: any, user: any): void {
@@ -185,6 +238,7 @@ export function ensureRefereeOrAbove(ctx: any, lobby: any, user: any): void {
     if (!isReferee && !isModOrAbove) {
         throw new SenderError('Only the referee, moderators, or admins can perform this action.');
     }
+    if (!isModOrAbove) ensureMemberPresent(member);
 }
 
 /**
@@ -215,7 +269,8 @@ export function ensureStageIs(lobby: any, ...stages: string[]): void {
  * Returns true if the caller user can kick or ban a member.
  * Per D-21: host, admin, moderator can kick/ban.
  * Per D-32: refereeCanKick flag on lobby controls whether referees can kick.
- * The `member` param is the CALLER's LobbyMember row (not the target).
+ * The `member` param is the CALLER's LobbyMember row (not the target); A98: callers pass a present row
+ * (ensurePresentMember).
  */
 export function canKickOrBan(ctx: any, lobby: any, user: any, member: any): boolean {
     if (lobby.hostUserId === user.id) return true;

@@ -683,7 +683,8 @@ describe('A85: lifting a disconnect auto-pause', () => {
         return s;
     }
 
-    it.each(['away', 'abandoned'])('resume_draft on the auto-pause by a seated player whose row is %s is rejected, the draft stays paused; a present seated player resumes (A85(2))', (state) => {
+    // T-S10h (A98): the rejection text is now the A98 one (away / abandoned member), checked before the A85(2) rule.
+    it.each(['away', 'abandoned'])('resume_draft on the auto-pause by a seated player whose row is %s is rejected, the draft stays paused; a present seated player resumes (A85(2), A98)', (state) => {
         const s = autoPausedByLeave();
         if (state === 'abandoned') {
             tx(s.test, s.a.b2, (ctx) => M.create_lobby(ctx, { ...DEFAULT_LOBBY_ARGS, abandonCurrentMatch: true } as any));
@@ -696,7 +697,9 @@ describe('A85: lifting a disconnect auto-pause', () => {
         const msg = rejection(s.test, s.a.b2, (ctx) => M.resume_draft(ctx, { lobbyId: s.lobbyId }));
         expect(snap(session(s.test, s.lobbyId).timerState)).toBe(before);
         expect(isPaused(s)).toBe(true);
-        expect(msg).toBe('Only the referee or a seated player can resume an auto-paused draft.');
+        expect(msg).toBe(state === 'abandoned'
+            ? 'You left this match for another lobby and can no longer act in it.'
+            : 'You are away from this lobby. Return to it before acting.');
         tx(s.test, s.a.r1, (ctx) => M.resume_draft(ctx, { lobbyId: s.lobbyId }));
         expect(isPaused(s)).toBe(false);
     });

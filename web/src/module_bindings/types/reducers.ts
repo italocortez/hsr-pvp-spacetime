@@ -29,6 +29,7 @@ import AdminRemoveCharacterArchetypesReducer from "../admin_remove_character_arc
 import AdminRestartTournamentFinalizeReducer from "../admin_restart_tournament_finalize_reducer";
 import AdminSeedEloConfigReducer from "../admin_seed_elo_config_reducer";
 import AdminSeedRatingConfigReducer from "../admin_seed_rating_config_reducer";
+import AdminSetGuestCreationReducer from "../admin_set_guest_creation_reducer";
 import AdminSetGuestLobbyCreationReducer from "../admin_set_guest_lobby_creation_reducer";
 import AdminUnbanUserReducer from "../admin_unban_user_reducer";
 import AdminUpdateAbuseConfigReducer from "../admin_update_abuse_config_reducer";
@@ -200,6 +201,7 @@ export type AdminRemoveCharacterArchetypesParams = __Infer<typeof AdminRemoveCha
 export type AdminRestartTournamentFinalizeParams = __Infer<typeof AdminRestartTournamentFinalizeReducer>;
 export type AdminSeedEloConfigParams = __Infer<typeof AdminSeedEloConfigReducer>;
 export type AdminSeedRatingConfigParams = __Infer<typeof AdminSeedRatingConfigReducer>;
+export type AdminSetGuestCreationParams = __Infer<typeof AdminSetGuestCreationReducer>;
 export type AdminSetGuestLobbyCreationParams = __Infer<typeof AdminSetGuestLobbyCreationReducer>;
 export type AdminUnbanUserParams = __Infer<typeof AdminUnbanUserReducer>;
 export type AdminUpdateAbuseConfigParams = __Infer<typeof AdminUpdateAbuseConfigReducer>;

@@ -120,7 +120,8 @@ const COLS = {
     adminLobbyBan: ['lobbyId', 'bannedUserId', 'bannedJoinSeq', 'bannedUserLabel', 'bannedByUserId', 'bannedByLabel', 'createdDate'] as const, // T-S9c: + bannedJoinSeq (A74(2))
     adminAbuse: ['id', 'cursorMinIntervalMs', 'chatMinIntervalMs', 'chatPerMinute', 'lineupMinIntervalMs',
         'lobbyCreatesPerHour', 'maxPresetsPerUser', 'maxCostSetsPerUser', 'maintenanceMode', 'guestLobbyCreationEnabled',
-        'guestLobbyBurstThreshold', 'guestLobbyBurstWindowMinutes'] as const,
+        'guestLobbyBurstThreshold', 'guestLobbyBurstWindowMinutes',
+        'guestCreationEnabled', 'guestCreationBurstThreshold', 'guestCreationBurstWindowMinutes'] as const, // T-S10h: + A95(2)
     adminUserPrivate: ['userId', 'loginMethod', 'providerId', 'providerUsername'] as const,
 };
 type Cols<K extends keyof typeof COLS> = (typeof COLS)[K][number];

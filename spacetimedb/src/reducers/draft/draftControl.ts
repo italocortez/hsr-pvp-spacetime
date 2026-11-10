@@ -2,7 +2,7 @@ import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser } from '@module/helpers/identity/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
-import { ensureLobbyMember, ensureStageIs, slotToTeamSide, isSeatedPlayer, memberHasLeft } from '@module/helpers/lobby/lobbyHelpers';
+import { ensurePresentMember, ensureStageIs, slotToTeamSide, isSeatedPlayer } from '@module/helpers/lobby/lobbyHelpers';
 import { ensureMatchAlive } from '@module/helpers/lobby/disconnectHelpers';
 import { lobbySteps, getNextSequence, ensurePauseInterval } from '@module/helpers/draft/stepSequence';
 import { pausedTimerState, resumedTimerState, turnBudgetMs } from '@module/helpers/draft/turnClock';
@@ -33,7 +33,7 @@ export const undo_last_step = spacetimedb.reducer(
         ensureStageIs(lobby, 'Drafting');
         ensureMatchAlive(ctx, lobby);
 
-        const member = ensureLobbyMember(ctx, lobbyId, user.id);
+        const member = ensurePresentMember(ctx, lobbyId, user.id); // A98: present, not away or abandoned
 
         // D-60: Only referees with refereeCanUndo permission
         if (!member.isReferee || !lobby.refereeCanUndo) {
@@ -133,7 +133,7 @@ export const pause_draft = spacetimedb.reducer(
         ensureStageIs(lobby, 'Drafting');
         ensureMatchAlive(ctx, lobby);
 
-        const member = ensureLobbyMember(ctx, lobbyId, user.id);
+        const member = ensurePresentMember(ctx, lobbyId, user.id); // A98: present, not away or abandoned
 
         // Already paused?
         if (session.timerState.isPaused) {
@@ -250,7 +250,7 @@ export const resume_draft = spacetimedb.reducer(
             throw new SenderError('Draft is not paused.');
         }
 
-        const member = ensureLobbyMember(ctx, lobbyId, user.id);
+        const member = ensurePresentMember(ctx, lobbyId, user.id); // A98: present, not away or abandoned
 
         // Find the most recent Pause step to determine who paused and what timeRemaining was
         const allSteps = lobbySteps(ctx, lobbyId);
@@ -262,8 +262,9 @@ export const resume_draft = spacetimedb.reducer(
         const isReferee = member.isReferee;
         const isAutoPause = lastPauseStep?.payload?.tag === 'Pause' && lastPauseStep.payload.value?.isAutoPause === true;
         if (isAutoPause) {
-            // A85(2): the referee or any seated player of either team; a seated row that is away or abandoned is not
-            if (!isReferee && !(isSeatedPlayer(member) && !memberHasLeft(member))) {
+            // A85(2): the referee or any seated player of either team (an away or abandoned row was already rejected by
+            // ensurePresentMember, A98)
+            if (!isReferee && !isSeatedPlayer(member)) {
                 throw new SenderError('Only the referee or a seated player can resume an auto-paused draft.');
             }
         } else {

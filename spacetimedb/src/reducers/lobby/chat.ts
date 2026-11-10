@@ -1,7 +1,7 @@
 import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser, isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
-import { ensureLobbyMember } from '@module/helpers/lobby/lobbyHelpers';
+import { ensurePresentIfMember, ensurePresentMember } from '@module/helpers/lobby/lobbyHelpers';
 import { computeAnonymousLabel } from '@module/helpers/identity/anonymousLabels';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { consumeChatAllowance } from '@module/helpers/lobby/abuseControls';
@@ -15,7 +15,7 @@ const CHAT_METADATA_MAX_LENGTH = 200;
 // Per D-10: all lobby members can send. Per D-12: 500 char limit.
 // Per D-13: rolling window of 50 — oldest deleted when limit reached.
 // Per D-14: metadata JSON validated against { type, replyToMessageId? } schema.
-// Per D-18: anonymousLabel populated when lobby has anonymous mode.
+// Per D-18 / A97 (S10h): anonymousLabel = the sender's seat label (seat kind + joinSeq), stored on every message.
 // ---------------------------------------------------------------------------
 export const send_chat_message = spacetimedb.reducer({
     lobbyId: t.u32(),
@@ -24,8 +24,8 @@ export const send_chat_message = spacetimedb.reducer({
 }, (ctx, { lobbyId, content, metadata }) => {
     const user = getAuthenticatedUser(ctx);
 
-    // D-10: All lobby members can send — ensureLobbyMember throws if not a member
-    ensureLobbyMember(ctx, lobbyId, user.id);
+    // D-10: All lobby members can send — ensurePresentMember throws if not a member; A98: or if away / abandoned
+    ensurePresentMember(ctx, lobbyId, user.id);
 
     // D-12: Content validation
     if (content.length === 0) throw new SenderError('Message cannot be empty.');
@@ -66,12 +66,11 @@ export const send_chat_message = spacetimedb.reducer({
 
     trimChatForInsert(ctx, lobbyId, messages);
 
-    // D-18: Anonymous enforcement — populate anonymousLabel when lobby has anonymous mode
+    // D-18 / A97: the sender's seat label ("Blue Player #3"), stored on every message, not only when the lobby is
+    // anonymous at send time (lobby audit #25): a lobby made anonymous later in Waiting still has a label for a sender
+    // who has left. ChatMessage is private; view_my_lobby_chat emits the label only for an anonymized sender.
     const lobby = ctx.db.Lobby.id.find(lobbyId);
-    const anonymousLabel =
-        lobby && (lobby.isAnonymousPlayers || lobby.isAnonymousSpectators)
-            ? computeAnonymousLabel(ctx, lobbyId, user.id)
-            : undefined;
+    const anonymousLabel = computeAnonymousLabel(ctx, lobbyId, user.id);
 
     // Insert the message
     ctx.db.ChatMessage.insert(insertWithAudit(ctx, {
@@ -112,7 +111,10 @@ export const delete_chat_message = spacetimedb.reducer({
     const isAdminOrMod = isRoleAtLeast(user.role, 'Moderator');
 
     // Check if caller is a referee in this lobby
-    const callerMember = [...ctx.db.LobbyMember.by_lobby_and_user.filter([msg.lobbyId, user.id])][0];
+    // A98: the host and referee powers come from the membership: a caller who holds a row must be present.
+    const callerMember = isAdminOrMod
+        ? [...ctx.db.LobbyMember.by_lobby_and_user.filter([msg.lobbyId, user.id])][0]
+        : ensurePresentIfMember(ctx, msg.lobbyId, user.id);
     const isReferee = callerMember?.isReferee === true;
 
     if (!isHost && !isAdminOrMod && !isReferee) {
