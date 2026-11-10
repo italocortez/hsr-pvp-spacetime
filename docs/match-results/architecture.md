@@ -424,6 +424,25 @@ reaches ceil(bestOf / 2) or staff resolve it). Stage list: Drafting, Equipping, 
   not yet finalized game (A60(7), lobby in AwaitingResult) recomputes the surcharge from the current synergy rows, and
   AwaitingResult does not block a patch (A107(4) names Drafting, Equipping and Scoring only).
 
+## Phase S10k execution (DECISIONS.md A110)
+
+- **Finalization step 16, played stat by ownership (A110;** `helpers/results/finalizationHelpers.ts`**).** A110
+  supersedes A82(2), A82(4) and A106 for the played stat. `playedCredit(ctx, charName, ownerSide, participants, owned)`
+  applies one rule to a manual Classic pick, a Classic timer pick and an Auction sale: the candidates are the
+  non-coach participants of the owning side (`effectiveParticipants`; `MatchResultParticipant` never holds a coach,
+  and the D-75 concede fallback filters coaches out); every candidate who owns the character on any of their HSR
+  accounts, selected for the match or not, is credited; no owner and one candidate credits that candidate; no owner
+  and two or more credits nobody. User id 0 (the timer's system actor) is never a candidate. The owning side, the
+  faced rows of the other side, the single global row, the `EMPTY` / `SKIP` skip and the concede flags
+  (`doCharStats`) are unchanged.
+- **Ownership read.** `ownedCharacters(ctx, userId, owned)` reads `HsrAccount.user_id` (btree on `userId`) for the
+  user's accounts, then `HsrAccountCharacter.hsr_account_id` (btree on `hsrAccountId`) for each account's rows, and
+  keeps the set of names in `owned`, a `Map` created once per finalization in step 16: each participant's roster is
+  read at most once per finalization, whatever the number of steps. No scan, no new index. `HsrAccount` has no soft
+  delete (accounts and their character rows are hard-deleted) and `isActive` is only the default selection, so every
+  account counts. Ownership is read when the match is finalized (A110(5)); the stored stat rows are not rewritten by
+  later roster changes.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -455,6 +474,7 @@ reaches ceil(bestOf / 2) or staff resolve it). Stage list: Drafting, Equipping, 
 | No stats for `EMPTY` / `SKIP` / the system picker; result reducers share a per-user result-entry window (30 writes per 10 s, `UserRateState`); at most 20 adjustments per record and a bounded per-team sum, checked on every team the call changes (review F2); standalone `override_match_result` needs Submitted / Disputed / Validated and an AwaitingResult lobby | Phase S10f execution (results audit #3, #7, #8) | 2026-11-09 |
 | A98: away / abandoned callers rejected by `ensureCaptainOrReferee` (`record_group_scores`, the game-package edits), `resultAuthority` (`set_score_adjustment`, `close_game`; staff exempt) and `confirm_game`; `concede_match` / `claim_forfeit` / `defer_match` run the A92(4) check for every caller; `dispute_match_result` unchanged (participant right). Full list: [../lobby/architecture.md](../lobby/architecture.md) "Phase S10h execution" | Phase S10h execution (DECISIONS.md A98) | 2026-11-10 |
 | A Classic timer pick credits every player of the acting team (one `playedCredit` function shared with the Auction sale); history reads no cost table | Phase S10i execution (DECISIONS.md A106, A107(6)) | 2026-11-10 |
+| Played stat follows ownership for a manual pick, a timer pick and a sale (`playedCredit` + per-finalization `ownedCharacters` cache over `HsrAccount.user_id` / `HsrAccountCharacter.hsr_account_id`); lone player credited when nobody owns it, nobody in a 2+ side | Phase S10k execution (DECISIONS.md A110) | 2026-11-10 |
 
 ---
 

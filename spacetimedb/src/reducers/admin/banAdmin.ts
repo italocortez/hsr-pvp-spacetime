@@ -13,7 +13,8 @@ const BAN_TYPE_TO_LOGIN_METHOD: Record<string, string> = { DiscordId: DISCORD_LO
 /**
  * Admin-only: Ban a provider ID (e.g., a Discord ID).
  * Creates a BanRecord and soft-deletes the affected user (if any): deletedAt is set and a UserDeletionJob runs the
- * deletion 5 s later (D-08 enforcement point 3). There is no client signal for deletedAt.
+ * deletion 5 s later (D-08 enforcement point 3). The public `User` row carries deletedAt and view_user_by_username
+ * returns [] for a soft-deleted user; view_my_profile does not carry it.
  */
 export const admin_ban_user = spacetimedb.reducer({
     banTypeTag: t.string(),   // 'DiscordId'

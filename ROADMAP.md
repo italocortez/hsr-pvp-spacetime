@@ -42,6 +42,7 @@ Each executed step writes its log to `docs/log/<date>-<step>.md` (goal, decision
 | S10h | Lobby and identity rulings: idle guest clean-up and guest creation limit, cursor events carry the seat, seat-based anonymous labels, away and abandoned members cannot act, private lobby needs a password (A95–A99); guest name collision fix | S10g | done 2026-11-10 (`docs/log/2026-11-10-s10h.md`) |
 | S10i | Draft, cost set and rating rulings: no advance from an unfinished draft, prices only from the lobby's cost set, completeness at publish and patch in place, Auction prices in the seed, global rating per season, timer auto-pick credit, server-side guest switches (A100, A101, A102, A106–A109) | S10h | done 2026-11-10 (`docs/log/2026-11-10-s10i.md`) |
 | S10j | Dead code and comment clean-up after the audit: 24 unused indexes, unused helpers and imports, two enum variants, stale comments; no behaviour change; A110 recorded | S10i | done 2026-11-10 (`docs/log/2026-11-10-s10j.md`) |
+| S10k | Played character stats follow ownership (A110); A111 (cursor events stay public, row filter tested at S11) and A112 (sign-in keeps a guest's tournament entry) recorded | S10j | done 2026-11-10 (`docs/log/2026-11-10-s10k.md`) |
 | M3 | Vite shell: tokens, base and media CSS, fonts, standby/404 | S10 | pending |
 | M4 | Router and guards (TanStack Router, typed links) | M3 | pending |
 | M9 | Test strategy wiring and CI workflow | M4 | pending |
@@ -50,7 +51,7 @@ Each executed step writes its log to `docs/log/<date>-<step>.md` (goal, decision
 | M8 (preview) | New Vercel project, env per environment, first preview deploy; env plan (M2): Production `VITE_STDB_TARGET=prod`, Preview + Development `=test`; function secrets `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `AUTH_SECRET`, `STDB_SERVER_TOKEN` per environment, set in the dashboard, never in the repo | M7 | pending |
 | M5 | Auth: link-code flow + Vercel function (A46), spike first | M8 (preview) | pending |
 | M10 | Asset service worker and preloading | M5 | pending |
-| S11 | Wipe test1, bootstrap, generate, live residue once (user gate) | M10 | pending |
+| S11 | Wipe test1, bootstrap, generate, live residue once (user gate). Carries from the backend closing audit (S10b–S10k logs): A77 (`User` private, `UserPrivate` merged); the clear-publish list (schema changes of S9c, S10e–S10j: `UserRateState`, `AbuseConfig`, `LobbyCursorEvent`, `TournamentWaitlistAccount`, removed indexes and enum variants); re-seed after publish (A108: Auction prices); the two-tabs presence check; the cursor row-filter test (A111); the index candidates of the S10j review | M10 | pending |
 | S12 | Contract/architecture updates, DECISIONS.md, skill refresh (A51, A52) | S11 | pending |
 | S13 | First prod publish, bootstrap, lock, first admin (user gate); M8 production deploy follows | S12 | pending |
 | S14.1 | Port: shell + `standby` (404, maintenance) | S13 | pending |

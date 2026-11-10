@@ -48,6 +48,7 @@ import { liveField, matchRow, resolveMatch } from './s8-fixtures';
 import { byKey, deferredDuel, offlinePastGrace, openMatchLobby, playMatch, recordsOfLobby, recordsOfMatch, validate } from './s8d-fixtures';
 import { bulkUpsert, costSetId, draftSyn, liveSyn, synergyRow } from './s10-c1-fixtures';
 import { rejection, seedCharacters } from './s10-c2-fixtures';
+import { ownedAccount } from './s10-a2-fixtures';
 
 type Team = 'Blue' | 'Red';
 const otherTeam = (t: Team): Team => (t === 'Blue' ? 'Red' : 'Blue');
@@ -379,7 +380,9 @@ describe('A82: Auction character stats follow the sale\'s winning team', () => {
     const globalStat = (test: Harness, characterName: string) =>
         [...test.db.GlobalCharacterStat.iter()].filter((r) => r.characterName === characterName);
 
-    it('1v1: Blue holds the bid, Red passes, Blue wins the game: Blue has "played" with a win, Red "faced", the global stat one win (A82(1)(2))', () => {
+    // T-S10k re-alignment (A110 supersedes A82(2)(4) for the played stat): the played stat follows ownership on the
+    // owning side (A82(1) still names that side); faced and global rows are unchanged (A82(3), A110(4)).
+    it('1v1: Blue holds the bid, Red passes, Blue wins the game: Blue (the lone player, owner or not) has "played" with a win, Red "faced", the global stat one win (A82(1), A110(2))', () => {
         const test = newHarness();
         const s = setupLobby(test, { lobby: { ...AUCTION, teamSize: 1 }, seats: [['b1', 'BluePlayer'], ['r1', 'RedPlayer']] });
         expect(session(test, s.lobbyId).nextNominatorTeam.tag).toBe('Blue');
@@ -398,7 +401,7 @@ describe('A82: Auction character stats follow the sale\'s winning team', () => {
         expect(g[0]).toMatchObject({ timesPicked: 1, matchesPlayed: 1, wins: 1, losses: 0 });
     });
 
-    it('2v2 with a timer-resolved sale: every Blue player "played", every Red player "faced", no stat row for user 0 (A82(2)(3))', () => {
+    it('2v2 with a timer-resolved sale: the Blue owner "played" (the non-owner not), both Red owners of red-1 "played", nobody for an unowned sale, every other-side player "faced", no stat row for user 0 (A82(1)(3), A110(1)(3)(4))', () => {
         const test = newHarness();
         const s = setupLobby(test, { lobby: AUCTION });
         const blueCap = captain(s, 'Blue');
@@ -409,30 +412,40 @@ describe('A82: Auction character stats follow the sale\'s winning team', () => {
         expect(sold.actorUserId).toBe(0);
         expect(sold.payload.value).toMatchObject({ characterName: 'y', winningTeam: { tag: 'Blue' } });
         draftAuction(s, blueNames(7), redNames(8));
+        // A110(1): ownership on unselected accounts, read at finalization.
+        ownedAccount(test, s.a.b1.userId, 'own-b1', ['y', 'blue-1']);
+        ownedAccount(test, s.a.r1.userId, 'own-r1', ['red-1']);
+        ownedAccount(test, s.a.r2.userId, 'own-r2', ['red-1']);
         finishGame(s, 'Blue');
 
         for (const name of ['y', 'blue-1']) {
-            for (const p of [s.a.b1, s.a.b2]) expect(charStat(test, p.userId, name)).toMatchObject({ matchesPlayed: 1, wins: 1, timesFaced: 0 });
+            expect(charStat(test, s.a.b1.userId, name)).toMatchObject({ matchesPlayed: 1, wins: 1, timesFaced: 0 });
+            expect(charStat(test, s.a.b2.userId, name)).toBeUndefined();
             for (const p of [s.a.r1, s.a.r2]) expect(charStat(test, p.userId, name)).toMatchObject({ matchesPlayed: 0, timesFaced: 1, lossesAgainst: 1 });
             expect(globalStat(test, name)).toHaveLength(1);
             expect(globalStat(test, name)[0]).toMatchObject({ timesPicked: 1, wins: 1, losses: 0 });
         }
+        // blue-2: nobody of the two Blue players owns it, so nobody "played" (A110(3)); faced and global still written.
+        for (const p of [s.a.b1, s.a.b2]) expect(charStat(test, p.userId, 'blue-2')).toBeUndefined();
+        for (const p of [s.a.r1, s.a.r2]) expect(charStat(test, p.userId, 'blue-2')).toMatchObject({ timesFaced: 1, lossesAgainst: 1 });
+        expect(globalStat(test, 'blue-2')).toHaveLength(1);
         for (const p of [s.a.b1, s.a.b2]) expect(charStat(test, p.userId, 'red-1')).toMatchObject({ matchesPlayed: 0, timesFaced: 1, winsAgainst: 1 });
         for (const p of [s.a.r1, s.a.r2]) expect(charStat(test, p.userId, 'red-1')).toMatchObject({ matchesPlayed: 1, losses: 1 });
         expect([...test.db.PlayerCharacterStat.by_user.filter(0)]).toHaveLength(0);
         expect(charStat(test, s.host.userId, 'y')).toBeUndefined(); // the spectator referee
     });
 
-    it('Classic is unchanged: a pick credits the picking captain only, not the teammate (A82(4))', () => {
+    it('Classic follows ownership too: a captain\'s pick of a character only the teammate owns credits the teammate, not the captain (A110(1), supersedes A82(4))', () => {
         const test = newHarness();
         insertRoster(test, [...blueNames(), ...redNames()]);
         const s = setupLobby(test);
         const cap = captain(s, 'Blue');
         const mate = [s.a.b1, s.a.b2].find((a) => a.userId !== cap.userId)!;
         draftClassic(s, blueNames(), redNames());
+        ownedAccount(test, mate.userId, 'own-mate', ['blue-1']);
         finishGame(s, 'Blue');
-        expect(charStat(test, cap.userId, 'blue-1')).toMatchObject({ matchesPlayed: 1, wins: 1 });
-        expect(charStat(test, mate.userId, 'blue-1')).toBeUndefined();
+        expect(charStat(test, mate.userId, 'blue-1')).toMatchObject({ matchesPlayed: 1, wins: 1 });
+        expect(charStat(test, cap.userId, 'blue-1')).toBeUndefined();
         for (const p of [s.a.r1, s.a.r2]) expect(charStat(test, p.userId, 'blue-1')).toMatchObject({ timesFaced: 1, lossesAgainst: 1 });
     });
 });

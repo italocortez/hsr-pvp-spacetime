@@ -118,6 +118,17 @@ and the global stat is written once. A manual pick still credits the picker only
 This replaces the S10f rule "no played row for a timer pick". Details: `docs/match-results/architecture.md`, "Phase
 S10i execution" (`playedCredit`).
 
+## Phase S10k execution (DECISIONS.md A110)
+
+The "played" side of `PlayerCharacterStat` (`matchesPlayed`, `wins`, `losses`) follows ownership for every way a team
+gets a character: a manual Classic pick, a Classic timer auto-pick and an Auction sale. Each non-coach player of the
+owning side who owns the character on any of their HSR accounts (selected for the match or not) gets it, with that
+side's win flag; with no owner, a one-player side credits its player and a side of two or more credits nobody. The
+faced rows, ban rows, `GlobalCharacterStat`, the `EMPTY` / `SKIP` skip and the concede flags are unchanged; no row for
+the system user. Ownership is read at finalization, so later roster edits do not change stored rows. This replaces
+A82(2), A82(4) and A106 for the played stat (S10i above: whole team on a timer pick). Details, including the index
+reads: `docs/match-results/architecture.md`, "Phase S10k execution".
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -133,6 +144,7 @@ S10i execution" (`playedCredit`).
 | Stat views without userId / audit ids; GlobalCharacterStat SYSTEM actor; relationships with the other player's card and MMR | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 | No stat rows for `EMPTY`, `SKIP` or the system picker | Phase S10f execution (results audit #3) | 2026-11-09 |
 | A Classic timer pick credits the whole acting team with "played" | Phase S10i execution (DECISIONS.md A106) | 2026-11-10 |
+| "Played" follows ownership (owners on the owning side; lone player when nobody owns it; nobody in a 2+ side) for picks, timer picks and sales | Phase S10k execution (DECISIONS.md A110) | 2026-11-10 |
 
 ---
 

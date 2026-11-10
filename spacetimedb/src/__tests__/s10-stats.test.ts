@@ -22,12 +22,18 @@ const globalStat = (test: Harness, characterName: string) =>
 const board = (test: Harness, category: string) =>
     [...test.db.Leaderboard.iter()].filter((r) => r.category === category).sort((a, b) => a.rank - b.rank);
 
-/** A harness with EloConfig and a Moderator, plus one finalized Ranked match won by Blue (b1, b2 over r1, r2). */
+/**
+ * A harness with EloConfig and a Moderator, plus one finalized Ranked match won by Blue (b1, b2 over r1, r2).
+ * T-S10k (A110(1)): before the finalization b1 gets an extra account owning blue-1 and r1 one owning red-1, so the
+ * played stat of those two picks has an owner to credit (a 2v2 side with no owner credits nobody, A110(3)).
+ */
 function firstMatch() {
     const test = newHarness();
     seedElo(test);
     const mod = moderator(test);
     const { s, recId } = playRanked(test, 'Blue');
+    ownedAccount(test, s.a.b1.userId, 'own-b1', [blueNames()[0]]);
+    ownedAccount(test, s.a.r1.userId, 'own-r1', [redNames()[0]]);
     validateAndFinalize(test, s, recId, mod, 'Blue');
     return { test, mod, s, recId };
 }
@@ -107,13 +113,15 @@ describe('stats after one Ranked match (player-stats contract: Player Win/Loss T
         expect(globalStat(test, blueNames()[0])).toMatchObject({ gameMode: { tag: 'MemoryOfChaos' }, matchType: { tag: 'Ranked' }, teamSize: 2, seasonId: 0 });
     });
 
-    it('PlayerCharacterStat: the picking captain has the pick (matchesPlayed 1, wins 1); opponents have it as faced (timesFaced 1, winsAgainst / lossesAgainst)', () => {
+    it('PlayerCharacterStat: the owner on the picking side has the pick (matchesPlayed 1, wins 1), the non-owner teammate not; opponents have it as faced (timesFaced 1, winsAgainst / lossesAgainst) (A110(1)(4))', () => {
         const { test, s } = firstMatch();
         const blue1 = blueNames()[0];
         const red1 = redNames()[0];
-        // draftClassic picks through the captains (b1, r1: the first player of each side, D-30).
+        // T-S10k re-alignment: the played stat follows ownership (A110), not the picking captain (was A82(4)).
         expect(charStat(test, s.a.b1.userId, blue1)).toMatchObject({ matchesPlayed: 1, wins: 1, losses: 0, timesFaced: 0 });
         expect(charStat(test, s.a.r1.userId, red1)).toMatchObject({ matchesPlayed: 1, wins: 0, losses: 1 });
+        expect(charStat(test, s.a.b2.userId, blue1)).toBeUndefined();
+        expect(charStat(test, s.a.r2.userId, red1)).toBeUndefined();
         for (const l of players(s).losers) expect(charStat(test, l.userId, blue1)).toMatchObject({ timesFaced: 1, winsAgainst: 0, lossesAgainst: 1 });
         for (const w of players(s).winners) expect(charStat(test, w.userId, red1)).toMatchObject({ timesFaced: 1, winsAgainst: 1, lossesAgainst: 0 });
     });

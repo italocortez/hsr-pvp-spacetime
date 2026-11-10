@@ -432,9 +432,10 @@ describe('Draft LOW #15: undo sequence numbering', () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('Results #3: finalization step 16 skips EMPTY, SKIP and the system user (match-results / player-stats architecture S10f)', () => {
-    // T-S10i re-assertion (A106): the timer auto-pick of a real character now credits the acting team's players with the
-    // played stat (1v1: the Blue player), with Blue's win flag; Red has it as faced; one global row; still none for user 0.
-    it('a timer EMPTY pick, a timer auto-pick of a real character and a SKIP ban: no row for EMPTY / SKIP, none for user 0; the real one is played by the acting team, faced by the other, one global row (results audit #3, A106)', () => {
+    // T-S10i re-assertion (A106), T-S10k re-alignment (A110): the timer auto-pick of a real character credits the acting
+    // side by ownership; in this 1v1 nobody owns 'solo', so the side's only player gets the played stat (A110(2)), with
+    // Blue's win flag; Red has it as faced; one global row; still none for user 0.
+    it('a timer EMPTY pick, a timer auto-pick of a real character and a SKIP ban: no row for EMPTY / SKIP, none for user 0; the real one is played by the acting side\'s only player, faced by the other, one global row (results audit #3, A110(2)(4))', () => {
         const test = newHarness();
         // One Classic cost row ('solo'): the first Blue timer pick draws it, Red's timer pick then finds nothing (EMPTY),
         // and Red's timer ban in the second ban phase finds nothing left either (SKIP).
@@ -495,7 +496,7 @@ describe('Results #3: finalization step 16 skips EMPTY, SKIP and the system user
         expect(playerRows.filter((r) => r.userId === 0)).toHaveLength(0);
         const solo = playerRows.filter((r) => r.characterName === 'solo');
         expect(solo.map((r) => r.userId).sort((a, b) => a - b)).toEqual([s.a.b1.userId, s.a.r1.userId].sort((a, b) => a - b));
-        expect(solo.find((r) => r.userId === s.a.b1.userId)).toMatchObject({ matchesPlayed: 1, wins: 1, losses: 0, timesFaced: 0 }); // A106
+        expect(solo.find((r) => r.userId === s.a.b1.userId)).toMatchObject({ matchesPlayed: 1, wins: 1, losses: 0, timesFaced: 0 }); // A110(2): the lone player
         expect(solo.find((r) => r.userId === s.a.r1.userId)).toMatchObject({ matchesPlayed: 0, timesFaced: 1, winsAgainst: 0, lossesAgainst: 1 });
         const soloGlobal = globalRows.filter((r) => r.characterName === 'solo');
         expect(soloGlobal).toHaveLength(1);

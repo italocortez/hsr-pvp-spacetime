@@ -89,7 +89,7 @@ All stat tables share the same partition dimensions:
 ### Character Pick Stats
 **Given:** Player picked character "Acheron" in a match that was won
 **When:** Finalization pipeline processes picks from MatchSessionStep rows
-**Then:** PlayerCharacterStat for [userId, "Acheron", ...]: matchesPlayed +1, wins +1. Only picked characters count -- bans excluded from pick stats (D-27).
+**Then:** PlayerCharacterStat for [userId, "Acheron", ...]: matchesPlayed +1, wins +1. Only picked characters count -- bans excluded from pick stats (D-27). _Superseded in Phase S10k execution (DECISIONS.md A110)._
 
 ### Character Ban Stats (D-23)
 **Given:** Character "Kafka" was banned during draft, 4 participants in match
@@ -218,9 +218,10 @@ All flat structured rows, zero JSON blobs (D-55). Self-contained for replay rend
 | Update 38 existing tests for new PK shapes (D-65) | Phase 6 CONTEXT.md | 2026-03-21 |
 | create_season creates inactive season; set_active_season enforces single-active guarantee | Phase 9 execution | 2026-03-29 |
 | Full hydration from codebase; Feature Overview and Stat Computation section added | Phase 13 normalization | 2026-04-09 |
-| Auction character stats: for an `AuctionSold` step the owning side is the sale's `winningTeam`; every player of that team gets the played stat, every player of the other team the faced stat, the global character stat is written once with the owning side's win flag; no row for the system user. Classic picks unchanged (the picker) | Phase S10c execution (DECISIONS.md A82) | 2026-11-09 |
-| No stat row of any kind is written for the `EMPTY` and `SKIP` placeholders, and no player row for the system user. A Classic timer auto-pick of a real character writes the faced rows and the global row; who receives its played stat is set by DECISIONS.md A106 | Phase S10f execution (backend audit 2026-11-09, results finding 3) | 2026-11-09 |
-| A Classic timer auto-pick of a real character credits the played stat to every non-coach player of the acting team, with that side's win flag; the other team gets the faced stat and the global stat is written once. A manual Classic pick credits the picker; an Auction sale the winning team (A82) | Phase S10i execution (DECISIONS.md A106) | 2026-11-10 |
+| Auction character stats: for an `AuctionSold` step the owning side is the sale's `winningTeam`; every player of that team gets the played stat, every player of the other team the faced stat, the global character stat is written once with the owning side's win flag; no row for the system user. Classic picks unchanged (the picker) | Phase S10c execution (DECISIONS.md A82) | 2026-11-09 _Superseded in Phase S10k execution (DECISIONS.md A110)._ |
+| No stat row of any kind is written for the `EMPTY` and `SKIP` placeholders, and no player row for the system user. A Classic timer auto-pick of a real character writes the faced rows and the global row; who receives its played stat is set by DECISIONS.md A106 | Phase S10f execution (backend audit 2026-11-09, results finding 3) | 2026-11-09 _Superseded in Phase S10k execution (DECISIONS.md A110)._ |
+| A Classic timer auto-pick of a real character credits the played stat to every non-coach player of the acting team, with that side's win flag; the other team gets the faced stat and the global stat is written once. A manual Classic pick credits the picker; an Auction sale the winning team (A82) | Phase S10i execution (DECISIONS.md A106) | 2026-11-10 _Superseded in Phase S10k execution (DECISIONS.md A110)._ |
+| The played stat follows ownership for every way a team gets a character (manual Classic pick, Classic timer auto-pick, Auction sale): each non-coach player of the owning team who owns the character on any of their game accounts, selected for the match or not, gets it with that side's win flag; if no player of the team is recorded as owning it, a team of one player credits that player and a team of two or more credits nobody. The faced stat of the other team and the single global row are unchanged; `EMPTY` and `SKIP` write nothing; no row for the system user. Ownership is read when the match is finalized (for a tournament game, when the tournament's finalization runs) | Phase S10k execution (DECISIONS.md A110) | 2026-11-10 |
 
 ---
 

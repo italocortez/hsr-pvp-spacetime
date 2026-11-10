@@ -179,15 +179,36 @@ export function processMatchMmr(
     }
 }
 
-// ─── playedCredit (A82, A106) ────────────────────────────────────────────────
-// The one place that decides who gets the "played" stat for a drafted character (step 16 below). A manual Classic
-// pick credits the picker only (A82(4)); an Auction sale (A82(2)) and a Classic timer pick (A106: actorUserId 0, the
-// system actor) credit every player of the owning side, i.e. its non-coach participants. A follow-up ruling may narrow
-// the team case (for example to the players who own the character); it changes here only.
+// ─── playedCredit (A110) ─────────────────────────────────────────────────────
+// The one place that decides who gets the "played" stat for a drafted character (step 16 below). Same rule for a
+// manual Classic pick, a Classic timer pick and an Auction sale (A110 supersedes A82(2)(4) and A106): the candidates
+// are the non-coach participants of the owning side (participants never hold a coach, draftClassic start_draft);
+// (1) every candidate who owns the character on any of their HSR accounts, selected for the match or not, is
+// credited; (2) nobody owns it and the side has one candidate: that one; (3) nobody owns it and the side has two or
+// more: nobody. Ownership is read now, at finalization (A110(5)); `owned` caches each user's set for this call.
+// Never the system user (SYSTEM_USER_ID 0, the timer's actor sentinel).
 
-function playedCredit(step: any, ownerSide: string, participants: any[]): number[] {
-    if (step.action.tag === 'Pick' && step.actorUserId !== 0) return [step.actorUserId];
-    return participants.filter((p: any) => p.teamSide.tag === ownerSide).map((p: any) => p.userId);
+function ownedCharacters(ctx: any, userId: number, owned: Map<number, Set<string>>): Set<string> {
+    let names = owned.get(userId);
+    if (names) return names;
+    names = new Set<string>();
+    // Index reads: HsrAccount.user_id (btree on userId), then HsrAccountCharacter.hsr_account_id (btree on hsrAccountId).
+    // HsrAccount has no soft delete (accounts are hard-deleted with their character rows); isActive is only the
+    // default selection preference, so every account counts.
+    for (const account of ctx.db.HsrAccount.user_id.filter(userId)) {
+        for (const row of ctx.db.HsrAccountCharacter.hsr_account_id.filter(account.id)) names.add(row.characterName);
+    }
+    owned.set(userId, names);
+    return names;
+}
+
+function playedCredit(ctx: any, charName: string, ownerSide: string, participants: any[], owned: Map<number, Set<string>>): number[] {
+    const candidates = participants
+        .filter((p: any) => p.teamSide.tag === ownerSide && p.userId !== 0)
+        .map((p: any) => p.userId as number);
+    const owners = candidates.filter((userId) => ownedCharacters(ctx, userId, owned).has(charName));
+    if (owners.length > 0) return owners;
+    return candidates.length === 1 ? candidates : [];
 }
 
 // ─── runFinalization ─────────────────────────────────────────────────────────
@@ -507,6 +528,7 @@ export function runFinalization(
     // 16. Increment character stats (per D-54, D-30: compare teamSide tags to winnerTeamSide)
     if (!isConcede || concedeFlags.doCharStats) {
         let winnerTeamSideTag: string | undefined = matchResult.winnerTeamSide?.tag;
+        const owned = new Map<number, Set<string>>(); // A110: each participant's owned set, read once per finalization
 
         for (const step of steps) {
             const actionTag = step.action.tag;
@@ -525,18 +547,18 @@ export function runFinalization(
 
             const actorTeamSide = step.actorSlot?.tag;
 
-            // A82, A106: an AuctionSold step and a Classic Pick step. The owning side is the sale's winningTeam or the
-            // pick's actorSlot; the players credited with "played" come from playedCredit (one place): every player of
-            // the owning side (the non-coach participants) for a sale and for a timer pick (actorUserId 0), the picker
-            // only for a manual pick. Every player of the other side gets "faced"; the global stat is written once,
-            // with the owning side's win flag. No row for the system user or a spectator side.
+            // A82, A110: an AuctionSold step and a Classic Pick step (manual or timer). The owning side is the sale's
+            // winningTeam or the pick's actorSlot; the players credited with "played" come from playedCredit (one
+            // place, A110: ownership, else the lone player, else nobody). Every player of the other side gets "faced";
+            // the global stat is written once, with the owning side's win flag. No row for the system user or a
+            // spectator side.
             if (actionTag === 'AuctionSold' || actionTag === 'Pick') {
                 const ownerSide = actionTag === 'AuctionSold'
                     ? (step.payload?.tag === 'AuctionSold' ? step.payload.value?.winningTeam?.tag : undefined)
                     : actorTeamSide;
                 if (ownerSide !== 'Blue' && ownerSide !== 'Red') continue;
                 const didOwnerWin = winnerTeamSideTag !== undefined && ownerSide === winnerTeamSideTag;
-                for (const userId of playedCredit(step, ownerSide, effectiveParticipants)) {
+                for (const userId of playedCredit(ctx, charName, ownerSide, effectiveParticipants, owned)) {
                     incrementPlayerCharacterStat(ctx, userId, charName, gameMode, draftMode, seasonId, matchType, teamSize, didOwnerWin, actingUserId);
                 }
                 for (const p of effectiveParticipants) {

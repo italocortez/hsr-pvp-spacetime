@@ -53,7 +53,7 @@ import {
 import { host as tournamentHost, liveField, moderator, setUserRole, verified } from './s8-fixtures';
 import { byKey, captainActor, openMatchLobby, seedElo } from './s8d-fixtures';
 import { rejection, seedReferenceNames } from './s10-c2-fixtures';
-import { parkedLobby, playRanked, validateAndFinalize } from './s10-a2-fixtures';
+import { ownedAccount, parkedLobby, playRanked, validateAndFinalize } from './s10-a2-fixtures';
 
 // ─── Shared builders ─────────────────────────────────────────────────────────
 
@@ -831,7 +831,7 @@ describe('A102: globalCompositeRating is computed from and written to the curren
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// B.8 A106: a Classic timer auto-pick credits the whole acting team
+// B.8 A106: a Classic timer auto-pick credits the whole acting team (T-S10k: superseded by A110, ownership)
 // ════════════════════════════════════════════════════════════════════════════
 
 const charStats = (test: Harness, characterName: string) =>
@@ -844,7 +844,7 @@ const globalStats = (test: Harness, characterName: string) =>
  * Red bans by hand; then `solo` is priced, Blue's pick turn expires into `solo`, Red's into EMPTY; the rest is drafted
  * by hand (completeDraft: each name picked by its captain) and the host closes the game for Blue.
  */
-function autoPickGame(seats: SetupOpts['seats']) {
+function autoPickGame(seats: SetupOpts['seats'], owned: Record<string, string[]> = {}) {
     const test = newHarness();
     const s = setupLobby(test, { seats, lobby: { autoRandomPick: true, banMode: { tag: 'Four' } }, beforeStart: withAccounts(test) });
     expireTurn(s); // Blue ban → SKIP
@@ -859,19 +859,23 @@ function autoPickGame(seats: SetupOpts['seats']) {
     const blueCaptain = captain(s, 'Blue'); // read before the close: a finalized casual lobby is gone
     const blueMateActor = s.a.b2 ? blueMate(s) : undefined;
     completeDraft(s);
+    // T-S10k (A110(1)): unselected accounts owning the named characters, read at finalization (the close below).
+    for (const [name, chars] of Object.entries(owned)) ownedAccount(test, s.a[name].userId, `own-${name}`, chars);
     finishGame(s, 'Blue');
     expect(test.db.MatchSessionHistory.count()).toBe(1n);
     return { test, s, blueCaptain, blueMateActor };
 }
 
-describe('A106: a Classic timer auto-pick of a real character credits every player of the acting team', () => {
-    for (const [label, seats] of [
-        ['1v1', [['b1', 'BluePlayer'], ['r1', 'RedPlayer']]],
-        ['2v2 with a Blue coach', [['b1', 'BluePlayer'], ['b2', 'BluePlayer'], ['bc', 'BlueCoach'], ['r1', 'RedPlayer'], ['r2', 'RedPlayer']]],
-    ] as Array<[string, SetupOpts['seats']]>) {
-        it(`${label}: every non-coach Blue player has "played" with Blue's win, every Red player "faced", one global row, none for user 0; EMPTY and SKIP write nothing (A106)`, () => {
-            const { test, s } = autoPickGame(seats);
-            const blue = ['b1', 'b2'].filter((n) => s.a[n]).map((n) => s.a[n].userId);
+// T-S10k re-alignment: A110 supersedes A106 (whole team) and A82(4) (the picker) for the played stat; the timer pick,
+// the manual pick and the sale all credit by ownership on the owning side.
+describe('A110 (was A106): a Classic timer auto-pick of a real character credits the acting side by ownership', () => {
+    for (const [label, seats, owned, creditedBlue] of [
+        ['1v1, nobody owns it: the lone Blue player', [['b1', 'BluePlayer'], ['r1', 'RedPlayer']], {}, ['b1']],
+        ['2v2 with a Blue coach, b1 and the coach own it: b1 only', [['b1', 'BluePlayer'], ['b2', 'BluePlayer'], ['bc', 'BlueCoach'], ['r1', 'RedPlayer'], ['r2', 'RedPlayer']], { b1: ['solo'], bc: ['solo'] }, ['b1']],
+    ] as Array<[string, SetupOpts['seats'], Record<string, string[]>, string[]]>) {
+        it(`${label} has "played" with Blue's win, every Red player "faced", one global row, none for user 0 or the coach; EMPTY and SKIP write nothing (A110(1)(2)(4))`, () => {
+            const { test, s } = autoPickGame(seats, owned);
+            const blue = creditedBlue.map((n) => s.a[n].userId);
             const red = ['r1', 'r2'].filter((n) => s.a[n]).map((n) => s.a[n].userId);
             const rows = charStats(test, 'solo');
             expect(rows.map((r) => r.userId).sort((x, y) => x - y)).toEqual([...blue, ...red].sort((x, y) => x - y));
@@ -888,27 +892,31 @@ describe('A106: a Classic timer auto-pick of a real character credits every play
         });
     }
 
-    it('a manual Classic pick still credits the picker only (A82(4), A106)', () => {
-        const { test, s, blueCaptain, blueMateActor } = autoPickGame([['b1', 'BluePlayer'], ['b2', 'BluePlayer'], ['r1', 'RedPlayer'], ['r2', 'RedPlayer']]);
-        const rows = charStats(test, 'fill-blue-1'); // completeDraft's first Blue pick, by the Blue captain
-        const cap = blueCaptain.userId;
+    it('a manual Classic pick by the captain of a character only the teammate owns credits the teammate, not the captain (A110(1))', () => {
+        const seats: SetupOpts['seats'] = [['b1', 'BluePlayer'], ['b2', 'BluePlayer'], ['r1', 'RedPlayer'], ['r2', 'RedPlayer']];
+        // completeDraft's first Blue pick, 'fill-blue-1', is made by the Blue captain; the captain is b1 (the first Blue seat).
+        const { test, s, blueCaptain, blueMateActor } = autoPickGame(seats, { b2: ['fill-blue-1'] });
+        expect(blueMateActor!.userId).toBe(s.a.b2.userId);
+        const rows = charStats(test, 'fill-blue-1');
         const played = rows.filter((r) => r.matchesPlayed > 0).map((r) => r.userId);
-        expect(played).toEqual([cap]);
-        expect(rows.some((r) => r.userId === blueMateActor!.userId)).toBe(false);
+        expect(played).toEqual([blueMateActor!.userId]);
+        expect(rows.some((r) => r.userId === blueCaptain.userId)).toBe(false);
         expect(rows.filter((r) => r.timesFaced > 0).map((r) => r.userId).sort((x, y) => x - y))
             .toEqual([s.a.r1.userId, s.a.r2.userId].sort((x, y) => x - y));
     });
 
-    it('an Auction sale is unchanged: every player of the winning team "played", the other team "faced" (A82(2))', () => {
+    it('an Auction sale follows ownership: the one owner of the winning team "played", the other team "faced" (A110(1), supersedes A82(2))', () => {
         const test = newHarness();
         const s = setupLobby(test, { lobby: { draftMode: { tag: 'Auction' } } });
         priceCharacterAt(test, key0('Auction'), 'sold', ladder(1));
         tx(test, captain(s, 'Blue'), nominateBody(s, 'sold'));
         tx(test, captain(s, 'Red'), passBody(s));
         completeDraft(s);
+        ownedAccount(test, s.a.b2.userId, 'own-b2', ['sold']);
         finishGame(s, 'Blue');
         const rows = charStats(test, 'sold');
-        const blue = [s.a.b1.userId, s.a.b2.userId];
+        const blue = [s.a.b2.userId];
+        expect(rows.filter((r) => r.matchesPlayed > 0).map((r) => r.userId)).toEqual(blue);
         expect(rows.filter((r) => r.matchesPlayed === 1 && r.wins === 1).map((r) => r.userId).sort((x, y) => x - y)).toEqual(blue.sort((x, y) => x - y));
         expect(rows.filter((r) => r.timesFaced === 1).map((r) => r.userId).sort((x, y) => x - y))
             .toEqual([s.a.r1.userId, s.a.r2.userId].sort((x, y) => x - y));

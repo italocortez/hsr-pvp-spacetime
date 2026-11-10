@@ -1132,3 +1132,25 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** user, 2026-11-10: "do you think we can have a way to only record character stats if the user owns the character at all even if they didnt chose the account that has it on the match that it got credit from (due to a team mate picking it) ? in an effort to have good data integrity for stats", then "I agree with your proposal for one player and two-or-more players". Only the captain can make a manual pick, so crediting the picker gave the captain every character of a 2v2 or 3v3 team.
 - **Supersedes:** A82(2) and A106 (whole team credited) and A82(4) (the picker credited) for the played stat.
 - **Where implemented:** S10k
+
+### A111 — Cursor events stay public for now; the row filter is tested at S11
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:**
+  1. The `LobbyCursorEvent` table stays readable by any connected client. After A96 a row carries only the lobby id, the seat number, a position and a time; nothing in it identifies a person. The site subscribes to its own lobby only.
+  2. At S11, on the live test database, the platform's row filter (`clientVisibilityFilter`, labelled experimental and unstable upstream, and barred by the repo's `spacetimedb` skill today) is tested for this one table: whether it restricts cursor events to the lobby's members, and at what cost. The result goes to the user, who then decides whether to adopt it and lift the skill's rule for this table.
+- **Why:** user, 2026-11-10: "also for cursor events, i accept that we can do A and then B later" (A = accept as is, B = test the row filter at the test database step). S10h review F2: a filter mechanism exists in SDK 2.14.1 and upstream says it applies to event tables, but no stable mechanism does; views cannot read event tables.
+- **Supersedes:** nothing; closes the open half of A96.
+- **Where implemented:** recorded in S10k; the test is part of S11
+
+### A112 — Signing in to an existing account keeps the guest's tournament entry
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** when a guest signs in with a provider account that already has a user (`server_link_provider`, the case where the identity is re-pointed to the existing user and the guest user is deleted):
+  1. Before the guest is deleted, each of the guest's enrolments in a tournament that is not Completed or Cancelled is moved to the existing user: the enrolment with its status, seed, alias and waitlist place, the solo team or the team membership and captaincy, and pending team requests. Bracket slots follow the team and are not rewritten. A solo team is renamed for the new owner by the usual naming rule.
+  2. Account locks are rebuilt from the existing user's own game accounts (all of them, as at a registration that names none), because the guest's game accounts are deleted with the guest. A waitlisted entry carries no chosen accounts across.
+  3. If the existing user already has an enrolment in that tournament, or cannot hold the entry (disqualified from it, or the tournament requires something the existing user lacks, such as a game account when a roster is required), the guest's entry is not moved and is settled as in a deletion (A94(2)).
+  4. Everything else of the guest is deleted as before. Lobby memberships are not moved by this row.
+- **Why:** user, 2026-11-10: "lets go with option A" (move the entry to the existing account). S10g review F2: after A94 a returning player who registered as a fresh guest and then signed in lost the entry (withdrawn or disqualified), although they had not left.
+- **Supersedes:** A94(2) for this one deletion path.
+- **Where implemented:** S10l
