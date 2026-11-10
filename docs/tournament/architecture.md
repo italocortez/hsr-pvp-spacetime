@@ -724,7 +724,7 @@ the stand-in's own action, never by the approval, and never once the stand-in ha
   covers a stand-in who deleted the account after approval and a player who deselected after confirming; a played
   user with no lock cannot select and so cannot be started either. Casual lobbies and tournaments without
   `requireOwnership` are unchanged.
-- SI2 therefore holds for a creator, for a stand-in approved while watching who takes the seat, and for one seated by
+- SI2 therefore holds for a creator (since A140 only a Moderator or Admin stand-in creating through the role), for a stand-in approved while watching who takes the seat, and for one seated by
   the host (locked and selected when they confirm): they can play and the game can start without leaving and
   rejoining.
 - `lock_tournament_accounts` (`reducers/tournament/tournamentRegistration.ts:311`, A135(8) / SI3): a caller with no
