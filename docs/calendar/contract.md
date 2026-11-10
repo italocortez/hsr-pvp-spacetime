@@ -216,7 +216,7 @@ Players can record recurring availability windows, bookmark other players' calen
 
 **Purpose:** Edit an existing calendar event
 
-**Permission:** Organizer or Admin
+**Permission:** Organizer or Admin _Superseded in Phase S10d execution (DECISIONS.md A89)._
 
 **Parameters:**
 | Param | Type | Required | Description |
@@ -245,7 +245,7 @@ Players can record recurring availability windows, bookmark other players' calen
 
 **Purpose:** Delete a calendar event and cascade-delete all invites
 
-**Permission:** Organizer or Admin
+**Permission:** Organizer or Admin _Superseded in Phase S10d execution (DECISIONS.md A89)._
 
 **Flow:**
 1. Find event by ID
@@ -287,7 +287,7 @@ Players can record recurring availability windows, bookmark other players' calen
 
 **Purpose:** Add additional invitees to an existing event
 
-**Permission:** Organizer or Admin
+**Permission:** Organizer or Admin _Superseded in Phase S10d execution (DECISIONS.md A89)._
 
 **Parameters:**
 | Param | Type | Required | Description |
@@ -318,7 +318,7 @@ Players can record recurring availability windows, bookmark other players' calen
 
 **Purpose:** Remove an invitee from a calendar event
 
-**Permission:** Organizer or Admin
+**Permission:** Organizer or Admin _Superseded in Phase S10d execution (DECISIONS.md A89)._
 
 **Parameters:**
 | Param | Type | Required | Description |
@@ -622,6 +622,8 @@ The calendar tables are private (A37 calendar contexts; supersedes the Phase 08 
 | Parameter shapes as implemented: `invite_to_event(eventId, inviteeUserId)` invites one user per call; `create_calendar_event(title, description, startAt, endAt, bracketMatchId, inviteeUserIds)` takes every field (`''` = no description, `0` = no bracket link, `inviteeUserIds` a comma-separated string whose non-numeric parts are ignored); `update_availability_slot` and `update_calendar_event` take every field and replace the row (no partial update) | Phase S10 execution (DECISIONS.md A76) | 2026-11-09 |
 | Event caps: `create_calendar_event` rejects when the caller organizes 40 events that have not ended (`endAt >= now`, after the lazy cleanup): "Maximum 40 active calendar events per user."; then when the caller organizes 100 events in total, ended or not: "Maximum 100 calendar events per user.". Finished events no longer count against the 40. This replaces the text "Maximum 40 calendar events per user." of the Phase S10 row above | Phase S10b execution (DECISIONS.md A79) | 2026-11-09 |
 | Past-date guards: `create_calendar_event` rejects an `endAt` in the past and `update_calendar_event` rejects a changed `endAt` in the past, both with "Event end time must not be in the past."; an update that keeps `endAt` (title or description of a finished event) is accepted. The 90-day event cleanup (D-07) and the one-week slot cleanup (D-27) are unchanged | Phase S10b execution (DECISIONS.md A79) | 2026-11-09 |
+| Tournament-linked events (`bracketMatchId` set): `update_calendar_event`, `delete_calendar_event`, `invite_to_event` and `remove_invite` also accept anyone holding the tournament's `bracket` permission (the tournament organizer, an assistant with the bracket flag, a Moderator, an Admin); others get "Forbidden: Only the organizer, an Admin or tournament staff with the bracket permission can <action>.". Personal events keep "Organizer or Admin" | Phase S10d execution (DECISIONS.md A89) | 2026-11-09 |
+| `update_calendar_event` rejects moving an ended event's `endAt` to now or later when the event's organizer already has 40 not-yet-ended events: "Maximum 40 active calendar events per user." | Phase S10d execution (DECISIONS.md A90) | 2026-11-09 |
 
 ---
 

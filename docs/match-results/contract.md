@@ -725,6 +725,7 @@ _Superseded in part in Phase S8e execution (DECISIONS.md A69(2)): the window end
 | `select_match_account` snapshot ratchet removed (dead since selection is Waiting-only); the BetweenGames ratchet section and scenario superseded | Phase S8e execution (DECISIONS.md A69(3)) | 2026-11-08 |
 | Admin edits of a closed game: `equip_lightcone` and `unequip_lightcone` take `teamSide` and edit that team's copy of the character (was: the first team whose draft holds it, which could not reach Red under `allowMirrorPicks`) | Phase S10b execution (DECISIONS.md A78) | 2026-11-09 |
 | `view_my_match_result` returns `concedeSummary` only to a Moderator or Admin caller; every other member gets no value, in anonymous and identified lobbies. The stored text is unchanged; the tournament staff view `view_my_tournament_match_results` still carries it for the organizer and assistants | Phase S10c execution (DECISIONS.md A83) | 2026-11-09 |
+| A39 scope: only the `winnerOverride` on an unresolved tie is refused to a referee seated on a team in a tournament lobby. The same referee may call `set_score_adjustment` for either team and close the game as staff (A34a, A60(4)); adjustments stay audited | Phase S10d execution (DECISIONS.md A88) | 2026-11-09 |
 
 ---
 

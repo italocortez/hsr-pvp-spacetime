@@ -3,14 +3,16 @@
 //
 // Permission model:
 //   - create: non-guest; tournament-linked events require the bracket permission (D-20, A25)
-//   - update/delete/invite/remove_invite: organizer OR Admin (D-08)
+//   - update/delete/invite/remove_invite: organizer OR Admin (D-08); a tournament-linked event also accepts the
+//     tournament's organizer and staff holding the bracket permission (A89, ensureCanManageEvent)
 //
 // Caps (D-04, D-06, A79), counted on the organizer's events after the lazy cleanup:
 //   - 40 not-yet-ended events (endAt >= now) per user (MAX_ACTIVE_EVENTS_PER_USER)
 //   - 100 retained events per user, ended or not (MAX_RETAINED_EVENTS_PER_USER)
 //   - 9 invitees per event (MAX_INVITEES_PER_EVENT)
 // Guards (A79): create rejects an endAt in the past; update rejects a changed endAt in the past (an unchanged endAt
-// stays allowed, e.g. editing a finished event's title).
+// stays allowed, e.g. editing a finished event's title). A90: update rejects reviving an ended event when its organizer
+// already has 40 not-yet-ended events.
 //
 // Lazy cleanup (D-07): events older than 90 days are deleted on every call
 // One event per bracket match enforced (D-19)
@@ -20,7 +22,7 @@ import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { Timestamp } from 'spacetimedb';
 import { getAuthenticatedUser, isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
-import { ensureTournamentPermission } from '@module/helpers/tournament/tournamentPermissions';
+import { ensureTournamentPermission, hasTournamentPermission } from '@module/helpers/tournament/tournamentPermissions';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { cleanupOldEvents } from '@module/helpers/calendar/calendarCleanup';
 import { deleteCalendarEventWithInvites } from '@module/helpers/calendar/calendarCascade';
@@ -28,6 +30,24 @@ import { deleteCalendarEventWithInvites } from '@module/helpers/calendar/calenda
 const MAX_ACTIVE_EVENTS_PER_USER = 40;
 const MAX_RETAINED_EVENTS_PER_USER = 100;
 const MAX_INVITEES_PER_EVENT = 9;
+
+/**
+ * D-08, A89: who may update, delete or manage the invites of an event. Personal events: the organizer or an Admin.
+ * Tournament-linked events (bracketMatchId set) also accept the tournament's organizer and any staff holding the
+ * `bracket` permission (hasTournamentPermission: Moderator+, the organizer, an assistant with canManageBracket),
+ * the permission that creates such events. A link whose bracket match or tournament is gone falls back to the
+ * personal rule.
+ */
+function ensureCanManageEvent(ctx: any, user: any, event: any, action: string): void {
+    if (event.organizerId === user.id || isRoleAtLeast(user.role, 'Admin')) return;
+    if (event.bracketMatchId != null) {
+        const bracketMatch = ctx.db.BracketMatch.id.find(event.bracketMatchId);
+        const tournament = bracketMatch ? ctx.db.Tournament.id.find(bracketMatch.tournamentId) : undefined;
+        if (tournament && hasTournamentPermission(ctx, user, tournament, 'bracket')) return;
+        throw new SenderError(`Forbidden: Only the organizer, an Admin or tournament staff with the bracket permission can ${action}.`);
+    }
+    throw new SenderError(`Forbidden: Only the organizer or an Admin can ${action}.`);
+}
 
 // ─── create_calendar_event ──────────────────────────────────────────────────
 // Creates a calendar event (personal or tournament-linked).
@@ -212,9 +232,7 @@ export const update_calendar_event = spacetimedb.reducer(
 
         const event = ctx.db.CalendarEvent.id.find(eventId);
         if (!event) throw new SenderError('Calendar event not found.');
-        if (event.organizerId !== user.id && !isRoleAtLeast(user.role, 'Admin')) {
-            throw new SenderError('Forbidden: Only the organizer or an Admin can update this event.');
-        }
+        ensureCanManageEvent(ctx, user, event, 'update this event');
 
         if (!title || title.trim() === '') throw new SenderError('Event title must not be empty.');
 
@@ -224,6 +242,17 @@ export const update_calendar_event = spacetimedb.reducer(
         // A79: a changed endAt must not lie in the past; an unchanged one stays allowed
         if (endMicros !== event.endAt.microsSinceUnixEpoch && endMicros < ctx.timestamp.microsSinceUnixEpoch) {
             throw new SenderError('Event end time must not be in the past.');
+        }
+        // A90: reviving an ended event (endAt moved back to now or later) counts against the organizer's active cap;
+        // an event that stays active, or stays ended, is not counted again. Ended events never count as active, so
+        // no cleanup is needed before counting.
+        const now = ctx.timestamp.microsSinceUnixEpoch;
+        if (event.endAt.microsSinceUnixEpoch < now && endMicros >= now) {
+            const activeCount = [...ctx.db.CalendarEvent.organizer_id.filter(event.organizerId)]
+                .filter((e: any) => e.endAt.microsSinceUnixEpoch >= now).length;
+            if (activeCount >= MAX_ACTIVE_EVENTS_PER_USER) {
+                throw new SenderError(`Maximum ${MAX_ACTIVE_EVENTS_PER_USER} active calendar events per user.`);
+            }
         }
 
         ctx.db.CalendarEvent.id.update(updateWithAudit(ctx, event, {
@@ -245,9 +274,7 @@ export const delete_calendar_event = spacetimedb.reducer(
 
         const event = ctx.db.CalendarEvent.id.find(eventId);
         if (!event) throw new SenderError('Calendar event not found.');
-        if (event.organizerId !== user.id && !isRoleAtLeast(user.role, 'Admin')) {
-            throw new SenderError('Forbidden: Only the organizer or an Admin can delete this event.');
-        }
+        ensureCanManageEvent(ctx, user, event, 'delete this event');
 
         deleteCalendarEventWithInvites(ctx, eventId);
     }
@@ -263,9 +290,7 @@ export const invite_to_event = spacetimedb.reducer(
 
         const event = ctx.db.CalendarEvent.id.find(eventId);
         if (!event) throw new SenderError('Calendar event not found.');
-        if (event.organizerId !== user.id && !isRoleAtLeast(user.role, 'Admin')) {
-            throw new SenderError('Forbidden: Only the organizer or an Admin can invite users to this event.');
-        }
+        ensureCanManageEvent(ctx, user, event, 'invite users to this event');
 
         const invitee = ctx.db.User.id.find(inviteeUserId);
         if (!invitee) throw new SenderError('Invitee user not found.');
@@ -299,9 +324,7 @@ export const remove_invite = spacetimedb.reducer(
 
         const event = ctx.db.CalendarEvent.id.find(eventId);
         if (!event) throw new SenderError('Calendar event not found.');
-        if (event.organizerId !== user.id && !isRoleAtLeast(user.role, 'Admin')) {
-            throw new SenderError('Forbidden: Only the organizer or an Admin can remove invites from this event.');
-        }
+        ensureCanManageEvent(ctx, user, event, 'remove invites from this event');
 
         const invite = [...ctx.db.CalendarEventInvite.by_event_and_invitee.filter([eventId, inviteeUserId])][0];
         if (!invite) throw new SenderError('Invite not found.');

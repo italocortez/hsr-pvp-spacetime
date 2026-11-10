@@ -88,6 +88,7 @@ import {
     type RegisterOpts,
 } from './s8-fixtures';
 import { duel, openMatchLobby, playMatch, seedElo, sidesOf } from './s8d-fixtures';
+import { parkedLobby } from './s10-a2-fixtures';
 
 // ─── Reading views ───────────────────────────────────────────────────────────
 
@@ -130,7 +131,7 @@ const COLS = {
     myLobbies: ['id', 'joinCode', 'name', 'stage', 'isAway'] as const,
     member: ['memberKey', 'lobbyId', 'joinSeq', 'userId', 'label', 'lobbySlot', 'presence', 'isHost', 'isReferee',
         'isCaptain', 'isConfirmed', 'avatarCharacterName', 'displayedAchievementId', 'mmrByMode', 'accountRating',
-        'accountCount'] as const,
+        'accountCount', 'disconnectActionAt'] as const, // T-S10d: + disconnectActionAt (A92(9))
     ban: ['lobbyId', 'bannedUserId', 'bannedJoinSeq', 'label', 'bannedByUserId', 'createdDate'] as const, // T-S9c: + bannedJoinSeq (A74(2))
     chat: ['id', 'lobbyId', 'senderUserId', 'senderType', 'content', 'metadata', 'anonymousLabel', 'createdDate'] as const,
     session: ['lobbyId', 'turnIndex', 'draftSequence', 'timerState', 'isAuctionPhase', 'nextNominatorTeam',
@@ -729,8 +730,8 @@ describe('view_lobby_browser (anonymous shared)', () => {
         const anon = lobbyOf(test, 'a', { lobby: { ...ANON, isAnonymousSpectators: true, name: 'Masked' }, seats: [], noStart: true });
         const empty = lobbyOf(test, 'e', { seats: [], noStart: true });
         const drafting = lobbyOf(test, 'd');
-        const parked = lobbyOf(test, 'k', { lobby: { disconnectPolicy: { tag: 'Deferred' } } });
-        tx(test, parked.host, (ctx) => M.defer_match(ctx, { lobbyId: parked.lobbyId }));
+        // T-S10d (A91(2)): parked through a submitted Ranked game instead of a standalone Deferred defer.
+        const parked = parkedLobby(test, { seats: seatsOf('k'), actors: { host: guest(test, 'khost') } });
         expect(lobbyRow(test, parked.lobbyId).stage.tag).toBe('AwaitingResult');
         const rows = shared<LobbyBrowserRow>(test, 'view_lobby_browser');
         const byId = (s: Lobby) => rows.find((r) => r.id === s.lobbyId);

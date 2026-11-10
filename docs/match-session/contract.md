@@ -76,7 +76,7 @@ The match session system manages the entire draft lifecycle within a lobby: char
 3. Coach guard: reject if caller's slot is a coach slot (D-39/MOUS-03)
 4. Turn validation: `draftSequence[turnIndex]` must exist, `actionRequired` must be `Pick`, `teamTurn` must match caller's team
 5. Captain check: if team has a captain, only the captain can pick
-6. If `allowMirrorPicks=false`: reject if characterName already appears in a Pick step
+6. If `allowMirrorPicks=false`: reject if characterName already appears in a Pick step _Superseded in Phase S10d execution (DECISIONS.md A87)._
 7. Always reject if characterName appears in a Ban step (bans are never bypassed)
 8. If `requireOwnership=true`: validate character ownership (D-40)
 9. Look up cost from `HsrCharacterCost` table using (characterName, eidolon, costSetId, gameMode) -- EMPTY costs 0
@@ -178,7 +178,7 @@ The match session system manages the entire draft lifecycle within a lobby: char
 5. **If Pick turn:**
    - Default: `characterName="EMPTY"`, `eidolon=0`
    - If `autoRandomPick=true`: build available pool — Phase 12.3 D-I-01/02: if `requireOwnership=true`, pool is union of characters from all `LobbyMemberAccount` rows for `(lobbyId, userId)` for each acting team member (migrated from `HsrAccount.isActive` global account); if `requireOwnership=false`, pool is all cost table characters for the game mode — exclude banned+picked, deterministic hash `(turnIndex * 31 + lobbyId) % poolSize`
-   - Insert Pick step with `actorUserId=0` (system), `costPaid=0`
+   - Insert Pick step with `actorUserId=0` (system), `costPaid=0` _Superseded in Phase S10d execution (DECISIONS.md A86)._
 6. **If Ban turn:**
    - Default: `characterName="SKIP"`
    - If `autoRandomPick=true`: same deterministic hash from available pool (same LobbyMemberAccount-based pool when requireOwnership=true)
@@ -1184,6 +1184,9 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 | Input bounds: `pick_character` rejects an eidolon above 6 when ownership is not required ("eidolon must be between 0 and 6."); `equip_lightcone` rejects a superimposition outside 1 to 5 on the open and the Admin closed-game path ("superimposition must be between 1 and 5."); `place_bid` rejects a bid that is not finite or is negative ("bidAmount must be a finite, non-negative number.") | Phase S10c execution (backend audit 2026-11-09, draft findings 1 to 3) | 2026-11-09 |
 | Auction, full team sits out: a team holding `charactersPerTeam` characters is rejected by `nominate_character` and `place_bid` ("Your team already has all its characters."); the rotation and the timer hand the nomination to the team that is not full; while one team is full, a nomination by the other team is sold to it at once at base cost with no bidding round (the nominating team's budget, ownership and exclusivity checks unchanged; the timer's EMPTY nomination sells at 0). No team can exceed `charactersPerTeam` | Phase S10c execution (DECISIONS.md A81) | 2026-11-09 |
 | `resume_draft` on an automatic (disconnect) pause: accepted from the referee or from any seated player of either team who is present; a coach, a non-referee spectator and an away or abandoned player are rejected ("Only the referee or a seated player can resume an auto-paused draft."). A manual pause keeps D-62 and its text | Phase S10c execution (DECISIONS.md A85) | 2026-11-09 |
+| Timer auto-pick pricing: with `autoRandomPick`, a real character drawn by the timer is priced from the lobby's Classic cost row like a manual pick: eidolon 0 when ownership is not required, the acting team's highest owned eidolon when it is (the pool stays the union of the team's selected accounts, D-I-01/02; equal to a manual pick in 1v1, never cheaper than one in 2v2 and above). `EMPTY` (setting off, or an empty pool) stays at cost 0 | Phase S10d execution (DECISIONS.md A86) | 2026-11-09 |
+| Mirror picks, once per team: with `allowMirrorPicks` a team may pick a character the other team holds, but not one it already holds ("Your team already picked this character."); without it "Character already picked." is unchanged. The timer pool follows the same rule. `EMPTY` is never blocking: a team may hold any number of `EMPTY` picks, manual or by timer, with mirror on or off. Auction is unaffected (sales are exclusive) | Phase S10d execution (DECISIONS.md A87) | 2026-11-09 |
+| `start_draft` is rejected while a seated player (not a coach) is offline: "All Blue and Red players must be online before starting."; an offline coach or spectator does not block | Phase S10d execution (DECISIONS.md A92(1)) | 2026-11-09 |
 
 ---
 

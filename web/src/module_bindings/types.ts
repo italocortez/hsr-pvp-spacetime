@@ -1150,6 +1150,7 @@ export const LobbyMemberViewRow = __t.object("LobbyMemberViewRow", {
   mmrByMode: __t.option(__t.array(__t.u32())),
   accountRating: __t.option(__t.u32()),
   accountCount: __t.option(__t.u8()),
+  disconnectActionAt: __t.option(__t.timestamp()),
 });
 export type LobbyMemberViewRow = __Infer<typeof LobbyMemberViewRow>;
 

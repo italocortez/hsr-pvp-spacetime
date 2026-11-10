@@ -4,7 +4,7 @@
 // accounts, roles and the EloConfig row are written straight into the in-memory datastore (or through the internal
 // owner), like the earlier suites. `test.db` is read only outside `tx` bodies. Nothing reaches maincloud.
 import { expect } from 'vitest';
-import { M, guest, lobbyRow, session, tx, type Actor, type Harness, type Lobby } from './s4-fixtures';
+import { M, advance, disconnect, guest, lobbyRow, session, tx, type Actor, type Harness, type Lobby } from './s4-fixtures';
 import { finishGame } from './s7-fixtures';
 import { bracketByKey, insertHsrAccount, liveField, matchRow, type TournamentArgs } from './s8-fixtures';
 
@@ -158,3 +158,23 @@ export const duel = (over: Partial<TournamentArgs> = {}) => liveField(2, over);
 
 /** A fresh verified-free guest (outsider). */
 export const outsider = (test: Harness, name = 'outsider') => guest(test, name);
+
+/**
+ * T-S10d (A91(2)): the Deferred policy is reserved for tournaments, so a Deferred lobby is a tournament lobby: a Bo1
+ * duel whose tournament holds Deferred, and the open lobby of its final (openMatchLobby: the organizer is the
+ * Spectator referee unless `opts.creator` is given; a participant creator sits on its team's seat).
+ */
+export function deferredDuel(opts: OpenOpts = {}, over: Partial<TournamentArgs> = {}) {
+    const f = duel({ defaultBestOf: 1, grandFinalBestOf: 1, disconnectPolicy: 'Deferred', ...over });
+    const m = byKey(f.test, f.id, 'W-R1-M1');
+    return { f, m, s: openMatchLobby(f, m.id, opts) };
+}
+
+/**
+ * T-S10d (A91(1)): `who` (a seated player) drops (client_disconnected) and the clock runs 1 s past the forfeit grace
+ * (`graceSeconds`, the default 60), so defer_match's precondition holds honestly.
+ */
+export function offlinePastGrace(test: Harness, who: Actor, graceSeconds = 60) {
+    disconnect(test, who);
+    advance(test, graceSeconds * 1_000 + 1_000);
+}

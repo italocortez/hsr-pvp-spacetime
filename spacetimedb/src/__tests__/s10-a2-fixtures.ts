@@ -4,7 +4,7 @@
 // (outside any reducer), like the earlier suites. `test.db` is read only outside `tx` bodies. Nothing reaches maincloud.
 // seedRatingData is copied from s6-rules.test.ts (a local helper there, not exported).
 import { expect } from 'vitest';
-import { M, lobbyRow, session, setupLobby, tx, type Actor, type Harness, type Lobby } from './s4-fixtures';
+import { M, lobbyRow, session, setupLobby, tx, type Actor, type Harness, type Lobby, type SetupOpts } from './s4-fixtures';
 import { H, arrange, blueNames, captain, closeGame, halves, redNames, side } from './s7-fixtures';
 import { AUDIT, insertHsrAccount } from './s8-fixtures';
 
@@ -166,11 +166,18 @@ export interface RankedOpts {
 export function playRanked(test: Harness, winner: 'Blue' | 'Red', opts: RankedOpts = {}): { s: Lobby; recId: number } {
     const s = setupLobby(test, { actors: opts.actors, lobby: opts.lobby, beforeStart: rankedHook(test, opts.ratings) });
     opts.afterStart?.(s);
-    draftWithBans(s, blueNames(), redNames(), opts.bans ?? []);
+    playRankedGame(s, winner, opts.bans ?? [], opts.screenshots ?? true);
+    const recId = [...test.db.MatchResultRecord.lobby_id.filter(s.lobbyId)][0].id;
+    return { s, recId };
+}
+
+/** playRanked after start_draft: drafted, arranged, Equipping → Scoring, scored by the host referee, closed. */
+function playRankedGame(s: Lobby, winner: 'Blue' | 'Red', bans: string[], shots: boolean) {
+    const { test } = s;
+    draftWithBans(s, blueNames(), redNames(), bans);
     arrange(s, captain(s, 'Blue'), 'Blue', halves(blueNames()));
     arrange(s, captain(s, 'Red'), 'Red', halves(redNames()));
     tx(test, s.host, (ctx) => M.advance_stage(ctx, { lobbyId: s.lobbyId }));
-    const shots = opts.screenshots ?? true;
     for (const team of ['Blue', 'Red'] as const) {
         const values = [H(team === winner ? 10 : 20), H(team === winner ? 10 : 20)];
         tx(test, s.host, (ctx) => M.record_group_scores(ctx, {
@@ -178,8 +185,25 @@ export function playRanked(test: Harness, winner: 'Blue' | 'Red', opts: RankedOp
         }));
     }
     closeGame(s, s.host);
-    const recId = [...test.db.MatchResultRecord.lobby_id.filter(s.lobbyId)][0].id;
-    return { s, recId };
+}
+
+/**
+ * T-S10d (A91(2)): a standalone lobby parked in AwaitingResult now that the Deferred policy is reserved for
+ * tournaments. setupLobby with `opts` (DEFAULT_LOBBY_ARGS' Standard policy; seats, actors and beforeStart kept), made
+ * Ranked by rankedHook after opts.beforeStart, then played as playRanked plays it: the host referee's close submits
+ * the game, so the record is Submitted (no standalone path parks a Pending record any more) and the lobby parks.
+ */
+export function parkedLobby(test: Harness, opts: SetupOpts = {}, winner: 'Blue' | 'Red' = 'Blue'): Lobby {
+    const s = setupLobby(test, {
+        ...opts,
+        beforeStart: (l) => {
+            opts.beforeStart?.(l);
+            rankedHook(test)(l);
+        },
+    });
+    playRankedGame(s, winner, [], true);
+    expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('AwaitingResult');
+    return s;
 }
 
 /** override_match_result → Validated(winner) by `mod`, then finalize_match_result by the match referee (the host). */

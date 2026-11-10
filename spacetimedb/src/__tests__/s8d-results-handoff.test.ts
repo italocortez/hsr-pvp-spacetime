@@ -20,8 +20,10 @@ import {
     playMatch,
     recordsOfLobby,
     recordsOfMatch,
+    seedElo,
     validate,
 } from './s8d-fixtures';
+import { parkedLobby } from './s10-a2-fixtures';
 
 const RESULTS = TOURNAMENT_PERM_MESSAGES.results;
 const BO1 = { defaultBestOf: 1, grandFinalBestOf: 1 };
@@ -233,18 +235,17 @@ describe('casual-only tools: finalize_match_result, admin_force_finalize, admin_
     });
 
     it('casual: admin_force_finalize finalizes a deferred lobby; admin_void_match voids another', () => {
+        // T-S10d (A91(2)): Deferred is tournament-only; a standalone lobby parks through a submitted Ranked game.
         const test = newHarness();
-        const deferred = { lobby: { disconnectPolicy: { tag: 'Deferred' } } };
-        const a = setupLobby(test, deferred);
-        tx(test, a.host, (ctx) => M.defer_match(ctx, { lobbyId: a.lobbyId }));
+        seedElo(test);
+        const a = parkedLobby(test);
         expect(lobbyRow(test, a.lobbyId).stage.tag).toBe('AwaitingResult');
         tx(test, 'internal', (ctx) => M.admin_force_finalize(ctx, { lobbyId: a.lobbyId, winnerTeamId: 1 }));
         expect(test.db.Lobby.id.find(a.lobbyId)).toBeFalsy();
         expect([...test.db.MatchSessionHistory.iter()]).toHaveLength(1);
 
         // The first lobby is gone: the same players may host / join a second one.
-        const b = setupLobby(test, { ...deferred, actors: a.a });
-        tx(test, b.host, (ctx) => M.defer_match(ctx, { lobbyId: b.lobbyId }));
+        const b = parkedLobby(test, { actors: a.a });
         tx(test, 'internal', (ctx) => M.admin_void_match(ctx, { lobbyId: b.lobbyId }));
         expect([...test.db.MatchSessionHistory.iter()]).toHaveLength(1); // a void writes no history
     });
@@ -443,15 +444,16 @@ describe('override_match_result: status and lobby guards for tournament records 
     });
 
     it('casual records are unchanged: a Pending casual record is overridden by a Moderator', () => {
+        // T-S10d (A91(2)): no standalone path parks a Pending record any more (Deferred is tournament-only); the
+        // Pending record is start_draft's, in a live casual draft, and the override leaves the lobby where it is.
         const test = newHarness();
-        const s = setupLobby(test, { lobby: { disconnectPolicy: { tag: 'Deferred' } } });
-        tx(test, s.host, (ctx) => M.defer_match(ctx, { lobbyId: s.lobbyId }));
+        const s = setupLobby(test);
         const [r] = recordsOfLobby(test, s.lobbyId);
         expect(r.status.tag).toBe('Pending');
         override(test, 'internal', r.id, 'Validated', 'Red');
         const after = test.db.MatchResultRecord.id.find(r.id)!;
         expect(after.status.tag).toBe('Validated');
         expect(after.winnerTeamSide?.tag).toBe('Red');
-        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('AwaitingResult');
+        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Drafting');
     });
 });

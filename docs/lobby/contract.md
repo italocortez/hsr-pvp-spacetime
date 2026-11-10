@@ -49,7 +49,7 @@ The lobby system manages the lifecycle of match rooms where players assemble, co
 | requireOwnership | bool | Yes | Require HsrAccountCharacter ownership for picks |
 | costSetId | u32 | Yes | FK to CostSet (0 = default) |
 | disconnectPolicy | DisconnectPolicy | Yes | Behavior on member disconnect |
-| disconnectForfeitSeconds | u32 | Yes | Auto-forfeit timeout (0 = not set) |
+| disconnectForfeitSeconds | u32 | Yes | Auto-forfeit timeout (0 = not set) _Superseded in Phase S10d execution (DECISIONS.md A92)._ |
 | teamBlueAlias | string | Yes | Blue team display name |
 | teamRedAlias | string | Yes | Red team display name |
 | bestOf | u8 | Yes | Series length (0 → 1; 1 = single game, 3/5/7 = series) _Superseded in Phase S8e execution (DECISIONS.md A67(2))._ |
@@ -1131,7 +1131,7 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(2))._
 | set_team_slot during Drafting | Rejected by stage guard | Slots frozen once draft begins |
 | unconfirm_ready during Drafting | Rejected by stage guard | Ready state locked during draft |
 | Guest calls update_lobby_settings with Ranked | Forced to Casual server-side | Guest override applies regardless of input |
-| disconnectForfeitSeconds=0 in create/update | Stored as undefined (not set) | 0 is sentinel for "no timeout" |
+| disconnectForfeitSeconds=0 in create/update | Stored as undefined (not set) | 0 is sentinel for "no timeout" _Superseded in Phase S10d execution (DECISIONS.md A92)._ |
 | Tournament lobby update_lobby_settings | Locked fields silently retain values | No error — free fields still update |
 | Preset name exactly 50 chars | Accepted | Boundary: 1-50 inclusive |
 | Preset name 51 chars | Rejected | "Preset name must be between 1 and 50 characters." |
@@ -1401,6 +1401,13 @@ _Superseded in Phase S8g execution (DECISIONS.md A70)._ Read "team1" as "the Blu
 | `broadcast_cursor` by a Spectator seat or by a non-member returns silently (no event, no error); coaches broadcast (D-34, as implemented since Phase 10 and documented here for the first time; tests `s10-chat`) | Phase S10 execution (DECISIONS.md A76) | 2026-11-09 |
 | `start_draft` and `advance_stage` are referee powers: accepted from the lobby member holding the referee flag (any seat) or a Moderator / Admin; everyone else, the host included, gets "Only the referee, moderators, or admins can perform this action." with nothing changed. A host who gave the flag away takes it back with `reclaim_referee`. Scenarios that say "the host starts the draft" / "the host calls `advance_stage`" read "the referee" | Phase S10b execution (DECISIONS.md A80) | 2026-11-09 |
 | Reconnect and auto-pause: the reconnect branch of `join_lobby` lifts an automatic pause only when the caller is a seated player (not a coach, not a spectator) and, after the caller's own return, no seated player of either team is offline, away or abandoned. A reload by an opponent, a coach or a spectator no longer resumes the draft. The pool, the forfeit grace and `claim_forfeit` are unchanged | Phase S10c execution (DECISIONS.md A85) | 2026-11-09 |
+| Disconnect policies by lobby kind: `Deferred` only for tournaments and their lobbies ("The Deferred disconnect policy is only available for tournaments and their lobbies." in `create_lobby`, `update_lobby_settings` on a lobby that is not tournament-controlled, `create_lobby_preset`, `update_lobby_preset`); `NoAction` only for casual lobbies ("The NoAction disconnect policy is only available for casual lobbies." for a Ranked lobby, also on a `matchType` change, and for tournaments). `disconnectForfeitSeconds` is the grace before a forfeit claim or a defer, nothing is automatic: 30 to 600, and 0 or unset means the default 60 ("disconnectForfeitSeconds must be between 30 and 600 (0 keeps the default of 60).") | Phase S10d execution (DECISIONS.md A91, A92) | 2026-11-09 |
+| `defer_match` needs a seated player (not a coach) who is offline, away or abandoned past the grace or with a spent pool: "Defer needs a seated player who has been disconnected past the forfeit grace or whose disconnect pool is spent."; the exclusive spectator referee (D-81) is exempt. The automatic park at an empty pool (Phase 10 D-10) is retired. A parked lobby is cleared by a Moderator or Admin, or by tournament staff through the result reducers; there is no automatic clean-up | Phase S10d execution (DECISIONS.md A91) | 2026-11-09 |
+| A seated player whose row is away cannot `concede_match`, `claim_forfeit` or `defer_match` ("You are away from this match. Return to it first."); an abandoned row never can ("You left this match for another lobby and cannot act on it.") | Phase S10d execution (DECISIONS.md A92(4)) | 2026-11-09 |
+| Forfeit and defer eligibility use the live pool: a player is past the threshold at the earlier of `disconnectedAt + grace` and `disconnectedAt + remaining pool`, without needing a reconnect. `view_my_lobby_members.disconnectActionAt` carries that instant for an offline, away or abandoned seated player in a live stage under Standard or Deferred | Phase S10d execution (DECISIONS.md A92(6), A92(9)) | 2026-11-09 |
+| Waiting stage: a host or referee who disconnects is subject to the 15 s transfer check (A22(5) order, online first); no `disconnectedAt` stamp and no pause in Waiting; other members schedule nothing. This replaces "no RefereeTransferCheck" in the Phase S4 edge-case row for Waiting | Phase S10d execution (DECISIONS.md A92(5)) | 2026-11-09 |
+| `client_connected` lifts an auto-pause under the same test as the `join_lobby` reconnect (a seated player returns and no seated player is still away); both paths share one helper and one clock write | Phase S10d execution (DECISIONS.md A92(7)) | 2026-11-09 |
+| A disconnect during a manual pause adds no auto-pause; the pauser or the referee resumes by D-62 and the draft runs. Accepted behaviour: the forfeit clock and the pool still run for the away player, and the captain role moves to a present teammate | Phase S10d execution (DECISIONS.md A92(8)) | 2026-11-09 |
 
 ---
 

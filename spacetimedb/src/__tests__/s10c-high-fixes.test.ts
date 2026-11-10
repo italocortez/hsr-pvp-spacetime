@@ -44,7 +44,7 @@ import {
     side,
 } from './s7-fixtures';
 import { liveField, matchRow, resolveMatch } from './s8-fixtures';
-import { byKey, openMatchLobby, playMatch, recordsOfLobby, recordsOfMatch, validate } from './s8d-fixtures';
+import { byKey, deferredDuel, offlinePastGrace, openMatchLobby, playMatch, recordsOfLobby, recordsOfMatch, validate } from './s8d-fixtures';
 import { bulkUpsert, costSetId, draftSyn, liveSyn, synergyRow } from './s10-c1-fixtures';
 import { rejection, seedCharacters } from './s10-c2-fixtures';
 
@@ -444,14 +444,18 @@ describe('A83: view_my_match_result emits concedeSummary only to a Moderator or 
     const resultFor = (test: Harness, who: Actor, lobbyId: number) =>
         ((M as any).view_my_match_result(test.viewContext(who.auth), {}) as any[]).find((r) => r.lobbyId === lobbyId);
 
-    it.each([false, true])('casual deferred, parked (isAnonymousPlayers %s): player and spectator get none; Moderator and Admin members get the text; the column keeps it (A83)', (anon) => {
-        const test = newHarness();
-        const s = setupLobby(test, { lobby: { disconnectPolicy: { tag: 'Deferred' }, isAnonymousPlayers: anon } });
+    // T-S10d (A91(1)(2)): Deferred is tournament-only, so the deferred lobby is the lobby of a Deferred tournament
+    // (isAnonymousDefault carries the anonymity), and the defer follows a seated player (r1) offline past the grace.
+    it.each([false, true])('deferred tournament lobby, parked (isAnonymousPlayers %s): player and spectator get none; Moderator and Admin members get the text; the column keeps it (A83)', (anon) => {
+        const { f, s } = deferredDuel({}, { isAnonymousDefault: anon });
+        const { test } = f;
+        expect(lobbyRow(test, s.lobbyId).isAnonymousPlayers).toBe(anon);
         const spec = joinAsSpectator(s, 'spec');
         const mod = joinAsSpectator(s, 'modspec');
         const adm = joinAsSpectator(s, 'admspec');
         setRole(test, mod.userId, 'Moderator');
         setRole(test, adm.userId, 'Admin');
+        offlinePastGrace(test, s.a.r1);
         tx(test, s.host, (ctx) => M.defer_match(ctx, { lobbyId: s.lobbyId }));
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('AwaitingResult');
         const [stored] = recordsOfLobby(test, s.lobbyId);

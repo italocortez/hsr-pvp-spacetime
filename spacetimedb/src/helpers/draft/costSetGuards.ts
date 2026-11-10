@@ -43,6 +43,17 @@ export function ensureCostSetCovers(ctx: any, costSetId: number, gameModeTag: st
     }
 }
 
+/** The Classic cost of a character at an eidolon level from the lobby's cost row (cost set, game mode, Classic); 0 without a row. */
+export function classicCostAt(ctx: any, lobby: any, characterName: string, eidolon: number): number {
+    const costRow = [...ctx.db.HsrCharacterCost.cost_set_id.filter(lobby.costSetId)].find(
+        (r: any) =>
+            r.characterName === characterName &&
+            r.gameMode.tag === lobby.gameMode.tag &&
+            r.draftMode.tag === 'Classic'
+    );
+    return costRow ? (costRow.costs[`e${eidolon}`] ?? 0) : 0;
+}
+
 /** delete_cost_set guard: any Lobby (A67(1): every lobby stage is live) or a non-terminal Tournament still references the set. */
 export function isCostSetInUse(ctx: any, costSetId: number): boolean {
     // iter() required: neither Lobby nor Tournament has a costSetId index; Lobby holds live lobbies only (GC'd)

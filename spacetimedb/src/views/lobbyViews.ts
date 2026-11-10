@@ -26,8 +26,10 @@ import { hasLivePresence } from '@module/helpers/identity/presenceHelpers';
 import {
     callerMemberships, hideUserId, maskLobbyRow, lobbyAnonymousFor, ratingVisible, renderSystemChat, anonymousLabelOr,
 } from '@module/helpers/identity/viewAnonymity';
-import { slotIsSpectator } from '@module/helpers/lobby/lobbyHelpers';
+import { isSeatedPlayer, LIVE_STAGES, slotIsSpectator } from '@module/helpers/lobby/lobbyHelpers';
+import { disconnectThresholdMicros, isMemberRowAway } from '@module/helpers/lobby/disconnectHelpers';
 import { computeLobbyMemberRating } from '@module/helpers/stats/accountRating';
+import { Timestamp } from 'spacetimedb';
 import { SYSTEM_USER_ID } from '@module/helpers/admin/auditColumns';
 
 const GAME_MODES = ['MemoryOfChaos', 'ApocalypticShadow', 'AnomalyArbitration'] as const;
@@ -254,7 +256,25 @@ const LobbyMemberViewRow = t.row('LobbyMemberViewRow', {
     mmrByMode: t.array(t.u32()).optional(),       // [MemoryOfChaos, ApocalypticShadow, AnomalyArbitration], active season
     accountRating: t.u32().optional(),
     accountCount: t.u8().optional(),
+    // A92(9): for a seated player who is offline, away or abandoned in a live stage under Standard / Deferred, the
+    // instant from which the forfeit claim (Standard) or the defer (Deferred) becomes available on that seat; else none.
+    disconnectActionAt: t.timestamp().optional(),
 });
+
+/**
+ * A92(9): the earlier of the grace end and the live pool's end (disconnectThresholdMicros, the test claim_forfeit and
+ * defer_match apply) for a seated player whose row is offline, away or abandoned in a live stage, under Standard or
+ * Deferred. The away test is the reducers' row test (isMemberRowAway), not the presence column: a stamped offline row
+ * whose user is live on another identity shows Online yet can be forfeited, so it still carries the instant. Not
+ * anonymity sensitive: it is derived from the seat's own disconnect stamp and the lobby's settings, names no user, and
+ * adds only a time to the seat's state. Changes only on a disconnect or a return.
+ */
+function disconnectActionAt(lobby: any, member: any): Timestamp | undefined {
+    if (!LIVE_STAGES.includes(lobby.stage.tag) || lobby.disconnectPolicy.tag === 'NoAction') return undefined;
+    if (!isSeatedPlayer(member) || !isMemberRowAway(member)) return undefined;
+    const micros = disconnectThresholdMicros(lobby, member);
+    return micros === undefined ? undefined : new Timestamp(micros);
+}
 
 function memberPresence(ctx: any, member: any): { tag: string; value: {} } {
     if (member.abandonedAt !== undefined) return { tag: 'Gone', value: {} };
@@ -302,6 +322,7 @@ export const view_my_lobby_members = spacetimedb.view(
                     accountCount = [...ctx.db.LobbyMemberAccount.by_lobby_and_user.filter([lobby.id, member.userId])].length;
                 }
 
+                const presence = memberPresence(ctx, member);
                 results.push({
                     memberKey: (BigInt(lobby.id) << 32n) | BigInt(member.joinSeq),
                     lobbyId: lobby.id,
@@ -309,7 +330,7 @@ export const view_my_lobby_members = spacetimedb.view(
                     userId: anonymize ? 0 : member.userId,
                     label,
                     lobbySlot: member.lobbySlot,
-                    presence: memberPresence(ctx, member),
+                    presence,
                     isHost: lobby.hostUserId === member.userId,
                     isReferee: member.isReferee,
                     isCaptain: member.isCaptain,
@@ -319,6 +340,7 @@ export const view_my_lobby_members = spacetimedb.view(
                     mmrByMode,
                     accountRating,
                     accountCount,
+                    disconnectActionAt: disconnectActionAt(lobby, member),
                 });
             }
         }

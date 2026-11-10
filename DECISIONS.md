@@ -898,3 +898,72 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** user, 2026-11-09: "We can reply on a player's good sport, we can limit this to referee's and seated players (both sides), not coaches or spectators", then "yeah lets do the split" (the automatic path stays tied to the away player's return because the page calls `join_lobby` on every reload). Audit, lobby slice finding 1.
 - **Supersedes:** D-11 / D-39's "any reconnect resumes"; extends D-62 for auto-pauses.
 - **Where implemented:** S10c
+
+### A86 — A timer auto-pick of a real character is priced like a manual pick
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:** when a Classic turn expires and `autoRandomPick` picks a real character, the pick is priced from the lobby's cost row exactly as `pick_character` prices it: at eidolon 0 when ownership is not required, at the highest owned eidolon of the acting team's account when it is (`resolveOwnedEidolon`), and only characters that team may legally pick are drawn. The `EMPTY` placeholder (setting off, or nothing pickable) stays at cost 0.
+- **Why:** user, 2026-11-09: "for the timer auto-pick, I agree with your recommendation". Audit, draft slice finding 6: a captain who let every turn expire got eight real characters at roster cost 0, the largest possible handicap in their favour.
+- **Supersedes:** the match-session contract line that gives the timer pick `costPaid = 0` for a real character (it stays true for `EMPTY`).
+- **Where implemented:** S10d
+
+### A87 — Mirror picks: once per team
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:** with `allowMirrorPicks`, a team may pick a character the other team already picked, but no team picks the same character twice. Without the setting nothing changes (a picked character is gone for both). The rule holds on every pick path (manual, timer auto-pick, Auction nomination and sale where mirror applies).
+- **Why:** user, 2026-11-09: "a team can only pick a character once, the enemy team can pick it again, but only once!". Audit, draft slice finding 10.
+- **Supersedes:** nothing; closes a gap in the mirror rule.
+- **Where implemented:** S10d
+
+### A88 — A team-seated tournament referee keeps score adjustments and the staff close
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:** A39 stays limited to the `winnerOverride` on an unresolved tie. A referee seated on a team in a tournament lobby may still call `set_score_adjustment` for either team and close the game as staff (A34a, A60(4)). No code change; adjustments stay audited.
+- **Why:** user, 2026-11-09: "yes, we will rely on good sportsmanship here". Audit, results slice finding 5 asked for a direction.
+- **Supersedes:** nothing; clarifies A39 against A34a.
+- **Where implemented:** S10d (contract note only)
+
+### A89 — Tournament staff manage tournament-linked calendar events
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:** for a calendar event linked to a bracket match (`bracketMatchId` set), `update_calendar_event`, `delete_calendar_event` and the invite reducers accept the event's organizer, an Admin, the tournament's organizer and any tournament staff holding the `bracket` permission (the permission that creates such events). Personal events are unchanged (organizer or Admin).
+- **Why:** user, 2026-11-09: "yes, they can". Audit, roster / calendar slice finding 7: an event scheduled by an assistant locked the tournament's organizer out, and D-19 blocked a replacement.
+- **Supersedes:** the "Organizer or Admin" caller rule of the calendar contract for tournament-linked events.
+- **Where implemented:** S10d
+
+### A90 — `update_calendar_event` enforces the active cap
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:** an update that moves an ended event's `endAt` back to now or later is rejected when the event's organizer already has 40 not-yet-ended events ("Maximum 40 active calendar events per user."). Updates that keep an event active, or keep it ended, are not counted again.
+- **Why:** user, 2026-11-09: "we should be consistent here so I vote yes". S10b review F2: the 40-active cap of A79 could be passed through update, up to the 100 ceiling.
+- **Supersedes:** nothing; completes A79(1).
+- **Where implemented:** S10d
+
+### A91 — Deferring a match
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:**
+  1. `defer_match` requires at least one seated player (not a coach) who is offline, away or abandoned and whose forfeit grace (`disconnectForfeitSeconds`) has passed or whose disconnect pool is empty (the live drain, A92(6)). An exclusive spectator referee (D-81) may defer without that precondition.
+  2. The `Deferred` policy is selectable only for tournaments and their lobbies. `create_lobby`, `update_lobby_settings` on a lobby that is not tournament-controlled, `create_lobby_preset` and `update_lobby_preset` reject it.
+  3. The automatic park at an empty pool from the original notes (Phase 10 D-10, Deferred branch) is retired: nothing ends or parks a match automatically (A68).
+  4. A parked lobby (AwaitingResult) is cleared by a Moderator or Admin by hand (`admin_force_finalize` / `admin_void_match`), or by tournament staff through the result reducers. No automatic clean-up.
+- **Why:** user, 2026-11-09: "lets go with your recommendation for deferring then" and "I agree wiuth your recomendations"; on parked lobbies: "i think is okay to let moderators or admins clear them by hand". Original intent (old repo Phase 10 notes): Deferred is "for tournament matches where TOs control outcomes"; defer is the exit of players waiting on a disconnected opponent. The code let any seated player park a healthy match, in casual lobbies too.
+- **Supersedes:** D-20 / D-63's unconditional defer; the Deferred branch of D-10.
+- **Where implemented:** S10d
+
+### A92 — Disconnect rules, second pass
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:**
+  1. `start_draft` is rejected while a seated player (not a coach) is offline or away.
+  2. `disconnectForfeitSeconds` is 30 to 600 wherever it is set (lobby, preset, tournament); unset keeps the default 60.
+  3. The `NoAction` policy is for casual lobbies only: rejected for Ranked lobbies and for tournaments.
+  4. A seated player whose row is away cannot `concede_match`, `claim_forfeit` or `defer_match` until they return through `join_lobby`; an abandoned row never can.
+  5. In the Waiting stage a host or referee who disconnects is subject to the same 15 s transfer check as in the live stages (A22(5) order, online first).
+  6. Forfeit eligibility uses the live pool: a player is past the pool when `pool - (now - disconnectedAt) <= 0`, not only when a stored pool is 0.
+  7. `client_connected` lifts an auto-pause under the same test as A85(1) (a seated player returns and no seated player is still away).
+  8. A disconnect during a manual pause stays as it is: no auto-pause is added, and the pauser (or the referee) resumes by D-62. Accepted behaviour, not a defect: the forfeit clock and the pool still run for the away player, the captain role moves to a present teammate, and the resume is a deliberate press.
+  9. `view_my_lobby_members` shows, for a seated player who is offline, away or abandoned in a live stage, the instant from which the forfeit claim (Standard) or the defer (Deferred) becomes available, so the room page can enable the button.
+- **Why:** user, 2026-11-09: "I agree wiuth your recomendations but I wanna explore more number 6", then, on the manual-pause case, "I would prefer not second pauses as this may look like a bug" and "yeah i agree with this final implemntation". Source: the disconnect policy review of 2026-11-09 (D2, G1, G4 to G7, G9, G11).
+- **Supersedes:** nothing wholesale; narrows A22a (Waiting), D-12 / D-13 (pool test), and the policy choices of `create_lobby` and `create_tournament`.
+- **Where implemented:** S10d

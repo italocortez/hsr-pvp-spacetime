@@ -5,6 +5,7 @@ import { getAuthenticatedUser, isRoleAtLeast } from '@module/helpers/identity/en
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { readAbuseConfig } from '@module/helpers/lobby/abuseControls';
 import { resolveMaxSpectators } from '@module/helpers/lobby/lobbyHelpers';
+import { ensureForfeitSecondsInRange, ensureNotDeferredOutsideTournament } from '@module/helpers/lobby/disconnectHelpers';
 
 import { ensureCostSetCovers, ensureCostSetUsable } from '@module/helpers/draft/costSetGuards';
 
@@ -117,6 +118,10 @@ export const create_lobby_preset = spacetimedb.reducer(
         if (args.name.length < 1 || args.name.length > 50) {
             throw new SenderError('Preset name must be between 1 and 50 characters.');
         }
+
+        // A91(2): no Deferred preset; A92(2): grace 30-600 s when set.
+        ensureNotDeferredOutsideTournament(args.disconnectPolicy.tag);
+        ensureForfeitSecondsInRange(args.disconnectForfeitSeconds);
 
         // Resolve disconnectForfeitSeconds — 0 sentinel means "not set"
         const disconnectForfeitSeconds = args.disconnectForfeitSeconds > 0
@@ -234,6 +239,10 @@ export const update_lobby_preset = spacetimedb.reducer(
         if (args.name.length < 1 || args.name.length > 50) {
             throw new SenderError('Preset name must be between 1 and 50 characters.');
         }
+
+        // A91(2): no Deferred preset (the system preset included); A92(2): grace 30-600 s when set.
+        ensureNotDeferredOutsideTournament(args.disconnectPolicy.tag);
+        ensureForfeitSecondsInRange(args.disconnectForfeitSeconds);
 
         // Resolve disconnectForfeitSeconds — 0 sentinel means "not set"
         const disconnectForfeitSeconds = args.disconnectForfeitSeconds > 0

@@ -402,8 +402,9 @@ Membership lifecycle after A68 (details in the reducer flows above):
   anonymized), `label`, `lobbySlot`, `presence` (`MemberPresence`: Gone if `abandonedAt`, Away if `leftAt`, else Online
   when the row or any `UserPresence` row of the user is live, A48, else Offline), `isHost`, `isReferee`, `isCaptain`,
   `isConfirmed`, `avatarCharacterName?` / `displayedAchievementId?` (identified seats), `mmrByMode?` (identified, not
-  `hideMmr`), `accountRating?` (`computeLobbyMemberRating`, merged) / `accountCount?` (A40 roster visibility). No
-  throttle stamps, no audit columns.
+  `hideMmr`), `accountRating?` (`computeLobbyMemberRating`, merged) / `accountCount?` (A40 roster visibility),
+  `disconnectActionAt?` (A92(9), set when the row is offline, away or abandoned by `isMemberRowAway`). No throttle
+  stamps, no audit columns.
 - **`view_my_lobby`** returns the full `Lobby` row (host and audit ids masked per A37); **`view_my_lobbies`** is the
   layer-0 row `{ id, joinCode, name, stage, isAway }`; **`view_my_lobby_bans`** lists the bans of lobbies the caller
   hosts or referees. Catalogue: [../views/architecture.md](../views/architecture.md).
@@ -434,6 +435,53 @@ Membership lifecycle after A68 (details in the reducer flows above):
   (unchanged, consistent with A85(1)); the only other path that lifts a pause is `resume_draft` (A85(2), see
   [../match-session/architecture.md](../match-session/architecture.md)). The disconnect pool, forfeit grace and
   `claim_forfeit` are unchanged (A85(3)).
+  _The "`client_connected` ... never resumes a draft" sentence is superseded in Phase S10d execution (DECISIONS.md A92(7))._
+
+## Phase S10d execution (DECISIONS.md A91, A92)
+
+- **Policy and grace rules (A91(2), A92(2)(3); `helpers/lobby/disconnectHelpers.ts`).**
+  `ensureNotDeferredOutsideTournament(tag)`: "The Deferred disconnect policy is only available for tournaments and
+  their lobbies." in `create_lobby`, `update_lobby_settings` on a lobby that is not tournament-controlled (the locked
+  branch ignores the argument), `create_lobby_preset` and `update_lobby_preset` (system preset included).
+  `ensureNoActionAllowed(tag, isRankedOrTournament)`: "The NoAction disconnect policy is only available for casual
+  lobbies." in `create_lobby` (Ranked), `update_lobby_settings` (unlocked, the effective `matchType` Ranked),
+  `create_tournament` / `update_tournament` (always; see [../tournament/architecture.md](../tournament/architecture.md)).
+  Presets are not checked for NoAction (A92(3) names lobbies and tournaments). `ensureForfeitSecondsInRange(s)`:
+  `disconnectForfeitSeconds` 0 / unset keeps the default 60, otherwise 30-600 ("disconnectForfeitSeconds must be
+  between 30 and 600 (0 keeps the default of 60).") in the same six writers. `create_tournament_lobby` copies the
+  tournament's values unchanged, so a tournament lobby may still be Deferred.
+- **`start_draft` (A92(1)).** Rejects while `anySeatedPlayerAway` (a seated player offline, away or abandoned):
+  "All Blue and Red players must be online before starting." (draft feature, `draftClassic.ts`).
+- **Waiting flag check (A92(5)).** `markMemberOffline` also schedules the 15 s `RefereeTransferCheck` in Waiting when
+  the member is the host or holds the referee flag (no `disconnectedAt`, no pause). `decideRefereeTransfer` accepts
+  `FLAG_CHECK_STAGES` = Waiting + `ACTIVE_STAGES` (`shared/lobby-rules`); `run_referee_transfer_check` moves the
+  referee (first online candidate, A22(5) order) and, in Waiting, the host (`onlineOnly`); the captain transfer and the
+  auto-pause stay live-stage / Drafting rules. `client_connected` cancels the pending check as in the live stages.
+- **Live pool (A92(6)).** `disconnectThresholdMicros(lobby, player)` = the earlier of `disconnectedAt + grace`
+  (`disconnectForfeitSeconds ?? 60`) and `disconnectedAt + disconnectPoolRemainingMs`; `isPastDisconnectThreshold`
+  (offline / away / abandoned, stamped, `now >=` threshold) is the per-player test of `isForfeitEligible` (every player
+  of the team) and of `defer_match` (any seated player).
+- **`defer_match` precondition (A91(1)).** Besides the existing guards, a caller other than the exclusive spectator
+  referee needs one seated player of either team past the threshold: "Defer needs a seated player who has been
+  disconnected past the forfeit grace or whose disconnect pool is spent." No automatic park (A91(3)); a parked
+  lobby is cleared by hand (A91(4), no code).
+- **Away callers (A92(4)).** `concede_match`, `claim_forfeit`, `defer_match`: after the spectator / coach guards
+  (the exclusive spectator referee is never away, `isThirdPartyReferee` skips such rows) `ensureSeatPresent` rejects an
+  abandoned row ("You left this match for another lobby and cannot act on it.") and an away row ("You are away from
+  this match. Return to it first.").
+- **One lift of an auto-pause (A92(7), G10).** `liftAutoPauseOnReturn(ctx, lobby, member, actorId)`
+  (`disconnectHelpers.ts`) holds the A85(1) test and the clock write (`isPaused = false`, `turnStartAt = now`;
+  `accumulatedPauseMs` untouched, F10 later). Callers: the `join_lobby` reconnect branch and `client_connected`
+  (per restored membership, after the row is written back online).
+- **Manual pause (A92(8)).** No code: a comment at the auto-pause decision in `run_referee_transfer_check` records the
+  accepted behaviour.
+- **`view_my_lobby_members.disconnectActionAt` (A92(9)).** Optional timestamp, last column: for a seated player whose
+  row is offline, away or abandoned (`isMemberRowAway`, the same row test `isPastDisconnectThreshold` applies for
+  `claim_forfeit` / `defer_match`; not the `presence` column, which also reads `UserPresence` on other identities) in a
+  live stage under Standard / Deferred, `disconnectThresholdMicros` (when the forfeit
+  claim, Standard, or the defer, Deferred, becomes available on that seat); otherwise none. It names no user and
+  derives from the seat's own stamp and the lobby settings, so anonymity is unchanged; it changes only on a
+  disconnect or a return.
 
 ## Phase History
 
@@ -478,6 +526,7 @@ Membership lifecycle after A68 (details in the reducer flows above):
 | S9a fix pass: spectator targets follow `isAnonymousSpectators`; browser host label per the host's seat kind; member-event chat lines rendered per reader; banned user masked in `view_my_lobby_bans`; `Lobby` header marked private | Phase S9a execution (DECISIONS.md A37) | 2026-11-08 |
 | Seat targeting: `kick_member`, `ban_member`, `set_captain`, `transfer_referee` take `targetJoinSeq`, `set_team_slot` an optional `targetJoinSeq` (omitted = self), `unban_member` takes `bannedJoinSeq`; `resolveSeat`; `Lobby.lastJoinSeq` replaces the `max + 1` join counter (seat numbers never reused); `LobbyBan.bannedJoinSeq`; no preventive ban of a non-member | Phase S9c execution (DECISIONS.md A74) | 2026-11-08 |
 | `join_lobby` auto-resume only for a seated player's return and only when no seated player of either team is still offline, away or abandoned (`isSeatedPlayer`, `anySeatedPlayerAway`) | Phase S10c execution (DECISIONS.md A85) | 2026-11-09 |
+| Deferred only in tournaments, NoAction only casual, forfeit grace 30-600 s; `start_draft` needs every seated player online; Waiting 15 s check for host / referee; live pool test; `defer_match` precondition; away / abandoned callers rejected by concede / claim / defer; `liftAutoPauseOnReturn` shared by `join_lobby` and `client_connected`; `view_my_lobby_members.disconnectActionAt` | Phase S10d execution (DECISIONS.md A91, A92) | 2026-11-09 |
 | Fix pass: `maxSpectators` caps watchers, not seat candidates (casual Waiting joins and `set_team_slot` moves into Spectator are not counted; live-stage joins and tournament Waiting spectators are); `ensureNotInLobby` runs `transferFlagsOnRemoval` on the away row before writing `abandonedAt` | Phase S8f execution (DECISIONS.md A68(4)(7)(8)) | 2026-11-08 |
 
 ---

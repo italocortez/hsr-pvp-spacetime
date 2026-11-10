@@ -8,7 +8,7 @@ import { M, expectReject, guest, lobbyRow, newHarness, setupLobby, tx, type Harn
 import { H, captain, playToScoring, side } from './s7-fixtures';
 import { moderator, setUserRole, verified } from './s8-fixtures';
 import { recordsOfLobby, seedElo } from './s8d-fixtures';
-import { playRanked, rankedHook } from './s10-a2-fixtures';
+import { parkedLobby, playRanked, rankedHook } from './s10-a2-fixtures';
 
 const dispute = (matchResultId: number, reason: string) => (ctx: any) => M.dispute_match_result(ctx, { matchResultId, reason });
 const override = (matchResultId: number, newStatusTag: string, winnerTeamSideTag: string, reason = 'staff') => (ctx: any) =>
@@ -138,12 +138,14 @@ describe('concede_match and defer_match (docs/lobby/contract.md disconnect polic
 
 // ─── admin_force_finalize / admin_void_match ──────────────────────────────────
 
-/** A casual Deferred lobby parked in AwaitingResult by the referee's defer. */
-function deferred(test: Harness): Lobby {
-    const s = setupLobby(test, { lobby: { disconnectPolicy: { tag: 'Deferred' } } });
-    tx(test, s.host, (ctx) => M.defer_match(ctx, { lobbyId: s.lobbyId }));
-    expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('AwaitingResult');
-    return s;
+/**
+ * A standalone lobby parked in AwaitingResult. T-S10d (A91(2)): Deferred is no longer selectable outside tournaments,
+ * so the lobby is a Ranked one whose game Blue won and the host's close submitted (parkedLobby); the EloConfig row is
+ * seeded so a force-finalize can run the Ranked finalization.
+ */
+function parked(test: Harness): Lobby {
+    seedElo(test);
+    return parkedLobby(test);
 }
 
 describe('admin_force_finalize / admin_void_match (contract; Acceptance: Admin Force-Finalizes / Admin Voids a Match, D-52, D-53)', () => {
@@ -151,7 +153,7 @@ describe('admin_force_finalize / admin_void_match (contract; Acceptance: Admin F
         const test = newHarness();
         const user = verified(test, 'plain');
         setUserRole(test, user.userId, 'User');
-        const s = deferred(test);
+        const s = parked(test);
         expectReject(test, user, (ctx) => M.admin_force_finalize(ctx, { lobbyId: s.lobbyId, winnerTeamId: 1 }), NOT_STAFF);
         expectReject(test, user, (ctx) => M.admin_void_match(ctx, { lobbyId: s.lobbyId }), NOT_STAFF);
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('AwaitingResult');
@@ -160,7 +162,7 @@ describe('admin_force_finalize / admin_void_match (contract; Acceptance: Admin F
     it('both tools reject a lobby that is not in AwaitingResult (a live draft)', () => {
         const test = newHarness();
         const mod = moderator(test);
-        const s = setupLobby(test, { lobby: { disconnectPolicy: { tag: 'Deferred' } } });
+        const s = setupLobby(test); // T-S10d (A91(2)): the stage is what matters; Standard instead of Deferred
         expectReject(test, mod, (ctx) => M.admin_force_finalize(ctx, { lobbyId: s.lobbyId, winnerTeamId: 1 }),
             'Can only force-finalize matches in AwaitingResult stage.');
         expectReject(test, mod, (ctx) => M.admin_void_match(ctx, { lobbyId: s.lobbyId }), 'Can only void matches in AwaitingResult stage.');
@@ -170,7 +172,7 @@ describe('admin_force_finalize / admin_void_match (contract; Acceptance: Admin F
     it('a Moderator force-finalizes: Validated for the named side, history written, lobby gone', () => {
         const test = newHarness();
         const mod = moderator(test);
-        const s = deferred(test);
+        const s = parked(test);
         tx(test, mod, (ctx) => M.admin_force_finalize(ctx, { lobbyId: s.lobbyId, winnerTeamId: 2 }));
         expect(test.db.Lobby.id.find(s.lobbyId)).toBeFalsy();
         expect([...test.db.MatchSessionHistory.iter()]).toHaveLength(1);
@@ -182,7 +184,7 @@ describe('admin_force_finalize / admin_void_match (contract; Acceptance: Admin F
     it('a Moderator voids: lobby, members, record and participants deleted; no history, no stats', () => {
         const test = newHarness();
         const mod = moderator(test);
-        const s = deferred(test);
+        const s = parked(test);
         const recId = recordsOfLobby(test, s.lobbyId)[0].id;
         tx(test, mod, (ctx) => M.admin_void_match(ctx, { lobbyId: s.lobbyId }));
         expect(test.db.Lobby.id.find(s.lobbyId)).toBeFalsy();

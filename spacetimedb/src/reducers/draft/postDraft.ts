@@ -14,6 +14,7 @@ import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHel
 import { ensureMatchAlive, ensureNotConceded } from '@module/helpers/lobby/disconnectHelpers';
 import { readAbuseConfig } from '@module/helpers/lobby/abuseControls';
 import { getNextSequence } from '@module/helpers/draft/stepSequence';
+import { classicCostAt } from '@module/helpers/draft/costSetGuards';
 import { teamOwnedEidolons } from '@module/helpers/draft/ownershipValidation';
 import {
     ensureCaptainOrReferee,
@@ -373,16 +374,6 @@ export const arrange_lineup = spacetimedb.reducer(
 // budget more than once, which A61 rules out; the two budgets merge at the D-50 rollover anyway); costPaid = the
 // extra at the new level. Logs a SetEidolon step (actorSlot = the team), refreshes the lineup row, then recomputes the
 // game and resets both confirmations. A60(7) Admin path on a closed game: no throttle, no reset, game recomputed.
-
-function classicCostAt(ctx: any, lobby: any, characterName: string, eidolon: number): number {
-    const costRow = [...ctx.db.HsrCharacterCost.cost_set_id.filter(lobby.costSetId)].find(
-        (r: any) =>
-            r.characterName === characterName &&
-            r.gameMode.tag === lobby.gameMode.tag &&
-            r.draftMode.tag === 'Classic'
-    );
-    return costRow ? (costRow.costs[`e${eidolon}`] ?? 0) : 0;
-}
 
 export const set_eidolon = spacetimedb.reducer(
     {

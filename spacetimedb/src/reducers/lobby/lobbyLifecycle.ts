@@ -16,8 +16,6 @@ import {
     resolveSeat,
     slotIsCoach,
     slotIsSpectator,
-    isSeatedPlayer,
-    anySeatedPlayerAway,
     LIVE_STAGES,
     memberHasLeft,
     resolveMaxSpectators,
@@ -26,11 +24,16 @@ import { hardDeleteLobby } from './lobbyGc';
 import { removeMemberRow } from '@module/helpers/lobby/memberRemoval';
 import { resolveUserLabel } from '@module/helpers/identity/userLabel';
 import { memberEventLabel, postMemberEventChat } from '@module/helpers/lobby/memberEventChat';
-import { markMemberOffline } from '@module/helpers/lobby/disconnectHelpers';
+import {
+    ensureForfeitSecondsInRange,
+    ensureNoActionAllowed,
+    ensureNotDeferredOutsideTournament,
+    liftAutoPauseOnReturn,
+    markMemberOffline,
+} from '@module/helpers/lobby/disconnectHelpers';
 import { consumeLobbyCreateAllowance, readAbuseConfig, recordGuestLobbyCreation } from '@module/helpers/lobby/abuseControls';
 import { normalizeLobbyName } from '@module/helpers/tournament/seriesSettings';
 import { ensureCostSetUsable } from '@module/helpers/draft/costSetGuards';
-import { lobbySteps } from '@module/helpers/draft/stepSequence';
 import { autoSeatSlot } from '@module/helpers/tournament/tournamentLobbySides';
 
 // ─── create_lobby ─────────────────────────────────────────────────────────────
@@ -111,6 +114,11 @@ export const create_lobby = spacetimedb.reducer(
 
         // D-23: guest restrictions
         ensureGuestRestrictions(user, args.matchType);
+
+        // A91(2): no Deferred outside tournaments; A92(3): NoAction only for casual lobbies; A92(2): grace 30-600 s.
+        ensureNotDeferredOutsideTournament(args.disconnectPolicy.tag);
+        ensureNoActionAllowed(args.disconnectPolicy.tag, args.matchType.tag === 'Ranked');
+        ensureForfeitSecondsInRange(args.disconnectForfeitSeconds);
 
         // A42(1) kill switch: guests cannot create while AbuseConfig.guestLobbyCreationEnabled is off;
         // guests already in lobbies are unaffected (join_lobby has no such check).
@@ -299,26 +307,8 @@ export const join_lobby = spacetimedb.reducer(
             }
             // Auto-resume if draft was auto-paused (D-11, D-39), as narrowed by A85(1): only a seated player's return
             // lifts it, and only when no seated player of either team is still offline, away or abandoned.
-            if (lobby.stage.tag === 'Drafting' && isSeatedPlayer(existingMember) && !anySeatedPlayerAway(ctx, lobbyId)) {
-                const session = ctx.db.MatchSession.lobbyId.find(lobbyId);
-                if (session && session.timerState.isPaused) {
-                    // Check if the latest Pause step was an auto-pause (S7b hand-off: a SetEidolon or other step
-                    // logged after the pause no longer hides it)
-                    const lastStep = lobbySteps(ctx, lobbyId)
-                        .filter((s: any) => s.payload?.tag === 'Pause')
-                        .sort((a: any, b: any) => b.sequence - a.sequence)[0];
-                    if (lastStep?.payload?.tag === 'Pause' && lastStep.payload.value?.isAutoPause) {
-                        // Auto-resume
-                        ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
-                            timerState: {
-                                ...session.timerState,
-                                isPaused: false,
-                                turnStartAt: ctx.timestamp,
-                            },
-                        }, user.id));
-                    }
-                }
-            }
+            // A92(7): the same function as client_connected.
+            liftAutoPauseOnReturn(ctx, lobby, existingMember, user.id);
             // Update activity
             ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
                 lastActivityAt: ctx.timestamp,

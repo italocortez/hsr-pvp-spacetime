@@ -7,6 +7,7 @@ import { ensureLobbyMember, ensureHostOrAbove, ensureStageIs, resolveSeat, slotT
 import { normalizeLobbyName } from '@module/helpers/tournament/seriesSettings';
 import { ensureCostSetCovers, ensureSelectableCostSet } from '@module/helpers/draft/costSetGuards';
 import { ensureSeatAllowed } from '@module/helpers/tournament/tournamentLobbySides';
+import { ensureForfeitSecondsInRange, ensureNoActionAllowed, ensureNotDeferredOutsideTournament } from '@module/helpers/lobby/disconnectHelpers';
 
 // ─── update_lobby_settings ────────────────────────────────────────────────────
 // Updates all mutable lobby configuration fields.
@@ -102,6 +103,14 @@ export const update_lobby_settings = spacetimedb.reducer(
         const allowMirrorPicks = isTournamentLocked
             ? lobby.allowMirrorPicks
             : (matchType.tag === 'Ranked' ? false : args.allowMirrorPicks);
+
+        // A91(2), A92(2)(3): the policy and grace rules apply to the arguments a lobby that is not tournament-controlled
+        // takes; the locked branch ignores the arguments (the tournament's values stand).
+        if (!isTournamentLocked) {
+            ensureNotDeferredOutsideTournament(args.disconnectPolicy.tag);
+            ensureNoActionAllowed(args.disconnectPolicy.tag, matchType.tag === 'Ranked');
+            ensureForfeitSecondsInRange(args.disconnectForfeitSeconds);
+        }
 
         // Resolve disconnectForfeitSeconds — locked fields use lobby value
         const disconnectForfeitSeconds = isTournamentLocked

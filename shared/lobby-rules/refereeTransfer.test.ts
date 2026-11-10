@@ -101,11 +101,15 @@ describe('decideRefereeTransfer (A22a grace check)', () => {
         expect(decideRefereeTransfer({ ...base, subject: { ...host, isReferee: false } })).toEqual({ action: 'none', reason: 'not-referee' });
         expect(decideRefereeTransfer({ ...base, subject: undefined })).toEqual({ action: 'none', reason: 'left-lobby' });
     });
-    // T-S8e (A67(1)): Finished is gone from LobbyStage; the inactive stages are Waiting and AwaitingResult.
-    it('does nothing in Waiting / AwaitingResult', () => {
-        for (const stage of ['Waiting', 'AwaitingResult'] as const) {
-            expect(decideRefereeTransfer({ ...base, stage, subject: host })).toEqual({ action: 'none', reason: 'inactive-stage' });
-        }
+    // T-S8e (A67(1)): Finished is gone from LobbyStage. T-S10d (A92(5)): Waiting runs the same 15 s flag check as the
+    // live stages; AwaitingResult stays inactive.
+    it('Waiting: the flag moves to the first online candidate, as in the live stages (A92(5))', () => {
+        expect(decideRefereeTransfer({ ...base, stage: 'Waiting', subject: host })).toEqual({ action: 'transfer', toUserId: 10 });
+        expect(decideRefereeTransfer({ ...base, stage: 'Waiting', subject: { ...host, isOnline: true } }))
+            .toEqual({ action: 'none', reason: 'reconnected' });
+    });
+    it('does nothing in AwaitingResult (A67(1), A92(5))', () => {
+        expect(decideRefereeTransfer({ ...base, stage: 'AwaitingResult', subject: host })).toEqual({ action: 'none', reason: 'inactive-stage' });
     });
     it('reports no candidate instead of inventing one', () => {
         expect(decideRefereeTransfer({ ...base, members: [host], subject: host })).toEqual({ action: 'none', reason: 'no-candidate' });

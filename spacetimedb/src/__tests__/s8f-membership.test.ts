@@ -33,7 +33,8 @@ import {
     type SetupOpts,
     seatOf,
 } from './s4-fixtures';
-import { byKey, playLobbyGame, createTournamentLobby, join, openMatchLobby, recordsOfLobby, sidesOf } from './s8d-fixtures';
+import { byKey, deferredDuel, duel, playLobbyGame, createTournamentLobby, join, openMatchLobby, recordsOfLobby, sidesOf } from './s8d-fixtures';
+import { parkedLobby } from './s10-a2-fixtures';
 import { liveField, matchRow, tRow, verified } from './s8-fixtures';
 
 // ─── Messages (the module code is the truth) ─────────────────────────────────
@@ -102,12 +103,22 @@ const noReferee = (over: SetupOpts = {}): SetupOpts => ({
     ...over,
 });
 
-/** A Deferred lobby parked in AwaitingResult through defer_match by the host (spectator referee). */
-function parkedLobby(test: Harness, opts: SetupOpts = {}): Lobby {
-    const s = setupLobby(test, { ...opts, lobby: { disconnectPolicy: { tag: 'Deferred' }, ...(opts.lobby ?? {}) } });
-    tx(test, s.host, (ctx) => M.defer_match(ctx, { lobbyId: s.lobbyId }));
-    expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('AwaitingResult');
-    return s;
+// T-S10d (A91(2)): parkedLobby (s10-a2-fixtures) parks a standalone lobby through a submitted Ranked game; the local
+// Deferred + defer_match builder is gone (Deferred is tournament-only).
+
+/**
+ * T-S10d (A91(2)): a live lobby under `policy`: a casual setupLobby for Standard / NoAction; for Deferred, the lobby of
+ * a Deferred tournament (deferredDuel: b1 / b2 Blue, r1 / r2 Red, the organizer as host and Spectator referee).
+ * `b1` replaces the Blue captain's actor in a casual lobby (a tournament player is already verified).
+ */
+function policyLobby(policy: 'Standard' | 'Deferred' | 'NoAction', b1?: (test: Harness) => Actor): { test: Harness; s: Lobby } {
+    if (policy === 'Deferred') {
+        const { f, s } = deferredDuel();
+        return { test: f.test, s };
+    }
+    const test = newHarness();
+    const actors = b1 ? { b1: b1(test) } : undefined;
+    return { test, s: setupLobby(test, { actors, lobby: { disconnectPolicy: { tag: policy } } }) };
 }
 
 /** A68(7): a lobby that keeps members always has a host (a member) and exactly one referee. */
@@ -135,8 +146,7 @@ describe('A68(1)(2): a player\'s Leave in a live stage is a disconnect', () => {
     for (const stage of ['Drafting', 'Equipping', 'Scoring'] as const) {
         for (const policy of ['Standard', 'Deferred', 'NoAction'] as const) {
             it(`${stage} / ${policy}: row kept, offline, leftAt; disconnectedAt ${policy === 'NoAction' ? 'not ' : ''}stamped; 15 s check; LMA rows and count unchanged`, () => {
-                const test = newHarness();
-                const s = setupLobby(test, { lobby: { disconnectPolicy: { tag: policy } } });
+                const { test, s } = policyLobby(policy); // T-S10d (A91(2)): Deferred = a Deferred tournament's lobby
                 giveAccounts(s, ['b1', 'b2', 'r1', 'r2']);
                 toStage(test, s, stage);
                 const countBefore = lobbyRow(test, s.lobbyId).currentPlayerCount;
@@ -251,18 +261,18 @@ describe('A68(1)(2): a player\'s Leave in a live stage is a disconnect', () => {
 });
 
 describe('A68(5): a spectator\'s or coach\'s Leave deletes the row in every stage', () => {
-    const withCoach = (test: Harness, opts: SetupOpts = {}) =>
-        setupLobby(test, {
-            ...opts,
-            beforeStart: (l) => {
-                for (const name of ['spec', 'coach']) {
-                    l.a[name] = guest(test, name);
-                    rejoin(test, l.a[name], l.lobbyId);
-                }
-                tx(test, l.host, (ctx) => M.set_team_slot(ctx, { lobbyId: l.lobbyId, targetJoinSeq: seatOf(ctx, l.lobbyId, l.a.coach.userId), lobbySlot: { tag: 'BlueCoach' } as any }));
-                giveAccounts(l, ['spec', 'coach']);
-            },
-        });
+    const coachOpts = (test: Harness, opts: SetupOpts = {}): SetupOpts => ({
+        ...opts,
+        beforeStart: (l) => {
+            for (const name of ['spec', 'coach']) {
+                l.a[name] = guest(test, name);
+                rejoin(test, l.a[name], l.lobbyId);
+            }
+            tx(test, l.host, (ctx) => M.set_team_slot(ctx, { lobbyId: l.lobbyId, targetJoinSeq: seatOf(ctx, l.lobbyId, l.a.coach.userId), lobbySlot: { tag: 'BlueCoach' } as any }));
+            giveAccounts(l, ['spec', 'coach']);
+        },
+    });
+    const withCoach = (test: Harness, opts: SetupOpts = {}) => setupLobby(test, coachOpts(test, opts));
 
     const expectGone = (test: Harness, s: Lobby) => {
         for (const name of ['spec', 'coach']) {
@@ -293,8 +303,7 @@ describe('A68(5): a spectator\'s or coach\'s Leave deletes the row in every stag
     });
     it('AwaitingResult', () => {
         const test = newHarness();
-        const s = withCoach(test, { lobby: { disconnectPolicy: { tag: 'Deferred' } } });
-        tx(test, s.host, (ctx) => M.defer_match(ctx, { lobbyId: s.lobbyId }));
+        const s = parkedLobby(test, coachOpts(test)); // T-S10d (A91(2)): parked through a submitted Ranked game
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('AwaitingResult');
         expectGone(test, s);
     });
@@ -341,10 +350,16 @@ describe('A68(3): absence runs only through claim_forfeit / defer_match / conced
     });
 
     it('Deferred: the other team may defer_match to staff while the Blue team is away', () => {
-        const test = newHarness();
-        const s = setupLobby(test, noReferee({ lobby: { disconnectPolicy: { tag: 'Deferred' } } }));
+        // T-S10d (A91(1)(2)): a Deferred tournament's lobby created by the Red captain (seated referee: no exclusive
+        // Spectator referee, so a player may defer); the Blue team is away past the grace before the defer.
+        const f = duel({ defaultBestOf: 1, grandFinalBestOf: 1, disconnectPolicy: 'Deferred' });
+        const { test } = f;
+        const m = byKey(test, f.id, 'W-R1-M1');
+        const s = openMatchLobby(f, m.id, { creator: sidesOf(f, m.id).red.captain });
+        expect(s.a.r1.userId).toBe(s.host.userId);
         leave(test, s.a.b1, s.lobbyId);
         leave(test, s.a.b2, s.lobbyId);
+        advance(test, 61_000);
         tx(test, s.a.r1, (ctx) => M.defer_match(ctx, { lobbyId: s.lobbyId }));
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('AwaitingResult');
         expect(recordOf(test, s.lobbyId).concedeSummary).toContain(`User#${s.a.b1.userId}`);
@@ -785,9 +800,9 @@ describe('A68(7): user deletion removes the membership like a leave; a live play
 
     for (const policy of ['Standard', 'Deferred', 'NoAction'] as const) {
         it(`Drafting / ${policy}: an admin-deleted player keeps the row, offline, leftAt + abandonedAt; disconnectedAt ${policy === 'NoAction' ? 'not ' : ''}stamped; LMA rows and count unchanged`, () => {
-            const test = newHarness();
-            const b1 = verified(test, 'b1');
-            const s = setupLobby(test, { actors: { b1 }, lobby: { disconnectPolicy: { tag: policy } } });
+            // T-S10d (A91(2)): Deferred = a Deferred tournament's lobby (its b1, the Blue captain, is verified).
+            const { test, s } = policyLobby(policy, (t) => verified(t, 'b1'));
+            const b1 = s.a.b1;
             giveAccounts(s, ['b1']);
             const countBefore = lobbyRow(test, s.lobbyId).currentPlayerCount;
             advance(test, 2_000);
@@ -894,7 +909,7 @@ describe('A68(8): spectator joins and maxSpectators', () => {
             expect(member(test, s.lobbyId, who.userId).lobbySlot.tag).toBe('Spectator');
         }
         const parked = parkedLobby(test, { actors: { host: guest(test, 'host2') }, seats: [['x1', 'BluePlayer'], ['y1', 'RedPlayer']] });
-        const late = guest(test, 'late');
+        const late = verified(test, 'late'); // T-S10d: the parked lobby is Ranked, which turns a guest away first (D-23)
         expectReject(test, late, (ctx) => M.join_lobby(ctx, { lobbyId: parked.lobbyId, joinCode: '', password: '' }),
             'Cannot join a lobby in stage: AwaitingResult');
     });

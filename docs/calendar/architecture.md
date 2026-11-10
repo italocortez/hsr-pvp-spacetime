@@ -104,6 +104,8 @@ User (id: u32 autoInc PK)
 2. Find event -- reject if not found; verify organizer OR Admin
 3. `CalendarEvent.id.update()` -- cannot change `bracketMatchId` (D-08)
    - Phase S10b execution (DECISIONS.md A79): after `startAt < endAt`, a changed `endAt` must not lie in the past (`'Event end time must not be in the past.'`); an unchanged `endAt` passes (a finished event's title / description stays editable).
+   - Phase S10d execution (DECISIONS.md A90): an update that revives an ended event (stored `endAt < now`, new `endAt >= now`) is rejected with `'Maximum 40 active calendar events per user.'` when the event's organizer (not the caller) already has 40 events with `endAt >= now` (`organizer_id` index, no cleanup: ended events never count as active). An event that stays active or stays ended is not counted again.
+   - Phase S10d execution (DECISIONS.md A89): the caller check of step 2 is `ensureCanManageEvent` (below).
 
 ### delete_calendar_event(eventId)
 1. `getAuthenticatedUser(ctx)`
@@ -127,6 +129,12 @@ User (id: u32 autoInc PK)
 2. Find `CalendarEventInvite` by `[eventId, callerId]` -- reject if not found; verify caller is invitee
 3. Reject if `status=Pending` (invitees cannot set back to Pending, D-01)
 4. Delete + re-insert with new `inviteStatus` and `respondedAt=ctx.timestamp` (composite PK update pattern, D-02)
+
+### Caller rule of update / delete / invite / remove_invite (Phase S10d execution, DECISIONS.md A89)
+`ensureCanManageEvent(ctx, user, event, action)` (`reducers/calendar/calendarEvents.ts`), used by `update_calendar_event`, `delete_calendar_event`, `invite_to_event` and `remove_invite` (the "verify organizer OR Admin" steps above):
+- the event's organizer or an Admin, always;
+- for a tournament-linked event (`bracketMatchId` set): also `hasTournamentPermission(ctx, user, tournament, 'bracket')` on the bracket match's tournament (Moderator+, the tournament's organizer, an assistant with `canManageBracket`: the permission that creates such events);
+- otherwise rejected: personal event `'Forbidden: Only the organizer or an Admin can <action>.'` (unchanged texts); tournament-linked event `'Forbidden: Only the organizer, an Admin or tournament staff with the bracket permission can <action>.'`. `<action>` is `update this event`, `delete this event`, `invite users to this event`, `remove invites from this event`. A link whose bracket match or tournament no longer exists falls back to the personal rule (with the tournament-linked text).
 
 ## Cross-Feature Cascades
 
@@ -187,6 +195,7 @@ invitees of an event (an anonymous tournament's match event would otherwise list
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
 | Calendar views (five per-sender views, index-only, labels denormalized, `isVisible` filtered server-side, tournament match events visible to both teams' members, organizer sees the invite list) | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 | Event caps: 40 not-yet-ended + 100 retained per organizer (after the cleanup); `endAt` in the past rejected on create and on a changed `endAt` in update | Phase S10b execution (DECISIONS.md A79) | 2026-11-09 |
+| Tournament-linked events: update / delete / invite / remove_invite also accept the tournament's organizer and `bracket` staff (`ensureCanManageEvent`); `update_calendar_event` applies the 40-active cap when it revives an ended event | Phase S10d execution (DECISIONS.md A89, A90) | 2026-11-09 |
 
 ---
 

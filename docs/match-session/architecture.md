@@ -387,6 +387,32 @@ referee rule is unchanged). Others get `'Only the referee or a seated player can
 draft.'`. A manual pause keeps D-62 (`'Only the referee or the player who paused can resume the draft.'`). The clock
 math is unchanged (F10). The `join_lobby` auto-resume (A85(1)) is described in [../lobby/architecture.md](../lobby/architecture.md).
 
+## Phase S10d execution (DECISIONS.md A86, A87, A92(1))
+
+All in `reducers/draft/draftClassic.ts`:
+
+- **Mirror picks once per team (A87).** `picksBlockingTeam(steps, lobby, team)`: without `allowMirrorPicks` every Pick
+  of either team; with it, only the Picks whose `actorSlot` is that team (manual and timer picks both carry the team).
+  `pick_character` rejects a character in that set: `'Character already picked.'` (no mirror, unchanged) or
+  `'Your team already picked this character.'` (mirror). The timer auto-pick pool excludes the same set, so under
+  mirror the other team's picks stay drawable. `EMPTY` is exempt: it is the no-pick placeholder, not a character, so it
+  never enters the set, mirror on or off, and a team may hold any number of `EMPTY` picks, manual or by timer (this
+  also lifts the older non-mirror block where one `EMPTY` of either team rejected every later manual `EMPTY`). Auction
+  never applies mirror (D-42: sales are exclusive), so no Auction path changes.
+- **Timer auto-pick priced like a pick (A86).** `classicPickCost(ctx, lobby, characterName, eidolon)` (0 for EMPTY,
+  else `classicCostAt` in `helpers/draft/costSetGuards.ts`: the Classic cost row of the lobby's set and game mode,
+  `costs['e' + eidolon]`, 0 without a row; `set_eidolon` uses the same helper) is shared by `pick_character` and
+  `timer_expiry_classic`. The timer prices on the acting team (pool = union of the team's selected accounts, eidolon =
+  the highest level any of its players owns), while `pick_character` prices on the caller: equal to a manual pick in
+  1v1, and never cheaper than one in 2v2 and above (it can be dearer, or draw a character only a teammate owns).
+  With `autoRandomPick` and a drawn character: eidolon 0 without `requireOwnership`; under it the highest level the acting team owns (`resolveOwnedEidolon` per non-coach player of the
+  team, the maximum), and `costPaid` from that level. The pool: without ownership the Classic cost rows of the set and
+  mode; under ownership the union of the acting team's selected accounts (D-I-01/02, unchanged); both minus bans and
+  `picksBlockingTeam`. Classic has no budget check on picks, so "cannot afford" does not arise; a team that owns nothing
+  pickable gets `EMPTY` at cost 0, as does a lobby without `autoRandomPick`.
+- **`start_draft` (A92(1)).** After the confirmation check: `'All Blue and Red players must be online before
+  starting.'` while `anySeatedPlayerAway(ctx, lobbyId)` (a seated player offline, away or abandoned).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -425,6 +451,7 @@ math is unchanged (F10). The `join_lobby` auto-resume (A85(1)) is described in [
 | Input bounds: `pick_character` eidolon 0..6 when the argument is used, `equip_lightcone` superimposition 1..5 (both paths), `place_bid` finite non-negative `bidAmount` | Phase S10c execution (audit 2026-11-09) | 2026-11-09 |
 | Auction: a full team neither nominates nor bids and is skipped by the rotation and the timer; while one team is full the other's nomination sells at once at base cost (`completeSale` shared by every sale) | Phase S10c execution (DECISIONS.md A81) | 2026-11-09 |
 | `resume_draft` on an auto-pause: the referee or any seated player of either team | Phase S10c execution (DECISIONS.md A85) | 2026-11-09 |
+| Timer auto-pick priced from the Classic cost row (owned eidolon under ownership); mirror picks once per team on the manual and timer paths; `start_draft` rejects while a seated player is offline or away | Phase S10d execution (DECISIONS.md A86, A87, A92(1)) | 2026-11-09 |
 
 ---
 

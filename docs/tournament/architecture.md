@@ -341,6 +341,17 @@ finalize job of this tournament is still scheduled." Placements also count a wal
 - `view_my_tournament_lobbies` rows carry the match's `blueTeamId` / `redTeamId` (`matchSides`, A70(1)).
   Catalogue: [../views/architecture.md](../views/architecture.md).
 
+## Phase S10d execution (DECISIONS.md A91(2), A92(2)(3))
+
+- `validateSettings` (`create_tournament`, `update_tournament`), after the enum check: `ensureNoActionAllowed(policy,
+  true)` rejects NoAction ("The NoAction disconnect policy is only available for casual lobbies."), and
+  `ensureForfeitSecondsInRange(disconnectForfeitSeconds)` rejects a set value outside 30-600 ("disconnectForfeitSeconds
+  must be between 30 and 600 (0 keeps the default of 60)."); 0 / omitted keeps the default 60. Helpers in
+  `helpers/lobby/disconnectHelpers.ts`.
+- Deferred stays selectable for tournaments; `create_tournament_lobby` copies the tournament's policy and grace as
+  before, and `update_lobby_settings` keeps them locked (A91(2)). Details: [../lobby/architecture.md](../lobby/architecture.md)
+  "Phase S10d execution".
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -375,6 +386,7 @@ finalize job of this tournament is still scheduled." Placements also count a wal
 | `set_match_sides(bracketMatchId, blueTeamId)`: the head start stays on team1 whatever the colours | Phase S8g execution (DECISIONS.md A71) | 2026-11-08 |
 | `dq_participant` no longer kicks a DQ'd player from a live lobby (whole-team path unchanged); `create_tournament_lobby` takes `abandonCurrentMatch` and copies `maxSpectators` | Phase S8f execution (DECISIONS.md A68) | 2026-11-08 |
 | Tournament arg views (participants, teams, team members, staff), per-sender enrollment / team requests / stand-ins / matches-for-me, `TournamentStandIn.user_id` index, colours on `view_my_tournament_lobbies` | Phase S9a execution (DECISIONS.md A37, A44(1), A26a(2), A70(1), A71) | 2026-11-08 |
+| `create_tournament` / `update_tournament` reject NoAction and a `disconnectForfeitSeconds` outside 30-600 | Phase S10d execution (DECISIONS.md A92(2)(3)) | 2026-11-09 |
 
 ---
 

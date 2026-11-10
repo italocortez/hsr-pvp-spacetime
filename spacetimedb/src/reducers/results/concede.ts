@@ -1,12 +1,26 @@
 import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser } from '@module/helpers/identity/ensurePermissions';
-import { ensureLobbyMember, slotTeam, slotIsCoach, slotIsSpectator, memberHasLeft } from '@module/helpers/lobby/lobbyHelpers';
-import { buildConcedeSummary, isForfeitEligible, isThirdPartyReferee } from '@module/helpers/lobby/disconnectHelpers';
+import { ensureLobbyMember, slotTeam, slotIsCoach, slotIsSpectator, memberHasLeft, isSeatedPlayer } from '@module/helpers/lobby/lobbyHelpers';
+import { buildConcedeSummary, isForfeitEligible, isPastDisconnectThreshold, isThirdPartyReferee } from '@module/helpers/lobby/disconnectHelpers';
 import { runFinalization } from '@module/helpers/results/finalizationHelpers';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { findLobbyResult } from '@module/helpers/results/scoringHelpers';
 import { handOffToBracket } from '@module/helpers/tournament/tournamentResults';
+
+/**
+ * A92(4): a seated player whose row is away (leftAt) cannot concede, claim a forfeit or defer until they return
+ * through join_lobby; an abandoned row (abandonedAt, A68(4)) never can. Called after the spectator / coach guards,
+ * so only player seats reach it (the exclusive spectator referee is never away: isThirdPartyReferee skips such rows).
+ */
+function ensureSeatPresent(member: any): void {
+    if (member.abandonedAt !== undefined) {
+        throw new SenderError('You left this match for another lobby and cannot act on it.');
+    }
+    if (member.leftAt !== undefined) {
+        throw new SenderError('You are away from this match. Return to it first.');
+    }
+}
 
 // ─── Shared concede helper ──────────────────────────────────────────────────
 // Used by concede_match, claim_forfeit and dq_participant's team settlement. A68(3): no reducer concedes
@@ -125,6 +139,7 @@ export const concede_match = spacetimedb.reducer(
             if (slotIsCoach(member.lobbySlot)) {
                 throw new SenderError('Coaches cannot concede.');
             }
+            ensureSeatPresent(member); // A92(4)
         }
 
         // Determine losing team: referee specifies via losingTeamSide, players derive from slot
@@ -198,6 +213,7 @@ export const claim_forfeit = spacetimedb.reducer(
             if (slotIsCoach(member.lobbySlot)) {
                 throw new SenderError('Coaches cannot claim forfeit.');
             }
+            ensureSeatPresent(member); // A92(4)
         }
 
         // D-15: Standard policy only
@@ -246,7 +262,8 @@ export const claim_forfeit = spacetimedb.reducer(
 
 // ─── defer_match ─────────────────────────────────────────────────────────────
 // Defer the match to AwaitingResult for TO / admin resolution (Deferred, A22a).
-// Deferred policy only. Per D-18, D-19, D-20, D-63.
+// Deferred policy only. Per D-18, D-19, D-20, D-63; A91(1): needs a seated player disconnected past the grace or the
+// live pool (the exclusive spectator referee is exempt); A92(4): an away or abandoned caller is rejected.
 
 export const defer_match = spacetimedb.reducer(
     {
@@ -287,11 +304,23 @@ export const defer_match = spacetimedb.reducer(
             if (slotIsCoach(member.lobbySlot)) {
                 throw new SenderError('Coaches cannot defer a match.');
             }
+            ensureSeatPresent(member); // A92(4)
         }
 
         // D-18: Deferred policy only
         if (lobby.disconnectPolicy.tag !== 'Deferred') {
             throw new SenderError('Defer is only available under Deferred disconnect policy.');
+        }
+
+        // A91(1): at least one seated player (not a coach) of either team is offline, away or abandoned and past the
+        // forfeit grace or the live pool (A92(6)). The exclusive spectator referee (D-81) defers without it.
+        if (!isCallerExclusiveReferee) {
+            const anyPastThreshold = [...ctx.db.LobbyMember.lobby_id.filter(lobbyId)].some(
+                (m: any) => isSeatedPlayer(m) && isPastDisconnectThreshold(lobby, m, ctx.timestamp),
+            );
+            if (!anyPastThreshold) {
+                throw new SenderError('Defer needs a seated player who has been disconnected past the forfeit grace or whose disconnect pool is spent.');
+            }
         }
 
         // Get all disconnected members (any team) for summary. A68(3): away / abandoned rows are offline players too.

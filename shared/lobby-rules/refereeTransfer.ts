@@ -21,6 +21,12 @@ export type LobbyStage =
 /** Stages where a referee is needed and a disconnect matters (D-08 scope; A67(1): the three live-game stages). */
 export const ACTIVE_STAGES: readonly LobbyStage[] = ['Drafting', 'Equipping', 'Scoring']; // A67(1)
 
+/**
+ * A92(5): the stages where the 15 s check moves the referee flag (and the host): Waiting plus the live stages.
+ * The captain transfer and the auto-pause stay limited to ACTIVE_STAGES / Drafting.
+ */
+export const FLAG_CHECK_STAGES: readonly LobbyStage[] = ['Waiting', ...ACTIVE_STAGES];
+
 export const isPlayer = (s: Slot): boolean => s === 'BluePlayer' || s === 'RedPlayer';
 export const isCoach = (s: Slot): boolean => s === 'BlueCoach' || s === 'RedCoach';
 
@@ -92,13 +98,13 @@ export type TransferCheckDecision =
     | { action: 'none'; reason: 'reconnected' | 'left-lobby' | 'not-referee' | 'inactive-stage' | 'no-candidate' }
     | { action: 'transfer'; toUserId: number };
 
-/** The referee flag moves only if the subject is still offline when the check fires (A22a). */
+/** The referee flag moves only if the subject is still offline when the check fires (A22a), in Waiting too (A92(5)). */
 export function decideRefereeTransfer(input: TransferCheckInput): TransferCheckDecision {
     const { subject } = input;
     if (!subject) return { action: 'none', reason: 'left-lobby' };
     if (subject.isOnline) return { action: 'none', reason: 'reconnected' };
     if (!subject.isReferee) return { action: 'none', reason: 'not-referee' };
-    if (!ACTIVE_STAGES.includes(input.stage)) return { action: 'none', reason: 'inactive-stage' };
+    if (!FLAG_CHECK_STAGES.includes(input.stage)) return { action: 'none', reason: 'inactive-stage' };
     const to = pickRefereeSuccessor(input.members, input.hostUserId, subject.userId);
     return to === null ? { action: 'none', reason: 'no-candidate' } : { action: 'transfer', toUserId: to };
 }

@@ -36,4 +36,5 @@ export default __t.row({
   mmrByMode: __t.option(__t.array(__t.u32())).name("mmr_by_mode"),
   accountRating: __t.option(__t.u32()).name("account_rating"),
   accountCount: __t.option(__t.u8()).name("account_count"),
+  disconnectActionAt: __t.option(__t.timestamp()).name("disconnect_action_at"),
 });

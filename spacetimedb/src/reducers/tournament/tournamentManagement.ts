@@ -19,6 +19,7 @@ import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHel
 import { ensureBestOf, ensureWinnerAdvantage } from '@module/helpers/tournament/seriesSettings';
 import { ensureCostSetCovers, ensureCostSetUsable, ensureSelectableCostSet } from '@module/helpers/draft/costSetGuards';
 import { ensureTournamentPreset, seedSystemLobbyPreset } from '@module/helpers/lobby/systemPreset';
+import { ensureForfeitSecondsInRange, ensureNoActionAllowed } from '@module/helpers/lobby/disconnectHelpers';
 import { assignFinalPlacements, ensureCanComplete, restartTournamentFinalization, startTournamentFinalization } from '@module/helpers/tournament/tournamentFinalization';
 
 // Valid enum tag lists for runtime validation
@@ -45,6 +46,7 @@ interface SettingsArgs {
     teamSize: number;
     rosterVisibility: string;
     disconnectPolicy: string;
+    disconnectForfeitSeconds?: number;
     defaultBestOf: number;
     grandFinalBestOf: number;
     winnerAdvantage: number;
@@ -76,6 +78,9 @@ function validateSettings(ctx: any, a: SettingsArgs) {
     validateEnumTag(a.format, VALID_TOURNAMENT_FORMATS, 'format');
     validateEnumTag(a.rosterVisibility, VALID_ROSTER_VISIBILITIES, 'rosterVisibility');
     validateEnumTag(a.disconnectPolicy, VALID_DISCONNECT_POLICIES, 'disconnectPolicy');
+    // A92(3): NoAction is for casual lobbies only; A92(2): the forfeit grace is 30-600 s when set.
+    ensureNoActionAllowed(a.disconnectPolicy, true);
+    ensureForfeitSecondsInRange(a.disconnectForfeitSeconds);
     validateEnumTag(a.groupAssignmentMode, VALID_GROUP_ASSIGNMENT_MODES, 'groupAssignmentMode');
     validateEnumTag(a.lineupFormat, VALID_LINEUP_FORMATS, 'lineupFormat');
 
@@ -130,7 +135,7 @@ const settingsParams = {
     rosterVisibility: t.string(),
     isAnonymousDefault: t.bool(),
     disconnectPolicy: t.string(),
-    disconnectForfeitSeconds: t.u32().optional(), // A36: one optional forfeit timer; 0 = none
+    disconnectForfeitSeconds: t.u32().optional(), // A36: one optional forfeit timer; 0 / omitted = default 60; A92(2): 30-600 when set
     costSetId: t.u32(),
     defaultBestOf: t.u8(),                         // A28: {1, 3}
     grandFinalBestOf: t.u8(),                      // A28: {1, 3}

@@ -1,7 +1,8 @@
 import { SenderError } from 'spacetimedb/server';
 import { ScheduleAt } from 'spacetimedb';
 import { ACTIVE_STAGES, type LobbyStage } from '@shared/lobby-rules';
-import { slotTeam, slotIsCoach, slotIsSpectator, memberHasLeft } from './lobbyHelpers';
+import { slotTeam, slotIsCoach, slotIsSpectator, memberHasLeft, isSeatedPlayer, anySeatedPlayerAway } from './lobbyHelpers';
+import { lobbySteps } from '@module/helpers/draft/stepSequence';
 import { findLobbyResult } from '@module/helpers/results/scoringHelpers';
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
 
@@ -14,8 +15,8 @@ const DISCONNECT_CLOCK_STAGES: readonly LobbyStage[] = ['Drafting', 'Equipping',
 /**
  * A22a (D.8.2) / A68(1): takes one membership offline, the shared body of `client_disconnected` (per membership) and
  * of a player's `leave_lobby` in a live stage: `isOnline = false`; in a live stage `disconnectedAt` stamped under
- * Standard / Deferred (D-08; NoAction tracks nothing); in an active stage one `RefereeTransferCheck` row 15 s out
- * (a stale pending one is dropped first). `extra` carries the Leave's `leftAt` (A68(2)). The row, its
+ * Standard / Deferred (D-08; NoAction tracks nothing); in an active stage, and in Waiting for the host or the referee
+ * (A92(5)), one `RefereeTransferCheck` row 15 s out (a stale pending one is dropped first). `extra` carries the Leave's `leftAt` (A68(2)). The row, its
  * LobbyMemberAccount rows and currentPlayerCount are untouched; the flags move only through the 15 s check.
  */
 export function markMemberOffline(ctx: any, lobby: any, member: any, actorId: number, extra: { leftAt?: any } = {}): void {
@@ -29,7 +30,9 @@ export function markMemberOffline(ctx: any, lobby: any, member: any, actorId: nu
         ...extra,
     }, actorId));
 
-    if (!ACTIVE_STAGES.includes(stageTag)) return;
+    // A92(5): in Waiting the 15 s check runs only for the host or the referee (flag transfers; no clock, no pause).
+    const isFlagHolder = member.isReferee || lobby.hostUserId === member.userId;
+    if (!ACTIVE_STAGES.includes(stageTag) && !(stageTag === 'Waiting' && isFlagHolder)) return;
 
     // One pending check per (lobby, user): drop a stale one before scheduling.
     for (const check of [...ctx.db.RefereeTransferCheck.by_lobby_and_user.filter([member.lobbyId, member.userId])]) {
@@ -41,6 +44,31 @@ export function markMemberOffline(ctx: any, lobby: any, member: any, actorId: nu
         lobbyId: member.lobbyId,
         userId: member.userId,
     });
+}
+
+/**
+ * A85(1), A92(7): the one automatic lift of a disconnect auto-pause, shared by the `join_lobby` reconnect branch and
+ * `client_connected` so the two paths cannot drift (policy review G10). Lifts only in Drafting, only when the returning
+ * row is a seated player and no seated player of either team is still offline, away or abandoned (call it after the
+ * returning row is back online), and only when the latest Pause step is an auto-pause (a manual pause keeps D-62).
+ * Clock write unchanged from the S10c join_lobby branch: isPaused = false, turnStartAt = now (F10 revisits the math).
+ */
+export function liftAutoPauseOnReturn(ctx: any, lobby: any, member: any, actorId: number): void {
+    if (lobby.stage.tag !== 'Drafting' || !isSeatedPlayer(member) || anySeatedPlayerAway(ctx, lobby.id)) return;
+    const session = ctx.db.MatchSession.lobbyId.find(lobby.id);
+    if (!session || !session.timerState.isPaused) return;
+    // The latest Pause step decides (S7b hand-off: a SetEidolon or other step logged after the pause does not hide it).
+    const lastPause = lobbySteps(ctx, lobby.id)
+        .filter((s: any) => s.payload?.tag === 'Pause')
+        .sort((a: any, b: any) => b.sequence - a.sequence)[0];
+    if (!lastPause?.payload?.value?.isAutoPause) return;
+    ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
+        timerState: {
+            ...session.timerState,
+            isPaused: false,
+            turnStartAt: ctx.timestamp,
+        },
+    }, actorId));
 }
 
 /**
@@ -120,7 +148,8 @@ export function handleDisconnectPoolUpdate(
  * Checks if ALL non-coach players on the target team are offline and
  * their disconnect grace period has elapsed (D-12, D-13). Used by claim_forfeit.
  * A68(3): away and abandoned rows (A68(2)(4)) count as offline players, with the disconnectedAt stamped at the
- * Leave; a team with zero player rows is not eligible.
+ * Leave; a team with zero player rows is not eligible. A92(6): the pool test uses the live drain
+ * (isPastDisconnectThreshold).
  */
 export function isForfeitEligible(
     ctx: any,
@@ -138,16 +167,77 @@ export function isForfeitEligible(
 
     if (teamPlayers.length === 0) return false;
 
-    const graceUs = BigInt((lobby.disconnectForfeitSeconds ?? 60) * 1_000_000);
+    return teamPlayers.every((p: any) => isPastDisconnectThreshold(lobby, p, now));
+}
 
-    return teamPlayers.every((p: any) => {
-        if (p.isOnline && !memberHasLeft(p)) return false;
-        if (!p.disconnectedAt) return false;
-        // Pool depleted OR grace exceeded
-        if (p.disconnectPoolRemainingMs <= 0) return true;
-        const elapsed = now.microsSinceUnixEpoch - p.disconnectedAt.microsSinceUnixEpoch;
-        return elapsed >= graceUs;
-    });
+/** A92(2): the forfeit grace when the lobby leaves it unset (D-09). */
+export const DEFAULT_DISCONNECT_FORFEIT_SECONDS = 60;
+const MIN_DISCONNECT_FORFEIT_SECONDS = 30;
+const MAX_DISCONNECT_FORFEIT_SECONDS = 600;
+
+/**
+ * A92(2): `disconnectForfeitSeconds` is 30 to 600 wherever it is set (lobby, preset, tournament); 0 / unset keeps the
+ * default 60. Writers: create_lobby, update_lobby_settings (unlocked), create_lobby_preset, update_lobby_preset,
+ * create_tournament, update_tournament.
+ */
+export function ensureForfeitSecondsInRange(seconds: number | undefined): void {
+    if (!seconds) return;
+    if (seconds < MIN_DISCONNECT_FORFEIT_SECONDS || seconds > MAX_DISCONNECT_FORFEIT_SECONDS) {
+        throw new SenderError(
+            `disconnectForfeitSeconds must be between ${MIN_DISCONNECT_FORFEIT_SECONDS} and ${MAX_DISCONNECT_FORFEIT_SECONDS} (0 keeps the default of ${DEFAULT_DISCONNECT_FORFEIT_SECONDS}).`,
+        );
+    }
+}
+
+/**
+ * A91(2): the Deferred policy is for tournaments and their lobbies only. Called by create_lobby, update_lobby_settings
+ * on a lobby that is not tournament-controlled, create_lobby_preset and update_lobby_preset (create_tournament,
+ * update_tournament and create_tournament_lobby keep it).
+ */
+export function ensureNotDeferredOutsideTournament(policyTag: string): void {
+    if (policyTag === 'Deferred') {
+        throw new SenderError('The Deferred disconnect policy is only available for tournaments and their lobbies.');
+    }
+}
+
+/** A92(3): the NoAction policy is for casual lobbies only (rejected for Ranked lobbies and for tournaments). */
+export function ensureNoActionAllowed(policyTag: string, isRankedOrTournament: boolean): void {
+    if (policyTag === 'NoAction' && isRankedOrTournament) {
+        throw new SenderError('The NoAction disconnect policy is only available for casual lobbies.');
+    }
+}
+
+/**
+ * The instant (micros since epoch) from which an offline, away or abandoned player with a `disconnectedAt` stamp is
+ * past the threshold: the earlier of the grace end (`disconnectedAt + disconnectForfeitSeconds`, default 60) and the
+ * live pool's end (A92(6): `disconnectedAt + pool`, the pool drained live, not only a stored 0). Undefined when the
+ * player has no stamp. Shared by the forfeit claim, the defer precondition (A91(1)) and view_my_lobby_members (A92(9)).
+ */
+export function disconnectThresholdMicros(lobby: any, player: any): bigint | undefined {
+    if (!player.disconnectedAt) return undefined;
+    const stamp: bigint = player.disconnectedAt.microsSinceUnixEpoch;
+    const graceEnd = stamp + BigInt((lobby.disconnectForfeitSeconds ?? DEFAULT_DISCONNECT_FORFEIT_SECONDS) * 1_000_000);
+    const poolEnd = stamp + BigInt(Math.max(0, player.disconnectPoolRemainingMs)) * 1000n;
+    return poolEnd < graceEnd ? poolEnd : graceEnd;
+}
+
+/**
+ * The row test for "this player is gone" used by the forfeit claim, the defer precondition and view_my_lobby_members
+ * (A92(9)): the row is offline, away or abandoned. Reads the LobbyMember row only (never User presence on another
+ * identity), so the view column is set exactly when isPastDisconnectThreshold can become true for the row.
+ */
+export function isMemberRowAway(player: any): boolean {
+    return !player.isOnline || memberHasLeft(player);
+}
+
+/**
+ * D-12 / D-13 as amended by A92(6): a player is past the threshold when offline (or away / abandoned), stamped, and
+ * either the grace has elapsed or the live pool is spent (`pool - (now - disconnectedAt) <= 0`).
+ */
+export function isPastDisconnectThreshold(lobby: any, player: any, now: any): boolean {
+    if (!isMemberRowAway(player)) return false;
+    const threshold = disconnectThresholdMicros(lobby, player);
+    return threshold !== undefined && now.microsSinceUnixEpoch >= threshold;
 }
 
 /**

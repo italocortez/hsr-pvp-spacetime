@@ -23,6 +23,7 @@ import {
     recordsOfLobby,
     recordsOfMatch,
     seedElo,
+    deferredDuel,
     tick,
     validate,
     type Field,
@@ -30,6 +31,7 @@ import {
 import { matchGames } from '@module/helpers/tournament/bracketResults';
 import { tournamentRecordsInBracketOrder } from '@module/helpers/tournament/tournamentResults';
 import { ensureEditableRecord, ensureOpenGame } from '@module/helpers/results/scoringHelpers';
+import { parkedLobby } from './s10-a2-fixtures';
 
 const BO3 = { defaultBestOf: 3, grandFinalBestOf: 3 };
 const IN_PLAY = 'A lobby for this bracket match is still in play.';
@@ -598,9 +600,10 @@ describe('A67(1): concede / claim_forfeit / defer stage lists', () => {
     });
 
     it('rejected in Waiting and in AwaitingResult', () => {
-        const test = newHarness();
-        const waiting = setupLobby(test, { noStart: true, lobby: { disconnectPolicy: { tag: 'Deferred' } } });
-        for (const [k, body] of Object.entries(calls(waiting))) expectReject(test, waiting.host, body, MSG[k as keyof typeof MSG]);
+        // T-S10d (A91(2)): a Deferred lobby is a tournament lobby (the Deferred tournament's lobby, still in Waiting).
+        const { f: wf, s: waiting } = deferredDuel({ noStart: true });
+        expect(lobbyRow(wf.test, waiting.lobbyId).stage.tag).toBe('Waiting');
+        for (const [k, body] of Object.entries(calls(waiting))) expectReject(wf.test, waiting.host, body, MSG[k as keyof typeof MSG]);
 
         const { f, m } = bo3Duel({ disconnectPolicy: 'Deferred' });
         const parked = playMatch(f, m.id, 'Blue');
@@ -637,12 +640,11 @@ describe('A67(1): the lobby GC', () => {
         const test = newHarness();
         const waiting = setupLobby(test, { noStart: true });
         const host2 = guest(test, 'host2');
-        const parked = setupLobby(test, {
+        // T-S10d (A91(2)): parked through a submitted Ranked game instead of a standalone Deferred defer.
+        const parked = parkedLobby(test, {
             actors: { host: host2 },
             seats: [['x1', 'BluePlayer'], ['x2', 'BluePlayer'], ['y1', 'RedPlayer'], ['y2', 'RedPlayer']],
-            lobby: { disconnectPolicy: { tag: 'Deferred' } },
         });
-        tx(test, parked.host, (ctx) => M.defer_match(ctx, { lobbyId: parked.lobbyId }));
         expect(lobbyRow(test, parked.lobbyId).stage.tag).toBe('AwaitingResult');
 
         for (const who of Object.values(waiting.a)) disconnect(test, who);

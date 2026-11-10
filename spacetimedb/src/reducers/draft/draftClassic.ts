@@ -2,13 +2,38 @@ import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser } from '@module/helpers/identity/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
-import { ensureLobbyMember, ensureRefereeOrAbove, ensureStageIs, slotTeam, slotIsCoach, slotToTeamSide } from '@module/helpers/lobby/lobbyHelpers';
+import { anySeatedPlayerAway, ensureLobbyMember, ensureRefereeOrAbove, ensureStageIs, slotTeam, slotIsCoach, slotToTeamSide } from '@module/helpers/lobby/lobbyHelpers';
 import { resolveOwnedEidolon, validateCharacterOwnership } from '@module/helpers/draft/ownershipValidation';
 import { buildAuctionBanSequence, buildClassicSequence } from '@module/helpers/draft/draftSequences';
 import { computeLobbyMemberRating } from '@module/helpers/stats/accountRating';
 import { banRestrictionError, isBanLegal } from '@module/helpers/lobby/banRestriction';
 import { ensureMatchAlive } from '@module/helpers/lobby/disconnectHelpers';
 import { lobbySteps, getNextSequence } from '@module/helpers/draft/stepSequence';
+import { classicCostAt } from '@module/helpers/draft/costSetGuards';
+
+/**
+ * A87: the picked characters a team may not pick again. Without allowMirrorPicks every pick of either team; with it,
+ * only the team's own picks (the other team's picks stay available, but no team picks the same character twice).
+ * The team of a Pick step is its actorSlot (Blue / Red on the manual and the timer path alike).
+ * EMPTY is the no-pick placeholder, not a character: it never blocks, mirror on or off, so a team may hold any number
+ * of EMPTY picks (manual or by timer).
+ */
+function picksBlockingTeam(steps: any[], lobby: any, team: string): Set<string> {
+    const names = new Set<string>();
+    for (const s of steps) {
+        if (s.action.tag !== 'Pick' || s.payload.tag !== 'Pick') continue;
+        if (s.payload.value.characterName === 'EMPTY') continue;
+        if (lobby.allowMirrorPicks && s.actorSlot.tag !== team) continue;
+        names.add(s.payload.value.characterName);
+    }
+    return names;
+}
+
+/** The Classic cost of a pick at an eidolon level (0 for EMPTY or no row; classicCostAt, 15.4 D-01 unified costs). */
+function classicPickCost(ctx: any, lobby: any, characterName: string, eidolon: number): number {
+    if (characterName === 'EMPTY') return 0;
+    return classicCostAt(ctx, lobby, characterName, eidolon);
+}
 
 // ─── start_draft ──────────────────────────────────────────────────────────────
 // Initializes the draft for a lobby.
@@ -47,6 +72,15 @@ export const start_draft = spacetimedb.reducer(
         const unconfirmed = playersOnly.filter((m: any) => !m.isConfirmed);
         if (unconfirmed.length > 0) {
             throw new SenderError('All Blue and Red players must be confirmed before starting.');
+        }
+
+        // A92(1): no start while a seated player (not a coach) is offline or away (the A85(1) presence test); a player
+        // offline since Waiting would otherwise carry no disconnect stamp and could never be forfeited (policy review G1).
+        // Residual (S10d review F3, kept as is): this gate counts a row with isOnline = false as present when its user
+        // has a live presence on another identity; such a row passes, loses its stamp below and enters Drafting offline
+        // and unstamped until its next real disconnect (the room page calls join_lobby on load, which closes it).
+        if (anySeatedPlayerAway(ctx, lobbyId)) {
+            throw new SenderError('All Blue and Red players must be online before starting.');
         }
 
         // Validate team composition: at least 1 non-coach player per team
@@ -232,7 +266,7 @@ export const start_draft = spacetimedb.reducer(
 // ─── pick_character ───────────────────────────────────────────────────────────
 // Records a character pick on the current turn.
 // Per D-39 (MOUS-03): Coaches cannot perform draft actions.
-// Per D-42: allowMirrorPicks controls whether the same character can be picked twice.
+// Per D-42: allowMirrorPicks lets the other team pick a character again; A87: never the same team twice.
 // Per D-40: requireOwnership triggers validateCharacterOwnership.
 // Captain or sole-player restriction: only team captain can pick (unless no captain assigned).
 
@@ -293,18 +327,14 @@ export const pick_character = spacetimedb.reducer(
             }
         }
 
-        // Character availability: check not already picked or banned (unless allowMirrorPicks)
+        // Character availability: check not already picked or banned. A87: with allowMirrorPicks the other team's
+        // picks stay available, but a team never picks the same character twice.
         const existingSteps = lobbySteps(ctx, lobbyId); // A67(3): the lobby's one game
-        if (!lobby.allowMirrorPicks) {
-            const alreadyPicked = existingSteps.some(
-                (s: any) =>
-                    s.action.tag === 'Pick' &&
-                    s.payload.tag === 'Pick' &&
-                    s.payload.value.characterName === characterName
-            );
-            if (alreadyPicked) {
-                throw new SenderError('Character already picked.');
-            }
+        const pickedByThisTeam = picksBlockingTeam(existingSteps, lobby, slotTeam(member.lobbySlot) ?? '');
+        if (pickedByThisTeam.has(characterName)) {
+            throw new SenderError(lobby.allowMirrorPicks
+                ? 'Your team already picked this character.'
+                : 'Character already picked.');
         }
         // Always check bans (mirror picks don't bypass bans)
         const alreadyBanned = existingSteps.some(
@@ -335,21 +365,7 @@ export const pick_character = spacetimedb.reducer(
             : requestedEidolon;
 
         // Determine cost from HsrCharacterCost table (15.4 D-10/D-11: filter draftMode='Classic').
-        let cost = 0;
-        if (characterName !== 'EMPTY') {
-            const costRows = [...ctx.db.HsrCharacterCost.cost_set_id.filter(lobby.costSetId)];
-            const costRow = costRows.find(
-                (r: any) =>
-                    r.characterName === characterName &&
-                    r.gameMode.tag === lobby.gameMode.tag &&
-                    r.draftMode.tag === 'Classic'
-            );
-            if (costRow) {
-                // Get cost for the specific eidolon level (15.4 D-01: unified costs struct).
-                const eidolonKey = `e${eidolon}` as keyof typeof costRow.costs;
-                cost = costRow.costs[eidolonKey] ?? 0;
-            }
-        }
+        const cost = classicPickCost(ctx, lobby, characterName, eidolon);
 
         // Record the step
         ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
@@ -573,8 +589,9 @@ export const ban_character = spacetimedb.reducer(
 // Called by the frontend when the turn timer expires.
 // Per D-43: Validates server-side that timer actually expired.
 // Per D-43b: If autoRandomPick=true, deterministically picks from available pool
-//            using hash (turnIndex * 31 + lobbyId) % availablePool.length.
-//            Otherwise auto-picks EMPTY CHARACTER (characterName="EMPTY", eidolon=0).
+//            using hash (turnIndex * 31 + lobbyId) % availablePool.length; A86: the pool holds what the acting
+//            team may legally pick, and the pick is priced like pick_character (cost row, owned eidolon).
+//            Otherwise auto-picks EMPTY CHARACTER (characterName="EMPTY", eidolon=0, costPaid=0).
 // For ban expiry: auto-bans a random character if autoRandomPick, else skips (empty ban).
 
 export const timer_expiry_classic = spacetimedb.reducer(
@@ -621,6 +638,7 @@ export const timer_expiry_classic = spacetimedb.reducer(
         if (currentStep.actionRequired.tag === 'Pick') {
             let characterName = 'EMPTY';
             let eidolon = 0;
+            let costPaid = 0;
 
             // D-43b: autoRandomPick — deterministic selection from available pool
             if (lobby.autoRandomPick) {
@@ -630,26 +648,18 @@ export const timer_expiry_classic = spacetimedb.reducer(
                         .filter((s: any) => s.action.tag === 'Ban' && s.payload.tag === 'Ban')
                         .map((s: any) => s.payload.value.characterName)
                 );
-                const pickedChars = new Set(
-                    existingSteps
-                        .filter((s: any) => s.action.tag === 'Pick' && s.payload.tag === 'Pick')
-                        .map((s: any) => s.payload.value.characterName)
-                );
-
                 // Determine who is acting (team with the current turn)
                 const actingTeam = currentStep.teamTurn.tag;
+                // A87: under allowMirrorPicks only the acting team's own picks are excluded.
+                const pickedChars = picksBlockingTeam(existingSteps, lobby, actingTeam);
                 const teamMembers = [...ctx.db.LobbyMember.lobby_id.filter(lobbyId)].filter(
                     (m: any) => slotTeam(m.lobbySlot) === actingTeam && !slotIsCoach(m.lobbySlot)
                 );
-
                 // Gather available pool: owned if requireOwnership, not banned/picked
                 let availablePool: string[] = [];
-                if (lobby.requireOwnership && teamMembers.length > 0) {
-                    // Union of all team members' owned characters across their selected LMA accounts.
-                    // D-I-01/02 (Phase 12.3): migrated from HsrAccount.isActive to LobbyMemberAccount —
-                    // closes the last in-gameplay runtime read of isActive (Phase 10.4 migration gap).
-                    // Matches the pattern at draftClassic.ts:76-96 (start_draft autoRandomPick validation)
-                    // and ownershipValidation.ts:21-36 (validateCharacterOwnership).
+                if (lobby.requireOwnership) {
+                    // Union of the acting team's players' owned characters across their selected LMA accounts
+                    // (D-I-01/02: LobbyMemberAccount, never HsrAccount.isActive). Nothing owned → empty pool → EMPTY.
                     const ownedSet = new Set<string>();
                     for (const member of teamMembers) {
                         const selectedAccounts = [...ctx.db.LobbyMemberAccount.by_lobby_and_user.filter([lobbyId, member.userId])];
@@ -685,9 +695,16 @@ export const timer_expiry_classic = spacetimedb.reducer(
                     // Deterministic hash: (turnIndex * 31 + lobbyId) % availablePool.length
                     const hashIndex = (session.turnIndex * 31 + lobbyId) % availablePool.length;
                     characterName = availablePool[hashIndex];
-                    // eidolon stays 0 for auto-pick
+                    // A86: priced like pick_character: E0 without ownership, else the highest level the acting team
+                    // owns on its selected accounts (resolveOwnedEidolon per player, the maximum over the team).
+                    if (lobby.requireOwnership) {
+                        for (const member of teamMembers) {
+                            eidolon = Math.max(eidolon, resolveOwnedEidolon(ctx, lobbyId, member.userId, characterName));
+                        }
+                    }
+                    costPaid = classicPickCost(ctx, lobby, characterName, eidolon);
                 }
-                // If no available pool, fall back to EMPTY
+                // If no available pool, fall back to EMPTY (cost 0)
             }
 
             // Record the auto-pick step
@@ -701,7 +718,7 @@ export const timer_expiry_classic = spacetimedb.reducer(
                 action: { tag: 'Pick', value: {} } as any,
                 payload: {
                     tag: 'Pick',
-                    value: { characterName, eidolon, costPaid: 0 },
+                    value: { characterName, eidolon, costPaid },
                 } as any,
                 timestamp: ctx.timestamp,
             }));
