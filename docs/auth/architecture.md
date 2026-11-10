@@ -95,7 +95,7 @@ BanRecord (id: u32 autoInc PK)  [PRIVATE -- public: false]
 3. Look up `UserIdentity` by provided identity
 4. Three merge cases:
    - **Case 1a**: Identity -> guest, no existing provider owner -- upgrade guest: `isGuest=false`, `hasDiscordLinked=true`, username=providerName
-   - **Case 1b**: Identity -> guest, provider already linked to different user -- re-point identity to existing user, delete orphaned guest. Phase S4 execution (A48, S3 review M3): the identity's `UserPresence.userId` + `lastLoginAt` follow the re-point before `performUserDeletion` removes the guest's own presence rows
+   - **Case 1b**: Identity -> guest, provider already linked to different user -- re-point identity to existing user, delete orphaned guest. Phase S4 execution (A48, S3 review M3): the identity's `UserPresence.userId` + `lastLoginAt` follow the re-point before `performUserDeletion` removes the guest's own presence rows. Phase S10l execution (A112): when the guest is about to be deleted (no other identity of the guest remains), `moveTournamentTiesToUser(ctx, guestId, existingUserId, SYSTEM_USER_ID)` (`helpers/tournament/entryTransfer.ts`) runs first and moves the guest's entries in unfinished tournaments to the existing user; the existing user must meet the tournament's gates as they stand at sign-in (enrolment, membership, `minimumMmr` by the `ensureMinimumMmr` rating test, `requireRoster`), the guest's recorded captaincies follow even without a membership, and the existing user's stand-in approvals for matches their new team plays are deleted; the full rules (move / do-not-move conditions, locks) are in [tournament/architecture.md](../tournament/architecture.md) "Phase S10l execution". What it does not move is settled by `performUserDeletion` as before (A94(2))
    - **Case 1c**: Identity -> verified user, refresh -- update timestamps, upsert `UserPrivate`
 5. Write/upsert `UserPrivate` (discordId, discordUsername, email), set `User.hasDiscordLinked=true`
 
@@ -338,6 +338,7 @@ Any new frontend subscription to a raw table (no projection view body) OR a per-
 | Identity GC deletes a guest user idle 30 days with no match history (`performUserDeletion`, 500 per run); `login_as_guest` counts new guests in the guest creation breaker (switch, threshold, alert) and repoints an orphan mapping | Phase S10h execution (DECISIONS.md A95; identity audit #7, #10) | 2026-11-10 |
 | Match history for guest retention also covers `hasHistoryReferences` (PlayerStat and the other stat / rating tables, review F1); a scheduled run that hits the 500 cap requeues in one hour (review F4); `login_as_guest` names a guest `Guest_` + the last 8 identity hex characters, made unique (`uniqueUsername` moved to `helpers/identity/usernames.ts`) | Phase S10h execution (S10h review fix pass) | 2026-11-10 |
 | Default guest creation threshold 300 per 10 minutes; `server_set_guest_creation(enabled)` (server identity) turns the switch on or off without an Admin session, resetting the counter on re-enable | Phase S10i execution (DECISIONS.md A109) | 2026-11-10 |
+| `server_link_provider` case 1b moves the guest's entries in unfinished tournaments to the existing user (`moveTournamentTiesToUser`) before the guest is deleted; entries the existing user cannot hold are settled by the deletion | Phase S10l execution (DECISIONS.md A112) | 2026-11-10 |
 
 ---
 

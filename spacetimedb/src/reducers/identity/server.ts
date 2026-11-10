@@ -4,6 +4,7 @@ import { Identity, Timestamp } from 'spacetimedb';
 import { auditUpdate, SYSTEM_USER_ID } from '@module/helpers/admin/auditColumns';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { performUserDeletion } from '@module/helpers/identity/userDeletionHelper';
+import { moveTournamentTiesToUser } from '@module/helpers/tournament/entryTransfer';
 import { rejectIfBanned, DISCORD_LOGIN_METHOD } from '@module/helpers/lobby/banHelper';
 import { seedSystemLobbyPreset } from '@module/helpers/lobby/systemPreset';
 import { uniqueUsername, USERNAME_MAX_LENGTH } from '@module/helpers/identity/usernames';
@@ -211,6 +212,9 @@ export const server_link_provider = spacetimedb.reducer({
             if (wasGuest) {
                 const remainingLinks = [...ctx.db.UserIdentity.user_id.filter(oldGuestId)];
                 if (remainingLinks.length === 0) {
+                    // A112 (S10l): the guest's entries in unfinished tournaments move to the existing user first; the
+                    // ones it cannot hold are settled by the deletion (A94(2)).
+                    moveTournamentTiesToUser(ctx, oldGuestId, providerOwner.id, systemUserId);
                     performUserDeletion(ctx, oldGuestId, systemUserId);
                 }
             }

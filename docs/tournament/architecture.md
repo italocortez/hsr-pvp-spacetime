@@ -407,6 +407,51 @@ finalize job of this tournament is still scheduled." Placements also count a wal
   registrant accounts and matches-for-me narrowed: [../views/architecture.md](../views/architecture.md) "Phase S10g execution".
 - **update_display_name** (audit #16): the solo team name goes through `soloTeamName` (unique, ` (2)` …).
 
+## Phase S10l execution (DECISIONS.md A112)
+
+`moveTournamentTiesToUser(ctx, fromGuestId, toUserId, actorId)` (`helpers/tournament/entryTransfer.ts`), called by
+`server_link_provider` case 1b (a guest signs in to a provider account that already has a user) right before
+`performUserDeletion` of the guest; actor `SYSTEM_USER_ID`, as the rest of the link path. No rate-limit allowance is
+consumed (`consumeTournamentAllowance` is not called). No schema change. Per guest enrolment (index reads only:
+`TournamentEnrolled.user_id`, `by_tournament_and_user`, `TournamentTeamMember.by_tournament_and_user`,
+`TournamentTeamRequest.user_id` / `by_team_and_user`, `TournamentPlayerAccount.by_tournament_and_user`,
+`TournamentWaitlistAccount.by_tournament_and_user`, `HsrAccount.user_id`, `Season.is_active`,
+`MmrRating.by_user_mode_season`, `TournamentStandIn.user_id`, `BracketMatch.id`, `TournamentTeam.captain_user_id`):
+
+- **Skipped** (stays with the guest): the tournament is Completed or Cancelled.
+- **Not moved** (left to `settleTournamentTiesForDeletion`, A94(2): withdrawn before the bracket, disqualified after):
+  the existing user has a `TournamentEnrolled` row in that tournament in any status (Disqualified included) or a
+  `TournamentTeamMember` row there; `minimumMmr` and the existing user's rating is below it (the `ensureMinimumMmr`
+  test: `MmrRating` for the tournament's game mode in the active season, else `EloConfig.initialRating`; no EloConfig
+  row counts as below); `requireVerified` and the existing user is a guest; `requireRoster` and the existing user owns
+  no active HSR account (the `register_for_tournament` check). The gates apply even though the guest registered
+  without them: `update_tournament` lets the organizer set `minimumMmr`, `requireVerified` and `requireRoster` in
+  Registration and CheckIn after guests enrolled (existing registrants are not re-checked), so a guest entry can sit in
+  a tournament with any of them. The `requireVerified` test is defensive: the existing user always has a provider link.
+- **Moved**: the enrolment is re-keyed (`updateEnrolled`; status, alias, waitlist flag, approval, random-team opt-in and
+  `createdDate` kept); the team membership is re-keyed and `captainUserId` follows when the guest was captain, also on
+  a team the guest no longer belongs to (S10l review F7: a disqualified guest's emptied team keeps `captainUserId`;
+  found through `TournamentTeam.captain_user_id`, so no team of an unfinished tournament names the deleted guest); a solo
+  team (teamSize 1) of a non-anonymous tournament is renamed through `soloTeamName` (display name, ` (2)` uniqueness
+  pass), an anonymous one keeps its alias / `Player <n>` name; the guest's pending `TournamentTeamRequest` rows to teams
+  of that tournament are re-keyed (requests addressed to the guest's team are keyed by the requester and stay).
+  `TournamentTeam.seedNumber`, `groupId`, status and the `BracketMatch` rows reference the team and are not touched.
+- **Stand-in approvals of the existing user** (S10l review F2): `approve_stand_in` refuses a member of the other team
+  only at approval time, so after the move the existing user's `TournamentStandIn` rows for bracket matches of that
+  tournament in which their new team plays (team1 or team2) are deleted; otherwise `allowedSlotsFor` would give them
+  both sides. Their stand-in rows for other matches stay.
+- **Locks** (A112(2)): the guest's `TournamentPlayerAccount` and `TournamentWaitlistAccount` rows of the tournament are
+  deleted; a non-waitlisted, non-Disqualified entry gets `lockPlayerAccounts(…, undefined)` (every HSR account of the
+  existing user); a waitlisted entry gets no remembered choice (stale rows of the existing user deleted), so
+  `waitlist_promote` locks every account through `lockAccountsAtPromotion`.
+- **Stays with the guest id** and goes through the deletion as before: lobby memberships and `LobbyMemberAccount`
+  selections (a Waiting row removed, a live player row kept away / abandoned, A68(7)); `MatchResultParticipant` rows
+  and other records of games already played (the guest then has history references and is archived to `DeletedUser`,
+  so `resolveUserLabel` still names it; the finalize job credits those games to the guest id, not the existing user);
+  calendar invites of bracket-match events; `TournamentAssistant` rows (a guest can be made assistant:
+  `assign_tournament_assistant` has no guest check) and `TournamentStandIn` rows (`approve_stand_in` rejects guests),
+  both deleted by A94(2). A Disqualified guest enrolment is moved like any other (status kept, no locks).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -443,6 +488,7 @@ finalize job of this tournament is still scheduled." Placements also count a wal
 | Tournament arg views (participants, teams, team members, staff), per-sender enrollment / team requests / stand-ins / matches-for-me, `TournamentStandIn.user_id` index, colours on `view_my_tournament_lobbies` | Phase S9a execution (DECISIONS.md A37, A44(1), A26a(2), A70(1), A71) | 2026-11-08 |
 | `create_tournament` / `update_tournament` reject NoAction and a `disconnectForfeitSeconds` outside 30-600 | Phase S10d execution (DECISIONS.md A92(2)(3)) | 2026-11-09 |
 | User deletion settles tournament ties (withdraw before the bracket, DQ after) and an organizer of a live tournament cannot delete the account (A94); `isAnonymousDefault` Draft-only (A103); `lock_tournament_accounts` + `TournamentWaitlistAccount` (A104); staff views non-terminal + Moderator+, Admin arg views (A105); DQ stage guard and lobby voiding, minimum MMR on the active season, tournament entry throttle (audit #2, #6, #8, #13) | Phase S10g execution (DECISIONS.md A94, A103, A104, A105) | 2026-11-09 |
+| A guest signing in to an existing account keeps its entries in unfinished tournaments (`moveTournamentTiesToUser`): enrolment, membership, captaincy and requests re-keyed, solo team renamed, locks rebuilt from the existing user's accounts; entries the existing user cannot hold are settled as a deletion | Phase S10l execution (DECISIONS.md A112) | 2026-11-10 |
 
 ---
 
