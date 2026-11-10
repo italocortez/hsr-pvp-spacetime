@@ -1358,3 +1358,23 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** user, 2026-11-10: "undo is removing steps in the draft, undo would remove a character, it doenst have to remove eidolons selections that happen during draft. If a character was selected and set to eidolon 5 and we undo, we are removing the step of selecting the character, which in consequence also removes the eidolon selected."
 - **Supersedes:** the SetEidolon entry of A127's step list as built first in S10t.
 - **Where implemented:** S10t
+
+### A133 — In Auction a team at 0 character budget cannot pay eidolon costs from the light-cone budget
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** during the draft of an Auction game, an eidolon cost may spill from the character budget into the light-cone budget only when the team's character budget is above 0 before the charge. A team whose character budget is 0 cannot raise an eidolon. So each team dips into the light-cone budget at most once per draft, with the charge that empties its character budget.
+  1. A sale is one charge: the winning bid and the default eidolon cost of that character together. If the team had character budget before the sale, the eidolon part may spill even when the bid alone empties the character budget.
+  2. Lowering an eidolon still refunds to the light-cone budget, never to the character budget.
+  3. The rule ends when the draft ends: in Equipping and later the budgets are merged and eidolon edits pay from the pool as today.
+- **Why:** user, 2026-11-10: "if the budget is already 0, does do we still draw from the lightcone budget and it would allow more than one draw from it? like if you have 0 already on character budget, not allow it to draw from lightcone, just if you have positive budget on character" and, on the three points, "i agree with what you put there".
+- **Supersedes:** A61(5) and A61(6) where they let a team at 0 character budget pay an eidolon cost entirely from the light-cone budget during the auction.
+- **Where implemented:** S10u
+
+### A134 — In the auction phase an undo goes back to the nomination: the whole round is removed
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** in the auction phase the unit of undo is the nomination round (the nomination, its bids, and its sale if it was sold). An undo pressed while a round is open removes the nomination and all its bids; an undo pressed after a sale removes the sale together with its nomination and bids and gives back what the sale charged (A132). Either way the draft returns to the moment before that nomination: no open nomination, nobody holds a bid, the same team nominates again with a fresh timer. No undo ever restores an earlier bidder as holder, so the refusal "Cannot undo this bid: the previous bidder can no longer cover their bid." is removed. Bans and Classic picks are undone one step at a time as before.
+- **Why:** user, 2026-11-10: "wouldnt it be better that undo just moves the bid phase to a renomination? so we just reset the budget as how it was right before the nomination". It removes the stalled-holder cases of S10t (review 2 G2 and the reopened bid after a sale undo).
+- **Orchestrator's reading (not the user's words):** bids charge no budget, so removing a round needs no budget change; eidolon selections on other characters made during the round stay with their costs (A132); selections on the character of an undone sale go with it (A132).
+- **Supersedes:** the bid-by-bid undo of A127 inside the auction phase and the bid refusal added in S10t.
+- **Where implemented:** S10u
