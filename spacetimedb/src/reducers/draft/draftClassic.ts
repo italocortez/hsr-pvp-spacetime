@@ -10,7 +10,7 @@ import { banRestrictionError, isBanLegal } from '@module/helpers/lobby/banRestri
 import { ensureMatchAlive, scheduleChecksForOfflineStaff } from '@module/helpers/lobby/disconnectHelpers';
 import { lobbySteps, getNextSequence } from '@module/helpers/draft/stepSequence';
 import { turnRemainingMs } from '@module/helpers/draft/turnClock';
-import { classicCostAt } from '@module/helpers/draft/costSetGuards';
+import { characterCostAt, pricedCharacterNames } from '@module/helpers/draft/costSetGuards';
 import { trimChatForInsert } from '@module/helpers/lobby/chatWindow';
 
 /**
@@ -31,10 +31,12 @@ function picksBlockingTeam(steps: any[], lobby: any, team: string): Set<string> 
     return names;
 }
 
-/** The Classic cost of a pick at an eidolon level (0 for EMPTY or no row; classicCostAt, 15.4 D-01 unified costs). */
+/**
+ * The cost of a pick at an eidolon level: the lobby's own cost row (A107(1): cost set, game mode, draft mode). EMPTY
+ * costs 0; a character without a row is rejected (A107(5), characterCostAt).
+ */
 function classicPickCost(ctx: any, lobby: any, characterName: string, eidolon: number): number {
-    if (characterName === 'EMPTY') return 0;
-    return classicCostAt(ctx, lobby, characterName, eidolon);
+    return characterCostAt(ctx, lobby, characterName, eidolon);
 }
 
 // ─── start_draft ──────────────────────────────────────────────────────────────
@@ -377,7 +379,7 @@ export const pick_character = spacetimedb.reducer(
             ? resolveOwnedEidolon(ctx, lobbyId, user.id, characterName)
             : requestedEidolon;
 
-        // Determine cost from HsrCharacterCost table (15.4 D-10/D-11: filter draftMode='Classic').
+        // A107(1)(5): the lobby's cost row (cost set, game mode, draft mode); no row → "<name> has no cost in this lobby's cost set."
         const cost = classicPickCost(ctx, lobby, characterName, eidolon);
 
         // Record the step
@@ -663,7 +665,8 @@ export const timer_expiry_classic = spacetimedb.reducer(
                 const teamMembers = [...ctx.db.LobbyMember.lobby_id.filter(lobbyId)].filter(
                     (m: any) => slotTeam(m.lobbySlot) === actingTeam && !slotIsCoach(m.lobbySlot)
                 );
-                // Gather available pool: owned if requireOwnership, not banned/picked
+                // Gather available pool: owned if requireOwnership, not banned/picked, priced by the lobby's cost set
+                const priced = pricedCharacterNames(ctx, lobby);
                 let availablePool: string[] = [];
                 if (lobby.requireOwnership) {
                     // Union of the acting team's players' owned characters across their selected LMA accounts
@@ -678,22 +681,13 @@ export const timer_expiry_classic = spacetimedb.reducer(
                             }
                         }
                     }
+                    // A107(5): an owned character without a row in the lobby's cost set is never drawn.
                     availablePool = [...ownedSet].filter(
-                        (name) => !bannedChars.has(name) && !pickedChars.has(name)
+                        (name) => priced.has(name) && !bannedChars.has(name) && !pickedChars.has(name)
                     );
                 } else {
-                    // All characters in the cost table for this game mode (not banned/picked).
-                    // 15.4 D-10/D-11: filter draftMode='Classic' so Auction-only rows don't
-                    // leak into the Classic auto-pool (WR-02 Phase 15.4).
-                    const costRows = [...ctx.db.HsrCharacterCost.cost_set_id.filter(lobby.costSetId)];
-                    const allChars = [...new Set(
-                        costRows
-                            .filter((r: any) =>
-                                r.gameMode.tag === lobby.gameMode.tag &&
-                                r.draftMode.tag === 'Classic'
-                            )
-                            .map((r: any) => r.characterName)
-                    )];
+                    // A107(1): every character the lobby's cost set prices in its game mode and draft mode (not banned/picked).
+                    const allChars = [...priced];
                     availablePool = allChars.filter(
                         (name) => !bannedChars.has(name) && !pickedChars.has(name)
                     );
@@ -748,17 +742,10 @@ export const timer_expiry_classic = spacetimedb.reducer(
                         .map((s: any) => s.payload.value.characterName)
                 );
 
-                // 15.4 D-10/D-11: filter draftMode='Classic' so Auction-only rows don't
-                // leak into the Classic auto-ban pool (WR-02 Phase 15.4).
-                const costRows = [...ctx.db.HsrCharacterCost.cost_set_id.filter(lobby.costSetId)];
-                const allChars = [...new Set(
-                    costRows
-                        .filter((r: any) =>
-                            r.gameMode.tag === lobby.gameMode.tag &&
-                            r.draftMode.tag === 'Classic'
-                        )
-                        .map((r: any) => r.characterName)
-                )];
+                // A107(1): the characters the lobby's cost set prices in its game mode and the lobby's draft mode (the
+                // Auction ban phase runs through this reducer and draws from the Auction rows, A101; no Classic-only
+                // filter, no default-set fallback).
+                const allChars = [...pricedCharacterNames(ctx, lobby)];
                 // A45(2): only characters the acting team may still ban under the lobby's Ban Restriction;
                 // none left → the SKIP sentinel, as without autoRandomPick.
                 const availablePool = allChars.filter(

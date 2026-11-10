@@ -188,6 +188,70 @@ keeps descriptions an admin wrote (the `Archetype` branch of `admin_bulk_upsert`
 **LOW.** The `unpublish_cost_set` header no longer claims clients stop receiving the live rows (they stay public until
 `delete_cost_set`).
 
+## Phase S10i execution (DECISIONS.md A101, A107, A108)
+
+Supersedes, for the reducers below, the "Row-absence semantic" (readers returned 0), the `publish_cost_set` Phase D
+(draft rows deleted) and the "not in draft state" edit rule above.
+
+**Lookups (A107(1)(5)).** Every character and light-cone price is read from the live rows of the lobby's own cost set,
+game mode and draft mode (`helpers/draft/costSetGuards.ts`: `characterCostRow` / `lightconeCostRow`, through
+`characterCostAt` / `lightconeCostAt` / `pricedCharacterNames`). No default-set fallback, no fixed draft mode. `EMPTY`
+costs 0 by rule. A real character or light cone without a row is rejected with `"<name> has no cost in this lobby's cost
+set."` A row that exists but lacks the requested eidolon / superimposition field is a data defect and is rejected with
+`"The cost row of <name> has no <field> value."` (`e0`..`e6` / `s1`..`s5`; review F3, A108(2): no price default).
+`doesCostSetCover` reads the same rows (`costSetRowsFor`) and checks the default set (id 0) like any other set (review
+F2, A108(2)): a set 0 without a character and a light-cone row for the game mode and draft mode is refused at lobby,
+preset and tournament selection with the coverage text, not mid-draft. Set 0 remains selectable without a `CostSet` row
+(`ensureSelectableCostSet`). A synergy pair without a row in the set and mode adds no surcharge (it is never a
+rejection). The readers are listed in docs/match-session/architecture.md "Phase S10i execution".
+
+**Draft copy and patch in place (A107(3)).** `helpers/roster/costSetCompleteness.ts`.
+- The `CostSetDraft*` rows of a set are its full editable copy. `publish_cost_set` no longer deletes them.
+- `edit_draft_*_cost` accept a set that is a draft or published and not locked (`ensureCostSetPatchable`; texts
+  "This cost set is locked; its costs cannot be changed." / "This cost set is unpublished; its costs cannot be
+  changed."). A published set without any draft row (published before S10i) gets its draft rebuilt from its live rows
+  first (`ensureDraftCopy`), in the edit and in a re-publish.
+- No `CostSet` column was added: there is no "unpublished edits" flag. The owner's client can compare
+  `view_my_draft_*_costs` with the live rows if it wants to show pending edits.
+
+**publish_cost_set(costSetId, confirmFillMissing?: bool)** (the argument is optional; omitted = false):
+1. Owner or Moderator+; `ensureCostSetPatchable`.
+2. A patch (the set is already published) is refused while any lobby on the set is in Drafting, Equipping or Scoring:
+   "Cannot patch this cost set while N lobbies using it are in Drafting, Equipping or Scoring." (`liveLobbiesOnCostSet`:
+   "using the set" = `Lobby.costSetId`; read through the `Lobby.stage` btree, one filter per live stage, then the
+   id compared. Waiting rooms, AwaitingResult lobbies, tournaments and presets do not block.)
+3. `ensureDraftCopy`.
+4. Completeness (A107(2), `missingCostEntries`): for each draft mode the draft prices at all (a character or light-cone
+   row of the set's game mode; synergy rows do not count), every `HsrCharacter` / `HsrLightcone` row without a draft
+   row in that mode. A draft mode with no character or light-cone row is not checked and not filled. Gaps without
+   confirmation: refused with "This cost set has no cost for C characters and L light cones (Classic: c characters, l
+   light cones; Auction: ...). Confirm to publish them at cost 0." Gaps with confirmation: written into the draft at
+   cost 0 (every eidolon / superimposition field 0), so they reach the live copy in step 5.
+5. `mirrorDraftToLive`: the live rows become equal to the draft under the same id. A new key is inserted; a changed
+   price replaces the row (audit kept); an unchanged row is not written (no broadcast); a live row with no draft row
+   is deleted. Synergies: changed modifier through `id.update`, new pairs inserted, stale pairs deleted.
+6. `CostSet`: `isPublished = true`, `isDraft = false` (the row is updated on every publish, audit columns move).
+
+Lobbies, presets and tournaments pointing at the set are not changed; they read the new prices from then on. Finished
+games keep the costs on their steps and lineups (A107(6)).
+
+**Lock, unpublish, delete, clone with pending draft edits.** Lock freezes the set: no edit, no patch; draft edits not
+yet published stay in the private draft and never go live. Unpublish (needs a lock) keeps them frozen. Delete removes
+the draft rows with the live rows (unchanged cascade). Clone (`create_cost_set` with a published source) copies the
+source's live rows, so unpublished draft edits of the source are not cloned.
+
+**Default set (id 0).** It is written by `admin_bulk_upsert` from `data/seed/` and has no `CostSet` row, so
+`publish_cost_set`, the completeness check and the patch guard never apply to it. Its completeness depends on the seed.
+A108(1): `data/seed/characters.json` and `data/seed/lightcones.json` price every character (83) and light cone (156)
+for Classic and for Auction, with equal values in all three game modes, so the seed writes 249 + 249 `HsrCharacterCost`
+rows and 468 + 468 `HsrLightconeCost` rows for set 0 (synergy rows keep their explicit Auction values). No reducer
+applies a default price or a cross-mode fallback (A108(2)). A database published with this module must be re-seeded
+(`stdb:seed`) before Auction lobbies on the default set work; until then the coverage guard refuses them at creation.
+
+**View.** `view_cost_set_missing(costSetId)`: rows `{ costSetId, draftMode, kind ('Character' | 'Lightcone'), name }`,
+for the set's owner and Moderator+ (checked before any read; anyone else and an unknown set get none). It reads the
+whole `HsrCharacter` / `HsrLightcone` reference tables (iter) after the permission check.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -202,6 +266,8 @@ keeps descriptions an admin wrote (the `Archetype` branch of `admin_bulk_upsert`
 | `draftMode: DraftMode` column added to all 6 cost tables; classicCosts+auctionBaseBid collapsed to single `costs` struct; first-ever synergy auction support. PK tuples extended by `draftMode`; 4-col btrees on char/lc; new 5-col `by_tuple` btree on both synergy tables; `source_mode` extended to 3 cols (`[sourceName, gameMode, draftMode]`). Reducer tuple match via iter() + predicate (A2_FALLBACK_ITER). Reducer arg shape: `edit_draft_*_cost` collapses dual JSON inputs to single `costsJson` and adds `draftModeTag`; one call = one row. | Phase 15.4 execution | 2026-04-15 |
 | Synergy pairs canonicalized (alphabetical) in `edit_draft_synergy_cost` and `admin_bulk_upsert`; either-order match; duplicate pair in one bulk payload rejected | Phase S7 execution (DECISIONS.md A21; backlog #3) | 2026-11-06 |
 | `edit_draft_*_cost`: finite costs 0..100000, bounded modifier, tags checked (game mode = the set's), names checked against `HsrCharacter` / `HsrLightcone`; re-seed keeps archetype descriptions | Phase S10f execution (roster audit #9, #10) | 2026-11-09 |
+| Lookups read the lobby's own set, game mode and draft mode with no fallback, a missing row rejects; publish checks completeness (confirm fills at cost 0); the draft stays after publish and a published, unlocked set is patched in place, refused while a lobby on it is live; `view_cost_set_missing` | Phase S10i execution (DECISIONS.md A101, A107) | 2026-11-10 |
+| The seed prices set 0 for Classic and Auction with equal values (249 + 249 character rows, 468 + 468 light-cone rows); no reducer applies a default price; `doesCostSetCover` checks set 0 like any other set (review F2); a cost row without the requested field is rejected (review F3); re-seed after publish | Phase S10i execution (DECISIONS.md A108) | 2026-11-10 |
 
 ---
 

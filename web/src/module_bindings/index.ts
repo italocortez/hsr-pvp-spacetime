@@ -165,6 +165,8 @@ import ServerNukeTestDataReducer from "./server_nuke_test_data_reducer";
 import ServerRegisterDelegateReducer from "./server_register_delegate_reducer";
 import ServerRevokeDelegateReducer from "./server_revoke_delegate_reducer";
 import ServerSetDatetimeReducer from "./server_set_datetime_reducer";
+import ServerSetGuestCreationReducer from "./server_set_guest_creation_reducer";
+import ServerSetGuestLobbyCreationReducer from "./server_set_guest_lobby_creation_reducer";
 import ServerSetMmrReducer from "./server_set_mmr_reducer";
 import ServerSetOnlineReducer from "./server_set_online_reducer";
 import ServerSetRoleReducer from "./server_set_role_reducer";
@@ -245,6 +247,7 @@ import ViewAdminTournamentTeamMembersRow from "./view_admin_tournament_team_memb
 import ViewAdminTournamentTeamsRow from "./view_admin_tournament_teams_table";
 import ViewAdminUserIdentitiesRow from "./view_admin_user_identities_table";
 import ViewAdminUserPrivateRow from "./view_admin_user_private_table";
+import ViewCostSetMissingRow from "./view_cost_set_missing_table";
 import ViewLobbyBrowserRow from "./view_lobby_browser_table";
 import ViewLobbyPresetsRow from "./view_lobby_presets_table";
 import ViewMyAvailabilityRow from "./view_my_availability_table";
@@ -744,6 +747,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, ViewAdminUserPrivateRow),
+  viewCostSetMissing: __table({
+    name: 'view_cost_set_missing',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, ViewCostSetMissingRow),
   viewLobbyBrowser: __table({
     name: 'view_lobby_browser',
     indexes: [
@@ -1264,6 +1274,8 @@ const reducersSchema = __reducers(
   __reducerSchema("server_register_delegate", ServerRegisterDelegateReducer),
   __reducerSchema("server_revoke_delegate", ServerRevokeDelegateReducer),
   __reducerSchema("server_set_datetime", ServerSetDatetimeReducer),
+  __reducerSchema("server_set_guest_creation", ServerSetGuestCreationReducer),
+  __reducerSchema("server_set_guest_lobby_creation", ServerSetGuestLobbyCreationReducer),
   __reducerSchema("server_set_mmr", ServerSetMmrReducer),
   __reducerSchema("server_set_online", ServerSetOnlineReducer),
   __reducerSchema("server_set_role", ServerSetRoleReducer),
@@ -1384,6 +1396,8 @@ type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "ta
     readonly "view_admin_user_identities": Omit<typeof tablesSchema.schemaType.tables["viewAdminUserIdentities"], "accessorName"> & { readonly accessorName: "view_admin_user_identities" };
     /** @deprecated Use `viewAdminUserPrivate` instead. This alias will be removed in the next major version. */
     readonly "view_admin_user_private": Omit<typeof tablesSchema.schemaType.tables["viewAdminUserPrivate"], "accessorName"> & { readonly accessorName: "view_admin_user_private" };
+    /** @deprecated Use `viewCostSetMissing` instead. This alias will be removed in the next major version. */
+    readonly "view_cost_set_missing": Omit<typeof tablesSchema.schemaType.tables["viewCostSetMissing"], "accessorName"> & { readonly accessorName: "view_cost_set_missing" };
     /** @deprecated Use `viewLobbyBrowser` instead. This alias will be removed in the next major version. */
     readonly "view_lobby_browser": Omit<typeof tablesSchema.schemaType.tables["viewLobbyBrowser"], "accessorName"> & { readonly accessorName: "view_lobby_browser" };
     /** @deprecated Use `viewLobbyPresets` instead. This alias will be removed in the next major version. */
@@ -1503,7 +1517,7 @@ const REMOTE_MODULE = {
     cliVersion: "2.14.1" as const,
   },
   tables: tablesSchema.schemaType.tables as __SchemaWithTableAccessorAliases["tables"],
-  viewsWithArgs: ["view_admin_tournament", "view_admin_tournament_enrolled", "view_admin_tournament_lobbies", "view_admin_tournament_match_results", "view_admin_tournament_matches", "view_admin_tournament_team_members", "view_admin_tournament_teams", "view_tournament_participants", "view_tournament_staff", "view_tournament_team_members", "view_tournament_teams", "view_user_achievements", "view_user_by_username"],
+  viewsWithArgs: ["view_admin_tournament", "view_admin_tournament_enrolled", "view_admin_tournament_lobbies", "view_admin_tournament_match_results", "view_admin_tournament_matches", "view_admin_tournament_team_members", "view_admin_tournament_teams", "view_cost_set_missing", "view_tournament_participants", "view_tournament_staff", "view_tournament_team_members", "view_tournament_teams", "view_user_achievements", "view_user_by_username"],
   reducers: reducersSchema.reducersType.reducers,
   ...proceduresSchema,
 } satisfies __RemoteModule<
@@ -1549,6 +1563,7 @@ const tableAccessorAliases = {
   "view_admin_tournament_teams": "viewAdminTournamentTeams",
   "view_admin_user_identities": "viewAdminUserIdentities",
   "view_admin_user_private": "viewAdminUserPrivate",
+  "view_cost_set_missing": "viewCostSetMissing",
   "view_lobby_browser": "viewLobbyBrowser",
   "view_lobby_presets": "viewLobbyPresets",
   "view_my_availability": "viewMyAvailability",
@@ -1696,6 +1711,8 @@ export type DbView = __DbViewBase & {
   readonly "view_admin_user_identities": __DbViewBase["viewAdminUserIdentities"];
   /** @deprecated Use `viewAdminUserPrivate` instead. This alias will be removed in the next major version. */
   readonly "view_admin_user_private": __DbViewBase["viewAdminUserPrivate"];
+  /** @deprecated Use `viewCostSetMissing` instead. This alias will be removed in the next major version. */
+  readonly "view_cost_set_missing": __DbViewBase["viewCostSetMissing"];
   /** @deprecated Use `viewLobbyBrowser` instead. This alias will be removed in the next major version. */
   readonly "view_lobby_browser": __DbViewBase["viewLobbyBrowser"];
   /** @deprecated Use `viewLobbyPresets` instead. This alias will be removed in the next major version. */
@@ -1882,6 +1899,8 @@ export type Tables = __TablesBase & {
   readonly "view_admin_user_identities": __TablesBase["viewAdminUserIdentities"];
   /** @deprecated Use `viewAdminUserPrivate` instead. This alias will be removed in the next major version. */
   readonly "view_admin_user_private": __TablesBase["viewAdminUserPrivate"];
+  /** @deprecated Use `viewCostSetMissing` instead. This alias will be removed in the next major version. */
+  readonly "view_cost_set_missing": __TablesBase["viewCostSetMissing"];
   /** @deprecated Use `viewLobbyBrowser` instead. This alias will be removed in the next major version. */
   readonly "view_lobby_browser": __TablesBase["viewLobbyBrowser"];
   /** @deprecated Use `viewLobbyPresets` instead. This alias will be removed in the next major version. */

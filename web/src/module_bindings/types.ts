@@ -585,6 +585,16 @@ export const CostSetDraftSynergy = __t.object("CostSetDraftSynergy", {
 });
 export type CostSetDraftSynergy = __Infer<typeof CostSetDraftSynergy>;
 
+export const CostSetMissingRow = __t.object("CostSetMissingRow", {
+  costSetId: __t.u32(),
+  get draftMode() {
+    return DraftMode;
+  },
+  kind: __t.string(),
+  name: __t.string(),
+});
+export type CostSetMissingRow = __Infer<typeof CostSetMissingRow>;
+
 export const DeletedUser = __t.object("DeletedUser", {
   id: __t.u32(),
   displayName: __t.string(),
@@ -2887,6 +2897,11 @@ export type ViewAdminUserIdentities = __Infer<typeof ViewAdminUserIdentities>;
 
 export const ViewAdminUserPrivate = __t.object("ViewAdminUserPrivate", {});
 export type ViewAdminUserPrivate = __Infer<typeof ViewAdminUserPrivate>;
+
+export const ViewCostSetMissing = __t.object("ViewCostSetMissing", {
+  costSetId: __t.u32(),
+});
+export type ViewCostSetMissing = __Infer<typeof ViewCostSetMissing>;
 
 export const ViewLobbyBrowser = __t.object("ViewLobbyBrowser", {});
 export type ViewLobbyBrowser = __Infer<typeof ViewLobbyBrowser>;

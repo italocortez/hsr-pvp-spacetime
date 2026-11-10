@@ -12,4 +12,5 @@ import {
 
 export default {
   costSetId: __t.u32(),
+  confirmFillMissing: __t.option(__t.bool()),
 };

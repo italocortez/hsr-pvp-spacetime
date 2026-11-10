@@ -35,6 +35,7 @@ import {
 } from './s4-fixtures';
 import { byKey, deferredDuel, duel, playLobbyGame, createTournamentLobby, join, openMatchLobby, recordsOfLobby, sidesOf } from './s8d-fixtures';
 import { parkedLobby } from './s10-a2-fixtures';
+import { completeDraft } from './s7-fixtures';
 import { liveField, matchRow, tRow, verified } from './s8-fixtures';
 
 // ─── Messages (the module code is the truth) ─────────────────────────────────
@@ -136,7 +137,10 @@ function toStage(test: Harness, s: Lobby, stage: 'Drafting' | 'Equipping' | 'Sco
     const order = ['Drafting', 'Equipping', 'Scoring'];
     while (lobbyRow(test, s.lobbyId).stage.tag !== stage) {
         expect(order.indexOf(lobbyRow(test, s.lobbyId).stage.tag)).toBeLessThan(order.indexOf(stage));
-        advanceStageOf(test, s);
+        // T-S10i (A100): the draft is finished through the reducers (automatic Drafting → Equipping); only
+        // Equipping → Scoring is a manual advance.
+        if (lobbyRow(test, s.lobbyId).stage.tag === 'Drafting') completeDraft(s);
+        else advanceStageOf(test, s);
     }
 }
 

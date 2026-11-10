@@ -7,6 +7,7 @@ import { performUserDeletion } from '@module/helpers/identity/userDeletionHelper
 import { rejectIfBanned, DISCORD_LOGIN_METHOD } from '@module/helpers/lobby/banHelper';
 import { seedSystemLobbyPreset } from '@module/helpers/lobby/systemPreset';
 import { uniqueUsername, USERNAME_MAX_LENGTH } from '@module/helpers/identity/usernames';
+import { setGuestCreationEnabled, setGuestLobbyCreationEnabled } from '@module/helpers/lobby/abuseControls';
 
 /**
  * Guard: the caller is a registered server identity (Owner or Delegate, §C.4).
@@ -313,6 +314,31 @@ export const server_delete_user = spacetimedb.reducer({
     }
 
     performUserDeletion(ctx, targetUser.id, SYSTEM_USER_ID);
+});
+
+/**
+ * A109(3): server-only switch of the guest creation breaker (login_as_guest for a new identity), the server-side twin of
+ * admin_set_guest_creation, for when no Admin can sign in (while the switch is off a new browser cannot start a session).
+ * Re-enabling drops the breaker's window counter. Audit actor: SYSTEM.
+ */
+export const server_set_guest_creation = spacetimedb.reducer({
+    enabled: t.bool(),
+}, (ctx, { enabled }) => {
+    requireServer(ctx);
+    setGuestCreationEnabled(ctx, enabled, SYSTEM_USER_ID);
+    console.log(`[ABUSE] Guest creation ${enabled ? 'enabled' : 'disabled'} by a server identity`);
+});
+
+/**
+ * A109(3): server-only switch of guest lobby creation (A42(1)), the server-side twin of admin_set_guest_lobby_creation.
+ * Re-enabling drops the breaker's window counter. Audit actor: SYSTEM.
+ */
+export const server_set_guest_lobby_creation = spacetimedb.reducer({
+    enabled: t.bool(),
+}, (ctx, { enabled }) => {
+    requireServer(ctx);
+    setGuestLobbyCreationEnabled(ctx, enabled, SYSTEM_USER_ID);
+    console.log(`[ABUSE] Guest lobby creation ${enabled ? 'enabled' : 'disabled'} by a server identity`);
 });
 
 /**

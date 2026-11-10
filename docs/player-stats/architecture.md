@@ -110,6 +110,14 @@ Finalization step 16 (`helpers/results/finalizationHelpers.ts`) writes no `Playe
 timer pick the opponents' faced rows and the global row are still written, with the side read from `actorSlot` as for
 a manual pick. Details: `docs/match-results/architecture.md`, "Phase S10f execution".
 
+## Phase S10i execution (DECISIONS.md A106)
+
+A Classic timer auto-pick of a real character (`actorUserId = 0`) now gives the "played" stat to every non-coach
+participant of the acting team, with that team's win flag, like an Auction sale (A82(2)); the other team gets "faced"
+and the global stat is written once. A manual pick still credits the picker only; `EMPTY` / `SKIP` write nothing.
+This replaces the S10f rule "no played row for a timer pick". Details: `docs/match-results/architecture.md`, "Phase
+S10i execution" (`playedCredit`).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -124,6 +132,7 @@ a manual pick. Details: `docs/match-results/architecture.md`, "Phase S10f execut
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
 | Stat views without userId / audit ids; GlobalCharacterStat SYSTEM actor; relationships with the other player's card and MMR | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 | No stat rows for `EMPTY`, `SKIP` or the system picker | Phase S10f execution (results audit #3) | 2026-11-09 |
+| A Classic timer pick credits the whole acting team with "played" | Phase S10i execution (DECISIONS.md A106) | 2026-11-10 |
 
 ---
 

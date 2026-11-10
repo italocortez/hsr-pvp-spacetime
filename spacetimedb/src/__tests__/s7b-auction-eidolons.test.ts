@@ -2,12 +2,13 @@
 // bids, the total-budget guard, the eidolon extra charged at the sale (both sale paths), the roster cost (amount +
 // extra), and set_eidolon paying / refunding the difference. Cost ladders have distinct e0..e6. TestClock; no maincloud.
 import { describe, expect, it } from 'vitest';
-import { M, advance, expectReject, lobbyRow, newHarness, session, setupLobby, steps, tx, type Harness, type Lobby } from './s4-fixtures';
+import { M, advance, expectReject, lobbyRow, newHarness, session, setupLobby, steps, tx, type Harness, type Lobby, priceCharacters } from './s4-fixtures';
 import {
     H,
     arrange,
     blueNames,
     captain,
+    completeDraft,
     draftAuction,
     gameRow,
     halves,
@@ -25,7 +26,7 @@ const NOT_OWNED = 'Your team does not own this character on any selected account
 const OVER_TOTAL = 'Not enough total budget: the eidolon extra for this character would exceed it.';
 
 const nominate = (s: Lobby, team: 'Blue' | 'Red', characterName: string) => (ctx: any) =>
-    M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName });
+    (priceCharacters(ctx, s.lobbyId, [characterName]), M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName }));
 const bid = (s: Lobby, bidAmount: number) => (ctx: any) => M.place_bid(ctx, { lobbyId: s.lobbyId, bidAmount });
 const pass = (s: Lobby) => (ctx: any) => M.pass_bid(ctx, { lobbyId: s.lobbyId });
 const budgets = (test: Harness, lobbyId: number) => {
@@ -140,7 +141,8 @@ describe('A61(5): the extra is charged at the sale, character budget first', () 
         tx(test, captain(s, 'Blue'), nominate(s, 'Blue', 'EMPTY')); // cost 0 ≤ character budget 0
         tx(test, captain(s, 'Red'), pass(s));
 
-        tx(test, s.host, (ctx) => M.advance_stage(ctx, { lobbyId: s.lobbyId })); // D-50 rollover
+        // T-S10i (A100): the auction is finished (EMPTY sales at 0) instead of advanced; its end makes the D-50 rollover.
+        completeDraft(s, 'EMPTY');
         expect(budgets(test, s.lobbyId)).toEqual({ blueChar: 0, blueLc: 40, redChar: 0, redLc: 150 });
     });
 
@@ -268,7 +270,7 @@ describe('A64: the sale eidolon is the lowest level the winning team owns', () =
         advance(test, 300);
         setEidolon(s, blueCap, 'Blue', 'a', 2); // -50 refunded to the light-cone budget
         expect(budgets(test, s.lobbyId)).toMatchObject({ blueChar: 25, blueLc: 100 });
-        tx(test, s.host, (ctx) => M.advance_stage(ctx, { lobbyId: s.lobbyId })); // D-50 rollover: 100 + 25
+        completeDraft(s, 'EMPTY'); // T-S10i (A100): finished (EMPTY sales at 0), not advanced; D-50 rollover: 100 + 25
         expect(budgets(test, s.lobbyId)).toMatchObject({ blueChar: 0, blueLc: 125 });
         advance(test, 300);
         setEidolon(s, blueCap, 'Blue', 'a', 6); // +50 from the light cones

@@ -1097,3 +1097,25 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** user, 2026-11-09: "characters and lightcones should always be read from its cost set."; "before we publish it, it needs to confirm we have every character and lightcone in it and if it doesn't, thats when we fill it out with cost 0 but we need to show that to whoever clicks the \"push cost set live\" button"; "would prefer character scannot be picked in lobbies on olrder sets"; "I agree with you recommendation on filling" (only the draft modes the set prices); on patching in place with the live-match guard: "updating the cost set wont damage the history right? that's snapshot. If so, yes I agree with your suggestion".
 - **Supersedes:** A101's "a missing row rejects the action" as the general rule (it remains only for entries added after publish, clause 5); the frozen-after-publish rule of `publish_cost_set` ("clone to make a new draft" stays available but is no longer the only way to change a live set).
 - **Where implemented:** S10h
+
+### A108 — The default cost set carries Auction prices; no price defaults in reducers
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:**
+  1. The seed data of the default cost set (id 0) prices every character and light cone for Auction with the same values as Classic, in all three game modes (`data/seed/characters.json`, `data/seed/lightcones.json`). Synergy rows keep their explicit Auction values.
+  2. No reducer applies a default price or a cross-mode fallback. A lobby reads its own cost set, game mode and draft mode (A107(1)); an entry with no row there cannot be picked, nominated or equipped (A107(5)), on the default set as on any other.
+  3. A new cost set is always a copy of the default set or of a published set, so it starts with both Classic and Auction prices; a host who edits only the Classic prices keeps a set that works in both modes.
+- **Why:** user, 2026-11-10: "for auction, write down the cost set for auction with the same prices as classic. Dont make anything default on the reducers, just fill out the missing data at the seed data." S10i found that the seed priced Classic only, which the old silent defaults had hidden (a missing character row cost 0, light cones fell back to Classic rows).
+- **Supersedes:** nothing; completes A107 for the default set.
+- **Where implemented:** S10i
+
+### A109 — Guest creation breaker: manual re-enable, default 300, server-side switch
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:**
+  1. The breaker of A95(2) stays as built: the count resets every window, but once a window crosses the threshold `guestCreationEnabled` is turned off and stays off until someone turns it back on. Re-enabling is a deliberate action, not automatic.
+  2. The default threshold is 300 new guests per 10 minutes (was 100).
+  3. New server reducer `server_set_guest_creation(enabled)`, callable by a server identity (Owner or Delegate, the same guard as the other `server_*` reducers), so the switch can be turned on or off without a signed-in Admin session; it resets the counter when it re-enables, like `admin_set_guest_creation`.
+- **Why:** user, 2026-11-10: "turning the switch back on I would prefer it to be an action item tho" and "could we be able to turn that switch off through a server reducer in case i'm not logged in? the default can be 300.". S10h review F3: while the switch is off a new browser cannot start a session, Discord sign-in included, so an Admin without an existing session needs a path that does not depend on logging in.
+- **Supersedes:** the default of 100 in A95(2).
+- **Where implemented:** S10i

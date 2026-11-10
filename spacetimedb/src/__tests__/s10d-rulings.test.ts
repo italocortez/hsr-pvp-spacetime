@@ -34,6 +34,8 @@ import {
     type Harness,
     type Lobby,
     type SetupOpts,
+    priceCharacters,
+    dropDefaultCostCoverage,
 } from './s4-fixtures';
 import {
     H,
@@ -108,9 +110,9 @@ function captainOf(s: Lobby, team: Team): Actor {
 /** pick_character by the captain of the team whose turn it is; asserts the turn belongs to `team`. */
 function pickAs(s: Lobby, team: Team, characterName: string) {
     expect(current(s.test, s.lobbyId).teamTurn.tag).toBe(team);
-    tx(s.test, captainOf(s, team), (ctx) => M.pick_character(ctx, { lobbyId: s.lobbyId, characterName, eidolon: 0 }));
+    tx(s.test, captainOf(s, team), (ctx) => (priceCharacters(ctx, s.lobbyId, [characterName]), M.pick_character(ctx, { lobbyId: s.lobbyId, characterName, eidolon: 0 })));
 }
-const pickBody = (s: Lobby, characterName: string) => (ctx: any) => M.pick_character(ctx, { lobbyId: s.lobbyId, characterName, eidolon: 0 });
+const pickBody = (s: Lobby, characterName: string) => (ctx: any) => (priceCharacters(ctx, s.lobbyId, [characterName]), M.pick_character(ctx, { lobbyId: s.lobbyId, characterName, eidolon: 0 }));
 
 /** The turn timer runs out and the host (a member) fires the expiry. */
 function expire(s: Lobby) {
@@ -138,6 +140,7 @@ function autoPickLobby(o: {
         seats: ONE_V_ONE,
         lobby: { autoRandomPick: true, ...(o.lobby ?? {}) },
         beforeStart: (l) => {
+            dropDefaultCostCoverage(test); // T-S10i fix pass (review F2): the coverage rows leave the timer pool
             selectAccount(test, l.lobbyId, l.a.b1.userId, 900, o.owned?.b1 ?? { 'not-in-pool-b': 0 });
             selectAccount(test, l.lobbyId, l.a.r1.userId, 901, o.owned?.r1 ?? { 'not-in-pool-r': 0 });
         },

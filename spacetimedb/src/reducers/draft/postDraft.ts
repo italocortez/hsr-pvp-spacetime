@@ -14,7 +14,7 @@ import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHel
 import { ensureMatchAlive, ensureNotConceded } from '@module/helpers/lobby/disconnectHelpers';
 import { ensureLineupThrottle, stampLineupThrottle } from '@module/helpers/lobby/abuseControls';
 import { ensureEditStepRoom, getNextSequence } from '@module/helpers/draft/stepSequence';
-import { classicCostAt } from '@module/helpers/draft/costSetGuards';
+import { characterCostAt, lightconeCostAt } from '@module/helpers/draft/costSetGuards';
 import { teamOwnedEidolons } from '@module/helpers/draft/ownershipValidation';
 import {
     ensureCaptainOrReferee,
@@ -38,7 +38,7 @@ import {
 import { recomputeAfterAdminEdit } from '@module/helpers/results/gameClose';
 import { auctionEidolonExtra, chargeExtra, teamDefaultEidolon } from './draftAuction';
 import { TeamSide } from '@module/types/enums';
-import { lineupError, type LineupFormatTag } from '@shared/scoring';
+import { charactersPerTeam, lineupError, type LineupFormatTag } from '@shared/scoring';
 
 // ─── Edit window (A60(3)/(7), A67(3)) ─────────────────────────────────────────
 // 'admin': the record's game is closed and the caller is an Admin (ensureOpenGame rejects everyone else; the record
@@ -127,34 +127,10 @@ export const equip_lightcone = spacetimedb.reducer(
         ensureInTeamDraft(ctx, lobbyId, side, characterName);
         if (superimposition < 1 || superimposition > 5) throw new SenderError('superimposition must be between 1 and 5.');
 
-        // Look up LC cost from HsrLightconeCost table (15.4 D-10/D-11/Pitfall 6).
-        // (lightconeName, gameMode, draftMode='Classic', costSetId) → SuperimpositionCost → s1..s5 field.
-        // LC equip happens in the classic draft context regardless of char-phase draftMode.
-        const CLASSIC_DRAFT_MODE = { tag: 'Classic', value: {} } as any;
-        const costSetId = lobby.costSetId;
-        let lcCost: number = 0;
-        // Tuple-filter with enum struct is unsupported (RESEARCH.md A2); fall back to
-        // cost_set_id filter + predicate find including draftMode.tag match.
-        const tryFind = (csId: number) => {
-            const rows = [...ctx.db.HsrLightconeCost.cost_set_id.filter(csId)];
-            return rows.find((r: any) =>
-                r.lightconeName === lightconeName &&
-                r.gameMode.tag === lobby.gameMode.tag &&
-                r.draftMode.tag === 'Classic'
-            );
-        };
-        const costSetIdToTry = costSetId !== 0 ? costSetId : 0;
-        const costRow = tryFind(costSetIdToTry)
-            ?? (costSetId !== 0 ? tryFind(0) : undefined);
-        // Reference CLASSIC_DRAFT_MODE for future btree-filter migration if A2 is revisited.
-        void CLASSIC_DRAFT_MODE;
-        if (costRow && costRow.costs) {
-            const sField = `s${superimposition}` as keyof typeof costRow.costs;
-            const rawCost = (costRow.costs as Record<string, number>)[sField];
-            if (typeof rawCost === 'number') {
-                lcCost = rawCost;
-            }
-        }
+        // A101 / A107(1)(5): the light cone's row in the lobby's own cost set, game mode and draft mode (no Classic-only
+        // read, no fallback to the default set); a light cone without a row is rejected ("<name> has no cost in this
+        // lobby's cost set.").
+        const lcCost = lightconeCostAt(ctx, lobby, lightconeName, superimposition);
 
         // Per D-55: Strict LC budget enforcement
         const isBlue = side === 'Blue';
@@ -358,7 +334,7 @@ export const arrange_lineup = spacetimedb.reducer(
 // Caller (A78): the captain of that team or any lobby referee (seated or not, naming the team through teamSide), the
 // arrange_lineup rule (ensureCaptainOrReferee); throttled like arrange_lineup (AbuseConfig.lineupMinIntervalMs).
 // Level: 0..6; under requireOwnership only a level the team owns on its selected accounts (teamOwnedEidolons).
-// Cost: Classic → costPaid = the Classic cost row at the new level (0 without a row), no budget. Auction → the
+// Cost: Classic → costPaid = the lobby's cost row at the new level (A107: no row → rejected), no budget. Auction → the
 // difference of the eidolon extras: a positive delta is charged character budget first, then the light-cone budget
 // (rejected when it exceeds both); a negative delta is refunded to the light-cone budget in every stage
 // (orchestrator rule, S7b: a refund never restores bidding power, otherwise a team could overdraw its character
@@ -438,7 +414,7 @@ export const set_eidolon = spacetimedb.reducer(
                     : { teamRedCharBudget: next.charBudget, teamRedLcBudget: next.lcBudget }, user.id));
             }
         } else {
-            costPaid = classicCostAt(ctx, lobby, characterName, eidolon);
+            costPaid = characterCostAt(ctx, lobby, characterName, eidolon); // A107: the lobby's row; none → rejected
         }
 
         ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
@@ -489,10 +465,24 @@ export const advance_stage = spacetimedb.reducer(
         const currentStage = lobby.stage.tag;
 
         if (currentStage === 'Drafting') {
+            // S10i review F7: past the A100 check this is reachable only through engineered state (every path that fills both teams already moves to Equipping).
             // Transition: Drafting → Equipping
             // Per D-50: Carry over leftover character budget to LC budget
             const session = ctx.db.MatchSession.lobbyId.find(lobbyId);
             if (!session) throw new SenderError('Match session not found.');
+
+            // A100: no advance out of an unfinished draft. A team holds the characters of its draft (teamDraft: its
+            // Pick steps in Classic, the AuctionSold steps it won in Auction; EMPTY counts); both must hold
+            // charactersPerTeam. The automatic transitions at the end of a draft (pick_character, timer_expiry_classic,
+            // the Auction sale) do not pass through here and are unchanged.
+            const target = charactersPerTeam(lobby.lineupFormat.tag as LineupFormatTag);
+            const blueHeld = teamDraft(ctx, lobbyId, 'Blue').characters.length;
+            const redHeld = teamDraft(ctx, lobbyId, 'Red').characters.length;
+            if (blueHeld < target || redHeld < target) {
+                throw new SenderError(
+                    `The draft is not finished: Blue holds ${blueHeld} of ${target} characters and Red holds ${redHeld} of ${target}.`,
+                );
+            }
 
             const newBlueLcBudget = session.teamBlueLcBudget + session.teamBlueCharBudget;
             const newRedLcBudget = session.teamRedLcBudget + session.teamRedCharBudget;

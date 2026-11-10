@@ -7,6 +7,7 @@ import { ensureMatchAlive } from '@module/helpers/lobby/disconnectHelpers';
 import { lobbySteps, getNextSequence } from '@module/helpers/draft/stepSequence';
 import { turnRemainingMs } from '@module/helpers/draft/turnClock';
 import { teamOwnedEidolons } from '@module/helpers/draft/ownershipValidation';
+import { characterCostAt } from '@module/helpers/draft/costSetGuards';
 import { charactersPerTeam, type LineupFormatTag } from '@shared/scoring';
 
 
@@ -44,29 +45,17 @@ function getBannedCharacters(ctx: any, lobbyId: number): Set<string> {
 }
 
 // ─── Helper: Look up costs from the cost table ──────────────────────────────
-// Per D-53, amended by A61(1): the base cost of a nomination is the Auction cost row's e0 (characterName,
-// costSetId, gameMode). Returns 0 if not found (0-cost characters per D-54) and for EMPTY.
+// Per D-53, amended by A61(1): the base cost of a nomination is the cost row's e0. A107(1)(5): the row is the lobby's
+// own (cost set, game mode, draft mode: characterCostAt); EMPTY costs 0 (D-54) and a real character without a row is
+// rejected ("<name> has no cost in this lobby's cost set."), at the nomination, the bid and the sale alike.
 
-function auctionCostRow(ctx: any, characterName: string, costSetId: number, gameMode: any): any {
-    if (characterName === 'EMPTY') return undefined;
-    // 15.4 D-10/D-11: filter draftMode='Auction' and read unified costs struct.
-    return [...ctx.db.HsrCharacterCost.cost_set_id.filter(costSetId)].find(
-        (r: any) =>
-            r.characterName === characterName &&
-            r.gameMode.tag === gameMode.tag &&
-            r.draftMode.tag === 'Auction'
-    );
-}
-
-/** The Auction cost of a character at an eidolon level in the lobby's cost set (0 for EMPTY / no row). */
+/** The Auction cost of a character at an eidolon level in the lobby's cost set (0 for EMPTY; no row → rejected). */
 export function auctionCostAt(ctx: any, lobby: any, characterName: string, eidolon: number): number {
-    const costRow = auctionCostRow(ctx, characterName, lobby.costSetId, lobby.gameMode);
-    if (!costRow) return 0;
-    return costRow.costs[`e${eidolon}`] ?? 0;
+    return characterCostAt(ctx, lobby, characterName, eidolon);
 }
 
-function getCharacterBaseCost(ctx: any, characterName: string, costSetId: number, gameMode: any): number {
-    return auctionCostRow(ctx, characterName, costSetId, gameMode)?.costs.e0 ?? 0;
+function getCharacterBaseCost(ctx: any, lobby: any, characterName: string): number {
+    return characterCostAt(ctx, lobby, characterName, 0);
 }
 
 /** A61(3): the eidolon extra = max(0, cost[eidolon] - cost[e0]) from the lobby's cost set (f32 like the budgets). */
@@ -357,7 +346,7 @@ export const nominate_character = spacetimedb.reducer(
         ensureTeamOwnsCharacter(ctx, lobby, side, characterName);
 
         // Per D-53 / A61(1): base cost = the E0 cost from the cost table
-        const baseCost = getCharacterBaseCost(ctx, characterName, lobby.costSetId, lobby.gameMode);
+        const baseCost = getCharacterBaseCost(ctx, lobby, characterName);
 
         // Budget check: nominating team must have enough budget for at least the base cost
         // Per D-53: nomination rejected if base cost > remaining budget

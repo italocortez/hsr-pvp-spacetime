@@ -7,7 +7,8 @@
 // Clauses: docs/admin/contract.md admin_bulk_upsert (flow 1-6, Error Cases, Edge Cases), Phase 15.4 D-14 (one row per
 // present sub-block), D-19 (full-tuple match incl. costSetId), D-25 (synergy Auction rows), A21 (canonical pairs).
 import { describe, expect, it } from 'vitest';
-import { M, newHarness, type Harness } from './s4-fixtures';
+// T-S10i fix pass (review F2): newBareHarness, no set-0 coverage rows; these tests read the rows of set 0.
+import { M, newBareHarness, type Harness } from './s4-fixtures';
 import { verified } from './s8-fixtures';
 import { bulkUpsert, rejection, seedCharacters } from './s10-c2-fixtures';
 
@@ -36,7 +37,7 @@ const charCostRow = (test: Harness, name: string, draftMode: string, costSetId =
 
 describe('admin_bulk_upsert: seed rows (in memory)', () => {
     it('HsrCharacter / HsrLightcone / Archetype rows land with every column; a second upsert by name updates in place (flow 4, A17 positioning columns)', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         bulkUpsert(test, 'HsrCharacter', [character('acheron'), character('kafka', { role: 'Support', element: 'Lightning', path: 'Nihility' })]);
         bulkUpsert(test, 'HsrLightcone', [lightcone('adreamscentedinwheat'), lightcone('alongthepassingshore')]);
         bulkUpsert(test, 'Archetype', [{ name: 'Debuff', description: '' }, { name: 'DoT', description: '' }]);
@@ -57,7 +58,7 @@ describe('admin_bulk_upsert: seed rows (in memory)', () => {
     });
 
     it('15.4-1..3 (D-14): both sub-blocks → a Classic and an Auction row; Classic-only → 1 row; Auction-only → 1 row; costs keep e0..e6 (fractions included)', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         bulkUpsert(test, 'HsrCharacterCost', [
             charCost('acheron', 'Classic', 7), charCost('acheron', 'Auction', 2),
             charCost('kafka', 'Classic', 4),
@@ -75,7 +76,7 @@ describe('admin_bulk_upsert: seed rows (in memory)', () => {
     });
 
     it('D-19: the cost row key is (name, gameMode, draftMode, costSetId): re-upserting Classic updates it alone; another game mode and cost set 5 coexist', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         bulkUpsert(test, 'HsrCharacterCost', [charCost('acheron', 'Classic', 7), charCost('acheron', 'Auction', 2)]);
         bulkUpsert(test, 'HsrCharacterCost', [
             charCost('acheron', 'Classic', 9),
@@ -95,7 +96,7 @@ describe('admin_bulk_upsert: seed rows (in memory)', () => {
     });
 
     it('HsrLightconeCost: one row per present sub-block, s1..s5 kept, keyed by (name, gameMode, draftMode, costSetId) (D-14, D-19)', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         bulkUpsert(test, 'HsrLightconeCost', [
             lcCost('adreamscentedinwheat', 'Classic', 1.5), lcCost('adreamscentedinwheat', 'Auction', 1),
             lcCost('alongthepassingshore', 'Classic', 3),
@@ -110,7 +111,7 @@ describe('admin_bulk_upsert: seed rows (in memory)', () => {
     });
 
     it('HsrSynergyCost (D-25, A21): Classic and zero-valued Auction rows per game mode, stored in canonical order; the reversed pair updates, a pair listed twice is rejected', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         // T-S10c (audit 2026-11-09, roster finding 1): a synergy needs both names as HsrCharacter rows.
         seedCharacters(test, ['anaxa', 'cerydra', 'kafka', 'acheron']);
         bulkUpsert(test, 'HsrSynergyCost', [
@@ -137,7 +138,7 @@ describe('admin_bulk_upsert: seed rows (in memory)', () => {
     });
 
     it('admin_bulk_upsert error cases: a missing draftMode key, an unsupported table, a non-array payload, a non-admin caller; an empty array is a no-op', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         const { draftMode: _omit, ...noDraftMode } = charCost('acheron', 'Classic', 7);
         const call = (tableName: string, jsonData: string) => (ctx: any) => M.admin_bulk_upsert(ctx, { tableName, jsonData });
 

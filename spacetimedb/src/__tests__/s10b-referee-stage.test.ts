@@ -16,7 +16,7 @@ import {
     type Actor,
     type Lobby,
 } from './s4-fixtures';
-import { captain, setRole } from './s7-fixtures';
+import { captain, completeDraft, engineerFullDraft, setRole } from './s7-fixtures';
 
 const REFEREE_OR_ABOVE = 'Only the referee, moderators, or admins can perform this action.';
 const SEATS: Array<[string, 'BluePlayer' | 'BlueCoach' | 'RedPlayer']> = [
@@ -30,7 +30,11 @@ function lobbyAt(stage: Stage): Lobby {
     const test = newHarness();
     const s = setupLobby(test, { seats: SEATS, noStart: stage === 'Waiting' });
     joinAsSpectator(s, 'watch');
-    if (stage === 'Equipping') tx(test, s.host, (ctx) => M.advance_stage(ctx, { lobbyId: s.lobbyId }));
+    // T-S10i (A100): advance_stage leaves Drafting only once both teams hold charactersPerTeam characters. Equipping is
+    // reached by finishing the draft (the automatic transition); the Drafting case is the engineered full draft still in
+    // Drafting (EMPTY picks written as steps), the one state from which the manual Drafting → Equipping is accepted.
+    if (stage === 'Equipping') completeDraft(s);
+    if (stage === 'Drafting') engineerFullDraft(s);
     expect(lobbyRow(test, s.lobbyId).stage.tag).toBe(stage);
     expect(refereeIds(test, s.lobbyId)).toEqual([s.host.userId]);
     return s;

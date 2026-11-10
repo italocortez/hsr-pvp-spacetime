@@ -25,6 +25,8 @@ import {
     type Lobby,
     type SetupOpts,
     seatOf,
+    priceCharacters,
+    priceLightcones,
 } from './s4-fixtures';
 import {
     H,
@@ -94,7 +96,7 @@ describe('A60(1): set_eidolon edit window', () => {
         expectReject(test, blueCap, (ctx) =>
             M.set_eidolon(ctx, { lobbyId: s.lobbyId, teamSide: side('Blue'), characterName: 'blue-1', eidolon: 1 }),
             "blue-1 is not in the Blue team's draft of this game.");
-        tx(test, blueCap, (ctx) => M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'blue-1', eidolon: 0 }));
+        tx(test, blueCap, (ctx) => (priceCharacters(ctx, s.lobbyId, ['blue-1']), M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'blue-1', eidolon: 0 })));
         setEidolon(s, blueCap, 'Blue', 'blue-1', 1); // Drafting
         const step = steps(test, s.lobbyId).find((st) => st.action.tag === 'SetEidolon')!;
         expect(step.actorSlot.tag).toBe('Blue');
@@ -119,7 +121,7 @@ describe('A60(1): set_eidolon edit window', () => {
         const test = newHarness();
         const s = setupLobby(test);
         const blueCap = captain(s, 'Blue');
-        tx(test, blueCap, (ctx) => M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'blue-1', eidolon: 0 }));
+        tx(test, blueCap, (ctx) => (priceCharacters(ctx, s.lobbyId, ['blue-1']), M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'blue-1', eidolon: 0 })));
         tx(test, s.host, (ctx) => M.pause_draft(ctx, { lobbyId: s.lobbyId }));
         expectReject(test, blueCap, (ctx) =>
             M.set_eidolon(ctx, { lobbyId: s.lobbyId, teamSide: side('Blue'), characterName: 'blue-1', eidolon: 2 }), 'Draft is paused.');
@@ -205,7 +207,7 @@ describe('A60(1): set_eidolon authority, throttle and levels', () => {
         const blueCap = captain(s, 'Blue');
         selectAccount(test, s.lobbyId, blueCap.userId, 900, { 'blue-1': 2 });
         selectAccount(test, s.lobbyId, blueCap.userId, 901, { 'blue-1': 6 });
-        tx(test, blueCap, (ctx) => M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'blue-1', eidolon: 0 }));
+        tx(test, blueCap, (ctx) => (priceCharacters(ctx, s.lobbyId, ['blue-1']), M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'blue-1', eidolon: 0 })));
         setEidolon(s, blueCap, 'Blue', 'blue-1', 2);
         advance(test, 300);
         expectReject(test, blueCap, (ctx) =>
@@ -293,7 +295,7 @@ describe('A60(3): confirm_game', () => {
         // T-S8e: the close submits, so a player meets the stage gate (post-draft edits) or the record gate (scores;
         // A69(2): 'This game is closed.' for the captain and for the referee).
         expectReject(test, blueCap, (ctx) =>
-            M.equip_lightcone(ctx, { lobbyId, teamSide: side('Blue'), characterName: 'blue-1', lightconeName: 'lc-1', superimposition: 1 }), stageMsg('AwaitingResult'));
+            (priceLightcones(ctx, lobbyId, ['lc-1']), M.equip_lightcone(ctx, { lobbyId, teamSide: side('Blue'), characterName: 'blue-1', lightconeName: 'lc-1', superimposition: 1 })), stageMsg('AwaitingResult'));
         expectReject(test, blueCap, (ctx) =>
             M.arrange_lineup(ctx, { lobbyId, teamSide: side('Blue'), groups: JSON.stringify(halves(blueNames())) }), stageMsg('AwaitingResult'));
         expectReject(test, blueCap, (ctx) =>
@@ -475,7 +477,7 @@ describe('A60(7): Admin edits a closed game', () => {
         const redBudget = () => test.db.MatchSession.lobbyId.find(lobbyId)!.teamRedLcBudget;
         const before = redBudget();
         tx(test, admin, (ctx) =>
-            M.equip_lightcone(ctx, { lobbyId, teamSide: side('Red'), characterName: 'red-1', lightconeName: 'lc-1', superimposition: 1 }));
+            (priceLightcones(ctx, lobbyId, ['lc-1']), M.equip_lightcone(ctx, { lobbyId, teamSide: side('Red'), characterName: 'red-1', lightconeName: 'lc-1', superimposition: 1 })));
         expect(lineup(test, lobbyId, 'Red').rosterCost).toBe(H(1)); // A78(2): the side the Admin names
         expect(redBudget()).toBe(before - 1);
         tx(test, admin, (ctx) => M.unequip_lightcone(ctx, { lobbyId, teamSide: side('Red'), characterName: 'red-1' }));
@@ -520,7 +522,7 @@ describe('A60(7): Admin edits a closed game', () => {
         expectReject(test, admin, (ctx) =>
             M.arrange_lineup(ctx, { lobbyId, teamSide: side('Blue'), groups: JSON.stringify(halves(blueNames())) }), GONE);
         expectReject(test, admin, (ctx) =>
-            M.equip_lightcone(ctx, { lobbyId, teamSide: side('Blue'), characterName: 'blue-1', lightconeName: 'lc-1', superimposition: 1 }), GONE);
+            (priceLightcones(ctx, lobbyId, ['lc-1']), M.equip_lightcone(ctx, { lobbyId, teamSide: side('Blue'), characterName: 'blue-1', lightconeName: 'lc-1', superimposition: 1 })), GONE);
         expect([...test.db.MatchSessionHistory.iter()]).toHaveLength(1);
     });
 

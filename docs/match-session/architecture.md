@@ -476,6 +476,46 @@ All in `reducers/draft/draftClassic.ts`:
   deleted step's number); `advance_stage` loses the unused `nextMsgId`; `postDraft.ts` drops the unused
   `slotToTeamSide` import.
 
+## Phase S10i execution (DECISIONS.md A100, A101, A107, A108)
+
+**A100: no advance out of an unfinished draft.** `advance_stage` from Drafting (`reducers/draft/postDraft.ts`) first
+counts what each team holds: `teamDraft(...).characters.length`, i.e. the team's Pick steps in Classic and the
+AuctionSold steps it won in Auction, `EMPTY` included. Both must reach `charactersPerTeam(lineupFormat)` (8 Halves,
+12 Thirds), else "The draft is not finished: Blue holds b of N characters and Red holds r of N." Nothing changes on
+a rejection. The automatic transitions at the end of a draft (`pick_character` / `timer_expiry_classic` on the last
+Classic step, the Auction sale that fills both teams) do not go through `advance_stage` and are unchanged; in practice
+the manual Drafting branch now only passes for a draft that is already complete.
+
+**A101 / A107(1)(5): every price from the lobby's own cost rows.** All lookups go through
+`helpers/draft/costSetGuards.ts` (lobby cost set + game mode + **lobby draft mode**; no default-set fallback):
+
+| Reader | Before | Now |
+|---|---|---|
+| `pick_character` (`classicPickCost`) | Classic rows, 0 without a row | `characterCostAt`; no row → rejected |
+| `timer_expiry_classic` pick pool, ownership off | Classic rows of the set | `pricedCharacterNames` (lobby draft mode) |
+| `timer_expiry_classic` pick pool, ownership on | owned characters | owned characters **with a row** (`pricedCharacterNames`) |
+| `timer_expiry_classic` pick price | Classic row, 0 without | `characterCostAt` (pool is priced, so never rejects) |
+| `timer_expiry_classic` ban pool (Classic and the Auction ban phase) | Classic rows | `pricedCharacterNames` (lobby draft mode) |
+| `nominate_character` base cost (`getCharacterBaseCost`) | Auction rows, 0 without | `characterCostAt(…, 0)`; no row → rejected |
+| `place_bid` / `ensureTotalBudgetFits` / `resolveSale` / `chargeExtra` input (`auctionEidolonExtra` → `auctionCostAt`) | Auction rows, 0 without | `characterCostAt`; a nomination already proved the row |
+| `set_eidolon` Classic (`classicCostAt`) | Classic rows, 0 without | `characterCostAt`; no row → rejected |
+| `set_eidolon` Auction (`auctionEidolonExtra`) | Auction rows, 0 without | `characterCostAt` |
+| `equip_lightcone` | Classic rows, then set 0, then 0 | `lightconeCostAt`; no row → rejected |
+| `unequip_lightcone` | no lookup (refunds the step's `costPaid`) | unchanged |
+| synergy surcharge (`synergyPairs`: `arrange_lineup`, `refreshLineupCosts`, `recomputeGame`) | already the lobby's set and draft mode | unchanged; a pair without a row has no surcharge |
+| `doesCostSetCover` | same rows | same rows through `costSetRowsFor`; set 0 checked like any other set (review F2, A108(2)) |
+
+`classicCostAt` was removed (`characterCostAt` replaces it). Rejection text: `"<name> has no cost in this lobby's cost
+set."`, where `<name>` is the argument as given. A row that exists but lacks the requested field (`e<eidolon>` /
+`s<superimposition>`) is rejected with `"The cost row of <name> has no <field> value."` instead of being priced at 0
+(review F3, A108(2)); the reducers bound eidolon to 0..6 and superimposition to 1..5, so only a defective row reaches
+it. `EMPTY` always costs 0 by rule and is never rejected. A lobby on the default set whose seed lacks the lobby's draft
+mode is refused at creation by the coverage guard (docs/cost-sets/architecture.md), not mid-draft. The manual Drafting
+branch of `advance_stage` stays; past the A100 check it is reachable only through engineered state (review F7). `ban_character` is not
+priced and keeps accepting any name. A cost set can be patched (A107(3)) only while none of its lobbies is in Drafting,
+Equipping or Scoring, so a price never changes under a live draft (docs/cost-sets/architecture.md "Phase S10i
+execution").
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -519,6 +559,8 @@ All in `reducers/draft/draftClassic.ts`:
 | Fix pass: `start_draft` schedules the 15 s check for an offline host or referee; abandoned players stay in the team's ownership and auto-pick pools | Phase S10e execution (review F2, F3; DECISIONS.md A93(4)) | 2026-11-09 |
 | One turn clock (`turnClock.ts`): pause freezes the remaining time in `accumulatedPauseMs`, resume and the automatic lift restore it, expiry needs remaining 0; edit-step cap 300 per team side (edits and confirmations counted separately, review F1); manual pause throttle 10 s per pausing party (Blue, Red, Referee; review F3) | Phase S10f execution (draft audit #5, #8; BACKEND-BUGS F10; policy review G10) | 2026-11-09 |
 | A98: `pick_character`, `ban_character`, `timer_expiry_classic`, the Auction reducers, `undo_last_step`, `pause_draft`, `resume_draft` reject an away / abandoned caller (`ensurePresentMember`); `start_draft` / `advance_stage` through `ensureRefereeOrAbove` (Moderator+ exempt). Full list: [../lobby/architecture.md](../lobby/architecture.md) "Phase S10h execution" | Phase S10h execution (DECISIONS.md A98) | 2026-11-10 |
+| `advance_stage` from Drafting needs `charactersPerTeam` characters per team; every character / light-cone price from the lobby's own set, game mode and draft mode, no fallback, a missing row rejects; timer pools draw priced characters only | Phase S10i execution (DECISIONS.md A100, A101, A107) | 2026-11-10 |
+| `doesCostSetCover` no longer exempts set 0 (review F2); a cost row without the requested eidolon / superimposition field is rejected, no `?? 0` (review F3); the manual Drafting branch of `advance_stage` kept with a note (review F7) | Phase S10i execution (DECISIONS.md A108) | 2026-11-10 |
 
 ---
 

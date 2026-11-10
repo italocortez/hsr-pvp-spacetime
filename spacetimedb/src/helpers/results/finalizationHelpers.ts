@@ -149,8 +149,10 @@ export function processMatchMmr(
             ...(currentRating ? auditUpdate(ctx, currentRating, actingUserId) : auditInsert(ctx, actingUserId)),
         } as any);
 
-        // Update globalCompositeRating
-        const allRatings = [...ctx.db.MmrRating.user_id.filter(participant.userId)];
+        // A102: globalCompositeRating is per season: the average of the user's MmrRating rows of the season this
+        // finalization writes (seasonId), stored on those rows only; earlier seasons' rows keep their own value.
+        const allRatings = [...ctx.db.MmrRating.user_id.filter(participant.userId)]
+            .filter((r: any) => r.seasonId === seasonId);
         if (allRatings.length > 0) {
             const avgRating = Math.round(allRatings.reduce((sum: number, r: any) => sum + r.rating, 0) / allRatings.length);
             for (const r of allRatings) {
@@ -175,6 +177,17 @@ export function processMatchMmr(
             seasonId,
         }, actingUserId));
     }
+}
+
+// ─── playedCredit (A82, A106) ────────────────────────────────────────────────
+// The one place that decides who gets the "played" stat for a drafted character (step 16 below). A manual Classic
+// pick credits the picker only (A82(4)); an Auction sale (A82(2)) and a Classic timer pick (A106: actorUserId 0, the
+// system actor) credit every player of the owning side, i.e. its non-coach participants. A follow-up ruling may narrow
+// the team case (for example to the players who own the character); it changes here only.
+
+function playedCredit(step: any, ownerSide: string, participants: any[]): number[] {
+    if (step.action.tag === 'Pick' && step.actorUserId !== 0) return [step.actorUserId];
+    return participants.filter((p: any) => p.teamSide.tag === ownerSide).map((p: any) => p.userId);
 }
 
 // ─── runFinalization ─────────────────────────────────────────────────────────
@@ -515,39 +528,28 @@ export function runFinalization(
             // A82: an AuctionSold step's actor is the passer or the system (timer sale); the owning side is the sale's
             // winningTeam. Every player of that side (the non-coach participants) gets "played", every player of the
             // other side "faced", the global stat is written once; no row for the system user or a spectator side.
-            if (actionTag === 'AuctionSold') {
-                const ownerSide = step.payload?.tag === 'AuctionSold' ? step.payload.value?.winningTeam?.tag : undefined;
+            // A82, A106: an AuctionSold step and a Classic Pick step. The owning side is the sale's winningTeam or the
+            // pick's actorSlot; the players credited with "played" come from playedCredit (one place): every player of
+            // the owning side (the non-coach participants) for a sale and for a timer pick (actorUserId 0), the picker
+            // only for a manual pick. Every player of the other side gets "faced"; the global stat is written once,
+            // with the owning side's win flag. No row for the system user or a spectator side.
+            if (actionTag === 'AuctionSold' || actionTag === 'Pick') {
+                const ownerSide = actionTag === 'AuctionSold'
+                    ? (step.payload?.tag === 'AuctionSold' ? step.payload.value?.winningTeam?.tag : undefined)
+                    : actorTeamSide;
                 if (ownerSide !== 'Blue' && ownerSide !== 'Red') continue;
                 const didOwnerWin = winnerTeamSideTag !== undefined && ownerSide === winnerTeamSideTag;
+                for (const userId of playedCredit(step, ownerSide, effectiveParticipants)) {
+                    incrementPlayerCharacterStat(ctx, userId, charName, gameMode, draftMode, seasonId, matchType, teamSize, didOwnerWin, actingUserId);
+                }
                 for (const p of effectiveParticipants) {
-                    if (p.teamSide.tag === ownerSide) {
-                        incrementPlayerCharacterStat(ctx, p.userId, charName, gameMode, draftMode, seasonId, matchType, teamSize, didOwnerWin, actingUserId);
-                    } else if (p.teamSide.tag === 'Blue' || p.teamSide.tag === 'Red') {
+                    if (p.teamSide.tag !== ownerSide && (p.teamSide.tag === 'Blue' || p.teamSide.tag === 'Red')) {
                         const didOpponentWin = winnerTeamSideTag !== undefined && p.teamSide.tag === winnerTeamSideTag;
                         incrementFacedStat(ctx, p.userId, charName, gameMode, draftMode, seasonId, matchType, teamSize, didOpponentWin, actingUserId);
                     }
                 }
                 // S9b (R2(3), A37): the helper stamps SYSTEM_USER_ID on the public GlobalCharacterStat rows.
                 incrementGlobalCharacterStat(ctx, charName, gameMode, draftMode, seasonId, matchType, teamSize, true, didOwnerWin);
-            }
-
-            if (actionTag === 'Pick') {
-                const didActorWin = winnerTeamSideTag !== undefined && actorTeamSide === winnerTeamSideTag;
-                // Results audit #3 (S10f): a Classic timer pick (A86 autoRandomPick) is logged with the system actor
-                // (actorUserId 0) and actorSlot = the acting team. No player row is written for the system user; the
-                // faced rows and the global row are kept, and the global row takes the side from actorSlot exactly as
-                // for a manual pick (whose actorSlot is the picker's team).
-                if (step.actorUserId !== 0) {
-                    incrementPlayerCharacterStat(ctx, step.actorUserId, charName, gameMode, draftMode, seasonId, matchType, teamSize, didActorWin, actingUserId);
-                }
-                for (const p of effectiveParticipants) {
-                    if (p.teamSide.tag !== actorTeamSide) {
-                        const didOpponentWin = winnerTeamSideTag !== undefined && p.teamSide.tag === winnerTeamSideTag;
-                        incrementFacedStat(ctx, p.userId, charName, gameMode, draftMode, seasonId, matchType, teamSize, didOpponentWin, actingUserId);
-                    }
-                }
-                // S9b (R2(3), A37): the helper stamps SYSTEM_USER_ID on the public GlobalCharacterStat rows.
-                incrementGlobalCharacterStat(ctx, charName, gameMode, draftMode, seasonId, matchType, teamSize, true, didActorWin);
             }
 
             if (actionTag === 'Ban') {

@@ -404,6 +404,26 @@ reaches ceil(bestOf / 2) or staff resolve it). Stage list: Drafting, Equipping, 
   tournament record whose bracket match is gone takes the same path. The tournament branch is unchanged.
 - **LOW.** The stale `dispute_match_result` comment on optional u32 values is removed.
 
+## Phase S10i execution (DECISIONS.md A106, A107(6))
+
+- **Finalization step 16, Classic timer pick (A106;** `helpers/results/finalizationHelpers.ts`**).** `AuctionSold` and
+  `Pick` steps now share one branch. The owning side is the sale's `winningTeam` or the pick's `actorSlot`; a side that
+  is not Blue / Red writes nothing. The players credited with "played" come from one function, `playedCredit(step,
+  ownerSide, participants)`: a manual Classic pick credits the picker only (A82(4), unchanged); an Auction sale (A82(2))
+  and a Classic timer pick of a real character (`actorUserId = 0`, A106) credit every participant of the owning side
+  (`effectiveParticipants`, non-coach). Every participant of the other side gets "faced"; the global stat is written
+  once with the owning side's win flag. `EMPTY` / `SKIP` still write nothing (S10f). A later ruling that narrows the
+  team case (for example to the players who own the character) changes `playedCredit` only.
+- **History never reads the cost tables (A107(6)).** Finalization copies the stored costs: `MatchSessionStepHistory`
+  from the step payloads (`costPaid`), `MatchLineupHistory` from `MatchLineup.synergySurcharge` / `rosterCost`
+  (`finalizationHelpers.ts`, step 8 and the lineup archive), and the history views (`views/matchHistoryViews.ts`) read
+  only history tables. The cost tables are read only on live paths: the draft reducers, `synergyPairs` in
+  `helpers/results/scoringHelpers.ts` (through `lineupCosts` / `recomputeGame`, called by the open-game edits,
+  `scoreEntry.ts`, `matchResultSubmission.ts` and `gameClose.ts`), `costSetGuards.ts`, `costSetCompleteness.ts`,
+  `costSetManagement.ts`, `admin.ts` and `server.ts` (`server_nuke_test_data`). Residual: an Admin edit of a closed but
+  not yet finalized game (A60(7), lobby in AwaitingResult) recomputes the surcharge from the current synergy rows, and
+  AwaitingResult does not block a patch (A107(4) names Drafting, Equipping and Scoring only).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -434,6 +454,7 @@ reaches ceil(bestOf / 2) or staff resolve it). Stage list: Drafting, Equipping, 
 | `view_my_match_result.concedeSummary` only for Moderator / Admin callers | Phase S10c execution (DECISIONS.md A83) | 2026-11-09 |
 | No stats for `EMPTY` / `SKIP` / the system picker; result reducers share a per-user result-entry window (30 writes per 10 s, `UserRateState`); at most 20 adjustments per record and a bounded per-team sum, checked on every team the call changes (review F2); standalone `override_match_result` needs Submitted / Disputed / Validated and an AwaitingResult lobby | Phase S10f execution (results audit #3, #7, #8) | 2026-11-09 |
 | A98: away / abandoned callers rejected by `ensureCaptainOrReferee` (`record_group_scores`, the game-package edits), `resultAuthority` (`set_score_adjustment`, `close_game`; staff exempt) and `confirm_game`; `concede_match` / `claim_forfeit` / `defer_match` run the A92(4) check for every caller; `dispute_match_result` unchanged (participant right). Full list: [../lobby/architecture.md](../lobby/architecture.md) "Phase S10h execution" | Phase S10h execution (DECISIONS.md A98) | 2026-11-10 |
+| A Classic timer pick credits every player of the acting team (one `playedCredit` function shared with the Auction sale); history reads no cost table | Phase S10i execution (DECISIONS.md A106, A107(6)) | 2026-11-10 |
 
 ---
 

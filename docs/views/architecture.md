@@ -320,6 +320,21 @@ views, plus `view_admin_stuck_games` (A60), `view_my_match_lineup_history` (A56)
 Egress: the staff views no longer grow with an organizer's finished tournaments; a Moderator+ subscriber receives every
 live tournament's rows (A105(1)). The Admin arg views are subscribed one tournament at a time.
 
+## Phase S10i execution (DECISIONS.md A107(2))
+
+**`view_cost_set_missing(costSetId)`** (`views/costSetViews.ts`, arg view; subscribe as
+`SELECT * FROM view_cost_set_missing(7)`): the entries the "push cost set live" dialog shows before `publish_cost_set`.
+Rows `CostSetMissingRow { costSetId, draftMode, kind ('Character' | 'Lightcone'), name }`: per draft mode the set's
+draft prices at all, every `HsrCharacter` / `HsrLightcone` row with no draft row (`missingCostEntries`,
+`helpers/roster/costSetCompleteness.ts`; a set published before S10i without draft rows is read from its live rows).
+Permission first: the caller's `User` must be the set's creator or Moderator+; anyone else, an unmapped identity and an
+unknown id get no rows, and nothing else is read. The reference tables are read whole (`iter`) after that check; the
+view is per caller and per set, so it re-evaluates only for its subscribers. Egress: one short row per missing entry,
+at most (characters + light cones) x 2 draft modes, about 480 rows for the current seed, and 0 once the set is complete.
+
+Since S10i the draft rows of a published set stay after publish (A107(3)), so `view_my_draft_*_costs` also return the
+editable copy of the caller's published sets.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -351,6 +366,7 @@ live tournament's rows (A105(1)). The Admin arg views are subscribed one tournam
 | S10g: staff views non-terminal + Moderator+, seven Admin-only arg views `view_admin_tournament*(tournamentId)`, registrant accounts neutral label / terminal skip / field-only rows, matches-for-me InProgress only | Phase S10g execution (DECISIONS.md A105; tournament audit #10, #11) | 2026-11-09 |
 | S10h: every anonymous label a view emits (`view_my_lobby_members.label`, `view_my_lobby_chat.anonymousLabel`, the member-event System lines, `view_my_match_steps` / `view_my_match_participants` / `view_my_lobby_bans` through `anonymousLabelOr`) is the A97 seat label "<Seat kind> #<joinSeq>"; `view_my_lobby_chat` uses `anonymousLabelOr` (live seat label, else stored, else "A player") instead of the stored label alone; `view_admin_abuse_config` gains the three A95(2) columns through the spread `AbuseConfig` columns. The leaver fallbacks ("<Side> player", "Banned player") are unchanged | Phase S10h execution (DECISIONS.md A95, A97) | 2026-11-10 |
 | Fix pass: `view_my_lobby_chat` (sender label and member-event lines) prefers the stored label and reads the live seat label only when none was stored (`storedOrLiveLabel`), so a rejoin does not relabel a former membership's lines | Phase S10h execution (S10h review F6; DECISIONS.md A97) | 2026-11-10 |
+| `view_cost_set_missing(costSetId)` for the set's owner and Moderator+; draft views keep a published set's draft | Phase S10i execution (DECISIONS.md A107(2)(3)) | 2026-11-10 |
 
 ---
 

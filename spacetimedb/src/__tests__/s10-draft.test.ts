@@ -13,6 +13,7 @@ import {
     lobbyRow,
     newHarness,
     pauseSteps,
+    priceCharacters,
     session,
     setupLobby,
     steps,
@@ -25,13 +26,21 @@ import { liveField, verified } from './s8-fixtures';
 import { byKey, createTournamentLobby, join, sidesOf } from './s8d-fixtures';
 import { lmaOf, lockAccount, ownedAccount, settingsFrom } from './s10-a2-fixtures';
 
-const pick = (s: Lobby, characterName: string) => (ctx: any) => M.pick_character(ctx, { lobbyId: s.lobbyId, characterName, eidolon: 0 });
+// T-S10i (A107(5)): the pick and nomination helpers price their name at 0 in the lobby's cost set, game mode and draft
+// mode inside the call's transaction (rolled back with a rejected call), so every name these tests draft has a cost row.
+const pick = (s: Lobby, characterName: string) => (ctx: any) => {
+    priceCharacters(ctx, s.lobbyId, [characterName]);
+    return M.pick_character(ctx, { lobbyId: s.lobbyId, characterName, eidolon: 0 });
+};
 const ban = (s: Lobby, characterName: string) => (ctx: any) => M.ban_character(ctx, { lobbyId: s.lobbyId, characterName });
 const expire = (s: Lobby) => (ctx: any) => M.timer_expiry_classic(ctx, { lobbyId: s.lobbyId });
 const undo = (s: Lobby) => (ctx: any) => M.undo_last_step(ctx, { lobbyId: s.lobbyId });
 const pause = (s: Lobby) => (ctx: any) => M.pause_draft(ctx, { lobbyId: s.lobbyId });
 const resume = (s: Lobby) => (ctx: any) => M.resume_draft(ctx, { lobbyId: s.lobbyId });
-const nominate = (s: Lobby, characterName: string) => (ctx: any) => M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName });
+const nominate = (s: Lobby, characterName: string) => (ctx: any) => {
+    priceCharacters(ctx, s.lobbyId, [characterName]);
+    return M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName });
+};
 const bid = (s: Lobby, bidAmount: number) => (ctx: any) => M.place_bid(ctx, { lobbyId: s.lobbyId, bidAmount });
 const pass = (s: Lobby) => (ctx: any) => M.pass_bid(ctx, { lobbyId: s.lobbyId });
 
@@ -506,6 +515,8 @@ describe('timer_expiry_classic auto-pick pool with requireOwnership (Acceptance:
             seats: ONE_V_ONE,
             lobby: { autoRandomPick: true, requireOwnership: true },
             beforeStart: (l) => {
+                // T-S10i (A107(5)): every owned character is priced, so the pool is decided by the selected accounts alone.
+                priceCharacters(test, l.lobbyId, ['a1', 'a2', 'bx', 'by', 'rx']);
                 expect(lmaOf(test, l.lobbyId, b1.userId)).toEqual([acctA]); // join auto-selected the active account (D-04)
                 tx(test, b1, (ctx) => M.select_match_account(ctx, { lobbyId: l.lobbyId, hsrAccountId: acctB }));
                 expect(lmaOf(test, l.lobbyId, b1.userId)).toEqual([acctB]); // casual: replace (D-07)
@@ -532,8 +543,11 @@ describe('timer_expiry_classic auto-pick pool with requireOwnership (Acceptance:
             lockAccount(test, f.id, who.userId, acct);
         }
         const lobbyId = createTournamentLobby(test, f.org, m.id);
+        priceCharacters(test, lobbyId, ['ax', 'bx', 'rx', 'ry']); // T-S10i (A107(5)): every owned character is priced
         // A settings change resets every confirmation (Backlog #9): set autoRandomPick before the players confirm.
-        const args = settingsFrom(test, lobbyId, { autoRandomPick: true });
+        // T-S10i: banMode None: the auto-ban pool now draws the priced characters (A107(1)), which would ban the owned ones
+        // this test draws its picks from; before S10i nothing was priced and every timer ban was a SKIP.
+        const args = settingsFrom(test, lobbyId, { autoRandomPick: true, banMode: { tag: 'None' } });
         tx(test, f.org, (ctx) => M.update_lobby_settings(ctx, args));
         for (const who of [blue.captain, blue.mate, red.captain, red.mate]) {
             join(test, who, lobbyId);
@@ -565,7 +579,10 @@ describe('timer_expiry_classic auto-pick pool with requireOwnership (Acceptance:
         }
         tx(test, f.org, (ctx) => M.approve_stand_in(ctx, { bracketMatchId: m.id, teamId: m.team1Id!, userId: sub.userId }));
         const lobbyId = createTournamentLobby(test, f.org, m.id);
-        const args = settingsFrom(test, lobbyId, { autoRandomPick: true }); // before the confirmations (Backlog #9)
+        priceCharacters(test, lobbyId, ['cx', 'ox', 'sx', 'rx', 'ry']); // T-S10i (A107(5)): every owned character is priced
+        // T-S10i: banMode None: the auto-ban pool now draws the priced characters (A107(1)), which would ban the owned ones
+        // this test draws its picks from; before S10i nothing was priced and every timer ban was a SKIP.
+        const args = settingsFrom(test, lobbyId, { autoRandomPick: true, banMode: { tag: 'None' } }); // before the confirmations (Backlog #9)
         tx(test, f.org, (ctx) => M.update_lobby_settings(ctx, args));
         for (const who of [blue.captain, sub, red.captain, red.mate]) {
             join(test, who, lobbyId);

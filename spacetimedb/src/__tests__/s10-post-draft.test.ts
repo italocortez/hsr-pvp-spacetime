@@ -4,8 +4,9 @@
 // test (orchestrator ruling Q5: D-10 / D-11). Every `it` cites docs/match-session/contract.md. In-memory datastore on
 // the TestClock; nothing reaches maincloud.
 import { describe, expect, it } from 'vitest';
-import { M, advance, expectReject, guest, joinAsSpectator, lobbyRow, newHarness, session, setupLobby, steps, tx, type Lobby } from './s4-fixtures';
-import { blueNames, captain, draftClassic, equip, insertLightconeCost, insertRoster, redNames, side } from './s7-fixtures';
+import { M, advance, expectReject, guest, joinAsSpectator, lobbyRow, newHarness, priceCharacters, session, setupLobby, steps, tx, type Lobby } from './s4-fixtures';
+import { blueNames, captain, draftAuction, draftClassic, engineerFullDraft, equip, insertLightconeCost, insertRoster, redNames, side } from './s7-fixtures';
+import { rejection } from './s10-c2-fixtures';
 import { insertLightconeCostFor } from './s10-a1-fixtures';
 
 const stageMsg = (stage: string) => `This action is not allowed in the current lobby stage (${stage}).`;
@@ -90,14 +91,27 @@ describe('equip_lightcone', () => {
         expect(equipSteps(s)).toHaveLength(1);
     });
 
-    it('the light-cone cost is read from the Classic row only: a light cone with only an Auction row costs 0 (flow step 5, D-10 / D-11)', () => {
+    // T-S10i re-assertion (A101, A107(1)(5)): the cost is the lobby's own draft-mode row, not the Classic row. In a
+    // Classic lobby a light cone with only an Auction row has no cost and is rejected; an Auction lobby reads that row.
+    it("the light-cone cost is the row of the lobby's draft mode: a light cone with only an Auction row is rejected in Classic and costs its Auction price in Auction (A101, A107(1)(5))", () => {
         const s = equipping();
         insertLightconeCostFor(s.test, 'auction-only', 'Auction', 30);
         const blue = captain(s, 'Blue');
         const start = session(s.test, s.lobbyId).teamBlueLcBudget;
-        equip(s, blue, 'Blue', 'blue-1', 'auction-only');
-        expect(equipSteps(s)[0].payload).toMatchObject({ value: { lightconeName: 'auction-only', costPaid: 0 } });
+        const msg = rejection(s.test, blue, equipBody(s, 'blue-1', 'auction-only'));
+        expect(equipSteps(s)).toHaveLength(0);
         expect(session(s.test, s.lobbyId).teamBlueLcBudget).toBe(start);
+        expect(msg).toBe("auction-only has no cost in this lobby's cost set.");
+
+        const test = newHarness();
+        insertRoster(test, [...blueNames(), ...redNames()]);
+        insertLightconeCostFor(test, 'auction-only', 'Auction', 30);
+        const a = setupLobby(test, { lobby: { draftMode: { tag: 'Auction' }, lightconeBudget: 50 } });
+        draftAuction(a, blueNames(), redNames());
+        const before = session(test, a.lobbyId).teamBlueLcBudget;
+        tx(test, captain(a, 'Blue'), equipBody(a, 'blue-1', 'auction-only'));
+        expect(equipSteps(a)[0].payload).toMatchObject({ value: { lightconeName: 'auction-only', costPaid: 30 } });
+        expect(session(test, a.lobbyId).teamBlueLcBudget).toBe(before - 30);
     });
 
     it('equip_lightcone in Drafting is rejected by the stage check (flow step 2; A60(1): Equipping or Scoring)', () => {
@@ -106,7 +120,7 @@ describe('equip_lightcone', () => {
         insertLightconeCost(test, 'lc-1', 1);
         const s = setupLobby(test);
         const blue = captain(s, 'Blue');
-        tx(test, blue, (ctx) => M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'blue-1', eidolon: 0 }));
+        tx(test, blue, (ctx) => (priceCharacters(ctx, s.lobbyId, ['blue-1']), M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'blue-1', eidolon: 0 })));
         expectReject(test, blue, equipBody(s, 'blue-1', 'lc-1'), stageMsg('Drafting'));
         expect(equipSteps(s)).toHaveLength(0);
     });
@@ -151,10 +165,19 @@ describe('advance_stage', () => {
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Waiting');
     });
 
-    it('the host advances Drafting → Equipping (D-50 rollover: charBudget into lcBudget) → Scoring', () => {
+    // T-S10i re-assertion (A100): Drafting → Equipping only once both teams hold charactersPerTeam characters. A finished
+    // draft leaves Drafting by itself, so the accepted case is the engineered full draft still in Drafting (EMPTY counts).
+    it('the host advances Drafting → Equipping (D-50 rollover: charBudget into lcBudget) → Scoring; refused out of an unfinished draft (A100)', () => {
         const test = newHarness();
         const s = setupLobby(test, { lobby: { characterBudget: 100, lightconeBudget: 50 } });
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Drafting');
+        const before = JSON.stringify(session(test, s.lobbyId), (_k, v) => (typeof v === 'bigint' ? v.toString() : v));
+        const msg = rejection(test, s.host, (ctx) => M.advance_stage(ctx, { lobbyId: s.lobbyId }));
+        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Drafting');
+        expect(JSON.stringify(session(test, s.lobbyId), (_k, v) => (typeof v === 'bigint' ? v.toString() : v))).toBe(before);
+        expect(msg).toBe('The draft is not finished: Blue holds 0 of 8 characters and Red holds 0 of 8.');
+
+        engineerFullDraft(s);
         tx(test, s.host, (ctx) => M.advance_stage(ctx, { lobbyId: s.lobbyId }));
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Equipping');
         const sess = session(test, s.lobbyId);

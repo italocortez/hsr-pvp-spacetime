@@ -4,7 +4,7 @@
 // gate sits at confirm_game; equips reset the game confirmations.
 import { describe, expect, it } from 'vitest';
 import { hardDeleteLobby } from '@module/reducers/lobby/lobbyGc';
-import { M, advance, expectReject, lobbyRow, newHarness, session, setupLobby, steps, tx } from './s4-fixtures';
+import { M, advance, expectReject, lobbyRow, newHarness, session, setupLobby, steps, tx, priceCharacters } from './s4-fixtures';
 import {
     H,
     arrange,
@@ -113,7 +113,7 @@ describe('CH-S6 / D.8.7: eidolon snapshot', () => {
         const blueCap = captain(s, 'Blue');
         selectAccount(test, s.lobbyId, blueCap.userId, 900, { 'blue-1': 6 });
         selectAccount(test, s.lobbyId, blueCap.userId, 901, { 'blue-1': 3 });
-        tx(test, blueCap, (ctx) => M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'blue-1', eidolon: 0 }));
+        tx(test, blueCap, (ctx) => (priceCharacters(ctx, s.lobbyId, ['blue-1']), M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'blue-1', eidolon: 0 })));
         const pick = steps(test, s.lobbyId).find((st) => st.action.tag === 'Pick')!;
         expect((pick.payload.value as { eidolon: number }).eidolon).toBe(6);
     });
@@ -121,7 +121,7 @@ describe('CH-S6 / D.8.7: eidolon snapshot', () => {
     it('requireOwnership off: the argument stands', () => {
         const test = newHarness();
         const s = setupLobby(test);
-        tx(test, captain(s, 'Blue'), (ctx) => M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'blue-1', eidolon: 4 }));
+        tx(test, captain(s, 'Blue'), (ctx) => (priceCharacters(ctx, s.lobbyId, ['blue-1']), M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'blue-1', eidolon: 4 })));
         const pick = steps(test, s.lobbyId).find((st) => st.action.tag === 'Pick')!;
         expect((pick.payload.value as { eidolon: number }).eidolon).toBe(4);
     });

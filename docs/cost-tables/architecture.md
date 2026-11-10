@@ -109,6 +109,14 @@ All three readers use the `iter()`-equivalent fallback pattern (btree filter + i
    - **HsrLightconeCost**: iter-find by `{ lightconeName, gameModeTag, draftModeTag, costSetId }` JSON key; delete row
    - **HsrSynergyCost**: delete by autoInc `id`
 
+## Phase S10i execution (DECISIONS.md A101, A107)
+
+The reader descriptions above (Classic-only rows, 0 for a missing row, the light-cone fallback to `costSetId = 0`) are
+superseded. Every reader now uses the lobby's cost set, game mode and draft mode with no fallback, `EMPTY` costs 0, and
+a real entry without a row is rejected ("<name> has no cost in this lobby's cost set."). The reader list and the
+publish / patch rules: `docs/match-session/architecture.md` and `docs/cost-sets/architecture.md`, "Phase S10i
+execution". The live tables' columns and indexes are unchanged.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -124,6 +132,7 @@ All three readers use the `iter()`-equivalent fallback pattern (btree filter + i
 | posX, posY, width on HsrLightcone for CSS positioning corrections in UI | Phase 02 execution | 2026-02-10 |
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
 | `draftMode: DraftMode` added to all 3 live cost tables; `classicCosts` + `auctionBaseBid` collapsed to single `costs` struct on char/lc. PK tuples extended by `draftMode` (decorative); 4-col btrees on char/lc; 5-col `by_tuple` btree on synergy; `source_mode` extended to 3 cols. Reader helpers filter `draftMode.tag === 'Classic' | 'Auction'` explicitly. Admin bulk-upsert + postDraft LC lookup use iter()/predicate fallback per A2; btree indexes remain for downstream view/sub usage. First-ever synergy auction row shape. pk_test probe table removed via same publish (D-23). | Phase 15.4 execution | 2026-04-15 |
+| Readers use the lobby's set, game mode and draft mode with no fallback; a missing row rejects | Phase S10i execution (DECISIONS.md A101, A107) | 2026-11-10 |
 
 ---
 

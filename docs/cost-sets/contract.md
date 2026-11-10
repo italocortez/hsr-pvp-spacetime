@@ -81,7 +81,7 @@ One call = one row. Editing both Classic and Auction for the same character requ
 |-----------|--------------|
 | Cost set not found | "Cost set {costSetId} not found." |
 | Not owner and not Moderator+ | "Forbidden: You do not own this cost set and are not a Moderator." |
-| Cost set not in draft state | "Cannot edit a cost set that is not in draft state. Publish creates a live copy; clone to make a new draft." |
+| Cost set not in draft state | "Cannot edit a cost set that is not in draft state. Publish creates a live copy; clone to make a new draft." _Superseded in Phase S10i execution (DECISIONS.md A107)._ |
 | Invalid JSON | "costsJson must be a valid JSON object." |
 | Missing e0–e6 field | "costsJson must have numeric field \"{key}\"." |
 
@@ -115,7 +115,7 @@ One call = one row per draft mode.
 |-----------|--------------|
 | Cost set not found | "Cost set {costSetId} not found." |
 | Not owner and not Moderator+ | "Forbidden: You do not own this cost set and are not a Moderator." |
-| Cost set not in draft state | "Cannot edit a cost set that is not in draft state." |
+| Cost set not in draft state | "Cannot edit a cost set that is not in draft state." _Superseded in Phase S10i execution (DECISIONS.md A107)._ |
 | Invalid JSON | "costsJson must be a valid JSON object." |
 | Missing s1–s5 field | "costsJson must have numeric field \"{key}\"." |
 
@@ -150,7 +150,7 @@ Phase 15.4 introduced first-ever synergy auction rows — the default seed set n
 |-----------|--------------|
 | Cost set not found | "Cost set {costSetId} not found." |
 | Not owner and not Moderator+ | "Forbidden: You do not own this cost set and are not a Moderator." |
-| Cost set not in draft state | "Cannot edit a cost set that is not in draft state." |
+| Cost set not in draft state | "Cannot edit a cost set that is not in draft state." _Superseded in Phase S10i execution (DECISIONS.md A107)._ |
 
 ### publish_cost_set
 
@@ -384,6 +384,10 @@ Phase 15.4 introduced first-ever synergy auction rows — the default seed set n
 | `ensureSelectableCostSet` (exists, published, not locked; id 0 passes) + loose `doesCostSetCover` at every selection site; `delete_cost_set` refuses while a non-Finished lobby or non-terminal tournament references the set; scenarios added | Phase S6 execution (backlog #2, R2, D-D6) | 2026-11-06 |
 | Synergy rows name real characters: `admin_bulk_upsert('HsrSynergyCost')` and `edit_draft_synergy_cost` reject a `characterA` / `characterB` with no `HsrCharacter` row ("Character <name> not found."); the two misspelt Trailblazer pairs in `data/seed/synergies.json` are corrected | Phase S10c execution (backend audit 2026-11-09, cross-cutting finding 1) | 2026-11-09 |
 | `edit_draft_character_cost` / `_lightcone_cost` / `_synergy_cost`: each cost field must be a finite number from 0 to 100000 and only the documented fields are stored; the synergy modifier is finite and within ±100000; the character or light cone must exist in the reference tables; `gameModeTag` must be the cost set's own game mode and `draftModeTag` Classic or Auction. A re-seed no longer overwrites archetype descriptions | Phase S10f execution (backend audit 2026-11-09, roster findings 9, 10) | 2026-11-09 |
+| Prices are read from the lobby's own cost set, game mode and draft mode only: no fallback to the default set, no cross-mode default. An entry with no row there cannot be picked, nominated, bid on, edited with `set_eidolon` or equipped ("<name> has no cost in this lobby's cost set."), on the default set too; the timer's auto-pick and auto-ban pools draw only priced entries; `EMPTY` is always 0; a synergy pair with no row adds no surcharge. The coverage guard reads the same rows and no longer exempts the default set | Phase S10i execution (DECISIONS.md A107, DECISIONS.md A108) | 2026-11-10 |
+| Completeness at publish: `view_cost_set_missing(costSetId)` (the set's owner and Moderator+) lists, per draft mode the draft prices, the characters and light cones of the reference tables with no draft row. `publish_cost_set(costSetId, confirmFillMissing?)`: with gaps and no confirmation it is refused ("This cost set has no cost for C characters and L light cones (…). Confirm to publish them at cost 0."); with confirmation the missing entries are written at cost 0 in the draft and the live copy; a draft mode with no rows is neither checked nor filled | Phase S10i execution (DECISIONS.md A107) | 2026-11-10 |
+| Patch in place: a published, not locked set keeps an editable draft copy (`edit_draft_*_cost` accepted) and `publish_cost_set` again makes the live rows equal to the draft under the same id (new rows inserted, changed prices replaced, unchanged rows not rewritten, rows absent from the draft deleted), with the same confirmation rule. Refused while a lobby using the set is in Drafting, Equipping or Scoring ("Cannot patch this cost set while N lobbies using it are in Drafting, Equipping or Scoring."); Waiting and AwaitingResult do not block. A locked set ("This cost set is locked; its costs cannot be changed.") and an unpublished one ("This cost set is unpublished; its costs cannot be changed.") refuse edits and publish. Finished and closed games keep their stored costs | Phase S10i execution (DECISIONS.md A107) | 2026-11-10 |
+| The default cost set (id 0) is seeded with Auction prices equal to the Classic prices for every character and light cone in all three game modes; synergy rows keep their explicit Auction values. A new cost set is a copy of the default or of a published set, so it starts with both modes. A database published with this module must be re-seeded before Auction lobbies on the default set are accepted | Phase S10i execution (DECISIONS.md A108) | 2026-11-10 |
 
 ---
 

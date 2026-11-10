@@ -18,6 +18,7 @@ import {
     type Actor,
     type Harness,
     type Lobby,
+    priceCharacters,
 } from './s4-fixtures';
 import { finishGame as closeCurrentGame } from './s7-fixtures';
 
@@ -159,7 +160,7 @@ function draftClassicGame(s: Lobby, game: number) {
         const who = captain(s, step.teamTurn.tag as 'Blue' | 'Red');
         const characterName = `g${game}_${sess.turnIndex}`;
         if (step.actionRequired.tag === 'Pick') {
-            tx(s.test, who, (ctx) => M.pick_character(ctx, { lobbyId: s.lobbyId, characterName, eidolon: 0 }));
+            tx(s.test, who, (ctx) => (priceCharacters(ctx, s.lobbyId, [characterName]), M.pick_character(ctx, { lobbyId: s.lobbyId, characterName, eidolon: 0 })));
         } else {
             tx(s.test, who, (ctx) => M.ban_character(ctx, { lobbyId: s.lobbyId, characterName }));
         }
@@ -176,7 +177,7 @@ function draftAuctionGame(s: Lobby, game: number) {
         // T-S10c (A81(2)): with the other team full (8, Halves) the nomination sells at once: no pass_bid follows.
         const otherFull = (other === 'Blue' ? sess.blueCharactersWon : sess.redCharactersWon) >= 8;
         tx(s.test, captain(s, nominator), (ctx) =>
-            M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: `a${game}_${guard}` }));
+            (priceCharacters(ctx, s.lobbyId, [`a${game}_${guard}`]), M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: `a${game}_${guard}` })));
         if (!otherFull) tx(s.test, captain(s, other), (ctx) => M.pass_bid(ctx, { lobbyId: s.lobbyId }));
     }
 }

@@ -1,4 +1,4 @@
-// T-S10h: in-memory tests for the S10h lobby and identity rulings (DECISIONS A95, A96, A97, A98, A99). SpacetimeDB
+// T-S10h: in-memory tests for the S10h lobby and identity rulings (DECISIONS A95, A96, A97, A98, A99; T-S10i fix pass: A109). SpacetimeDB
 // test-utils only; nothing reaches maincloud. State is built through the module's reducers; where a decision names a
 // state the reducers cannot reach in the needed shape, the row is patched straight in the in-memory datastore and the
 // test says so (A98: a Waiting-stage Leave deletes the row, A68(5), so an away row in Waiting is patched; an away
@@ -35,6 +35,7 @@ import { rejection } from './s10-c2-fixtures';
 import { parkedLobby, settingsFrom } from './s10-a2-fixtures';
 import { seedElo } from './s8d-fixtures';
 import { seatLabel } from './s10h-fixtures';
+import { ABUSE_CONFIG_DEFAULTS } from '@module/helpers/lobby/abuseControls';
 
 // ─── Texts ───────────────────────────────────────────────────────────────────
 
@@ -254,7 +255,8 @@ describe('A95(2): guest creation counter, threshold, switch and admin alert', ()
 
     it('A95(2) under the threshold passes; the creation that crosses it succeeds, turns the switch off and writes exactly one alert; the next new guest is refused; a returning guest still logs in', () => {
         const test = newHarness();
-        expect(config(test)).toMatchObject({ guestCreationEnabled: true, guestCreationBurstThreshold: 100, guestCreationBurstWindowMinutes: 10 });
+        // T-S10i fix pass (A109(2)): the default threshold is 300 (was 100 under A95(2)).
+        expect(config(test)).toMatchObject({ guestCreationEnabled: true, guestCreationBurstThreshold: 300, guestCreationBurstWindowMinutes: 10 });
         setThreshold(test, 3);
 
         const first = [guest(test, 'g1'), guest(test, 'g2'), guest(test, 'g3')];
@@ -338,6 +340,84 @@ describe('A95(2): guest creation counter, threshold, switch and admin alert', ()
             const b = rejection(test, who, (ctx) => M.admin_update_abuse_config(ctx, { guestCreationBurstThreshold: 1 }));
             expect(snap(config(test))).toBe(before);
             expect([a, b]).toEqual([ADMIN_ONLY, ADMIN_ONLY]);
+        }
+    });
+});
+
+// ─── T-S10i fix pass: A109(2)(3), the default threshold and the server-side switches ─────────────────────────────
+// The server reducers run as 'internal' (the Owner server identity), as the other server_* tests do.
+
+describe('A109: default threshold 300; server_set_guest_creation and server_set_guest_lobby_creation', () => {
+    const config = (test: Harness) => test.db.AbuseConfig.id.find(1)!;
+    const counter = (test: Harness, key: string) => test.db.AbuseCounter.key.find(key);
+    const NOT_SERVER = 'Forbidden: caller is not a registered server identity.';
+    const GUEST_LOBBY_OFF = 'Guest lobby creation is temporarily disabled';
+    const serverGuestCreation = (enabled: boolean) => (ctx: Ctx) => M.server_set_guest_creation(ctx, { enabled });
+    const serverGuestLobby = (enabled: boolean) => (ctx: Ctx) => M.server_set_guest_lobby_creation(ctx, { enabled });
+    const admin = (test: Harness) => {
+        const a = verified(test, 'admin');
+        setRole(test, a.userId, 'Admin');
+        return a;
+    };
+
+    it('A109(2) the AbuseConfig row written at init and the read-path default both carry guestCreationBurstThreshold 300 with the 10-minute window', () => {
+        const test = newHarness();
+        expect(config(test)).toMatchObject({ guestCreationBurstThreshold: 300, guestCreationBurstWindowMinutes: 10 });
+        expect(ABUSE_CONFIG_DEFAULTS).toMatchObject({ guestCreationBurstThreshold: 300, guestCreationBurstWindowMinutes: 10 });
+    });
+
+    it('A109(3) server_set_guest_creation turns the switch off and on with SYSTEM in the audit columns; the re-enable drops the counter; off keeps it', () => {
+        const test = newHarness();
+        const adm = admin(test);
+        guest(test, 'before');
+        expect(counter(test, 'guest_create')!.count).toBeGreaterThan(0);
+        const countBefore = counter(test, 'guest_create')!.count;
+        tx(test, adm, (ctx) => M.admin_set_guest_creation(ctx, { enabled: true })); // stamps the admin as last modifier
+        expect(config(test).lastModifiedById).toBe(adm.userId);
+
+        tx(test, 'internal', serverGuestCreation(false));
+        expect(config(test)).toMatchObject({ guestCreationEnabled: false, lastModifiedById: 0 });
+        expect(counter(test, 'guest_create')!.count).toBe(countBefore); // turning it off does not reset the window
+        expect(rejection(test, asAuth(freshAuth(test, 'blocked')), (ctx) => M.login_as_guest(ctx, {}))).toBe(GUEST_CREATION_OFF);
+
+        tx(test, 'internal', serverGuestCreation(true));
+        expect(config(test)).toMatchObject({ guestCreationEnabled: true, lastModifiedById: 0 });
+        expect(counter(test, 'guest_create')).toBeFalsy();
+        guest(test, 'after');
+        expect(counter(test, 'guest_create')!.count).toBe(1);
+    });
+
+    it('A109(3) server_set_guest_lobby_creation turns the switch off and on with SYSTEM in the audit columns; the re-enable drops the counter; off keeps it', () => {
+        const test = newHarness();
+        const adm = admin(test);
+        const g1 = guest(test, 'g1');
+        tx(test, g1, (ctx) => M.create_lobby(ctx, { ...DEFAULT_LOBBY_ARGS } as any));
+        expect(counter(test, 'guest_lobby_create')!.count).toBe(1);
+        tx(test, adm, (ctx) => M.admin_set_guest_lobby_creation(ctx, { enabled: true }));
+        expect(config(test).lastModifiedById).toBe(adm.userId);
+
+        tx(test, 'internal', serverGuestLobby(false));
+        expect(config(test)).toMatchObject({ guestLobbyCreationEnabled: false, lastModifiedById: 0 });
+        expect(counter(test, 'guest_lobby_create')!.count).toBe(1);
+        const g2 = guest(test, 'g2');
+        expect(rejection(test, g2, (ctx) => M.create_lobby(ctx, { ...DEFAULT_LOBBY_ARGS } as any))).toBe(GUEST_LOBBY_OFF);
+
+        tx(test, 'internal', serverGuestLobby(true));
+        expect(config(test)).toMatchObject({ guestLobbyCreationEnabled: true, lastModifiedById: 0 });
+        expect(counter(test, 'guest_lobby_create')).toBeFalsy();
+        tx(test, g2, (ctx) => M.create_lobby(ctx, { ...DEFAULT_LOBBY_ARGS } as any));
+        expect(counter(test, 'guest_lobby_create')!.count).toBe(1);
+    });
+
+    it('A109(3) an Admin, a Moderator and a guest client are rejected by both server reducers with the server-identity text; nothing changes', () => {
+        const test = newHarness();
+        const callers = [admin(test), moderator(test), guest(test, 'plain')];
+        for (const who of callers) {
+            for (const body of [serverGuestCreation(false), serverGuestCreation(true), serverGuestLobby(false), serverGuestLobby(true)]) {
+                const before = snap([config(test), [...test.db.AbuseCounter.iter()]]);
+                expect(rejection(test, who, body)).toBe(NOT_SERVER);
+                expect(snap([config(test), [...test.db.AbuseCounter.iter()]])).toBe(before);
+            }
         }
     });
 });

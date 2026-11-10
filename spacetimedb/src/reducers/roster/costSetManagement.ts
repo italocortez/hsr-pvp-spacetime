@@ -3,7 +3,15 @@ import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser, ensureTournamentHost, isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { auditInsert, auditUpdate } from '@module/helpers/admin/auditColumns';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
-import { isCostSetInUse } from '@module/helpers/draft/costSetGuards';
+import { isCostSetInUse, liveLobbiesOnCostSet } from '@module/helpers/draft/costSetGuards';
+import {
+    ensureCostSetPatchable,
+    ensureDraftCopy,
+    fillMissingAtZero,
+    mirrorDraftToLive,
+    missingCostEntries,
+    missingCostText,
+} from '@module/helpers/roster/costSetCompleteness';
 import { readAbuseConfig } from '@module/helpers/lobby/abuseControls';
 import { BUDGET_MAX } from '@module/helpers/lobby/lobbyConfigBounds';
 import { canonicalPair } from '@shared/scoring';
@@ -66,7 +74,9 @@ function parseCostFields(costsJson: string, keys: string[]): Record<string, numb
 //
 // Lifecycle:
 //   create_cost_set (clone) → edit_draft_*_cost → publish_cost_set
+//   → (A107(3)) edit_draft_*_cost → publish_cost_set again (patch in place, same id), any number of times
 //   → (optional) lock_cost_set → unpublish_cost_set → delete_cost_set
+// A clone copies the source's live rows: draft edits of the source that were not published yet are not cloned.
 
 export const create_cost_set = spacetimedb.reducer(
     { name: t.string(), sourceSetId: t.u32(), gameModeTag: t.string() },
@@ -181,14 +191,14 @@ export const edit_draft_character_cost = spacetimedb.reducer(
             throw new SenderError('Forbidden: You do not own this cost set and are not a Moderator.');
         }
 
-        if (!costSet.isDraft) {
-            throw new SenderError('Cannot edit a cost set that is not in draft state. Publish creates a live copy; clone to make a new draft.');
-        }
+        // A107(3): a draft, or a published set that is not locked (patch in place: the draft stays editable).
+        ensureCostSetPatchable(costSet);
 
         // Parse JSON cost object (15.4 D-16: single costsJson, one row = one draftMode); EidolonCost e0-e6, S10f bounds
         const costs = parseCostFields(costsJson, ['e0', 'e1', 'e2', 'e3', 'e4', 'e5', 'e6']);
         ensureDraftRowTags(costSet, gameModeTag, draftModeTag);
         if (!ctx.db.HsrCharacter.name.find(characterName)) throw new SenderError(`Character ${characterName} not found.`);
+        ensureDraftCopy(ctx, costSet, user.id); // a set published before S10i: rebuild its draft from the live rows first
 
         const gameMode = { tag: gameModeTag, value: {} } as any;
         const draftMode = { tag: draftModeTag, value: {} } as any;
@@ -248,14 +258,14 @@ export const edit_draft_lightcone_cost = spacetimedb.reducer(
             throw new SenderError('Forbidden: You do not own this cost set and are not a Moderator.');
         }
 
-        if (!costSet.isDraft) {
-            throw new SenderError('Cannot edit a cost set that is not in draft state.');
-        }
+        // A107(3): a draft, or a published set that is not locked.
+        ensureCostSetPatchable(costSet);
 
         // Parse JSON cost object (15.4 D-17: single costsJson, one row = one draftMode); SuperimpositionCost s1-s5, S10f bounds
         const costs = parseCostFields(costsJson, ['s1', 's2', 's3', 's4', 's5']);
         ensureDraftRowTags(costSet, gameModeTag, draftModeTag);
         if (!ctx.db.HsrLightcone.name.find(lightconeName)) throw new SenderError(`Light cone ${lightconeName} not found.`);
+        ensureDraftCopy(ctx, costSet, user.id);
 
         const gameMode = { tag: gameModeTag, value: {} } as any;
         const draftMode = { tag: draftModeTag, value: {} } as any;
@@ -319,9 +329,8 @@ export const edit_draft_synergy_cost = spacetimedb.reducer(
             throw new SenderError('Forbidden: You do not own this cost set and are not a Moderator.');
         }
 
-        if (!costSet.isDraft) {
-            throw new SenderError('Cannot edit a cost set that is not in draft state.');
-        }
+        // A107(3): a draft, or a published set that is not locked.
+        ensureCostSetPatchable(costSet);
 
         // Audit 2026-11-09 (roster finding 1): both names must be HsrCharacter rows.
         for (const name of [characterA, characterB]) {
@@ -332,6 +341,7 @@ export const edit_draft_synergy_cost = spacetimedb.reducer(
             throw new SenderError(`costModifier must be a number between -${BUDGET_MAX} and ${BUDGET_MAX}.`);
         }
         ensureDraftRowTags(costSet, gameModeTag, draftModeTag);
+        ensureDraftCopy(ctx, costSet, user.id);
 
         const gameMode = { tag: gameModeTag, value: {} } as any;
         const draftMode = { tag: draftModeTag, value: {} } as any;
@@ -371,15 +381,25 @@ export const edit_draft_synergy_cost = spacetimedb.reducer(
 );
 
 // ─── publish_cost_set ─────────────────────────────────────────────────────────
-// Copies draft rows to live cost tables, cleans up draft tables, and marks
-// the CostSet as published (isDraft=false, isPublished=true).
-//
-// After publish, the cost data is broadcast to all subscribers via the live
-// HsrCharacterCost / HsrLightconeCost / HsrSynergyCost tables.
+// A107(2)(3)(4). Publishes a draft set, or patches a published, unlocked set in place (same id). Steps:
+//   1. Owner or Moderator+; the set must be a draft or published and not locked (ensureCostSetPatchable).
+//   2. Patch only (the set is already published): refused while any lobby on the set is in Drafting, Equipping or
+//      Scoring ("Cannot patch this cost set while N lobbies using it are in Drafting, Equipping or Scoring.").
+//      liveLobbiesOnCostSet: an index read (Lobby.stage per live stage, then costSetId). Waiting rooms, lobbies in
+//      AwaitingResult and tournaments between games do not block.
+//   3. A set published before S10i gets its draft rebuilt from its live rows (ensureDraftCopy).
+//   4. Completeness (missingCostEntries): per draft mode the draft prices at all, the HsrCharacter / HsrLightcone rows
+//      without a draft row. With gaps and no confirmFillMissing the call is refused with the counts (missingCostText);
+//      with it the gaps are written into the draft at cost 0 (fillMissingAtZero) and so reach the live copy.
+//   5. The live rows become equal to the draft (mirrorDraftToLive): new rows inserted, changed rows replaced,
+//      unchanged rows untouched, live rows with no draft row deleted. The draft is kept: it stays the editable copy.
+//   6. CostSet: isPublished = true, isDraft = false.
+// Lobbies, presets and tournaments that point at the set are not touched: they read the new prices from now on.
+// History keeps the costs stored on its steps and lineups (A107(6)).
 
 export const publish_cost_set = spacetimedb.reducer(
-    { costSetId: t.u32() },
-    (ctx, { costSetId }) => {
+    { costSetId: t.u32(), confirmFillMissing: t.bool().optional() },
+    (ctx, { costSetId, confirmFillMissing }) => {
         const user = getAuthenticatedUser(ctx);
 
         const costSet = ctx.db.CostSet.id.find(costSetId);
@@ -391,101 +411,27 @@ export const publish_cost_set = spacetimedb.reducer(
             throw new SenderError('Forbidden: You do not own this cost set and are not a Moderator.');
         }
 
-        if (!costSet.isDraft) {
-            throw new SenderError('Cannot publish a cost set that is not in draft state.');
-        }
+        ensureCostSetPatchable(costSet);
 
-        // Phase A: Copy draft character costs to live HsrCharacterCost table (15.4 D-21 Pitfall 7).
-        // existingLive predicate extended with draftMode.tag match.
-        const draftChars = [...ctx.db.CostSetDraftCharacter.cost_set_id.filter(costSetId)];
-        for (const draft of draftChars) {
-            const liveRows = [...ctx.db.HsrCharacterCost.cost_set_id.filter(costSetId)];
-            const existingLive = liveRows.find(
-                r => r.characterName === draft.characterName &&
-                     r.gameMode.tag === draft.gameMode.tag &&
-                     r.draftMode.tag === draft.draftMode.tag
-            );
-            if (existingLive) {
-                ctx.db.HsrCharacterCost.delete(existingLive);
-            }
-            ctx.db.HsrCharacterCost.insert({
-                characterName: draft.characterName,
-                gameMode: draft.gameMode,
-                draftMode: draft.draftMode,
-                costs: draft.costs,
-                costSetId: costSetId,
-                ...(existingLive ? auditUpdate(ctx, existingLive, user.id) : auditInsert(ctx, user.id)),
-            } as any);
-        }
-
-        // Phase B: Copy draft lightcone costs to live HsrLightconeCost table (15.4 D-21).
-        const draftLcs = [...ctx.db.CostSetDraftLightcone.cost_set_id.filter(costSetId)];
-        for (const draft of draftLcs) {
-            const liveRows = [...ctx.db.HsrLightconeCost.cost_set_id.filter(costSetId)];
-            const existingLive = liveRows.find(
-                r => r.lightconeName === draft.lightconeName &&
-                     r.gameMode.tag === draft.gameMode.tag &&
-                     r.draftMode.tag === draft.draftMode.tag
-            );
-            if (existingLive) {
-                ctx.db.HsrLightconeCost.delete(existingLive);
-            }
-            ctx.db.HsrLightconeCost.insert({
-                lightconeName: draft.lightconeName,
-                gameMode: draft.gameMode,
-                draftMode: draft.draftMode,
-                costs: draft.costs,
-                costSetId: costSetId,
-                ...(existingLive ? auditUpdate(ctx, existingLive, user.id) : auditInsert(ctx, user.id)),
-            } as any);
-        }
-
-        // Phase C: Copy draft synergy costs to live HsrSynergyCost table (15.4 D-21).
-        // HsrSynergyCost uses autoInc id PK — find existing by 5-tuple including draftMode.
-        const draftSyns = [...ctx.db.CostSetDraftSynergy.cost_set_id.filter(costSetId)];
-        for (const draft of draftSyns) {
-            const liveSyns = [...ctx.db.HsrSynergyCost.cost_set_id.filter(costSetId)];
-            const existingLive = liveSyns.find(
-                r =>
-                    r.characterA === draft.characterA &&
-                    r.characterB === draft.characterB &&
-                    r.gameMode.tag === draft.gameMode.tag &&
-                    r.draftMode.tag === draft.draftMode.tag
-            );
-            if (existingLive) {
-                // Update via id.update() — preserves autoInc id and existing draftMode (via spread).
-                ctx.db.HsrSynergyCost.id.update(
-                    updateWithAudit(ctx, existingLive, { costModifier: draft.costModifier }, user.id),
+        if (costSet.isPublished) {
+            const live = liveLobbiesOnCostSet(ctx, costSetId);
+            if (live > 0) {
+                throw new SenderError(
+                    `Cannot patch this cost set while ${live} ${live === 1 ? 'lobby using it is' : 'lobbies using it are'} in Drafting, Equipping or Scoring.`,
                 );
-            } else {
-                // KEEP `auditInsert` primitive for file-symmetry with the character / light-cone inline ternaries above
-                // and 3 edit_draft_* else-branches — auditInsert stays callable in this file
-                // regardless, so migrating only this branch yields zero eviction win.
-                ctx.db.HsrSynergyCost.insert({
-                    id: 0,
-                    characterA: draft.characterA,
-                    characterB: draft.characterB,
-                    gameMode: draft.gameMode,
-                    draftMode: draft.draftMode,
-                    costModifier: draft.costModifier,
-                    costSetId: costSetId,
-                    ...auditInsert(ctx, user.id),
-                } as any);
             }
         }
 
-        // Phase D: Clean up all draft rows for this costSetId
-        for (const row of [...ctx.db.CostSetDraftCharacter.cost_set_id.filter(costSetId)]) {
-            ctx.db.CostSetDraftCharacter.delete(row);
-        }
-        for (const row of [...ctx.db.CostSetDraftLightcone.cost_set_id.filter(costSetId)]) {
-            ctx.db.CostSetDraftLightcone.delete(row);
-        }
-        for (const row of [...ctx.db.CostSetDraftSynergy.cost_set_id.filter(costSetId)]) {
-            ctx.db.CostSetDraftSynergy.delete(row);
+        ensureDraftCopy(ctx, costSet, user.id);
+
+        const missing = missingCostEntries(ctx, costSet);
+        if (missing.length > 0) {
+            if (!confirmFillMissing) throw new SenderError(missingCostText(missing));
+            fillMissingAtZero(ctx, costSet, missing, user.id);
         }
 
-        // Phase E: Update CostSet metadata — mark as published and no longer a draft
+        mirrorDraftToLive(ctx, costSetId, user.id);
+
         ctx.db.CostSet.id.update(
             updateWithAudit(ctx, costSet, { isPublished: true, isDraft: false }, user.id),
         );
@@ -498,6 +444,8 @@ export const publish_cost_set = spacetimedb.reducer(
 // cost set continue unaffected.
 //
 // Lock is the required precursor to unpublish.
+// A107(3): a locked set can no longer be edited or patched; draft edits not yet published stay in the private draft
+// and never reach the live rows (delete_cost_set removes them).
 // NOTE: costSetId=0 (the default set) cannot be locked.
 
 export const lock_cost_set = spacetimedb.reducer(

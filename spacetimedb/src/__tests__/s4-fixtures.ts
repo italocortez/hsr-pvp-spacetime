@@ -11,13 +11,62 @@ export { M, TestAuth };
 export const START = Timestamp.fromDate(new Date('2026-01-01T00:00:00Z'));
 export const SYSTEM_USER_ID = 0;
 
-export function newHarness() {
+/** The harness after `init`, with no cost rows at all (cost-set content tests that create no lobby on set 0). */
+export function newBareHarness() {
     const test = createModuleTestHarness(spacetimedb, M, { clock: new TestClock(START) });
     // init as the owner: creates ServerIdentity(Owner) and the SYSTEM user the audit columns rely on.
     test.withReducerTx(TestAuth.internal(), (ctx) => M.init(ctx, {}));
     return test;
 }
+
+/** The default harness: newBareHarness plus the set-0 coverage rows (seedDefaultCostCoverage). */
+export function newHarness() {
+    const test = newBareHarness();
+    seedDefaultCostCoverage(test);
+    return test;
+}
 export type Harness = ReturnType<typeof newHarness>;
+
+// ─── T-S10i fix pass (review F2, A108(2)): set-0 coverage rows ────────────────────────────────────────────────────
+// The default cost set (id 0) is checked for coverage like any other set, so a lobby, preset or tournament on set 0
+// needs at least one character and one light-cone cost row of its game mode and draft mode. The harness has no seed
+// data, so newHarness writes one placeholder row of each for set 0 in every game mode and both draft modes, the
+// minimum the selection guard reads. The character placeholder is EMPTY (always cost 0 by rule, so a manual or timer
+// EMPTY pick is unchanged); the light-cone placeholder has no reference row and is never equipped. Tests that read
+// the rows of set 0 (clones, row counts) or the timer pools drop them with dropDefaultCostCoverage once their lobbies
+// exist, or start from newBareHarness.
+
+export const COVERAGE_CHARACTER = 'EMPTY';
+export const COVERAGE_LIGHTCONE = 'coverage-placeholder-lc';
+const ALL_GAME_MODES = ['MemoryOfChaos', 'ApocalypticShadow', 'AnomalyArbitration'];
+const ALL_DRAFT_MODES = ['Classic', 'Auction'];
+
+export function seedDefaultCostCoverage(test: Harness) {
+    const ts = test.clock.now();
+    const audit = { createdById: 0, createdDate: ts, lastModifiedById: 0, lastModifiedDate: ts };
+    for (const gameMode of ALL_GAME_MODES) {
+        for (const draftMode of ALL_DRAFT_MODES) {
+            test.db.HsrCharacterCost.insert({
+                characterName: COVERAGE_CHARACTER, gameMode: { tag: gameMode }, draftMode: { tag: draftMode },
+                costs: { e0: 0, e1: 0, e2: 0, e3: 0, e4: 0, e5: 0, e6: 0 }, costSetId: 0, ...audit,
+            } as any);
+            test.db.HsrLightconeCost.insert({
+                lightconeName: COVERAGE_LIGHTCONE, gameMode: { tag: gameMode }, draftMode: { tag: draftMode },
+                costs: { s1: 0, s2: 0, s3: 0, s4: 0, s5: 0 }, costSetId: 0, ...audit,
+            } as any);
+        }
+    }
+}
+
+/** Removes the set-0 coverage rows (outside a transaction); lobbies already created on set 0 keep running. */
+export function dropDefaultCostCoverage(test: Harness) {
+    for (const r of [...test.db.HsrCharacterCost.cost_set_id.filter(0)]) {
+        if (r.characterName === COVERAGE_CHARACTER) test.db.HsrCharacterCost.delete(r);
+    }
+    for (const r of [...test.db.HsrLightconeCost.cost_set_id.filter(0)]) {
+        if (r.lightconeName === COVERAGE_LIGHTCONE) test.db.HsrLightconeCost.delete(r);
+    }
+}
 type Ctx = Parameters<Parameters<Harness['withReducerTx']>[1]>[0];
 
 export interface Actor {
@@ -212,6 +261,90 @@ export function setupLobby(test: Harness, opts: SetupOpts = {}): Lobby {
 export function refereeActor(s: Lobby): Actor {
     const refId = refereeIds(s.test, s.lobbyId)[0];
     return Object.values(s.a).find((x) => x.userId === refId) ?? s.host;
+}
+
+// ─── T-S10i (A107(1)(5), A108): prices for the names a test drafts ────────────────────────────────────────────────
+// Every pick, nomination, bid, set_eidolon and equip reads the lobby's own cost set, game mode and draft mode, and an
+// entry with no row there is rejected ("<name> has no cost in this lobby's cost set."). The drivers seed the reference
+// row (HsrCharacter / HsrLightcone) and an explicit cost row for every name they use, at cost 0 unless the key already
+// has a row (a test that asserts prices seeds them first; a priced-at-0 entry is legal). `src` is the harness outside a
+// transaction (test.db), or the reducer ctx inside a `tx` body (reading test.db inside withReducerTx crashes the
+// datastore), so a local call helper can price its name in the same transaction as the call. EMPTY / SKIP are never
+// seeded.
+
+type Src = { db: any; clock?: { now(): any }; timestamp?: any };
+const AUDIT0 = (src: Src) => {
+    const ts = src.timestamp ?? src.clock!.now();
+    return { createdById: 0, createdDate: ts, lastModifiedById: 0, lastModifiedDate: ts };
+};
+
+/** An HsrCharacter reference row for `name` (5-star Hunt Fire Dps), unless one exists. */
+export function ensureCharacterRef(src: Src, name: string) {
+    if (src.db.HsrCharacter.name.find(name)) return;
+    src.db.HsrCharacter.insert({
+        name, displayName: name, aliases: [], rarity: 5, path: { tag: 'Hunt' }, element: { tag: 'Fire' }, role: { tag: 'Dps' },
+        imageUrl: '', versionReleased: 1, treatAsVersion: 1, posX: 0, posY: 0, width: 0, ...AUDIT0(src),
+    } as any);
+}
+
+/** An HsrLightcone reference row for `name` (5-star Destruction), unless one exists. */
+export function ensureLightconeRef(src: Src, name: string) {
+    if (src.db.HsrLightcone.name.find(name)) return;
+    src.db.HsrLightcone.insert({
+        name, displayName: name, aliases: [], path: { tag: 'Destruction' }, rarity: 5, imageUrl: '', posX: 0, posY: 0, width: 0,
+        ...AUDIT0(src),
+    } as any);
+}
+
+export interface CostKey { costSetId: number; gameMode: string; draftMode: string }
+
+/** The cost key a lobby reads (A107(1)): its cost set, game mode and draft mode. */
+export function costKeyOf(src: Src, lobbyId: number): CostKey {
+    const l = src.db.Lobby.id.find(lobbyId)!;
+    return { costSetId: l.costSetId, gameMode: l.gameMode.tag, draftMode: l.draftMode.tag };
+}
+
+/** A character cost row for `key` with one cost per eidolon (`ladder[e]`), unless the key already has a row. */
+export function priceCharacterAt(src: Src, key: CostKey, name: string, ladder: number[] | number = 0) {
+    if (name === 'EMPTY' || name === 'SKIP') return;
+    ensureCharacterRef(src, name);
+    const exists = [...src.db.HsrCharacterCost.cost_set_id.filter(key.costSetId)].some(
+        (r: any) => r.characterName === name && r.gameMode.tag === key.gameMode && r.draftMode.tag === key.draftMode);
+    if (exists) return;
+    const l = typeof ladder === 'number' ? Array(7).fill(ladder) : ladder;
+    src.db.HsrCharacterCost.insert({
+        characterName: name, gameMode: { tag: key.gameMode }, draftMode: { tag: key.draftMode },
+        costs: { e0: l[0], e1: l[1], e2: l[2], e3: l[3], e4: l[4], e5: l[5], e6: l[6] }, costSetId: key.costSetId,
+        ...AUDIT0(src),
+    } as any);
+}
+
+/** A light-cone cost row for `key` (one cost per superimposition, `ladder[s - 1]`), unless the key already has a row. */
+export function priceLightconeAt(src: Src, key: CostKey, name: string, ladder: number[] | number = 0) {
+    ensureLightconeRef(src, name);
+    const exists = [...src.db.HsrLightconeCost.cost_set_id.filter(key.costSetId)].some(
+        (r: any) => r.lightconeName === name && r.gameMode.tag === key.gameMode && r.draftMode.tag === key.draftMode);
+    if (exists) return;
+    const l = typeof ladder === 'number' ? Array(5).fill(ladder) : ladder;
+    src.db.HsrLightconeCost.insert({
+        lightconeName: name, gameMode: { tag: key.gameMode }, draftMode: { tag: key.draftMode },
+        costs: { s1: l[0], s2: l[1], s3: l[2], s4: l[3], s5: l[4] }, costSetId: key.costSetId,
+        ...AUDIT0(src),
+    } as any);
+}
+
+/** Prices characters (cost 0 unless already priced) in the lobby's cost set, game mode and draft mode (no-op without the lobby). */
+export function priceCharacters(src: Src, lobbyId: number, names: string[], cost: number | number[] = 0) {
+    if (!src.db.Lobby.id.find(lobbyId)) return;
+    const key = costKeyOf(src, lobbyId);
+    for (const n of names) priceCharacterAt(src, key, n, cost);
+}
+
+/** Prices light cones (cost 0 unless already priced) in the lobby's cost set, game mode and draft mode (no-op without the lobby). */
+export function priceLightcones(src: Src, lobbyId: number, names: string[], cost: number | number[] = 0) {
+    if (!src.db.Lobby.id.find(lobbyId)) return;
+    const key = costKeyOf(src, lobbyId);
+    for (const n of names) priceLightconeAt(src, key, n, cost);
 }
 
 /** Adds a spectator after the draft started (new joins are allowed in Drafting as Spectator). */

@@ -28,6 +28,7 @@ import {
     type Harness,
     type Lobby,
     type SetupOpts,
+    priceCharacters,
 } from './s4-fixtures';
 import {
     blueNames,
@@ -97,12 +98,12 @@ describe('audit draft finding 1: pick_character rejects an eidolon above 6 when 
         const { test, s, cap } = classicLobby();
         const turn0 = session(test, s.lobbyId).turnIndex;
         const steps0 = steps(test, s.lobbyId).length;
-        const msg = rejection(test, cap, (ctx) => M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'x', eidolon: 7 }));
+        const msg = rejection(test, cap, (ctx) => (priceCharacters(ctx, s.lobbyId, ['x']), M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'x', eidolon: 7 })));
         expect(steps(test, s.lobbyId)).toHaveLength(steps0);
         expect(session(test, s.lobbyId).turnIndex).toBe(turn0);
         expect(msg).toBe('eidolon must be between 0 and 6.');
 
-        tx(test, cap, (ctx) => M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'x', eidolon: 6 }));
+        tx(test, cap, (ctx) => (priceCharacters(ctx, s.lobbyId, ['x']), M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'x', eidolon: 6 })));
         const [pick] = stepsOf(test, s.lobbyId, 'Pick');
         expect(pick.payload.value).toMatchObject({ characterName: 'x', eidolon: 6, costPaid: 16 });
         expect(session(test, s.lobbyId).turnIndex).toBe(turn0 + 1);
@@ -111,7 +112,7 @@ describe('audit draft finding 1: pick_character rejects an eidolon above 6 when 
     it('requireOwnership: the argument is ignored, so eidolon 7 is accepted and the owned level (E3) is used and priced (finding 1, CH-S6)', () => {
         const { test, s, cap } = classicLobby({ lobby: { requireOwnership: true } });
         selectAccount(test, s.lobbyId, cap.userId, 900, { x: 3 });
-        tx(test, cap, (ctx) => M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'x', eidolon: 7 }));
+        tx(test, cap, (ctx) => (priceCharacters(ctx, s.lobbyId, ['x']), M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'x', eidolon: 7 })));
         const [pick] = stepsOf(test, s.lobbyId, 'Pick');
         expect(pick.payload.value).toMatchObject({ characterName: 'x', eidolon: 3, costPaid: 13 });
     });
@@ -194,7 +195,7 @@ describe('audit draft finding 3: place_bid rejects a non-finite or negative amou
         insertAuctionCost(test, 'x', [10, 10, 10, 10, 10, 10, 10]);
         const s = setupLobby(test, { lobby: AUCTION });
         const nominator = session(test, s.lobbyId).nextNominatorTeam.tag as Team;
-        tx(test, captain(s, nominator), (ctx) => M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: 'x' }));
+        tx(test, captain(s, nominator), (ctx) => (priceCharacters(ctx, s.lobbyId, ['x']), M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: 'x' })));
         const bidder = captain(s, otherTeam(nominator));
         const state = () => {
             const ss = session(test, s.lobbyId);
@@ -233,7 +234,7 @@ describe('A81: a team holding charactersPerTeam characters sits out of the Aucti
         const s = setupLobby(test, { lobby: AUCTION });
         expect(session(test, s.lobbyId).nextNominatorTeam.tag).toBe('Blue');
         for (let i = 1; i <= 8; i++) {
-            tx(test, captain(s, 'Blue'), (ctx) => M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: `r${i}` }));
+            tx(test, captain(s, 'Blue'), (ctx) => (priceCharacters(ctx, s.lobbyId, [`r${i}`]), M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: `r${i}` })));
             tx(test, captain(s, 'Red'), (ctx) => M.place_bid(ctx, { lobbyId: s.lobbyId, bidAmount: 1 }));
             tx(test, captain(s, 'Blue'), (ctx) => M.pass_bid(ctx, { lobbyId: s.lobbyId }));
         }
@@ -247,7 +248,7 @@ describe('A81: a team holding charactersPerTeam characters sits out of the Aucti
         const { test, lobbyId } = s;
         expect(session(test, lobbyId).nextNominatorTeam.tag).toBe('Blue');
         const before = snap(session(test, lobbyId), steps(test, lobbyId).length);
-        const msg = rejection(test, captain(s, 'Red'), (ctx) => M.nominate_character(ctx, { lobbyId, characterName: 'extra' }));
+        const msg = rejection(test, captain(s, 'Red'), (ctx) => (priceCharacters(ctx, lobbyId, ['extra']), M.nominate_character(ctx, { lobbyId, characterName: 'extra' })));
         expect(snap(session(test, lobbyId), steps(test, lobbyId).length)).toBe(before);
         expect(msg).toBe(FULL);
     });
@@ -274,7 +275,7 @@ describe('A81: a team holding charactersPerTeam characters sits out of the Aucti
         const red0 = session(test, lobbyId).teamRedCharBudget;
         const bids0 = stepsOf(test, lobbyId, 'Bid').length;
 
-        tx(test, captain(s, 'Blue'), (ctx) => M.nominate_character(ctx, { lobbyId, characterName: 'bx' }));
+        tx(test, captain(s, 'Blue'), (ctx) => (priceCharacters(ctx, lobbyId, ['bx']), M.nominate_character(ctx, { lobbyId, characterName: 'bx' })));
         const sold = lastSold(test, lobbyId);
         expect(sold.payload.value).toMatchObject({ characterName: 'bx', winningAmount: 7, winningTeam: { tag: 'Blue' } });
         expect(stepsOf(test, lobbyId, 'Bid')).toHaveLength(bids0);
@@ -312,7 +313,7 @@ describe('A81: a team holding charactersPerTeam characters sits out of the Aucti
         const { test, lobbyId } = s;
         insertAuctionCost(test, 'pricey', [500, 500, 500, 500, 500, 500, 500]);
         const before = snap(session(test, lobbyId), steps(test, lobbyId).length);
-        const msg = rejection(test, captain(s, 'Blue'), (ctx) => M.nominate_character(ctx, { lobbyId, characterName: 'pricey' }));
+        const msg = rejection(test, captain(s, 'Blue'), (ctx) => (priceCharacters(ctx, lobbyId, ['pricey']), M.nominate_character(ctx, { lobbyId, characterName: 'pricey' })));
         expect(snap(session(test, lobbyId), steps(test, lobbyId).length)).toBe(before);
         expect(msg).toBe('Not enough budget to nominate this character.');
     });
@@ -321,7 +322,7 @@ describe('A81: a team holding charactersPerTeam characters sits out of the Aucti
         const s = redFull();
         const { test, lobbyId } = s;
         for (let i = 1; lobbyRow(test, lobbyId).stage.tag === 'Drafting' && i <= 20; i++) {
-            tx(test, captain(s, 'Blue'), (ctx) => M.nominate_character(ctx, { lobbyId, characterName: `b${i}` }));
+            tx(test, captain(s, 'Blue'), (ctx) => (priceCharacters(ctx, lobbyId, [`b${i}`]), M.nominate_character(ctx, { lobbyId, characterName: `b${i}` })));
             const w = won(test, lobbyId);
             expect(w.Blue).toBeLessThanOrEqual(8);
             expect(w.Red).toBe(8);
@@ -344,7 +345,7 @@ describe('A81: a team holding charactersPerTeam characters sits out of the Aucti
                 const nominator = ss.nextNominatorTeam.tag as Team;
                 const other = otherTeam(nominator);
                 const otherFull = (other === 'Blue' ? ss.blueCharactersWon : ss.redCharactersWon) >= perTeam;
-                tx(test, captain(s, nominator), (ctx) => M.nominate_character(ctx, { lobbyId, characterName: `d${i}` }));
+                tx(test, captain(s, nominator), (ctx) => (priceCharacters(ctx, lobbyId, [`d${i}`]), M.nominate_character(ctx, { lobbyId, characterName: `d${i}` })));
                 if (otherFull) {
                     immediate++;
                     expect(session(test, lobbyId).currentNomination).toBeUndefined();
@@ -382,7 +383,7 @@ describe('A82: Auction character stats follow the sale\'s winning team', () => {
         const test = newHarness();
         const s = setupLobby(test, { lobby: { ...AUCTION, teamSize: 1 }, seats: [['b1', 'BluePlayer'], ['r1', 'RedPlayer']] });
         expect(session(test, s.lobbyId).nextNominatorTeam.tag).toBe('Blue');
-        tx(test, s.a.b1, (ctx) => M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: 'x' }));
+        tx(test, s.a.b1, (ctx) => (priceCharacters(ctx, s.lobbyId, ['x']), M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: 'x' })));
         tx(test, s.a.r1, (ctx) => M.pass_bid(ctx, { lobbyId: s.lobbyId }));
         const sold = stepsOf(test, s.lobbyId, 'AuctionSold')[0];
         expect(sold.actorUserId).toBe(s.a.r1.userId); // the passer is the step's actor
@@ -401,7 +402,7 @@ describe('A82: Auction character stats follow the sale\'s winning team', () => {
         const test = newHarness();
         const s = setupLobby(test, { lobby: AUCTION });
         const blueCap = captain(s, 'Blue');
-        tx(test, blueCap, (ctx) => M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: 'y' }));
+        tx(test, blueCap, (ctx) => (priceCharacters(ctx, s.lobbyId, ['y']), M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: 'y' })));
         advance(test, 30_000 + 1);
         tx(test, s.host, (ctx) => M.timer_expiry_auction(ctx, { lobbyId: s.lobbyId }));
         const sold = stepsOf(test, s.lobbyId, 'AuctionSold')[0];

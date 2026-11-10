@@ -21,9 +21,10 @@ import {
     tx,
     type Actor,
     type Lobby,
+    priceCharacters,
 } from './s4-fixtures';
 import { groupCount, type LineupFormatTag } from '@shared/scoring';
-import { H, confirmAndClose, gameRow, playToScoring, record, recordScores, setRole } from './s7-fixtures';
+import { H, completeDraft, confirmAndClose, gameRow, playToScoring, record, recordScores, setRole } from './s7-fixtures';
 
 const NOT_ELIGIBLE = /Opposing team is not eligible for forfeit/;
 const rejoin = (s: Lobby, who: Actor) =>
@@ -116,7 +117,7 @@ describe('F3 / A22(3): expiry and draft actions are gated', () => {
         advance(test, 31_000);
 
         expectReject(test, s.a.b1, (ctx) => M.timer_expiry_classic(ctx, { lobbyId: s.lobbyId }), 'Draft is paused.');
-        expectReject(test, blueCaptain(s), (ctx) => M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'Acheron', eidolon: 0 }), 'Draft is paused.');
+        expectReject(test, blueCaptain(s), (ctx) => (priceCharacters(ctx, s.lobbyId, ['Acheron']), M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'Acheron', eidolon: 0 })), 'Draft is paused.');
         expectReject(test, blueCaptain(s), (ctx) => M.ban_character(ctx, { lobbyId: s.lobbyId, characterName: 'Acheron' }), 'Draft is paused.');
         expect(session(test, s.lobbyId).turnIndex).toBe(0);
     });
@@ -129,7 +130,7 @@ describe('F3 / A22(3): expiry and draft actions are gated', () => {
         advance(test, 31_000);
 
         const cap = blueCaptain(s);
-        expectReject(test, cap, (ctx) => M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: 'Acheron' }), 'Draft is paused.');
+        expectReject(test, cap, (ctx) => (priceCharacters(ctx, s.lobbyId, ['Acheron']), M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: 'Acheron' })), 'Draft is paused.');
         expectReject(test, cap, (ctx) => M.place_bid(ctx, { lobbyId: s.lobbyId, bidAmount: 5 }), 'Draft is paused.');
         expectReject(test, cap, (ctx) => M.pass_bid(ctx, { lobbyId: s.lobbyId }), 'Draft is paused.');
         expectReject(test, cap, (ctx) => M.timer_expiry_auction(ctx, { lobbyId: s.lobbyId }), 'Draft is paused.');
@@ -254,7 +255,8 @@ describe('F8 / A22(4): result reducers in AwaitingResult', () => {
         const test = newHarness();
         const s = setupLobby(test);
         const recordId = [...test.db.MatchResultRecord.lobby_id.filter(s.lobbyId)][0].id;
-        for (let i = 0; i < 2; i++) tx(test, s.host, (ctx) => M.advance_stage(ctx, { lobbyId: s.lobbyId }));
+        completeDraft(s); // T-S10i (A100): the draft is finished first (automatic Drafting → Equipping)
+        tx(test, s.host, (ctx) => M.advance_stage(ctx, { lobbyId: s.lobbyId }));
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Scoring');
         // A casual concede finalizes inline and deletes the lobby; a tournament-controlled one stays in AwaitingResult
         // (D-80). The flag is set directly on the row (no bracket: bracketMatchId stays undefined).
@@ -280,7 +282,7 @@ describe('F9: undo skips the audit rows and keeps sequences unique', () => {
         const test = newHarness();
         const s = setupLobby(test);
         const { lobbyId } = s;
-        tx(test, blueCaptain(s), (ctx) => M.pick_character(ctx, { lobbyId, characterName: 'Acheron', eidolon: 0 }));
+        tx(test, blueCaptain(s), (ctx) => (priceCharacters(ctx, lobbyId, ['Acheron']), M.pick_character(ctx, { lobbyId, characterName: 'Acheron', eidolon: 0 })));
         expect(session(test, lobbyId).turnIndex).toBe(1);
         tx(test, s.host, (ctx) => M.pause_draft(ctx, { lobbyId }));
 
@@ -300,7 +302,7 @@ describe('F9: undo skips the audit rows and keeps sequences unique', () => {
         expect(new Set(seqs).size).toBe(seqs.length);
 
         // The same character can be picked again after the undo (the turn is Blue's again).
-        tx(test, blueCaptain(s), (ctx) => M.pick_character(ctx, { lobbyId, characterName: 'Acheron', eidolon: 0 }));
+        tx(test, blueCaptain(s), (ctx) => (priceCharacters(ctx, lobbyId, ['Acheron']), M.pick_character(ctx, { lobbyId, characterName: 'Acheron', eidolon: 0 })));
         const seqs2 = steps(test, lobbyId).map((x) => x.sequence);
         expect(new Set(seqs2).size).toBe(seqs2.length);
     });

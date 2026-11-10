@@ -4,7 +4,7 @@
 // (outside any reducer), like the earlier suites. `test.db` is read only outside `tx` bodies. Nothing reaches maincloud.
 // seedRatingData is copied from s6-rules.test.ts (a local helper there, not exported).
 import { expect } from 'vitest';
-import { M, lobbyRow, session, setupLobby, tx, type Actor, type Harness, type Lobby, type SetupOpts } from './s4-fixtures';
+import { M, lobbyRow, priceCharacters, session, setupLobby, tx, type Actor, type Harness, type Lobby, type SetupOpts } from './s4-fixtures';
 import { H, arrange, blueNames, captain, closeGame, halves, redNames, side } from './s7-fixtures';
 import { AUDIT, insertHsrAccount } from './s8-fixtures';
 
@@ -93,6 +93,7 @@ export function settingsFrom(test: Harness, lobbyId: number, over: Record<string
  * each Ban turn's captain bans the next name of `bans`.
  */
 export function draftWithBans(s: Lobby, blue: string[], red: string[], bans: string[] = []) {
+    priceCharacters(s.test, s.lobbyId, [...blue, ...red]); // T-S10i (A107(5)): every drafted name has a cost row
     const queue = { Blue: [...blue], Red: [...red] };
     const banQueue = [...bans];
     let guard = 0;

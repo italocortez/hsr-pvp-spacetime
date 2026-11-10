@@ -30,6 +30,7 @@ import {
     type Harness,
     type SetupOpts,
     seatOf,
+    priceCharacters,
 } from './s4-fixtures';
 
 const GRACE_MICROS = 15_000_000n;
@@ -196,7 +197,7 @@ describe('F5: spectators never pause; players auto-pause once', () => {
         const otherBlue = [a.b1, a.b2].find((x) => x.userId !== blueCaptain.userId)!;
 
         // One pick first so the Pause must land after an existing sequence.
-        tx(test, captainActor, (ctx) => M.pick_character(ctx, { lobbyId, characterName: 'Acheron', eidolon: 0 }));
+        tx(test, captainActor, (ctx) => (priceCharacters(ctx, lobbyId, ['Acheron']), M.pick_character(ctx, { lobbyId, characterName: 'Acheron', eidolon: 0 })));
         const maxSeq = Math.max(...steps(test, lobbyId).map((x) => x.sequence));
 
         disconnect(test, captainActor);

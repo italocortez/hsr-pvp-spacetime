@@ -3,7 +3,13 @@ import { t, SenderError } from 'spacetimedb/server';
 import { SYSTEM_USER_ID } from '@module/helpers/admin/auditColumns';
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { ensureAdmin } from '@module/helpers/identity/ensurePermissions';
-import { resetGuestCreationCounter, resetGuestLobbyCounter, seedAbuseConfigDefaults } from '@module/helpers/lobby/abuseControls';
+import {
+    resetGuestCreationCounter,
+    resetGuestLobbyCounter,
+    seedAbuseConfigDefaults,
+    setGuestCreationEnabled,
+    setGuestLobbyCreationEnabled,
+} from '@module/helpers/lobby/abuseControls';
 
 // ─── Abuse controls: admin reducers (DECISIONS A42; ACCESS-SECURITY-OPS §B.5) ──────────────────────────────
 // The guest-lobby circuit breaker runs inline in create_lobby (A57): helpers/abuseControls.ts
@@ -60,9 +66,7 @@ export const admin_set_guest_lobby_creation = spacetimedb.reducer(
     { enabled: t.bool() },
     (ctx, { enabled }) => {
         const admin = ensureAdmin(ctx);
-        const existing = seedAbuseConfigDefaults(ctx);
-        if (enabled && !existing.guestLobbyCreationEnabled) resetGuestLobbyCounter(ctx);
-        ctx.db.AbuseConfig.id.update(updateWithAudit(ctx, existing, { guestLobbyCreationEnabled: enabled }, admin.id));
+        setGuestLobbyCreationEnabled(ctx, enabled, admin.id);
         console.log(`[ABUSE] Guest lobby creation ${enabled ? 'enabled' : 'disabled'} by admin #${admin.id}`);
     }
 );
@@ -75,9 +79,7 @@ export const admin_set_guest_creation = spacetimedb.reducer(
     { enabled: t.bool() },
     (ctx, { enabled }) => {
         const admin = ensureAdmin(ctx);
-        const existing = seedAbuseConfigDefaults(ctx);
-        if (enabled && !existing.guestCreationEnabled) resetGuestCreationCounter(ctx);
-        ctx.db.AbuseConfig.id.update(updateWithAudit(ctx, existing, { guestCreationEnabled: enabled }, admin.id));
+        setGuestCreationEnabled(ctx, enabled, admin.id);
         console.log(`[ABUSE] Guest creation ${enabled ? 'enabled' : 'disabled'} by admin #${admin.id}`);
     }
 );

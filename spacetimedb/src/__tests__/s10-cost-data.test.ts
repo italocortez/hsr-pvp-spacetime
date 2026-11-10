@@ -7,7 +7,8 @@
 // The default seed's own content stays with the seed port. Nothing reaches maincloud.
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { DbConnection } from '@bindings/index';
-import { M, expectReject, guest, newHarness, tx, type Actor, type Harness } from './s4-fixtures';
+// T-S10i fix pass (review F2): newBareHarness, no set-0 coverage rows; these tests clone set 0 and count its rows.
+import { M, expectReject, guest, newBareHarness, tx, type Actor, type Harness } from './s4-fixtures';
 import { host as tournamentHost, moderator, verified } from './s8-fixtures';
 import {
     E,
@@ -66,7 +67,11 @@ const editLc = (test: Harness, who: Actor | 'internal', id: number, lightconeNam
     tx(test, who, (ctx) => M.edit_draft_lightcone_cost(ctx, { costSetId: id, lightconeName, gameModeTag: MOC, draftModeTag, costsJson }));
 const editSyn = (test: Harness, who: Actor | 'internal', id: number, sourceName: string, targetName: string, draftModeTag: string, costModifier: number) =>
     tx(test, who, (ctx) => M.edit_draft_synergy_cost(ctx, { costSetId: id, sourceName, targetName, gameModeTag: MOC, draftModeTag, costModifier }));
-const publish = (test: Harness, who: Actor | 'internal', id: number) => tx(test, who, (ctx) => M.publish_cost_set(ctx, { costSetId: id }));
+/** publish_cost_set; T-S10i (A107(2)): `confirmFillMissing` writes the draft's gaps at cost 0 before it goes live. */
+const publish = (test: Harness, who: Actor | 'internal', id: number, confirmFillMissing?: boolean) =>
+    tx(test, who, (ctx) => M.publish_cost_set(ctx, { costSetId: id, confirmFillMissing }));
+const LOCKED = 'This cost set is locked; its costs cannot be changed.';
+const UNPUBLISHED = 'This cost set is unpublished; its costs cannot be changed.';
 const lock = (test: Harness, who: Actor | 'internal', id: number) => tx(test, who, (ctx) => M.lock_cost_set(ctx, { costSetId: id }));
 const unpublish = (test: Harness, who: Actor | 'internal', id: number) => tx(test, who, (ctx) => M.unpublish_cost_set(ctx, { costSetId: id }));
 const del = (test: Harness, who: Actor | 'internal', id: number) => tx(test, who, (ctx) => M.delete_cost_set(ctx, { costSetId: id }));
@@ -82,7 +87,7 @@ const flags = (test: Harness, id: number) => {
 
 describe('create_cost_set (cost-sets contract § create_cost_set; D-20)', () => {
     it('a Tournament Host creates a draft set cloned from set 0, filtered by game mode, both draft modes kept (scenario "Create Cost Set (clone from source)")', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         seedDefaultSet(test);
         const org = tournamentHost(test);
         const id = createSet(test, org, '  Spring rules  ');
@@ -98,7 +103,7 @@ describe('create_cost_set (cost-sets contract § create_cost_set; D-20)', () => 
     });
 
     it('a guest and a verified User are rejected (Permission: TournamentHost+); no set is created', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         const g = guest(test, 'g');
         const user = verified(test, 'plain');
         for (const who of [g, user]) {
@@ -109,7 +114,7 @@ describe('create_cost_set (cost-sets contract § create_cost_set; D-20)', () => 
     });
 
     it('rejects an empty / whitespace or over-100-character name, an unknown game mode, an unknown source and an unpublished source (contract error table)', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         const org = tournamentHost(test);
         const draft = createSet(test, org, 'still a draft');
         const NAME = 'Cost set name must be between 1 and 100 characters.';
@@ -125,24 +130,31 @@ describe('create_cost_set (cost-sets contract § create_cost_set; D-20)', () => 
     });
 
     it('cloning a published non-default set copies that set\'s live rows (both draft modes), not set 0\'s', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         seedDefaultSet(test);
         seedReferenceNames(test, ['kafka']); // T-S10f: edit_draft_*_cost requires the reference rows (roster audit #9)
         const org = tournamentHost(test);
         const src = createSet(test, org, 'source');
         editChar(test, org, src, 'acheron', 'Classic', E(7));
         editChar(test, org, src, 'kafka', 'Auction', E(8));
-        publish(test, org, src);
+        // T-S10i (A107(2)): the source's gaps (kafka Classic, pela in both modes) are confirmed and published at 0.
+        publish(test, org, src, true);
         const copy = createSet(test, org, 'copy', src);
         const rows = draftChar(test, copy);
-        expect(keysOf(rows, 'characterName')).toEqual(['acheron|MemoryOfChaos|Auction', 'acheron|MemoryOfChaos|Classic', 'kafka|MemoryOfChaos|Auction']);
+        expect(keysOf(rows, 'characterName')).toEqual(keysOf(liveChar(test, src), 'characterName'));
+        expect(keysOf(rows, 'characterName')).toEqual([
+            'acheron|MemoryOfChaos|Auction', 'acheron|MemoryOfChaos|Classic', 'kafka|MemoryOfChaos|Auction', 'kafka|MemoryOfChaos|Classic',
+            'pela|MemoryOfChaos|Auction', 'pela|MemoryOfChaos|Classic',
+        ]);
         expect(rows.find((r) => r.characterName === 'acheron' && r.draftMode.tag === 'Classic')!.costs).toEqual(eCost(7));
+        expect(rows.find((r) => r.characterName === 'kafka' && r.draftMode.tag === 'Auction')!.costs).toEqual(eCost(8));
+        expect(rows.find((r) => r.characterName === 'kafka' && r.draftMode.tag === 'Classic')!.costs).toEqual(eCost(0));
     });
 });
 
 describe('edit_draft_*_cost (cost-sets contract §§ edit_draft_character_cost / lightcone / synergy; D-16..D-18, A21)', () => {
     it('one call = one row per (name, mode, draftMode): Classic and Auction rows are separate, a re-edit replaces the row (scenario "Edit Draft Costs")', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         seedReferenceNames(test, ['kafka'], ['patience']); // T-S10f: edit_draft_*_cost requires the reference rows (roster audit #9)
         const org = tournamentHost(test);
         const id = createSet(test, org, 'edits');
@@ -159,7 +171,7 @@ describe('edit_draft_*_cost (cost-sets contract §§ edit_draft_character_cost /
     });
 
     it('a synergy edit is keyed by the 5-tuple: an Auction row is inserted then updated; editing B + A updates the A + B row (A21)', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         seedSynergyCharacters(test);
         const org = tournamentHost(test);
         const id = createSet(test, org, 'synergy');
@@ -174,7 +186,7 @@ describe('edit_draft_*_cost (cost-sets contract §§ edit_draft_character_cost /
     });
 
     it('rejects invalid JSON, a missing e0 / s1 field and an unknown set (edge cases "costsJson ...")', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         const org = tournamentHost(test);
         const id = createSet(test, org, 'bad input');
         expect(() => editChar(test, org, id, 'kafka', 'Classic', 'not json')).toThrow('costsJson must be a valid JSON object.');
@@ -187,7 +199,7 @@ describe('edit_draft_*_cost (cost-sets contract §§ edit_draft_character_cost /
     });
 
     it('another Tournament Host cannot edit or publish the set; a Moderator edits and publishes any set (Permission: owner or Moderator+)', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         seedReferenceNames(test, ['kafka']); // T-S10f: edit_draft_*_cost requires the reference rows (roster audit #9)
         const org = tournamentHost(test, 'owner');
         const rival = tournamentHost(test, 'rival');
@@ -205,8 +217,10 @@ describe('edit_draft_*_cost (cost-sets contract §§ edit_draft_character_cost /
 });
 
 describe('publish / lock / unpublish / delete (cost-sets contract; scenarios "Publish", "Lock", "Unpublish", "Delete")', () => {
-    it('publish copies every draft row, both draft modes, to the live tables with their values, deletes the drafts and flips the flags (Pitfall 7 guard)', () => {
-        const test = newHarness();
+    // T-S10i re-assertion (A107(2)(3)): a complete draft (every reference character and light cone priced in each priced
+    // mode) publishes without confirmation, and the draft copy is kept as the set's editable image (no longer deleted).
+    it('publish copies every draft row, both draft modes, to the live tables with their values, keeps the drafts and flips the flags (Pitfall 7 guard, A107(2)(3))', () => {
+        const test = newBareHarness();
         seedSynergyCharacters(test);
         seedReferenceNames(test, ['kafka'], ['patience']); // T-S10f: edit_draft_*_cost requires the reference rows (roster audit #9)
         const org = tournamentHost(test);
@@ -217,29 +231,52 @@ describe('publish / lock / unpublish / delete (cost-sets contract; scenarios "Pu
         editLc(test, org, id, 'patience', 'Auction', S(20));
         editSyn(test, org, id, 'kafka', 'blackswan', 'Classic', 0.5);
         editSyn(test, org, id, 'kafka', 'blackswan', 'Auction', 2.5);
+        editChar(test, org, id, 'blackswan', 'Classic', E(4)); // T-S10i: the draft prices every reference character
+        editChar(test, org, id, 'blackswan', 'Auction', E(40));
         publish(test, org, id);
 
         expect(flags(test, id)).toEqual({ isDraft: false, isPublished: true, isLocked: false });
-        expect(liveChar(test, id).map((r) => [r.draftMode.tag, r.costs.e0]).sort()).toEqual([['Auction', 30], ['Classic', 3]]);
+        expect(liveChar(test, id).map((r) => [r.characterName, r.draftMode.tag, r.costs.e0]).sort())
+            .toEqual([['blackswan', 'Auction', 40], ['blackswan', 'Classic', 4], ['kafka', 'Auction', 30], ['kafka', 'Classic', 3]]);
         expect(liveLc(test, id).map((r) => [r.draftMode.tag, r.costs.s1]).sort()).toEqual([['Auction', 20], ['Classic', 2]]);
         expect(liveSyn(test, id).map((r) => [r.draftMode.tag, r.costModifier]).sort()).toEqual([['Auction', 2.5], ['Classic', 0.5]]);
-        expect([draftChar(test, id), draftLc(test, id), draftSyn(test, id)].map((r) => r.length)).toEqual([0, 0, 0]);
+        expect([draftChar(test, id), draftLc(test, id), draftSyn(test, id)].map((r) => r.length)).toEqual([4, 2, 2]);
+        expect(keysOf(draftChar(test, id), 'characterName')).toEqual(keysOf(liveChar(test, id), 'characterName'));
     });
 
-    it('a published set can be neither edited nor published again', () => {
-        const test = newHarness();
+    // T-S10i re-assertion (A107(3)): a published, unlocked set is patched in place (its draft stays editable, publish
+    // again); a locked set and an unpublished set reject edits and publish.
+    it('a published, unlocked set is edited and published again in place; a locked or an unpublished set rejects edits and publish (A107(3))', () => {
+        const test = newBareHarness();
+        seedReferenceNames(test, ['kafka', 'a', 'b'], ['patience']);
         const org = tournamentHost(test);
         const id = createSet(test, org, 'done');
         publish(test, org, id);
-        expect(() => publish(test, org, id)).toThrow('Cannot publish a cost set that is not in draft state.');
-        expect(() => editChar(test, org, id, 'kafka', 'Classic', E(1)))
-            .toThrow('Cannot edit a cost set that is not in draft state. Publish creates a live copy; clone to make a new draft.');
-        expect(() => editLc(test, org, id, 'patience', 'Classic', S(1))).toThrow('Cannot edit a cost set that is not in draft state.');
-        expect(() => editSyn(test, org, id, 'a', 'b', 'Classic', 1)).toThrow('Cannot edit a cost set that is not in draft state.');
+        editChar(test, org, id, 'kafka', 'Classic', E(1));
+        editLc(test, org, id, 'patience', 'Classic', S(1));
+        editSyn(test, org, id, 'a', 'b', 'Classic', 1);
+        expect(liveChar(test, id)).toHaveLength(0); // the live rows change only at publish
+        publish(test, org, id, true); // gaps a, b (Classic) confirmed at 0
+        expect(costSetRow(test, id)!.id).toBe(id);
+        expect(liveChar(test, id).map((r) => [r.characterName, r.costs.e0]).sort()).toEqual([['a', 0], ['b', 0], ['kafka', 1]]);
+        expect(liveLc(test, id).map((r) => [r.lightconeName, r.costs.s1])).toEqual([['patience', 1]]);
+        expect(liveSyn(test, id).map((r) => [r.characterA, r.characterB, r.costModifier])).toEqual([['a', 'b', 1]]);
+
+        lock(test, org, id);
+        expect(() => editChar(test, org, id, 'kafka', 'Classic', E(2))).toThrow(LOCKED);
+        expect(() => editLc(test, org, id, 'patience', 'Classic', S(2))).toThrow(LOCKED);
+        expect(() => editSyn(test, org, id, 'a', 'b', 'Classic', 2)).toThrow(LOCKED);
+        expect(() => publish(test, org, id, true)).toThrow(LOCKED);
+        unpublish(test, org, id);
+        expect(() => editChar(test, org, id, 'kafka', 'Classic', E(2))).toThrow(UNPUBLISHED);
+        expect(() => editLc(test, org, id, 'patience', 'Classic', S(2))).toThrow(UNPUBLISHED);
+        expect(() => editSyn(test, org, id, 'a', 'b', 'Classic', 2)).toThrow(UNPUBLISHED);
+        expect(() => publish(test, org, id, true)).toThrow(UNPUBLISHED);
+        expect(liveChar(test, id).map((r) => [r.characterName, r.costs.e0]).sort()).toEqual([['a', 0], ['b', 0], ['kafka', 1]]);
     });
 
     it('lock: a published set locks once; a draft or an already locked set is rejected; a rival is rejected', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         const org = tournamentHost(test, 'owner');
         const rival = tournamentHost(test, 'rival');
         const draft = createSet(test, org, 'draft');
@@ -253,7 +290,7 @@ describe('publish / lock / unpublish / delete (cost-sets contract; scenarios "Pu
     });
 
     it('unpublish: refused before lock and on an unpublished set; after lock it clears both flags and the live rows stay', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         seedReferenceNames(test, ['kafka']); // T-S10f: edit_draft_*_cost requires the reference rows (roster audit #9)
         const org = tournamentHost(test);
         const id = createSet(test, org, 'retiring');
@@ -268,22 +305,24 @@ describe('publish / lock / unpublish / delete (cost-sets contract; scenarios "Pu
     });
 
     it('delete: refused while published; after unpublish it removes the set and its live rows of both draft modes, leaving other sets alone', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         seedSynergyCharacters(test);
         seedDefaultSet(test);
         seedReferenceNames(test, ['kafka'], ['patience']); // T-S10f: edit_draft_*_cost requires the reference rows (roster audit #9)
         const org = tournamentHost(test);
         const keep = createSet(test, org, 'keep');
         editChar(test, org, keep, 'kafka', 'Classic', E(1));
-        publish(test, org, keep);
+        publish(test, org, keep, true); // T-S10i (A107(2)): gaps confirmed at 0
         const id = createSet(test, org, 'doomed');
         editChar(test, org, id, 'kafka', 'Classic', E(3));
         editChar(test, org, id, 'kafka', 'Auction', E(30));
         editLc(test, org, id, 'patience', 'Auction', S(2));
         editSyn(test, org, id, 'kafka', 'blackswan', 'Auction', 1);
-        publish(test, org, id);
-        expect(liveChar(test, id).map((r) => `${r.characterName}|${r.draftMode.tag}`).sort())
-            .toEqual(['acheron|Auction', 'acheron|Classic', 'kafka|Auction', 'kafka|Classic']); // cloned from set 0 + edits
+        publish(test, org, id, true); // T-S10i (A107(2)): gaps confirmed at 0
+        expect(liveChar(test, id).map((r) => `${r.characterName}|${r.draftMode.tag}`).sort()).toEqual([
+            'acheron|Auction', 'acheron|Classic', 'blackswan|Auction', 'blackswan|Classic', 'kafka|Auction', 'kafka|Classic',
+            'pela|Auction', 'pela|Classic',
+        ]); // cloned from set 0 + edits + the gaps filled at 0 (A107(2))
         const keptRows = liveChar(test, keep);
         expect(() => del(test, org, id)).toThrow('Cost set must be unpublished before deleting. Call unpublish_cost_set first.');
         lock(test, org, id);
@@ -292,13 +331,14 @@ describe('publish / lock / unpublish / delete (cost-sets contract; scenarios "Pu
 
         expect(costSetRow(test, id)).toBeFalsy();
         expect([liveChar(test, id), liveLc(test, id), liveSyn(test, id)].map((r) => r.length)).toEqual([0, 0, 0]);
+        expect([draftChar(test, id), draftLc(test, id), draftSyn(test, id)].map((r) => r.length)).toEqual([0, 0, 0]); // A107(3): the kept draft goes too
         expect(liveChar(test, keep)).toEqual(keptRows);
         expect(liveChar(test, 0)).toHaveLength(3);
         expect(liveSyn(test, 0)).toHaveLength(2);
     });
 
     it('delete of a never-published draft removes its draft rows; a rival cannot delete it', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         seedDefaultSet(test);
         const org = tournamentHost(test, 'owner');
         const rival = tournamentHost(test, 'rival');
@@ -311,7 +351,7 @@ describe('publish / lock / unpublish / delete (cost-sets contract; scenarios "Pu
     });
 
     it('the default set (id 0) cannot be locked, unpublished or deleted, even by an Admin (scenario "Default Cost Set Protection")', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         seedDefaultSet(test);
         expect(() => lock(test, 'internal', 0)).toThrow('The default cost set (id=0) cannot be locked.');
         expect(() => unpublish(test, 'internal', 0)).toThrow('The default cost set (id=0) cannot be unpublished.');
@@ -320,7 +360,7 @@ describe('publish / lock / unpublish / delete (cost-sets contract; scenarios "Pu
     });
 
     it('lock, unpublish, delete and publish of an unknown set are "Cost set N not found."', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         for (const op of [lock, unpublish, del, publish]) {
             expect(() => op(test, 'internal', 4040)).toThrow('Cost set 4040 not found.');
         }
@@ -333,7 +373,7 @@ describe('publish / lock / unpublish / delete (cost-sets contract; scenarios "Pu
 
 describe('admin_bulk_upsert on the cost tables: the (name, mode, draftMode, costSetId) key', () => {
     it('Classic and Auction rows of the same character / light cone / synergy pair coexist as separate rows', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         seedSynergyCharacters(test);
         bulkUpsert(test, 'HsrCharacterCost', [charCostRow('kafka', 'Classic', 1), charCostRow('kafka', 'Auction', 10)]);
         bulkUpsert(test, 'HsrLightconeCost', [lcCostRow('patience', 'Classic', 1), lcCostRow('patience', 'Auction', 10)]);
@@ -345,7 +385,7 @@ describe('admin_bulk_upsert on the cost tables: the (name, mode, draftMode, cost
     });
 
     it('re-upserting the Classic row updates it in place (one row) and leaves the Auction sibling untouched', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         bulkUpsert(test, 'HsrCharacterCost', [charCostRow('kafka', 'Classic', 1), charCostRow('kafka', 'Auction', 10)]);
         bulkUpsert(test, 'HsrCharacterCost', [charCostRow('kafka', 'Classic', 4)]);
         const rows = liveChar(test, 0);
@@ -355,7 +395,7 @@ describe('admin_bulk_upsert on the cost tables: the (name, mode, draftMode, cost
     });
 
     it('synergy: updating the Classic row keeps its id, never touches the Auction sibling, and a reversed pair is the same row (A21)', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         seedSynergyCharacters(test);
         bulkUpsert(test, 'HsrSynergyCost', [synergyRow('kafka', 'blackswan', 'Classic', 0.5), synergyRow('kafka', 'blackswan', 'Auction', 1.5)]);
         const before = new Map(liveSyn(test, 0).map((r) => [r.draftMode.tag, r]));
@@ -367,7 +407,7 @@ describe('admin_bulk_upsert on the cost tables: the (name, mode, draftMode, cost
     });
 
     it('the same pair listed twice in one payload, in either order, is rejected (A21)', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         seedSynergyCharacters(test);
         expect(() => bulkUpsert(test, 'HsrSynergyCost', [synergyRow('kafka', 'blackswan', 'Auction', 1), synergyRow('blackswan', 'kafka', 'Auction', 2)]))
             .toThrow('Synergy pair blackswan + kafka is listed twice (pairs are unordered).');
@@ -375,7 +415,7 @@ describe('admin_bulk_upsert on the cost tables: the (name, mode, draftMode, cost
     });
 
     it('rows of distinct costSetIds coexist; re-seeding set 0 never overwrites the set-5 row (legacy regression)', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         bulkUpsert(test, 'HsrCharacterCost', [charCostRow('kafka', 'Classic', 5, 5)]);
         bulkUpsert(test, 'HsrCharacterCost', [charCostRow('kafka', 'Classic', 1, 0)]);
         bulkUpsert(test, 'HsrCharacterCost', [charCostRow('kafka', 'Classic', 2, 0)]);
@@ -384,7 +424,7 @@ describe('admin_bulk_upsert on the cost tables: the (name, mode, draftMode, cost
     });
 
     it('a payload carrying only one draft mode writes only that mode (seed extraction 15.4-2 / 15.4-3)', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         bulkUpsert(test, 'HsrCharacterCost', [charCostRow('classic-only', 'Classic', 1), charCostRow('auction-only', 'Auction', 2)]);
         expect(keysOf(liveChar(test, 0), 'characterName')).toEqual(['auction-only|MemoryOfChaos|Auction', 'classic-only|MemoryOfChaos|Classic']);
     });
@@ -394,12 +434,12 @@ describe('admin_bulk_upsert on the cost tables: the (name, mode, draftMode, cost
         ['HsrLightconeCost', { lightconeName: 'patience', gameMode: MOC, costs: sCost(1), costSetId: 0 }],
         ['HsrSynergyCost', { characterA: 'kafka', characterB: 'blackswan', gameMode: MOC, costModifier: 1, costSetId: 0 }],
     ])('%s: a row without the draftMode key is rejected by the key check (D-19)', (tableName, row) => {
-        const test = newHarness();
+        const test = newBareHarness();
         expect(() => bulkUpsert(test, tableName, [row])).toThrow(/Row 0 key mismatch: missing: \[draftMode\]/);
     });
 
     it('a non-Admin is rejected; an unsupported table and a non-array payload are rejected with the contract texts', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         const mod = moderator(test);
         expect(() => bulkUpsert(test, 'HsrCharacterCost', [charCostRow('kafka', 'Classic', 1)], mod)).toThrow('Forbidden: Requires Admin privileges.');
         expect(() => bulkUpsert(test, 'User', [])).toThrow('Bulk upsert not supported for table: User');
@@ -419,7 +459,7 @@ describe('admin_bulk_upsert on the cost tables: the (name, mode, draftMode, cost
 
 describe('synergy Auction round trip (Phase 15.4 D-25a)', () => {
     it('admin_bulk_upsert writes an Auction synergy row with its modifier and set id', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         seedSynergyCharacters(test);
         bulkUpsert(test, 'HsrSynergyCost', [synergyRow('kafka', 'blackswan', 'Auction', 3.5, 7)]);
         expect(liveSyn(test, 7)).toEqual([expect.objectContaining({
@@ -429,7 +469,7 @@ describe('synergy Auction round trip (Phase 15.4 D-25a)', () => {
     });
 
     it('an Auction-only draft synergy publishes to one live Auction row and no Classic row', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         seedSynergyCharacters(test);
         const org = tournamentHost(test);
         const id = createSet(test, org, 'auction syn');
@@ -445,7 +485,7 @@ describe('synergy Auction round trip (Phase 15.4 D-25a)', () => {
 
 describe('admin_bulk_upsert partial update: null = keep on an existing row, default on a new row', () => {
     it('HsrCharacter: a row with only imageUrl set keeps every other stored field', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         bulkUpsert(test, 'HsrCharacter', [characterRow('pu-char', {
             displayName: 'Partial', aliases: ['alpha', 'beta'], element: 'Ice', role: 'Support', imageUrl: 'img.orig',
             versionReleased: 2.5, treatAsVersion: 2, posX: 10, posY: 20, width: 300,
@@ -461,7 +501,7 @@ describe('admin_bulk_upsert partial update: null = keep on an existing row, defa
     });
 
     it('HsrLightcone: a row with only imageUrl set keeps every other stored field', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         bulkUpsert(test, 'HsrLightcone', [lightconeRow('pu-lc', { displayName: 'PU LC', aliases: ['lc-alpha'], rarity: 4, imageUrl: 'lc.orig', posX: 5, posY: 15, width: 250 })]);
         const nulls = Object.fromEntries(Object.keys(lightconeRow('x')).filter((k) => k !== 'name').map((k) => [k, null]));
         bulkUpsert(test, 'HsrLightcone', [{ ...nulls, name: 'pu-lc', imageUrl: 'lc.NEW' }]);
@@ -471,7 +511,7 @@ describe('admin_bulk_upsert partial update: null = keep on an existing row, defa
     });
 
     it('the insert branch applies the schema defaults to null fields of a new row', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         bulkUpsert(test, 'HsrCharacter', [characterRow('pu-new', {
             displayName: null, aliases: null, rarity: null, imageUrl: null, versionReleased: null, treatAsVersion: null, posX: null, posY: null, width: null,
         })]);
@@ -481,14 +521,14 @@ describe('admin_bulk_upsert partial update: null = keep on an existing row, defa
     });
 
     it('HsrCharacterCost: null costs on an existing row keep the stored struct', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         bulkUpsert(test, 'HsrCharacterCost', [charCostRow('kafka', 'Classic', 5, 9)]);
         bulkUpsert(test, 'HsrCharacterCost', [{ ...charCostRow('kafka', 'Classic', 0, 9), costs: null }]);
         expect(liveChar(test, 9).map((r) => r.costs)).toEqual([eCost(5)]);
     });
 
     it('per-draftMode independence: a null-costs update of the Classic row keeps it, and the Auction row is untouched by both writes', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         bulkUpsert(test, 'HsrCharacterCost', [charCostRow('kafka', 'Classic', 5, 9), charCostRow('kafka', 'Auction', 50, 9)]);
         bulkUpsert(test, 'HsrCharacterCost', [{ ...charCostRow('kafka', 'Classic', 0, 9), costs: null }]);
         bulkUpsert(test, 'HsrCharacterCost', [charCostRow('kafka', 'Classic', 6, 9)]);
@@ -498,7 +538,7 @@ describe('admin_bulk_upsert partial update: null = keep on an existing row, defa
     });
 
     it('a non-null costs struct replaces the stored one wholesale (no field-level merge inside the struct)', () => {
-        const test = newHarness();
+        const test = newBareHarness();
         bulkUpsert(test, 'HsrCharacterCost', [charCostRow('kafka', 'Auction', 5, 9)]);
         const next = { e0: 111, e1: 112, e2: 113, e3: 114, e4: 115, e5: 116, e6: 117 };
         bulkUpsert(test, 'HsrCharacterCost', [{ ...charCostRow('kafka', 'Auction', 0, 9), costs: next }]);

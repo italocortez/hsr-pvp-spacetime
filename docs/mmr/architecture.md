@@ -153,6 +153,14 @@ MMR reaches a client only where the UI names that player: the lobby member row (
 account could hold a public top-20 slot for the rest of the season; it now drops out at the next rebuild. The check is
 cached per user within one rebuild.
 
+## Phase S10i execution (DECISIONS.md A102)
+
+**`globalCompositeRating` is per season.** `processMatchMmr` (`helpers/results/finalizationHelpers.ts`) averages only
+the user's `MmrRating` rows of the season the finalization writes (`seasonId`: the active season, or 0 without one) and
+writes the average to those rows only. Rows of earlier seasons keep the value they had when their season was current.
+`rebuildLeaderboard` already read the stored value from the season's rows, so the Global category now ranks a
+season-only average.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -173,6 +181,7 @@ cached per user within one rebuild.
 | MMR per game: one record per lobby, each finalized on its own; nothing aggregates across the games of a bracket match (A67(7)) | Phase S8e execution | 2026-11-08 |
 | Leaderboard: top 20 per category (rating, wins, user id), SYSTEM audit actor, `actingUserId` parameter removed; `view_my_mmr_ratings` (own rows per mode and season) | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 | Leaderboard rebuild skips users with no live `User` row | Phase S10f execution (results audit #9) | 2026-11-09 |
+| `globalCompositeRating` computed from and written to the current season's `MmrRating` rows only | Phase S10i execution (DECISIONS.md A102) | 2026-11-10 |
 
 ---
 

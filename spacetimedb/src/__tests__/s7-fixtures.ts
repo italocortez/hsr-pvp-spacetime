@@ -7,7 +7,10 @@
 import { expect } from 'vitest';
 import { charactersPerTeam, groupCount, type LineupFormatTag } from '@shared/scoring';
 import { teamDraft } from '@module/helpers/results/scoringHelpers';
-import { M, advance, captainOf, lobbyRow, session, setupLobby, tx, type Actor, type Harness, type Lobby, type SetupOpts } from './s4-fixtures';
+import {
+    M, advance, captainOf, lobbyRow, priceLightconeAt as priceLightconeAtKey, priceCharacters, priceLightcones, session, setupLobby, tx,
+    type Actor, type Harness, type Lobby, type SetupOpts,
+} from './s4-fixtures';
 
 /** Hundredths of a value (scores, costs and handicaps are fixed-point hundredths). */
 export const H = (n: number) => Math.round(n * 100);
@@ -21,6 +24,7 @@ export const blueNames = (n = 8) => Array.from({ length: n }, (_, i) => `blue-${
 export const redNames = (n = 8) => Array.from({ length: n }, (_, i) => `red-${i + 1}`);
 
 export function insertCharacter(test: Harness, name: string, rarity: 4 | 5) {
+    if (test.db.HsrCharacter.name.find(name)) return; // T-S10i: a driver may have seeded the reference row already
     test.db.HsrCharacter.insert({
         name,
         displayName: name,
@@ -93,6 +97,7 @@ export const side = (tag: 'Blue' | 'Red') => ({ tag }) as { tag: 'Blue' | 'Red' 
 
 /** Plays the Classic draft sequence: each Pick turn's captain picks the next name of its list (eidolon per name). */
 export function draftClassic(s: Lobby, blue: string[], red: string[], eidolons: Record<string, number> = {}) {
+    priceCharacters(s.test, s.lobbyId, [...blue, ...red]); // T-S10i (A107(5)): every drafted name has a cost row
     const queue = { Blue: [...blue], Red: [...red] };
     for (;;) {
         const sess = session(s.test, s.lobbyId);
@@ -112,6 +117,7 @@ export function draftClassic(s: Lobby, blue: string[], red: string[], eidolons: 
  * T-S10c (A81(2)): a nomination made while the other team is full sells at once, so no pass_bid follows it.
  */
 export function draftAuction(s: Lobby, blue: string[], red: string[]) {
+    priceCharacters(s.test, s.lobbyId, [...blue, ...red]); // T-S10i (A107(5)): every nominated name has a cost row
     const queue = { Blue: [...blue], Red: [...red] };
     const perTeam = charactersPerTeam(lobbyRow(s.test, s.lobbyId).lineupFormat.tag as LineupFormatTag);
     while (lobbyRow(s.test, s.lobbyId).stage.tag === 'Drafting') {
@@ -235,20 +241,20 @@ export function finishGame(s: Lobby, winner: 'Blue' | 'Red' = 'Blue') {
     closeGame(s, s.host);
 }
 
-/** A light-cone cost row (cost set 0, Memory of Chaos); equip_lightcone reads the Classic row in both draft modes. */
+/**
+ * A light-cone price in cost set 0, Memory of Chaos. T-S10i (A101, A108(1)): equip_lightcone reads the lobby's own draft
+ * mode, and the default set carries the same Auction price as Classic, so the Classic and the Auction row are both
+ * written (a key that already has a row is left alone).
+ */
 export function insertLightconeCost(test: Harness, lightconeName: string, cost: number) {
-    test.db.HsrLightconeCost.insert({
-        lightconeName,
-        gameMode: { tag: 'MemoryOfChaos' },
-        draftMode: { tag: 'Classic' },
-        costs: { s1: cost, s2: cost, s3: cost, s4: cost, s5: cost },
-        costSetId: 0,
-        ...AUDIT(test),
-    });
+    for (const draftMode of ['Classic', 'Auction']) {
+        priceLightconeAtKey(test, { costSetId: 0, gameMode: 'MemoryOfChaos', draftMode }, lightconeName, cost);
+    }
 }
 
 /** T-S10b (A78(2)): equip_lightcone by `who` for `team`'s copy of the character (the caller names the side). */
 export function equip(s: Lobby, who: Actor, team: 'Blue' | 'Red', characterName: string, lightconeName: string) {
+    priceLightcones(s.test, s.lobbyId, [lightconeName]); // T-S10i (A107(5)): 0 unless the test priced it
     tx(s.test, who, (ctx) =>
         M.equip_lightcone(ctx, { lobbyId: s.lobbyId, teamSide: side(team), characterName, lightconeName, superimposition: 1 }));
 }
@@ -260,10 +266,81 @@ export function unequip(s: Lobby, who: Actor, team: 'Blue' | 'Red', characterNam
 
 /** T-S7b: set_eidolon (A60(1)) by `who` for a character of `team`'s draft of the current game. */
 export function setEidolon(s: Lobby, who: Actor, team: 'Blue' | 'Red', characterName: string, eidolon: number) {
+    priceCharacters(s.test, s.lobbyId, [characterName]); // T-S10i (A107(5)): 0 unless the test priced it
     tx(s.test, who, (ctx) => M.set_eidolon(ctx, { lobbyId: s.lobbyId, teamSide: side(team), characterName, eidolon }));
 }
 
 /** T-S7b: sets a user's role directly on the row (as the S7 tests set Moderator). */
 export function setRole(test: Harness, userId: number, role: 'Moderator' | 'Admin') {
     test.db.User.id.update({ ...test.db.User.id.find(userId)!, role: { tag: role } });
+}
+
+/**
+ * T-S10i (A100): finishes the lobby's draft through the reducers, from wherever it stands, so the lobby reaches
+ * Equipping by the automatic end-of-draft transition (advance_stage no longer leaves an unfinished draft). Classic: each
+ * remaining Pick turn's captain picks the next filler name of its team (`<prefix>-blue-<n>` / `<prefix>-red-<n>`, priced
+ * at 0 in the lobby's cost set, game mode and draft mode unless already priced), each Ban turn bans a filler name.
+ * Auction: ban turns as in Classic, then each nomination by the nominator's captain, passed by the other captain unless
+ * that team is full (A81(2)). `prefix: 'EMPTY'` picks / nominates the EMPTY placeholder instead (cost 0, exempt from
+ * ownership, A100: it counts), for lobbies under requireOwnership or tests that must not move a budget.
+ */
+export function completeDraft(s: Lobby, prefix = 'fill') {
+    const { test, lobbyId } = s;
+    const counter = { Blue: 0, Red: 0, ban: 0 };
+    const next = (team: 'Blue' | 'Red') => (prefix === 'EMPTY' ? 'EMPTY' : `${prefix}-${team.toLowerCase()}-${++counter[team]}`);
+    let guard = 0;
+    while (lobbyRow(test, lobbyId).stage.tag === 'Drafting' && guard++ < 200) {
+        const sess = session(test, lobbyId);
+        const step = sess.draftSequence[sess.turnIndex];
+        if (step && !sess.isAuctionPhase) {
+            const team = step.teamTurn.tag as 'Blue' | 'Red';
+            if (step.actionRequired.tag === 'Ban') {
+                const characterName = `${prefix}-ban-${++counter.ban}`;
+                tx(test, captain(s, team), (ctx) => M.ban_character(ctx, { lobbyId, characterName }));
+            } else {
+                const characterName = next(team);
+                priceCharacters(test, lobbyId, [characterName]);
+                tx(test, captain(s, team), (ctx) => M.pick_character(ctx, { lobbyId, characterName, eidolon: 0 }));
+            }
+            continue;
+        }
+        const team = sess.nextNominatorTeam.tag as 'Blue' | 'Red';
+        const other = team === 'Blue' ? 'Red' : 'Blue';
+        const perTeam = charactersPerTeam(lobbyRow(test, lobbyId).lineupFormat.tag as LineupFormatTag);
+        const otherFull = (other === 'Blue' ? sess.blueCharactersWon : sess.redCharactersWon) >= perTeam;
+        const characterName = next(team);
+        priceCharacters(test, lobbyId, [characterName]);
+        tx(test, captain(s, team), (ctx) => M.nominate_character(ctx, { lobbyId, characterName }));
+        if (!otherFull) tx(test, captain(s, other), (ctx) => M.pass_bid(ctx, { lobbyId }));
+    }
+    expect(lobbyRow(test, lobbyId).stage.tag).toBe('Equipping');
+}
+
+/**
+ * T-S10i (A100): an engineered state the reducers never leave behind: the lobby is still in Drafting while both teams
+ * hold `charactersPerTeam` characters (every pick makes the automatic transition at the end of the sequence). The missing
+ * picks are written straight into MatchSessionStep as Pick steps of `name(team, i)` (EMPTY by default; EMPTY counts,
+ * A100), sequence after the last one, for each team of `teams` (default both); the session and the stage are not touched.
+ */
+export function engineerFullDraft(
+    s: Lobby,
+    name: (team: 'Blue' | 'Red', i: number) => string = () => 'EMPTY',
+    teams: Array<'Blue' | 'Red'> = ['Blue', 'Red'],
+) {
+    const { test, lobbyId } = s;
+    const perTeam = charactersPerTeam(lobbyRow(test, lobbyId).lineupFormat.tag as LineupFormatTag);
+    for (const team of teams) {
+        const held = tx(test, 'internal', (ctx) => teamDraft(ctx, lobbyId, team).characters.length);
+        for (let i = held; i < perTeam; i++) {
+            const all = [...test.db.MatchSessionStep.lobby_id.filter(lobbyId)];
+            const sequence = all.reduce((m, r) => Math.max(m, r.sequence), 0) + 1;
+            const ts = test.clock.now();
+            test.db.MatchSessionStep.insert({
+                id: 0, lobbyId, sequence, actorUserId: captain(s, team).userId, anonymousLabel: undefined,
+                actorSlot: { tag: team }, action: { tag: 'Pick' },
+                payload: { tag: 'Pick', value: { characterName: name(team, i), eidolon: 0, costPaid: 0 } },
+                timestamp: ts, createdById: 0, createdDate: ts, lastModifiedById: 0, lastModifiedDate: ts,
+            } as any);
+        }
+    }
 }

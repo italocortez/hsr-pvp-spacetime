@@ -13,7 +13,10 @@ import {
     linkDiscord,
     lobbyRow,
     member,
+    dropDefaultCostCoverage,
+    newBareHarness,
     newHarness,
+    seedDefaultCostCoverage,
     session,
     setupLobby,
     steps,
@@ -22,6 +25,7 @@ import {
     type Harness,
     type Lobby,
     seatOf,
+    priceCharacters,
 } from './s4-fixtures';
 import { finishGame } from './s7-fixtures';
 import { seedReferenceNames } from './s10-c2-fixtures';
@@ -55,9 +59,11 @@ const NO_COSTS = /This cost set has no costs for MemoryOfChaos × (Classic|Aucti
 
 describe('Backlog #2: cost-set selectability and coverage', () => {
     it('an uncovered set is rejected, id 0 passes, a covered set passes, a locked set is rejected', () => {
-        const test = newHarness();
+        // T-S10i fix pass (review F2): the sets are cloned from a set 0 without rows; set 0 is then covered for its lobby.
+        const test = newBareHarness();
         const empty = publishedCostSet(test, 'empty', null);
         const classic = publishedCostSet(test, 'classic', 'Classic');
+        seedDefaultCostCoverage(test);
 
         const g = guest(test, 'g');
         expectReject(test, g, (ctx) => M.create_lobby(ctx, { ...DEFAULT_LOBBY_ARGS, costSetId: empty } as any), NO_COSTS);
@@ -79,9 +85,11 @@ describe('Backlog #2: cost-set selectability and coverage', () => {
     });
 
     it('presets, settings changes and tournaments run the same guards', () => {
-        const test = newHarness();
+        // T-S10i fix pass (review F2): as above, the clones are taken before set 0 gets its coverage rows.
+        const test = newBareHarness();
         const empty = publishedCostSet(test, 'empty', null);
         const classic = publishedCostSet(test, 'classic', 'Classic');
+        seedDefaultCostCoverage(test);
         const s = setupLobby(test, { noStart: true });
         const base = (() => {
             const { joinCode: _j, presetId: _p, ...rest } = DEFAULT_LOBBY_ARGS;
@@ -105,7 +113,7 @@ describe('Backlog #2: cost-set selectability and coverage', () => {
     });
 
     it('deleting a set a live lobby uses is rejected; once the lobby is gone it can be deleted', () => {
-        const test = newHarness();
+        const test = newBareHarness(); // T-S10i fix pass (review F2): the clone of set 0 carries no coverage rows
         const classic = publishedCostSet(test, 'classic', 'Classic');
         const s = setupLobby(test, { noStart: true, lobby: { costSetId: classic } });
         tx(test, 'internal', (ctx) => M.lock_cost_set(ctx, { costSetId: classic }));
@@ -239,7 +247,7 @@ function seedRoles(test: Harness, roles: Record<string, 'Dps' | 'Support' | 'Sus
 const ban = (s: Lobby, team: 'Blue' | 'Red', characterName: string) =>
     tx(s.test, captain(s, team), (ctx) => M.ban_character(ctx, { lobbyId: s.lobbyId, characterName }));
 const pick = (s: Lobby, team: 'Blue' | 'Red', characterName: string) =>
-    tx(s.test, captain(s, team), (ctx) => M.pick_character(ctx, { lobbyId: s.lobbyId, characterName, eidolon: 0 }));
+    tx(s.test, captain(s, team), (ctx) => (priceCharacters(ctx, s.lobbyId, [characterName]), M.pick_character(ctx, { lobbyId: s.lobbyId, characterName, eidolon: 0 })));
 
 describe('A45(2): Ban Restriction', () => {
     it('Max 1 DPS rejects a second DPS ban by the same team; another role and the other team are unaffected', () => {
@@ -278,7 +286,8 @@ describe('A45(2): Ban Restriction', () => {
         const s = setupLobby(test, {
             lobby: { banMode: { tag: 'Four' }, banRestriction: { tag: 'MaxOneDps' }, autoRandomPick: true },
             // autoRandomPick requires every player to field an account with characters (D-43b).
-            beforeStart: (l) => tx(test, 'internal', (ctx) => {
+            // T-S10i fix pass (review F2): the set-0 coverage rows leave the ban pool once the lobby exists.
+            beforeStart: (l) => { dropDefaultCostCoverage(test); tx(test, 'internal', (ctx) => {
                 for (const name of ['b1', 'b2', 'r1', 'r2']) {
                     const acct = ctx.db.HsrAccount.insert({
                         id: 0, userId: l.a[name].userId, uid: '600000000', region: 'America', displayLabel: name,
@@ -291,7 +300,7 @@ describe('A45(2): Ban Restriction', () => {
                     } as any);
                     ctx.db.LobbyMemberAccount.insert({ lobbyId: l.lobbyId, userId: l.a[name].userId, hsrAccountId: acct.id });
                 }
-            }),
+            }); },
         });
         ban(s, 'Blue', 'dpsA');
         ban(s, 'Red', 'x');

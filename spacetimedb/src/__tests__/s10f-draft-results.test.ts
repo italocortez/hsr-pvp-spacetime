@@ -13,6 +13,7 @@ import {
     expectReject,
     fireCheck,
     lobbyRow,
+    newBareHarness,
     newHarness,
     pauseSteps,
     pendingCheck,
@@ -24,6 +25,8 @@ import {
     type Harness,
     type Lobby,
     type SetupOpts,
+    priceCharacters,
+    priceLightcones,
 } from './s4-fixtures';
 import {
     H,
@@ -100,7 +103,7 @@ const CLOCK_MODES: ClockMode[] = [
         newTurn: (s) => {
             const sess = session(s.test, s.lobbyId);
             const team = sess.draftSequence[sess.turnIndex].teamTurn.tag as Team;
-            tx(s.test, captain(s, team), (ctx) => M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'kafka', eidolon: 0 }));
+            tx(s.test, captain(s, team), (ctx) => (priceCharacters(ctx, s.lobbyId, ['kafka']), M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'kafka', eidolon: 0 })));
         },
     },
     {
@@ -109,7 +112,7 @@ const CLOCK_MODES: ClockMode[] = [
         expire: (s) => (ctx) => M.timer_expiry_auction(ctx, { lobbyId: s.lobbyId }),
         newTurn: (s) => {
             const team = session(s.test, s.lobbyId).nextNominatorTeam.tag as Team;
-            tx(s.test, captain(s, team), (ctx) => M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: 'kafka' }));
+            tx(s.test, captain(s, team), (ctx) => (priceCharacters(ctx, s.lobbyId, ['kafka']), M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: 'kafka' })));
         },
     },
 ];
@@ -277,7 +280,7 @@ describe('Draft #8: the per-side edit-step cap (300) (match-session architecture
         expect(editSteps(s, 'Blue')).toHaveLength(300);
         const calls: Array<(ctx: any) => unknown> = [
             (ctx) => M.set_eidolon(ctx, { lobbyId, teamSide: side('Blue'), characterName: 'blue-2', eidolon: 0 }),
-            (ctx) => M.equip_lightcone(ctx, { lobbyId, teamSide: side('Blue'), characterName: 'blue-1', lightconeName: 'lc-1', superimposition: 1 }),
+            (ctx) => (priceLightcones(ctx, lobbyId, ['lc-1']), M.equip_lightcone(ctx, { lobbyId, teamSide: side('Blue'), characterName: 'blue-1', lightconeName: 'lc-1', superimposition: 1 })),
             (ctx) => M.unequip_lightcone(ctx, { lobbyId, teamSide: side('Blue'), characterName: 'blue-1' }),
         ];
         for (const who of [captain(s, 'Blue'), s.host]) {
@@ -297,7 +300,7 @@ describe('Draft #8: the per-side edit-step cap (300) (match-session architecture
         const { test, lobbyId } = s;
         tx(test, captain(s, 'Red'), (ctx) => M.set_eidolon(ctx, { lobbyId, teamSide: side('Red'), characterName: 'red-2', eidolon: 1 }));
         advance(test, 300);
-        tx(test, s.host, (ctx) => M.equip_lightcone(ctx, { lobbyId, teamSide: side('Red'), characterName: 'red-1', lightconeName: 'lc-1', superimposition: 1 }));
+        tx(test, s.host, (ctx) => (priceLightcones(ctx, lobbyId, ['lc-1']), M.equip_lightcone(ctx, { lobbyId, teamSide: side('Red'), characterName: 'red-1', lightconeName: 'lc-1', superimposition: 1 })));
         expect(editSteps(s, 'Red')).toHaveLength(2);
         tx(test, captain(s, 'Blue'), confirmCall(s, 'Blue'));
         tx(test, captain(s, 'Red'), confirmCall(s, 'Red'));
@@ -404,7 +407,7 @@ describe('Draft LOW #15: undo sequence numbering', () => {
         const pickNext = (name: string) => {
             const sess = session(test, s.lobbyId);
             const team = sess.draftSequence[sess.turnIndex].teamTurn.tag as Team;
-            tx(test, captain(s, team), (ctx) => M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: name, eidolon: 0 }));
+            tx(test, captain(s, team), (ctx) => (priceCharacters(ctx, s.lobbyId, [name]), M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: name, eidolon: 0 })));
         };
         pickNext('a1');
         pickNext('a2');
@@ -429,7 +432,9 @@ describe('Draft LOW #15: undo sequence numbering', () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('Results #3: finalization step 16 skips EMPTY, SKIP and the system user (match-results / player-stats architecture S10f)', () => {
-    it('a timer EMPTY pick, a timer auto-pick of a real character and a SKIP ban: no row for EMPTY / SKIP, none for user 0; the real one has faced rows and one global row (results audit #3)', () => {
+    // T-S10i re-assertion (A106): the timer auto-pick of a real character now credits the acting team's players with the
+    // played stat (1v1: the Blue player), with Blue's win flag; Red has it as faced; one global row; still none for user 0.
+    it('a timer EMPTY pick, a timer auto-pick of a real character and a SKIP ban: no row for EMPTY / SKIP, none for user 0; the real one is played by the acting team, faced by the other, one global row (results audit #3, A106)', () => {
         const test = newHarness();
         // One Classic cost row ('solo'): the first Blue timer pick draws it, Red's timer pick then finds nothing (EMPTY),
         // and Red's timer ban in the second ban phase finds nothing left either (SKIP).
@@ -472,7 +477,9 @@ describe('Results #3: finalization step 16 skips EMPTY, SKIP and the system user
             } else if (kind === 'Ban') {
                 tx(test, captain(s, team), (ctx) => M.ban_character(ctx, { lobbyId, characterName: `ban-${n++}` }));
             } else {
-                tx(test, captain(s, team), (ctx) => M.pick_character(ctx, { lobbyId, characterName: `${team.toLowerCase()}-p${n++}`, eidolon: 0 }));
+                const characterName = `${team.toLowerCase()}-p${n++}`;
+                priceCharacters(test, lobbyId, [characterName]); // T-S10i (A107(5)): priced at 0 when picked (after the timer turns)
+                tx(test, captain(s, team), (ctx) => M.pick_character(ctx, { lobbyId, characterName, eidolon: 0 }));
             }
         }
         expect(skipDone).toBe(true);
@@ -487,8 +494,9 @@ describe('Results #3: finalization step 16 skips EMPTY, SKIP and the system user
         }
         expect(playerRows.filter((r) => r.userId === 0)).toHaveLength(0);
         const solo = playerRows.filter((r) => r.characterName === 'solo');
-        expect(solo.map((r) => r.userId)).toEqual([s.a.r1.userId]); // faced by the Red player; no "played" row for anyone
-        expect(solo[0]).toMatchObject({ matchesPlayed: 0, timesFaced: 1, winsAgainst: 0, lossesAgainst: 1 });
+        expect(solo.map((r) => r.userId).sort((a, b) => a - b)).toEqual([s.a.b1.userId, s.a.r1.userId].sort((a, b) => a - b));
+        expect(solo.find((r) => r.userId === s.a.b1.userId)).toMatchObject({ matchesPlayed: 1, wins: 1, losses: 0, timesFaced: 0 }); // A106
+        expect(solo.find((r) => r.userId === s.a.r1.userId)).toMatchObject({ matchesPlayed: 0, timesFaced: 1, winsAgainst: 0, lossesAgainst: 1 });
         const soloGlobal = globalRows.filter((r) => r.characterName === 'solo');
         expect(soloGlobal).toHaveLength(1);
         expect(soloGlobal[0]).toMatchObject({ timesPicked: 1, timesBanned: 0, wins: 1, losses: 0 }); // side from actorSlot (Blue won)
@@ -638,7 +646,7 @@ describe('Results #7: the four package edits keep the 250 ms lineup throttle (ma
         const cap = captain(s, 'Blue');
         const ops: Array<[string, (ctx: any) => unknown]> = [
             ['set_eidolon', (ctx) => M.set_eidolon(ctx, { lobbyId, teamSide: side('Blue'), characterName: 'blue-2', eidolon: 1 })],
-            ['equip_lightcone', (ctx) => M.equip_lightcone(ctx, { lobbyId, teamSide: side('Blue'), characterName: 'blue-1', lightconeName: 'lc-1', superimposition: 1 })],
+            ['equip_lightcone', (ctx) => (priceLightcones(ctx, lobbyId, ['lc-1']), M.equip_lightcone(ctx, { lobbyId, teamSide: side('Blue'), characterName: 'blue-1', lightconeName: 'lc-1', superimposition: 1 }))],
             ['unequip_lightcone', (ctx) => M.unequip_lightcone(ctx, { lobbyId, teamSide: side('Blue'), characterName: 'blue-1' })],
             ['arrange_lineup', (ctx) => M.arrange_lineup(ctx, { lobbyId, teamSide: side('Blue'), groups: JSON.stringify(halves(blueNames())) })],
         ];
@@ -898,7 +906,7 @@ describe('Roster #6: user deletion recomputes isDuplicateUid (roster architectur
 describe('Roster #9: edit_draft_*_cost input rules (cost-sets architecture S10f)', () => {
     const MOC = 'MemoryOfChaos';
     function draftSet() {
-        const test = newHarness();
+        const test = newBareHarness(); // T-S10i fix pass (review F2): set 0 holds no rows, nothing is cloned
         seedReferenceNames(test, ['kafka', 'pela'], ['patience']);
         const org = tournamentHost(test);
         tx(test, org, (ctx) => M.create_cost_set(ctx, { name: 'rules', sourceSetId: 0, gameModeTag: MOC }));

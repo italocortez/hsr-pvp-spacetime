@@ -27,6 +27,8 @@ import {
     steps,
     tx,
     type Harness,
+    priceCharacters,
+    priceLightcones,
 } from './s4-fixtures';
 import {
     H,
@@ -83,7 +85,7 @@ describe('A67(3): one game per lobby, steps without game numbers', () => {
         const test = newHarness();
         const s = setupLobby(test);
         expectReject(test, s.host, (ctx) => M.undo_last_step(ctx, { lobbyId: s.lobbyId }), /No steps to undo\.|Nothing to undo/);
-        tx(test, captain(s, 'Blue'), (ctx) => M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'first', eidolon: 0 }));
+        tx(test, captain(s, 'Blue'), (ctx) => (priceCharacters(ctx, s.lobbyId, ['first']), M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'first', eidolon: 0 })));
         tx(test, s.host, (ctx) => M.undo_last_step(ctx, { lobbyId: s.lobbyId }));
         expect(picksOf(test, s.lobbyId)).toHaveLength(0);
         expect(steps(test, s.lobbyId).filter((x) => x.action.tag === 'Undo')).toHaveLength(1);
@@ -118,7 +120,7 @@ describe('A67(3): one game per lobby, steps without game numbers', () => {
             const who = captain(s, step.teamTurn.tag as 'Blue' | 'Red');
             const characterName = `b_${sess.turnIndex}`;
             tx(test, who, (ctx) => step.actionRequired.tag === 'Pick'
-                ? M.pick_character(ctx, { lobbyId: s.lobbyId, characterName, eidolon: 0 })
+                ? (priceCharacters(ctx, s.lobbyId, [characterName]), M.pick_character(ctx, { lobbyId: s.lobbyId, characterName, eidolon: 0 }))
                 : M.ban_character(ctx, { lobbyId: s.lobbyId, characterName }));
         }
         expectReject(test, captain(s, 'Blue'), (ctx) => M.ban_character(ctx, { lobbyId: s.lobbyId, characterName: 'dps3' }), /at most one DPS/);
@@ -127,7 +129,7 @@ describe('A67(3): one game per lobby, steps without game numbers', () => {
     it('auto-resume on reconnect (join_lobby) reads the latest Pause of the lobby; a manual pause is not resumed', () => {
         const test = newHarness();
         const s = setupLobby(test);
-        tx(test, captain(s, 'Blue'), (ctx) => M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'p', eidolon: 0 }));
+        tx(test, captain(s, 'Blue'), (ctx) => (priceCharacters(ctx, s.lobbyId, ['p']), M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'p', eidolon: 0 })));
         const quiet = [s.a.b1, s.a.b2].find((x) => x.userId !== captain(s, 'Blue').userId)!;
         disconnect(test, quiet);
         const row = pendingCheck(test, s.lobbyId, quiet.userId);
@@ -168,7 +170,7 @@ describe('A67(3): one game per lobby, steps without game numbers', () => {
     it('view_my_match_steps rows carry no gameNumber', () => {
         const test = newHarness();
         const s = setupLobby(test);
-        tx(test, captain(s, 'Blue'), (ctx) => M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'v', eidolon: 0 }));
+        tx(test, captain(s, 'Blue'), (ctx) => (priceCharacters(ctx, s.lobbyId, ['v']), M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'v', eidolon: 0 })));
         const rows: any[] = (M as any).view_my_match_steps(test.viewContext(s.a.b1.auth), {});
         const mine = rows.filter((r) => r.lobbyId === s.lobbyId);
         expect(mine.length).toBeGreaterThan(0);
@@ -212,10 +214,10 @@ describe('S7b hand-offs: equip_lightcone checks the draft; unequip_lightcone', (
     it('equip_lightcone on a character outside the named team\'s draft is rejected (A78(2))', () => {
         const { test, s } = scoring();
         expectReject(test, captain(s, 'Blue'), (ctx) =>
-            M.equip_lightcone(ctx, { lobbyId: s.lobbyId, teamSide: side('Blue'), characterName: redNames()[0], lightconeName: 'lc-7', superimposition: 1 }),
+            (priceLightcones(ctx, s.lobbyId, ['lc-7']), M.equip_lightcone(ctx, { lobbyId: s.lobbyId, teamSide: side('Blue'), characterName: redNames()[0], lightconeName: 'lc-7', superimposition: 1 })),
             `${redNames()[0]} is not in the Blue team's draft of this game.`);
         expectReject(test, captain(s, 'Blue'), (ctx) =>
-            M.equip_lightcone(ctx, { lobbyId: s.lobbyId, teamSide: side('Blue'), characterName: 'nobody', lightconeName: 'lc-7', superimposition: 1 }),
+            (priceLightcones(ctx, s.lobbyId, ['lc-7']), M.equip_lightcone(ctx, { lobbyId: s.lobbyId, teamSide: side('Blue'), characterName: 'nobody', lightconeName: 'lc-7', superimposition: 1 })),
             "nobody is not in the Blue team's draft of this game.");
         expect(steps(test, s.lobbyId).filter((x) => x.action.tag === 'EquipLightcone')).toHaveLength(0);
     });

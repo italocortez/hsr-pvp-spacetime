@@ -26,7 +26,7 @@ export const ABUSE_CONFIG_DEFAULTS = {
     guestLobbyBurstThreshold: 50,     // A58 (A42 example was 20)
     guestLobbyBurstWindowMinutes: 10,
     guestCreationEnabled: true,       // A95(2)
-    guestCreationBurstThreshold: 100, // A95(2): new guest users per window
+    guestCreationBurstThreshold: 300, // A95(2), A109(2): new guest users per window
     guestCreationBurstWindowMinutes: 10,
 };
 
@@ -115,7 +115,8 @@ export const GUEST_CREATION_DISABLED_TEXT = 'New guest accounts are temporarily 
  * is counted in AbuseCounter['guest_create']; the creation that pushes the count past guestCreationBurstThreshold inside
  * guestCreationBurstWindowMinutes still succeeds (a throw would roll the trip back), turns the switch off and writes one
  * count-only AdminAlert ('guest_create_burst'), all in the caller's transaction. An admin re-enables it with
- * admin_set_guest_creation(true) or admin_update_abuse_config, which also drops the window.
+ * admin_set_guest_creation(true) or admin_update_abuse_config, a server identity with server_set_guest_creation(true)
+ * (A109(3)); each also drops the window.
  */
 export function recordGuestCreation(ctx: any): void {
     const cfg = seedAbuseConfigDefaults(ctx);
@@ -131,6 +132,28 @@ export function recordGuestCreation(ctx: any): void {
 /** A95(2): re-enabling guest creation drops its window, as resetGuestLobbyCounter does for the lobby breaker. */
 export function resetGuestCreationCounter(ctx: any): void {
     if (ctx.db.AbuseCounter.key.find(GUEST_CREATE_COUNTER_KEY)) ctx.db.AbuseCounter.key.delete(GUEST_CREATE_COUNTER_KEY);
+}
+
+/**
+ * A95(2) / A109(3): writes AbuseConfig.guestCreationEnabled with `actorId` in the audit columns; a false -> true change
+ * drops the breaker's window (resetGuestCreationCounter). Shared by admin_set_guest_creation (the admin) and
+ * server_set_guest_creation (SYSTEM).
+ */
+export function setGuestCreationEnabled(ctx: any, enabled: boolean, actorId: number): void {
+    const existing = seedAbuseConfigDefaults(ctx);
+    if (enabled && !existing.guestCreationEnabled) resetGuestCreationCounter(ctx);
+    ctx.db.AbuseConfig.id.update(updateWithAudit(ctx, existing, { guestCreationEnabled: enabled }, actorId));
+}
+
+/**
+ * A42(1) / A109(3): writes AbuseConfig.guestLobbyCreationEnabled with `actorId` in the audit columns; a false -> true
+ * change drops the breaker's window (resetGuestLobbyCounter). Shared by admin_set_guest_lobby_creation (the admin) and
+ * server_set_guest_lobby_creation (SYSTEM).
+ */
+export function setGuestLobbyCreationEnabled(ctx: any, enabled: boolean, actorId: number): void {
+    const existing = seedAbuseConfigDefaults(ctx);
+    if (enabled && !existing.guestLobbyCreationEnabled) resetGuestLobbyCounter(ctx);
+    ctx.db.AbuseConfig.id.update(updateWithAudit(ctx, existing, { guestLobbyCreationEnabled: enabled }, actorId));
 }
 
 const EPOCH = new Timestamp(0n);

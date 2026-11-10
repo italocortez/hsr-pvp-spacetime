@@ -5,6 +5,8 @@
 // 2. view_my_draft_character_costs — draft character cost rows for caller's sets
 // 3. view_my_draft_lightcone_costs — draft lightcone cost rows for caller's sets
 // 4. view_my_draft_synergy_costs   — draft synergy cost rows for caller's sets
+// 5. view_cost_set_missing(id)     — A107(2): reference entries the set's draft lacks (owner / Moderator+)
+// Since S10i (A107(3)) the draft rows of a published set stay after publish: they are its editable copy.
 
 import spacetimedb from '@module/schema';
 import { t } from 'spacetimedb/server';
@@ -12,6 +14,9 @@ import { CostSet } from '@module/tables/roster/costSet';
 import { CostSetDraftCharacter } from '@module/tables/roster/costSetDraftCharacter';
 import { CostSetDraftLightcone } from '@module/tables/roster/costSetDraftLightcone';
 import { CostSetDraftSynergy } from '@module/tables/roster/costSetDraftSynergy';
+import { DraftMode } from '@module/types/enums';
+import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
+import { missingCostEntries } from '@module/helpers/roster/costSetCompleteness';
 
 // ---------------------------------------------------------------------------
 // 1. My Cost Sets (per-user view) — CostSet rows owned by the requesting user
@@ -77,6 +82,41 @@ export const view_my_draft_lightcone_costs = spacetimedb.view(
             }
         }
         return results;
+    }
+);
+
+// ---------------------------------------------------------------------------
+// 5. view_cost_set_missing(costSetId) — A107(2): the entries the "push cost set live" dialog shows before
+//    publish_cost_set. Per draft mode the set's draft prices at all, the HsrCharacter and HsrLightcone rows with no
+//    draft row (missingCostEntries; a set published before S10i without draft rows is read from its live rows).
+//    The set's owner and Moderator+ only: the permission is checked before any cost or reference read; anyone else,
+//    and an unknown set, gets no rows. Subscribe as `SELECT * FROM view_cost_set_missing(7)`.
+// ---------------------------------------------------------------------------
+const CostSetMissingRow = t.row('CostSetMissingRow', {
+    costSetId: t.u32(),
+    draftMode: DraftMode,
+    kind: t.string(),                       // 'Character' | 'Lightcone'
+    name: t.string(),                       // HsrCharacter.name / HsrLightcone.name
+});
+
+export const view_cost_set_missing = spacetimedb.view(
+    { name: 'view_cost_set_missing', public: true },
+    { costSetId: t.u32() },
+    t.array(CostSetMissingRow),
+    (ctx, { costSetId }) => {
+        const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
+        if (!mapping) return [];
+        const user = ctx.db.User.id.find(mapping.userId);
+        if (!user) return [];
+        const costSet = ctx.db.CostSet.id.find(costSetId);
+        if (!costSet) return [];
+        if (costSet.creatorId !== user.id && !isRoleAtLeast(user.role, 'Moderator')) return [];
+        return missingCostEntries(ctx, costSet).map((m) => ({
+            costSetId,
+            draftMode: { tag: m.draftMode, value: {} } as any,
+            kind: m.kind,
+            name: m.name,
+        }));
     }
 );
 

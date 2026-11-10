@@ -249,7 +249,7 @@ The system has three admin-tunable config tables: EloConfig (ELO math parameters
    - Calculate delta: `K * (actualResult - expectedScore)`, rounded to integer
    - New rating = `max(0, currentRating + delta)` (floor at 0)
    - Delete + insert MmrRating (composite PK upsert pattern)
-   - Recalculate `globalCompositeRating` as average across all modes for this user
+   - Recalculate `globalCompositeRating` as average across all modes for this user _Superseded in Phase S10i execution (DECISIONS.md A102)._
    - Insert MmrHistory row with previousRating, newRating, delta, matchHistoryId
 
 ## Pure Math Helpers
@@ -284,7 +284,7 @@ All functions are pure math with zero database access.
 ### GlobalCompositeRating -- Multiple Modes
 **Given:** A player has MmrRating rows in multiple gameModes
 **When:** Any mode's rating changes
-**Then:** globalCompositeRating is recalculated as `round(average of all mode ratings)` for all of that player's MmrRating rows.
+**Then:** globalCompositeRating is recalculated as `round(average of all mode ratings)` for all of that player's MmrRating rows. _Superseded in Phase S10i execution (DECISIONS.md A102)._
 
 ### Leaderboard Threshold -- Minimum 2 Matches
 **Given:** Player A has matchesPlayed=1, Player B has matchesPlayed=2 in MemoryOfChaos
@@ -427,7 +427,7 @@ _Superseded in Phase S8e execution (DECISIONS.md A69(3))._ The ratchet is remove
 | Draw result (winnerTeamSide undefined) | Both sides get actualResult=0.5, expected=0.5 with equal ratings -> delta=0 | No rating change for perfectly matched draw |
 | Rating cannot go negative | `Math.max(0, rating + delta)` floors at 0 | Prevents negative MMR values |
 | MmrRating composite PK upsert | Delete + insert pattern (no SpacetimeDB composite PK update) | Necessary because PK is [userId, gameMode, seasonId] |
-| globalCompositeRating cascade update | All MmrRating rows for a user are delete+insert'd to update this field | Recalculated as average across all modes after any mode changes |
+| globalCompositeRating cascade update | All MmrRating rows for a user are delete+insert'd to update this field | Recalculated as average across all modes after any mode changes _Superseded in Phase S10i execution (DECISIONS.md A102)._ |
 | Tournament MmrHistory sentinel | matchHistoryId=0 until runFinalization step 12 back-fills it | process_tournament_mmr runs before finalization creates MatchSessionHistory |
 | Season 0 (pre-season) | `getActiveSeasonId` returns 0 when no Season has isActive=true | Pre-season matches still get rated, isolated from future seasons |
 | K-factor boundary (20 matches) | matchesPlayed=20 -> kFactorNew (40), matchesPlayed=21 -> kFactorMid (20) | Inclusive boundary: <= threshold gets lower tier |
@@ -529,6 +529,7 @@ _Superseded in Phase S8e execution (DECISIONS.md A69(3))._ The ratchet is remove
 | Scenario "Snapshot Ratchet" superseded: the ratchet is removed, the snapshot is taken once at `start_draft` (A66) | Phase S8e execution (DECISIONS.md A69(3)) | 2026-11-08 |
 | Scenarios S9b-M1, S9b-M2: top-20 leaderboard with the rating / wins / user id order and SYSTEM actor; own ratings through `view_my_mmr_ratings` | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 | The leaderboard rebuild skips rating rows of users with no `User` row or with `deletedAt` set | Phase S10f execution (backend audit 2026-11-09, results finding 9) | 2026-11-09 |
+| `globalCompositeRating` is the average of the user's mode ratings of the season being written, and is written to that season's `MmrRating` rows only; rows of earlier seasons keep their stored value | Phase S10i execution (DECISIONS.md A102) | 2026-11-10 |
 
 ---
 

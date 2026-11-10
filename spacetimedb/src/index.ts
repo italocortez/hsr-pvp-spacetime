@@ -39,6 +39,7 @@ export {
     view_my_draft_character_costs,
     view_my_draft_lightcone_costs,
     view_my_draft_synergy_costs,
+    view_cost_set_missing,                  // S10i: arg view (costSetId), A107(2)
 } from '@module/views/costSetViews';
 export {
     view_my_player_stats,
@@ -113,7 +114,7 @@ export {
 export { broadcast_cursor } from '@module/reducers/lobby/cursor';
 export { login_as_guest } from '@module/reducers/identity/auth';
 export { delete_my_account, update_display_name, update_username, update_avatar } from '@module/reducers/identity/profile';
-export { server_register_delegate, server_revoke_delegate, server_link_provider, server_set_role, server_delete_user, server_set_datetime, server_set_online, server_set_mmr, server_nuke_test_data } from '@module/reducers/identity/server';
+export { server_register_delegate, server_revoke_delegate, server_link_provider, server_set_role, server_delete_user, server_set_guest_creation, server_set_guest_lobby_creation, server_set_datetime, server_set_online, server_set_mmr, server_nuke_test_data } from '@module/reducers/identity/server';
 export { admin_ban_user, admin_unban_user } from '@module/reducers/admin/banAdmin';
 export { admin_delete_row, admin_bulk_upsert, admin_update_user } from '@module/reducers/admin/admin';
 export { admin_update_elo_config, admin_seed_elo_config } from '@module/reducers/stats/eloAdmin';

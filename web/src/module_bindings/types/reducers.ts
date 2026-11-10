@@ -137,6 +137,8 @@ import ServerNukeTestDataReducer from "../server_nuke_test_data_reducer";
 import ServerRegisterDelegateReducer from "../server_register_delegate_reducer";
 import ServerRevokeDelegateReducer from "../server_revoke_delegate_reducer";
 import ServerSetDatetimeReducer from "../server_set_datetime_reducer";
+import ServerSetGuestCreationReducer from "../server_set_guest_creation_reducer";
+import ServerSetGuestLobbyCreationReducer from "../server_set_guest_lobby_creation_reducer";
 import ServerSetMmrReducer from "../server_set_mmr_reducer";
 import ServerSetOnlineReducer from "../server_set_online_reducer";
 import ServerSetRoleReducer from "../server_set_role_reducer";
@@ -309,6 +311,8 @@ export type ServerNukeTestDataParams = __Infer<typeof ServerNukeTestDataReducer>
 export type ServerRegisterDelegateParams = __Infer<typeof ServerRegisterDelegateReducer>;
 export type ServerRevokeDelegateParams = __Infer<typeof ServerRevokeDelegateReducer>;
 export type ServerSetDatetimeParams = __Infer<typeof ServerSetDatetimeReducer>;
+export type ServerSetGuestCreationParams = __Infer<typeof ServerSetGuestCreationReducer>;
+export type ServerSetGuestLobbyCreationParams = __Infer<typeof ServerSetGuestLobbyCreationReducer>;
 export type ServerSetMmrParams = __Infer<typeof ServerSetMmrReducer>;
 export type ServerSetOnlineParams = __Infer<typeof ServerSetOnlineReducer>;
 export type ServerSetRoleParams = __Infer<typeof ServerSetRoleReducer>;
