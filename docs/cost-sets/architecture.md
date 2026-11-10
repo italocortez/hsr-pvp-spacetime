@@ -168,6 +168,26 @@ Character/lightcone cost edits use a single `costsJson: string` arg (JSON-parsed
 
 All 4 views resolve `ctx.sender -> UserIdentity -> User`, then filter by `creatorId`.
 
+## Phase S10f execution (roster audit #9; LOW #17)
+
+**`edit_draft_*_cost` input rules** (`reducers/roster/costSetManagement.ts`), in this order after the set, owner and
+draft-state checks:
+- `costsJson` is a JSON object with the named fields (`e0`..`e6` or `s1`..`s5`), each a finite number from 0 to
+  `BUDGET_MAX` (100 000, the lobby budget ceiling, `helpers/lobby/lobbyConfigBounds.ts`): "costsJson field "X" must be a
+  number between 0 and 100000."; the stored cost object holds only those fields.
+- `gameModeTag` is a GameMode tag and equals the set's own `gameMode` ("This cost set is for X; gameModeTag must be
+  X."); `draftModeTag` is Classic or Auction ("Invalid draftModeTag. Must be one of: Classic, Auction").
+- The character name must be an `HsrCharacter` row ("Character X not found."), the light-cone name an `HsrLightcone`
+  row ("Light cone X not found."); the synergy names were already checked (S10c).
+- `edit_draft_synergy_cost`: `costModifier` finite with |value| <= 100 000 ("costModifier must be a number between
+  -100000 and 100000."); negative modifiers stay allowed.
+
+**Seed (roster audit #10).** `scripts/stdb/_seed.ts` sends only the archetype names not yet in `Archetype`, so a re-seed
+keeps descriptions an admin wrote (the `Archetype` branch of `admin_bulk_upsert` has no keep-merge).
+
+**LOW.** The `unpublish_cost_set` header no longer claims clients stop receiving the live rows (they stay public until
+`delete_cost_set`).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -181,6 +201,7 @@ All 4 views resolve `ctx.sender -> UserIdentity -> User`, then filter by `creato
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
 | `draftMode: DraftMode` column added to all 6 cost tables; classicCosts+auctionBaseBid collapsed to single `costs` struct; first-ever synergy auction support. PK tuples extended by `draftMode`; 4-col btrees on char/lc; new 5-col `by_tuple` btree on both synergy tables; `source_mode` extended to 3 cols (`[sourceName, gameMode, draftMode]`). Reducer tuple match via iter() + predicate (A2_FALLBACK_ITER). Reducer arg shape: `edit_draft_*_cost` collapses dual JSON inputs to single `costsJson` and adds `draftModeTag`; one call = one row. | Phase 15.4 execution | 2026-04-15 |
 | Synergy pairs canonicalized (alphabetical) in `edit_draft_synergy_cost` and `admin_bulk_upsert`; either-order match; duplicate pair in one bulk payload rejected | Phase S7 execution (DECISIONS.md A21; backlog #3) | 2026-11-06 |
+| `edit_draft_*_cost`: finite costs 0..100000, bounded modifier, tags checked (game mode = the set's), names checked against `HsrCharacter` / `HsrLightcone`; re-seed keeps archetype descriptions | Phase S10f execution (roster audit #9, #10) | 2026-11-09 |
 
 ---
 

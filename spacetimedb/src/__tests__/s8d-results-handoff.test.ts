@@ -443,17 +443,29 @@ describe('override_match_result: status and lobby guards for tournament records 
         expect(matchRow(f.test, m.id).winnerTeamId).toBe(m.team1Id);
     });
 
-    it('casual records are unchanged: a Pending casual record is overridden by a Moderator', () => {
-        // T-S10d (A91(2)): no standalone path parks a Pending record any more (Deferred is tournament-only); the
-        // Pending record is start_draft's, in a live casual draft, and the override leaves the lobby where it is.
+    it('casual records: a Pending record in a live draft is rejected and unchanged; a Submitted parked record is overridden by a Moderator (results audit #8)', () => {
+        // T-S10d (A91(2)): no standalone path parks a Pending record any more (Deferred is tournament-only).
+        // T-S10f (results audit #8): a standalone record follows the tournament status rule (Submitted, Disputed or
+        // Validated) and its lobby must be parked in AwaitingResult; start_draft's Pending record is refused.
         const test = newHarness();
         const s = setupLobby(test);
         const [r] = recordsOfLobby(test, s.lobbyId);
         expect(r.status.tag).toBe('Pending');
-        override(test, 'internal', r.id, 'Validated', 'Red');
-        const after = test.db.MatchResultRecord.id.find(r.id)!;
+        expectReject(test, 'internal', (ctx) => M.override_match_result(ctx, { matchResultId: r.id, newStatusTag: 'Validated', winnerTeamSideTag: 'Red', reason: 'staff' }),
+            'Only a Submitted, Disputed or Validated result can be overridden (this one is Pending).');
+        const unchanged = test.db.MatchResultRecord.id.find(r.id)!;
+        expect(unchanged.status.tag).toBe('Pending');
+        expect(unchanged.winnerTeamSide).toBeUndefined();
+        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Drafting');
+
+        const test2 = newHarness(); // a second harness: the same default actors cannot sit in two lobbies
+        const parked = parkedLobby(test2, {}, 'Blue');
+        const [sub] = recordsOfLobby(test2, parked.lobbyId);
+        expect(sub.status.tag).toBe('Submitted');
+        override(test2, 'internal', sub.id, 'Validated', 'Red');
+        const after = test2.db.MatchResultRecord.id.find(sub.id)!;
         expect(after.status.tag).toBe('Validated');
         expect(after.winnerTeamSide?.tag).toBe('Red');
-        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Drafting');
+        expect(lobbyRow(test2, parked.lobbyId).stage.tag).toBe('AwaitingResult');
     });
 });

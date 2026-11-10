@@ -2,7 +2,7 @@ import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { ensureVerifiedUser } from '@module/helpers/identity/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
-import { validateUid, deriveRegion, recalcDuplicateUid } from '@module/helpers/roster/rosterHelpers';
+import { validateUid, deriveRegion, recalcDuplicateUid, ensureDisplayLabelLength } from '@module/helpers/roster/rosterHelpers';
 import { applyBatchUpsert, applyBatchRemove } from '@module/helpers/roster/rosterMutations';
 // S10e review F3 (lobby audit #12): the guards below read accountLobbyLocks, which skips abandoned memberships.
 import { accountLobbyLocks } from '@module/helpers/lobby/lobbyHelpers';
@@ -39,6 +39,7 @@ export const create_hsr_account = spacetimedb.reducer(
             throw new SenderError('Maximum 5 HSR accounts per user');
         }
 
+        ensureDisplayLabelLength(displayLabel.trim());
         const label = displayLabel.trim() || 'Account ' + (existing.length + 1);
         const isFirst = existing.length === 0;
 
@@ -74,6 +75,7 @@ export const update_hsr_account = spacetimedb.reducer(
 
         const trimmed = displayLabel.trim();
         if (!trimmed) throw new SenderError('Display label cannot be empty');
+        ensureDisplayLabelLength(trimmed);
 
         ctx.db.HsrAccount.id.update(updateWithAudit(ctx, account, {
             displayLabel: trimmed,

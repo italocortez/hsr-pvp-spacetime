@@ -430,6 +430,52 @@ All in `reducers/draft/draftClassic.ts`:
   `teamOwnedEidolons`, `resolveOwnedEidolon`, `teamDefaultEidolon` and the timer auto-pick pool still see the departed
   player's characters for the rest of the game (S10e's release of those rows is reverted).
 
+## Phase S10f execution (draft audit #5, #8; BACKEND-BUGS F10; policy review G10)
+
+- **Turn clock (F10).** One definition in `helpers/draft/turnClock.ts`, used by `pause_draft`, the disconnect auto-pause
+  (`run_referee_transfer_check`), `resume_draft`, `liftAutoPauseOnReturn` (`join_lobby` reconnect and
+  `client_connected`) and both `timer_expiry_*` reducers. The column `TimerState.accumulatedPauseMs` keeps its name and
+  now holds the turn's **budget measured from `turnStartAt`** (0 = a full turn):
+  - `budgetMs = accumulatedPauseMs > 0 ? accumulatedPauseMs : lobby.standardTurnSeconds * 1000`
+  - `remainingMs = isPaused ? budgetMs : max(0, budgetMs - (now - turnStartAt))`
+  - a new turn (start, pick, ban, nomination, bid, sale, undo) writes `turnStartAt = now`, `accumulatedPauseMs = 0`;
+  - a pause (manual or auto) freezes it: `isPaused = true`, `turnStartAt = now`, `accumulatedPauseMs = remainingMs`
+    (at least 1 ms, so a turn paused at 0 never comes back as a full turn); the Pause step's `timeRemainingMs` is the
+    same value;
+  - a resume (`resume_draft` or the automatic lift) writes `isPaused = false`, `turnStartAt = now` and keeps
+    `accumulatedPauseMs`: the turn continues with exactly the time it had left. `resume_draft` no longer reads the
+    time from the Pause step (it still reads the step for the D-62 / A85(2) caller rule);
+  - `timer_expiry_classic` / `timer_expiry_auction` accept the call only when `remainingMs` is 0
+    ("Turn timer has not yet expired." otherwise). Clients compute the same `remainingMs` from `view_my_match_session`.
+- **Edit-step cap (draft audit #8; per side since review F1).** `helpers/draft/stepSequence.ts::ensureEditStepRoom(ctx,
+  lobbyId, side, kind)`: counted per team side, so one team can only exhaust its own allowance. Each side has two
+  counters of `MAX_EDIT_STEPS_PER_LOBBY = 300`: edits (`SetEidolon`, `EquipLightcone`, `UnequipLightcone` steps whose
+  `actorSlot`, the edited team, is that side, whoever the caller was: captain or referee) and confirmations
+  (`ConfirmGame` steps whose `confirmedSide` is that side). A Thirds game drafts 24 characters; normal play stays far
+  below. Checked on the open-game path of `set_eidolon`, `equip_lightcone`, `unequip_lightcone` (edit counter of the
+  step's `teamSide`): "The {side} side of this game has reached the limit of 300 edit steps; the referee or staff can
+  still close it."; and by `confirm_game` (confirmation counter of the confirming side): "The {side} side of this game
+  has reached the limit of 300 confirmation steps; the referee or staff can still close it." The A60(7) Admin
+  closed-game edit, `close_game` and the concede are not capped.
+- **Pause throttle (draft audit #8; per pausing party since review F3).** `ensurePauseInterval(ctx, lobby, party)`: a
+  manual `pause_draft` is rejected while the latest manual Pause step of the caller's own party is younger than
+  `PAUSE_MIN_INTERVAL_MS = 10 000` ("The draft was paused moments ago. Please wait a few seconds before pausing
+  again."). Parties: `Blue` and `Red` (a team's players, and a referee without the pause power, who pauses as a player
+  of their seat) and `Referee` (a referee pausing with the power, `isReferee && refereeCanPause`, seated or not). A
+  Pause step's party: `Referee` when its `actorSlot` is Spectator or the actor's current `LobbyMember` row is a referee
+  and the lobby has `refereeCanPause`; otherwise its `actorSlot` (Blue / Red). So after Blue pauses, Red's first pause
+  and the referee's are accepted at once; Blue's next one waits 10 s. Every pause / resume cycle logs one Pause step
+  and `resume_draft` needs a pause, so each party's cycles are bounded at one per 10 s, the referee's unlimited pauses
+  included. Auto-pauses are neither counted nor throttled. The party of an older step is resolved from the actor's
+  current member row, so a referee transfer inside the 10 s re-labels that actor's earlier pauses (accepted edge).
+- **Lineup throttle moved.** `ensureLineupThrottle` / `stampLineupThrottle` moved from `postDraft.ts` to
+  `helpers/lobby/abuseControls.ts`; the stamp re-reads the member row before writing it. Still used by the four package
+  edits only: the result reducers use the per-user result-entry window instead (`docs/match-results/architecture.md`,
+  S10f).
+- **LOW fixes.** `undo_last_step` takes the Undo row's sequence before deleting the undone step (it could reuse the
+  deleted step's number); `advance_stage` loses the unused `nextMsgId`; `postDraft.ts` drops the unused
+  `slotToTeamSide` import.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -471,6 +517,7 @@ All in `reducers/draft/draftClassic.ts`:
 | Timer auto-pick priced from the Classic cost row (owned eidolon under ownership); mirror picks once per team on the manual and timer paths; `start_draft` rejects while a seated player is offline or away | Phase S10d execution (DECISIONS.md A86, A87, A92(1)) | 2026-11-09 |
 | `start_draft` rejections name the seat; a team over `teamSize` is rejected; the start line respects the chat window | Phase S10e execution (lobby audit #6, #9, #10) | 2026-11-09 |
 | Fix pass: `start_draft` schedules the 15 s check for an offline host or referee; abandoned players stay in the team's ownership and auto-pick pools | Phase S10e execution (review F2, F3; DECISIONS.md A93(4)) | 2026-11-09 |
+| One turn clock (`turnClock.ts`): pause freezes the remaining time in `accumulatedPauseMs`, resume and the automatic lift restore it, expiry needs remaining 0; edit-step cap 300 per team side (edits and confirmations counted separately, review F1); manual pause throttle 10 s per pausing party (Blue, Red, Referee; review F3) | Phase S10f execution (draft audit #5, #8; BACKEND-BUGS F10; policy review G10) | 2026-11-09 |
 
 ---
 

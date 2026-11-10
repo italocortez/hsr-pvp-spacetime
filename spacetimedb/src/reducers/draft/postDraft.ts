@@ -9,11 +9,11 @@
 import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser } from '@module/helpers/identity/ensurePermissions';
-import { ensureStageIs, ensureRefereeOrAbove, slotToTeamSide } from '@module/helpers/lobby/lobbyHelpers';
+import { ensureStageIs, ensureRefereeOrAbove } from '@module/helpers/lobby/lobbyHelpers';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { ensureMatchAlive, ensureNotConceded } from '@module/helpers/lobby/disconnectHelpers';
-import { readAbuseConfig } from '@module/helpers/lobby/abuseControls';
-import { getNextSequence } from '@module/helpers/draft/stepSequence';
+import { ensureLineupThrottle, stampLineupThrottle } from '@module/helpers/lobby/abuseControls';
+import { ensureEditStepRoom, getNextSequence } from '@module/helpers/draft/stepSequence';
 import { classicCostAt } from '@module/helpers/draft/costSetGuards';
 import { teamOwnedEidolons } from '@module/helpers/draft/ownershipValidation';
 import {
@@ -78,20 +78,9 @@ function afterEdit(ctx: any, lobby: any, window: EditWindow, actorId: number): v
     resetConfirmations(ctx, findGame(ctx, window.record.id), actorId);
 }
 
-/** B-4 throttle (fan-out): reject a move that comes faster than AbuseConfig.lineupMinIntervalMs. */
-function ensureLineupThrottle(ctx: any, member: any): void {
-    const minIntervalMicros = BigInt(readAbuseConfig(ctx).lineupMinIntervalMs) * 1000n;
-    const now = ctx.timestamp.microsSinceUnixEpoch;
-    if (member.lastLineupAt && now - member.lastLineupAt.microsSinceUnixEpoch < minIntervalMicros) {
-        throw new SenderError('Lineup changes are too frequent. Please wait a moment.');
-    }
-}
-
-/** Throttle stamp on the private member row: no audit bump (not a user edit, like lastCursorAt). */
-function stampLineupThrottle(ctx: any, lobbyId: number, member: any): void {
-    ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, member.userId]);
-    ctx.db.LobbyMember.insert({ ...member, lastLineupAt: ctx.timestamp });
-}
+// B-4 throttle: ensureLineupThrottle / stampLineupThrottle live in helpers/lobby/abuseControls.ts since S10f (the
+// result reducers use the per-user result-entry window instead). Draft audit #8: the open-game step writers also call ensureEditStepRoom (stepSequence.ts), counted
+// per edited team side (review F1).
 
 // ─── equip_lightcone ─────────────────────────────────────────────────────────
 // Records LC equip as a backend step. Deducts LC cost from team's LC budget.
@@ -133,6 +122,7 @@ export const equip_lightcone = spacetimedb.reducer(
         if (window.mode === 'open') {
             member ??= ensureCaptainOrReferee(ctx, lobbyId, user.id, side, 'equip lightcones');
             ensureLineupThrottle(ctx, member);
+            ensureEditStepRoom(ctx, lobbyId, side, 'edit');
         }
         ensureInTeamDraft(ctx, lobbyId, side, characterName);
         if (superimposition < 1 || superimposition > 5) throw new SenderError('superimposition must be between 1 and 5.');
@@ -241,6 +231,7 @@ export const unequip_lightcone = spacetimedb.reducer(
         if (window.mode === 'open') {
             member ??= ensureCaptainOrReferee(ctx, lobbyId, user.id, side, 'unequip lightcones');
             ensureLineupThrottle(ctx, member);
+            ensureEditStepRoom(ctx, lobbyId, side, 'edit');
         }
         ensureInTeamDraft(ctx, lobbyId, side, characterName);
 
@@ -395,6 +386,7 @@ export const set_eidolon = spacetimedb.reducer(
         if (window.mode === 'open') {
             member ??= ensureCaptainOrReferee(ctx, lobbyId, user.id, side, 'set an eidolon for that team');
             ensureLineupThrottle(ctx, member);
+            ensureEditStepRoom(ctx, lobbyId, side, 'edit');
             // A22(3): no edit while the draft is paused. Drafting only (Equipping may carry isPaused across
             // advance_stage); client_connected's auto-resume looks at the last step for an auto-pause, so a SetEidolon
             // step logged during a pause would block it.
@@ -519,9 +511,6 @@ export const advance_stage = spacetimedb.reducer(
 
             // System chat message for stage change (D-11)
             const existingMessages = [...ctx.db.ChatMessage.lobby_id.filter(lobbyId)];
-            const nextMsgId = existingMessages.length > 0
-                ? Math.max(...existingMessages.map((m: any) => m.id)) + 1
-                : 1;
 
             // Rolling window: delete oldest if > 50
             if (existingMessages.length >= 50) {

@@ -368,6 +368,42 @@ reaches ceil(bestOf / 2) or staff resolve it). Stage list: Drafting, Equipping, 
   tournament's organizer and assistants, who resolve deferred and conceded matches and already see real ids in their own
   tournament (A37).
 
+## Phase S10f execution (results audit #3, #7, #8)
+
+- **Finalization step 16, sentinels (#3).** A step whose character is `EMPTY` (timer pick, auto-nomination) or `SKIP`
+  (timer ban) writes no stat row of any kind (player, faced, ban, global). A Classic timer pick of a real character
+  (A86 `autoRandomPick`: `actorUserId = 0`, `actorSlot` = the acting team) writes no `PlayerCharacterStat` row for the
+  system user; the opponents' faced rows and the global row are written, the global row's win flag taken from
+  `actorSlot` exactly as for a manual pick (whose `actorSlot` is the picker's team). The dead Nominate / Bid name
+  extraction is gone.
+- **Result-entry window (#7).** `record_group_scores`, `set_score_adjustment` and `confirm_game` count each call in a
+  per-user fixed window (`consumeResultEntryAllowance`, `helpers/lobby/abuseControls.ts`; `UserRateState`
+  `resultEntryWindowStart` / `resultEntryCount`, row created on first use, window starting at the epoch): at most
+  `RESULT_ENTRIES_PER_WINDOW = 30` writes per `RESULT_ENTRY_WINDOW_MS = 10 000`, then "You are entering results too
+  quickly. Please wait a moment." until the window is 10 s old. Burst-tolerant, so a referee saving both teams' scores
+  in one click (two calls back to back) passes; the three reducers share the count, and a rejected call consumes
+  nothing (the reducer rolls back). Constants, not `AbuseConfig` columns. Counted on the open-game path for a caller
+  with a `LobbyMember` row in the lobby; staff outside the lobby and the A60(7) Admin closed-game edit are not counted.
+  These reducers do not use the B-4 lineup throttle (`LobbyMember.lastLineupAt`, 250 ms), which stays on
+  `arrange_lineup`, `equip_lightcone`, `unequip_lightcone` and `set_eidolon` only. `confirm_game` also counts against
+  the confirming side's confirmation-step cap (per side since review F1; `docs/match-session/architecture.md`, S10f).
+- **Adjustment bounds (#7).** `set_score_adjustment`: at most `MAX_ADJUSTMENTS_PER_RECORD = 20` rows per record (both
+  teams; a new entry beyond it: "A game can carry at most 20 adjustments; edit or delete one first."); each value
+  within ±`MAX_SCORE_HUNDREDTHS` (100 000 000, unchanged). Review F2: the sum of each team's adjustments after the
+  call stays within the same bound for every team the call changes: the entry's team after the call (a new entry or
+  an edit: the `teamSide` argument; a delete, `value = 0` with `adjustmentId`: the existing row's team, the `teamSide`
+  argument is ignored) and, on an edit or a delete, the existing row's team, which loses the old value ("The {team}
+  adjustments cannot add up to more than 100000000 hundredths either way.", naming the team out of bounds). So moving
+  or deleting an entry while naming the other team cannot push the old team past the bound, and no team's sum leaves
+  ±100 000 000; the adjusted result fits the i32 `team*AdjustedResult` columns. An unknown `adjustmentId` is rejected
+  ("Adjustment not found for this game.") before the sum check. `value` is an i32 argument, so it is always a finite integer.
+- **`override_match_result` on a standalone record (#8,** `reducers/tournament/tournamentAdmin.ts`**).** The record must
+  not be Voided ("This result was voided."), must be Submitted, Disputed or Validated ("Only a Submitted, Disputed or
+  Validated result can be overridden (this one is X)."), and its lobby must exist ("The match lobby no longer exists.")
+  and be in AwaitingResult ("Only the result of a match waiting for its result (AwaitingResult) can be overridden."). A
+  tournament record whose bracket match is gone takes the same path. The tournament branch is unchanged.
+- **LOW.** The stale `dispute_match_result` comment on optional u32 values is removed.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -396,6 +432,7 @@ reaches ceil(bestOf / 2) or staff resolve it). Stage list: Drafting, Equipping, 
 | `refereeFullControl` dropped; `view_my_match_result`, `view_my_match_result_games` (nested group scores and adjustments), staff-only `view_admin_stuck_games` | Phase S9a execution (DECISIONS.md A37, A54, A56, A60(9), A63) | 2026-11-08 |
 | Finalization step 16: `AuctionSold` stats follow `winningTeam` (played for every player of that side, faced for the other, one global row), never the step actor | Phase S10c execution (DECISIONS.md A82) | 2026-11-09 |
 | `view_my_match_result.concedeSummary` only for Moderator / Admin callers | Phase S10c execution (DECISIONS.md A83) | 2026-11-09 |
+| No stats for `EMPTY` / `SKIP` / the system picker; result reducers share a per-user result-entry window (30 writes per 10 s, `UserRateState`); at most 20 adjustments per record and a bounded per-team sum, checked on every team the call changes (review F2); standalone `override_match_result` needs Submitted / Disputed / Validated and an AwaitingResult lobby | Phase S10f execution (results audit #3, #7, #8) | 2026-11-09 |
 
 ---
 

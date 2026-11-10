@@ -5,6 +5,7 @@ import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHel
 import { ensureLobbyMember, ensureStageIs, slotTeam, slotIsCoach, slotToTeamSide } from '@module/helpers/lobby/lobbyHelpers';
 import { ensureMatchAlive } from '@module/helpers/lobby/disconnectHelpers';
 import { lobbySteps, getNextSequence } from '@module/helpers/draft/stepSequence';
+import { turnRemainingMs } from '@module/helpers/draft/turnClock';
 import { teamOwnedEidolons } from '@module/helpers/draft/ownershipValidation';
 import { charactersPerTeam, type LineupFormatTag } from '@shared/scoring';
 
@@ -710,13 +711,8 @@ export const timer_expiry_auction = spacetimedb.reducer(
             throw new SenderError('Auction phase not active.');
         }
 
-        // Server-side timer validation: check that enough time has actually elapsed
-        const elapsedMicros =
-            ctx.timestamp.microsSinceUnixEpoch -
-            session.timerState.turnStartAt.microsSinceUnixEpoch;
-        const elapsedMs = Number(elapsedMicros) / 1000;
-        const turnLimitMs = lobby.standardTurnSeconds * 1000;
-        if (elapsedMs < turnLimitMs) {
+        // Server-side timer validation (S10f, F10): the turn's remaining time (helpers/draft/turnClock.ts) must be 0
+        if (turnRemainingMs(lobby, session.timerState, ctx.timestamp.microsSinceUnixEpoch) > 0) {
             throw new SenderError('Turn timer has not yet expired.');
         }
 

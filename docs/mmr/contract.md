@@ -528,6 +528,7 @@ _Superseded in Phase S8e execution (DECISIONS.md A69(3))._ The ratchet is remove
 | Scenario S8e-M1: every lobby is a match for MMR; an MMR-tournament Bo3 moves MMR up to three times (user confirmed 2026-11-08) | Phase S8e execution (DECISIONS.md A67(7)) | 2026-11-08 |
 | Scenario "Snapshot Ratchet" superseded: the ratchet is removed, the snapshot is taken once at `start_draft` (A66) | Phase S8e execution (DECISIONS.md A69(3)) | 2026-11-08 |
 | Scenarios S9b-M1, S9b-M2: top-20 leaderboard with the rating / wins / user id order and SYSTEM actor; own ratings through `view_my_mmr_ratings` | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
+| The leaderboard rebuild skips rating rows of users with no `User` row or with `deletedAt` set | Phase S10f execution (backend audit 2026-11-09, results finding 9) | 2026-11-09 |
 
 ---
 

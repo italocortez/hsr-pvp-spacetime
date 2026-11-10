@@ -178,7 +178,7 @@ export function processMatchMmr(
 }
 
 // ─── runFinalization ─────────────────────────────────────────────────────────
-// 18-step pipeline: reads ephemeral data, archives to history, increments all
+// The numbered pipeline (steps 1-18, with 16.5; header line 2 counts it as 19): reads ephemeral data, archives to history, increments all
 // stats, processes MMR (if applicable), deletes ephemeral.
 // A24 (S8d): a tournament record reaches this only through run_tournament_finalize, which passes
 // options.tournamentMmr (true when the tournament counts toward MMR and is Completed, false when Cancelled, A24(5)).
@@ -497,16 +497,18 @@ export function runFinalization(
 
         for (const step of steps) {
             const actionTag = step.action.tag;
+            // Only Pick, AuctionSold and Ban steps are counted below (the Nominate / Bid extraction was dead, S10f).
             let charName: string | undefined;
             if (step.payload) {
                 const payloadTag = step.payload.tag;
-                if (payloadTag === 'Pick' || payloadTag === 'Ban' || payloadTag === 'AuctionSold' || payloadTag === 'Nominate') {
+                if (payloadTag === 'Pick' || payloadTag === 'Ban' || payloadTag === 'AuctionSold') {
                     charName = step.payload.value?.characterName;
-                } else if (payloadTag === 'Bid') {
-                    charName = step.payload.value?.targetCharacter;
                 }
             }
             if (!charName) continue;
+            // Results audit #3 (S10f): the EMPTY pick / nomination and SKIP ban sentinels are not characters; no stat
+            // row of any kind (player, faced, ban, global) is written for them.
+            if (charName === 'EMPTY' || charName === 'SKIP') continue;
 
             const actorTeamSide = step.actorSlot?.tag;
 
@@ -531,7 +533,13 @@ export function runFinalization(
 
             if (actionTag === 'Pick') {
                 const didActorWin = winnerTeamSideTag !== undefined && actorTeamSide === winnerTeamSideTag;
-                incrementPlayerCharacterStat(ctx, step.actorUserId, charName, gameMode, draftMode, seasonId, matchType, teamSize, didActorWin, actingUserId);
+                // Results audit #3 (S10f): a Classic timer pick (A86 autoRandomPick) is logged with the system actor
+                // (actorUserId 0) and actorSlot = the acting team. No player row is written for the system user; the
+                // faced rows and the global row are kept, and the global row takes the side from actorSlot exactly as
+                // for a manual pick (whose actorSlot is the picker's team).
+                if (step.actorUserId !== 0) {
+                    incrementPlayerCharacterStat(ctx, step.actorUserId, charName, gameMode, draftMode, seasonId, matchType, teamSize, didActorWin, actingUserId);
+                }
                 for (const p of effectiveParticipants) {
                     if (p.teamSide.tag !== actorTeamSide) {
                         const didOpponentWin = winnerTeamSideTag !== undefined && p.teamSide.tag === winnerTeamSideTag;

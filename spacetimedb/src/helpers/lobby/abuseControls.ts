@@ -112,6 +112,8 @@ function writeRateState(ctx: any, userId: number, existing: any, changes: Record
             lobbyCreates: 0,
             membershipWindowStart: EPOCH,
             membershipCount: 0,
+            resultEntryWindowStart: EPOCH,
+            resultEntryCount: 0,
             ...changes,
         }, userId));
     }
@@ -169,6 +171,53 @@ export function consumeMembershipAllowance(ctx: any, userId: number): void {
     } else {
         writeRateState(ctx, userId, state, { membershipWindowStart: ctx.timestamp, membershipCount: 1 });
     }
+}
+
+/**
+ * Results audit #7 (S10f follow-up): the per-user rate of result writes (record_group_scores, set_score_adjustment,
+ * confirm_game on the open-game path, for a caller with a LobbyMember row in the lobby). Each rewrites the game rows
+ * every lobby member's result view receives. A fixed window instead of a minimum interval, so a referee who saves both
+ * teams' scores in one click (two calls back to back) is not rejected: at most RESULT_ENTRIES_PER_WINDOW writes per
+ * fixed RESULT_ENTRY_WINDOW_MS window (an average of three a second for a script loop). Constants, not AbuseConfig
+ * columns. A rejected call consumes nothing (the reducer rolls back).
+ */
+export const RESULT_ENTRY_WINDOW_MS = 10_000;
+export const RESULT_ENTRIES_PER_WINDOW = 30;
+
+/** Counts one result write of the user, rejecting it once the current window is full. */
+export function consumeResultEntryAllowance(ctx: any, userId: number): void {
+    const now: bigint = ctx.timestamp.microsSinceUnixEpoch;
+    const state = ctx.db.UserRateState.userId.find(userId);
+    const windowOpen = state && now - state.resultEntryWindowStart.microsSinceUnixEpoch < BigInt(RESULT_ENTRY_WINDOW_MS) * 1000n;
+    if (windowOpen) {
+        if (state.resultEntryCount >= RESULT_ENTRIES_PER_WINDOW) {
+            throw new SenderError('You are entering results too quickly. Please wait a moment.');
+        }
+        writeRateState(ctx, userId, state, { resultEntryCount: state.resultEntryCount + 1 });
+    } else {
+        writeRateState(ctx, userId, state, { resultEntryWindowStart: ctx.timestamp, resultEntryCount: 1 });
+    }
+}
+
+/**
+ * B-4 lineup throttle (fan-out): rejects a game-package call that comes faster than AbuseConfig.lineupMinIntervalMs
+ * after the member's previous one (LobbyMember.lastLineupAt). Used by arrange_lineup, equip_lightcone,
+ * unequip_lightcone and set_eidolon on the open-game path (the result reducers use consumeResultEntryAllowance).
+ */
+export function ensureLineupThrottle(ctx: any, member: any): void {
+    const minIntervalMicros = BigInt(readAbuseConfig(ctx).lineupMinIntervalMs) * 1000n;
+    const now = ctx.timestamp.microsSinceUnixEpoch;
+    if (member.lastLineupAt && now - member.lastLineupAt.microsSinceUnixEpoch < minIntervalMicros) {
+        throw new SenderError('Lineup changes are too frequent. Please wait a moment.');
+    }
+}
+
+/** Throttle stamp on the private member row (re-read, so no write of the call is lost): no audit bump, like lastCursorAt. */
+export function stampLineupThrottle(ctx: any, lobbyId: number, member: any): void {
+    const fresh = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, member.userId])][0];
+    if (!fresh) return;
+    ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, member.userId]);
+    ctx.db.LobbyMember.insert({ ...fresh, lastLineupAt: ctx.timestamp });
 }
 
 /**

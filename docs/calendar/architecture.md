@@ -171,6 +171,20 @@ RSVP row, not the event from a removed team member's calendar; a stand-in (`Tour
 invite row. An invitee never sees the other
 invitees of an event (an anonymous tournament's match event would otherwise list the opposing players).
 
+## Phase S10f execution (calendar audit #2, #3, #5; LOW #11, #13)
+
+- **Duplicate manual invitees (#2).** `create_calendar_event` de-duplicates the manual ids among themselves
+  (`[...new Set(manualInviteeIds)]`) before removing the auto-invite set; the 9-invitee cap counts each user once.
+- **One "no end date" rule (#3).** `calendarAvailability.ts::hasEndDate(endDate)`: `''` and `'0'` both mean none (A76(2)).
+  `create_availability_slot` and `update_availability_slot` use it for `expiresAt` (none: now + 6 months) and for
+  `recurrenceRule.endDate` (none: the epoch sentinel), so `'0'` no longer stores a 1970 expiry.
+- **Length caps (#5).** `create_calendar_event` / `update_calendar_event` (`eventTexts`): title trimmed, 1 to 100
+  characters ("Event title cannot exceed 100 characters."), description trimmed, at most 1000 characters ("Event
+  description cannot exceed 1000 characters."; empty stores none). In line with the tournament name (100) and the
+  dispute / override reasons (1000).
+- **LOW.** `create_calendar_event` attaches the invites to the row `insert` returns (no re-read by `createdDate`); the
+  file headers say the lazy cleanups run in `create_calendar_event` / `create_availability_slot` (not "every call").
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -196,6 +210,7 @@ invitees of an event (an anonymous tournament's match event would otherwise list
 | Calendar views (five per-sender views, index-only, labels denormalized, `isVisible` filtered server-side, tournament match events visible to both teams' members, organizer sees the invite list) | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 | Event caps: 40 not-yet-ended + 100 retained per organizer (after the cleanup); `endAt` in the past rejected on create and on a changed `endAt` in update | Phase S10b execution (DECISIONS.md A79) | 2026-11-09 |
 | Tournament-linked events: update / delete / invite / remove_invite also accept the tournament's organizer and `bracket` staff (`ensureCanManageEvent`); `update_calendar_event` applies the 40-active cap when it revives an ended event | Phase S10d execution (DECISIONS.md A89, A90) | 2026-11-09 |
+| Manual invitees de-duplicated; one `hasEndDate` rule for slots; title 100 / description 1000 caps; invites attach to the inserted row | Phase S10f execution (calendar audit #2, #3, #5) | 2026-11-09 |
 
 ---
 

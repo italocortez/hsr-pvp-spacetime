@@ -34,6 +34,16 @@ export function deriveRegion(uid: string): string {
     return region;
 }
 
+/** S10f (roster audit #5): HsrAccount.displayLabel cap, the same 32 characters as User.displayName (profile.ts). */
+export const MAX_DISPLAY_LABEL_LENGTH = 32;
+
+/** Rejects a trimmed display label longer than MAX_DISPLAY_LABEL_LENGTH (the label reaches public roster views). */
+export function ensureDisplayLabelLength(trimmedLabel: string): void {
+    if (trimmedLabel.length > MAX_DISPLAY_LABEL_LENGTH) {
+        throw new SenderError(`Display label cannot exceed ${MAX_DISPLAY_LABEL_LENGTH} characters`);
+    }
+}
+
 /**
  * Recalculates isDuplicateUid for ALL accounts sharing the given UID.
  * Called after account creation or deletion.

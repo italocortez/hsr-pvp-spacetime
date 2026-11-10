@@ -4,7 +4,8 @@ import { getAuthenticatedUser } from '@module/helpers/identity/ensurePermissions
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { ensureMatchAlive } from '@module/helpers/lobby/disconnectHelpers';
 import { ensureStageIs, slotIsCoach, slotIsSpectator, slotTeam } from '@module/helpers/lobby/lobbyHelpers';
-import { getNextSequence } from '@module/helpers/draft/stepSequence';
+import { ensureEditStepRoom, getNextSequence } from '@module/helpers/draft/stepSequence';
+import { consumeResultEntryAllowance } from '@module/helpers/lobby/abuseControls';
 import { closeGame } from '@module/helpers/results/gameClose';
 import {
     ensureAuctionSurchargeFits,
@@ -79,6 +80,11 @@ export const confirm_game = spacetimedb.reducer(
         if (slotTeam(member.lobbySlot) !== side) {
             throw new SenderError(`Only the team captain can confirm the ${side} side of the game.`);
         }
+
+        // S10f: the per-user result-entry window (results audit #7) and the confirmation-step cap of the confirming side
+        // (draft audit #8, per side since review F1): every confirmation logs a ConfirmGame step, and an edit in between clears the flags, so the pair is bounded.
+        consumeResultEntryAllowance(ctx, user.id);
+        ensureEditStepRoom(ctx, lobbyId, side, 'confirm');
 
         const { game, record } = readyGame(ctx, lobby, [side], 'confirming', user.id);
         if (side === 'Blue' ? game.blueConfirmed : game.redConfirmed) {
@@ -197,9 +203,7 @@ export const dispute_match_result = spacetimedb.reducer(
             throw new SenderError('Match result not found.');
         }
 
-        // Check idempotency first — more specific error when already disputed
-        // Note: use status.tag check instead of disputedByUserId !== undefined
-        // because SpacetimeDB optional u32 representation may not equal JS undefined.
+        // Check idempotency first — more specific error when already disputed (the status is the dispute marker)
         if (matchResult.status.tag === 'Disputed') {
             throw new SenderError('This match result has already been disputed.');
         }

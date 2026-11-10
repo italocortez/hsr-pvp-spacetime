@@ -4,7 +4,8 @@ import { getAuthenticatedUser } from '@module/helpers/identity/ensurePermissions
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { ensureLobbyMember, ensureStageIs, slotToTeamSide, isSeatedPlayer, memberHasLeft } from '@module/helpers/lobby/lobbyHelpers';
 import { ensureMatchAlive } from '@module/helpers/lobby/disconnectHelpers';
-import { lobbySteps, getNextSequence } from '@module/helpers/draft/stepSequence';
+import { lobbySteps, getNextSequence, ensurePauseInterval } from '@module/helpers/draft/stepSequence';
+import { pausedTimerState, resumedTimerState, turnBudgetMs } from '@module/helpers/draft/turnClock';
 
 // ─── undo_last_step ───────────────────────────────────────────────────────────
 // Undoes the last draft step.
@@ -63,6 +64,10 @@ export const undo_last_step = spacetimedb.reducer(
             throw new SenderError('Nothing to undo in this game.');
         }
 
+        // F9: the Undo record's own sequence, taken before the delete (draft audit LOW #15: taken after it, the Undo row
+        // could reuse the deleted step's sequence)
+        const undoSequence = getNextSequence(ctx, lobbyId);
+
         // Delete the last step
         ctx.db.MatchSessionStep.id.delete(lastStep.id);
 
@@ -70,7 +75,7 @@ export const undo_last_step = spacetimedb.reducer(
         ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
             id: 0,
             lobbyId,
-            sequence: getNextSequence(ctx, lobbyId),
+            sequence: undoSequence,
             actorUserId: user.id,
             anonymousLabel: undefined,
             actorSlot: slotToTeamSide(member.lobbySlot),
@@ -164,15 +169,13 @@ export const pause_draft = spacetimedb.reducer(
             }
         }
 
-        // Calculate time remaining at point of pause
-        const elapsedMicros =
-            ctx.timestamp.microsSinceUnixEpoch -
-            session.timerState.turnStartAt.microsSinceUnixEpoch;
-        const elapsedMs = Number(elapsedMicros) / 1000;
-        const timeRemainingMs = Math.max(
-            0,
-            lobby.standardTurnSeconds * 1000 - elapsedMs + session.timerState.accumulatedPauseMs
-        );
+        // Draft audit #8 (S10f): at most one manual pause per PAUSE_MIN_INTERVAL_MS per pausing party (review F3):
+        // a referee with the pause power against the referees' last manual pause, a player against their team's.
+        ensurePauseInterval(ctx, lobby, isRefereeWithPower ? 'Referee' : member.lobbySlot.tag.startsWith('Blue') ? 'Blue' : 'Red');
+
+        // S10f (F10): freeze the clock at the time left in the turn (helpers/draft/turnClock.ts).
+        const paused = pausedTimerState(ctx, lobby, session.timerState);
+        const timeRemainingMs = paused.remainingMs;
 
         // Insert Pause step (F9: its own sequence, so it never collides with a draft step)
         ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
@@ -185,7 +188,7 @@ export const pause_draft = spacetimedb.reducer(
             action: { tag: 'Pause' },
             payload: {
                 tag: 'Pause',
-                value: { timeRemainingMs: Math.round(timeRemainingMs), isAutoPause: false },
+                value: { timeRemainingMs, isAutoPause: false },
             },
             timestamp: ctx.timestamp,
         }, user.id));
@@ -201,10 +204,7 @@ export const pause_draft = spacetimedb.reducer(
                 : session.pausesUsedRed;
 
         ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
-            timerState: {
-                ...session.timerState,
-                isPaused: true,
-            },
+            timerState: paused.timerState,
             pausesUsedBlue: newPausesBlue,
             pausesUsedRed: newPausesRed,
         }, user.id));
@@ -213,7 +213,7 @@ export const pause_draft = spacetimedb.reducer(
             lastActivityAt: ctx.timestamp,
         }, user.id));
 
-        console.log(`[DRAFT] pause_draft: User #${user.id} paused lobby #${lobbyId}. timeRemainingMs=${Math.round(timeRemainingMs)}`);
+        console.log(`[DRAFT] pause_draft: User #${user.id} paused lobby #${lobbyId}. timeRemainingMs=${timeRemainingMs}`);
     }
 );
 
@@ -222,8 +222,8 @@ export const pause_draft = spacetimedb.reducer(
 // Per D-62: referee OR the original pausing player can resume a manual pause.
 // A85(2): an auto-pause (disconnect) is resumed by the referee or any seated player of either team; coaches and
 // spectators without the referee flag are rejected.
-// Sets accumulatedPauseMs to the timeRemainingMs stored in the Pause step so the
-// clock continues from where it was paused.
+// S10f (F10): the pause froze the time left in accumulatedPauseMs (equal to the Pause step's timeRemainingMs);
+// the resume sets turnStartAt = now and keeps it, so the clock continues from where it was paused (turnClock.ts).
 
 export const resume_draft = spacetimedb.reducer(
     {
@@ -276,19 +276,11 @@ export const resume_draft = spacetimedb.reducer(
             }
         }
 
-        // Restore timeRemainingMs from the Pause step
-        const timeRemainingMs =
-            lastPauseStep && lastPauseStep.payload.tag === 'Pause'
-                ? lastPauseStep.payload.value.timeRemainingMs
-                : lobby.standardTurnSeconds * 1000;
-
+        // S10f (F10): the pause froze the remaining time in accumulatedPauseMs; it runs again from now
+        // (helpers/draft/turnClock.ts, the same write as liftAutoPauseOnReturn).
+        const timeRemainingMs = turnBudgetMs(lobby, session.timerState);
         ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
-            timerState: {
-                ...session.timerState,
-                isPaused: false,
-                turnStartAt: ctx.timestamp,
-                accumulatedPauseMs: timeRemainingMs,
-            },
+            timerState: resumedTimerState(ctx, session.timerState),
         }, user.id));
 
         ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {

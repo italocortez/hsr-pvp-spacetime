@@ -146,6 +146,13 @@ mode, as above), `lastUpdatedAt` (`lastModifiedDate`). No audit ids. `MmrRating`
 MMR reaches a client only where the UI names that player: the lobby member row (S9a) and `view_my_relationships`
 (`otherMmrByMode`, S9b).
 
+## Phase S10f execution (results audit #9)
+
+**Leaderboard and deleted users.** `rebuildLeaderboard` skips every `MmrRating` row whose user has no live `User` row
+(no row, or `deletedAt` set). User deletion keeps `MmrRating` / `PlayerStat` (history), so before this a deleted
+account could hold a public top-20 slot for the rest of the season; it now drops out at the next rebuild. The check is
+cached per user within one rebuild.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -165,6 +172,7 @@ MMR reaches a client only where the UI names that player: the lobby member row (
 | Tournament MMR moved into the finalize job (Completed only, bracket order, real matchHistoryId, one leaderboard rebuild); `process_tournament_mmr` deleted (A24) | Phase S8d execution | 2026-11-07 |
 | MMR per game: one record per lobby, each finalized on its own; nothing aggregates across the games of a bracket match (A67(7)) | Phase S8e execution | 2026-11-08 |
 | Leaderboard: top 20 per category (rating, wins, user id), SYSTEM audit actor, `actingUserId` parameter removed; `view_my_mmr_ratings` (own rows per mode and season) | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
+| Leaderboard rebuild skips users with no live `User` row | Phase S10f execution (results audit #9) | 2026-11-09 |
 
 ---
 

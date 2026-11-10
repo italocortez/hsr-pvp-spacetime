@@ -66,7 +66,7 @@ Cost sets define the per-character, per-lightcone, and synergy cost values used 
 2. Find CostSet by ID
 3. Ownership check: caller is creator or Moderator+
 4. Verify costSet.isDraft=true
-5. Parse and validate costsJson: must be valid JSON with numeric e0–e6 fields
+5. Parse and validate costsJson: must be valid JSON with numeric e0–e6 fields _Superseded in Phase S10f execution (backend audit 2026-11-09, roster finding 9)._
 6. Find existing CostSetDraftCharacter row by 4-tuple (costSetId + characterName + gameModeTag + draftModeTag) via `cost_set_id` btree filter + in-memory predicate (A2_FALLBACK_ITER; SpacetimeDB 2.1.0 enum-struct btree limitation)
 7. If found: delete old row, insert updated row (composite PK upsert pattern)
 8. If not found: insert new row
@@ -383,6 +383,7 @@ Phase 15.4 introduced first-ever synergy auction rows — the default seed set n
 | Synergy auction round-trip test coverage added: `test/backend/cost-sets/synergy-auction-round-trip.test.ts` (D-25a) | Phase 15.4 execution | 2026-04-15 |
 | `ensureSelectableCostSet` (exists, published, not locked; id 0 passes) + loose `doesCostSetCover` at every selection site; `delete_cost_set` refuses while a non-Finished lobby or non-terminal tournament references the set; scenarios added | Phase S6 execution (backlog #2, R2, D-D6) | 2026-11-06 |
 | Synergy rows name real characters: `admin_bulk_upsert('HsrSynergyCost')` and `edit_draft_synergy_cost` reject a `characterA` / `characterB` with no `HsrCharacter` row ("Character <name> not found."); the two misspelt Trailblazer pairs in `data/seed/synergies.json` are corrected | Phase S10c execution (backend audit 2026-11-09, cross-cutting finding 1) | 2026-11-09 |
+| `edit_draft_character_cost` / `_lightcone_cost` / `_synergy_cost`: each cost field must be a finite number from 0 to 100000 and only the documented fields are stored; the synergy modifier is finite and within ±100000; the character or light cone must exist in the reference tables; `gameModeTag` must be the cost set's own game mode and `draftModeTag` Classic or Auction. A re-seed no longer overwrites archetype descriptions | Phase S10f execution (backend audit 2026-11-09, roster findings 9, 10) | 2026-11-09 |
 
 ---
 

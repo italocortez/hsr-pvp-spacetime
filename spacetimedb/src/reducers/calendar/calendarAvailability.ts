@@ -6,7 +6,7 @@
 //   - delete_availability_slot: owner OR Admin (D-14)
 //
 // Caps (per D-10): max 10 slots per user; 6-month window (D-12)
-// Lazy cleanup (D-27): expired slots older than 1 week are deleted on every call
+// Lazy cleanup (D-27): the caller's expired slots older than 1 week are deleted by create_availability_slot
 
 import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
@@ -17,6 +17,14 @@ import { cleanupExpiredSlots } from '@module/helpers/calendar/calendarCleanup';
 
 const SIX_MONTHS_MICROS = BigInt(180 * 24 * 60 * 60) * BigInt(1_000_000);
 const MAX_AVAILABILITY_SLOTS = 10;
+
+/**
+ * Calendar audit #3 (S10f): the one "no end date" rule of a recurring slot, shared by expiresAt and
+ * recurrenceRule.endDate in create and update. '' and '0' both mean "none" (A76(2)); anything else is the end (micros).
+ */
+function hasEndDate(endDate: string): boolean {
+    return !!endDate && endDate !== '0';
+}
 
 // ─── create_availability_slot ────────────────────────────────────────────────
 // Creates an availability slot for the authenticated user.
@@ -72,7 +80,7 @@ export const create_availability_slot = spacetimedb.reducer(
         // Calculate expiresAt
         let expiresAtMicros: bigint;
         if (isRecurring) {
-            if (endDate && endDate !== '') {
+            if (hasEndDate(endDate)) {
                 expiresAtMicros = BigInt(endDate);
             } else {
                 expiresAtMicros = now + SIX_MONTHS_MICROS;
@@ -91,7 +99,7 @@ export const create_availability_slot = spacetimedb.reducer(
                 interval: interval || 1,
                 dayOfWeek,
                 dayOfMonth,
-                endDate: endDate && endDate !== '' && endDate !== '0'
+                endDate: hasEndDate(endDate)
                     ? new Timestamp(BigInt(endDate))
                     : new Timestamp(0n),
             };
@@ -167,7 +175,7 @@ export const update_availability_slot = spacetimedb.reducer(
         // Calculate expiresAt
         let expiresAtMicros: bigint;
         if (isRecurring) {
-            if (endDate && endDate !== '') {
+            if (hasEndDate(endDate)) {
                 expiresAtMicros = BigInt(endDate);
             } else {
                 expiresAtMicros = now + SIX_MONTHS_MICROS;
@@ -184,7 +192,7 @@ export const update_availability_slot = spacetimedb.reducer(
                 interval: interval || 1,
                 dayOfWeek,
                 dayOfMonth,
-                endDate: endDate && endDate !== '' && endDate !== '0'
+                endDate: hasEndDate(endDate)
                     ? new Timestamp(BigInt(endDate))
                     : new Timestamp(0n),
             };

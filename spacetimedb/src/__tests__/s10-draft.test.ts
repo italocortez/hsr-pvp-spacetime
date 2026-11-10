@@ -331,6 +331,7 @@ describe('pause_draft / resume_draft (contract pause_draft, resume_draft, D-62; 
         const test = newHarness();
         const s = setupLobby(test, { lobby: { allowPlayerPause: true } });
         for (let i = 1; i <= 3; i++) {
+            advance(test, 10_000); // T-S10f (draft audit #8): a manual pause within 10 s of the previous manual pause is rejected
             tx(test, s.a.b1, pause(s));
             expect(session(test, s.lobbyId).pausesUsedBlue).toBe(i);
             tx(test, s.a.b1, resume(s));
@@ -338,6 +339,7 @@ describe('pause_draft / resume_draft (contract pause_draft, resume_draft, D-62; 
         expectReject(test, s.a.b2, pause(s), 'Blue team has used all 3 pauses.');
         expect(session(test, s.lobbyId).timerState.isPaused).toBe(false);
         expect(session(test, s.lobbyId).pausesUsedBlue).toBe(3);
+        advance(test, 10_000); // T-S10f: not needed since review F3 (the 10 s interval is per pausing party), kept harmless
         tx(test, s.a.r1, pause(s));
         expect(session(test, s.lobbyId).pausesUsedRed).toBe(1);
     });
@@ -346,6 +348,7 @@ describe('pause_draft / resume_draft (contract pause_draft, resume_draft, D-62; 
         const test = newHarness();
         const s = setupLobby(test, { lobby: { allowPlayerPause: true, refereeCanPause: true } });
         for (let i = 1; i <= 4; i++) {
+            advance(test, 10_000); // T-S10f (draft audit #8): a manual pause within 10 s of the previous manual pause is rejected
             tx(test, s.host, pause(s));
             expect(session(test, s.lobbyId).timerState.isPaused).toBe(true);
             tx(test, s.host, resume(s));

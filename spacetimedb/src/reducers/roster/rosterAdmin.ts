@@ -3,7 +3,7 @@ import { t, SenderError } from 'spacetimedb/server';
 import { ensureAdmin } from '@module/helpers/identity/ensurePermissions';
 import { auditInsert, auditUpdate } from '@module/helpers/admin/auditColumns';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
-import { validateUid, deriveRegion, recalcDuplicateUid } from '@module/helpers/roster/rosterHelpers';
+import { validateUid, deriveRegion, recalcDuplicateUid, ensureDisplayLabelLength } from '@module/helpers/roster/rosterHelpers';
 import { updateAccountRating } from '@module/helpers/stats/accountRating';
 import { accountLobbyLocks } from '@module/helpers/lobby/lobbyHelpers'; // S10e review F3: abandoned memberships skipped
 
@@ -26,6 +26,7 @@ export const admin_create_hsr_account = spacetimedb.reducer(
             throw new SenderError('Maximum 5 HSR accounts per user');
         }
 
+        ensureDisplayLabelLength(displayLabel.trim());
         const label = displayLabel.trim() || 'Account ' + (existing.length + 1);
         const isFirst = existing.length === 0;
 
@@ -59,6 +60,7 @@ export const admin_update_hsr_account = spacetimedb.reducer(
 
         const trimmed = displayLabel.trim();
         if (!trimmed) throw new SenderError('Display label cannot be empty');
+        ensureDisplayLabelLength(trimmed);
 
         ctx.db.HsrAccount.id.update(updateWithAudit(ctx, account, {
             displayLabel: trimmed,

@@ -178,7 +178,9 @@ export const dq_participant = spacetimedb.reducer(
 //     is decided when a side reaches ceil(bestOf / 2).
 //   - Rejected: the lobby is voided (record kept as Rejected for audit, lobby hard-deleted so a replay lobby can be
 //     made, A24(3)), then the tally is recomputed without the record (recordGameSettled).
-// Standalone records keep the old behaviour (status / winner / end reason written on the record only).
+// Standalone records keep the old behaviour (status / winner / end reason written on the record only), behind the
+// same status rule (S10f, results audit #8: not Voided; Submitted / Disputed / Validated) and a present lobby in
+// AwaitingResult.
 
 export const override_match_result = spacetimedb.reducer(
     {
@@ -267,6 +269,20 @@ export const override_match_result = spacetimedb.reducer(
             // recordGameSettled below re-decides it from the new tally.
             if (bracketMatch.state.tag === 'Decided') {
                 rollbackBracketResult(ctx, bracketMatch.id, actingUserId, false, false);
+            }
+        } else {
+            // Results audit #8 (S10f): a standalone record gets the same status rule as the tournament branch (not
+            // Voided; Submitted, Disputed or Validated, so a Pending record of a match still being played is refused),
+            // and its lobby must be present and parked in AwaitingResult (the stage the game close moves it to; a live
+            // draft is never overridden).
+            if (matchResult.status.tag === 'Voided') throw new SenderError('This result was voided.');
+            if (!['Submitted', 'Disputed', 'Validated'].includes(matchResult.status.tag)) {
+                throw new SenderError(`Only a Submitted, Disputed or Validated result can be overridden (this one is ${matchResult.status.tag}).`);
+            }
+            const lobby = ctx.db.Lobby.id.find(matchResult.lobbyId);
+            if (!lobby) throw new SenderError('The match lobby no longer exists.');
+            if (lobby.stage.tag !== 'AwaitingResult') {
+                throw new SenderError('Only the result of a match waiting for its result (AwaitingResult) can be overridden.');
             }
         }
 

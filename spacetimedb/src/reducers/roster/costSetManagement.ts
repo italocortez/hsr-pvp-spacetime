@@ -5,6 +5,7 @@ import { auditInsert, auditUpdate } from '@module/helpers/admin/auditColumns';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { isCostSetInUse } from '@module/helpers/draft/costSetGuards';
 import { readAbuseConfig } from '@module/helpers/lobby/abuseControls';
+import { BUDGET_MAX } from '@module/helpers/lobby/lobbyConfigBounds';
 import { canonicalPair } from '@shared/scoring';
 
 // Valid GameMode tags
@@ -12,6 +13,52 @@ const VALID_GAME_MODE_TAGS = ['MemoryOfChaos', 'ApocalypticShadow', 'AnomalyArbi
 
 // Default cost set — cannot be unpublished, locked, or deleted via these reducers
 const DEFAULT_COST_SET_ID = 0;
+
+// ─── edit_draft_*_cost input rules (S10f, roster audit #9) ──────────────────────
+// gameModeTag: one of the GameMode tags and equal to the set's own game mode (create_cost_set clones that mode only);
+// draftModeTag: Classic or Auction. Every cost value (e0..e6, s1..s5) is a finite number from 0 to BUDGET_MAX (100000,
+// the lobby budget ceiling: a higher price can never be paid); a synergy costModifier is finite with |value| <=
+// BUDGET_MAX (negative modifiers stay allowed). Character and light-cone names must be HsrCharacter / HsrLightcone rows
+// (the synergy names were already checked, S10c). The stored cost object holds the named fields only.
+
+const VALID_DRAFT_MODE_TAGS = ['Classic', 'Auction'];
+
+function ensureDraftRowTags(costSet: any, gameModeTag: string, draftModeTag: string): void {
+    if (!VALID_GAME_MODE_TAGS.includes(gameModeTag)) {
+        throw new SenderError(`Invalid gameModeTag. Must be one of: ${VALID_GAME_MODE_TAGS.join(', ')}`);
+    }
+    if (gameModeTag !== costSet.gameMode.tag) {
+        throw new SenderError(`This cost set is for ${costSet.gameMode.tag}; gameModeTag must be ${costSet.gameMode.tag}.`);
+    }
+    if (!VALID_DRAFT_MODE_TAGS.includes(draftModeTag)) {
+        throw new SenderError(`Invalid draftModeTag. Must be one of: ${VALID_DRAFT_MODE_TAGS.join(', ')}`);
+    }
+}
+
+/** Parses costsJson into an object of exactly `keys`, each a finite number in 0..BUDGET_MAX. */
+function parseCostFields(costsJson: string, keys: string[]): Record<string, number> {
+    let parsed: any;
+    try {
+        parsed = JSON.parse(costsJson);
+    } catch {
+        throw new SenderError('costsJson must be a valid JSON object.');
+    }
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new SenderError('costsJson must be a valid JSON object.');
+    }
+    const costs: Record<string, number> = {};
+    for (const key of keys) {
+        const value = parsed[key];
+        if (typeof value !== 'number') {
+            throw new SenderError(`costsJson must have numeric field "${key}".`);
+        }
+        if (!Number.isFinite(value) || value < 0 || value > BUDGET_MAX) {
+            throw new SenderError(`costsJson field "${key}" must be a number between 0 and ${BUDGET_MAX}.`);
+        }
+        costs[key] = value;
+    }
+    return costs;
+}
 
 // ─── create_cost_set ──────────────────────────────────────────────────────────
 // Creates a new draft cost set by cloning costs from an existing published set
@@ -138,21 +185,10 @@ export const edit_draft_character_cost = spacetimedb.reducer(
             throw new SenderError('Cannot edit a cost set that is not in draft state. Publish creates a live copy; clone to make a new draft.');
         }
 
-        // Parse JSON cost object (15.4 D-16: single costsJson, one row = one draftMode)
-        let costs: any;
-        try {
-            costs = JSON.parse(costsJson);
-        } catch {
-            throw new SenderError('costsJson must be a valid JSON object.');
-        }
-
-        // Validate EidolonCost structure (e0-e6 as numbers)
-        const eidolonKeys = ['e0', 'e1', 'e2', 'e3', 'e4', 'e5', 'e6'];
-        for (const key of eidolonKeys) {
-            if (typeof costs[key] !== 'number') {
-                throw new SenderError(`costsJson must have numeric field "${key}".`);
-            }
-        }
+        // Parse JSON cost object (15.4 D-16: single costsJson, one row = one draftMode); EidolonCost e0-e6, S10f bounds
+        const costs = parseCostFields(costsJson, ['e0', 'e1', 'e2', 'e3', 'e4', 'e5', 'e6']);
+        ensureDraftRowTags(costSet, gameModeTag, draftModeTag);
+        if (!ctx.db.HsrCharacter.name.find(characterName)) throw new SenderError(`Character ${characterName} not found.`);
 
         const gameMode = { tag: gameModeTag, value: {} } as any;
         const draftMode = { tag: draftModeTag, value: {} } as any;
@@ -216,21 +252,10 @@ export const edit_draft_lightcone_cost = spacetimedb.reducer(
             throw new SenderError('Cannot edit a cost set that is not in draft state.');
         }
 
-        // Parse JSON cost object (15.4 D-17: single costsJson, one row = one draftMode)
-        let costs: any;
-        try {
-            costs = JSON.parse(costsJson);
-        } catch {
-            throw new SenderError('costsJson must be a valid JSON object.');
-        }
-
-        // Validate SuperimpositionCost structure (s1-s5 as numbers)
-        const superimpositionKeys = ['s1', 's2', 's3', 's4', 's5'];
-        for (const key of superimpositionKeys) {
-            if (typeof costs[key] !== 'number') {
-                throw new SenderError(`costsJson must have numeric field "${key}".`);
-            }
-        }
+        // Parse JSON cost object (15.4 D-17: single costsJson, one row = one draftMode); SuperimpositionCost s1-s5, S10f bounds
+        const costs = parseCostFields(costsJson, ['s1', 's2', 's3', 's4', 's5']);
+        ensureDraftRowTags(costSet, gameModeTag, draftModeTag);
+        if (!ctx.db.HsrLightcone.name.find(lightconeName)) throw new SenderError(`Light cone ${lightconeName} not found.`);
 
         const gameMode = { tag: gameModeTag, value: {} } as any;
         const draftMode = { tag: draftModeTag, value: {} } as any;
@@ -302,6 +327,11 @@ export const edit_draft_synergy_cost = spacetimedb.reducer(
         for (const name of [characterA, characterB]) {
             if (!ctx.db.HsrCharacter.name.find(name)) throw new SenderError(`Character ${name} not found.`);
         }
+        // S10f (roster audit #9): the modifier is finite and bounded; the tags are checked like the cost rows'.
+        if (!Number.isFinite(costModifier) || Math.abs(costModifier) > BUDGET_MAX) {
+            throw new SenderError(`costModifier must be a number between -${BUDGET_MAX} and ${BUDGET_MAX}.`);
+        }
+        ensureDraftRowTags(costSet, gameModeTag, draftModeTag);
 
         const gameMode = { tag: gameModeTag, value: {} } as any;
         const draftMode = { tag: draftModeTag, value: {} } as any;
@@ -428,7 +458,7 @@ export const publish_cost_set = spacetimedb.reducer(
                     updateWithAudit(ctx, existingLive, { costModifier: draft.costModifier }, user.id),
                 );
             } else {
-                // KEEP `auditInsert` primitive for file-symmetry with L369/L391 inline ternaries
+                // KEEP `auditInsert` primitive for file-symmetry with the character / light-cone inline ternaries above
                 // and 3 edit_draft_* else-branches — auditInsert stays callable in this file
                 // regardless, so migrating only this branch yields zero eviction win.
                 ctx.db.HsrSynergyCost.insert({
@@ -504,8 +534,8 @@ export const lock_cost_set = spacetimedb.reducer(
 
 // ─── unpublish_cost_set ───────────────────────────────────────────────────────
 // Sets isPublished = false and isLocked = false on a locked+published set.
-// Live cost rows remain in the tables but the CostSet metadata signals
-// "don't broadcast" — clients will stop receiving this set's cost data.
+// Live cost rows remain in the public cost tables until delete_cost_set (a client subscribed with
+// WHERE costSetId = N keeps receiving them); only the CostSet flags change.
 //
 // Requires isLocked === true (must lock before unpublishing).
 // NOTE: costSetId=0 (the default set) cannot be unpublished.

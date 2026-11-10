@@ -453,6 +453,7 @@ admin_upsert_archetype, admin_delete_archetype, admin_assign_character_archetype
 | Phase 12.3 execution | D-G lobby guards (ROST-GUARD-01) on set_active_hsr_account (WIDE), batch_upsert_characters (NARROW), batch_remove_characters (NARROW), migrate_roster (source+target); rosterMutations.ts helper extraction (D-D-01/02/03) with applyBatchUpsert + applyBatchRemove; migrate_roster rating-recompute fix (D-D-04 latent bug) | 2026-04-12 |
 | Integration Surface row identifier updated: `view_public_accounts` → `view_public_hsr_accounts` (matches Phase 15.5 D-04 view rename — `hsr_` names the underlying HsrAccount table). View body, projection, and `isRosterPublic` / `isRatingPublic` filtering are unchanged from Phase 10.4. Historical Phase 10.4 row at line 451 left verbatim per the no-historical-rewrite rule | Phase 15.5 execution | 2026-04-16 |
 | Phase 15.5 verify-work: provenance entry added documenting that the `view_public_hsr_accounts` identifier propagated to the Integration Surface table during Plan 04 (commit `28d59f9`). No roster code or behavior change in Phase 15.5 — pure identifier follow-through | Phase 15.5 verify-work | 2026-04-17 |
+| `displayLabel` is at most 32 characters in the user and admin account reducers. Deleting a user recomputes the duplicate-UID flag of the accounts that shared a UID with the deleted ones | Phase S10f execution (backend audit 2026-11-09, roster findings 5, 6) | 2026-11-09 |
 
 ---
 

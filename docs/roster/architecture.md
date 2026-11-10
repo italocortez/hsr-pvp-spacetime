@@ -165,6 +165,15 @@ for their roster while the rows stay for the match (`docs/lobby/architecture.md`
   hidden from the caller (`hideUserId`). Abandoned memberships of the caller are skipped.
 - **`view_my_roster`** re-checked against the profile page: unchanged.
 
+## Phase S10f execution (roster audit #5, #6)
+
+- **`displayLabel` cap (#5).** `create_hsr_account`, `update_hsr_account`, `admin_create_hsr_account` and
+  `admin_update_hsr_account` reject a trimmed label over 32 characters ("Display label cannot exceed 32 characters";
+  `rosterHelpers.ts::ensureDisplayLabelLength`, the `User.displayName` limit). The label reaches the public roster views.
+- **Duplicate UID after user deletion (#6).** `performUserDeletion` (`helpers/identity/userDeletionHelper.ts`) calls
+  `recalcDuplicateUid` for each distinct UID of the deleted user's accounts after deleting them, as the two delete
+  reducers do: the remaining holder of a UID reverts to `isDuplicateUid = false` when it is alone.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -183,6 +192,7 @@ for their roster while the rows stay for the match (`docs/lobby/architecture.md`
 | `computeAccountRating` refactored over a character set (`computeRosterRating`) with a single-account wrapper; `computeMergedAccountRating` / `computeLobbyMemberRating` added for multi-account players | Phase S6 execution (backlog #10) | 2026-11-06 |
 | `is_roster_public` index; `view_public_hsr_accounts` index-only (owner identified by choice); `view_my_roster_visibility` per A40 with `joinSeq` and masked ids | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 | Lobby guards (D-G-01, D-24) ignore abandoned memberships (`accountLobbyLocks`) | Phase S10e execution (lobby audit #12, review F3) | 2026-11-09 |
+| `displayLabel` at most 32 characters; user deletion recomputes `isDuplicateUid` | Phase S10f execution (roster audit #5, #6) | 2026-11-09 |
 
 ---
 

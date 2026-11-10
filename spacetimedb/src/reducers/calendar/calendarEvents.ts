@@ -14,8 +14,9 @@
 // stays allowed, e.g. editing a finished event's title). A90: update rejects reviving an ended event when its organizer
 // already has 40 not-yet-ended events.
 //
-// Lazy cleanup (D-07): events older than 90 days are deleted on every call
+// Lazy cleanup (D-07): the organizer's events older than 90 days are deleted by create_calendar_event
 // One event per bracket match enforced (D-19)
+// Length caps (S10f, calendar audit #5): title 1..100 characters, description up to 1000 characters (both trimmed)
 // Auto-invite bracket match participants for tournament-linked events (D-17, D-18)
 
 import spacetimedb from '@module/schema';
@@ -30,6 +31,25 @@ import { deleteCalendarEventWithInvites } from '@module/helpers/calendar/calenda
 const MAX_ACTIVE_EVENTS_PER_USER = 40;
 const MAX_RETAINED_EVENTS_PER_USER = 100;
 const MAX_INVITEES_PER_EVENT = 9;
+const MAX_TITLE_LENGTH = 100;
+const MAX_DESCRIPTION_LENGTH = 1000;
+
+/**
+ * S10f (calendar audit #5): the title and description reach every invitee's and saver's view, so both are bounded.
+ * Returns the trimmed title and the stored description (undefined when empty).
+ */
+function eventTexts(title: string, description: string): { title: string; description: string | undefined } {
+    const trimmedTitle = (title ?? '').trim();
+    if (trimmedTitle === '') throw new SenderError('Event title must not be empty.');
+    if (trimmedTitle.length > MAX_TITLE_LENGTH) {
+        throw new SenderError(`Event title cannot exceed ${MAX_TITLE_LENGTH} characters.`);
+    }
+    const trimmedDescription = (description ?? '').trim();
+    if (trimmedDescription.length > MAX_DESCRIPTION_LENGTH) {
+        throw new SenderError(`Event description cannot exceed ${MAX_DESCRIPTION_LENGTH} characters.`);
+    }
+    return { title: trimmedTitle, description: trimmedDescription !== '' ? trimmedDescription : undefined };
+}
 
 /**
  * D-08, A89: who may update, delete or manage the invites of an event. Personal events: the organizer or an Admin.
@@ -74,7 +94,7 @@ export const create_calendar_event = spacetimedb.reducer(
         const user = getAuthenticatedUser(ctx);
         if (user.isGuest) throw new SenderError('Guests cannot create calendar events.');
 
-        if (!title || title.trim() === '') throw new SenderError('Event title must not be empty.');
+        const texts = eventTexts(title, description);
 
         const startMicros = BigInt(startAt);
         const endMicros = BigInt(endAt);
@@ -154,9 +174,10 @@ export const create_calendar_event = spacetimedb.reducer(
             }
         }
 
-        // Validate total invitee count (D-04)
+        // Validate total invitee count (D-04). Calendar audit #2 (S10f): manual ids are de-duplicated among themselves
+        // as well as against the auto-invite set (the invite table has no engine-enforced key).
         const autoSet = new Set(autoInviteeIds);
-        const uniqueManual = manualInviteeIds.filter(id => !autoSet.has(id));
+        const uniqueManual = [...new Set(manualInviteeIds)].filter(id => !autoSet.has(id));
         if (autoInviteCount + uniqueManual.length > MAX_INVITEES_PER_EVENT) {
             throw new SenderError(`Maximum ${MAX_INVITEES_PER_EVENT} invitees per event.`);
         }
@@ -168,24 +189,16 @@ export const create_calendar_event = spacetimedb.reducer(
             }
         }
 
-        // Insert event
-        ctx.db.CalendarEvent.insert(insertWithAudit(ctx, {
+        // Insert event (calendar audit LOW #13: the inserted row, with its id, is the one insert returns)
+        const newEvent = ctx.db.CalendarEvent.insert(insertWithAudit(ctx, {
             id: 0,
             organizerId: user.id,
-            title: title.trim(),
+            title: texts.title,
             startAt: new Timestamp(startMicros),
             endAt: new Timestamp(endMicros),
             bracketMatchId: linkedBracketMatchId,
-            description: description && description.trim() !== '' ? description.trim() : undefined,
+            description: texts.description,
         }, user.id));
-
-        // Retrieve the newly inserted event by finding the most recent one for this user
-        // (within the same transaction, no race condition)
-        const allOrganizerEvents = [...ctx.db.CalendarEvent.organizer_id.filter(user.id)];
-        const newEvent = allOrganizerEvents.sort((a: any, b: any) =>
-            Number(b.createdDate.microsSinceUnixEpoch - a.createdDate.microsSinceUnixEpoch)
-        )[0];
-        if (!newEvent) return;
 
         // Insert auto-invites for tournament-linked events
         for (const inviteeId of autoInviteeIds) {
@@ -234,7 +247,7 @@ export const update_calendar_event = spacetimedb.reducer(
         if (!event) throw new SenderError('Calendar event not found.');
         ensureCanManageEvent(ctx, user, event, 'update this event');
 
-        if (!title || title.trim() === '') throw new SenderError('Event title must not be empty.');
+        const texts = eventTexts(title, description);
 
         const startMicros = BigInt(startAt);
         const endMicros = BigInt(endAt);
@@ -256,8 +269,8 @@ export const update_calendar_event = spacetimedb.reducer(
         }
 
         ctx.db.CalendarEvent.id.update(updateWithAudit(ctx, event, {
-            title: title.trim(),
-            description: description && description.trim() !== '' ? description.trim() : undefined,
+            title: texts.title,
+            description: texts.description,
             startAt: new Timestamp(startMicros),
             endAt: new Timestamp(endMicros),
         }, user.id));

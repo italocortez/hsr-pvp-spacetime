@@ -173,7 +173,7 @@ The match session system manages the entire draft lifecycle within a lobby: char
 **Flow:**
 1. Authenticate caller
 2. Verify lobby is in `Drafting` stage
-3. Server-side timer validation: elapsed time since `turnStartAt` must be >= `standardTurnSeconds * 1000` ms
+3. Server-side timer validation: elapsed time since `turnStartAt` must be >= `standardTurnSeconds * 1000` ms _Superseded in Phase S10f execution (backend audit 2026-11-09, draft finding 5 (bug F10))._
 4. Read current step from `draftSequence[turnIndex]`
 5. **If Pick turn:**
    - Default: `characterName="EMPTY"`, `eidolon=0`
@@ -472,7 +472,7 @@ The match session system manages the entire draft lifecycle within a lobby: char
 4. Reject if caller is spectator (and not referee)
 5. If caller is referee with `refereeCanPause=true`: unlimited pauses, skip team counter
 6. If caller is non-referee player: require `allowPlayerPause=true`, enforce 3-per-team limit
-7. Calculate `timeRemainingMs` from elapsed time and accumulated pause time
+7. Calculate `timeRemainingMs` from elapsed time and accumulated pause time _Superseded in Phase S10f execution (backend audit 2026-11-09, draft finding 5 (bug F10))._
 8. Insert `Pause` step with `timeRemainingMs` and `isAutoPause=false`
 9. Set `timerState.isPaused=true`
 10. If non-referee pause: increment `pausesUsedBlue` or `pausesUsedRed`
@@ -515,12 +515,12 @@ The match session system manages the entire draft lifecycle within a lobby: char
 3. Reject if not currently paused
 4. Find most recent Pause step to identify original pauser and stored `timeRemainingMs`
 5. Allow resume if caller is referee OR is the original pauser _Superseded in Phase S10c execution (DECISIONS.md A85)._
-6. Set `timerState.isPaused=false`, `turnStartAt=ctx.timestamp`, `accumulatedPauseMs=timeRemainingMs` (so timer resumes from paused position)
+6. Set `timerState.isPaused=false`, `turnStartAt=ctx.timestamp`, `accumulatedPauseMs=timeRemainingMs` (so timer resumes from paused position) _Superseded in Phase S10f execution (backend audit 2026-11-09, draft finding 5 (bug F10))._
 
 **Expected State Changes:**
 - `MatchSession.timerState.isPaused` = false
 - `MatchSession.timerState.turnStartAt` reset to current timestamp
-- `MatchSession.timerState.accumulatedPauseMs` = timeRemainingMs from Pause step
+- `MatchSession.timerState.accumulatedPauseMs` = timeRemainingMs from Pause step _Superseded in Phase S10f execution (backend audit 2026-11-09, draft finding 5 (bug F10))._
 
 **Error Cases:**
 | Condition | Error Message |
@@ -818,7 +818,7 @@ Note: The globally-active account (HsrAccount.isActive=true) is NOT consulted. P
 **Then:** Pause step recorded with timeRemainingMs. timerState.isPaused=true. pausesUsedBlue incremented to 1.
 
 **When:** Same Blue player calls `resume_draft(lobbyId)`
-**Then:** timerState.isPaused=false. accumulatedPauseMs = timeRemainingMs from Pause step. turnStartAt reset.
+**Then:** timerState.isPaused=false. accumulatedPauseMs = timeRemainingMs from Pause step. turnStartAt reset. _Superseded in Phase S10f execution (backend audit 2026-11-09, draft finding 5 (bug F10))._
 
 ### Pause and Resume: Referee
 
@@ -1188,6 +1188,8 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 | Mirror picks, once per team: with `allowMirrorPicks` a team may pick a character the other team holds, but not one it already holds ("Your team already picked this character."); without it "Character already picked." is unchanged. The timer pool follows the same rule. `EMPTY` is never blocking: a team may hold any number of `EMPTY` picks, manual or by timer, with mirror on or off. Auction is unaffected (sales are exclusive) | Phase S10d execution (DECISIONS.md A87) | 2026-11-09 |
 | `start_draft` is rejected while a seated player (not a coach) is offline: "All Blue and Red players must be online before starting."; an offline coach or spectator does not block | Phase S10d execution (DECISIONS.md A92(1)) | 2026-11-09 |
 | `start_draft` account rejections name the seat, never the user id: "The player at seat N has no account selected for this match. …", "The player at seat N has no account selected. autoRandomPick requires …", "The player at seat N has no characters on their selected account(s). …" | Phase S10e execution (backend audit 2026-11-09, lobby finding 9) | 2026-11-09 |
+| Turn clock, one definition for pause, auto-pause, resume, both auto-pause lift paths and both timer expiry reducers (Classic and Auction): the turn budget is `accumulatedPauseMs` when it is above 0, otherwise `standardTurnSeconds * 1000`; the remaining time is the budget while paused, otherwise the budget minus the time since `turnStartAt`, never below 0. A pause stores the remaining time (at least 1 ms) as the budget; a resume keeps it and restarts `turnStartAt`; a new turn resets the budget to 0. After any pause and resume a turn has exactly the time it had left, and expiry is accepted only at 0 remaining | Phase S10f execution (backend audit 2026-11-09, draft finding 5 (bug F10)) | 2026-11-09 |
+| Post-draft edit steps are capped per team side: 300 `SetEidolon` / `EquipLightcone` / `UnequipLightcone` steps per edited side and 300 `ConfirmGame` steps per confirming side ("The <Side> side of this game has reached the limit of 300 edit steps; the referee or staff can still close it." / "… confirmation steps; …"); `close_game`, the Admin closed-game edit and concede are not capped. A manual `pause_draft` is rejected within 10 s of the same party's previous manual pause (Blue, Red, or the referee); auto-pauses are neither counted nor rejected | Phase S10f execution (backend audit 2026-11-09, draft finding 8) | 2026-11-09 |
 
 ---
 

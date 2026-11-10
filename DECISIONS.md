@@ -979,3 +979,107 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** user, 2026-11-09: "if the host drops in waiting room, shouldn't we just drop the room? nothing had started yet", then "i forgot we had a 30m room cleanup for idles and everyone offline, even hosts right? wouldn't we want to work around that one then?", then "yeah i agree with the new version". S10d review F4: as built for A92(5), tournament staff who dropped for 15 s in Waiting lost the host role to a player and nothing returned it.
 - **Supersedes:** the host half of A92(5).
 - **Where implemented:** S10e
+
+### A94 — User deletion and tournaments
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:**
+  1. The organizer of a tournament that is not Completed or Cancelled cannot delete their own account (`delete_my_account` rejects, verified and guest branch alike).
+  2. Every other deletion path (`performUserDeletion` from self-deletion, ban, admin and server deletion) settles the user's tournament ties first: in a tournament whose bracket does not exist yet the user is withdrawn (the enrolment path of `withdraw_from_tournament`, including solo team, membership and account locks); once the bracket exists the user is disqualified (the `dq_participant` path). Pending team requests, assistant rows and stand-in approvals of the user are deleted.
+- **Why:** user, 2026-11-09: "deleting a user with tournament ties: agree". Audit, identity finding 2 and tournament finding 14: a deleted player kept an enrolment, a team and a captaincy; an organizer could delete their account mid-tournament.
+- **Supersedes:** nothing; completes the deletion cascade.
+- **Where implemented:** S10g
+
+### A95 — Guest retention and a guest creation limit
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:**
+  1. The weekly identity clean-up deletes a guest user that has been idle for 30 days and has no match history at all (no participant row in any live or archived match). A guest with any match history is kept.
+  2. Guest creation (`login_as_guest`) gets a counter with a threshold and an admin alert, modelled on the guest lobby breaker (A57 / A58); thresholds live in `AbuseConfig`.
+- **Why:** user, 2026-11-09: "a guess idle for 30 days is fine as long as there is no match history at all". Audit, identity finding 7: guests were never collected and creation was unlimited.
+- **Supersedes:** D-06's "identity GC skips guests" for the idle, history-free case.
+- **Where implemented:** S10h
+
+### A96 — Cursor events carry the seat, not the user
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:** `LobbyCursorEvent` rows identify the sender by the lobby seat number (`joinSeq`), never by user id, in anonymous and identified lobbies alike. The stream is restricted to the lobby's members if SpacetimeDB 2.14.1 offers a supported way to do so for an event table; if it does not, the orchestrator reports back before any other route is chosen.
+- **Why:** user, 2026-11-09: "cursor stream: i agree on that". Audit, lobby finding 8: any connected client could read every lobby's cursor stream with real user ids.
+- **Supersedes:** the `senderUserId` column of the cursor event (S11 clear-publish).
+- **Where implemented:** S10h
+
+### A97 — Anonymous labels come from the seat number
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:** an anonymized member's label is built from the seat kind and the seat number (`joinSeq`), for example "Spectator #7" or "Blue Player #3", in views and in stored chat labels. The seat number never changes and is never reused (A74), so a label names one membership for the lobby's lifetime.
+- **Why:** user, 2026-11-09: "anonymous labels: that's fine!". Audit, lobby finding 7: position-based labels shifted when an earlier peer left, so old chat lines pointed at the wrong person.
+- **Supersedes:** the position-based label of `anonymousLabels.ts`.
+- **Where implemented:** S10h
+
+### A98 — Away and abandoned members cannot act
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:** a member whose row is away (`leftAt`) or abandoned (`abandonedAt`) is rejected by every action reducer of that lobby: draft and Auction actions, post-draft edits, score entry and confirmations, pause / resume / undo, chat, cursor, seat and captain changes, referee and host transfers, kick / ban, settings. An away member regains everything by returning through `join_lobby`; an abandoned member never does. `leave_lobby` and `join_lobby` themselves are unaffected. Moderator and Admin powers that do not depend on membership are unaffected.
+- **Why:** user, 2026-11-09: "away and abandoned: correct". Audit, lobby finding 2; extends A92(4).
+- **Supersedes:** nothing; completes A68(2)(4).
+- **Where implemented:** S10h
+
+### A99 — A private lobby needs a password
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:** `create_lobby` with `isPublic = false` and an empty password is rejected, and so is switching a lobby to private while it has no password.
+- **Why:** user, 2026-11-09: "private lobby without a password: correct". Audit, lobby finding 11: such a lobby could never be joined.
+- **Where implemented:** S10h
+
+### A100 — No advance out of an unfinished draft
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:** `advance_stage` from Drafting is rejected until both teams hold all their characters (`charactersPerTeam`, `EMPTY` placeholders count).
+- **Why:** user, 2026-11-09: "advancing out of an unfinished draft: correct". Audit, draft finding 7: an early advance left a lineup that could never be valid.
+- **Where implemented:** S10h
+
+### A101 — Light-cone costs come from the lobby's own cost set and draft mode
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:** `equip_lightcone` (and every other light-cone price lookup, including the Auction auto-ban pool) reads the rows of the lobby's cost set, game mode and draft mode. There is no silent fallback to the default cost set: the coverage guard (`doesCostSetCover`) and the lookup read the same rows, and a missing row is handled by one rule for characters and light cones alike (a selectable cost set covers what its lobby needs; a missing row rejects the action with a clear text).
+- **Why:** user, 2026-11-09: "light cone cost in auction: correct on that". Audit, draft finding 9 and roster finding 8.
+- **Supersedes:** the Classic-rows lookup and the fallback to set 0.
+- **Where implemented:** S10h
+
+### A102 — The global rating is per season
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:** `globalCompositeRating` is computed from, and written to, the user's `MmrRating` rows of the current season only.
+- **Why:** user, 2026-11-09: "global rating: yes thats right". Audit, results finding 4.
+- **Where implemented:** S10h
+
+### A103 — A tournament's anonymous setting is fixed after Draft
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:** `update_tournament` accepts a change of `isAnonymousDefault` in the Draft stage only, like format and team size.
+- **Why:** user, 2026-11-09: "tournament settings: yes that's fine!". Audit, tournament finding 9: flipping it after registration left display names in solo team names.
+- **Where implemented:** S10g
+
+### A104 — Locking game accounts after registration
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:** a registered (approved or waitlisted) player may add account locks for a tournament until their first game of that tournament has started; locks are never removed that way. The rest is unchanged and confirmed: registration locks the accounts named, or all of the player's accounts when none are named (a player owns at most 5); per match the player selects, in the Waiting stage, one or more of their locked accounts up to the tournament's `maxAccountsPerPlayer`; an account that is not locked cannot be selected. A waitlisted registrant's chosen accounts are remembered for promotion.
+- **Why:** user, 2026-11-09: "they also select which account or accounts they play with on a given match as long as they all were locked during the signup, right?" (yes), after the recommendation to allow late locking until the first tournament game. Audit, tournament finding 7: a player who registered before adding an account could never start a match.
+- **Where implemented:** S10g
+
+### A105 — Tournament staff views
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:**
+  1. The staff views (`view_my_tournaments`, `_enrolled`, `_teams`, `_team_members`, `_matches`, `_match_results`, `_lobbies`) return only tournaments that are not Completed or Cancelled, for the organizer, the assistants, and Moderators and Admins.
+  2. An Admin-only set of views sees everything, finished and cancelled tournaments included. To bound egress it takes the tournament id as an argument.
+- **Why:** user, 2026-11-09: "yes, make one for admin only that sees everything tho.". Audit, tournament finding 12.
+- **Where implemented:** S10g
+
+### A106 — A Classic timer auto-pick credits the whole team
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:** when the Classic turn timer auto-picks a real character, every player of the acting team (the non-coach participants of that side) gets the played stat for it, with that side's win flag; the other team gets the faced stat and the global stat is written once. Same rule as an Auction sale (A82(2)). A manual Classic pick still credits the picker only (A82(4)); `EMPTY` and `SKIP` write nothing.
+- **Why:** user, 2026-11-09: "for the auto picker on classic, yes, credit every player on the team that got it". S10f review F5: the timer pick has no picker, so nobody received the played stat.
+- **Supersedes:** nothing; fills the case A82 left open.
+- **Where implemented:** S10h

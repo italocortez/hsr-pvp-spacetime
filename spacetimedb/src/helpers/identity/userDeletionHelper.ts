@@ -3,6 +3,7 @@ import { transferFlagsOnRemoval } from '@module/helpers/lobby/flagTransferHelper
 import { removeMemberRow } from '@module/helpers/lobby/memberRemoval';
 import { LIVE_STAGES, slotIsCoach, slotIsSpectator } from '@module/helpers/lobby/lobbyHelpers';
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
+import { recalcDuplicateUid } from '@module/helpers/roster/rosterHelpers';
 
 /**
  * Returns true if the iterator yields at least one element.
@@ -106,6 +107,11 @@ export function performUserDeletion(ctx: any, userId: number, actorId: number): 
             ctx.db.HsrAccountCharacter.delete(char);
         }
         ctx.db.HsrAccount.id.delete(account.id);
+    }
+    // Roster audit #6 (S10f): the other holders of a deleted account's UID get their isDuplicateUid recomputed, as the
+    // two delete reducers do (a UID left with one account reverts to false).
+    for (const uid of new Set(hsrAccounts.map((a: any) => a.uid))) {
+        recalcDuplicateUid(ctx, uid, actorId);
     }
 
     // Guest users with no history → hard-delete (no references to preserve)

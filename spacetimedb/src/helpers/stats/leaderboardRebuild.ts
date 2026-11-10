@@ -88,8 +88,21 @@ export function rebuildLeaderboard(ctx: any, seasonId?: number): void {
     const byMode = new Map<string, Entry[]>();
     for (const { gameModeTag } of MODE_CATEGORIES) byMode.set(gameModeTag, []);
     const globalUserIds = new Set<number>();
+    // Results audit #9 (S10f): user deletion keeps MmrRating / PlayerStat, so a user with no live User row (hard-deleted,
+    // or soft-deleted and waiting for the job) is skipped: the public table never ranks a deleted account.
+    const liveUser = new Map<number, boolean>();
+    const isLive = (userId: number): boolean => {
+        let live = liveUser.get(userId);
+        if (live === undefined) {
+            const user = ctx.db.User.id.find(userId);
+            live = !!user && user.deletedAt == null;
+            liveUser.set(userId, live);
+        }
+        return live;
+    };
     for (const r of ctx.db.MmrRating.iter()) {
         if (r.seasonId !== effectiveSeasonId || r.matchesPlayed < MIN_MATCHES) continue;
+        if (!isLive(r.userId)) continue;
         globalUserIds.add(r.userId);
         const list = byMode.get(r.gameMode.tag);
         if (!list) continue;

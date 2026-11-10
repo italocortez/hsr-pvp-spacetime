@@ -102,6 +102,14 @@ No direct client-callable reducers. All writes are performed by internal helpers
   (displayName, avatar, title, MMR per mode; PAGE-MAP D2, A40) and no audit columns: see
   [../views/architecture.md](../views/architecture.md) "Phase S9b execution".
 
+## Phase S10f execution (results audit #3)
+
+Finalization step 16 (`helpers/results/finalizationHelpers.ts`) writes no `PlayerCharacterStat`, faced, ban or
+`GlobalCharacterStat` row for the sentinels `EMPTY` (timer pick or auto-nomination) and `SKIP` (timer ban), and no
+`PlayerCharacterStat` row for the system user (a Classic timer pick of a real character, `actorUserId = 0`). For that
+timer pick the opponents' faced rows and the global row are still written, with the side read from `actorSlot` as for
+a manual pick. Details: `docs/match-results/architecture.md`, "Phase S10f execution".
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -115,6 +123,7 @@ No direct client-callable reducers. All writes are performed by internal helpers
 | MatchType (Solo | Team) partition allows separate stats for 1v1 vs team formats | Phase 06 execution | 2026-02-28 |
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
 | Stat views without userId / audit ids; GlobalCharacterStat SYSTEM actor; relationships with the other player's card and MMR | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
+| No stat rows for `EMPTY`, `SKIP` or the system picker | Phase S10f execution (results audit #3) | 2026-11-09 |
 
 ---
 

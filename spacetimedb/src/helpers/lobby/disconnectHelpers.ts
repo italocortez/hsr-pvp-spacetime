@@ -3,6 +3,7 @@ import { ScheduleAt } from 'spacetimedb';
 import { ACTIVE_STAGES, type LobbyStage } from '@shared/lobby-rules';
 import { slotTeam, slotIsCoach, slotIsSpectator, memberHasLeft, isSeatedPlayer, anySeatedPlayerAway } from './lobbyHelpers';
 import { lobbySteps } from '@module/helpers/draft/stepSequence';
+import { resumedTimerState } from '@module/helpers/draft/turnClock';
 import { findLobbyResult } from '@module/helpers/results/scoringHelpers';
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
 
@@ -72,7 +73,8 @@ export function scheduleChecksForOfflineStaff(ctx: any, lobby: any): void {
  * `client_connected` so the two paths cannot drift (policy review G10). Lifts only in Drafting, only when the returning
  * row is a seated player and no seated player of either team is still offline, away or abandoned (call it after the
  * returning row is back online), and only when the latest Pause step is an auto-pause (a manual pause keeps D-62).
- * Clock write unchanged from the S10c join_lobby branch: isPaused = false, turnStartAt = now (F10 revisits the math).
+ * Clock write (S10f, F10 / G10): resumedTimerState, the same write as resume_draft (turnStartAt = now, the frozen
+ * remaining time in accumulatedPauseMs kept), so the turn continues with the time it had when it was auto-paused.
  */
 export function liftAutoPauseOnReturn(ctx: any, lobby: any, member: any, actorId: number): void {
     if (lobby.stage.tag !== 'Drafting' || !isSeatedPlayer(member) || anySeatedPlayerAway(ctx, lobby.id)) return;
@@ -84,11 +86,7 @@ export function liftAutoPauseOnReturn(ctx: any, lobby: any, member: any, actorId
         .sort((a: any, b: any) => b.sequence - a.sequence)[0];
     if (!lastPause?.payload?.value?.isAutoPause) return;
     ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
-        timerState: {
-            ...session.timerState,
-            isPaused: false,
-            turnStartAt: ctx.timestamp,
-        },
+        timerState: resumedTimerState(ctx, session.timerState),
     }, actorId));
 }
 

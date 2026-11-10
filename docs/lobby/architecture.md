@@ -296,7 +296,7 @@ B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3
 2. "Still offline" = the row has `leftAt` / `abandonedAt` (A68(2): regardless of presence), or `LobbyMember.isOnline=false` and no live `UserPresence` row of the user (A48).
 3. `decideRefereeTransfer` (`shared/lobby-rules`): `transfer` only if still offline, still `isReferee` and the stage is active; `moveRefereeFlag` writes the two rows with the SYSTEM_USER_ID audit actor.
 4. Still offline and active stage: `transferCaptain` (online teammate first, then any teammate), then `transferHost` (online candidates only, `onlineOnly`) on the re-read lobby; both in the A22(5) order.
-5. Drafting only: `decideAutoPause` -> insert the auto-Pause step (`actorUserId=0`, `isAutoPause=true`, `timeRemainingMs` as in `pause_draft`, `sequence = getNextSequence` per F9) and set `timerState.isPaused=true`.
+5. Drafting only: `decideAutoPause` -> insert the auto-Pause step (`actorUserId=0`, `isAutoPause=true`, `timeRemainingMs` as in `pause_draft`, `sequence = getNextSequence` per F9) and set `timerState.isPaused=true`. Phase S10f execution (F10): the timer write is `pausedTimerState` (`helpers/draft/turnClock.ts`), the same freeze as `pause_draft` (`turnStartAt = now`, `accumulatedPauseMs` = the remaining time); auto-pauses are not subject to the manual pause throttle.
 
 ### Flag-transfer priority (flagTransferHelpers.ts, shared/lobby-rules/refereeTransfer.ts)
 One order for every flag (A22(5), A68(7); D-35's lowest-user-id rule is retired): **host → Blue players → Red players → spectators → Blue coach → Red coach**, each tier by `joinSeq` (`pickSuccessor` in the pure core). The leaver and rows with `leftAt` / `abandonedAt` are never candidates. The captain's candidates are the players of the leaver's team. Flags never return automatically to the original holder.
@@ -473,7 +473,10 @@ Membership lifecycle after A68 (details in the reducer flows above):
 - **One lift of an auto-pause (A92(7), G10).** `liftAutoPauseOnReturn(ctx, lobby, member, actorId)`
   (`disconnectHelpers.ts`) holds the A85(1) test and the clock write (`isPaused = false`, `turnStartAt = now`;
   `accumulatedPauseMs` untouched, F10 later). Callers: the `join_lobby` reconnect branch and `client_connected`
-  (per restored membership, after the row is written back online).
+  (per restored membership, after the row is written back online). Phase S10f execution (F10): the clock write is
+  `resumedTimerState` (`helpers/draft/turnClock.ts`), the same write as `resume_draft`; the auto-pause froze the
+  remaining time in `accumulatedPauseMs`, so the turn resumes with the time it had (docs/match-session/architecture.md,
+  "Phase S10f execution").
 - **Manual pause (A92(8)).** No code: a comment at the auto-pause decision in `run_referee_transfer_check` records the
   accepted behaviour.
 - **`view_my_lobby_members.disconnectActionAt` (A92(9)).** Optional timestamp, last column: for a seated player whose

@@ -13,6 +13,7 @@ import { moveRefereeFlag, toMemberLite, transferCaptain, transferHost } from '@m
 import { memberHasLeft, slotToTeamSide } from '@module/helpers/lobby/lobbyHelpers';
 import { hasLivePresence } from '@module/helpers/identity/presenceHelpers';
 import { getNextSequence } from '@module/helpers/draft/stepSequence';
+import { pausedTimerState } from '@module/helpers/draft/turnClock';
 
 // ─── run_referee_transfer_check ───────────────────────────────────────────────
 // A22a scheduled check (ACCESS-SECURITY-OPS D.8.2), bound to RefereeTransferCheck through `onSchedule`
@@ -96,13 +97,8 @@ export const run_referee_transfer_check = spacetimedb.reducer(
         // away player, the captain role moved above, and the resume is a deliberate press.
         if (!shouldPause) return;
 
-        // Snapshot of the clock, same formula as pause_draft (F10 revisits the pause/resume math for both).
-        const elapsedMicros = ctx.timestamp.microsSinceUnixEpoch - session.timerState.turnStartAt.microsSinceUnixEpoch;
-        const elapsedMs = Number(elapsedMicros) / 1000;
-        const timeRemainingMs = Math.max(
-            0,
-            lobby.standardTurnSeconds * 1000 - elapsedMs + session.timerState.accumulatedPauseMs,
-        );
+        // S10f (F10): the same clock freeze as pause_draft (helpers/draft/turnClock.ts).
+        const paused = pausedTimerState(ctx, lobby, session.timerState);
 
         ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
             id: 0,
@@ -112,14 +108,11 @@ export const run_referee_transfer_check = spacetimedb.reducer(
             anonymousLabel: undefined,
             actorSlot: slotToTeamSide(member.lobbySlot),
             action: { tag: 'Pause' },
-            payload: { tag: 'Pause', value: { timeRemainingMs: Math.round(timeRemainingMs), isAutoPause: true } },
+            payload: { tag: 'Pause', value: { timeRemainingMs: paused.remainingMs, isAutoPause: true } },
             timestamp: ctx.timestamp,
         }, SYSTEM_USER_ID));
         ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
-            timerState: {
-                ...session.timerState,
-                isPaused: true,
-            },
+            timerState: paused.timerState,
         }, SYSTEM_USER_ID));
         console.log(`[REFEREE_CHECK] Lobby #${lobbyId}: draft auto-paused, player #${userId} still offline after the grace period`);
     },

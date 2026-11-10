@@ -9,6 +9,7 @@ import { computeLobbyMemberRating } from '@module/helpers/stats/accountRating';
 import { banRestrictionError, isBanLegal } from '@module/helpers/lobby/banRestriction';
 import { ensureMatchAlive, scheduleChecksForOfflineStaff } from '@module/helpers/lobby/disconnectHelpers';
 import { lobbySteps, getNextSequence } from '@module/helpers/draft/stepSequence';
+import { turnRemainingMs } from '@module/helpers/draft/turnClock';
 import { classicCostAt } from '@module/helpers/draft/costSetGuards';
 import { trimChatForInsert } from '@module/helpers/lobby/chatWindow';
 
@@ -632,13 +633,8 @@ export const timer_expiry_classic = spacetimedb.reducer(
             throw new SenderError('Draft is paused.');
         }
 
-        // Server-side timer validation: check that enough time has actually elapsed
-        const elapsedMicros =
-            ctx.timestamp.microsSinceUnixEpoch -
-            session.timerState.turnStartAt.microsSinceUnixEpoch;
-        const elapsedMs = Number(elapsedMicros) / 1000;
-        const turnLimitMs = lobby.standardTurnSeconds * 1000;
-        if (elapsedMs < turnLimitMs) {
+        // Server-side timer validation (S10f, F10): the turn's remaining time (helpers/draft/turnClock.ts) must be 0
+        if (turnRemainingMs(lobby, session.timerState, ctx.timestamp.microsSinceUnixEpoch) > 0) {
             throw new SenderError('Turn timer has not yet expired.');
         }
 

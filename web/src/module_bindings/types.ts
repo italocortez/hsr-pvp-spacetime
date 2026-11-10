@@ -2794,6 +2794,8 @@ export const UserRateState = __t.object("UserRateState", {
   lobbyCreates: __t.u32(),
   membershipWindowStart: __t.timestamp(),
   membershipCount: __t.u32(),
+  resultEntryWindowStart: __t.timestamp(),
+  resultEntryCount: __t.u32(),
   createdById: __t.u32(),
   createdDate: __t.timestamp(),
   lastModifiedById: __t.u32(),

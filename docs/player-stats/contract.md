@@ -219,6 +219,7 @@ All flat structured rows, zero JSON blobs (D-55). Self-contained for replay rend
 | create_season creates inactive season; set_active_season enforces single-active guarantee | Phase 9 execution | 2026-03-29 |
 | Full hydration from codebase; Feature Overview and Stat Computation section added | Phase 13 normalization | 2026-04-09 |
 | Auction character stats: for an `AuctionSold` step the owning side is the sale's `winningTeam`; every player of that team gets the played stat, every player of the other team the faced stat, the global character stat is written once with the owning side's win flag; no row for the system user. Classic picks unchanged (the picker) | Phase S10c execution (DECISIONS.md A82) | 2026-11-09 |
+| No stat row of any kind is written for the `EMPTY` and `SKIP` placeholders, and no player row for the system user. A Classic timer auto-pick of a real character writes the faced rows and the global row; who receives its played stat is set by DECISIONS.md A106 | Phase S10f execution (backend audit 2026-11-09, results finding 3) | 2026-11-09 |
 
 ---
 

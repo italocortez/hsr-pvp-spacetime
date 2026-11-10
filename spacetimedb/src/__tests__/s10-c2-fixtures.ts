@@ -139,6 +139,27 @@ export function seedCharacters(test: Harness, names: string[]) {
     });
 }
 
+/** Reference light cones (path Destruction). */
+export function seedLightcones(test: Harness, names: string[]) {
+    tx(test, 'internal', (ctx) => {
+        for (const name of names) {
+            ctx.db.HsrLightcone.insert({
+                name, displayName: name, aliases: [], path: { tag: 'Destruction' }, rarity: 5, imageUrl: '', posX: 0, posY: 0, width: 0,
+                createdById: 0, createdDate: ctx.timestamp, lastModifiedById: 0, lastModifiedDate: ctx.timestamp,
+            } as any);
+        }
+    });
+}
+
+/**
+ * T-S10f (roster audit #9): edit_draft_character_cost / _lightcone_cost require HsrCharacter / HsrLightcone rows.
+ * Seeds the names that are not there yet (safe to call after seedCharacters / seedLightcones).
+ */
+export function seedReferenceNames(test: Harness, characters: string[], lightcones: string[] = []) {
+    seedCharacters(test, characters.filter((n) => !test.db.HsrCharacter.name.find(n)));
+    seedLightcones(test, lightcones.filter((n) => !test.db.HsrLightcone.name.find(n)));
+}
+
 // Copied from s6-rules.test.ts (local there): the rating fixtures.
 export const RATING_CHARS = ['c1', 'c2', 'c5', 'c6', 'c9'];
 

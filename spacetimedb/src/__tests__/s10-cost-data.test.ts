@@ -30,7 +30,7 @@ import {
     sCost,
     synergyRow,
 } from './s10-c1-fixtures';
-import { seedCharacters } from './s10-c2-fixtures';
+import { seedCharacters, seedReferenceNames } from './s10-c2-fixtures';
 
 const FORBIDDEN_OWNER = 'Forbidden: You do not own this cost set and are not a Moderator.';
 const MOC = 'MemoryOfChaos';
@@ -127,6 +127,7 @@ describe('create_cost_set (cost-sets contract § create_cost_set; D-20)', () => 
     it('cloning a published non-default set copies that set\'s live rows (both draft modes), not set 0\'s', () => {
         const test = newHarness();
         seedDefaultSet(test);
+        seedReferenceNames(test, ['kafka']); // T-S10f: edit_draft_*_cost requires the reference rows (roster audit #9)
         const org = tournamentHost(test);
         const src = createSet(test, org, 'source');
         editChar(test, org, src, 'acheron', 'Classic', E(7));
@@ -142,6 +143,7 @@ describe('create_cost_set (cost-sets contract § create_cost_set; D-20)', () => 
 describe('edit_draft_*_cost (cost-sets contract §§ edit_draft_character_cost / lightcone / synergy; D-16..D-18, A21)', () => {
     it('one call = one row per (name, mode, draftMode): Classic and Auction rows are separate, a re-edit replaces the row (scenario "Edit Draft Costs")', () => {
         const test = newHarness();
+        seedReferenceNames(test, ['kafka'], ['patience']); // T-S10f: edit_draft_*_cost requires the reference rows (roster audit #9)
         const org = tournamentHost(test);
         const id = createSet(test, org, 'edits');
         editChar(test, org, id, 'kafka', 'Classic', E(3));
@@ -186,6 +188,7 @@ describe('edit_draft_*_cost (cost-sets contract §§ edit_draft_character_cost /
 
     it('another Tournament Host cannot edit or publish the set; a Moderator edits and publishes any set (Permission: owner or Moderator+)', () => {
         const test = newHarness();
+        seedReferenceNames(test, ['kafka']); // T-S10f: edit_draft_*_cost requires the reference rows (roster audit #9)
         const org = tournamentHost(test, 'owner');
         const rival = tournamentHost(test, 'rival');
         const mod = moderator(test);
@@ -205,6 +208,7 @@ describe('publish / lock / unpublish / delete (cost-sets contract; scenarios "Pu
     it('publish copies every draft row, both draft modes, to the live tables with their values, deletes the drafts and flips the flags (Pitfall 7 guard)', () => {
         const test = newHarness();
         seedSynergyCharacters(test);
+        seedReferenceNames(test, ['kafka'], ['patience']); // T-S10f: edit_draft_*_cost requires the reference rows (roster audit #9)
         const org = tournamentHost(test);
         const id = createSet(test, org, 'full');
         editChar(test, org, id, 'kafka', 'Classic', E(3));
@@ -250,6 +254,7 @@ describe('publish / lock / unpublish / delete (cost-sets contract; scenarios "Pu
 
     it('unpublish: refused before lock and on an unpublished set; after lock it clears both flags and the live rows stay', () => {
         const test = newHarness();
+        seedReferenceNames(test, ['kafka']); // T-S10f: edit_draft_*_cost requires the reference rows (roster audit #9)
         const org = tournamentHost(test);
         const id = createSet(test, org, 'retiring');
         editChar(test, org, id, 'kafka', 'Classic', E(3));
@@ -266,6 +271,7 @@ describe('publish / lock / unpublish / delete (cost-sets contract; scenarios "Pu
         const test = newHarness();
         seedSynergyCharacters(test);
         seedDefaultSet(test);
+        seedReferenceNames(test, ['kafka'], ['patience']); // T-S10f: edit_draft_*_cost requires the reference rows (roster audit #9)
         const org = tournamentHost(test);
         const keep = createSet(test, org, 'keep');
         editChar(test, org, keep, 'kafka', 'Classic', E(1));

@@ -58,6 +58,7 @@ import {
 } from './s4-fixtures';
 import { blueNames, finishGame, playToScoring, redNames, setRole, type ScoringLobbyOpts } from './s7-fixtures';
 import { AUDIT, insertHsrAccount, moderator, verified } from './s8-fixtures';
+import { seedUserRow } from './s10f-fixtures';
 import { duel, seedElo } from './s8d-fixtures';
 
 // ─── Reading views ───────────────────────────────────────────────────────────
@@ -471,10 +472,13 @@ describe('Leaderboard top 20 and the SYSTEM audit actor on public aggregates (A4
         const order = [17, 3, 22, 9, 0, 14, 6, 20, 11, 1, 19, 8, 23, 4, 15, 12, 2, 21, 7, 16, 10, 5, 18, 13];
         for (const i of order) {
             const s = { userId: 5000 + ((i * 7) % 24), rating: 1600 - 25 * Math.floor(i / 4), wins: i % 4 < 2 ? 3 : 1 };
+            seedUserRow(test, s.userId); // T-S10f (results audit #9): only users with a live User row are ranked
             seedRating(test, s.userId, s.rating, { global: s.rating });
             seedStat(test, s.userId, s.wins);
             seeds.push(s);
         }
+        seedUserRow(test, 6001);
+        seedUserRow(test, 6002);
         seedRating(test, 6001, 1999, { matchesPlayed: 1, global: 1999 });
         seedRating(test, 6002, 1998, { matchesPlayed: 1, global: 1998 });
         return seeds;
@@ -520,6 +524,7 @@ describe('Leaderboard top 20 and the SYSTEM audit actor on public aggregates (A4
     it('direct helper call (rebuildLeaderboard is exported): a second rebuild replaces the season\'s rows (still 20, no duplicate), other seasons untouched', () => {
         const test = newHarness();
         const seeds = seed24(test);
+        seedUserRow(test, 7000); // T-S10f (results audit #9)
         seedRating(test, 7000, 1500, { seasonId: 9, global: 1500 });
         tx(test, 'internal', (ctx) => rebuildLeaderboard(ctx, 9));
         expect(category(test, 'MemoryOfChaos').map((r) => r.userId)).toEqual([7000]);

@@ -24,6 +24,7 @@ import {
     seatOf,
 } from './s4-fixtures';
 import { finishGame } from './s7-fixtures';
+import { seedReferenceNames } from './s10-c2-fixtures';
 
 const actorOf = (s: Lobby, userId: number): Actor => Object.values(s.a).find((x) => x.userId === userId)!;
 const captain = (s: Lobby, team: 'Blue' | 'Red') =>
@@ -37,6 +38,8 @@ function publishedCostSet(test: Harness, name: string, draftModeTag: 'Classic' |
     tx(test, 'internal', (ctx) => M.create_cost_set(ctx, { name, sourceSetId: 0, gameModeTag: 'MemoryOfChaos' }));
     const id = [...test.db.CostSet.iter()].find((c) => c.name === name)!.id;
     if (draftModeTag) {
+        // T-S10f (roster audit #9): edit_draft_*_cost requires the HsrCharacter / HsrLightcone rows
+        seedReferenceNames(test, ['acheron'], ['along-the-passing-shore']);
         tx(test, 'internal', (ctx) => M.edit_draft_character_cost(ctx, {
             costSetId: id, characterName: 'acheron', gameModeTag: 'MemoryOfChaos', draftModeTag, costsJson: E(2),
         }));
