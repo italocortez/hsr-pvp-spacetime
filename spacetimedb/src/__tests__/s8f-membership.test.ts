@@ -819,6 +819,7 @@ describe('A68(7): user deletion removes the membership like a leave; a live play
             else expect(m.disconnectedAt?.microsSinceUnixEpoch).toBe(now(test));
             expect(m.isReferee).toBe(false);
             expect(m.isCaptain).toBe(false);
+            // S10e review F3: the abandoned row keeps its LobbyMemberAccount rows (the roster guards ignore them).
             expect(lmaRows(test, s.lobbyId, b1.userId)).toHaveLength(1);
             expect(lobbyRow(test, s.lobbyId).currentPlayerCount).toBe(countBefore);
             expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Drafting');
@@ -960,15 +961,15 @@ describe('A68(8): spectator joins and maxSpectators', () => {
         expect(members(test, lobbyId).filter((m) => m.lobbySlot.tag === 'Spectator')).toHaveLength(4);
     });
 
-    it('the 20-member cap still applies', () => {
+    it('the 20-member cap still applies (teamSize 3, S10e lobby audit #10 rejects 4; coaches and spectators fill the rest)', () => {
         const test = newHarness();
         const seats: SetupOpts['seats'] = [
-            ['b1', 'BluePlayer'], ['b2', 'BluePlayer'], ['b3', 'BluePlayer'], ['b4', 'BluePlayer'],
-            ['r1', 'RedPlayer'], ['r2', 'RedPlayer'], ['r3', 'RedPlayer'], ['r4', 'RedPlayer'],
+            ['b1', 'BluePlayer'], ['b2', 'BluePlayer'], ['b3', 'BluePlayer'],
+            ['r1', 'RedPlayer'], ['r2', 'RedPlayer'], ['r3', 'RedPlayer'],
             ['bc', 'BlueCoach'], ['rc', 'RedCoach'],
-            ...Array.from({ length: 9 }, (_, i) => [`s${i}`, 'Spectator'] as [string, 'Spectator']),
+            ...Array.from({ length: 11 }, (_, i) => [`s${i}`, 'Spectator'] as [string, 'Spectator']),
         ];
-        const s = setupLobby(test, { noStart: true, lobby: { teamSize: 4 }, seats });
+        const s = setupLobby(test, { noStart: true, lobby: { teamSize: 3 }, seats });
         expect(members(test, s.lobbyId)).toHaveLength(20);
         const extra = guest(test, 'extra');
         expectReject(test, extra, (ctx) => M.join_lobby(ctx, { lobbyId: s.lobbyId, joinCode: '', password: '' }), 'Lobby is full (max 20 members).');

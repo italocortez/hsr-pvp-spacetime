@@ -181,6 +181,7 @@ import StartDraftReducer from "./start_draft_reducer";
 import TimerExpiryAuctionReducer from "./timer_expiry_auction_reducer";
 import TimerExpiryClassicReducer from "./timer_expiry_classic_reducer";
 import ToggleCalendarVisibilityReducer from "./toggle_calendar_visibility_reducer";
+import TransferHostReducer from "./transfer_host_reducer";
 import TransferRefereeReducer from "./transfer_referee_reducer";
 import UnbanMemberReducer from "./unban_member_reducer";
 import UnconfirmReadyReducer from "./unconfirm_ready_reducer";
@@ -1221,6 +1222,7 @@ const reducersSchema = __reducers(
   __reducerSchema("timer_expiry_auction", TimerExpiryAuctionReducer),
   __reducerSchema("timer_expiry_classic", TimerExpiryClassicReducer),
   __reducerSchema("toggle_calendar_visibility", ToggleCalendarVisibilityReducer),
+  __reducerSchema("transfer_host", TransferHostReducer),
   __reducerSchema("transfer_referee", TransferRefereeReducer),
   __reducerSchema("unban_member", UnbanMemberReducer),
   __reducerSchema("unconfirm_ready", UnconfirmReadyReducer),

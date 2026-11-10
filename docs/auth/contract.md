@@ -43,7 +43,7 @@ Authentication manages how users connect to the SpacetimeDB module, create accou
 **Flow:**
 1. Resolve UserIdentity from callerIdentityHex
 2. `rejectIfBanned(ctx, 'DiscordId', providerId)` — D-08 enforcement point 1
-3. Case 1a: Guest user → update User (isGuest=false, hasDiscordLinked=true, username=providerName)
+3. Case 1a: Guest user → update User (isGuest=false, hasDiscordLinked=true, username=providerName) _Superseded in Phase S10e execution (backend audit 2026-11-09, identity finding 3)._
 4. Case 1b: Verified user with different identity → redirect existing user to this identity
 5. Case 1c: Upgrade existing mapping
 6. Upsert UserPrivate with discordId + discordUsername
@@ -144,7 +144,7 @@ Authentication manages how users connect to the SpacetimeDB module, create accou
 ### Provider Linking (Discord) — Phase 12
 **Given:** Guest user exists, UserIdentity maps identity to User
 **When:** `server_link_provider` called by server identity with provider='discord', valid providerId
-**Then:** User row updated: `isGuest=false`, `hasDiscordLinked=true`, `username=providerName`. UserPrivate row inserted with `discordId`, `discordUsername`.
+**Then:** User row updated: `isGuest=false`, `hasDiscordLinked=true`, `username=providerName`. UserPrivate row inserted with `discordId`, `discordUsername`. _Superseded in Phase S10e execution (backend audit 2026-11-09, identity finding 3)._
 
 ### Ban Enforcement at Link-Time — Phase 12
 **Given:** A BanRecord exists for a Discord ID
@@ -301,3 +301,4 @@ _Superseded in Phase S8f execution (DECISIONS.md A68)._ The lobby guard is the D
 | `delete_my_account()` for every user (verified: lobby + live-tournament guards, cascades through `performUserDeletion`; guest: the old `delete_guest_account` behaviour); `delete_guest_account` removed | Phase S6 execution (DECISIONS.md A45(3)) | 2026-11-06 |
 | Scenario "Delete My Account While Away": the lobby guard is the D-22 test (away blocks, abandoned / AwaitingResult do not); `performUserDeletion` hands over the user's lobby flags | Phase S8f execution (DECISIONS.md A68) | 2026-11-08 |
 | Rejection texts as implemented (tests `s10-identity`): `admin_ban_user` on a provider id already banned — "Provider <BanType>:<providerId> is already banned."; unban of an unknown record — "BanRecord #<id> not found."; the Admin-only gates — "Forbidden: Requires Admin privileges."; link-time ban (SEC-03a, `server_link_provider`) — "This <provider> account is banned and cannot be linked." | Phase S10 execution (DECISIONS.md A76) | 2026-11-09 |
+| Provider link, guest upgrade: `providerName` is trimmed and cut to 32 characters (empty: "providerName is required"); when the name is taken the username becomes the first free `name_2`, `name_3`, … within 32 characters, so the link never fails on a name collision | Phase S10e execution (backend audit 2026-11-09, identity finding 3) | 2026-11-09 |

@@ -967,3 +967,15 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** user, 2026-11-09: "I agree wiuth your recomendations but I wanna explore more number 6", then, on the manual-pause case, "I would prefer not second pauses as this may look like a bug" and "yeah i agree with this final implemntation". Source: the disconnect policy review of 2026-11-09 (D2, G1, G4 to G7, G9, G11).
 - **Supersedes:** nothing wholesale; narrows A22a (Waiting), D-12 / D-13 (pool test), and the policy choices of `create_lobby` and `create_tournament`.
 - **Where implemented:** S10d
+
+### A93 — The host in the waiting room, and a host hand-over
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:**
+  1. In the Waiting stage a disconnect moves the referee flag only: 15 s after the referee (host or not) disconnects, the flag goes to an online member in the A22(5) order, so the match can be started (A80). The host role does not move on a disconnect in Waiting, in casual, ranked and tournament lobbies alike.
+  2. No room is closed because its host is away. The existing clean-up stays the only automatic removal: every member offline and 30 minutes idle (D-47, A68(9)).
+  3. New reducer `transfer_host(lobbyId, targetJoinSeq)`: the host hands the host role to another member of the lobby who is present (not away, not abandoned), by seat (A74). Available in every stage in which the lobby is alive. A Moderator or Admin may call it too.
+  4. Unchanged: a host who presses Leave in Waiting passes the role to the next member (A68(7)); in the live stages the host role moves with the 15 s check as before (D.8.2).
+- **Why:** user, 2026-11-09: "if the host drops in waiting room, shouldn't we just drop the room? nothing had started yet", then "i forgot we had a 30m room cleanup for idles and everyone offline, even hosts right? wouldn't we want to work around that one then?", then "yeah i agree with the new version". S10d review F4: as built for A92(5), tournament staff who dropped for 15 s in Waiting lost the host role to a player and nothing returned it.
+- **Supersedes:** the host half of A92(5).
+- **Where implemented:** S10e

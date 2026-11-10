@@ -1,9 +1,9 @@
 import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
-import { getAuthenticatedUser } from '@module/helpers/identity/ensurePermissions';
+import { getAuthenticatedUser, isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { hasTournamentPermission } from '@module/helpers/tournament/tournamentPermissions';
-import { resolveSeat } from '@module/helpers/lobby/lobbyHelpers';
+import { memberHasLeft, resolveSeat } from '@module/helpers/lobby/lobbyHelpers';
 
 // ─── transfer_referee ─────────────────────────────────────────────────────────
 // Transfers the referee flag from the caller to another lobby member.
@@ -57,7 +57,7 @@ export const transfer_referee = spacetimedb.reducer(
 // Permission: lobby host only. D.8.4 (S8d): in a tournament lobby also a seated (member) staff member with the
 // `results` permission (canResolveResults assistant, organizer, Moderator+), who takes the flag themself.
 // A68(7): when no member holds the flag, any member who calls takes it (a lobby with members always has a referee).
-// NOTE: Auto-assignment of the referee flag at lobby creation is deferred to Phase 9.
+// The host gets the flag at creation (create_lobby, create_tournament_lobby: isReferee = true).
 
 export const reclaim_referee = spacetimedb.reducer(
     {
@@ -118,6 +118,48 @@ export const reclaim_referee = spacetimedb.reducer(
         ctx.db.LobbyMember.insert(updateWithAudit(ctx, hostMember, { isReferee: true }, user.id));
 
         console.log(`[LOBBY] Referee reclaimed by host #${user.id} from user #${currentReferee.userId} in lobby #${lobbyId}`);
+    }
+);
+
+// ─── transfer_host ────────────────────────────────────────────────────────────
+// A93(3): the host hands the host role (Lobby.hostUserId) to another member who is present (not away, not abandoned,
+// A68(2)(4)), by seat (A74). Every stage of a lobby that exists. Caller: the host, or a Moderator / Admin (who need
+// not be a member). The referee flag does not move with it (transfer_referee / reclaim_referee).
+// Guard order (A74): lobby -> the caller's permission -> seat -> target rules, so a stranger learns nothing about the
+// lobby's seats.
+
+export const transfer_host = spacetimedb.reducer(
+    {
+        lobbyId: t.u32(),
+        targetJoinSeq: t.u32(),
+    },
+    (ctx, { lobbyId, targetJoinSeq }) => {
+        const user = getAuthenticatedUser(ctx);
+
+        const lobby = ctx.db.Lobby.id.find(lobbyId);
+        if (!lobby) {
+            throw new SenderError('Lobby not found.');
+        }
+
+        if (lobby.hostUserId !== user.id && !isRoleAtLeast(user.role, 'Moderator')) {
+            throw new SenderError('Only the host, moderators, or admins can hand over the host role.');
+        }
+
+        // A74(1): seat -> member row ("No member sits at seat N of this lobby.")
+        const target = resolveSeat(ctx, lobbyId, targetJoinSeq);
+        if (target.userId === lobby.hostUserId) {
+            throw new SenderError(`The member at seat ${targetJoinSeq} is already the host.`);
+        }
+        if (memberHasLeft(target)) {
+            throw new SenderError(`The member at seat ${targetJoinSeq} has left the match and cannot become the host.`);
+        }
+
+        ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
+            hostUserId: target.userId,
+            lastActivityAt: ctx.timestamp,
+        }, user.id));
+
+        console.log(`[LOBBY] Host role of lobby #${lobbyId} handed from user #${lobby.hostUserId} to user #${target.userId} by user #${user.id}`);
     }
 );
 

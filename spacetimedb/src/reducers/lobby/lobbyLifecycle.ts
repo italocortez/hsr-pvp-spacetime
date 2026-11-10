@@ -31,7 +31,8 @@ import {
     liftAutoPauseOnReturn,
     markMemberOffline,
 } from '@module/helpers/lobby/disconnectHelpers';
-import { consumeLobbyCreateAllowance, readAbuseConfig, recordGuestLobbyCreation } from '@module/helpers/lobby/abuseControls';
+import { consumeLobbyCreateAllowance, consumeMembershipAllowance, readAbuseConfig, recordGuestLobbyCreation } from '@module/helpers/lobby/abuseControls';
+import { ensureLobbyConfigInRange, ensureTeamAliases } from '@module/helpers/lobby/lobbyConfigBounds';
 import { normalizeLobbyName } from '@module/helpers/tournament/seriesSettings';
 import { ensureCostSetUsable } from '@module/helpers/draft/costSetGuards';
 import { autoSeatSlot } from '@module/helpers/tournament/tournamentLobbySides';
@@ -109,7 +110,7 @@ export const create_lobby = spacetimedb.reducer(
         // A68(8): spectator count
         const maxSpectators = resolveMaxSpectators(args.maxSpectators, 12);
 
-        // Server-generated join code (Jackbox-style, 5 chars, deterministic hash)
+        // Server-generated join code (Jackbox-style, 6 chars, deterministic hash)
         const joinCode = generateJoinCode(ctx, user.id);
 
         // D-23: guest restrictions
@@ -119,6 +120,10 @@ export const create_lobby = spacetimedb.reducer(
         ensureNotDeferredOutsideTournament(args.disconnectPolicy.tag);
         ensureNoActionAllowed(args.disconnectPolicy.tag, args.matchType.tag === 'Ranked');
         ensureForfeitSecondsInRange(args.disconnectForfeitSeconds);
+
+        // S10e (lobby audit #10, #5): numeric settings in range; team aliases capped.
+        ensureLobbyConfigInRange(args);
+        ensureTeamAliases(args.teamBlueAlias, args.teamRedAlias);
 
         // A42(1) kill switch: guests cannot create while AbuseConfig.guestLobbyCreationEnabled is off;
         // guests already in lobbies are unaffected (join_lobby has no such check).
@@ -231,7 +236,7 @@ export const create_lobby = spacetimedb.reducer(
             }, user.id));
         }
 
-        console.log(`[LOBBY] Lobby #${lobby.id} created by user #${user.id} (${args.joinCode})`);
+        console.log(`[LOBBY] Lobby #${lobby.id} created by user #${user.id} (${joinCode})`);
     }
 );
 
@@ -276,17 +281,17 @@ export const join_lobby = spacetimedb.reducer(
         // D-04, D-37, D-39, D-40: stage-specific join logic with extended reconnect (A68(1): D-38's rejoin ban is gone)
         const existingMember = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, user.id])][0];
         if (existingMember) {
-            // F1: Waiting included — a refresh in the waiting room is a reconnect too.
-            const reconnectStages = ['Waiting', 'Drafting', 'Equipping', 'Scoring', 'AwaitingResult']; // A67(1)
-            if (!reconnectStages.includes(lobby.stage.tag)) {
-                throw new SenderError('Cannot rejoin this lobby in its current stage.');
-            }
+            // F1: every stage (A67(1)) is a reconnect stage, Waiting included: a refresh in the waiting room is a
+            // reconnect too.
             // A68(4): an abandoned row (the player took another lobby) never returns.
             if (existingMember.abandonedAt !== undefined) {
                 throw new SenderError('You left this match for another lobby and cannot return.');
             }
             // A68(1)(2): an away row (leftAt) returns here, the only path that clears leftAt.
             const isReturn = existingMember.leftAt !== undefined;
+            // S10e (lobby audit #6): a return (it posts a chat line) counts against the membership rate; a plain
+            // reconnect (page reload) does not.
+            if (isReturn) consumeMembershipAllowance(ctx, user.id);
             // Reconnect: set isOnline=true, clear disconnectedAt (D-39)
             // Compute pool decrement if disconnectedAt was set
             let newPool = existingMember.disconnectPoolRemainingMs;
@@ -316,6 +321,9 @@ export const join_lobby = spacetimedb.reducer(
             console.log(`[LOBBY] User #${user.id} reconnected to lobby #${lobbyId} (stage: ${lobby.stage.tag})`);
             return;
         }
+
+        // S10e (lobby audit #6): per-user membership rate (new joins)
+        consumeMembershipAllowance(ctx, user.id);
 
         // D-22 / A68(4): one lobby at a time (genuinely new joins only, F1)
         ensureNotInLobby(ctx, user.id, args.abandonCurrentMatch ?? false);
@@ -450,6 +458,8 @@ export const join_lobby = spacetimedb.reducer(
 // check (A68(7)).
 // A68(5)(7): every other Leave (a player in Waiting / AwaitingResult, a spectator or coach in any stage) deletes the
 // row through removeMemberRow (flags transferred). An empty Waiting lobby is hard-deleted.
+// S10e fix pass (review N8): a Leave is never rejected by the membership rate and consumes no allowance (a user at the
+// cap can always get out); joins, returns and seat moves are still counted.
 
 export const leave_lobby = spacetimedb.reducer(
     {

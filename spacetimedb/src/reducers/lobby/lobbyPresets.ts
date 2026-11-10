@@ -6,6 +6,7 @@ import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHel
 import { readAbuseConfig } from '@module/helpers/lobby/abuseControls';
 import { resolveMaxSpectators } from '@module/helpers/lobby/lobbyHelpers';
 import { ensureForfeitSecondsInRange, ensureNotDeferredOutsideTournament } from '@module/helpers/lobby/disconnectHelpers';
+import { ensureLobbyConfigInRange } from '@module/helpers/lobby/lobbyConfigBounds';
 
 import { ensureCostSetCovers, ensureCostSetUsable } from '@module/helpers/draft/costSetGuards';
 
@@ -122,6 +123,8 @@ export const create_lobby_preset = spacetimedb.reducer(
         // A91(2): no Deferred preset; A92(2): grace 30-600 s when set.
         ensureNotDeferredOutsideTournament(args.disconnectPolicy.tag);
         ensureForfeitSecondsInRange(args.disconnectForfeitSeconds);
+        // S10e (lobby audit #10): numeric settings in range.
+        ensureLobbyConfigInRange(args);
 
         // Resolve disconnectForfeitSeconds — 0 sentinel means "not set"
         const disconnectForfeitSeconds = args.disconnectForfeitSeconds > 0
@@ -243,6 +246,8 @@ export const update_lobby_preset = spacetimedb.reducer(
         // A91(2): no Deferred preset (the system preset included); A92(2): grace 30-600 s when set.
         ensureNotDeferredOutsideTournament(args.disconnectPolicy.tag);
         ensureForfeitSecondsInRange(args.disconnectForfeitSeconds);
+        // S10e (lobby audit #10): numeric settings in range.
+        ensureLobbyConfigInRange(args);
 
         // Resolve disconnectForfeitSeconds — 0 sentinel means "not set"
         const disconnectForfeitSeconds = args.disconnectForfeitSeconds > 0

@@ -99,6 +99,8 @@ BanRecord (id: u32 autoInc PK)  [PRIVATE -- public: false]
    - **Case 1c**: Identity -> verified user, refresh -- update timestamps, upsert `UserPrivate`
 5. Write/upsert `UserPrivate` (discordId, discordUsername, email), set `User.hasDiscordLinked=true`
 
+Phase S10e execution (identity audit #3): the actual arguments are `(callerIdentityHex, provider, providerId, providerName)`. `providerName` is trimmed and cut to 32 characters (the username length; empty after trim: "providerName is required"); the trimmed name is stored as `displayName` and `providerUsername`. Case 1a takes it as the username through `uniqueUsername`: the name itself when no other user holds it, else the first free `name_2`, `name_3`, ... (the base shortened to stay within 32), so a username taken by another account no longer aborts the link on the unique index. `callerIdentityHex` goes through the file's `parseIdentityHex` (same texts as before); Cases 2 and 3 share one terminal "Identity not registered. Call login_as_guest first."
+
 ### clientConnected() -- lifecycle hook (exported as `client_connected`)
 > Both lifecycle hooks register only because `index.ts` exports them. Before 2026-11-05 they were bare `spacetimedb.clientConnected(...)` calls, which the SDK silently drops, so neither hook ever ran on a published database. Behavior below is the spec; it takes effect on the first publish that includes the fix.
 
@@ -120,6 +122,8 @@ Fires 15 s after the user's last disconnect; no-op when the lobby or the member 
 
 ### run_identity_gc / performUserDeletion -- presence cascade (Phase S4 execution, A48)
 Identity GC deletes the `UserPresence` row together with each identity it removes (orphaned or stale) and treats "online" as any live row of the user. `performUserDeletion` deletes every `UserPresence` row of the user before the `UserIdentity` rows.
+
+Phase S10e execution (identity audit #1): `performIdentityGc` never collects an identity that has a `ServerIdentity` row or maps to the SYSTEM user (found by username 'SYSTEM'): those mappings are filtered out before the orphan, guest, online and newest-identity rules run. Identity audit #5: `server_revoke_delegate` and `admin_delete_row('UserIdentity')` delete the identity's `UserPresence` row with the mapping (details in `docs/admin/architecture.md`). Lobby audit #12, as revised by the S10e fix pass (review F3): a live-stage player row abandoned by `performUserDeletion` keeps its `LobbyMemberAccount` rows, as before S10e (the roster guards ignore abandoned rows, `docs/lobby/architecture.md`). Fix pass (review F5, N9): `admin_delete_row('UserIdentity')` refuses a `ServerIdentity` identity and a SYSTEM mapping, and, when the user has no live presence left afterwards, takes the user's online memberships offline as `client_disconnected` does (`markMemberOffline`).
 
 ### admin_ban_user(banTypeTag, providerId, reason)
 1. `ensureAdmin(ctx)` -- requires Admin role
@@ -311,10 +315,12 @@ Any new frontend subscription to a raw table (no projection view body) OR a per-
 | B-8 maintenance-mode rejection in `client_connected` (`AbuseConfig.maintenanceMode`, server identities exempt); inert until S5 seeds the row | Phase S4 execution (ACCESS-SECURITY-OPS §B.5) | 2026-11-06 |
 | `performUserDeletion` hands over the user's lobby flags first (A68(7)); `client_connected` / `client_disconnected` skip away / abandoned lobby rows (A68(2), details in `docs/lobby/architecture.md`) | Phase S8f execution (DECISIONS.md A68) | 2026-11-08 |
 | `view_my_profile` row re-shaped for the profile page (PK `id`; no presence, deletedAt or audit columns; provider fields per A46); `view_my_identity` = `{ identity, userId }`; `view_admin_user_private` a staff-only full read; new `view_user_by_username` | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
+| Identity GC exempts server identities and SYSTEM mappings; provider link trims / caps the name and derives a free username on a collision; revoking a delegate deletes its presence row; `server_set_role` / `server_delete_user` reject the SYSTEM user ("The SYSTEM user cannot be changed." / "... cannot be deleted.") | Phase S10e execution (identity audit #1, #3, #5, #9) | 2026-11-09 |
+| Fix pass: `performUserDeletion` no longer releases an abandoned row's `LobbyMemberAccount` rows; `admin_delete_row('UserIdentity')` refuses server identities and SYSTEM mappings and runs the disconnect path for a user left with no live presence | Phase S10e execution (review F3, F5, N9) | 2026-11-09 |
 
 ---
 
-*Last updated: 2026-11-06*
+*Last updated: 2026-11-09*
 *Feature owner: Phase 01 / Phase 12 / Phase 16*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

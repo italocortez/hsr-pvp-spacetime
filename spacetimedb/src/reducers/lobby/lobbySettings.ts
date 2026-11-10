@@ -8,6 +8,8 @@ import { normalizeLobbyName } from '@module/helpers/tournament/seriesSettings';
 import { ensureCostSetCovers, ensureSelectableCostSet } from '@module/helpers/draft/costSetGuards';
 import { ensureSeatAllowed } from '@module/helpers/tournament/tournamentLobbySides';
 import { ensureForfeitSecondsInRange, ensureNoActionAllowed, ensureNotDeferredOutsideTournament } from '@module/helpers/lobby/disconnectHelpers';
+import { ensureLobbyConfigInRange, ensureTeamAliases } from '@module/helpers/lobby/lobbyConfigBounds';
+import { consumeMembershipAllowance } from '@module/helpers/lobby/abuseControls';
 
 // ─── update_lobby_settings ────────────────────────────────────────────────────
 // Updates all mutable lobby configuration fields.
@@ -111,6 +113,28 @@ export const update_lobby_settings = spacetimedb.reducer(
             ensureNoActionAllowed(args.disconnectPolicy.tag, matchType.tag === 'Ranked');
             ensureForfeitSecondsInRange(args.disconnectForfeitSeconds);
         }
+
+        // S10e (lobby audit #24): D-23 holds for a lobby switched to Ranked too: no guest may hold a member row.
+        if (matchType.tag === 'Ranked' && lobby.matchType.tag !== 'Ranked'
+            && [...ctx.db.LobbyMember.lobby_id.filter(lobbyId)].some((m: any) => ctx.db.User.id.find(m.userId)?.isGuest === true)) {
+            throw new SenderError('A guest is in this lobby; guests cannot join Ranked lobbies.');
+        }
+
+        // S10e (lobby audit #10, #5): the values this update stores are in range; team aliases capped.
+        ensureLobbyConfigInRange({
+            teamSize: isTournamentLocked ? lobby.teamSize : args.teamSize,
+            standardTurnSeconds: args.standardTurnSeconds,
+            reserveBankSeconds: args.reserveBankSeconds,
+            characterBudget: args.characterBudget,
+            lightconeBudget: args.lightconeBudget,
+            minimumBidRaise: args.minimumBidRaise,
+            rosterDiffAdvantage: args.rosterDiffAdvantage,
+            rosterThreshold: args.rosterThreshold,
+            underThresholdAdvantage: args.underThresholdAdvantage,
+            aboveThresholdPenalty: args.aboveThresholdPenalty,
+            deathPenalty: args.deathPenalty,
+        });
+        ensureTeamAliases(args.teamBlueAlias, args.teamRedAlias);
 
         // Resolve disconnectForfeitSeconds — locked fields use lobby value
         const disconnectForfeitSeconds = isTournamentLocked
@@ -264,13 +288,13 @@ export const set_team_slot = spacetimedb.reducer(
         // If moving someone else, require host or above
         if (targetUserId !== user.id) {
             ensureHostOrAbove(ctx, lobby, user);
-        } else {
-            // Self-move: user must be a member
-            ensureLobbyMember(ctx, lobbyId, user.id);
         }
 
-        // Find target member
+        // Find target member (a self-move by a non-member is rejected here: "You are not a member of this lobby.")
         const targetMember = ensureLobbyMember(ctx, lobbyId, targetUserId);
+
+        // S10e (lobby audit #6): per-user membership rate, counted on the caller
+        consumeMembershipAllowance(ctx, user.id);
 
         // A35 / D.8.5 (S8d): in a tournament lobby the target may only take a slot of allowedSlotsFor (its team's
         // player / coach slots, Spectator always); casual lobbies allow every slot.
@@ -308,9 +332,10 @@ export const set_team_slot = spacetimedb.reducer(
                         throw new SenderError(`${newTeam} team is full (max ${lobby.teamSize} players).`);
                     }
                 }
-            } else if (newSlotTag === 'Spectator' && (lobby.stage.tag !== 'Waiting' || lobby.isTournamentControlled)) {
+            } else if (newSlotTag === 'Spectator' && lobby.isTournamentControlled) {
                 // A68(8): maxSpectators caps watchers, not seat candidates, as in join_lobby: a casual Waiting lobby's
-                // Spectator slot holds seat candidates (D-27) and is not capped; live stages and tournament lobbies are.
+                // Spectator slot holds seat candidates (D-27) and is not capped; tournament lobbies are (set_team_slot
+                // runs in Waiting only, so the live-stage half of join_lobby's rule never applies here).
                 const spectatorCount = allMembers.filter((m: any) => slotIsSpectator(m.lobbySlot) && m.userId !== targetUserId).length;
                 if (spectatorCount >= lobby.maxSpectators) {
                     throw new SenderError(`Spectator slots are full (max ${lobby.maxSpectators}).`);
@@ -318,11 +343,16 @@ export const set_team_slot = spacetimedb.reducer(
             }
         }
 
+        // S10e (lobby audit #3): the captain flag belongs to a player seat of one team; a move to another team, to a
+        // coach seat or to Spectator clears it (start_draft names a captain for a team left without one, D-30).
+        const leavesCaptainSeat = newTeam !== currentTeam || slotIsCoach(args.lobbySlot) !== slotIsCoach(targetMember.lobbySlot);
+
         // Delete + reinsert with new lobbySlot and isConfirmed reset
         ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, targetUserId]);
         ctx.db.LobbyMember.insert(updateWithAudit(ctx, targetMember, {
             lobbySlot: args.lobbySlot,
             isConfirmed: false,
+            ...(leavesCaptainSeat && targetMember.isCaptain ? { isCaptain: false } : {}),
         }, user.id));
 
         // Update lobby activity timestamp
@@ -434,11 +464,8 @@ export const set_captain = spacetimedb.reducer(
 
         // A74(1): seat -> member row ("No member sits at seat N of this lobby."), resolved only after the caller's
         // checks so a stranger learns nothing about the lobby's seats
-        const target = resolveSeat(ctx, lobbyId, args.targetJoinSeq);
-        const targetUserId = target.userId;
-
-        // Find target member
-        const targetMember = ensureLobbyMember(ctx, lobbyId, targetUserId);
+        const targetMember = resolveSeat(ctx, lobbyId, args.targetJoinSeq);
+        const targetUserId = targetMember.userId;
 
         // Target must be on a team (Blue or Red), not Spectator, and not a coach
         if (slotIsSpectator(targetMember.lobbySlot)) {

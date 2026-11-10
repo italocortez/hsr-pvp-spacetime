@@ -457,6 +457,7 @@ Membership lifecycle after A68 (details in the reducer flows above):
   `FLAG_CHECK_STAGES` = Waiting + `ACTIVE_STAGES` (`shared/lobby-rules`); `run_referee_transfer_check` moves the
   referee (first online candidate, A22(5) order) and, in Waiting, the host (`onlineOnly`); the captain transfer and the
   auto-pause stay live-stage / Drafting rules. `client_connected` cancels the pending check as in the live stages.
+  **Narrowed in S10e (A93(1)):** the host half is gone; see "Phase S10e execution" below.
 - **Live pool (A92(6)).** `disconnectThresholdMicros(lobby, player)` = the earlier of `disconnectedAt + grace`
   (`disconnectForfeitSeconds ?? 60`) and `disconnectedAt + disconnectPoolRemainingMs`; `isPastDisconnectThreshold`
   (offline / away / abandoned, stamped, `now >=` threshold) is the per-player test of `isForfeitEligible` (every player
@@ -482,6 +483,70 @@ Membership lifecycle after A68 (details in the reducer flows above):
   claim, Standard, or the defer, Deferred, becomes available on that seat); otherwise none. It names no user and
   derives from the seat's own stamp and the lobby settings, so anonymity is unchanged; it changes only on a
   disconnect or a return.
+
+## Phase S10e execution (DECISIONS.md A93; lobby and identity / admin audit findings)
+
+- **Waiting disconnect moves the referee flag only (A93(1)).** `markMemberOffline` schedules the 15 s
+  `RefereeTransferCheck` in Waiting only when the row holds the referee flag; a host who is not the referee schedules
+  nothing. `run_referee_transfer_check` still moves the referee flag in `FLAG_CHECK_STAGES` (Waiting + live), but the
+  captain and host transfers run in `ACTIVE_STAGES` only, so the host role never moves on a disconnect in Waiting.
+  Leave in Waiting still hands the host role on (`removeMemberRow`, A68(7)); no room is closed for an away host, GC's
+  everyone-offline + 30 min rule is unchanged (A93(2)).
+- **Offline host or referee at the start (A93(4), fix pass F2).** `start_draft` calls
+  `scheduleChecksForOfflineStaff(ctx, lobby)` (`disconnectHelpers.ts`) as the lobby enters Drafting: every member row
+  that is the host or holds the referee flag and is offline, away or abandoned gets one `RefereeTransferCheck` 15 s out,
+  unless one is already pending for it (a referee who dropped in Waiting keeps that check). The check then moves the
+  host role and the referee flag as for a disconnect after the start. Nothing is stamped or paused here.
+- **`transfer_host(lobbyId, targetJoinSeq)` (A93(3), `refereeManagement.ts`).** Caller: the host, or Moderator+
+  (no membership needed): "Only the host, moderators, or admins can hand over the host role." Then `resolveSeat`
+  (A74). Target rules: "The member at seat N is already the host."; an away or abandoned row (`memberHasLeft`): "The
+  member at seat N has left the match and cannot become the host." Any stage of an existing lobby. Writes
+  `Lobby.hostUserId` (+ `lastActivityAt`), audit actor the caller; the referee flag does not move.
+- **Captain flag follows the seat (audit #3).** `set_team_slot` clears `isCaptain` when the target changes team, moves
+  between a player and a coach seat, or moves to Spectator; `start_draft` names a captain for a team without one (D-30).
+- **Input caps (audit #5).** `teamBlueAlias` / `teamRedAlias` at most 30 characters in `create_lobby` and
+  `update_lobby_settings` (`ensureTeamAliases`, `helpers/lobby/lobbyConfigBounds.ts`): "Team aliases must be at most
+  30 characters." Chat metadata: see `docs/chat/architecture.md`.
+- **Chat window and membership rate (audit #6).** Every member-event System line (`postMemberEventChat`) and the
+  "Draft has started!" line trim the lobby to the D-13 window first (`trimChatForInsert`, `helpers/lobby/chatWindow.ts`,
+  oldest first by `createdDate`). `consumeMembershipAllowance(ctx, userId)` (`abuseControls.ts`) counts a user's
+  membership changes in a fixed 10 s window of `UserRateState` (`membershipWindowStart`, `membershipCount`), at most 20
+  per window: a new join and a return (`isReturn`) through `join_lobby`, and every `set_team_slot` call (counted on the
+  caller). A plain reconnect is not counted. Fix pass (review N8): `leave_lobby` is never counted nor rejected, in any
+  branch, so a user at the cap can always leave; a join / leave loop is held by its joins. Rejection: "You are changing lobbies or seats too quickly. Please wait a
+  moment." Constants `MEMBERSHIP_WINDOW_MS` / `MEMBERSHIP_CHANGES_PER_WINDOW`, not `AbuseConfig` columns.
+- **`start_draft` texts and team size (audits #9, #10).** The account / character rejections name the seat ("The player
+  at seat N has no account selected ..."), never a user id. A team with more players than `teamSize`: "{Blue|Red} team
+  has N players; the team size is M."
+- **Settings ranges (audit #10).** `ensureLobbyConfigInRange` (`lobbyConfigBounds.ts`) in `create_lobby`,
+  `update_lobby_settings` (the values it stores; a tournament lobby's locked `teamSize` is the lobby's own),
+  `create_lobby_preset`, `update_lobby_preset`: `teamSize` 1-3 ("teamSize must be 1, 2, or 3."), `standardTurnSeconds`
+  10-600, `reserveBankSeconds` 0-1800 ("{name} must be between {min} and {max}."), `characterBudget` /
+  `lightconeBudget` / `minimumBidRaise` finite 0-100000 ("{name} must be a number between 0 and 100000."), the four
+  signed handicaps `rosterDiffAdvantage`, `underThresholdAdvantage`, `aboveThresholdPenalty`, `deathPenalty` (i32)
+  -1000000 to 1000000 hundredths ("{name} must be between -1000000 and 1000000 (hundredths)."; fix pass N1: negative
+  values accepted again, as before S10e), `rosterThreshold` (u32, a roster cost) 0-1000000 ("rosterThreshold must be
+  between 0 and 1000000 (hundredths).").
+- **Ranked with a guest seated (audit #24).** `update_lobby_settings` switching a lobby to Ranked rejects while any
+  member row belongs to a guest: "A guest is in this lobby; guests cannot join Ranked lobbies."
+- **Abandoned rows keep their accounts; the roster guards ignore them (audit #12, fix pass F3).** The account locks
+  stay: an abandoned row (`ensureNotInLobby` with `abandonCurrentMatch`, or `performUserDeletion` for a live-stage
+  player) keeps its `LobbyMemberAccount` rows, so the team's ownership pool (`teamOwnedEidolons`), the eidolon pricing
+  (`resolveOwnedEidolon`, `teamDefaultEidolon`) and the timer auto-pick pool are unchanged mid-draft. The roster guards
+  that say "Leave the lobby first" read `accountLobbyLocks(ctx, hsrAccountId)` (`lobbyHelpers.ts`): the account's
+  `LobbyMemberAccount` rows minus those whose membership row has `abandonedAt` (an orphan row with no membership still
+  locks). Readers: `set_active_hsr_account`, `delete_hsr_account`, `batch_upsert_characters`,
+  `batch_remove_characters`, `migrate_roster` (both sides) in `reducers/roster/roster.ts`, and
+  `admin_delete_hsr_account` (`rosterAdmin.ts`). An away row (`leftAt` only) still locks: the player may return.
+  `releaseMemberAccounts(ctx, lobbyId, userId)` deletes a membership's rows and is called by `removeMemberRow` only.
+- **Admin removal paths (identity audit #4).** `admin_delete_row('Lobby')` runs `hardDeleteLobby`;
+  `admin_delete_row('LobbyMember')` runs `removeMemberRow`. Fix pass: a tournament lobby and a lobby whose record is
+  Validated or processed are refused (F1); a seated player row is refused in Drafting / Equipping / Scoring /
+  AwaitingResult (F4, A68(6)); a deleted last live identity takes the user's memberships offline through
+  `markMemberOffline` (F5). Texts in `docs/admin/architecture.md`.
+- **Dead code removed.** `join_lobby`'s reconnect-stage list (every stage is one), the `stage !== 'Waiting'` operand of
+  `set_team_slot`'s spectator cap (the reducer is Waiting-only), the second `ensureLobbyMember` in `set_team_slot` /
+  `set_captain`, the Admin line of `canKickOrBan`; `create_lobby` logs the generated join code.
 
 ## Phase History
 
@@ -528,10 +593,12 @@ Membership lifecycle after A68 (details in the reducer flows above):
 | `join_lobby` auto-resume only for a seated player's return and only when no seated player of either team is still offline, away or abandoned (`isSeatedPlayer`, `anySeatedPlayerAway`) | Phase S10c execution (DECISIONS.md A85) | 2026-11-09 |
 | Deferred only in tournaments, NoAction only casual, forfeit grace 30-600 s; `start_draft` needs every seated player online; Waiting 15 s check for host / referee; live pool test; `defer_match` precondition; away / abandoned callers rejected by concede / claim / defer; `liftAutoPauseOnReturn` shared by `join_lobby` and `client_connected`; `view_my_lobby_members.disconnectActionAt` | Phase S10d execution (DECISIONS.md A91, A92) | 2026-11-09 |
 | Fix pass: `maxSpectators` caps watchers, not seat candidates (casual Waiting joins and `set_team_slot` moves into Spectator are not counted; live-stage joins and tournament Waiting spectators are); `ensureNotInLobby` runs `transferFlagsOnRemoval` on the away row before writing `abandonedAt` | Phase S8f execution (DECISIONS.md A68(4)(7)(8)) | 2026-11-08 |
+| Waiting disconnect moves the referee flag only; `transfer_host`; captain flag cleared on a team / coach / spectator move; alias cap 30; member-event and start lines inside the chat window; membership rate (20 changes / 10 s, `UserRateState`); `start_draft` names seats and rejects teams over `teamSize`; `ensureLobbyConfigInRange` in create / update / presets; Ranked rejected with a guest seated; abandon releases `LobbyMemberAccount` rows; admin row deletes through `hardDeleteLobby` / `removeMemberRow` | Phase S10e execution (DECISIONS.md A93; audit 2026-11-09) | 2026-11-09 |
+| Fix pass: abandoned rows keep their `LobbyMemberAccount` rows and the roster guards ignore them (`accountLobbyLocks`); `start_draft` schedules the 15 s check for an offline host or referee; `leave_lobby` outside the membership rate; signed handicaps -1000000 to 1000000 again (`rosterThreshold` 0-1000000); admin lobby / member deletes guarded | Phase S10e execution (review F1-F5, N1, N8; DECISIONS.md A93(4), A68(6)) | 2026-11-09 |
 
 ---
 
-*Last updated: 2026-11-08*
+*Last updated: 2026-11-09*
 *Feature owner: Phase 05 / Phase 09 / Phase 10.1 / Phase 10.4 / Phase 12.1 / Phase 16*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

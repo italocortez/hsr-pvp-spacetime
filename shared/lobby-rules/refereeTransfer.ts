@@ -22,8 +22,8 @@ export type LobbyStage =
 export const ACTIVE_STAGES: readonly LobbyStage[] = ['Drafting', 'Equipping', 'Scoring']; // A67(1)
 
 /**
- * A92(5): the stages where the 15 s check moves the referee flag (and the host): Waiting plus the live stages.
- * The captain transfer and the auto-pause stay limited to ACTIVE_STAGES / Drafting.
+ * A92(5): the stages where the 15 s check moves the referee flag: Waiting plus the live stages.
+ * A93(1): the host and captain transfers stay limited to ACTIVE_STAGES, the auto-pause to Drafting.
  */
 export const FLAG_CHECK_STAGES: readonly LobbyStage[] = ['Waiting', ...ACTIVE_STAGES];
 

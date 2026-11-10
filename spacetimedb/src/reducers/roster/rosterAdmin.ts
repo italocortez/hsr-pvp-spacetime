@@ -5,6 +5,7 @@ import { auditInsert, auditUpdate } from '@module/helpers/admin/auditColumns';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { validateUid, deriveRegion, recalcDuplicateUid } from '@module/helpers/roster/rosterHelpers';
 import { updateAccountRating } from '@module/helpers/stats/accountRating';
+import { accountLobbyLocks } from '@module/helpers/lobby/lobbyHelpers'; // S10e review F3: abandoned memberships skipped
 
 // ─── admin_create_hsr_account ─────────────────────────────────────────────────
 // Admin proxy: creates an HSR account on behalf of any target user.
@@ -79,7 +80,7 @@ export const admin_delete_hsr_account = spacetimedb.reducer(
         if (!account) throw new SenderError('HSR account not found');
 
         // D-24: Block deletion if account is currently selected in an active lobby
-        const activeLma = [...ctx.db.LobbyMemberAccount.by_account.filter(hsrAccountId)];
+        const activeLma = accountLobbyLocks(ctx, hsrAccountId);
         if (activeLma.length > 0) {
             throw new SenderError('Cannot delete an account that is selected in an active lobby. Leave the lobby first.');
         }

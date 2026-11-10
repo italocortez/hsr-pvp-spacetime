@@ -7,7 +7,7 @@ import { hasLivePresence } from '@module/helpers/identity/presenceHelpers';
 
 // ─── Server-generated join codes ──────────────────────────────────────────────
 // Deterministic hash-based code generation (no Math.random — reducers must be deterministic).
-// 5 uppercase alphanumeric chars = 36^5 = ~60M possible codes. Retry on collision.
+// 6 uppercase alphanumeric chars = 36^6 = ~2.2G possible codes. Retry on collision.
 const JOIN_CODE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 const JOIN_CODE_LENGTH = 6;
 const MAX_RETRIES = 10;
@@ -61,6 +61,9 @@ export function membershipHold(ctx: any, member: any): { kind: 'free' | 'away' |
  * up only when the caller confirms (`abandonCurrentMatch`): its row becomes abandoned (`abandonedAt` set, `leftAt`,
  * `isOnline = false` and `disconnectedAt` kept; it still counts as an offline player for the forfeit test and in
  * currentPlayerCount) and the caller may proceed. Callers: create_lobby, join_lobby (new joins), create_tournament_lobby.
+ * S10e fix pass (lobby audit #12, review F3): the abandoned row keeps its LobbyMemberAccount rows, so the team's
+ * ownership pool, eidolon pricing and auto-pick pool stay intact mid-draft; the roster guards ("Leave the lobby
+ * first") ignore them instead (accountLobbyLocks).
  */
 export function ensureNotInLobby(ctx: any, userId: number, abandonCurrentMatch: boolean): void {
     const away: Array<{ member: any; lobby: any }> = [];
@@ -85,6 +88,30 @@ export function ensureNotInLobby(ctx: any, userId: number, abandonCurrentMatch: 
         ctx.db.LobbyMember.insert(updateWithAudit(ctx, current, { abandonedAt: ctx.timestamp }, userId));
         console.log(`[LOBBY] User #${userId} abandoned lobby #${member.lobbyId} to take another lobby (A68(4))`);
     }
+}
+
+/**
+ * Deletes the member's LobbyMemberAccount rows in one lobby (the account lock of that membership). Used when a row is
+ * removed (removeMemberRow); an abandoned row keeps its rows (S10e review F3, see accountLobbyLocks).
+ */
+export function releaseMemberAccounts(ctx: any, lobbyId: number, userId: number): void {
+    for (const lma of [...ctx.db.LobbyMemberAccount.by_lobby_and_user.filter([lobbyId, userId])]) {
+        ctx.db.LobbyMemberAccount.delete(lma);
+    }
+}
+
+/**
+ * The LobbyMemberAccount rows that lock an HSR account for the roster guards ("Leave the lobby first", D-24 / D-G-01):
+ * every row of the account except those whose membership is abandoned (`abandonedAt` set, A68(4)). Lobby audit #12 /
+ * S10e review F3: an abandoned player can never return to that match, so their accounts are free for their roster,
+ * while the rows themselves stay for the match (team ownership pool, eidolon pricing, auto-pick pool). A row whose
+ * membership is gone (orphan) still locks, as before.
+ */
+export function accountLobbyLocks(ctx: any, hsrAccountId: number): any[] {
+    return [...ctx.db.LobbyMemberAccount.by_account.filter(hsrAccountId)].filter((lma: any) => {
+        const member = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lma.lobbyId, lma.userId])][0];
+        return member?.abandonedAt === undefined;
+    });
 }
 
 /**
@@ -192,8 +219,7 @@ export function ensureStageIs(lobby: any, ...stages: string[]): void {
  */
 export function canKickOrBan(ctx: any, lobby: any, user: any, member: any): boolean {
     if (lobby.hostUserId === user.id) return true;
-    if (isRoleAtLeast(user.role, 'Admin')) return true;
-    if (isRoleAtLeast(user.role, 'Moderator')) return true;
+    if (isRoleAtLeast(user.role, 'Moderator')) return true; // Moderator or Admin
     if (member.isReferee && lobby.refereeCanKick) return true;
     return false;
 }

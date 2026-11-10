@@ -846,7 +846,7 @@ describe('A92(5): a host or referee who disconnects in Waiting', () => {
         fireCheck(test, row);
     };
 
-    it('the host-referee closes the tab: after 15 s both flags move to the first online member in the A22(5) order (b1 offline → b2); no stamp, no pause (A92(5))', () => {
+    it('the host-referee closes the tab: after 15 s the referee flag moves to the first online member in the A22(5) order (b1 offline → b2); the host role stays; no stamp, no pause (A93)', () => {
         const test = newHarness();
         const s = setupLobby(test, { noStart: true });
         disconnect(test, s.a.b1); // a plain member: nothing scheduled
@@ -855,27 +855,28 @@ describe('A92(5): a host or referee who disconnects in Waiting', () => {
         expect(member(test, s.lobbyId, s.host.userId).disconnectedAt).toBeUndefined();
         fire(test, s, s.host);
         expect(refereeIds(test, s.lobbyId)).toEqual([s.a.b2.userId]); // Blue players by joinSeq, online first
-        expect(lobbyRow(test, s.lobbyId).hostUserId).toBe(s.a.b2.userId);
+        expect(lobbyRow(test, s.lobbyId).hostUserId).toBe(s.host.userId); // A93(1): the host role does not move in Waiting
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Waiting');
         expect(test.db.MatchSession.lobbyId.find(s.lobbyId)).toBeFalsy();
         expect(steps(test, s.lobbyId)).toHaveLength(0);
     });
 
-    it('host and referee on different members: each one\'s disconnect moves its own flag (A92(5))', () => {
+    it('host and referee on different members: the host\'s disconnect schedules nothing; the referee\'s moves the referee flag (A93)', () => {
         const test = newHarness();
         const s = setupLobby(test, { noStart: true });
         tx(test, s.host, (ctx) => M.transfer_referee(ctx, { lobbyId: s.lobbyId, targetJoinSeq: seatOf(ctx, s.lobbyId, s.a.r1.userId) }));
         expect(refereeIds(test, s.lobbyId)).toEqual([s.a.r1.userId]);
 
-        disconnect(test, s.host); // the host only
-        fire(test, s, s.host);
-        expect(lobbyRow(test, s.lobbyId).hostUserId).toBe(s.a.b1.userId);
+        disconnect(test, s.host); // the host only, not the referee: A93(1) schedules nothing
+        expect(checksFor(test, s.lobbyId, s.host.userId)).toHaveLength(0);
+        advance(test, 15_000);
+        expect(lobbyRow(test, s.lobbyId).hostUserId).toBe(s.host.userId);
         expect(refereeIds(test, s.lobbyId)).toEqual([s.a.r1.userId]);
 
-        disconnect(test, s.a.r1); // the referee only
+        disconnect(test, s.a.r1); // the referee, not the host
         fire(test, s, s.a.r1);
-        expect(refereeIds(test, s.lobbyId)).toEqual([s.a.b1.userId]); // the (new, online) host first
-        expect(lobbyRow(test, s.lobbyId).hostUserId).toBe(s.a.b1.userId);
+        expect(refereeIds(test, s.lobbyId)).toEqual([s.a.b1.userId]); // the host is offline: Blue players by joinSeq
+        expect(lobbyRow(test, s.lobbyId).hostUserId).toBe(s.host.userId);
     });
 
     it('a refresh inside the 15 s keeps both flags (A22a in Waiting)', () => {

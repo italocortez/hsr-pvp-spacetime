@@ -1,6 +1,13 @@
 import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
-import { ScheduleAt } from 'spacetimedb';
+import { Identity, ScheduleAt } from 'spacetimedb';
+import { hardDeleteLobby } from '@module/reducers/lobby/lobbyGc';
+import { removeMemberRow } from '@module/helpers/lobby/memberRemoval';
+import { isSeatedPlayer, memberHasLeft } from '@module/helpers/lobby/lobbyHelpers';
+import { markMemberOffline } from '@module/helpers/lobby/disconnectHelpers';
+import { hasLivePresence } from '@module/helpers/identity/presenceHelpers';
+import { findLobbyResult } from '@module/helpers/results/scoringHelpers';
+import { performUserDeletion } from '@module/helpers/identity/userDeletionHelper';
 import { ensureAdmin } from '@module/helpers/identity/ensurePermissions';
 import { auditUpdate } from '@module/helpers/admin/auditColumns';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
@@ -135,7 +142,44 @@ function parseNumericPk(raw: string, tableName: string): number {
     return id;
 }
 
-// ─── Generic row delete (works for any public table) ─────────────────────────
+/** Identity audit #4: match state of a lobby that still exists is removed with the lobby, never row by row. */
+function ensureLobbyGone(ctx: any, lobbyId: number, tableName: string): void {
+    if (ctx.db.Lobby.id.find(lobbyId)) {
+        throw new SenderError(`Cannot delete a ${tableName} row of lobby #${lobbyId} while the lobby exists. Delete the Lobby row instead.`);
+    }
+}
+
+/**
+ * Identity audit #14: a malformed JSON key is a SenderError naming the table, not an opaque SyntaxError. S10e review N3:
+ * valid JSON that is not an object or array (null, a number, a string) gets the same text, not a TypeError on the field
+ * read (the composite keys are objects; MatchSessionStepHistory's is a 2-tuple array).
+ */
+function parseJsonPk(raw: string, tableName: string): any {
+    let key: unknown;
+    try {
+        key = JSON.parse(raw);
+    } catch {
+        throw new SenderError(`Invalid primary key for ${tableName}: expected JSON`);
+    }
+    if (key === null || typeof key !== 'object') {
+        throw new SenderError(`Invalid primary key for ${tableName}: expected JSON`);
+    }
+    return key;
+}
+
+// ─── Generic row delete (the admin panel's fixed list of tables below) ───────
+// S10e (identity audit #4, #5): rows with dependants go through the module's own removal paths: a Lobby through
+// hardDeleteLobby (the whole D-19 cascade), a LobbyMember through removeMemberRow (flags handed over, account lock
+// released, count decremented), a UserIdentity together with its UserPresence row (a guest left with no identity is
+// deleted through performUserDeletion). MatchSession / MatchSessionStep rows are deleted raw only once their lobby is
+// gone (orphans); a live lobby's match state is removed with the lobby.
+// S10e fix pass: a tournament lobby and a lobby whose record is Validated or processed are refused (F1, the
+// admin_void_match guards); a seated player row is refused in Drafting / Equipping / Scoring / AwaitingResult (F4,
+// A68(6)); a server identity or SYSTEM mapping is refused (N9); a deleted last live identity takes the user's
+// memberships offline as a disconnect does (F5).
+
+// F4: the stages in which a seated player's row is never removed (A68(6); AwaitingResult too: the record is open).
+const PLAYER_LOCKED_STAGES: readonly string[] = ['Drafting', 'Equipping', 'Scoring', 'AwaitingResult'];
 
 export const admin_delete_row = spacetimedb.reducer(
     { tableName: t.string(), primaryKeyJson: t.string() },
@@ -147,6 +191,9 @@ export const admin_delete_row = spacetimedb.reducer(
                 const id = parseNumericPk(primaryKeyJson, 'User');
                 const user = ctx.db.User.id.find(id);
                 if (!user) throw new SenderError('Row not found');
+
+                // Identity audit #9: the server identities' admin rights come from the SYSTEM user.
+                if (user.username === 'SYSTEM') throw new SenderError('The SYSTEM user cannot be deleted.');
 
                 // Already pending deletion
                 if (user.deletedAt) throw new SenderError(`User #${id} is already pending deletion.`);
@@ -194,16 +241,43 @@ export const admin_delete_row = spacetimedb.reducer(
                 break;
             }
             case 'UserIdentity': {
-                // Identity PKs are hex strings — must iterate (no hex→Identity conversion)
-                let found = false;
-                for (const row of ctx.db.UserIdentity.iter()) {
-                    if (row.identity.toHexString() === primaryKeyJson) {
-                        ctx.db.UserIdentity.identity.delete(row.identity);
-                        found = true;
-                        break;
+                // The key is the identity hex string.
+                let identity: Identity;
+                try {
+                    identity = Identity.fromString(primaryKeyJson);
+                } catch {
+                    throw new SenderError('Invalid primary key for UserIdentity: expected an identity hex string');
+                }
+                const row = ctx.db.UserIdentity.identity.find(identity);
+                if (!row) throw new SenderError('Row not found');
+                // S10e review N9 (identity audit #1 / #9): the server identities (Owner, Delegates) and every mapping
+                // of the SYSTEM user stay, as identity GC keeps them: their admin rights come from the SYSTEM link.
+                if (ctx.db.ServerIdentity.identity.find(identity)) {
+                    throw new SenderError('A server identity mapping cannot be deleted.');
+                }
+                if (row.userId === ctx.db.User.username.find('SYSTEM')?.id) {
+                    throw new SenderError('A mapping of the SYSTEM user cannot be deleted.');
+                }
+                ctx.db.UserIdentity.identity.delete(identity);
+                // Identity audit #5: the presence row goes with its mapping (client_disconnected skips presence
+                // without one, so a live row would read the user as online forever).
+                if (ctx.db.UserPresence.identity.find(identity)) ctx.db.UserPresence.identity.delete(identity);
+                // A guest with no identity left can never log in again (Guest_<hex> is taken) and no GC sees it.
+                const owner = ctx.db.User.id.find(row.userId);
+                if (owner?.isGuest && [...ctx.db.UserIdentity.user_id.filter(row.userId)].length === 0) {
+                    performUserDeletion(ctx, row.userId, admin.id);
+                } else if (!hasLivePresence(ctx, row.userId)) {
+                    // S10e review F5: the deleted identity was the user's last live one, and client_disconnected will
+                    // never run for it (no mapping). Take the user's memberships offline as a disconnect does
+                    // (markMemberOffline: isOnline false, the live-stage stamp, the 15 s check). Rows already offline,
+                    // away or abandoned keep their stamp and pending check.
+                    for (const member of [...ctx.db.LobbyMember.user_id.filter(row.userId)]) {
+                        if (!member.isOnline || memberHasLeft(member)) continue;
+                        const lobby = ctx.db.Lobby.id.find(member.lobbyId);
+                        if (!lobby) continue;
+                        markMemberOffline(ctx, lobby, member, admin.id);
                     }
                 }
-                if (!found) throw new SenderError('Row not found');
                 break;
             }
             case 'HsrCharacter': {
@@ -219,7 +293,7 @@ export const admin_delete_row = spacetimedb.reducer(
             case 'HsrCharacterCost': {
                 // Full composite PK: (characterName, gameMode, draftMode, costSetId).
                 // Tuple-filter with enum struct unsupported (RESEARCH.md A2); use iter() with full predicate.
-                const key = JSON.parse(primaryKeyJson);
+                const key = parseJsonPk(primaryKeyJson, tableName);
                 let found = false;
                 for (const row of ctx.db.HsrCharacterCost.iter()) {
                     if (row.characterName === key.characterName &&
@@ -236,7 +310,7 @@ export const admin_delete_row = spacetimedb.reducer(
             }
             case 'HsrLightconeCost': {
                 // Full composite PK: (lightconeName, gameMode, draftMode, costSetId).
-                const key = JSON.parse(primaryKeyJson);
+                const key = parseJsonPk(primaryKeyJson, tableName);
                 let found = false;
                 for (const row of ctx.db.HsrLightconeCost.iter()) {
                     if (row.lightconeName === key.lightconeName &&
@@ -267,7 +341,7 @@ export const admin_delete_row = spacetimedb.reducer(
                 break;
             }
             case 'HsrCharacterArchetype': {
-                const key = JSON.parse(primaryKeyJson);
+                const key = parseJsonPk(primaryKeyJson, tableName);
                 const row = [...ctx.db.HsrCharacterArchetype.by_character_and_archetype.filter([key.characterName, key.archetypeId])][0];
                 if (!row) throw new SenderError('Row not found');
                 ctx.db.HsrCharacterArchetype.delete(row);
@@ -275,37 +349,60 @@ export const admin_delete_row = spacetimedb.reducer(
             }
             case 'Lobby': {
                 const id = parseNumericPk(primaryKeyJson, 'Lobby');
-                if (!ctx.db.Lobby.id.find(id)) throw new SenderError('Row not found');
-                ctx.db.Lobby.id.delete(id);
+                const lobby = ctx.db.Lobby.id.find(id);
+                if (!lobby) throw new SenderError('Row not found');
+                // S10e review F1: the guards of admin_void_match (D.8.3, D-56). hardDeleteLobby deletes the lobby's
+                // MatchResultRecord, so a tournament lobby (its records drive the bracket tally, A24 / A67(4)) and a
+                // Validated or already processed record (a counted game) never go through this path.
+                if (lobby.isTournamentControlled) {
+                    throw new SenderError('This is a tournament lobby: use rollback_bracket_match or the tournament result reducers (results permission).');
+                }
+                const record = findLobbyResult(ctx, id);
+                if (record && (record.status.tag === 'Validated' || record.mmrProcessedAt !== undefined)) {
+                    throw new SenderError('This lobby\'s match result is Validated or already processed: use admin_void_match or override_match_result.');
+                }
+                hardDeleteLobby(ctx, id); // identity audit #4: the D-19 cascade, as close_lobby
                 break;
             }
             case 'LobbyMember': {
-                const key = JSON.parse(primaryKeyJson);
+                const key = parseJsonPk(primaryKeyJson, tableName);
                 const row = [...ctx.db.LobbyMember.by_lobby_and_user.filter([key.lobbyId, key.userId])][0];
                 if (!row) throw new SenderError('Row not found');
-                ctx.db.LobbyMember.delete(row);
+                // S10e review F4 (A68(6)): a seated player (not a coach, not a spectator) is never removed once the
+                // draft has started; the match ends by result, concede or forfeit.
+                const memberLobby = ctx.db.Lobby.id.find(row.lobbyId);
+                if (memberLobby && PLAYER_LOCKED_STAGES.includes(memberLobby.stage.tag) && isSeatedPlayer(row)) {
+                    throw new SenderError('Players cannot be removed once the draft has started; the match ends by result, concede or forfeit.');
+                }
+                // Identity audit #4: flags handed over (A68(7)), account lock released, count decremented; an emptied
+                // Waiting lobby is hard-deleted.
+                removeMemberRow(ctx, row.lobbyId, row.userId, admin.id);
                 break;
             }
             case 'MatchSession': {
                 const id = parseNumericPk(primaryKeyJson, 'MatchSession');
                 if (!ctx.db.MatchSession.lobbyId.find(id)) throw new SenderError('Row not found');
+                ensureLobbyGone(ctx, id, 'MatchSession');
                 ctx.db.MatchSession.lobbyId.delete(id);
                 break;
             }
             case 'MatchSessionStep': {
                 const id = parseNumericPk(primaryKeyJson, 'MatchSessionStep');
-                if (!ctx.db.MatchSessionStep.id.find(id)) throw new SenderError('Row not found');
+                const step = ctx.db.MatchSessionStep.id.find(id);
+                if (!step) throw new SenderError('Row not found');
+                ensureLobbyGone(ctx, step.lobbyId, 'MatchSessionStep');
                 ctx.db.MatchSessionStep.id.delete(id);
                 break;
             }
             case 'MatchSessionHistory': {
-                if (!ctx.db.MatchSessionHistory.id.find(Number(primaryKeyJson))) throw new SenderError('Row not found');
-                ctx.db.MatchSessionHistory.id.delete(Number(primaryKeyJson));
+                const id = parseNumericPk(primaryKeyJson, 'MatchSessionHistory');
+                if (!ctx.db.MatchSessionHistory.id.find(id)) throw new SenderError('Row not found');
+                ctx.db.MatchSessionHistory.id.delete(id);
                 break;
             }
             case 'MatchSessionStepHistory': {
                 // Composite PK [matchHistoryId, sequence] (A67(3)) — parse JSON 2-tuple
-                const stepPK = JSON.parse(primaryKeyJson);
+                const stepPK = parseJsonPk(primaryKeyJson, tableName);
                 const stepRow = [...ctx.db.MatchSessionStepHistory.by_match_history.filter(stepPK[0])]
                     .find((r: any) => r.sequence === stepPK[1]);
                 if (!stepRow) throw new SenderError('Row not found');
@@ -345,7 +442,12 @@ export const admin_bulk_upsert = spacetimedb.reducer(
     (ctx, { tableName, jsonData }) => {
         const admin = ensureAdmin(ctx);
 
-        const rows: any[] = JSON.parse(jsonData);
+        let rows: any[];
+        try {
+            rows = JSON.parse(jsonData);
+        } catch {
+            throw new SenderError('jsonData must be a JSON array'); // identity audit #14: not an opaque SyntaxError
+        }
         if (!Array.isArray(rows)) throw new SenderError('jsonData must be a JSON array');
 
         validateKeys(rows, tableName, ctx);
@@ -683,6 +785,8 @@ export const admin_update_user = spacetimedb.reducer(
 
         const user = ctx.db.User.id.find(userId);
         if (!user) throw new SenderError('User not found');
+        // Identity audit #9: the server identities' admin rights come from the SYSTEM user (name and role).
+        if (user.username === 'SYSTEM') throw new SenderError('The SYSTEM user cannot be changed.');
 
         // Validate role tag
         validateEnum('userRole', roleTag, ctx, 'User');

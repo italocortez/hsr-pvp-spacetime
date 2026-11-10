@@ -110,6 +110,8 @@ function writeRateState(ctx: any, userId: number, existing: any, changes: Record
             chatCount: 0,
             lobbyWindowStart: EPOCH,
             lobbyCreates: 0,
+            membershipWindowStart: EPOCH,
+            membershipCount: 0,
             ...changes,
         }, userId));
     }
@@ -139,6 +141,44 @@ export function consumeChatAllowance(ctx: any, userId: number, lastMessageMicros
     } else {
         writeRateState(ctx, userId, state, { chatWindowStart: ctx.timestamp, chatCount: 1 });
     }
+}
+
+/**
+ * S10e (lobby audit #6): the per-user rate of membership changes (a new join or a return through join_lobby, a
+ * set_team_slot call). Each rewrites the room's member rows and, for joins, the lobby-browser row every lobbies-page
+ * subscriber receives. At most MEMBERSHIP_CHANGES_PER_WINDOW changes per fixed MEMBERSHIP_WINDOW_MS window: an average
+ * minimum interval of 500 ms that still lets one gesture issue several calls back to back (join then take a seat). A
+ * person clicking through seats or rooms does not reach it; a script loop is held to two changes a second. Constants,
+ * not AbuseConfig columns (no change to the config row); a plain reconnect (page reload) is not counted. leave_lobby is
+ * never counted nor rejected (S10e review N8: a user at the cap can always leave), so a join / leave loop is held by
+ * its joins.
+ */
+export const MEMBERSHIP_WINDOW_MS = 10_000;
+export const MEMBERSHIP_CHANGES_PER_WINDOW = 20;
+
+/** Counts one membership change of the user, rejecting it once the current window is full. */
+export function consumeMembershipAllowance(ctx: any, userId: number): void {
+    const now: bigint = ctx.timestamp.microsSinceUnixEpoch;
+    const state = ctx.db.UserRateState.userId.find(userId);
+    const windowOpen = state && now - state.membershipWindowStart.microsSinceUnixEpoch < BigInt(MEMBERSHIP_WINDOW_MS) * 1000n;
+    if (windowOpen) {
+        if (state.membershipCount >= MEMBERSHIP_CHANGES_PER_WINDOW) {
+            throw new SenderError('You are changing lobbies or seats too quickly. Please wait a moment.');
+        }
+        writeRateState(ctx, userId, state, { membershipCount: state.membershipCount + 1 });
+    } else {
+        writeRateState(ctx, userId, state, { membershipWindowStart: ctx.timestamp, membershipCount: 1 });
+    }
+}
+
+/**
+ * Identity / admin audit #6: re-enabling guest lobby creation drops the breaker's fixed window
+ * (AbuseCounter['guest_lobby_create']), so the first guest creation after the re-enable opens a new window instead of
+ * counting on top of the burst that tripped the switch (and tripping it again at once). Called on a false -> true
+ * change of AbuseConfig.guestLobbyCreationEnabled (admin_set_guest_lobby_creation, admin_update_abuse_config).
+ */
+export function resetGuestLobbyCounter(ctx: any): void {
+    if (ctx.db.AbuseCounter.key.find(GUEST_LOBBY_COUNTER_KEY)) ctx.db.AbuseCounter.key.delete(GUEST_LOBBY_COUNTER_KEY);
 }
 
 /** B-7 lobby-creation cap (D-B5, guests included per A43): lobbyCreatesPerHour per fixed one-hour window. */

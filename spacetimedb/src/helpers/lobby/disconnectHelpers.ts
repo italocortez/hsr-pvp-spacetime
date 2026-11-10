@@ -15,8 +15,9 @@ const DISCONNECT_CLOCK_STAGES: readonly LobbyStage[] = ['Drafting', 'Equipping',
 /**
  * A22a (D.8.2) / A68(1): takes one membership offline, the shared body of `client_disconnected` (per membership) and
  * of a player's `leave_lobby` in a live stage: `isOnline = false`; in a live stage `disconnectedAt` stamped under
- * Standard / Deferred (D-08; NoAction tracks nothing); in an active stage, and in Waiting for the host or the referee
- * (A92(5)), one `RefereeTransferCheck` row 15 s out (a stale pending one is dropped first). `extra` carries the Leave's `leftAt` (A68(2)). The row, its
+ * Standard / Deferred (D-08; NoAction tracks nothing); in an active stage, and in Waiting for the referee only
+ * (A92(5) as narrowed by A93(1): a host who is not the referee schedules nothing in Waiting), one
+ * `RefereeTransferCheck` row 15 s out (a stale pending one is dropped first). `extra` carries the Leave's `leftAt` (A68(2)). The row, its
  * LobbyMemberAccount rows and currentPlayerCount are untouched; the flags move only through the 15 s check.
  */
 export function markMemberOffline(ctx: any, lobby: any, member: any, actorId: number, extra: { leftAt?: any } = {}): void {
@@ -30,20 +31,40 @@ export function markMemberOffline(ctx: any, lobby: any, member: any, actorId: nu
         ...extra,
     }, actorId));
 
-    // A92(5): in Waiting the 15 s check runs only for the host or the referee (flag transfers; no clock, no pause).
-    const isFlagHolder = member.isReferee || lobby.hostUserId === member.userId;
-    if (!ACTIVE_STAGES.includes(stageTag) && !(stageTag === 'Waiting' && isFlagHolder)) return;
+    // A92(5) / A93(1): in Waiting the 15 s check runs only for the referee (the referee flag moves; the host role does
+    // not move on a disconnect in Waiting; no clock, no pause).
+    if (!ACTIVE_STAGES.includes(stageTag) && !(stageTag === 'Waiting' && member.isReferee)) return;
 
     // One pending check per (lobby, user): drop a stale one before scheduling.
     for (const check of [...ctx.db.RefereeTransferCheck.by_lobby_and_user.filter([member.lobbyId, member.userId])]) {
         ctx.db.RefereeTransferCheck.scheduledId.delete(check.scheduledId);
     }
+    insertTransferCheck(ctx, member.lobbyId, member.userId);
+}
+
+function insertTransferCheck(ctx: any, lobbyId: number, userId: number): void {
     ctx.db.RefereeTransferCheck.insert({
         scheduledId: 0n,
         scheduledAt: ScheduleAt.time(ctx.timestamp.microsSinceUnixEpoch + REFEREE_TRANSFER_GRACE_MICROS),
-        lobbyId: member.lobbyId,
-        userId: member.userId,
+        lobbyId,
+        userId,
     });
+}
+
+/**
+ * S10e review F2 (A93(4)): called by start_draft as the lobby enters Drafting. A host or referee row that is offline at
+ * that moment (offline, away or abandoned) gets the 15 s RefereeTransferCheck, so the host role and the referee flag
+ * move in the live stages as they do for a disconnect after the start (in Waiting the host's disconnect scheduled
+ * nothing, A93(1)). A check already pending for the row (a referee who dropped in Waiting) is kept as is. Nothing is
+ * stamped or paused here; the check decides as for any other subject (a seated player is online at the start, A92(1)).
+ */
+export function scheduleChecksForOfflineStaff(ctx: any, lobby: any): void {
+    for (const m of [...ctx.db.LobbyMember.lobby_id.filter(lobby.id)]) {
+        if (!m.isReferee && lobby.hostUserId !== m.userId) continue;
+        if (m.isOnline && !memberHasLeft(m)) continue;
+        if ([...ctx.db.RefereeTransferCheck.by_lobby_and_user.filter([lobby.id, m.userId])].length > 0) continue;
+        insertTransferCheck(ctx, lobby.id, m.userId);
+    }
 }
 
 /**

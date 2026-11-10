@@ -138,6 +138,12 @@ lobby id). The guards exist for UX clarity -- the snapshot from Phase 12.3's D-A
 capture already makes the MMR system correct even if every guard were bypassed
 by an admin reducer.
 
+Phase S10e execution (lobby audit #12, review F3): these guards and the two D-24 deletion
+guards (`delete_hsr_account`, `admin_delete_hsr_account`) read `accountLobbyLocks(ctx,
+hsrAccountId)` (`helpers/lobby/lobbyHelpers.ts`): the `by_account` rows minus those whose
+`LobbyMember` row is abandoned (`abandonedAt`, A68(4)). An abandoned player's accounts are free
+for their roster while the rows stay for the match (`docs/lobby/architecture.md`).
+
 ### Phase S6 execution: rating over a character set (helpers/stats/accountRating.ts, backlog #10)
 - `computeRosterRating(ctx, characters)` holds the Phase 11 formula over an explicit set of `{ characterName, eidolonLevel }` (vertical mean, archetype coverage, cached or on-the-fly `maxPossible` denominator, unchanged).
 - `computeAccountRating(ctx, hsrAccountId)` is the thin single-account wrapper (the account's own `HsrAccountCharacter` rows); every existing caller (`updateAccountRating`, `admin_recalculate_all_ratings`, roster mutations) gets the same number as before.
@@ -176,6 +182,7 @@ by an admin reducer.
 | Phase 12.3 | Helper extraction (rosterMutations.ts with applyBatchUpsert / applyBatchRemove), migrate_roster rating-recompute fix (D-D-04 latent bug), four D-G lobby guards on set_active / batch_upsert / batch_remove / migrate_roster |
 | `computeAccountRating` refactored over a character set (`computeRosterRating`) with a single-account wrapper; `computeMergedAccountRating` / `computeLobbyMemberRating` added for multi-account players | Phase S6 execution (backlog #10) | 2026-11-06 |
 | `is_roster_public` index; `view_public_hsr_accounts` index-only (owner identified by choice); `view_my_roster_visibility` per A40 with `joinSeq` and masked ids | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
+| Lobby guards (D-G-01, D-24) ignore abandoned memberships (`accountLobbyLocks`) | Phase S10e execution (lobby audit #12, review F3) | 2026-11-09 |
 
 ---
 

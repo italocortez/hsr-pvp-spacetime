@@ -241,6 +241,7 @@ Lobby chat provides ephemeral, per-lobby messaging for all lobby members. Messag
 | Rate limit (`chatMinIntervalMs`, `chatPerMinute` from `AbuseConfig`, window in `UserRateState`); scenarios "Chat Too Fast", "Chat Per-Minute Cap" and three edge cases added | Phase S5 execution (DECISIONS.md A43, D-B5) | 2026-11-06 |
 | Member-event System lines rendered per reader in `view_my_lobby_chat` (scenario "S9a fix: System Line About a Hidden Member") | Phase S9a execution (DECISIONS.md A37) | 2026-11-08 |
 | Scenarios "System Message on Kick" / "System Message on Ban": `kick_member(lobbyId, targetJoinSeq)` / `ban_member(lobbyId, targetJoinSeq)` name the seat, not the user (A74); the System line text is unchanged (tests `s10-chat`) | Phase S10 execution (DECISIONS.md A74, A76) | 2026-11-09 |
+| Chat `metadata` is capped at 200 characters ("Message metadata exceeds 200 character limit."). Member-event system lines and the "Draft has started!" line respect the 50-message rolling window; the row removed is the oldest by creation time | Phase S10e execution (backend audit 2026-11-09, lobby findings 5, 6) | 2026-11-09 |
 
 ---
 

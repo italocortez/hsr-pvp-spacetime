@@ -61,7 +61,16 @@ function performIdentityGc(ctx: any): { itemsScanned: number; itemsDeleted: numb
         identityMap.set(ui.userId, arr);
     }
 
-    for (const [userId, identities] of identityMap) {
+    // S10e (identity audit #1): the server identities (Owner, Delegates) and every mapping of the SYSTEM user are never
+    // collected: losing them strips the Owner / a delegate of the admin rights the SYSTEM link gives
+    // (getAuthenticatedUser), and nothing re-creates the mapping (init does not rerun; server_register_delegate
+    // rejects an already registered identity).
+    const systemUserId = ctx.db.User.username.find('SYSTEM')?.id;
+    const isProtected = (ui: any) => ui.userId === systemUserId || !!ctx.db.ServerIdentity.identity.find(ui.identity);
+
+    for (const [userId, allIdentities] of identityMap) {
+        const identities = allIdentities.filter((ui: any) => !isProtected(ui));
+        if (identities.length === 0) continue;
         const user = ctx.db.User.id.find(userId);
 
         // D-12: Orphaned identity (user row not found) -> delete immediately

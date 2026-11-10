@@ -41,14 +41,33 @@ function requireTestDatabase(ctx: { readonly env: { readonly STDB_TARGET: string
     if (ctx.env.STDB_TARGET !== 'test') throw new SenderError('Not a test database.');
 }
 
-function parseIdentityHex(identityHex: string): Identity {
+function parseIdentityHex(identityHex: string, argName = 'identityHex'): Identity {
     if (!identityHex || identityHex.length === 0) {
-        throw new SenderError('identityHex is required');
+        throw new SenderError(`${argName} is required`);
     }
     try {
         return Identity.fromString(identityHex);
     } catch {
-        throw new SenderError('identityHex is not a valid identity');
+        throw new SenderError(`${argName} is not a valid identity`);
+    }
+}
+
+/** Usernames are at most 32 characters (update_username, update_display_name). */
+const USERNAME_MAX_LENGTH = 32;
+
+/**
+ * S10e (identity audit #3): `base` when no other user holds it, else the first free `base_2`, `base_3`, ... (the base
+ * shortened so the result stays within USERNAME_MAX_LENGTH). User.username is unique; a collision would otherwise
+ * abort the transaction on the index instead of linking the provider.
+ */
+function uniqueUsername(ctx: any, base: string, selfUserId: number): string {
+    const holder = ctx.db.User.username.find(base);
+    if (!holder || holder.id === selfUserId) return base;
+    for (let n = 2; ; n++) {
+        const suffix = `_${n}`;
+        const candidate = base.slice(0, USERNAME_MAX_LENGTH - suffix.length) + suffix;
+        const other = ctx.db.User.username.find(candidate);
+        if (!other || other.id === selfUserId) return candidate;
     }
 }
 
@@ -114,6 +133,9 @@ export const server_revoke_delegate = spacetimedb.reducer({
     }
     ctx.db.ServerIdentity.identity.delete(identity);
     ctx.db.UserIdentity.identity.delete(identity);
+    // S10e (identity audit #5): the identity's UserPresence row goes with its mapping; client_disconnected returns
+    // before touching presence once the mapping is gone, so a live row would stay online for the SYSTEM user.
+    if (ctx.db.UserPresence.identity.find(identity)) ctx.db.UserPresence.identity.delete(identity);
 });
 
 /**
@@ -137,11 +159,13 @@ export const server_link_provider = spacetimedb.reducer({
     requireServer(ctx);
     const systemUserId = SYSTEM_USER_ID;
 
-    // 2. Validate inputs
+    // 2. Validate inputs. S10e (identity audit #3): the provider name is trimmed and capped like a username
+    // (USERNAME_MAX_LENGTH, update_username / update_display_name).
     if (!providerId || providerId.length === 0) {
         throw new SenderError('providerId is required');
     }
-    if (!providerName || providerName.length === 0) {
+    const name = (providerName ?? '').trim().slice(0, USERNAME_MAX_LENGTH);
+    if (name.length === 0) {
         throw new SenderError('providerName is required');
     }
     if (!callerIdentityHex || callerIdentityHex.length === 0) {
@@ -159,12 +183,7 @@ export const server_link_provider = spacetimedb.reducer({
     rejectIfBanned(ctx, loginMethod, providerId);
 
     // 5. Resolve the end-user's identity -> UserIdentity -> User
-    let callerIdentity: any;
-    try {
-        callerIdentity = Identity.fromString(callerIdentityHex);
-    } catch {
-        throw new SenderError('callerIdentityHex is not a valid identity');
-    }
+    const callerIdentity = parseIdentityHex(callerIdentityHex, 'callerIdentityHex');
     const userMapping: any = ctx.db.UserIdentity.identity.find(callerIdentity);
 
     let currentUser: any = null;
@@ -214,9 +233,10 @@ export const server_link_provider = spacetimedb.reducer({
 
         // Case 1a / 1c: Upgrade guest or refresh provider info
         // Update User table
+        // S10e (identity audit #3): a guest upgrade takes the provider name, or a derived free one on a collision.
         ctx.db.User.id.update(updateWithAudit(ctx, currentUser, {
-            username: currentUser.isGuest ? providerName : currentUser.username,
-            displayName: currentUser.isGuest ? providerName : currentUser.displayName,
+            username: currentUser.isGuest ? uniqueUsername(ctx, name, currentUser.id) : currentUser.username,
+            displayName: currentUser.isGuest ? name : currentUser.displayName,
             isGuest: false,
             hasDiscordLinked: true,
         }, systemUserId));
@@ -230,26 +250,21 @@ export const server_link_provider = spacetimedb.reducer({
             ctx.db.UserPrivate.userId.update(updateWithAudit(ctx, existingPrivate, {
                 loginMethod,
                 providerId,
-                providerUsername: providerName,
+                providerUsername: name,
             }, systemUserId));
         } else {
             ctx.db.UserPrivate.insert(insertWithAudit(ctx, {
                 userId: currentUser.id,
                 loginMethod,
                 providerId,
-                providerUsername: providerName,
+                providerUsername: name,
             }, systemUserId));
         }
         return;
     }
 
-    // No UserIdentity mapping exists for this identity yet
-    if (providerOwner) {
-        // Case 2: Cross-device login -- client must call login_as_guest first.
-        throw new SenderError('Identity not registered. Call login_as_guest first.');
-    }
-
-    // Case 3: Same problem -- can't create UserIdentity without the Identity object.
+    // No UserIdentity mapping exists for this identity yet (Case 2, cross-device login with a known provider, and
+    // Case 3, a fresh identity, alike): the client must call login_as_guest first.
     throw new SenderError('Identity not registered. Call login_as_guest first.');
 });
 
@@ -278,6 +293,10 @@ export const server_set_role = spacetimedb.reducer({
     if (!targetUser) {
         throw new SenderError(`User "${username}" not found`);
     }
+    // S10e (identity audit #9): the server identities' admin rights come from the SYSTEM user's role.
+    if (targetUser.username === 'SYSTEM') {
+        throw new SenderError('The SYSTEM user cannot be changed.');
+    }
 
     ctx.db.User.id.update(updateWithAudit(ctx, targetUser, {
         role: { tag: roleTag, value: {} } as any,
@@ -302,6 +321,10 @@ export const server_delete_user = spacetimedb.reducer({
     const targetUser = ctx.db.User.username.find(username);
     if (!targetUser) {
         throw new SenderError(`User "${username}" not found`);
+    }
+    // S10e (identity audit #9): deleting SYSTEM would remove every server identity's mapping.
+    if (targetUser.username === 'SYSTEM') {
+        throw new SenderError('The SYSTEM user cannot be deleted.');
     }
 
     performUserDeletion(ctx, targetUser.id, SYSTEM_USER_ID);
@@ -485,7 +508,7 @@ export const server_set_mmr = spacetimedb.reducer({
  *
  * Preserves:
  *   - ServerIdentity
- *   - SYSTEM user (id=0) and its UserIdentity mapping
+ *   - SYSTEM user (found by username 'SYSTEM'; its row id is autoInc, not 0) and its UserIdentity mappings
  *   - Seed data: HsrCharacter, HsrLightcone, HsrCharacterCost, HsrLightconeCost,
  *     HsrSynergyCost, Archetype, HsrCharacterArchetype
  *   - Starter achievements: Achievement + AchievementCriteria
@@ -656,5 +679,5 @@ export const server_nuke_test_data = spacetimedb.reducer({
     if (users.length > 0) console.log(`[NUKE] User: ${users.length}`);
     totalDeleted += users.length;
 
-    console.log(`[NUKE] server_nuke_test_data complete: ${totalDeleted} rows deleted from filtered blocks; 43 tables fully cleared via Table.clear()`);
+    console.log(`[NUKE] server_nuke_test_data complete: ${totalDeleted} rows deleted from filtered blocks; the other tables listed above fully cleared via Table.clear()`);
 });

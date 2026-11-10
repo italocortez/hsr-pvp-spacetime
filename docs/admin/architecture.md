@@ -44,7 +44,8 @@ BanRecord (id: u32 autoInc PK)  [PRIVATE -- public: false]
 ### server_register_delegate(identityHex, label) / server_revoke_delegate(identityHex)
 1. `requireOwner(ctx)` -- only the Owner row may manage delegates
 2. Register: insert `ServerIdentity` (`kind=Delegate`) + `UserIdentity` -> SYSTEM user; rejects duplicates
-3. Revoke: delete the delegate's `ServerIdentity` and `UserIdentity` rows; the Owner cannot be revoked
+3. Revoke: delete the delegate's `ServerIdentity` and `UserIdentity` rows; the Owner cannot be revoked. Phase S10e execution (identity audit #5): the identity's `UserPresence` row is deleted too (a live row would otherwise keep the SYSTEM user online, since `client_disconnected` stops at the missing mapping)
+4. Phase S10e execution (identity audit #1): identity GC never collects a `ServerIdentity` identity or a SYSTEM mapping (`docs/auth/architecture.md`)
 
 ### server_link_provider(identity, discordId, discordUsername, email?)
 1. `requireServer(ctx)` -- validate caller has a ServerIdentity row (Owner or Delegate)
@@ -58,10 +59,11 @@ BanRecord (id: u32 autoInc PK)  [PRIVATE -- public: false]
 2. Find user by `User.username.find(username)` -- reject if not found
 3. Validate roleTag against Role enum variants
 4. `User.id.update()` with new role
+Phase S10e execution (identity audit #9): the SYSTEM user is rejected after the lookup ("The SYSTEM user cannot be changed."); the server identities' admin rights come from its role.
 
 ### server_delete_user(username)
 1. `requireServer(ctx)` -- validate caller has a ServerIdentity row (Owner or Delegate)
-2. Find user by `User.username.find(username)` -- reject if not found
+2. Find user by `User.username.find(username)` -- reject if not found; the SYSTEM user is rejected ("The SYSTEM user cannot be deleted.", Phase S10e execution, identity audit #9)
 3. Call `performUserDeletion(ctx, userId, callerId)` -- same cascade as scheduled path
 
 ### server_set_mmr(userId, gameModeTag, rating) -- test databases only
@@ -73,15 +75,23 @@ BanRecord (id: u32 autoInc PK)  [PRIVATE -- public: false]
 ### admin_delete_row(tableName, primaryKeyJson)
 1. `ensureAdmin(ctx)` -- requires Admin role
 2. Switch on `tableName` with table-specific guards:
-   - `User`: soft-delete (set `deletedAt`), block if hosting/in active lobby or match step, schedule `UserDeletionJob` for 5s cascade
-   - `UserIdentity`: iter-scan (no hex->Identity conversion)
+   - `User`: soft-delete (set `deletedAt`), block if hosting/in active lobby or match step, schedule `UserDeletionJob` for 5s cascade. Phase S10e: the SYSTEM user is rejected ("The SYSTEM user cannot be deleted.")
+   - `UserIdentity`: Phase S10e execution (identity audit #5): the key is the identity hex, parsed with `Identity.fromString` ("Invalid primary key for UserIdentity: expected an identity hex string") and found by PK; the mapping and the identity's `UserPresence` row are deleted; a guest left with no identity goes through `performUserDeletion` (admin actor). Fix pass (review N9): an identity with a `ServerIdentity` row is refused ("A server identity mapping cannot be deleted."), as is any mapping of the SYSTEM user ("A mapping of the SYSTEM user cannot be deleted."), the rows identity GC also keeps. Fix pass (review F5): when the user is not deleted and has no live `UserPresence` row left, each of the user's memberships that is online and not away / abandoned goes through `markMemberOffline` (admin actor): `isOnline = false`, `disconnectedAt` in a live stage under Standard / Deferred, the 15 s `RefereeTransferCheck` as for a disconnect (`client_disconnected` never runs for the deleted identity)
    - `HsrCharacter`, `HsrLightcone`: delete by name PK
    - `HsrCharacterCost`, `HsrLightconeCost`: iter-find by composite key
    - `HsrSynergyCost`: delete by autoInc id
    - `Archetype`: cascade-delete `HsrCharacterArchetype` junction rows first
    - `HsrCharacterArchetype`: delete single junction row by composite key
-   - `Lobby`, `MatchSession`, `MatchSessionStep`, `MatchSessionHistory`, `MatchSessionStepHistory`: direct delete
+   - `Lobby`, `MatchSession`, `MatchSessionStep`, `MatchSessionHistory`, `MatchSessionStepHistory`: direct delete. **Changed in Phase S10e execution (identity audit #4):**
+     - `Lobby`: `hardDeleteLobby` (the D-19 cascade close_lobby runs: result rows, lineups, chat, account selections, members, bans, password, steps, session, lobby). Fix pass (review F1, the `admin_void_match` guards, D.8.3 / D-56): a tournament-controlled lobby is refused ("This is a tournament lobby: use rollback_bracket_match or the tournament result reducers (results permission)."), and so is a lobby whose `MatchResultRecord` is Validated or has `mmrProcessedAt` ("This lobby's match result is Validated or already processed: use admin_void_match or override_match_result."); nothing is deleted. Other lobbies keep the full cascade
+     - `LobbyMember` (key `{"lobbyId","userId"}`): `removeMemberRow` (flags handed over in the A22(5) order, `LobbyMemberAccount` rows deleted, `currentPlayerCount` decremented; an emptied Waiting lobby is hard-deleted). Fix pass (review F4, A68(6)): a seated player row (a team player seat, not a coach, not a spectator) is refused while the lobby is in Drafting, Equipping, Scoring or AwaitingResult ("Players cannot be removed once the draft has started; the match ends by result, concede or forfeit.", the `kick_member` text); coach and spectator rows, and every row in Waiting, still go through `removeMemberRow`
+     - `MatchSession` / `MatchSessionStep`: refused while the lobby exists ("Cannot delete a {table} row of lobby #N while the lobby exists. Delete the Lobby row instead."); allowed for orphans
+     - `MatchSessionHistory`: key through `parseNumericPk`
+   - Identity audit #14: a malformed JSON key is a `SenderError` ("Invalid primary key for {table}: expected JSON"; fix pass, review N3: also valid JSON that is not an object or array, e.g. `null`, `5`, `"x"`); `admin_bulk_upsert` answers unparsable `jsonData` with "jsonData must be a JSON array"
    - Unknown table: `SenderError`
+
+### admin_update_user(userId, displayName, username, roleTag)
+Phase S10e execution (identity audit #9): rejects the SYSTEM user ("The SYSTEM user cannot be changed."). Otherwise unchanged (no field validation and no solo team-name sync yet: identity audit #11, open).
 
 ### admin_bulk_upsert(tableName, jsonData)
 1. `ensureAdmin(ctx)` -- requires Admin role
@@ -144,7 +154,8 @@ BanRecord (id: u32 autoInc PK)  [PRIVATE -- public: false]
 Tables: `AbuseConfig` (private singleton id 1, tunables + `maintenanceMode` + `guestLobbyCreationEnabled`), `UserRateState` (private, one row per user: chat and lobby-create windows), `AdminAlert` (**public**, counts only, no user ids, audit columns always SYSTEM), `AbuseCounter` (private, Phase S6 execution / A57: `key: string` PK, `windowStart`, `count: u32`, audit columns always SYSTEM; one row `'guest_lobby_create'`).
 Defaults (D-B5): cursor 50 ms, chat 700 ms / 30 per minute, lineup 250 ms (no decided value; applied by `arrange_lineup` in S7), 10 lobby creates per hour, 10 presets, 5 cost sets, maintenance off, guest creation on, breaker 50 guest creations in 10 minutes (A58; was 20).
 - `admin_update_abuse_config(...every column optional)`: `ensureAdmin`; omitted fields keep their value; at least one field required; `cursorMinIntervalMs`, `chatMinIntervalMs`, `lineupMinIntervalMs`, `guestLobbyBurstWindowMinutes` must be > 0 (a 0 would switch the guard off); `updateWithAudit` with the admin's id. Readers pick the change up on their next call.
-- `admin_set_guest_lobby_creation(enabled)`: `ensureAdmin`; flips `guestLobbyCreationEnabled` (the admin-panel button; also re-enables after a breaker trip).
+- `admin_set_guest_lobby_creation(enabled)`: `ensureAdmin`; flips `guestLobbyCreationEnabled` (the admin-panel button; also re-enables after a breaker trip). Phase S10e execution (identity audit #6): a false -> true change (here or through `admin_update_abuse_config`) deletes `AbuseCounter['guest_lobby_create']` (`resetGuestLobbyCounter`), so the next guest creation opens a new window instead of re-tripping the breaker on the old count.
+- Phase S10e execution (lobby audit #6): `UserRateState` gains `membershipWindowStart` / `membershipCount` (the per-user membership-change window, 20 changes per 10 s; joins, returns and seat moves; a leave is not counted since the fix pass, review N8; `docs/lobby/architecture.md`).
 - `admin_acknowledge_alert(alertId)`: `ensureAdmin`; "Alert N not found." when absent; no-op when already acknowledged; sets `isAcknowledged=true`, `acknowledgedAt=now` with **SYSTEM** audit columns (public row, no user ids); the admin's id goes only to the module log.
 - Inline circuit breaker (Phase S6 execution, A57 / A58; replaces the S5 scheduled breaker, which is deleted): `recordGuestLobbyCreation(ctx)` (helpers/lobby/abuseControls.ts) runs inside `create_lobby` for a **guest** caller after the kill-switch check passed. It bumps the fixed window `AbuseCounter['guest_lobby_create']` (a new window, count 1, opens when the stored one is `guestLobbyBurstWindowMinutes` old). When the new count exceeds `guestLobbyBurstThreshold` while the switch is on, the creation still succeeds, `guestLobbyCreationEnabled=false` (SYSTEM actor) and one `AdminAlert { kind: 'guest_lobby_burst', windowStartAt: counter.windowStart, windowEndAt: now, count, threshold, isAcknowledged: false }` is inserted, all in the same transaction. Later guest creations are rejected by the kill switch, so a trip writes one alert. Counts creations, not surviving lobbies; a rejected creation rolls its bump back. Cost: one PK read + one write per guest creation, nothing when idle.
 - Cleanup: `performUserDeletion` deletes the user's `UserRateState` row; `server_nuke_test_data` clears `UserRateState`, `AbuseCounter` and `AdminAlert` and keeps `AbuseConfig`.
@@ -284,10 +295,12 @@ public `User` subscription is the only `User` subscription in the app (PAGE-MAP 
 | `override_match_result` on a tournament record: Decided match rejected ("roll back first"), then `recordGameSettled` recomputes the derived tally (decidedBy Staff); `admin_delete_row` step-history key `[matchHistoryId, sequence]` (A67(3)(4)) | Phase S8e execution | 2026-11-08 |
 | Six Moderator+ admin views (`view_admin_user_identities`, `_ban_records`, `_deleted_users`, `_presence`, `_lobby_bans`, `_abuse_config`); `view_admin_user_private` without audit columns (staff-only full reads after the role check); three Appendix B admin views not built | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 | `view_admin_lobby_bans` carries `bannedJoinSeq`; the In-Cell `lobby_ban` grid passes it to `unban_member` | Phase S9c execution (DECISIONS.md A74) | 2026-11-08 |
+| `admin_delete_row`: Lobby through `hardDeleteLobby`, LobbyMember through `removeMemberRow`, MatchSession / MatchSessionStep only for orphans, UserIdentity by PK with its presence row (guest left without identity deleted), SYSTEM user protected, JSON keys guarded; re-enabling guest lobby creation resets the breaker counter; revoking a delegate deletes its presence row | Phase S10e execution (identity audit #4, #5, #6, #9, #14) | 2026-11-09 |
+| Fix pass: `admin_delete_row('Lobby')` refuses tournament lobbies and Validated / processed records; `admin_delete_row('LobbyMember')` refuses a seated player in the live stages and AwaitingResult; `admin_delete_row('UserIdentity')` refuses server identities and SYSTEM mappings and takes a user left with no live presence offline in their lobbies; non-object JSON keys rejected; `admin_delete_hsr_account`'s lobby guard ignores abandoned memberships | Phase S10e execution (review F1, F3, F4, F5, N3, N9; DECISIONS.md A68(6)) | 2026-11-09 |
 
 ---
 
-*Last updated: 2026-11-08*
+*Last updated: 2026-11-09*
 *Feature owner: Phase 01 / Phase 09 / Phase 12 / Phase 15*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

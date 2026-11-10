@@ -4,6 +4,8 @@ import { ensureVerifiedUser } from '@module/helpers/identity/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { validateUid, deriveRegion, recalcDuplicateUid } from '@module/helpers/roster/rosterHelpers';
 import { applyBatchUpsert, applyBatchRemove } from '@module/helpers/roster/rosterMutations';
+// S10e review F3 (lobby audit #12): the guards below read accountLobbyLocks, which skips abandoned memberships.
+import { accountLobbyLocks } from '@module/helpers/lobby/lobbyHelpers';
 
 /**
  * D-G-02 (Phase 12.3): Builds a user-facing SenderError for the lobby-guard
@@ -102,14 +104,14 @@ export const set_active_hsr_account = spacetimedb.reducer(
         // bound to a live lobby" and (b) "I'm trying to swap OUT of an account that's
         // bound to a live lobby". Snapshot from Plan 01 already makes the system
         // correct — this guard exists for clarity (D-G-03).
-        const targetBinding = [...ctx.db.LobbyMemberAccount.by_account.filter(hsrAccountId)];
+        const targetBinding = accountLobbyLocks(ctx, hsrAccountId);
         if (targetBinding.length > 0) {
             throw buildLobbyGuardError(ctx, targetBinding, 'change your active account');
         }
         const allBindings = ctx.db.HsrAccount.user_id.filter(user.id);
         for (const acc of allBindings) {
             if (!acc.isActive) continue;
-            const activeBinding = [...ctx.db.LobbyMemberAccount.by_account.filter(acc.id)];
+            const activeBinding = accountLobbyLocks(ctx, acc.id);
             if (activeBinding.length > 0) {
                 throw buildLobbyGuardError(ctx, activeBinding, 'change your active account');
             }
@@ -140,7 +142,7 @@ export const delete_hsr_account = spacetimedb.reducer(
         if (account.userId !== user.id) throw new SenderError('Not your account');
 
         // D-24: Block deletion if account is currently selected in an active lobby
-        const activeLma = [...ctx.db.LobbyMemberAccount.by_account.filter(hsrAccountId)];
+        const activeLma = accountLobbyLocks(ctx, hsrAccountId);
         if (activeLma.length > 0) {
             throw new SenderError('Cannot delete an account that is selected in an active lobby. Leave the lobby first.');
         }
@@ -198,7 +200,7 @@ export const batch_upsert_characters = spacetimedb.reducer(
         // D-G-01 (Phase 12.3, NARROW per research A2): reject when the specific
         // target account is bound to a live lobby. Existing `by_account` index is
         // sufficient — no new `by_user` index (C11).
-        const hsrAccountBinding = [...ctx.db.LobbyMemberAccount.by_account.filter(hsrAccountId)];
+        const hsrAccountBinding = accountLobbyLocks(ctx, hsrAccountId);
         if (hsrAccountBinding.length > 0) {
             throw buildLobbyGuardError(ctx, hsrAccountBinding, 'edit characters on this account');
         }
@@ -227,7 +229,7 @@ export const batch_remove_characters = spacetimedb.reducer(
 
         // D-G-01 (Phase 12.3, NARROW per research A2): reject when the target account
         // is bound to a live lobby.
-        const hsrAccountBinding = [...ctx.db.LobbyMemberAccount.by_account.filter(hsrAccountId)];
+        const hsrAccountBinding = accountLobbyLocks(ctx, hsrAccountId);
         if (hsrAccountBinding.length > 0) {
             throw buildLobbyGuardError(ctx, hsrAccountBinding, 'remove characters from this account');
         }
@@ -267,11 +269,11 @@ export const migrate_roster = spacetimedb.reducer(
 
         // D-G-01 (Phase 12.3): reject when EITHER side of the migration is bound
         // to a live lobby. Both accounts are mutated, so both must be checked.
-        const sourceBinding = [...ctx.db.LobbyMemberAccount.by_account.filter(sourceAccountId)];
+        const sourceBinding = accountLobbyLocks(ctx, sourceAccountId);
         if (sourceBinding.length > 0) {
             throw buildLobbyGuardError(ctx, sourceBinding, 'migrate characters from this account');
         }
-        const targetBinding = [...ctx.db.LobbyMemberAccount.by_account.filter(targetAccountId)];
+        const targetBinding = accountLobbyLocks(ctx, targetAccountId);
         if (targetBinding.length > 0) {
             throw buildLobbyGuardError(ctx, targetBinding, 'migrate characters to this account');
         }

@@ -119,7 +119,7 @@ export { create_tournament, update_tournament, advance_tournament_stage, cancel_
 export { check_in_tournament } from '@module/reducers/tournament/tournamentCheckIn';
 export { register_for_tournament, withdraw_from_tournament, approve_participant, reject_participant, waitlist_promote, add_participant, set_anonymous_alias } from '@module/reducers/tournament/tournamentRegistration';
 export { create_tournament_team, request_join_team, accept_team_request, reject_team_request, leave_tournament_team, disband_tournament_team, withdraw_tournament_team, add_team_member, rename_tournament_team, assign_team_group, clear_team_groups } from '@module/reducers/tournament/tournamentTeams';
-export { transfer_referee, reclaim_referee } from '@module/reducers/lobby/refereeManagement';
+export { transfer_referee, reclaim_referee, transfer_host } from '@module/reducers/lobby/refereeManagement';
 export { confirm_game, close_game, dispute_match_result } from '@module/reducers/results/matchResultSubmission';
 export { record_group_scores, set_score_adjustment } from '@module/reducers/results/scoreEntry';
 export { dq_participant, override_match_result, assign_tournament_assistant, remove_tournament_assistant, mod_promote_to_host, mod_demote_from_host } from '@module/reducers/tournament/tournamentAdmin';

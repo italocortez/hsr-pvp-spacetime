@@ -413,6 +413,23 @@ All in `reducers/draft/draftClassic.ts`:
 - **`start_draft` (A92(1)).** After the confirmation check: `'All Blue and Red players must be online before
   starting.'` while `anySeatedPlayerAway(ctx, lobbyId)` (a seated player offline, away or abandoned).
 
+## Phase S10e execution (lobby audit #9, #10, #6)
+
+- **Seat-named rejections (A74(4) completed).** The three account / character rejections of `start_draft` name the seat,
+  never a user id: "The player at seat N has no account selected for this match. ...", "The player at seat N has no
+  account selected. autoRandomPick requires ...", "The player at seat N has no characters on their selected
+  account(s). ...".
+- **Team size.** After the one-player-per-team check: "{Blue|Red} team has N players; the team size is M." when a team
+  seats more non-coach players than `lobby.teamSize` (an `update_lobby_settings` that lowered it after the seating).
+- **Chat window.** "Draft has started!" is inserted after `trimChatForInsert` (D-13, `docs/chat/architecture.md`).
+- **Offline host or referee (fix pass F2, A93(4)).** After the stage moves to Drafting, `start_draft` calls
+  `scheduleChecksForOfflineStaff`: the host's row and the referee's row, when offline, away or abandoned, get the 15 s
+  `RefereeTransferCheck` (a pending one is kept), so the host role and the flag move in the live stages as for a
+  disconnect after the start (`docs/lobby/architecture.md`). No `disconnectedAt` stamp, no pause from `start_draft`.
+- **Ownership pool and abandoned players (fix pass F3).** An abandoned player's `LobbyMemberAccount` rows stay, so
+  `teamOwnedEidolons`, `resolveOwnedEidolon`, `teamDefaultEidolon` and the timer auto-pick pool still see the departed
+  player's characters for the rest of the game (S10e's release of those rows is reverted).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -452,6 +469,8 @@ All in `reducers/draft/draftClassic.ts`:
 | Auction: a full team neither nominates nor bids and is skipped by the rotation and the timer; while one team is full the other's nomination sells at once at base cost (`completeSale` shared by every sale) | Phase S10c execution (DECISIONS.md A81) | 2026-11-09 |
 | `resume_draft` on an auto-pause: the referee or any seated player of either team | Phase S10c execution (DECISIONS.md A85) | 2026-11-09 |
 | Timer auto-pick priced from the Classic cost row (owned eidolon under ownership); mirror picks once per team on the manual and timer paths; `start_draft` rejects while a seated player is offline or away | Phase S10d execution (DECISIONS.md A86, A87, A92(1)) | 2026-11-09 |
+| `start_draft` rejections name the seat; a team over `teamSize` is rejected; the start line respects the chat window | Phase S10e execution (lobby audit #6, #9, #10) | 2026-11-09 |
+| Fix pass: `start_draft` schedules the 15 s check for an offline host or referee; abandoned players stay in the team's ownership and auto-pick pools | Phase S10e execution (review F2, F3; DECISIONS.md A93(4)) | 2026-11-09 |
 
 ---
 

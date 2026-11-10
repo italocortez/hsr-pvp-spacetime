@@ -2,7 +2,6 @@ import spacetimedb from '@module/schema';
 import { RefereeTransferCheck } from '@module/tables/lobby/refereeTransferCheck';
 import {
     ACTIVE_STAGES,
-    FLAG_CHECK_STAGES,
     decideAutoPause,
     decideRefereeTransfer,
     type LobbyStage,
@@ -18,18 +17,20 @@ import { getNextSequence } from '@module/helpers/draft/stepSequence';
 // ─── run_referee_transfer_check ───────────────────────────────────────────────
 // A22a scheduled check (ACCESS-SECURITY-OPS D.8.2), bound to RefereeTransferCheck through `onSchedule`
 // (SDK 2.7+ form, no table→reducer cycle). `client_disconnected` inserts one row per active-stage membership (and,
-// A92(5), per Waiting membership whose row holds the host or referee flag), 15 s out, when the user's last connection drops, and a player's `leave_lobby` in a live stage inserts one too
-// (A68(1)); `client_connected` deletes the pending rows of rows without `leftAt`, so a page refresh inside the
+// A92(5) / A93(1), per Waiting membership whose row holds the referee flag), 15 s out, when the user's last connection drops, and a player's `leave_lobby` in a live stage inserts one too
+// (A68(1)), and `start_draft` inserts one for a host or referee row that is offline as the draft starts (S10e review
+// F2, A93(4): scheduleChecksForOfflineStaff); `client_connected` deletes the pending rows of rows without `leftAt`, so a page refresh inside the
 // window never reaches this reducer (a leaver's check survives the refresh, A68(2)). The scheduler consumes the row; the reducer is a
 // no-op when the lobby or the member is gone.
 //
 // Decisions come from the pure core in shared/lobby-rules (`decideRefereeTransfer`, `decideAutoPause`):
 //   - referee flag: moves only if the subject is still offline, still referee and the stage is active or Waiting
-//     (A92(5); in Waiting the host moves too, and only the host's or the referee's disconnect schedules a check), to the
+//     (A92(5); in Waiting only the referee's disconnect schedules a check and only the referee flag moves, A93(1)), to the
 //     first online candidate in the A22(5) order (host → Blue players → Red players → spectators → coaches,
 //     by joinSeq; leaver, offline and away / abandoned rows skipped);
-//   - captain and host: the A68(7) transfers (A22(5) order), run with the same grace when still offline; the host
-//     goes to an online candidate only (as before), the captain to an online teammate first, then any teammate;
+//   - captain and host: the A68(7) transfers (A22(5) order), run with the same grace when still offline, in the live
+//     stages only (A93(1)); the host goes to an online candidate only (as before), the captain to an online teammate
+//     first, then any teammate;
 //   - an away / abandoned subject (A68(2)) counts as offline regardless of the user's presence rows;
 //   - auto-pause: only an offline *team player* in Drafting under Standard/Deferred, when not already paused.
 //     Spectators and coaches never pause anything (F5); a spectator referee or host loses that flag only by the
@@ -71,9 +72,10 @@ export const run_referee_transfer_check = spacetimedb.reducer(
         }
 
         // D.8.2: captain and host move with the same grace, only while the lobby is still in an active stage.
-        // A92(5): in Waiting the host moves too (same A22(5) order, online first); the captain stays a live-stage rule.
-        if (!subject.isOnline && FLAG_CHECK_STAGES.includes(stage)) {
-            if (ACTIVE_STAGES.includes(stage)) transferCaptain(ctx, lobbyId, userId);
+        // A93(1): in Waiting only the referee flag moves (above); the host role stays with an away host there
+        // (transfer_host and Leave are the ways to hand it over, A93(3)(4)).
+        if (!subject.isOnline && ACTIVE_STAGES.includes(stage)) {
+            transferCaptain(ctx, lobbyId, userId);
             const freshLobby = ctx.db.Lobby.id.find(lobbyId);
             if (freshLobby) {
                 transferHost(ctx, lobbyId, freshLobby, userId, { onlineOnly: true });

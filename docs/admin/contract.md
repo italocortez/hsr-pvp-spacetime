@@ -151,7 +151,7 @@ Admin and server operations handle privileged actions: server identity registrat
 1. `ensureAdmin(ctx)`
 2. Switch on tableName — each table has its own deletion logic
 3. User: soft-delete (sets deletedAt, schedules UserDeletionJob)
-4. Lobby/MatchSession: blocking guard if active
+4. Lobby/MatchSession: blocking guard if active _Superseded in Phase S10e execution (backend audit 2026-11-09, identity finding 4)._
 5. All others: direct delete by PK
 
 **Error Cases:**
@@ -160,8 +160,8 @@ Admin and server operations handle privileged actions: server identity registrat
 | Not admin | ensureAdmin throws |
 | Row not found | "Row not found" |
 | User already pending deletion | "User #{id} is already pending deletion." |
-| Active lobby blocking | "Cannot delete lobby #{id}: lobby is currently active..." |
-| Active match blocking | "Cannot delete match session for lobby #{id}: match is active..." |
+| Active lobby blocking | "Cannot delete lobby #{id}: lobby is currently active..." _Superseded in Phase S10e execution (backend audit 2026-11-09, identity finding 4)._ |
+| Active match blocking | "Cannot delete match session for lobby #{id}: match is active..." _Superseded in Phase S10e execution (backend audit 2026-11-09, identity finding 4)._ |
 | Unknown table | "Unknown table: {tableName}" |
 
 ### admin_bulk_upsert
@@ -432,3 +432,5 @@ _Superseded in Phase S8e execution (S8e review, DECISIONS.md A67(4), TD-13/14): 
 | Scenarios S8e-A1..A3: override recomputes the derived tally, decided matches must be rolled back first, step-history key without a game number; supersedes the S8d override rule "rollback + re-apply" | Phase S8e execution (DECISIONS.md A67(3)(4)) | 2026-11-08 |
 | Scenarios S9b-AD1..AD3: admin views staff-only, per-identity presence rows, kill-switch state through `view_admin_abuse_config` | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 | `server_link_discord` → `server_link_provider(callerIdentityHex, provider, providerId, providerName)` (A46): guest upgrade and returning-user re-point unchanged in substance; validation texts "providerId is required" etc.; link-time ban "This <provider> account is banned and cannot be linked." (tests `s10-identity`; residue `test/live/scheduler-chains`) | Phase S10 execution (DECISIONS.md A46, A76) | 2026-11-09 |
+| `admin_delete_row`: `Lobby` runs the full lobby clean-up cascade, refused for a tournament lobby ("This is a tournament lobby: use rollback_bracket_match or the tournament result reducers (results permission).") and for a lobby whose result is Validated or processed ("This lobby's match result is Validated or already processed: use admin_void_match or override_match_result."); `LobbyMember` goes through the member-removal path (flags, counts, account rows), refused for a seated player once the draft has started; `MatchSession` / `MatchSessionStep` rows are refused while their lobby exists; `UserIdentity` also deletes the presence row, takes the user's memberships offline when no live identity remains, removes a guest left with no identity, and refuses server identities and SYSTEM mappings; the SYSTEM user cannot be deleted or changed; malformed keys get "Invalid primary key for {table}: expected JSON" | Phase S10e execution (backend audit 2026-11-09, identity findings 4, 5, 9, 14) | 2026-11-09 |
+| Identity clean-up never removes an identity that has a `ServerIdentity` row or belongs to the SYSTEM user. Re-enabling guest lobby creation resets the breaker counter, so the next creation does not trip it again | Phase S10e execution (backend audit 2026-11-09, identity findings 1, 6) | 2026-11-09 |

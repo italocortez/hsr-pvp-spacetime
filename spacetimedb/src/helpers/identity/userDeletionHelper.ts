@@ -33,11 +33,13 @@ export function hasHistoryReferences(ctx: any, userId: number): boolean {
 }
 
 /**
- * Cascade-delete active-state rows + soft-delete (or hard-delete guest) User row.
+ * Cascade-delete active-state rows, then remove the User row.
  *
- * Cascade: UserIdentity, HsrAccount, HsrAccountCharacter
+ * Cascade: UserPrivate, lobby memberships (below), calendar data, UserPresence, UserRateState, UserIdentity,
+ * HsrAccount, HsrAccountCharacter.
  * Guest users with no history references → hard-delete (row removed entirely).
- * All others → soft-delete: username='deleted_<id>', discordId cleared, displayName preserved.
+ * All others → the User row is hard-deleted and archived to DeletedUser (id, displayName, isGuest, deletedAt), which
+ * resolveUserLabel reads for history rows (Phase 15.2 D-09).
  *
  * Safe to call even if UserIdentity rows were already deleted (e.g. identity re-pointed
  * during Discord linking) — the filter returns 0 rows and the loop is a no-op.
@@ -56,11 +58,12 @@ export function performUserDeletion(ctx: any, userId: number, actorId: number): 
     // A68(7): user deletion is a row removal. Waiting / AwaitingResult, a spectator or coach in any stage (A68(5)),
     // or an orphan row: removeMemberRow, as leave_lobby (flags transferred in the A22(5) order, online first then any;
     // LobbyMemberAccount rows deleted, currentPlayerCount decremented, an emptied Waiting lobby hard-deleted).
-    // A player in Drafting / Equipping / Scoring (an admin deletion mid-match; delete_my_account refuses an away or
-    // live membership): A68(6) keeps the row, so the flags move and the row becomes away and abandoned (isOnline
+    // A player in Drafting / Equipping / Scoring (an admin deletion mid-match, or a guest's delete_my_account: only the
+    // verified branch refuses an away or live membership, A45(3)): A68(6) keeps the row, so the flags move and the row becomes away and abandoned (isOnline
     // false, leftAt, abandonedAt, disconnectedAt under Standard / Deferred): an offline player for the forfeit test
     // (A68(3)) and never a flag candidate again (A68(7) hasLeft). Stamps already on the row are kept (the grace clock
-    // does not restart).
+    // does not restart). The kept row keeps its LobbyMemberAccount rows (S10e review F3: abandoned rows are not
+    // released; the roster guards ignore them, accountLobbyLocks).
     for (const membership of [...ctx.db.LobbyMember.user_id.filter(userId)]) {
         const lobby = ctx.db.Lobby.id.find(membership.lobbyId);
         const isPlayer = !slotIsSpectator(membership.lobbySlot) && !slotIsCoach(membership.lobbySlot);

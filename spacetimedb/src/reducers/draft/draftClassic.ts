@@ -7,9 +7,10 @@ import { resolveOwnedEidolon, validateCharacterOwnership } from '@module/helpers
 import { buildAuctionBanSequence, buildClassicSequence } from '@module/helpers/draft/draftSequences';
 import { computeLobbyMemberRating } from '@module/helpers/stats/accountRating';
 import { banRestrictionError, isBanLegal } from '@module/helpers/lobby/banRestriction';
-import { ensureMatchAlive } from '@module/helpers/lobby/disconnectHelpers';
+import { ensureMatchAlive, scheduleChecksForOfflineStaff } from '@module/helpers/lobby/disconnectHelpers';
 import { lobbySteps, getNextSequence } from '@module/helpers/draft/stepSequence';
 import { classicCostAt } from '@module/helpers/draft/costSetGuards';
+import { trimChatForInsert } from '@module/helpers/lobby/chatWindow';
 
 /**
  * A87: the picked characters a team may not pick again. Without allowMirrorPicks every pick of either team; with it,
@@ -92,6 +93,12 @@ export const start_draft = spacetimedb.reducer(
         if (redPlayers.length === 0) {
             throw new SenderError('Red team must have at least one non-coach player.');
         }
+        // S10e (lobby audit #10): update_lobby_settings may have lowered teamSize under the seated count.
+        for (const [team, players] of [['Blue', bluePlayers], ['Red', redPlayers]] as const) {
+            if (players.length > lobby.teamSize) {
+                throw new SenderError(`${team} team has ${players.length} players; the team size is ${lobby.teamSize}.`);
+            }
+        }
 
         // D-08: Ranked/MMR-tournament gate — all players must have at least one LobbyMemberAccount row
         const needsAccountEnforcement = lobby.matchType.tag === 'Ranked' ||
@@ -103,7 +110,7 @@ export const start_draft = spacetimedb.reducer(
                 const accountRows = [...ctx.db.LobbyMemberAccount.by_lobby_and_user.filter([lobbyId, member.userId])];
                 if (accountRows.length === 0) {
                     throw new SenderError(
-                        `Player #${member.userId} has no account selected for this match. All players must select an account before starting a ranked or MMR-counted match.`
+                        `The player at seat ${member.joinSeq} has no account selected for this match. All players must select an account before starting a ranked or MMR-counted match.`
                     );
                 }
             }
@@ -115,7 +122,7 @@ export const start_draft = spacetimedb.reducer(
                 const selectedAccounts = [...ctx.db.LobbyMemberAccount.by_lobby_and_user.filter([lobbyId, member.userId])];
                 if (selectedAccounts.length === 0) {
                     throw new SenderError(
-                        `Player #${member.userId} has no account selected. autoRandomPick requires all players to have characters.`
+                        `The player at seat ${member.joinSeq} has no account selected. autoRandomPick requires all players to have characters.`
                     );
                 }
                 // D-12: Check union of characters across all selected accounts
@@ -126,7 +133,7 @@ export const start_draft = spacetimedb.reducer(
                 }
                 if (totalChars === 0) {
                     throw new SenderError(
-                        `Player #${member.userId} has no characters on their selected account(s). autoRandomPick requires all players to have characters.`
+                        `The player at seat ${member.joinSeq} has no characters on their selected account(s). autoRandomPick requires all players to have characters.`
                     );
                 }
             }
@@ -248,7 +255,12 @@ export const start_draft = spacetimedb.reducer(
             lastActivityAt: ctx.timestamp,
         }, user.id));
 
-        // System chat message
+        // S10e review F2 (A93(4)): an offline host or referee gets the 15 s check now, so the roles move in the live
+        // stages as for a disconnect after the start (a host who dropped in Waiting scheduled nothing, A93(1)).
+        scheduleChecksForOfflineStaff(ctx, lobby);
+
+        // System chat message (D-13 rolling window, S10e)
+        trimChatForInsert(ctx, lobbyId);
         ctx.db.ChatMessage.insert(insertWithAudit(ctx, {
             id: 0,
             lobbyId,

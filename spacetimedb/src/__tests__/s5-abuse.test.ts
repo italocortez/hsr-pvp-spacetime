@@ -284,14 +284,27 @@ describe('A57: inline circuit breaker', () => {
         expectReject(test, 'internal', (ctx) => M.admin_acknowledge_alert(ctx, { alertId: alertId + 999 }), /not found/);
     });
 
-    it('re-enabling the switch after a trip lets guests create again; the next crossing writes a new alert', () => {
+    it('re-enabling the switch after a trip resets the counter: the next guest creation succeeds with no new trip or alert; a new alert only once the threshold is crossed again in a window (identity audit #6)', () => {
         const test = newHarness();
         tx(test, 'internal', (ctx) => M.admin_update_abuse_config(ctx, { guestLobbyBurstThreshold: 2 }));
         guestLobbies(test, 3);
         expect(config(test).guestLobbyCreationEnabled).toBe(false);
+        expect(alerts(test)).toHaveLength(1);
         tx(test, 'internal', (ctx) => M.admin_set_guest_lobby_creation(ctx, { enabled: true }));
+
+        // Same clock instant as the burst: the re-enable dropped the window, so this creation opens a new one.
+        const lobbiesBefore = [...test.db.Lobby.iter()].length;
         guestLobbies(test, 1, 'after');
-        // Same window, count 4 > 2: the switch was on again, so this creation trips it once more.
+        expect([...test.db.Lobby.iter()].length).toBe(lobbiesBefore + 1);
+        expect(config(test).guestLobbyCreationEnabled).toBe(true);
+        expect(alerts(test)).toHaveLength(1);
+        expect(counter(test)!.count).toBe(1);
+
+        // Up to the threshold in the new window: still on; one past it: tripped again with a second alert.
+        guestLobbies(test, 1, 'again');
+        expect(config(test).guestLobbyCreationEnabled).toBe(true);
+        expect(alerts(test)).toHaveLength(1);
+        guestLobbies(test, 1, 'over');
         expect(config(test).guestLobbyCreationEnabled).toBe(false);
         expect(alerts(test)).toHaveLength(2);
     });

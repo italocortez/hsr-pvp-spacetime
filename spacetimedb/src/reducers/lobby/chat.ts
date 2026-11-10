@@ -5,6 +5,10 @@ import { ensureLobbyMember } from '@module/helpers/lobby/lobbyHelpers';
 import { computeAnonymousLabel } from '@module/helpers/identity/anonymousLabels';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { consumeChatAllowance } from '@module/helpers/lobby/abuseControls';
+import { lobbyChatOldestFirst, trimChatForInsert } from '@module/helpers/lobby/chatWindow';
+
+/** S10e (lobby audit #5): the cap on a message's metadata JSON (content: 500, D-12). */
+const CHAT_METADATA_MAX_LENGTH = 200;
 
 // ---------------------------------------------------------------------------
 // send_chat_message
@@ -28,6 +32,11 @@ export const send_chat_message = spacetimedb.reducer({
     if (content.length > 500) throw new SenderError('Message exceeds 500 character limit.');
 
     // D-14: Metadata validation — default empty to {"type":"text"}, validate JSON schema
+    // S10e (lobby audit #5): metadata is capped like the content; the documented shape
+    // ({"type":"reply","replyToMessageId":4294967295}) is well under the cap.
+    if (metadata.length > CHAT_METADATA_MAX_LENGTH) {
+        throw new SenderError(`Message metadata exceeds ${CHAT_METADATA_MAX_LENGTH} character limit.`);
+    }
     let resolvedMetadata = metadata;
     if (!metadata || metadata.length === 0) {
         resolvedMetadata = '{"type":"text"}';
@@ -44,11 +53,8 @@ export const send_chat_message = spacetimedb.reducer({
         }
     }
 
-    // D-13: Rolling window enforcement — keep at most 49 messages before inserting
-    const messages = [...ctx.db.ChatMessage.lobby_id.filter(lobbyId)].sort(
-        (a: any, b: any) =>
-            Number(a.createdDate.microsSinceUnixEpoch - b.createdDate.microsSinceUnixEpoch)
-    );
+    // D-13: Rolling window enforcement — keep at most 49 messages before inserting (oldest first by createdDate)
+    const messages = lobbyChatOldestFirst(ctx, lobbyId);
 
     // B-4 (D-B5): minimum interval since the sender's newest message in this lobby + the fixed one-minute
     // window in UserRateState, both read from AbuseConfig. Rejection rolls the whole call back.
@@ -58,9 +64,7 @@ export const send_chat_message = spacetimedb.reducer({
     }
     consumeChatAllowance(ctx, user.id, lastOwnMicros);
 
-    if (messages.length >= 50) {
-        ctx.db.ChatMessage.id.delete(messages[0].id);
-    }
+    trimChatForInsert(ctx, lobbyId, messages);
 
     // D-18: Anonymous enforcement — populate anonymousLabel when lobby has anonymous mode
     const lobby = ctx.db.Lobby.id.find(lobbyId);

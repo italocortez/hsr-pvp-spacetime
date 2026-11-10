@@ -1,5 +1,6 @@
 import { insertWithAudit } from '@module/helpers/admin/auditHelpers';
 import { computeAnonymousLabel } from '@module/helpers/identity/anonymousLabels';
+import { trimChatForInsert } from './chatWindow';
 
 // ─── Member-event System chat (D-11; S9a fix, A37) ──────────────────────────────────────────────────────────
 // System lines about a member ("… joined the lobby.") name a person, and who may read that name depends on the
@@ -58,6 +59,7 @@ export function postMemberEventChat(
     ctx: any, lobby: any, event: MemberEvent, subjectUserId: number, subjectName: string, actorId?: number,
     anonymousLabel: string | undefined = memberEventLabel(ctx, lobby, subjectUserId),
 ): void {
+    trimChatForInsert(ctx, lobby.id); // D-13 rolling window (S10e, lobby audit #6)
     ctx.db.ChatMessage.insert(insertWithAudit(ctx, {
         id: 0,
         lobbyId: lobby.id,

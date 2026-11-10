@@ -3,7 +3,7 @@ import { t, SenderError } from 'spacetimedb/server';
 import { SYSTEM_USER_ID } from '@module/helpers/admin/auditColumns';
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { ensureAdmin } from '@module/helpers/identity/ensurePermissions';
-import { seedAbuseConfigDefaults } from '@module/helpers/lobby/abuseControls';
+import { resetGuestLobbyCounter, seedAbuseConfigDefaults } from '@module/helpers/lobby/abuseControls';
 
 // ─── Abuse controls: admin reducers (DECISIONS A42; ACCESS-SECURITY-OPS §B.5) ──────────────────────────────
 // The guest-lobby circuit breaker runs inline in create_lobby (A57): helpers/abuseControls.ts
@@ -42,18 +42,21 @@ export const admin_update_abuse_config = spacetimedb.reducer(
         if (Object.keys(changes).length === 0) throw new SenderError('No abuse config fields provided.');
 
         const existing = seedAbuseConfigDefaults(ctx);
+        if (changes.guestLobbyCreationEnabled === true && !existing.guestLobbyCreationEnabled) resetGuestLobbyCounter(ctx);
         ctx.db.AbuseConfig.id.update(updateWithAudit(ctx, existing, changes, admin.id));
         console.log(`[ABUSE] AbuseConfig updated by admin #${admin.id}: ${Object.keys(changes).join(', ')}`);
     }
 );
 
 // ─── admin_set_guest_lobby_creation ───────────────────────────────────────────
-// A42(1): the admin-panel kill switch. Re-enabling after a breaker trip is the same call with `true`.
+// A42(1): the admin-panel kill switch. Re-enabling after a breaker trip is the same call with `true`; it drops the
+// breaker's window counter (identity audit #6) so the next guest creation starts a new window instead of re-tripping.
 export const admin_set_guest_lobby_creation = spacetimedb.reducer(
     { enabled: t.bool() },
     (ctx, { enabled }) => {
         const admin = ensureAdmin(ctx);
         const existing = seedAbuseConfigDefaults(ctx);
+        if (enabled && !existing.guestLobbyCreationEnabled) resetGuestLobbyCounter(ctx);
         ctx.db.AbuseConfig.id.update(updateWithAudit(ctx, existing, { guestLobbyCreationEnabled: enabled }, admin.id));
         console.log(`[ABUSE] Guest lobby creation ${enabled ? 'enabled' : 'disabled'} by admin #${admin.id}`);
     }

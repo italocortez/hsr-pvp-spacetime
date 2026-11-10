@@ -29,8 +29,8 @@ Lobby (id: u32 autoInc PK)
 ### send_chat_message(lobbyId, content, metadata?)
 1. `getAuthenticatedUser(ctx)` -- resolve caller; find `LobbyMember` for caller in this lobby
 2. Validate `content.length <= 500` (D-12)
-3. If `metadata` provided: validate parses as JSON with valid `type` field (`text` | `reply` | `emoji_only`) -- reject with `SenderError` if invalid (D-14)
-4. Rolling window (D-13): count messages via `lobby_id` index; if >= 50, delete oldest by `createdDate`
+3. If `metadata` provided: validate parses as JSON with valid `type` field (`text` | `reply` | `emoji_only`) -- reject with `SenderError` if invalid (D-14). S10e (lobby audit #5): `metadata` is at most 200 characters, checked first ("Message metadata exceeds 200 character limit.")
+4. Rolling window (D-13): `trimChatForInsert` (`helpers/lobby/chatWindow.ts`) deletes the oldest rows by `createdDate` until one insert leaves the lobby at 50 (S10e: the shared helper; same rule as before for a lobby at the window)
 5. Anonymous enforcement: if `lobby.isAnonymousPlayers || lobby.isAnonymousSpectators`:
    - Compute `computeAnonymousLabel(ctx, lobbyId, userId)`
    - Write `senderUserId=0`, `anonymousLabel=computedLabel`
@@ -53,7 +53,7 @@ Rate limit (Phase S5 execution; DECISIONS.md A43, D-B5; ACCESS-SECURITY-OPS B-4)
 ### System messages (inserted by other reducers)
 Inserted by: `join_lobby`, `leave_lobby`, `kick_member`, `ban_member`, `advance_stage` (Drafting->Equipping, Equipping->Scoring), `start_draft`.
 - `senderType=System`, `senderUserId=0`, no `anonymousLabel`
-- Subject to the same 50-message rolling window
+- Subject to the same 50-message rolling window. S10e (lobby audit #6 / #14): `postMemberEventChat` and `start_draft`'s "Draft has started!" call `trimChatForInsert` before their insert (before S10e they inserted without trimming, so join / leave loops grew the table without bound). Still open: the `advance_stage` lines (`postDraft.ts`, trimmed by auto-increment id) and `postSystemChat` (`helpers/results/scoringHelpers.ts`, by id; concede / defer lines) do not use the helper yet.
 - S9a fix (A37): member events (`join_lobby` joined / back, `leave_lobby` left / away, `kick_member` kicked, `ban_member` banned) go through `postMemberEventChat` (`helpers/lobby/memberEventChat.ts`): `content` keeps the plain text with the display name (the table is private), `metadata = {"event","subjectUserId"}`, and `anonymousLabel` holds the subject's seat label in an anonymous lobby, read before any row removal. `view_my_lobby_chat` renders these lines per reader through `renderSystemChat` (`helpers/identity/viewAnonymity.ts`): template `{member} joined the lobby.` / `left the lobby.` / `left the match.` / `is back.` / `was kicked from the lobby.` / `was banned from the lobby.`, `{member}` = display name when the subject is visible to the reader, else the live seat label, else the stored label, else "A player"; metadata goes out with `subjectUserId = 0` for a hidden subject. Other System lines pass through unchanged.
 
 ### Lifecycle cleanup (close_lobby / auto-close)
@@ -75,10 +75,11 @@ Inserted by: `join_lobby`, `leave_lobby`, `kick_member`, `ban_member`, `advance_
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
 | Chat rate limit: `chatMinIntervalMs` since the sender's last message + `chatPerMinute` fixed window in `UserRateState`, both from `AbuseConfig` | Phase S5 execution (DECISIONS.md A43, D-B5) | 2026-11-06 |
 | Member-event System lines carry `metadata {event, subjectUserId}` + the seat label and are rendered per reader in `view_my_lobby_chat` (no hidden member named) | Phase S9a execution (DECISIONS.md A37) | 2026-11-08 |
+| Metadata capped at 200 characters; one window helper (`trimChatForInsert`, by `createdDate`) used by player messages, member-event lines and the draft start line | Phase S10e execution (lobby audit #5, #6) | 2026-11-09 |
 
 ---
 
-*Last updated: 2026-04-09*
+*Last updated: 2026-11-09*
 *Feature owner: Phase 09*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)
