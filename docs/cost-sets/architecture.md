@@ -256,6 +256,35 @@ whole `HsrCharacter` / `HsrLightcone` reference tables (iter) after the permissi
 
 - **Unpublished sets of a deleted user (A122(6), L89).** `delete_cost_set`'s row deletion moved to `deleteCostSetRows` (behaviour unchanged). `performUserDeletion` runs it for each of the user's sets with `isPublished` false that `isCostSetInUse` does not hold (no `Lobby` row on the set, no unfinished tournament). Each such set costs one `Lobby` and one `Tournament` scan (`isCostSetInUse`; no `costSetId` index). A set kept because it was in use is not removed later. Published sets stay with their creator gone. Details in [../auth/architecture.md](../auth/architecture.md) "Phase S10r execution".
 
+## Phase S10w execution (DECISIONS.md A142)
+
+- **No Admin cost-row change on a set with a live game.** The A107(4) patch guard of `publish_cost_set` now has an
+  Admin counterpart: `ensureNoLiveGameOnCostSet(ctx, costSetId)` (`helpers/draft/costSetGuards.ts`, over
+  `liveLobbiesOnCostSet`: a `Lobby` on the set in Drafting, Equipping or Scoring; Waiting rooms and lobbies in
+  AwaitingResult do not count). Callers: `admin_bulk_upsert` for each `HsrCharacterCost` / `HsrLightconeCost` /
+  `HsrSynergyCost` row that inserts or changes a value (the row's `costSetId ?? 0`), and `admin_delete_row` for a row
+  of the three tables (the found row's set). Refusal: "Cannot change a cost row of cost set N while M lobby using it is
+  / lobbies using it are in Drafting, Equipping or Scoring." Unlike the patch guard it applies to the default set 0 (no
+  `CostSet` row). A142 closes the outside price change between a bid and its sale
+  ([../match-session/architecture.md](../match-session/architecture.md) "Known limitation").
+- **An identical row is not a change.** `admin_bulk_upsert` compares a merged existing row with the stored one at f32
+  precision (`e0..e6`, `s1..s5`, `costModifier`) and skips it when equal: no write, no refusal, audit columns kept.
+  A refused call is whole (one transaction per call). The seed (`stdb:seed`) sends one call per table
+  (`HsrCharacter`, `HsrLightcone`, `HsrCharacterCost`, `HsrLightconeCost`, `HsrSynergyCost`, `Archetype`) and stops at
+  the first refusal (fix pass, review F2): with games live on set 0, a re-seed with identical prices passes; a re-seed
+  that changes a price commits the calls before the cost call carrying the change (the reference tables, and cost
+  tables with no change), is refused at that call and stops there. Re-running it once no game on set 0 is live
+  completes it (idempotent: identical rows skipped, changed rows written). Outside a live game an identical row is no
+  longer rewritten (no audit bump); everything else is as before ([../admin/architecture.md](../admin/architecture.md)
+  "Phase S10w execution").
+- **`costSetId` checked (fix pass, review F1).** The three cost cases of `admin_bulk_upsert` and the
+  `HsrCharacterCost` / `HsrLightconeCost` keys of `admin_delete_row` accept `costSetId` `null` (set 0) or a whole
+  number 0..4294967295 only; a string, fraction, boolean, array or out-of-range number is refused before any lookup or
+  guard, so it can no longer slip a row into a live set.
+- **Unchanged:** the owner's draft-row edits (`edit_draft_*_cost`, private draft rows only), `publish_cost_set` and its
+  A107(4) refusal, `lock_cost_set`, `unpublish_cost_set`, `delete_cost_set` (`isCostSetInUse`, any lobby). No schema
+  change. Tests: `spacetimedb/src/__tests__/s10w-account-edit-lock.test.ts`.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -273,10 +302,12 @@ whole `HsrCharacter` / `HsrLightcone` reference tables (iter) after the permissi
 | Lookups read the lobby's own set, game mode and draft mode with no fallback, a missing row rejects; publish checks completeness (confirm fills at cost 0); the draft stays after publish and a published, unlocked set is patched in place, refused while a lobby on it is live; `view_cost_set_missing` | Phase S10i execution (DECISIONS.md A101, A107) | 2026-11-10 |
 | The seed prices set 0 for Classic and Auction with equal values (249 + 249 character rows, 468 + 468 light-cone rows); no reducer applies a default price; `doesCostSetCover` checks set 0 like any other set (review F2); a cost row without the requested field is rejected (review F3); re-seed after publish | Phase S10i execution (DECISIONS.md A108) | 2026-11-10 |
 | User deletion removes the user's unpublished cost sets not in use (`deleteCostSetRows`, shared with `delete_cost_set`); published sets stay | Phase S10r execution (DECISIONS.md A122) | 2026-11-10 |
+| An Admin cost-row insert, change or deletion (`admin_bulk_upsert`, `admin_delete_row`; character, light-cone and synergy rows) is refused while a lobby on the set is in Drafting, Equipping or Scoring (`ensureNoLiveGameOnCostSet`, the A107(4) test, set 0 included); an upsert row equal to the stored one (f32) is skipped, so an identical re-seed passes | Phase S10w execution (DECISIONS.md A142) | 2026-11-10 |
+| Fix pass: a non-integer or out-of-range `costSetId` refused in the Admin cost paths; the per-call seed behaviour documented | Phase S10w execution (DECISIONS.md A142; S10w review F1, F2) | 2026-11-10 |
 
 ---
 
-*Last updated: 2026-04-15*
+*Last updated: 2026-11-10 (S10w)*
 *Feature owner: Phase 03 (schema), Phase 15.4 (draftMode restructure)*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

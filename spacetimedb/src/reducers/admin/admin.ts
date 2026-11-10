@@ -22,6 +22,7 @@ import { hsrLightconeCostColumns } from '@module/tables/roster/hsrLightconeCost'
 import { hsrSynergyCostUpsertKeys } from '@module/tables/roster/hsrSynergyCost';
 import { archetypeColumns } from '@module/tables/roster/archetype';
 import { canonicalPair } from '@shared/scoring';
+import { ensureNoLiveGameOnCostSet } from '@module/helpers/draft/costSetGuards';
 
 // ─── Strict enum validator ───────────────────────────────────────────────────
 // Enum values must match exactly (case-sensitive). No coercion.
@@ -120,6 +121,33 @@ function mergeForUpdate<T extends Record<string, any>, K extends keyof T & strin
         }
     }
     return merged;
+}
+
+/**
+ * S10w (A142): whether `next` equals `stored` on every field of `fields` at the column's f32 precision (the cost
+ * columns are f32, so an incoming JSON number is compared as Math.fround of it). A field of `next` that is not a number
+ * counts as a change (the write path then behaves as before). Used by admin_bulk_upsert to skip an identical cost row.
+ */
+const EIDOLON_COST_FIELDS = ['e0', 'e1', 'e2', 'e3', 'e4', 'e5', 'e6'] as const;
+const SUPERIMPOSITION_COST_FIELDS = ['s1', 's2', 's3', 's4', 's5'] as const;
+function sameF32Fields(stored: any, next: any, fields: readonly string[]): boolean {
+    if (next === null || typeof next !== 'object') return false;
+    return fields.every((f) => typeof next[f] === 'number' && Math.fround(next[f]) === Math.fround(stored[f]));
+}
+
+/**
+ * S10w fix pass (review F1): the `costSetId` of a cost row in admin_bulk_upsert, or of a cost-row key in
+ * admin_delete_row. `null` / `undefined` mean the default set 0; otherwise it must be a whole number from 0 to
+ * 4294967295 (the u32 column). Anything else ("0", 0.4, false, [0], 4294967296, NaN) is refused before any lookup or
+ * guard: a loose value matched no row and no live lobby, then serialized into a real set.
+ */
+const U32_MAX = 4294967295;
+function parseCostSetId(raw: unknown, tableName: string): number {
+    if (raw === null || raw === undefined) return 0;
+    if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 0 || raw > U32_MAX) {
+        throw new SenderError(`Invalid costSetId for ${tableName}: must be a whole number from 0 to ${U32_MAX}.`);
+    }
+    return raw === 0 ? 0 : raw; // -0 → 0
 }
 
 /**
@@ -297,12 +325,14 @@ export const admin_delete_row = spacetimedb.reducer(
                 // Full composite PK: (characterName, gameMode, draftMode, costSetId).
                 // Tuple-filter with enum struct unsupported (RESEARCH.md A2); use iter() with full predicate.
                 const key = parseJsonPk(primaryKeyJson, tableName);
+                const keySetId = parseCostSetId(key.costSetId, tableName); // S10w fix pass (review F1)
                 let found = false;
                 for (const row of ctx.db.HsrCharacterCost.iter()) {
                     if (row.characterName === key.characterName &&
                         row.gameMode.tag === key.gameModeTag &&
                         row.draftMode.tag === key.draftModeTag &&
-                        row.costSetId === key.costSetId) {
+                        row.costSetId === keySetId) {
+                        ensureNoLiveGameOnCostSet(ctx, row.costSetId); // S10w (A142): the A107(4) test
                         ctx.db.HsrCharacterCost.delete(row);
                         found = true;
                         break;
@@ -314,12 +344,14 @@ export const admin_delete_row = spacetimedb.reducer(
             case 'HsrLightconeCost': {
                 // Full composite PK: (lightconeName, gameMode, draftMode, costSetId).
                 const key = parseJsonPk(primaryKeyJson, tableName);
+                const keySetId = parseCostSetId(key.costSetId, tableName); // S10w fix pass (review F1)
                 let found = false;
                 for (const row of ctx.db.HsrLightconeCost.iter()) {
                     if (row.lightconeName === key.lightconeName &&
                         row.gameMode.tag === key.gameModeTag &&
                         row.draftMode.tag === key.draftModeTag &&
-                        row.costSetId === key.costSetId) {
+                        row.costSetId === keySetId) {
+                        ensureNoLiveGameOnCostSet(ctx, row.costSetId); // S10w (A142): the A107(4) test
                         ctx.db.HsrLightconeCost.delete(row);
                         found = true;
                         break;
@@ -330,7 +362,9 @@ export const admin_delete_row = spacetimedb.reducer(
             }
             case 'HsrSynergyCost': {
                 const id = parseNumericPk(primaryKeyJson, 'HsrSynergyCost');
-                if (!ctx.db.HsrSynergyCost.id.find(id)) throw new SenderError('Row not found');
+                const synergyRow = ctx.db.HsrSynergyCost.id.find(id);
+                if (!synergyRow) throw new SenderError('Row not found');
+                ensureNoLiveGameOnCostSet(ctx, synergyRow.costSetId); // S10w (A142): the A107(4) test
                 ctx.db.HsrSynergyCost.id.delete(id);
                 break;
             }
@@ -444,6 +478,12 @@ export const admin_delete_row = spacetimedb.reducer(
 //
 //   4. Insert branch retains its default-injection logic (per D-12); partial-update only
 //      kicks in when an existing row is found.
+//
+//   5. S10w (A142): a cost row (HsrCharacterCost, HsrLightconeCost, HsrSynergyCost) whose merged values equal the
+//      stored row (f32 precision) is skipped: no write, no refusal, audit columns kept. Any other row (an insert or a
+//      real change) of a cost set with a lobby in Drafting, Equipping or Scoring is refused (ensureNoLiveGameOnCostSet,
+//      the A107(4) test) and the whole call rolls back (one transaction: all or nothing). admin_delete_row refuses the
+//      deletion of such a row the same way.
 //
 // Callers: `scripts/stdb/seed.ts` / `bootstrap.ts`, future admin UI editors.
 export const admin_bulk_upsert = spacetimedb.reducer(
@@ -608,7 +648,7 @@ export const admin_bulk_upsert = spacetimedb.reducer(
                 for (const r of rows) {
                     validateEnumIfPresent('gameMode', r.gameMode, ctx, tableName);
                     validateEnumIfPresent('draftMode', r.draftMode, ctx, tableName);
-                    const csId = r.costSetId ?? 0;
+                    const csId = parseCostSetId(r.costSetId, tableName); // S10w fix pass (review F1): before any lookup or guard
 
                     // Tuple-filter with enum struct is unsupported (RESEARCH.md A2); use iter() fallback
                     // with extended predicate including draftMode.
@@ -629,6 +669,9 @@ export const admin_bulk_upsert = spacetimedb.reducer(
                             costs: r.costs,
                         };
                         const merged = mergeForUpdate(existing, incoming, HSR_CHARACTER_COST_FIELDS);
+                        // S10w (A142): an identical row is not a change: no write, no refusal, audit columns kept.
+                        if (sameF32Fields(existing.costs, merged.costs, EIDOLON_COST_FIELDS)) continue;
+                        ensureNoLiveGameOnCostSet(ctx, csId); // S10w (A142): a change, by the A107(4) test
                         // Re-insert pattern (no direct PK accessor for composite delete+insert is fine here).
                         ctx.db.HsrCharacterCost.delete(existing);
                         ctx.db.HsrCharacterCost.insert({
@@ -643,6 +686,7 @@ export const admin_bulk_upsert = spacetimedb.reducer(
                         // Insert branch: required enums must be present.
                         validateEnum('gameMode', r.gameMode, ctx, tableName);
                         validateEnum('draftMode', r.draftMode, ctx, tableName);
+                        ensureNoLiveGameOnCostSet(ctx, csId); // S10w (A142): an insert, by the A107(4) test
                         ctx.db.HsrCharacterCost.insert(insertWithAudit(ctx, {
                             characterName: r.characterName,
                             gameMode: { tag: r.gameMode, value: {} } as any,
@@ -660,7 +704,7 @@ export const admin_bulk_upsert = spacetimedb.reducer(
                 for (const r of rows) {
                     validateEnumIfPresent('gameMode', r.gameMode, ctx, tableName);
                     validateEnumIfPresent('draftMode', r.draftMode, ctx, tableName);
-                    const csId = r.costSetId ?? 0;
+                    const csId = parseCostSetId(r.costSetId, tableName); // S10w fix pass (review F1): before any lookup or guard
 
                     let existing: any = null;
                     for (const e of ctx.db.HsrLightconeCost.iter()) {
@@ -678,6 +722,9 @@ export const admin_bulk_upsert = spacetimedb.reducer(
                             costs: r.costs,
                         };
                         const merged = mergeForUpdate(existing, incoming, HSR_LIGHTCONE_COST_FIELDS);
+                        // S10w (A142): an identical row is not a change: no write, no refusal, audit columns kept.
+                        if (sameF32Fields(existing.costs, merged.costs, SUPERIMPOSITION_COST_FIELDS)) continue;
+                        ensureNoLiveGameOnCostSet(ctx, csId); // S10w (A142): a change, by the A107(4) test
                         ctx.db.HsrLightconeCost.delete(existing);
                         ctx.db.HsrLightconeCost.insert({
                             lightconeName: existing.lightconeName,
@@ -690,6 +737,7 @@ export const admin_bulk_upsert = spacetimedb.reducer(
                     } else {
                         validateEnum('gameMode', r.gameMode, ctx, tableName);
                         validateEnum('draftMode', r.draftMode, ctx, tableName);
+                        ensureNoLiveGameOnCostSet(ctx, csId); // S10w (A142): an insert, by the A107(4) test
                         ctx.db.HsrLightconeCost.insert(insertWithAudit(ctx, {
                             lightconeName: r.lightconeName,
                             gameMode: { tag: r.gameMode, value: {} } as any,
@@ -710,6 +758,7 @@ export const admin_bulk_upsert = spacetimedb.reducer(
                 const HSR_SYNERGY_COST_FIELDS = ['costModifier'] as const;
                 const seenPairs = new Set<string>();
                 for (const raw of rows) {
+                    const csId = parseCostSetId(raw.costSetId, tableName); // S10w fix pass (review F1): before any lookup or guard
                     const [characterA, characterB] = canonicalPair(raw.characterA, raw.characterB);
                     // Audit 2026-11-09 (roster finding 1): both names must be HsrCharacter rows (a misspelt name never matches a group).
                     for (const name of [characterA, characterB]) {
@@ -718,7 +767,6 @@ export const admin_bulk_upsert = spacetimedb.reducer(
                     const r = { ...raw, characterA, characterB };
                     validateEnumIfPresent('gameMode', r.gameMode, ctx, tableName);
                     validateEnumIfPresent('draftMode', r.draftMode, ctx, tableName);
-                    const csId = r.costSetId ?? 0;
                     const pairKey = `${characterA}|${characterB}|${r.gameMode}|${r.draftMode}|${csId}`;
                     if (seenPairs.has(pairKey)) {
                         throw new SenderError(`Synergy pair ${characterA} + ${characterB} is listed twice (pairs are unordered).`);
@@ -742,12 +790,16 @@ export const admin_bulk_upsert = spacetimedb.reducer(
                             costModifier: r.costModifier,
                         };
                         const merged = mergeForUpdate(existing, incoming, HSR_SYNERGY_COST_FIELDS);
+                        // S10w (A142): an identical row is not a change: no write, no refusal, audit columns kept.
+                        if (sameF32Fields(existing, merged, ['costModifier'])) continue;
+                        ensureNoLiveGameOnCostSet(ctx, csId); // S10w (A142): a change, by the A107(4) test
                         ctx.db.HsrSynergyCost.id.update(
                             updateWithAudit(ctx, existing, { costModifier: merged.costModifier }, admin.id),
                         );
                     } else {
                         validateEnum('gameMode', r.gameMode, ctx, tableName);
                         validateEnum('draftMode', r.draftMode, ctx, tableName);
+                        ensureNoLiveGameOnCostSet(ctx, csId); // S10w (A142): an insert, by the A107(4) test
                         const row = {
                             id: 0,
                             characterA: r.characterA,

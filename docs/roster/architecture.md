@@ -102,8 +102,8 @@ All mirror user variants with `ensureAdmin(ctx)` and `targetUserId` parameter (n
 - `admin_create_hsr_account(targetUserId, uid, displayLabel)`
 - `admin_update_hsr_account(hsrAccountId, displayLabel, isRosterPublic, isRatingPublic)`
 - `admin_delete_hsr_account(hsrAccountId)` -- same deletion guard as user variant (D-24)
-- `admin_batch_upsert_characters(hsrAccountId, charactersJson)`
-- `admin_batch_remove_characters(hsrAccountId, characterNamesJson)`
+- `admin_batch_upsert_characters(hsrAccountId, charactersJson)` -- refused for a selected account (A142, Phase S10w below)
+- `admin_batch_remove_characters(hsrAccountId, characterNamesJson)` -- same (A142)
 
 ### Phase 12.3: rosterMutations.ts helpers and lobby guards
 
@@ -184,6 +184,29 @@ for their roster while the rows stay for the match (`docs/lobby/architecture.md`
   moment.`). A rejected call consumes nothing (rollback). The `admin_*` proxies of `rosterAdmin.ts` and the cost-set
   reducers are not counted. No schema change.
 
+## Phase S10w execution (DECISIONS.md A142)
+
+- **A selected account is locked for the Admin tools too.** `admin_batch_upsert_characters` and
+  `admin_batch_remove_characters` (`reducers/roster/rosterAdmin.ts`) call `ensureAccountRosterEditable(ctx,
+  hsrAccountId)` (`helpers/lobby/lobbyHelpers.ts`) right after the account lookup, before any validation or write. It
+  reads `accountLobbyLocks`, the test of the owner's `batch_upsert_characters` / `batch_remove_characters` (D-G-01,
+  D-24): any `LobbyMemberAccount` row of the account in any lobby stage (Waiting included, AwaitingResult too while the
+  row exists), except those of an abandoned membership (S10e review F3, kept on purpose). Refusal: "This account is
+  selected in active lobby <joinCode>; its roster cannot be edited until the player's membership in that lobby ends or
+  the lobby closes." (fallback `lobby #<id>`; fix pass, review F3: a player who leaves during a match is away and the
+  lock stays). The lock ends when the row goes (`removeMemberRow`: leaving or removal in Waiting; `hardDeleteLobby`:
+  the lobby closing) or when the membership is abandoned (A68(4)).
+- **Unchanged:** `admin_delete_hsr_account` already refused a locked account (D-24, its own text); `admin_update_hsr_account`
+  edits only the label and the visibility toggles, which the owner may change while selected too; `admin_create_hsr_account`
+  makes an account no lobby can hold yet. There is no Admin migrate / copy reducer, and the generic table editor
+  (`admin_delete_row`, `admin_bulk_upsert`) has no `HsrAccount` or `HsrAccountCharacter` case. The owner's reducers are
+  unchanged.
+- **Still able to change a selected account's characters:** the user deletion cascade (`performUserDeletion`, which
+  deletes the user's accounts and their characters: the deletion or ban of a seated user) and `server_nuke_test_data`
+  (test database only).
+  The first is the remaining route the S10u sale fallback covers ([../match-session/architecture.md](../match-session/architecture.md)).
+- No schema change. Tests: `spacetimedb/src/__tests__/s10w-account-edit-lock.test.ts`.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -204,10 +227,12 @@ for their roster while the rows stay for the match (`docs/lobby/architecture.md`
 | Lobby guards (D-G-01, D-24) ignore abandoned memberships (`accountLobbyLocks`) | Phase S10e execution (lobby audit #12, review F3) | 2026-11-09 |
 | `displayLabel` at most 32 characters; user deletion recomputes `isDuplicateUid` | Phase S10f execution (roster audit #5, #6) | 2026-11-09 |
 | Player roster writes count on the per-user membership allowance (20 calls per 10 s) | Phase S10s execution (DECISIONS.md A122) | 2026-11-10 |
+| `admin_batch_upsert_characters` / `admin_batch_remove_characters` refuse an account selected in an active lobby (`ensureAccountRosterEditable` over `accountLobbyLocks`, the owner's test; abandoned memberships still skipped) | Phase S10w execution (DECISIONS.md A142) | 2026-11-10 |
+| Fix pass: the Admin roster refusal says the lock lasts until the membership ends or the lobby closes (an away player stays locked) | Phase S10w execution (DECISIONS.md A142; S10w review F3) | 2026-11-10 |
 
 ---
 
-*Last updated: 2026-11-10 (S10s)*
+*Last updated: 2026-11-10 (S10w)*
 *Feature owner: Phase 02 / Phase 10.4 / Phase 12.3*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

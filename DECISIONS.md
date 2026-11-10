@@ -1444,3 +1444,11 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Decision:** a member of a match's team gets no exception to the lobby's limits. When the side's seats and the spectator seats are full, the member's join is refused until the host frees a place.
 - **Why:** user, 2026-11-10: "if the lobby is full, then they cannot join yet, let the host handle that by himself, they would be communicating outside the web anyway to say they cannot join because its full". S10v review 3, N3.
 - **Where implemented:** no change
+
+### A142 — A game account in use by a live lobby cannot be edited, by anyone
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** while a game account is selected in an active lobby, its roster cannot be edited: the refusal that already applies to the owner's own edits (D-24, `accountLobbyLocks`) also applies to the Admin roster tools. In the same spirit an Admin cannot change or delete a cost row of a cost set while a lobby on that set has a game live (A107(4) already refuses a patch of the set). This removes the outside edits that could raise an eidolon cost between a bid and its sale. The sale fallback of S10u (the highest affordable level, down to E0) stays as the safety net for what cannot be refused: the deletion or ban of a seated user, and the roster of a member who abandoned the match (whose account is deliberately released, S10e).
+- **Why:** user, 2026-11-10: "for the eidolon issue, can we just not allow edits to a given game account if its being used in a lobby at that very moment?". S10u review 2, G2.
+- **Orchestrator's reading (not the user's words):** the cost-row part and keeping the fallback for the two remaining routes.
+- **Where implemented:** S10w

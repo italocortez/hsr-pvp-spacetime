@@ -120,6 +120,21 @@ export function liveLobbiesOnCostSet(ctx: any, costSetId: number): number {
 }
 
 /**
+ * S10w (A142): the Admin cost-row paths (admin_bulk_upsert and admin_delete_row on HsrCharacterCost, HsrLightconeCost
+ * and HsrSynergyCost) refuse to insert, change or delete a row of a cost set while a lobby on that set has a game live,
+ * by the A107(4) test above (Drafting, Equipping or Scoring; Waiting and AwaitingResult do not count). The default set
+ * (id 0) is checked like any other. An upsert row equal to the stored one is skipped before this check (not a change).
+ */
+export function ensureNoLiveGameOnCostSet(ctx: any, costSetId: number): void {
+    const live = liveLobbiesOnCostSet(ctx, costSetId);
+    if (live > 0) {
+        throw new SenderError(
+            `Cannot change a cost row of cost set ${costSetId} while ${live} ${live === 1 ? 'lobby using it is' : 'lobbies using it are'} in Drafting, Equipping or Scoring.`,
+        );
+    }
+}
+
+/**
  * Deletes a cost set's live rows (HsrCharacterCost / HsrLightconeCost / HsrSynergyCost), its draft rows
  * (CostSetDraft*) and the CostSet row. delete_cost_set runs it after its guards; S10r (A122(6), L89): the user
  * deletion cascade runs it for the user's unpublished sets that isCostSetInUse does not hold.

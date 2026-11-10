@@ -5,7 +5,8 @@ import { auditInsert, auditUpdate } from '@module/helpers/admin/auditColumns';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { validateUid, deriveRegion, recalcDuplicateUid, ensureDisplayLabelLength } from '@module/helpers/roster/rosterHelpers';
 import { updateAccountRating } from '@module/helpers/stats/accountRating';
-import { accountLobbyLocks } from '@module/helpers/lobby/lobbyHelpers'; // S10e review F3: abandoned memberships skipped
+// S10e review F3: abandoned memberships skipped. S10w (A142): the character edits refuse a selected account.
+import { accountLobbyLocks, ensureAccountRosterEditable } from '@module/helpers/lobby/lobbyHelpers';
 
 // ─── admin_create_hsr_account ─────────────────────────────────────────────────
 // Admin proxy: creates an HSR account on behalf of any target user.
@@ -135,6 +136,7 @@ export const admin_batch_upsert_characters = spacetimedb.reducer(
 
         const account = ctx.db.HsrAccount.id.find(hsrAccountId);
         if (!account) throw new SenderError('HSR account not found');
+        ensureAccountRosterEditable(ctx, hsrAccountId); // S10w (A142): as the owner's batch_upsert_characters (D-24)
 
         const items: Array<{ characterName: string; eidolonLevel: number }> = JSON.parse(charactersJson);
         if (!Array.isArray(items) || items.length === 0) {
@@ -179,6 +181,7 @@ export const admin_batch_remove_characters = spacetimedb.reducer(
 
         const account = ctx.db.HsrAccount.id.find(hsrAccountId);
         if (!account) throw new SenderError('HSR account not found');
+        ensureAccountRosterEditable(ctx, hsrAccountId); // S10w (A142): as the owner's batch_remove_characters (D-24)
 
         const names: string[] = JSON.parse(characterNamesJson);
         if (!Array.isArray(names) || names.length === 0) {

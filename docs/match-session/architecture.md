@@ -659,7 +659,8 @@ pick under edits; `set_eidolon` stays allowed in the confirm window and one undo
 execution, A134_); `AuctionSoldPayload.charCharged: f64`,
 `lcCharged: f64` (the winner's); `SetEidolonPayload.charCharged: f64`, `lcCharged: f64` (the edited team's, written by
 every `set_eidolon` call, 0 in Classic or for a delta of 0). Appended at the end of each struct. The bid's opening amount
-is logged because an admin cost-row import can change a price during a live draft. `MatchSessionStepHistory.payload` is
+is logged because an admin cost-row import could change a price during a live draft (_refused since Phase S10w
+execution, A142_). `MatchSessionStepHistory.payload` is
 the JSON of the live payload (`finalizationHelpers.ts`), so the history copy carries the new fields without a change.
 
 **The end of the draft (A129, A130, A131; supersedes the automatic move).** The last Classic pick (`pick_character`,
@@ -796,9 +797,11 @@ restarts after an undo in 24 games).
   of the character budget after the bid, plus the light-cone budget when the character budget before the sale is not
   0. When the default level's extra does not fit, the character is sold at the highest level from the default down to
   E0 whose extra fits (E0 has none), exactly that extra is charged, and the level applied is the AuctionSold `eidolon` /
-  `eidolonCost`. This happens only when something outside the draft raised the extra after the bid guard: an admin
-  cost-row change, a roster change, or the deletion of a seated player's user (its account rows go while the seat stays,
-  so the team's lowest owned level can rise). Example: 2v2 under ownership, budgets 10 / 2, X costs 10 / 11.5 / 15 at
+  `eidolonCost`. This happens only when something outside the draft raised the extra after the bid guard. Since Phase
+  S10w (DECISIONS.md A142) only two routes remain: the deletion or ban of a seated player's user (its account rows go
+  while the seat stays, so the team's lowest owned level can rise) and the roster of a member who abandoned the match;
+  an Admin roster edit of a selected account and an Admin cost-row change of a set with a live game are refused (see the
+  limitation below). Example: 2v2 under ownership, budgets 10 / 2, X costs 10 / 11.5 / 15 at
   E0 / E1 / E2; Blue holds X at 10 with its default E0; the E0 owner's rows go, the default becomes E2 (extra 5 > 2): X is
   sold at E1 (extra 1.5), Blue 0 / 0.5. Under ownership the level applied may be one the team does not own; it may move
   to an owned level later through `set_eidolon`, if it owns a level it can pay for (the delta is computed from the
@@ -809,10 +812,14 @@ restarts after an undo in 24 games).
 - **Known limitation (S10u review 2 G2, for the owner to rule).** After a step-down sale under ownership a team can sit
   at a level it does not own and cannot leave: the owned levels above cost more than it has (in the example above E2
   needs 3.5 more, in Drafting and in Equipping alike) and the levels below are not owned. Scoring uses the recorded
-  level (`teamDraft`, `lineupCosts`, the 5-star eidolon tie-break), not the one the team fields. Three routes outside
-  the draft can cause it: an Admin roster or cost edit, the deletion of a seated user (its account rows go while the
-  seat stays), and the roster of a member who abandoned the match (A68(4): their rows stay in the team's pool but the
-  roster lock is gone). In every route the step-down only follows a rise of the default, so the team never pays less
+  level (`teamDraft`, `lineupCosts`, the 5-star eidolon tie-break), not the one the team fields. **Phase S10w execution
+  (DECISIONS.md A142):** the Admin route is closed. `admin_batch_upsert_characters` / `admin_batch_remove_characters`
+  refuse an account selected in an active lobby (`ensureAccountRosterEditable`, the owner's `accountLobbyLocks` test),
+  and `admin_bulk_upsert` / `admin_delete_row` refuse an insert, change or deletion of a character, light-cone or synergy cost row of a set with a lobby in
+  Drafting, Equipping or Scoring (`ensureNoLiveGameOnCostSet`, the A107(4) test); `resolveSale` is unchanged and stays
+  the safety net. Two routes outside the draft remain, which cannot be refused: the deletion or ban of a seated user
+  (its account rows go while the seat stays), and the roster of a member who abandoned the match (A68(4): their rows
+  stay in the team's pool but the roster lock is gone on purpose, S10e review F3). In every route the step-down only follows a rise of the default, so the team never pays less
   than it would have without the change. Options recorded by the review: keep; step down through owned levels only and
   void the round when none fits; owned levels only with the unowned E0 as the last fallback.
 - **Guards** (`ensureTotalBudgetFits`, used by `nominate_character` (so also the A81(2) immediate sale) and
@@ -897,10 +904,11 @@ restarts after an undo in 24 games).
 | Auction, Drafting: an eidolon raise needs available character budget (character budget minus a held bid) above 0; nomination and bid refuse a character with a default extra above 0 for a team at 0 character budget; `resolveSale` refuses the same defensively (_superseded by the fix-pass row below: the sale is never refused for its extra_); `chargeExtra` refuses a shortfall above double-precision noise instead of clamping it | Phase S10u execution (DECISIONS.md A133; review 3 F2) | 2026-11-10 |
 | Fix pass: a holder's raise must fit its free character budget (no spill while holding: one dip per team per stretch without a character-budget-restoring undo); "0" for A133 is `charBudgetIsZero` (2^-20 of the starting character budget, floor 1); a sale whose default extra no longer fits sells at the highest affordable level down to E0 (never refused for its extra); `place_bid`'s minimum raise compared as f32 | Phase S10u execution (DECISIONS.md A133; S10u review F1, F2, F3, F6) | 2026-11-10 |
 | Final pass: the A133 zero tolerance refuses only a charge that needs the light-cone budget (raise, guard, held-bid-of-0 check; the sale already excluded light cones); with a minimum raise above 0 a bid must be above the current bid in f32, and the refusal prints f32 values in their shortest form; the step-down limitation documented | Phase S10u execution (DECISIONS.md A133; S10u review 2 G1, G2, G3, G4) | 2026-11-10 |
+| The step-down limitation: the Admin route is closed (roster edits of a selected account and cost-row changes of a set with a live game are refused); `resolveSale` unchanged, its fallback left for the deletion or ban of a seated user and an abandoned member's roster | Phase S10w execution (DECISIONS.md A142; S10u review 2 G2) | 2026-11-10 |
 
 ---
 
-*Last updated: 2026-11-10 (S10u)*
+*Last updated: 2026-11-10 (S10w)*
 *Feature owner: Phase 07 / Phase 09 / Phase 12.3 / Phase 15.4 / Phase 15.3*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

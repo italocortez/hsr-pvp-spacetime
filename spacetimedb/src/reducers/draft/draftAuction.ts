@@ -141,8 +141,9 @@ function ensureTeamOwnsCharacter(ctx: any, lobby: any, side: string, characterNa
  * S10u (A133(1)): the sale is one charge (amount + default extra) and its extra may spill into the light-cone budget
  * only when the team's character budget is above 0 (charBudgetIsZero) before the sale. A team at 0 character budget
  * therefore cannot nominate or bid on a character whose default extra is above 0. These guards make the default extra
- * payable at the sale while nothing outside the draft changes; when something does (an admin cost-row change, a roster
- * change, a seated player's deletion raising the team's lowest owned level), resolveSale sells at a lower level.
+ * payable at the sale while nothing outside the draft changes; when something does (since S10w, A142, only the deletion
+ * or ban of a seated user, or an edit of the roster of a member who abandoned the match, raising the team's lowest owned
+ * level), resolveSale sells at a lower level.
  */
 function ensureTotalBudgetFits(ctx: any, lobby: any, session: any, side: string, characterName: string, amount: number): void {
     const extra = auctionEidolonExtra(ctx, lobby, characterName, teamDefaultEidolon(ctx, lobby, side, characterName));
@@ -163,12 +164,16 @@ function ensureTotalBudgetFits(ctx: any, lobby: any, session: any, side: string,
  * chargeExtra. Returns the AuctionSold payload values and the winner's new budgets.
  * S10u fix pass (A133(1), review F2): a sale is never refused for its extra. The payable extra is what is left of the
  * character budget after the bid, plus the light-cone budget when the character budget before the sale is above 0
- * (A133). When the default level's extra does not fit (it grew after the bid guard: an admin cost-row change, a roster
- * change, a seated player's deletion), the character is sold at the highest level from the default down to E0 whose
+ * (A133). When the default level's extra does not fit (it grew after the bid guard), the character is sold at the highest level from the default down to E0 whose
  * extra fits (E0 has extra 0, so one always does); exactly that extra is charged and that level is recorded in the
  * AuctionSold payload (eidolon, eidolonCost). Under ownership that level may be one the team does not own; the team may
  * move to an owned level later through set_eidolon, if it owns a level it can pay for (S10u review 2 G2: otherwise it
  * stays at the applied level, which scoring uses).
+ * S10w (A142): the fallback stays as the safety net for what cannot be refused. An Admin roster edit of a selected
+ * account and an Admin cost-row change of a set with a live game are refused (as the owner's roster edits and
+ * publish_cost_set already were), so the only routes left that raise the extra between a bid and its sale are the
+ * deletion or ban of a seated user and the roster of a member who abandoned the match (its account is released on
+ * purpose, S10e review F3).
  */
 function resolveSale(ctx: any, lobby: any, session: any, winningSide: string, characterName: string, winningAmount: number) {
     const team = winningSide === 'Blue' || winningSide === 'Red';

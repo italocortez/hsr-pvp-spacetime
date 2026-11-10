@@ -118,6 +118,23 @@ export function accountLobbyLocks(ctx: any, hsrAccountId: number): any[] {
 }
 
 /**
+ * S10w (A142): the Admin roster tools (admin_batch_upsert_characters, admin_batch_remove_characters) refuse an account
+ * that accountLobbyLocks holds, exactly as the owner's own edits are refused (D-24); an abandoned member's account stays
+ * free (S10e review F3). Names the first lobby by its join code (fallback: its id). S10w fix pass (review F3): a player
+ * who leaves during a match is away and the lock stays; it ends when the membership row goes (removal in Waiting, the
+ * lobby closing) or is abandoned.
+ */
+export function ensureAccountRosterEditable(ctx: any, hsrAccountId: number): void {
+    const locks = accountLobbyLocks(ctx, hsrAccountId);
+    if (locks.length === 0) return;
+    const lobby = ctx.db.Lobby.id.find(locks[0].lobbyId);
+    const label = lobby?.joinCode ? `lobby ${lobby.joinCode}` : `lobby #${locks[0].lobbyId}`;
+    throw new SenderError(
+        `This account is selected in active ${label}; its roster cannot be edited until the player's membership in that lobby ends or the lobby closes.`,
+    );
+}
+
+/**
  * Enforces guest restrictions for lobby creation/join.
  * Per D-23: guests cannot create or join Ranked lobbies.
  */

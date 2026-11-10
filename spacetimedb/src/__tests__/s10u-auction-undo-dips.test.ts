@@ -985,7 +985,7 @@ describe('A133 (review F2): a sale is never refused; an extra that grew after th
     it('A133(1): a later set_eidolon on a stepped-down character computes its cost from the applied level (E1 → E0 refunds 1.5, not 5)', () => {
         const s = grownExtra([10, 11.5, 15, 15, 15, 15, 15], true);
         pass(s, 'Red'); // sold at E1: 0 / 0.5
-        // The E0 owner's row comes back (an Admin roster edit), so Blue owns E0 again.
+        // The E0 owner's row comes back (a direct row write; T-S10w: since A142 an Admin roster edit of a selected account is refused), so Blue owns E0 again.
         const ts = s.test.clock.now();
         s.test.db.HsrAccountCharacter.insert({ hsrAccountId: 9001, characterName: 'X', eidolonLevel: 0, createdById: 0, createdDate: ts, lastModifiedById: 0, lastModifiedDate: ts } as any);
         eid(s, 'Blue', 'X', 0);
