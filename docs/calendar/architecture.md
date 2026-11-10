@@ -147,6 +147,7 @@ All cascades run in the same transaction as the triggering reducer:
 | `dq_participant` (auto-advance) | `deleteCalendarEventForBracketMatch(ctx, activeMatch.id)` | D-22 |
 | `withdraw_from_tournament` | `deleteUserInvitesForTournament(ctx, userId, tournamentId)` | D-24 |
 | `performUserDeletion` | `deleteAllCalendarDataForUser(ctx, userId)` | D-23 |
+| `server_link_provider` moving a guest's tournament entry (`moveEntry`) | `moveUserInvitesForTournament(ctx, fromUserId, toUserId, tournamentId, actorId)` | A113(5), Phase S10m execution |
 
 Cascade helper functions live in `spacetimedb/src/helpers/calendar/calendarCascade.ts`.
 
@@ -185,6 +186,17 @@ invitees of an event (an anonymous tournament's match event would otherwise list
 - **LOW.** `create_calendar_event` attaches the invites to the row `insert` returns (no re-read by `createdDate`); the
   file headers say the lazy cleanups run in `create_calendar_event` / `create_availability_slot` (not "every call").
 
+## Phase S10m execution (DECISIONS.md A113(5))
+
+`moveUserInvitesForTournament` (`helpers/calendar/calendarCascade.ts`), called by `moveEntry`
+(`helpers/tournament/entryTransfer.ts`) when a guest's tournament entry moves to an existing user (A112): for each of
+the guest's invites (`CalendarEventInvite.invitee_user_id`) whose event (`CalendarEvent.id`) has a `bracketMatchId`
+whose match (`BracketMatch.id`) belongs to that tournament, the invite row is deleted and re-inserted for the existing
+user (event, `inviteStatus`, `respondedAt`, `createdById` / `createdDate` kept; `lastModified*` = the link path's
+`SYSTEM_USER_ID`), unless the existing user already has an invite for that event (`by_event_and_invitee`), in which case
+the guest's row is only deleted. The event's invite count never grows, so `MAX_INVITEES_PER_EVENT` holds. Invites to
+personal events and to other tournaments' events stay with the guest and go with its deletion (D-23).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -211,6 +223,7 @@ invitees of an event (an anonymous tournament's match event would otherwise list
 | Event caps: 40 not-yet-ended + 100 retained per organizer (after the cleanup); `endAt` in the past rejected on create and on a changed `endAt` in update | Phase S10b execution (DECISIONS.md A79) | 2026-11-09 |
 | Tournament-linked events: update / delete / invite / remove_invite also accept the tournament's organizer and `bracket` staff (`ensureCanManageEvent`); `update_calendar_event` applies the 40-active cap when it revives an ended event | Phase S10d execution (DECISIONS.md A89, A90) | 2026-11-09 |
 | Manual invitees de-duplicated; one `hasEndDate` rule for slots; title 100 / description 1000 caps; invites attach to the inserted row | Phase S10f execution (calendar audit #2, #3, #5) | 2026-11-09 |
+| A guest's invites to a tournament's bracket-match events move to the existing user with the guest's entry (`moveUserInvitesForTournament`; dropped when that user is already invited) | Phase S10m execution (DECISIONS.md A113(5)) | 2026-11-10 |
 
 ---
 

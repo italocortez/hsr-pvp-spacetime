@@ -135,7 +135,7 @@ Arguments (both): `name, description, format, teamSize, maxParticipants, rosterV
 
 1. `create_tournament`: `ensureTournamentHost`. `update_tournament`: `owner`; stage Draft, Registration or CheckIn (`Tournament settings can only change before Seeding.`); `format` / `teamSize` differ from the row outside Draft → `Format and team size can only change in Draft.`; `isAnonymousDefault` differs outside Draft → `The anonymous setting can only change in Draft.` (A103, S10g); `maxParticipants` below the capacity count → rejected.
 2. Validation (`validateSettings`): name 1–100, description ≤ 2000, teamSize 1–3, enum tags (`validateEnumTag`), both bestOf ∈ {1, 3}, `winnerAdvantage < ceil(grandFinalBestOf / 2)`, `has3rdPlaceMatch` only where `allowsThirdPlace(format)`, `groupSize ≥ 2` for group formats, `groupAdvanceCount ∈ {1, 2}`, `maxAccountsPerPlayer ≤ 10`, timestamps in the future and ordered.
-3. Derived: `requireResultValidation = countTowardsMmr || argument`; `allowMirrorPicks = false` when `countTowardsMmr` (D-42); `disconnectForfeitSeconds` / `minimumMmr` 0 → unset.
+3. Derived: `requireResultValidation = countTowardsMmr || argument`; `allowMirrorPicks = false` when `countTowardsMmr` (D-42); `disconnectForfeitSeconds` / `minimumMmr` 0 → unset; `requireVerified = forcesRequireVerified(…) || argument` and, on update, the guest-enrolment refusal (A113, see "Phase S10m execution").
 4. `lobbyPresetId` (A33a, `ensureTournamentPreset`): omitted on create = the system preset; given = the system preset or one the organizer owns; omitted on update = unchanged. Cost-set guards as before (R2, D-D6).
 5. `defaultGameMode` and `countTowardsMmr` are fixed after creation.
 
@@ -189,7 +189,7 @@ Enrolled caller; tournament anonymous; Registration or CheckIn; alias 1–32 tri
 `bracket`; Seeding; group format; `groupAssignmentMode = Manual`. Assign: a Ready team of the tournament; `groupIndex < groupCount(readyTeams, groupSize)`; writes `TournamentTeam.groupId` (0-based, as `insertGroupBracket`). Clear: unsets every `groupId`. A change stamps `Tournament.lastSeedChangeAt`. Group sizes are validated by `generate_bracket` (S8c: every Ready team grouped, exactly `groupCount` groups, each ≥ `groupSize`, sizes within one); generation clears and rewrites every `groupId`.
 
 ### assign_tournament_assistant(tournamentId, userId, canManageParticipants, canManageBracket, canResolveResults) / remove_tournament_assistant(tournamentId, userId)
-`owner`. Assign upserts the row with the three A25 flags (existing row updated in place, as before); assigning oneself is rejected (so an organizer cannot list themself; a Moderator may list the organizer, which grants nothing new). Remove deletes the row. `mod_promote_to_host` / `mod_demote_from_host` are unchanged (`ensureModerator`).
+`owner`. Assign upserts the row with the three A25 flags (existing row updated in place, as before); a guest target is rejected (`A tournament assistant must be a verified user.`, A113(6), S10m); assigning oneself is rejected (so an organizer cannot list themself; a Moderator may list the organizer, which grants nothing new). Remove deletes the row. `mod_promote_to_host` / `mod_demote_from_host` are unchanged (`ensureModerator`).
 
 ### dq_participant(tournamentId, userId, reason, dqWholeTeam?)
 `participants` (A25). **Phase S8c execution:** the enrolment becomes Disqualified (row kept, A26a(2)); the player (with `dqWholeTeam` every member, enrolments Disqualified too) leaves the team, captain transferred (D-21); a team left non-empty gets `refreshTeamStatus` only before generation (after it the team keeps its status and plays with stand-ins, A26a(3)); a team left empty becomes **Disqualified** (no longer deleted). In Seeding after generation `lastSeedChangeAt` is stamped (regenerate). InProgress: every open match of the team is settled through `applyBracketResult` (decidedBy Dq) or, while the opponent is unknown, its slot becomes a BYE; rule and messages in [brackets/architecture.md](../brackets/architecture.md) "Phase S8c execution". Live lobby handling unchanged (D-25 / D-26; S8d). **Phase S10g:** the body is `disqualifyParticipant` (`helpers/tournament/disqualification.ts`), shared with user deletion (A94(2)); Registration through InProgress only (`Tournament is <stage>; participants can be disqualified from Registration through InProgress only.`, audit #8); every match the DQ settles has its unsettled lobbies voided except the live one, which is force-conceded (audit #2, A68(6)).
@@ -428,6 +428,8 @@ consumed (`consumeTournamentAllowance` is not called). No schema change. Per gue
   without them: `update_tournament` lets the organizer set `minimumMmr`, `requireVerified` and `requireRoster` in
   Registration and CheckIn after guests enrolled (existing registrants are not re-checked), so a guest entry can sit in
   a tournament with any of them. The `requireVerified` test is defensive: the existing user always has a provider link.
+  Since S10m (A113(1)(2)) those settings force `requireVerified` and the change is refused while guests are enrolled,
+  so only rows written before A113 still carry a guest entry under these gates.
 - **Moved**: the enrolment is re-keyed (`updateEnrolled`; status, alias, waitlist flag, approval, random-team opt-in and
   `createdDate` kept); the team membership is re-keyed and `captainUserId` follows when the guest was captain, also on
   a team the guest no longer belongs to (S10l review F7: a disqualified guest's emptied team keeps `captainUserId`;
@@ -448,9 +450,36 @@ consumed (`consumeTournamentAllowance` is not called). No schema change. Per gue
   selections (a Waiting row removed, a live player row kept away / abandoned, A68(7)); `MatchResultParticipant` rows
   and other records of games already played (the guest then has history references and is archived to `DeletedUser`,
   so `resolveUserLabel` still names it; the finalize job credits those games to the guest id, not the existing user);
-  calendar invites of bracket-match events; `TournamentAssistant` rows (a guest can be made assistant:
-  `assign_tournament_assistant` has no guest check) and `TournamentStandIn` rows (`approve_stand_in` rejects guests),
-  both deleted by A94(2). A Disqualified guest enrolment is moved like any other (status kept, no locks).
+  `TournamentAssistant` rows (rows written before S10m only: `assign_tournament_assistant` rejects guests since A113(6))
+  and `TournamentStandIn` rows (`approve_stand_in` rejects guests), both deleted by A94(2). A Disqualified guest
+  enrolment is moved like any other (status kept, no locks). Calendar invites of the tournament's bracket-match events
+  move since S10m (A113(5), "Phase S10m execution").
+
+## Phase S10m execution (DECISIONS.md A113)
+
+No schema change; index reads only.
+
+- **Forced `requireVerified`** (A113(1)): `forcesRequireVerified` (`reducers/tournament/tournamentManagement.ts`) is
+  true when `countTowardsMmr`, `requireRoster`, `minimumMmr` set (non-zero), `requireOwnership`, or `rosterVisibility`
+  is not `ClosedNoRating` (`RosterVisibility` = `OpenRoster | ClosedWithRating | ClosedNoRating`; the first two force
+  it). `create_tournament` and `update_tournament` store `requireVerified = forced || argument`, the way
+  `requireResultValidation` follows `countTowardsMmr`; `update_tournament` reads the stored `countTowardsMmr` (fixed
+  after creation). With no trigger the organizer's value is stored, true or false.
+- **Refusal while guests are enrolled** (A113(2)): in `update_tournament`, when the stored `requireVerified` would go
+  from false to true, every `TournamentEnrolled` row of the tournament (`tournament_id` index) whose user
+  (`User.id`) is a guest is counted, except Disqualified rows (they cannot play and no reducer removes them, so counting
+  them would block the change for good); waitlisted and awaiting-approval rows count. A count above zero throws
+  `These settings require verified accounts, and <n> guest player(s) are registered. Remove them first, or keep the
+  settings that allow guests.` and nothing changes. An update that leaves the effective value as it is (off stays off,
+  on stays on) is never refused. `register_for_tournament` already rejects guests under `requireVerified` (its check runs
+  before the `minimumMmr` guest line, which is now unreachable for new tournaments).
+- **Calendar invites move with the entry** (A113(5)): `moveEntry` (`helpers/tournament/entryTransfer.ts`) ends with
+  `moveUserInvitesForTournament(ctx, guestId, existingUserId, tournamentId, SYSTEM_USER_ID)`
+  ([../calendar/architecture.md](../calendar/architecture.md) "Phase S10m execution").
+- **Assistants** (A113(6)): `assign_tournament_assistant` rejects a guest target with `A tournament assistant must be
+  a verified user.` (the `approve_stand_in` style).
+- **Sign-in during a live game** (A113(4)): `server_link_provider`, [../auth/architecture.md](../auth/architecture.md)
+  "Phase S10m execution".
 
 ## Phase History
 
@@ -489,6 +518,7 @@ consumed (`consumeTournamentAllowance` is not called). No schema change. Per gue
 | `create_tournament` / `update_tournament` reject NoAction and a `disconnectForfeitSeconds` outside 30-600 | Phase S10d execution (DECISIONS.md A92(2)(3)) | 2026-11-09 |
 | User deletion settles tournament ties (withdraw before the bracket, DQ after) and an organizer of a live tournament cannot delete the account (A94); `isAnonymousDefault` Draft-only (A103); `lock_tournament_accounts` + `TournamentWaitlistAccount` (A104); staff views non-terminal + Moderator+, Admin arg views (A105); DQ stage guard and lobby voiding, minimum MMR on the active season, tournament entry throttle (audit #2, #6, #8, #13) | Phase S10g execution (DECISIONS.md A94, A103, A104, A105) | 2026-11-09 |
 | A guest signing in to an existing account keeps its entries in unfinished tournaments (`moveTournamentTiesToUser`): enrolment, membership, captaincy and requests re-keyed, solo team renamed, locks rebuilt from the existing user's accounts; entries the existing user cannot hold are settled as a deletion | Phase S10l execution (DECISIONS.md A112) | 2026-11-10 |
+| `requireVerified` forced on by `countTowardsMmr`, `requireRoster`, `minimumMmr`, `requireOwnership` or a roster visibility other than `ClosedNoRating`; `update_tournament` refuses to turn it on while non-Disqualified guest enrolments exist (count in the text); a moved entry takes the guest's match calendar invites; guests cannot be assistants | Phase S10m execution (DECISIONS.md A113) | 2026-11-10 |
 
 ---
 

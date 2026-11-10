@@ -766,7 +766,8 @@ describe('tournament audit #10: view_tournament_registrant_accounts', () => {
     it('audit #10(a)(c): anonymous tournament: a participant sees neutral labels and no ids for other seats, the real label on own rows; waitlisted / disqualified readers see only their own rows; staff see every registrant', () => {
         const test = newHarness();
         const org = host(test);
-        const id = openTournament(test, org, { teamSize: 1, isAnonymousDefault: true, maxParticipants: 3, waitlistEnabled: true });
+        // S10m: the fixture default is now ClosedNoRating (A113(1)); this view test reads an open roster.
+        const id = openTournament(test, org, { teamSize: 1, isAnonymousDefault: true, maxParticipants: 3, waitlistEnabled: true, rosterVisibility: 'OpenRoster' });
         const p1 = verified(test, 'p1');
         const p2 = verified(test, 'p2');
         const d = verified(test, 'd');

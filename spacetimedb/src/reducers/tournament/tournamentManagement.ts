@@ -38,6 +38,21 @@ function validateEnumTag(value: string, validTags: string[], fieldName: string):
 
 const unit = (tag: string) => ({ tag, value: {} }) as any;
 
+/**
+ * A113(1) (S10m): settings under which a guest cannot play force `requireVerified` on: counted towards MMR, a roster
+ * required, a minimum MMR set (non-zero), ownership required, or a roster visibility other than ClosedNoRating
+ * (OpenRoster and ClosedWithRating both show the player's roster or rating; RosterVisibility has these three values).
+ */
+function forcesRequireVerified(s: {
+    countTowardsMmr: boolean;
+    requireRoster: boolean;
+    minimumMmr?: number;
+    requireOwnership: boolean;
+    rosterVisibility: string;
+}): boolean {
+    return s.countTowardsMmr || s.requireRoster || !!s.minimumMmr || s.requireOwnership || s.rosterVisibility !== 'ClosedNoRating';
+}
+
 /** The decided settings shared by create_tournament and update_tournament (A28, A29, A32, A33, A36). */
 interface SettingsArgs {
     name: string;
@@ -214,7 +229,7 @@ export const create_tournament = spacetimedb.reducer(
             allowMirrorPicks: args.countTowardsMmr ? false : args.allowMirrorPicks, // D-42: Ranked forces false
             lineupFormat: unit(args.lineupFormat),
             lobbyPresetId: lobbyPreset.id,
-            requireVerified: args.requireVerified,
+            requireVerified: forcesRequireVerified(args) || args.requireVerified, // A113(1)
             requireRoster: args.requireRoster,
             minimumMmr: args.minimumMmr ? args.minimumMmr : undefined,
             requireApproval: args.requireApproval,
@@ -255,6 +270,23 @@ export const update_tournament = spacetimedb.reducer(
             throw new SenderError('The anonymous setting can only change in Draft.');
         }
         const v = validateSettings(ctx, args);
+
+        // A113(1)(2) (S10m): countTowardsMmr is fixed after creation, so the stored value is read. Turning the effective
+        // requireVerified on is refused while guests hold an entry; Disqualified rows are not counted (they cannot play
+        // and no reducer removes them, so counting them would block the change for good).
+        const requireVerified = forcesRequireVerified({ ...args, countTowardsMmr: tournament.countTowardsMmr }) || args.requireVerified;
+        if (requireVerified && !tournament.requireVerified) {
+            let guests = 0;
+            for (const e of ctx.db.TournamentEnrolled.tournament_id.filter(tournament.id)) {
+                if (e.status.tag === 'Disqualified') continue;
+                if (ctx.db.User.id.find(e.userId)?.isGuest) guests++;
+            }
+            if (guests > 0) {
+                throw new SenderError(
+                    `These settings require verified accounts, and ${guests} guest player(s) are registered. Remove them first, or keep the settings that allow guests.`,
+                );
+            }
+        }
 
         // maxParticipants never below the current capacity count (non-waitlisted, non-DQ; A26a).
         const taken = capacityCount(ctx, tournament.id);
@@ -299,7 +331,7 @@ export const update_tournament = spacetimedb.reducer(
             allowMirrorPicks: tournament.countTowardsMmr ? false : args.allowMirrorPicks,       // D-42
             lineupFormat: unit(args.lineupFormat),
             lobbyPresetId: nextPresetId,
-            requireVerified: args.requireVerified,
+            requireVerified,                                                                     // A113(1)
             requireRoster: args.requireRoster,
             minimumMmr: args.minimumMmr ? args.minimumMmr : undefined,
             requireApproval: args.requireApproval,

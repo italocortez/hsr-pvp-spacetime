@@ -5,6 +5,8 @@
  * All functions operate within the same reducer transaction as the caller.
  */
 
+import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
+
 /**
  * Deletes all CalendarEventInvite rows for an event, then deletes the CalendarEvent itself.
  * Per D-03: event deletion must cascade to invites.
@@ -51,6 +53,27 @@ export function deleteUserInvitesForTournament(ctx: any, userId: number, tournam
         const event = ctx.db.CalendarEvent.id.find(invite.eventId);
         if (event && event.bracketMatchId !== undefined && matchIdSet.has(event.bracketMatchId)) {
             ctx.db.CalendarEventInvite.delete(invite);
+        }
+    }
+}
+
+/**
+ * A113(5) (S10m): when a guest's tournament entry moves to an existing user (A112, moveEntry), the guest's invites to
+ * events linked to bracket matches of that tournament are re-pointed to `toUserId` (same event, status and responded
+ * time kept; audit columns updated). When `toUserId` already holds an invite for the event, the guest's invite is
+ * deleted instead (one row per event and invitee). The event's invite count never grows, so the per-event cap
+ * (MAX_INVITEES_PER_EVENT) holds. Invites to personal events and to other tournaments' events stay with the guest
+ * (the deletion removes them). Index reads: invites by invitee, event by id, bracket match by id.
+ */
+export function moveUserInvitesForTournament(ctx: any, fromUserId: number, toUserId: number, tournamentId: number, actorId: number): void {
+    for (const invite of [...ctx.db.CalendarEventInvite.invitee_user_id.filter(fromUserId)]) {
+        const event = ctx.db.CalendarEvent.id.find(invite.eventId);
+        if (!event || event.bracketMatchId === undefined) continue;
+        const match = ctx.db.BracketMatch.id.find(event.bracketMatchId);
+        if (!match || match.tournamentId !== tournamentId) continue;
+        ctx.db.CalendarEventInvite.delete(invite);
+        if ([...ctx.db.CalendarEventInvite.by_event_and_invitee.filter([invite.eventId, toUserId])].length === 0) {
+            ctx.db.CalendarEventInvite.insert(updateWithAudit(ctx, invite, { inviteeUserId: toUserId }, actorId));
         }
     }
 }

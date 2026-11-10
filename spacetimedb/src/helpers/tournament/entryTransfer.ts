@@ -20,11 +20,14 @@
 //     deleted (the guest's HSR accounts go with the guest); a non-waitlisted, non-Disqualified entry gets every game
 //     account of the existing user locked (lockPlayerAccounts with no ids, as a registration that names none); a
 //     waitlisted entry carries no remembered choice, so promotion locks every account (lockAccountsAtPromotion).
+//   - Calendar invites (A113(5), S10m): the guest's invites to events linked to bracket matches of the tournament are
+//     re-pointed to the existing user (moveUserInvitesForTournament; dropped when that user is already invited).
 // Not moved: BracketMatch rows (they reference teams), lobby memberships and lobby account selections, result
-// participants, calendar invites, assistant and stand-in rows of the guest: all left to the deletion.
+// participants, other calendar invites, assistant and stand-in rows of the guest: all left to the deletion.
 // No rate-limit allowance is consumed; audit columns carry `actorId` (the link path's SYSTEM_USER_ID).
 
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
+import { moveUserInvitesForTournament } from '@module/helpers/calendar/calendarCascade';
 import { deleteWaitlistAccounts, findEnrolled, findMembership, lockPlayerAccounts, soloTeamName, updateEnrolled } from './tournamentHelpers';
 
 /**
@@ -61,6 +64,8 @@ function meetsMinimumMmr(ctx: any, tournament: any, user: any): boolean {
  * minimumMmr, requireVerified and requireRoster in Registration and CheckIn after guests enrolled (existing
  * registrants are not re-checked), so a guest entry can sit in a tournament with any of them. The requireVerified line
  * is defensive: the existing user always has a provider link (that is how the sign-in found them), so it never fails.
+ * Since A113(1)(2) (S10m) these three gates force requireVerified on and update_tournament refuses to turn it on while
+ * guests are enrolled, so new guest entries never sit under them; the checks stay for rows written before A113.
  */
 function canHoldEntry(ctx: any, tournament: any, target: any): boolean {
     if (findEnrolled(ctx, tournament.id, target.id)) return false;
@@ -131,6 +136,7 @@ function moveEntry(ctx: any, tournament: any, enrolled: any, fromGuestId: number
     } else if (enrolled.status.tag !== 'Disqualified') {
         lockPlayerAccounts(ctx, tournamentId, toUserId, undefined, actorId);
     }
+    moveUserInvitesForTournament(ctx, fromGuestId, toUserId, tournamentId, actorId); // A113(5)
     console.log(`[TOURNAMENT] A112: entry of guest #${fromGuestId} in tournament #${tournamentId} moved to user #${toUserId}`);
 }
 

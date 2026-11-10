@@ -9,6 +9,24 @@ import { rejectIfBanned, DISCORD_LOGIN_METHOD } from '@module/helpers/lobby/banH
 import { seedSystemLobbyPreset } from '@module/helpers/lobby/systemPreset';
 import { uniqueUsername, USERNAME_MAX_LENGTH } from '@module/helpers/identity/usernames';
 import { setGuestCreationEnabled, setGuestLobbyCreationEnabled } from '@module/helpers/lobby/abuseControls';
+import { LIVE_STAGES, slotIsCoach, slotIsSpectator } from '@module/helpers/lobby/lobbyHelpers';
+
+/** A113(4) (S10m): the refusal of a sign-in to an existing account while the guest plays a live game. */
+const FINISH_GAME_BEFORE_SIGN_IN_TEXT = 'Finish your current game before signing in to an existing account.';
+
+/**
+ * A113(4): the user holds a player seat (BluePlayer / RedPlayer; coach and spectator seats do not count) that is not
+ * abandoned (A68(4): an away seat still counts, its holder may return) in a lobby whose stage is Drafting, Equipping or
+ * Scoring (LIVE_STAGES). Waiting and AwaitingResult lobbies do not count.
+ */
+function isSeatedInLiveGame(ctx: any, userId: number): boolean {
+    for (const m of ctx.db.LobbyMember.user_id.filter(userId)) {
+        if (slotIsSpectator(m.lobbySlot) || slotIsCoach(m.lobbySlot) || m.abandonedAt !== undefined) continue;
+        const lobby = ctx.db.Lobby.id.find(m.lobbyId);
+        if (lobby && LIVE_STAGES.includes(lobby.stage.tag)) return true;
+    }
+    return false;
+}
 
 /**
  * Guard: the caller is a registered server identity (Owner or Delegate, §C.4).
@@ -192,6 +210,13 @@ export const server_link_provider = spacetimedb.reducer({
             // Re-point identity to the provider owner, clean up orphaned guest.
             const oldGuestId = currentUser.id;
             const wasGuest = currentUser.isGuest;
+
+            // A113(4) (S10m): the guest is deleted below when this identity is its only link (the mapping is re-pointed
+            // first). On that path, refuse before any change while the guest holds a player seat (not coach, not
+            // spectator, not abandoned) in a lobby that is Drafting, Equipping or Scoring: its game would lose a player.
+            if (wasGuest && [...ctx.db.UserIdentity.user_id.filter(oldGuestId)].length <= 1 && isSeatedInLiveGame(ctx, oldGuestId)) {
+                throw new SenderError(FINISH_GAME_BEFORE_SIGN_IN_TEXT);
+            }
 
             ctx.db.UserIdentity.identity.update(updateWithAudit(ctx, userMapping, {
                 userId: providerOwner.id,

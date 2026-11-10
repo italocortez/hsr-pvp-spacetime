@@ -95,7 +95,7 @@ BanRecord (id: u32 autoInc PK)  [PRIVATE -- public: false]
 3. Look up `UserIdentity` by provided identity
 4. Three merge cases:
    - **Case 1a**: Identity -> guest, no existing provider owner -- upgrade guest: `isGuest=false`, `hasDiscordLinked=true`, username=providerName
-   - **Case 1b**: Identity -> guest, provider already linked to different user -- re-point identity to existing user, delete orphaned guest. Phase S4 execution (A48, S3 review M3): the identity's `UserPresence.userId` + `lastLoginAt` follow the re-point before `performUserDeletion` removes the guest's own presence rows. Phase S10l execution (A112): when the guest is about to be deleted (no other identity of the guest remains), `moveTournamentTiesToUser(ctx, guestId, existingUserId, SYSTEM_USER_ID)` (`helpers/tournament/entryTransfer.ts`) runs first and moves the guest's entries in unfinished tournaments to the existing user; the existing user must meet the tournament's gates as they stand at sign-in (enrolment, membership, `minimumMmr` by the `ensureMinimumMmr` rating test, `requireRoster`), the guest's recorded captaincies follow even without a membership, and the existing user's stand-in approvals for matches their new team plays are deleted; the full rules (move / do-not-move conditions, locks) are in [tournament/architecture.md](../tournament/architecture.md) "Phase S10l execution". What it does not move is settled by `performUserDeletion` as before (A94(2))
+   - **Case 1b**: Identity -> guest, provider already linked to different user -- re-point identity to existing user, delete orphaned guest. Phase S4 execution (A48, S3 review M3): the identity's `UserPresence.userId` + `lastLoginAt` follow the re-point before `performUserDeletion` removes the guest's own presence rows. Phase S10l execution (A112): when the guest is about to be deleted (no other identity of the guest remains), `moveTournamentTiesToUser(ctx, guestId, existingUserId, SYSTEM_USER_ID)` (`helpers/tournament/entryTransfer.ts`) runs first and moves the guest's entries in unfinished tournaments to the existing user; the existing user must meet the tournament's gates as they stand at sign-in (enrolment, membership, `minimumMmr` by the `ensureMinimumMmr` rating test, `requireRoster`), the guest's recorded captaincies follow even without a membership, and the existing user's stand-in approvals for matches their new team plays are deleted; the full rules (move / do-not-move conditions, locks) are in [tournament/architecture.md](../tournament/architecture.md) "Phase S10l execution". What it does not move is settled by `performUserDeletion` as before (A94(2)). Phase S10m execution (A113(4)): on that deletion path, see "Phase S10m execution" below, the link is refused before any change while the guest plays a live game
    - **Case 1c**: Identity -> verified user, refresh -- update timestamps, upsert `UserPrivate`
 5. Write/upsert `UserPrivate` (discordId, discordUsername, email), set `User.hasDiscordLinked=true`
 
@@ -305,6 +305,19 @@ Any new frontend subscription to a raw table (no projection view body) OR a per-
 
 `User.public = true` means a malicious actor subscribing directly to `SELECT * FROM user` (not via our frontend) still receives rows. Closing that requires `User.public = false` + on-demand read reducers — explicitly deferred in Phase 15.5 CONTEXT deferred ideas. This phase's scope is "our frontend does not auto-subscribe anonymous," not "adversarial clients cannot query User."
 
+## Phase S10m execution (DECISIONS.md A113(4))
+
+`server_link_provider` case 1b, when the caller's user is a guest that has no other identity (`UserIdentity.user_id`
+returns only the caller's mapping, so the guest would be deleted after the re-point): before the mapping is touched,
+`isSeatedInLiveGame(ctx, guestId)` (`reducers/identity/server.ts`) reads the guest's `LobbyMember.user_id` rows and the
+`Lobby.id` of each; a row counts when its seat is a player seat (not `slotIsSpectator`, not `slotIsCoach`), it is not
+abandoned (`abandonedAt` unset; an away row still counts, its holder may return, A68(2)), and the lobby stage is in
+`LIVE_STAGES` (Drafting, Equipping, Scoring). Any such row throws `Finish your current game before signing in to an
+existing account.`; nothing changes (identity mapping, presence, guest, entries). Waiting and AwaitingResult lobbies,
+spectator and coach seats do not block; the first-time link (case 1a, the guest upgraded in place) is not checked.
+The calendar invites of a moved tournament entry move with it (A113(5)):
+[../tournament/architecture.md](../tournament/architecture.md) "Phase S10m execution".
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -339,6 +352,7 @@ Any new frontend subscription to a raw table (no projection view body) OR a per-
 | Match history for guest retention also covers `hasHistoryReferences` (PlayerStat and the other stat / rating tables, review F1); a scheduled run that hits the 500 cap requeues in one hour (review F4); `login_as_guest` names a guest `Guest_` + the last 8 identity hex characters, made unique (`uniqueUsername` moved to `helpers/identity/usernames.ts`) | Phase S10h execution (S10h review fix pass) | 2026-11-10 |
 | Default guest creation threshold 300 per 10 minutes; `server_set_guest_creation(enabled)` (server identity) turns the switch on or off without an Admin session, resetting the counter on re-enable | Phase S10i execution (DECISIONS.md A109) | 2026-11-10 |
 | `server_link_provider` case 1b moves the guest's entries in unfinished tournaments to the existing user (`moveTournamentTiesToUser`) before the guest is deleted; entries the existing user cannot hold are settled by the deletion | Phase S10l execution (DECISIONS.md A112) | 2026-11-10 |
+| `server_link_provider` case 1b refuses the sign-in (`Finish your current game before signing in to an existing account.`) while the guest that would be deleted holds a non-abandoned player seat in a Drafting, Equipping or Scoring lobby | Phase S10m execution (DECISIONS.md A113(4)) | 2026-11-10 |
 
 ---
 

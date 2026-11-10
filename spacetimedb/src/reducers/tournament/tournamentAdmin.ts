@@ -201,7 +201,8 @@ export const override_match_result = spacetimedb.reducer(
 // Assigns or updates a tournament assistant with the three A25 flags. Permission: owner (A25; assistants never
 // manage assistants). Kept semantics: an existing row for the user is updated in place (upsert, pre-S8b
 // behaviour); the caller cannot assign themself (so an organizer cannot list themself; a Moderator may still list
-// the organizer, whose flags then change nothing because the organizer already holds every permission).
+// the organizer, whose flags then change nothing because the organizer already holds every permission). A113(6): a
+// guest target is refused.
 
 export const assign_tournament_assistant = spacetimedb.reducer(
     {
@@ -219,6 +220,10 @@ export const assign_tournament_assistant = spacetimedb.reducer(
         const targetUser = ctx.db.User.id.find(userId);
         if (!targetUser) {
             throw new SenderError('Target user not found.');
+        }
+        // A113(6) (S10m): staff are verified users (the approve_stand_in rule).
+        if (targetUser.isGuest) {
+            throw new SenderError('A tournament assistant must be a verified user.');
         }
 
         // Cannot assign yourself as an assistant

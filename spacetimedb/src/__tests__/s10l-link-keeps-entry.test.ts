@@ -368,10 +368,13 @@ describe('A112(3): entries the existing user cannot hold are settled as a deleti
     it('A112(3): the tournament requires a roster and the existing user has no game account: not moved, settled as a deletion', () => {
         const test = newHarness();
         const org = host(test);
-        const id = openTournament(test, org, { teamSize: 1, requireRoster: true });
+        // S10m: A113(1)(2) no longer let a guest enter a roster tournament; the row is set directly, as data written
+        // before A113 (requireRoster on, requireVerified off).
+        const id = openTournament(test, org, { teamSize: 1 });
         const g = guest(test, 'g-roster');
         insertHsrAccount(test, g.userId, 'g-roster-acc');
         register(test, g, id);
+        test.db.Tournament.id.update({ ...test.db.Tournament.id.find(id)!, requireRoster: true });
         const e = existingUser(test, 'e-roster', 'NoRoster', 0);
 
         const guestId = signIn(test, g, e.providerId);
@@ -490,7 +493,9 @@ describe('S10l review fixes', () => {
         const gAt = guest(test, 'g-floor-at');
         register(test, gLow, id);
         register(test, gAt, id);
-        tx(test, org, updateBody(test, id, { minimumMmr: 1500 }));
+        // S10m: A113(2) refuses this change through update_tournament while guests are enrolled; the floor is set
+        // directly, as data written before A113 (minimumMmr set, requireVerified off).
+        test.db.Tournament.id.update({ ...test.db.Tournament.id.find(id)!, minimumMmr: 1500 });
         expect(enrolled(test, id, gLow.userId)).toBeTruthy(); // existing registrants are not re-checked
         const low = existingUser(test, 'e-floor-low', 'Low');
         rate(test, low.a.userId, 1200);

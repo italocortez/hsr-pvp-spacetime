@@ -48,7 +48,7 @@ export const TOURNAMENT_ARGS = {
     format: 'SingleElimination',
     teamSize: 2,
     maxParticipants: 8,
-    rosterVisibility: 'OpenRoster',
+    rosterVisibility: 'ClosedNoRating', // S10m: A113(1) forces requireVerified for any other value; "no gates" keeps guests able to register
     isAnonymousDefault: false,
     disconnectPolicy: 'Standard',
     disconnectForfeitSeconds: undefined as number | undefined,

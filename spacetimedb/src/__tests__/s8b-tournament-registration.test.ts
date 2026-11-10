@@ -146,7 +146,8 @@ describe('minimum MMR (A36b)', () => {
     it('a guest is rejected', () => {
         const { test, id } = mmrTournament(500);
         const g = guest(test, 'g');
-        expectReject(test, g, (ctx) => M.register_for_tournament(ctx, { tournamentId: id }), 'Guests cannot join a tournament with a minimum MMR.');
+        // S10m: A113(1) forces requireVerified when a minimum MMR is set, so the requireVerified check answers first.
+        expectReject(test, g, (ctx) => M.register_for_tournament(ctx, { tournamentId: id }), 'This tournament requires a verified account. Link your Discord first.');
     });
 
     it('a verified player without a rating row is evaluated at initialRating (1000)', () => {

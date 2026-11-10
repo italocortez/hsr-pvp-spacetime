@@ -44,6 +44,7 @@ Each executed step writes its log to `docs/log/<date>-<step>.md` (goal, decision
 | S10j | Dead code and comment clean-up after the audit: 24 unused indexes, unused helpers and imports, two enum variants, stale comments; no behaviour change; A110 recorded | S10i | done 2026-11-10 (`docs/log/2026-11-10-s10j.md`) |
 | S10k | Played character stats follow ownership (A110); A111 (cursor events stay public, row filter tested at S11) and A112 (sign-in keeps a guest's tournament entry) recorded | S10j | done 2026-11-10 (`docs/log/2026-11-10-s10k.md`) |
 | S10l | Signing in to an existing account keeps the guest's tournament entry (A112) | S10k | done 2026-11-10 (`docs/log/2026-11-10-s10l.md`) |
+| S10m | "Require verified" forced where a guest cannot play, refusal while guests are enrolled, sign-in guard during a running game, match invites follow a moved entry, no guest assistants (A113); A114–A116 recorded | S10l | done 2026-11-10 (`docs/log/2026-11-10-s10m.md`) |
 | M3 | Vite shell: tokens, base and media CSS, fonts, standby/404 | S10 | pending |
 | M4 | Router and guards (TanStack Router, typed links) | M3 | pending |
 | M9 | Test strategy wiring and CI workflow | M4 | pending |
