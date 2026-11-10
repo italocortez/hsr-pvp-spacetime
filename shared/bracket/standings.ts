@@ -1,5 +1,5 @@
 // Group standings (A23: computed, never stored; A30 ranking rule; A31 no draws). Pure: no `spacetimedb` / `react`.
-// Runs on the server when advancing out of groups (`helpers/tournamentStandings.ts`) and in the web app for the
+// Runs on the server when advancing out of groups (`helpers/tournament/tournamentStandings.ts`) and in the web app for the
 // live standings table, so the two cannot disagree.
 
 /** A decided group match; the games are the stored series score of `BracketMatch` (team1Games / team2Games). */

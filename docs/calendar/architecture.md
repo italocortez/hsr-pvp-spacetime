@@ -35,7 +35,7 @@ User (id: u32 autoInc PK)
   |     organizerId -> User.id  [btree: organizer_id]
   |     title: string
   |     description: string? (optional, D-26)
-  |     startAt: Timestamp  [btree: start_at]
+  |     startAt: Timestamp
   |     endAt: Timestamp
   |     bracketMatchId: u32? -> BracketMatch.id  [btree: bracket_match_id]
   |     audit columns

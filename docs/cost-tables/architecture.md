@@ -22,7 +22,6 @@ HsrCharacter (name: string PK)  [public: true]
   +-- versionReleased: f64
   +-- treatAsVersion: f64 (override version for rating weight calculation)
   +-- audit columns
-  Indexes: by_path (btree), by_element (btree), by_role (btree)
 
   +-- HsrCharacterCost (PK: [characterName, gameMode, draftMode, costSetId])  [public: true]
   |     characterName -> HsrCharacter.name
@@ -44,7 +43,6 @@ HsrLightcone (name: string PK)  [public: true]
   +-- posY: i32
   +-- width: i32
   +-- audit columns
-  Indexes: by_path (btree)
 
   +-- HsrLightconeCost (PK: [lightconeName, gameMode, draftMode, costSetId])  [public: true]
         lightconeName -> HsrLightcone.name
@@ -64,9 +62,7 @@ HsrSynergyCost (id: u32 autoInc PK)  [public: true]
   +-- costModifier: f32
   +-- costSetId: u32 (0=default sentinel, or CostSet.id)
   +-- audit columns
-  Indexes: source_mode (btree 3-col: [sourceName, gameMode, draftMode]),
-           target_name (btree),
-           cost_set_id (btree),
+  Indexes: cost_set_id (btree),
            by_tuple (btree 5-col: [sourceName, targetName, gameMode, draftMode, costSetId])
 ```
 

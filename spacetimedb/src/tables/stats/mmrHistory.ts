@@ -21,6 +21,5 @@ export const MmrHistory = table({
     public: false, // S3 (A37): private, read through views (S9)
     indexes: [
         { accessor: 'user_id', algorithm: 'btree', columns: ['userId'] },
-        { accessor: 'match_history_id', algorithm: 'btree', columns: ['matchHistoryId'] },
     ],
 }, mmrHistoryColumns);

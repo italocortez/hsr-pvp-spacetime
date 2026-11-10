@@ -23,12 +23,12 @@ MatchSessionStepHistory (id: u32 autoInc PK)
 
 MatchParticipantHistory (PK: [userId, matchHistoryId])
   +-- userId -> User.id  [btree: by_user]
-  +-- matchHistoryId -> MatchSessionHistory.id  [btree: by_match_history]
+  +-- matchHistoryId -> MatchSessionHistory.id
   +-- teamSide: TeamSide, displayName, isReferee/Coach/Captain
 
 MmrHistory (id: u32 autoInc PK)
   +-- userId -> User.id  [btree: user_id]
-  +-- matchHistoryId -> MatchSessionHistory.id  [btree: match_history_id]
+  +-- matchHistoryId -> MatchSessionHistory.id
   +-- gameMode, previousRating, newRating, delta, seasonId
 
 MatchResultGameHistory (id: u32 autoInc PK)

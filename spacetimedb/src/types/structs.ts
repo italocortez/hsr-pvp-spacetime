@@ -29,12 +29,6 @@ export const LobbyConfigSnapshot = t.object('LobbyConfigSnapshot', {
     deathPenalty: t.i32(),
 });
 
-export const PlayerSnapshot = t.object('PlayerSnapshot', {
-    userId: t.u32(),
-    displayName: t.string(),
-    avatarUrl: t.string(),
-});
-
 export const TimerState = t.object('TimerState', {
     turnStartAt: t.timestamp(),
     teamBlueReserveMs: t.u32(),

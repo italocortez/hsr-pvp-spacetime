@@ -1,5 +1,5 @@
 // A35 seat enforcement core (`allowedSlotsFor`, D.8.5), moved from the prototype in S8a. Pure; the module glue
-// `spacetimedb/src/helpers/tournamentLobbySides.ts` resolves the bracket match, team memberships and stand-ins, then calls this.
+// `spacetimedb/src/helpers/tournament/tournamentLobbySides.ts` resolves the bracket match, team memberships and stand-ins, then calls this.
 
 import type { Slot } from './refereeTransfer';
 
@@ -29,12 +29,4 @@ export function allowedSlotsFor(ctx: SeatContext, userId: number): ReadonlySet<S
     if (onTeam1) { allowed.add('BluePlayer'); allowed.add('BlueCoach'); }
     if (onTeam2) { allowed.add('RedPlayer'); allowed.add('RedCoach'); }
     return allowed;
-}
-
-/** A26: the auto-seat on join. Team members land on their side as players; others spectate. */
-export function autoSeatFor(ctx: SeatContext, userId: number): Slot {
-    const allowed = allowedSlotsFor(ctx, userId);
-    if (allowed.has('BluePlayer')) return 'BluePlayer';
-    if (allowed.has('RedPlayer')) return 'RedPlayer';
-    return 'Spectator';
 }

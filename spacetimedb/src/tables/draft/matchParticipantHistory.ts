@@ -21,7 +21,5 @@ export const MatchParticipantHistory = table({
     primaryKey: ['userId', 'matchHistoryId'],
     indexes: [
         { accessor: 'by_user', algorithm: 'btree', columns: ['userId'] },
-        { accessor: 'by_match_history', algorithm: 'btree', columns: ['matchHistoryId'] },
-        { accessor: 'by_user_and_match', algorithm: 'btree', columns: ['userId', 'matchHistoryId'] },
     ],
 }, matchParticipantHistoryColumns);

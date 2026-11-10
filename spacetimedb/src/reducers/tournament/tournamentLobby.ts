@@ -8,10 +8,8 @@ import { findSystemLobbyPreset, SYSTEM_PRESET_VALUES } from '@module/helpers/lob
 import { autoSeatSlot } from '@module/helpers/tournament/tournamentLobbySides';
 import { findLobbyResult } from '@module/helpers/results/scoringHelpers';
 import { matchGames } from '@module/helpers/tournament/bracketResults';
-import { winsNeededFor } from '@module/helpers/tournament/seriesSettings';
+import { LOBBY_NAME_MAX, winsNeededFor } from '@module/helpers/tournament/seriesSettings';
 import type { Lobby } from '@bindings/types';
-
-const LOBBY_NAME_MAX = 50; // D-A8 (helpers/seriesSettings.ts normalizeLobbyName)
 
 /** A34 / A35: the creator is a member of team1 / team2 of the match or one of its approved stand-ins. */
 function isMatchParticipant(ctx: any, bracketMatch: any, userId: number): boolean {

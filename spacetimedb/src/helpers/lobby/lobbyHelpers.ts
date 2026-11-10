@@ -134,7 +134,7 @@ export function ensureGuestRestrictions(user: any, matchType: any): void {
  * seat number is never handed to a later joiner. The A22(5) referee-candidate order and the S9 anonymous labels
  * derive from it.
  */
-export function nextJoinSeq(ctx: any, lobby: any): number {
+export function nextJoinSeq(lobby: any): number {
     return lobby.lastJoinSeq + 1;
 }
 
@@ -272,7 +272,7 @@ export function ensureStageIs(lobby: any, ...stages: string[]): void {
  * The `member` param is the CALLER's LobbyMember row (not the target); A98: callers pass a present row
  * (ensurePresentMember).
  */
-export function canKickOrBan(ctx: any, lobby: any, user: any, member: any): boolean {
+export function canKickOrBan(lobby: any, user: any, member: any): boolean {
     if (lobby.hostUserId === user.id) return true;
     if (isRoleAtLeast(user.role, 'Moderator')) return true; // Moderator or Admin
     if (member.isReferee && lobby.refereeCanKick) return true;

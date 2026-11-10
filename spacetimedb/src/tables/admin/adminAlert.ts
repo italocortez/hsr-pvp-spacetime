@@ -28,7 +28,4 @@ export const adminAlertColumns = {
 export const AdminAlert = table({
     name: 'admin_alert',
     public: true,
-    indexes: [
-        { accessor: 'is_acknowledged', algorithm: 'btree', columns: ['isAcknowledged'] },
-    ],
 }, adminAlertColumns);

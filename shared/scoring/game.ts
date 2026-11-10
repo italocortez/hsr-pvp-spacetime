@@ -3,7 +3,8 @@ import type { GameModeTag } from './units';
 import { decideWinner, type Side } from './winner';
 
 // One game, end to end: group sums → itemized modifiers → handicaps → tie-break chain. The module
-// (record_group_scores / set_score_adjustment / submit_match_result) and the web live preview both call this.
+// (recomputeGame, run by record_group_scores / set_score_adjustment and the game close) and the web live preview
+// both call this.
 
 export interface GameTeamInput {
     /** Raw result of each lineup group, hundredths. */

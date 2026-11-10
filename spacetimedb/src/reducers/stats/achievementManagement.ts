@@ -78,7 +78,7 @@ export const update_achievement = spacetimedb.reducer(
         achievementId: number;
         name?: string | undefined;
         description?: string | undefined;
-        rarity: any | undefined;
+        rarity: any;
     }) => {
         const admin = ensureModerator(ctx);
 
@@ -98,7 +98,7 @@ export const update_achievement = spacetimedb.reducer(
         ctx.db.Achievement.id.update(updateWithAudit(ctx, existing, {
             name: name ?? existing.name,
             description: description ?? existing.description,
-            rarity: rarity ?? existing.rarity,
+            rarity,
         }, admin.id));
 
         console.log(`[ACHIEVEMENT] Updated achievement #${achievementId} by admin #${admin.id}`);

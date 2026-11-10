@@ -2,10 +2,9 @@ import spacetimedb from '@module/schema';
 import { UserDeletionJob, setRunUserDeletionReducer } from '@module/tables/identity/userDeletionJob';
 import { performUserDeletion } from '@module/helpers/identity/userDeletionHelper';
 
-// Scheduled reducer: cascades active-state data + soft-deletes (or hard-deletes guest) User.
-// Fires ~5 seconds after admin initiates deletion.
-// Guest users with no history references are hard-deleted; all others are soft-deleted
-// with username='deleted_<id>', displayName preserved for history table FK integrity.
+// Scheduled reducer: runs performUserDeletion ~5 seconds after an admin deletion or a ban set deletedAt.
+// The User row is hard-deleted; every user but a guest without history references is archived to DeletedUser first,
+// which history rows resolve their labels from (helpers/identity/userDeletionHelper.ts).
 //
 // External-invocation defense: SpacetimeDB v2.2.0 engine returns "no such reducer" for
 // external WS callers attempting to invoke scheduled reducers (verified 2026-05-03 in

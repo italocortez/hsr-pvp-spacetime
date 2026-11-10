@@ -157,8 +157,6 @@ export const MatchResultStatus = t.enum('MatchResultStatus', {
 
 export const ValidationStatus = t.enum('ValidationStatus', {
     Pending: t.unit(),
-    Confirmed: t.unit(),
-    Disputed: t.unit(),
 });
 
 export const DisconnectPolicy = t.enum('DisconnectPolicy', {
@@ -256,7 +254,8 @@ export const TeamStatus = t.enum('TeamStatus', {
 });
 
 // A23 (review 5.2): exact-slot, single-writer bracket. Pending = slots not yet filled, Ready = both
-// teams known, Walkover = decided by a BYE, Void = never played (cancelled / rolled back), Decided = result settled.
+// teams known, Walkover = decided by a BYE, Void = both slots BYE (never played),
+// Decided = result settled. A rollback returns a match to Ready or Pending; a cancel leaves states as they are.
 export const BracketMatchState = t.enum('BracketMatchState', {
     Pending: t.unit(),
     Ready: t.unit(),

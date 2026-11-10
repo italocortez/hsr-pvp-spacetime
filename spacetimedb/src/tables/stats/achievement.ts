@@ -17,7 +17,4 @@ export const achievementColumns = {
 export const Achievement = table({
     name: 'achievement',
     public: true,
-    indexes: [
-        { accessor: 'by_rarity', algorithm: 'btree', columns: ['rarity'] },
-    ],
 }, achievementColumns);

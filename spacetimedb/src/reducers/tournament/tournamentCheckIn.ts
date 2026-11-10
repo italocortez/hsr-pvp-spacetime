@@ -1,7 +1,7 @@
 // ─── Tournament Check-In Reducer ──────────────────────────────────────────────
 // A26: check-in is team-level, done by the team captain (or `participants` staff) in one click during the CheckIn
 // stage. Per-member check-in and the per-member no-show prune are gone: at CheckIn → Seeding a team that was not
-// checked in becomes Withdrawn and its members stay enrolled (helpers/tournamentHelpers.ts closeRegistration).
+// checked in becomes Withdrawn and its members stay enrolled (helpers/tournament/tournamentHelpers.ts enterSeeding).
 
 import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';

@@ -19,6 +19,5 @@ export const CostSetDraftCharacter = table({
     primaryKey: ['costSetId', 'characterName', 'gameMode', 'draftMode'],
     indexes: [
         { accessor: 'cost_set_id', algorithm: 'btree', columns: ['costSetId'] },
-        { accessor: 'by_set_character_and_mode', algorithm: 'btree', columns: ['costSetId', 'characterName', 'gameMode', 'draftMode'] },
     ],
 }, costSetDraftCharacterColumns);

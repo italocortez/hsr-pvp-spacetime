@@ -374,7 +374,7 @@ export const join_lobby = spacetimedb.reducer(
         }
 
         // R4 / A74(3): the next seat number; written back as lobby.lastJoinSeq in the Lobby update below
-        const joinSeq = nextJoinSeq(ctx, lobby);
+        const joinSeq = nextJoinSeq(lobby);
 
         // D-27: join as Spectator (casual lobbies; tournament lobbies: the auto-seat above)
         ctx.db.LobbyMember.insert(insertWithAudit(ctx, {
@@ -588,7 +588,7 @@ export const kick_member = spacetimedb.reducer(
         const callerMember = ensureMemberPresentUnlessStaff(ctx, lobbyId, user);
 
         // Permission check
-        if (!canKickOrBan(ctx, lobby, user, callerMember)) {
+        if (!canKickOrBan(lobby, user, callerMember)) {
             throw new SenderError('Only the host, moderators, admins, or an authorized referee can kick members.');
         }
 
@@ -654,7 +654,7 @@ export const ban_member = spacetimedb.reducer(
         const callerMember = ensureMemberPresentUnlessStaff(ctx, lobbyId, user);
 
         // Permission check
-        if (!canKickOrBan(ctx, lobby, user, callerMember)) {
+        if (!canKickOrBan(lobby, user, callerMember)) {
             throw new SenderError('Only the host, moderators, admins, or an authorized referee can ban members.');
         }
 

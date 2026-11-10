@@ -2834,8 +2834,6 @@ export type UserRateState = __Infer<typeof UserRateState>;
 // The tagged union or sum type for the algebraic type `ValidationStatus`.
 export const ValidationStatus = __t.enum("ValidationStatus", {
   Pending: __t.unit(),
-  Confirmed: __t.unit(),
-  Disputed: __t.unit(),
 });
 export type ValidationStatus = __Infer<typeof ValidationStatus>;
 

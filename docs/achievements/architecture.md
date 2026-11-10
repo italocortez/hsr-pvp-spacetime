@@ -18,7 +18,7 @@ Achievement (id: u32 autoInc PK)
   +-- isManualOnly: bool
   +-- maxAwards: u32? (null=unlimited, 1=one-time, N=capped globally)
   +-- audit columns
-  Indexes: name (unique), by_rarity (btree, rarity)
+  Indexes: name (unique)
 
   +-- AchievementCriteria (id: u32 autoInc PK)
   |     achievementId -> Achievement.id  [btree: by_achievement]
@@ -30,7 +30,7 @@ Achievement (id: u32 autoInc PK)
   |     filterCharacterName: string?
   |     filterMatchType: string? (MatchType tag)
   |     audit columns
-  |     Indexes: by_achievement (btree, achievementId), by_stat_table (btree, statTable)
+  |     Indexes: by_achievement (btree, achievementId)
 
   +-- UserAchievement (id: u32 autoInc PK)
         userId -> User.id  [btree: by_user]

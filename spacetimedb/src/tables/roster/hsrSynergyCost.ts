@@ -25,8 +25,6 @@ export const HsrSynergyCost = table({
     name: 'hsr_synergy_cost',
     public: true,
     indexes: [
-        { accessor: 'character_a_mode', algorithm: 'btree', columns: ['characterA', 'gameMode', 'draftMode'] },
-        { accessor: 'character_b', algorithm: 'btree', columns: ['characterB'] },
         { accessor: 'cost_set_id', algorithm: 'btree', columns: ['costSetId'] },
         { accessor: 'by_tuple', algorithm: 'btree', columns: ['characterA', 'characterB', 'gameMode', 'draftMode', 'costSetId'] },
     ]

@@ -20,6 +20,5 @@ export const AvailabilitySlot = table({
     public: false, // S3 (A37 calendar contexts): private, read through view_my_calendar_* / view_saved_calendar_availability (S9)
     indexes: [
         { accessor: 'user_id', algorithm: 'btree', columns: ['userId'] },
-        { accessor: 'start_at', algorithm: 'btree', columns: ['startAt'] },
     ],
 }, availabilitySlotColumns);

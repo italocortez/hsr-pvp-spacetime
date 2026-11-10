@@ -22,8 +22,7 @@ HsrCharacter (name: string PK)  -- admin-managed game data
         characterName: string -> HsrCharacter.name (app-enforced FK)
         archetypeId: u32 -> Archetype.id (app-enforced FK)
         audit columns
-        Indexes: character_name (btree, characterName),
-                 archetype_id (btree, archetypeId),
+        Indexes: archetype_id (btree, archetypeId),
                  by_character_and_archetype (btree, [characterName, archetypeId])
 ```
 

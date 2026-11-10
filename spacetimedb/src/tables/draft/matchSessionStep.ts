@@ -6,7 +6,7 @@ export const matchSessionStepColumns = {
     id: t.u32().primaryKey().autoInc(),
 
     lobbyId: t.u32(),      // FK to Lobby/MatchSession
-    sequence: t.u32(),     // 1, 2, 3... (strict ordering within the lobby's one game, A67(3))
+    sequence: t.u32(),     // 0, 1, 2... (getNextSequence; strict ordering within the lobby's one game, A67(3))
 
     actorUserId: t.u32(), // Who performed the action (persistent User ID)
     anonymousLabel: t.string().optional(),

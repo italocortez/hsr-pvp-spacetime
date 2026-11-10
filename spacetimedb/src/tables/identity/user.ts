@@ -12,7 +12,7 @@ export const userColumns = {
     hasDiscordLinked: t.bool(),           // D-02: replaces sensitive auth ID; only bool exposed on public table
     avatarCharacterName: t.string(), // FK reference to HsrCharacter name
     displayedAchievementId: t.u32().optional(), // FK to Achievement.id — shown on profile
-    deletedAt: t.timestamp().optional(), // Set by admin soft-delete; scheduled job hard-deletes after 5s
+    deletedAt: t.timestamp().optional(), // Set by an admin deletion or a ban; the scheduled job deletes after 5s (delete_my_account and server_delete_user delete at once)
     createdById: t.u32(),
     createdDate: t.timestamp(),
     lastModifiedById: t.u32(),

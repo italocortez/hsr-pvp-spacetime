@@ -9,7 +9,7 @@ import { insertWithAudit } from '@module/helpers/admin/auditHelpers';
 // defaults to it (create_tournament); S8's create_tournament_lobby copies the free set from the pointed preset and
 // falls back to this one.
 //
-// The free-set values are the tournament-lobby constants of reducers/tournamentLobby.ts (create_tournament_lobby):
+// The free-set values are the tournament-lobby constants of reducers/tournament/tournamentLobby.ts (create_tournament_lobby):
 // Classic, ban mode Four, NoRestriction, 60 s turns, 120 s reserve, handicaps 0, budgets 0 / 0 / minimum raise 20,
 // autoRandomPick false, referee may undo / pause / set captain but not kick, player pause on, exclusive concede on.
 // Integrity-set columns (teamSize, gameMode, matchType, anonymity, rosterVisibility, requireOwnership, costSetId,

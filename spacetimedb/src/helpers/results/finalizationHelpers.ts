@@ -525,9 +525,6 @@ export function runFinalization(
 
             const actorTeamSide = step.actorSlot?.tag;
 
-            // A82: an AuctionSold step's actor is the passer or the system (timer sale); the owning side is the sale's
-            // winningTeam. Every player of that side (the non-coach participants) gets "played", every player of the
-            // other side "faced", the global stat is written once; no row for the system user or a spectator side.
             // A82, A106: an AuctionSold step and a Classic Pick step. The owning side is the sale's winningTeam or the
             // pick's actorSlot; the players credited with "played" come from playedCredit (one place): every player of
             // the owning side (the non-coach participants) for a sale and for a timer pick (actorUserId 0), the picker

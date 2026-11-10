@@ -25,6 +25,5 @@ export const GlobalCharacterStat = table({
     primaryKey: ['characterName', 'gameMode', 'draftMode', 'seasonId', 'matchType', 'teamSize'],
     indexes: [
         { accessor: 'by_char_mode', algorithm: 'btree', columns: ['characterName', 'gameMode'] },
-        { accessor: 'by_season', algorithm: 'btree', columns: ['seasonId'] },
     ],
 }, globalCharacterStatColumns);

@@ -3,7 +3,7 @@ import { t, SenderError } from 'spacetimedb/server';
 import { DraftMode, BanMode, GameMode, MatchType, RosterVisibility, DisconnectPolicy, LobbySlot, BanRestriction, LineupFormat, ShuffleMode } from '@module/types/enums';
 import { getAuthenticatedUser, isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
-import { ensureLobbyMember, ensurePresentMember, ensurePresentIfMember, ensureMemberPresentUnlessStaff, memberHasLeft, ensureHostOrAbove,PRIVATE_LOBBY_PASSWORD_TEXT, ensureStageIs, resolveSeat, slotTeam, slotIsCoach, slotIsSpectator, slotToTeamSide, resolveMaxSpectators } from '@module/helpers/lobby/lobbyHelpers';
+import { ensureLobbyMember, ensurePresentMember, ensurePresentIfMember, ensureMemberPresentUnlessStaff, memberHasLeft, ensureHostOrAbove, PRIVATE_LOBBY_PASSWORD_TEXT, ensureStageIs, resolveSeat, slotTeam, slotIsCoach, slotIsSpectator, resolveMaxSpectators } from '@module/helpers/lobby/lobbyHelpers';
 import { normalizeLobbyName } from '@module/helpers/tournament/seriesSettings';
 import { ensureCostSetCovers, ensureSelectableCostSet } from '@module/helpers/draft/costSetGuards';
 import { ensureSeatAllowed } from '@module/helpers/tournament/tournamentLobbySides';

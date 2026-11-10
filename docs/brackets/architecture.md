@@ -17,7 +17,7 @@ Tournament (id: u32 autoInc PK)
   +-- TournamentTeam (status, seedNumber: u32?, groupId: u32?)   [group membership; standings are computed, A23]
 
   +-- BracketMatch (id: u32 autoInc PK; public, team ids only)
-        tournamentId -> Tournament.id              [btree tournament_id, by_tournament_and_position]
+        tournamentId -> Tournament.id              [btree tournament_id]
         positionKey: string  ('W-R1-M1', 'L-R2-M1', 'GF', 'TP', 'G0-R1-M1': the engine's address)
         bracketSide: BracketSide (Winners | Losers | GrandFinals | ThirdPlace | Group)
         roundNumber, matchNumber: u32; groupId: u32? (Group rows)
@@ -65,7 +65,7 @@ already-placed teams latest in the winners bracket (ties: lowest seed). With two
 elimination match pairs two teams of one group. The elimination bracket is `generateSingleElim` /
 `generateDoubleElim` over that order.
 
-The seat-enforcement core moved to `shared/lobby-rules/allowedSlots.ts` (`allowedSlotsFor`, `autoSeatFor`,
+The seat-enforcement core moved to `shared/lobby-rules/allowedSlots.ts` (`allowedSlotsFor`,
 `ALL_SLOTS`, `SeatContext`).
 
 ### Module helpers (`spacetimedb/src/helpers/`)

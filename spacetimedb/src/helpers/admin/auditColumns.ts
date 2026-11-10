@@ -6,7 +6,7 @@ export const SYSTEM_USER_ID = 0;
  * Both "created" and "lastModified" point to the same actor and timestamp.
  *
  * **RESTRICTED USE — prefer `insertWithAudit` from `./auditHelpers` for all
- * new-row inserts.** This primitive is retained only for the 9 conditional
+ * new-row inserts.** This primitive is retained only for the conditional
  * upsert sites where a single row literal must admit BOTH audit shapes
  * (`existing ? auditUpdate(...) : auditInsert(...)`) or where file-symmetry
  * with such a ternary keeps a primitive `auditInsert` call in a structurally
@@ -15,31 +15,17 @@ export const SYSTEM_USER_ID = 0;
  * context switch between two forms of "new row insert" within the same
  * reducer body.
  *
- * **Permanent retention sites (Phase 15.3 Wave 3 Option α, 9 total):**
- * - `helpers/rosterMutations.ts` L55 — P5 inline ternary
- *   (HsrAccountCharacter composite-PK upsert, `applyBatchUpsert` helper).
- * - `reducers/rosterAdmin.ts` L160-161 — P5 inline ternary
- *   (admin_batch_upsert_characters HsrAccountCharacter composite-PK upsert).
- * - `helpers/finalizationHelpers.ts` L148-149 — P5 inline ternary
- *   (MmrRating composite-PK upsert inside `processMatchMmr`).
- * - `reducers/costSetManagement.ts` L176 — P5 if/else split-conditional
- *   (edit_draft_character_cost else-branch — caller builds explicit row
- *   after delete; if-branch carries `auditUpdate`, else-branch `auditInsert`).
- * - `reducers/costSetManagement.ts` L253 — P5 if/else split-conditional
- *   (edit_draft_lightcone_cost else-branch, mirror pattern).
- * - `reducers/costSetManagement.ts` L319 — P5 if/else split-conditional
- *   (edit_draft_synergy_cost else-branch, mirror pattern).
- * - `reducers/costSetManagement.ts` L369 — P5 inline ternary
- *   (publish_cost_set HsrCharacterCost sync).
- * - `reducers/costSetManagement.ts` L391 — P5 inline ternary
- *   (publish_cost_set HsrLightconeCost sync).
- * - `reducers/costSetManagement.ts` L424 — primitive call, file-symmetry
- *   (publish_cost_set HsrSynergyCost upsert else-branch — sibling inline
- *   ternaries at L369/L391 already force `auditInsert` to stay callable in
- *   this file; migrating only this else-branch yields zero eviction win).
+ * **Retention sites (Phase 15.3 Option α; paths and functions as of S10j):**
+ * - `helpers/roster/rosterMutations.ts` `applyBatchUpsert` — inline ternary
+ *   (HsrAccountCharacter composite-PK upsert).
+ * - `reducers/roster/rosterAdmin.ts` `admin_batch_upsert_characters` — inline ternary (same upsert).
+ * - `helpers/results/finalizationHelpers.ts` `processMatchMmr` — inline ternary (MmrRating upsert).
+ * - `reducers/roster/costSetManagement.ts` `edit_draft_character_cost` / `edit_draft_lightcone_cost` /
+ *   `edit_draft_synergy_cost` — if/else split-conditional (the else-branch inserts the new draft row).
+ * - `helpers/roster/costSetCompleteness.ts` `mirrorDraftToLive` — inline ternaries (publish sync), with
+ *   the primitive inserts of `fillMissingAtZero`, `ensureDraftCopy` and `mirrorDraftToLive` kept for symmetry.
  *
- * See Phase 15.3 CONTEXT.md D-06 / D-07 (two-tier API rationale) and
- * Plan 13 SUMMARY (Option α final accounting).
+ * See Phase 15.3 CONTEXT.md D-06 / D-07 (two-tier API rationale).
  */
 export function auditInsert(ctx: any, userId: number = SYSTEM_USER_ID) {
     return {

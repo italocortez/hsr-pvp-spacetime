@@ -12,8 +12,8 @@ const BAN_TYPE_TO_LOGIN_METHOD: Record<string, string> = { DiscordId: DISCORD_LO
 
 /**
  * Admin-only: Ban a provider ID (e.g., a Discord ID).
- * Creates a BanRecord and soft-deletes the affected user (if any) to trigger
- * the existing client-side auto-logout path in useAuth.ts (D-08 enforcement point 3).
+ * Creates a BanRecord and soft-deletes the affected user (if any): deletedAt is set and a UserDeletionJob runs the
+ * deletion 5 s later (D-08 enforcement point 3). There is no client signal for deletedAt.
  */
 export const admin_ban_user = spacetimedb.reducer({
     banTypeTag: t.string(),   // 'DiscordId'
@@ -58,7 +58,7 @@ export const admin_ban_user = spacetimedb.reducer({
         bannedByUserId: admin.id,
     }, admin.id));
 
-    // D-08 enforcement point 3: Soft-delete the user to trigger auto-logout.
+    // D-08 enforcement point 3: soft-delete the user; the scheduled deletion follows.
     // Find the user via UserPrivate.provider_id index (same login method).
     const privateRows = [...ctx.db.UserPrivate.provider_id.filter(providerId)]
         .filter((p: any) => p.loginMethod === loginMethod);
@@ -68,7 +68,7 @@ export const admin_ban_user = spacetimedb.reducer({
             ctx.db.User.id.update(
                 updateWithAudit(ctx, user, { deletedAt: ctx.timestamp }, admin.id),
             );
-            // D-10 R1 fix: schedule deletion cascade 5s out (matches admin.ts:181-188 pattern)
+            // D-10 R1 fix: schedule deletion cascade 5s out (the admin_delete_row('User') pattern, reducers/admin/admin.ts)
             const deleteAt = ctx.timestamp.microsSinceUnixEpoch + 5_000_000n;
             ctx.db.UserDeletionJob.insert(insertWithAudit(ctx, {
                 scheduledId: 0n,

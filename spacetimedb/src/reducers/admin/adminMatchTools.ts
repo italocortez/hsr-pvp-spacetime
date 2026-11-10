@@ -4,7 +4,6 @@ import { getAuthenticatedUser, isRoleAtLeast } from '@module/helpers/identity/en
 import { runFinalization } from '@module/helpers/results/finalizationHelpers';
 import { hardDeleteLobby } from '@module/reducers/lobby/lobbyGc';
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
-import { slotTeam, slotIsCoach, slotIsSpectator } from '@module/helpers/lobby/lobbyHelpers';
 import { findLobbyResult } from '@module/helpers/results/scoringHelpers';
 
 /**

@@ -15,8 +15,6 @@
 
 export type Target = 'test' | 'prod';
 
-export const TARGETS: readonly Target[] = ['test', 'prod'];
-
 /** Committed, non-secret. Renamed by the user on 2026-11-06. */
 export const STDB_DATABASES: Readonly<Record<Target, string>> = {
     test: 'hsr-spacetimedb-test1',

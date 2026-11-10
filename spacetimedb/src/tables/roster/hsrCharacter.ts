@@ -28,9 +28,4 @@ export const hsrCharacterColumns = {
 export const HsrCharacter = table({
     name: 'hsr_character',
     public: true,
-    indexes: [
-        { accessor: 'by_path', algorithm: 'btree', columns: ['path'] },
-        { accessor: 'by_element', algorithm: 'btree', columns: ['element'] },
-        { accessor: 'by_role', algorithm: 'btree', columns: ['role'] },
-    ]
 }, hsrCharacterColumns);

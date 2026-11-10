@@ -25,15 +25,15 @@ import { TeamSide } from '@module/types/enums';
 
 // A60 (S7b): the game is confirmed and closed by its captains. confirm_match_scores (series-level flags) and
 // submit_match_result (the referee's submission click) were removed: A67(3), the close of the game submits it
-// (submitGameResult in helpers/gameClose.ts).
+// (submitGameResult in helpers/results/gameClose.ts).
 
 /**
  * Shared preconditions of confirm_game and close_game for the lobby's game: Equipping or Scoring, match alive, the
  * lobby's Pending record, the game not closed, the given sides' lineups arranged, both sides' group scores complete
  * (the game is recomputed from its inputs) and the A60(4) Auction gate for the given sides. Returns the fresh game
- * row, the record and the session.
+ * row and the record.
  */
-function readyGame(ctx: any, lobby: any, sides: TeamTag[], verb: 'confirming' | 'closing', actorId: number): { game: any; record: any; session: any } {
+function readyGame(ctx: any, lobby: any, sides: TeamTag[], verb: 'confirming' | 'closing', actorId: number): { game: any; record: any } {
     ensureStageIs(lobby, 'Equipping', 'Scoring');
     ensureMatchAlive(ctx, lobby);
     const record = findPendingResult(ctx, lobby.id);
@@ -49,7 +49,7 @@ function readyGame(ctx: any, lobby: any, sides: TeamTag[], verb: 'confirming' | 
         throw new SenderError(`Both teams' group scores are needed before ${verb}.`);
     }
     for (const side of sides) ensureAuctionSurchargeFits(ctx, lobby, session, side);
-    return { game: findGame(ctx, record.id), record, session };
+    return { game: findGame(ctx, record.id), record };
 }
 
 // ─── confirm_game ─────────────────────────────────────────────────────────────

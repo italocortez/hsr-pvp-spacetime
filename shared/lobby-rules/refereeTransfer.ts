@@ -28,7 +28,6 @@ export const ACTIVE_STAGES: readonly LobbyStage[] = ['Drafting', 'Equipping', 'S
 export const FLAG_CHECK_STAGES: readonly LobbyStage[] = ['Waiting', ...ACTIVE_STAGES];
 
 export const isPlayer = (s: Slot): boolean => s === 'BluePlayer' || s === 'RedPlayer';
-export const isCoach = (s: Slot): boolean => s === 'BlueCoach' || s === 'RedCoach';
 
 const byJoin = (a: MemberLite, b: MemberLite) => a.joinOrder - b.joinOrder;
 

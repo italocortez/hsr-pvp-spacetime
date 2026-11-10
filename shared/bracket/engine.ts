@@ -2,10 +2,10 @@
  * Pure bracket generation + advancement engine (A23, S8a: moved from the review prototype
  * `notes/migration/prototypes/bracket-generation/bracket.ts`, behaviour unchanged).
  *
- * No SpacetimeDB or React imports. The module (`spacetimedb/src/helpers/bracketStore.ts`) calls
+ * No SpacetimeDB or React imports. The module (`spacetimedb/src/helpers/tournament/bracketStore.ts`) calls
  * `generateSingleElim` / `generateDoubleElim`, persists one BracketMatch row per MatchSpec (including
  * the explicit `nextWinnerSlot` / `nextLoserSlot`), and applies the same routing rules as
- * `BracketEngine` when a result is applied (`helpers/bracketResults.ts`). The web app uses it for
+ * `BracketEngine` when a result is applied (`helpers/tournament/bracketResults.ts`). The web app uses it for
  * the bracket preview.
  *
  * Design rules (see TOURNAMENT-INTENT-REVIEW.md section 5):

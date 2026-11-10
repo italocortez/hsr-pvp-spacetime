@@ -8,7 +8,7 @@ import { table, t } from 'spacetimedb/server';
 export const userIdentityColumns = {
     identity: t.identity().primaryKey(),
     userId: t.u32(),
-    lastSeenAt: t.timestamp(), // For future cleanup of stale identity mappings
+    lastSeenAt: t.timestamp(), // read by the identity GC (reducers/identity/identityGc.ts) to find stale mappings
     createdById: t.u32(),
     createdDate: t.timestamp(),
     lastModifiedById: t.u32(),

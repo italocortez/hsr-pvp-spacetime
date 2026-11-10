@@ -20,7 +20,6 @@ export const MmrRating = table({
     primaryKey: ['userId', 'gameMode', 'seasonId'],
     indexes: [
         { accessor: 'user_id', algorithm: 'btree', columns: ['userId'] },
-        { accessor: 'rating', algorithm: 'btree', columns: ['rating'] },
         { accessor: 'by_user_mode_season', algorithm: 'btree', columns: ['userId', 'gameMode', 'seasonId'] },
     ],
 }, mmrRatingColumns);

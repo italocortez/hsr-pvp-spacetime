@@ -12,7 +12,7 @@ import {
 } from '@module/helpers/lobby/abuseControls';
 
 // ─── Abuse controls: admin reducers (DECISIONS A42; ACCESS-SECURITY-OPS §B.5) ──────────────────────────────
-// The guest-lobby circuit breaker runs inline in create_lobby (A57): helpers/abuseControls.ts
+// The guest-lobby circuit breaker runs inline in create_lobby (A57): helpers/lobby/abuseControls.ts
 // recordGuestLobbyCreation. There is no scheduled breaker any more. A95(2): the guest creation breaker runs inline in
 // login_as_guest (recordGuestCreation) on the same model.
 
@@ -86,7 +86,7 @@ export const admin_set_guest_creation = spacetimedb.reducer(
 
 // ─── admin_acknowledge_alert ──────────────────────────────────────────────────
 // A42(3): stops the notifier from opening further issues for this alert. AdminAlert is public and carries no
-// user ids, so the audit columns stay SYSTEM (tables/adminAlert.ts); the admin's id goes to the module log only.
+// user ids, so the audit columns stay SYSTEM (tables/admin/adminAlert.ts); the admin's id goes to the module log only.
 // Acknowledging an already acknowledged alert is a no-op.
 export const admin_acknowledge_alert = spacetimedb.reducer(
     { alertId: t.u32() },

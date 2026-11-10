@@ -43,9 +43,9 @@ export function validateCharacterOwnership(
  * takes the highest HsrAccountCharacter.eidolonLevel of the character across the member's selected match accounts
  * (LobbyMemberAccount) and ignores the client's argument, so a player cannot declare E0 to pay less and play E6.
  * 0 when none of the selected accounts has the character (pick_character rejects that case first through
- * validateCharacterOwnership; nominate_character, which has no ownership check, records E0).
- * The value lands in the Pick / AuctionSold payload, which is the scoring input (A21 tie-break 3), so later roster
- * edits change nothing.
+ * validateCharacterOwnership). Classic picks only: Auction records E0 at the sale (A61(1)) and checks ownership on
+ * nominations and bids (A61(2)). The value lands in the Pick payload, which is the scoring input (A21 tie-break 3);
+ * later roster edits do not change it, an eidolon edit goes through set_eidolon (A60).
  */
 export function resolveOwnedEidolon(ctx: any, lobbyId: number, userId: number, characterName: string): number {
     let eidolon = 0;

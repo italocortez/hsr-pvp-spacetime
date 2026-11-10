@@ -27,7 +27,7 @@ Private draft tables (public: false -- not broadcast to clients):
   |     gameMode: GameMode
   |     draftMode: DraftMode (Classic | Auction)
   |     costs: EidolonCost struct (e0-e6 numbers)
-  |     Indexes: cost_set_id (btree), by_set_character_and_mode (btree 4-col)
+  |     Indexes: cost_set_id (btree)
   |
   +-- CostSetDraftLightcone (PK: [costSetId, lightconeName, gameMode, draftMode])
   |     costSetId -> CostSet.id  [btree: cost_set_id]
@@ -35,7 +35,7 @@ Private draft tables (public: false -- not broadcast to clients):
   |     gameMode: GameMode
   |     draftMode: DraftMode
   |     costs: SuperimpositionCost struct (s1-s5 numbers)
-  |     Indexes: cost_set_id (btree), by_set_lightcone_and_mode (btree 4-col)
+  |     Indexes: cost_set_id (btree)
   |
   +-- CostSetDraftSynergy (PK: [costSetId, sourceName, targetName, gameMode, draftMode])
         costSetId -> CostSet.id  [btree: cost_set_id]
@@ -44,7 +44,7 @@ Private draft tables (public: false -- not broadcast to clients):
         gameMode: GameMode
         draftMode: DraftMode
         costModifier: f32
-        Indexes: cost_set_id (btree), by_tuple (btree 5-col: [costSetId, sourceName, targetName, gameMode, draftMode])
+        Indexes: cost_set_id (btree)
 
 Live cost tables (public: true -- broadcast to all subscribers):
   +-- HsrCharacterCost (PK: [characterName, gameMode, draftMode, costSetId])
@@ -70,8 +70,7 @@ Live cost tables (public: true -- broadcast to all subscribers):
         draftMode: DraftMode
         costModifier: f32
         costSetId -> CostSet.id (0=default)
-        Indexes: source_mode (btree 3-col: [sourceName, gameMode, draftMode]),
-                 target_name (btree), cost_set_id (btree),
+        Indexes: cost_set_id (btree),
                  by_tuple (btree 5-col: [sourceName, targetName, gameMode, draftMode, costSetId])
 ```
 

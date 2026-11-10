@@ -5,7 +5,8 @@ import { table, t } from 'spacetimedb/server';
  * Tracks which HSR account(s) each lobby member is using for this match.
  *
  * Non-public (D-02): opponents cannot see account selection via raw subscription.
- * No audit columns (D-03 pattern): ephemeral join table, created at join, deleted at leave/close.
+ * No audit columns (D-03 pattern): ephemeral join table, created at join; rows of away and abandoned memberships
+ * stay until the member row goes (the roster guards ignore abandoned memberships, S10e).
  */
 export const lobbyMemberAccountColumns = {
     lobbyId: t.u32(),

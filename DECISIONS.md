@@ -1119,3 +1119,16 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** user, 2026-11-10: "turning the switch back on I would prefer it to be an action item tho" and "could we be able to turn that switch off through a server reducer in case i'm not logged in? the default can be 300.". S10h review F3: while the switch is off a new browser cannot start a session, Discord sign-in included, so an Admin without an existing session needs a path that does not depend on logging in.
 - **Supersedes:** the default of 100 in A95(2).
 - **Where implemented:** S10i
+
+### A110 — Character "played" stats follow ownership
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** for every way a team gets a character (a manual Classic pick, a Classic timer auto-pick, an Auction sale), the played stat is decided by ownership, not by who made the call:
+  1. Each non-coach player of the owning team who owns the character on any of their HSR accounts (selected for the match or not) gets the played stat, with that side's win flag.
+  2. If no player of the team is recorded as owning it and the team has exactly one player, that player gets it.
+  3. If no player of the team is recorded as owning it and the team has two or more players, nobody gets it.
+  4. The other team's faced stat and the global character stat are written as before; `EMPTY` and `SKIP` write nothing; no row for the system user.
+  5. Ownership is read when the match is finalized; later roster changes do not rewrite stats.
+- **Why:** user, 2026-11-10: "do you think we can have a way to only record character stats if the user owns the character at all even if they didnt chose the account that has it on the match that it got credit from (due to a team mate picking it) ? in an effort to have good data integrity for stats", then "I agree with your proposal for one player and two-or-more players". Only the captain can make a manual pick, so crediting the picker gave the captain every character of a 2v2 or 3v3 team.
+- **Supersedes:** A82(2) and A106 (whole team credited) and A82(4) (the picker credited) for the played stat.
+- **Where implemented:** S10k

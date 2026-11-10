@@ -328,9 +328,6 @@ const tablesSchema = __schema({
       { accessor: 'name', name: 'achievement_name_idx_btree', algorithm: 'btree', columns: [
         'name',
       ] },
-      { accessor: 'by_rarity', name: 'achievement_rarity_idx_btree', algorithm: 'btree', columns: [
-        'rarity',
-      ] },
     ],
     constraints: [
       { name: 'achievement_id_key', constraint: 'unique', columns: ['id'] },
@@ -346,9 +343,6 @@ const tablesSchema = __schema({
       { accessor: 'id', name: 'achievement_criteria_id_idx_btree', algorithm: 'btree', columns: [
         'id',
       ] },
-      { accessor: 'by_stat_table', name: 'achievement_criteria_stat_table_idx_btree', algorithm: 'btree', columns: [
-        'statTable',
-      ] },
     ],
     constraints: [
       { name: 'achievement_criteria_id_key', constraint: 'unique', columns: ['id'] },
@@ -359,9 +353,6 @@ const tablesSchema = __schema({
     indexes: [
       { accessor: 'id', name: 'admin_alert_id_idx_btree', algorithm: 'btree', columns: [
         'id',
-      ] },
-      { accessor: 'is_acknowledged', name: 'admin_alert_is_acknowledged_idx_btree', algorithm: 'btree', columns: [
-        'isAcknowledged',
       ] },
     ],
     constraints: [
@@ -391,10 +382,6 @@ const tablesSchema = __schema({
       ] },
       { accessor: 'tournament_id', name: 'bracket_match_tournament_id_idx_btree', algorithm: 'btree', columns: [
         'tournamentId',
-      ] },
-      { accessor: 'by_tournament_and_position', name: 'bracket_match_tournament_id_position_key_idx_btree', algorithm: 'btree', columns: [
-        'tournamentId',
-        'positionKey',
       ] },
     ],
     constraints: [
@@ -433,9 +420,6 @@ const tablesSchema = __schema({
         'characterName',
         'gameMode',
       ] },
-      { accessor: 'by_season', name: 'global_character_stat_season_id_idx_btree', algorithm: 'btree', columns: [
-        'seasonId',
-      ] },
     ],
     constraints: [
     ],
@@ -443,17 +427,8 @@ const tablesSchema = __schema({
   hsrCharacter: __table({
     name: 'hsr_character',
     indexes: [
-      { accessor: 'by_element', name: 'hsr_character_element_idx_btree', algorithm: 'btree', columns: [
-        'element',
-      ] },
       { accessor: 'name', name: 'hsr_character_name_idx_btree', algorithm: 'btree', columns: [
         'name',
-      ] },
-      { accessor: 'by_path', name: 'hsr_character_path_idx_btree', algorithm: 'btree', columns: [
-        'path',
-      ] },
-      { accessor: 'by_role', name: 'hsr_character_role_idx_btree', algorithm: 'btree', columns: [
-        'role',
       ] },
     ],
     constraints: [
@@ -469,9 +444,6 @@ const tablesSchema = __schema({
       { accessor: 'by_character_and_archetype', name: 'hsr_character_archetype_character_name_archetype_id_idx_btree', algorithm: 'btree', columns: [
         'characterName',
         'archetypeId',
-      ] },
-      { accessor: 'character_name', name: 'hsr_character_archetype_character_name_idx_btree', algorithm: 'btree', columns: [
-        'characterName',
       ] },
     ],
     constraints: [
@@ -498,9 +470,6 @@ const tablesSchema = __schema({
     indexes: [
       { accessor: 'name', name: 'hsr_lightcone_name_idx_btree', algorithm: 'btree', columns: [
         'name',
-      ] },
-      { accessor: 'by_path', name: 'hsr_lightcone_path_idx_btree', algorithm: 'btree', columns: [
-        'path',
       ] },
     ],
     constraints: [
@@ -533,14 +502,6 @@ const tablesSchema = __schema({
         'draftMode',
         'costSetId',
       ] },
-      { accessor: 'character_a_mode', name: 'hsr_synergy_cost_character_a_game_mode_draft_mode_idx_btree', algorithm: 'btree', columns: [
-        'characterA',
-        'gameMode',
-        'draftMode',
-      ] },
-      { accessor: 'character_b', name: 'hsr_synergy_cost_character_b_idx_btree', algorithm: 'btree', columns: [
-        'characterB',
-      ] },
       { accessor: 'cost_set_id', name: 'hsr_synergy_cost_cost_set_id_idx_btree', algorithm: 'btree', columns: [
         'costSetId',
       ] },
@@ -555,11 +516,6 @@ const tablesSchema = __schema({
   leaderboard: __table({
     name: 'leaderboard',
     indexes: [
-      { accessor: 'by_category_rank_season', name: 'leaderboard_category_rank_season_id_idx_btree', algorithm: 'btree', columns: [
-        'category',
-        'rank',
-        'seasonId',
-      ] },
       { accessor: 'by_user', name: 'leaderboard_user_id_idx_btree', algorithm: 'btree', columns: [
         'userId',
       ] },

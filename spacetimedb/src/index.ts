@@ -206,7 +206,7 @@ export const init = spacetimedb.init((ctx) => {
   seedAbuseConfigDefaults(ctx);
 
   // A33a / CH-S4: the built-in system lobby preset ("Tournament default"), owned by SYSTEM_USER_ID, from
-  // compile-time constants (helpers/systemPreset.ts). Idempotent: inserted only when absent.
+  // compile-time constants (helpers/lobby/systemPreset.ts). Idempotent: inserted only when absent.
   seedSystemLobbyPreset(ctx);
 });
 
@@ -269,7 +269,7 @@ export const client_connected = spacetimedb.clientConnected((ctx) => {
       ctx.db.User.id.update(updateWithAudit(ctx, user, {
         deletedAt: ctx.timestamp,
       }, user.id));
-      // D-10 R1 fix: schedule deletion cascade 5s out (matches admin.ts:181-188 pattern)
+      // D-10 R1 fix: schedule deletion cascade 5s out (the admin_delete_row('User') pattern, reducers/admin/admin.ts)
       // Actor is user.id — no human admin present on reconnect; matches existing audit pattern
       const deleteAt = ctx.timestamp.microsSinceUnixEpoch + 5_000_000n;
       ctx.db.UserDeletionJob.insert(insertWithAudit(ctx, {

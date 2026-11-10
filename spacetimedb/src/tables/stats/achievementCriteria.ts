@@ -22,6 +22,5 @@ export const AchievementCriteria = table({
     public: true,
     indexes: [
         { accessor: 'by_achievement', algorithm: 'btree', columns: ['achievementId'] },
-        { accessor: 'by_stat_table', algorithm: 'btree', columns: ['statTable'] },
     ],
 }, achievementCriteriaColumns);

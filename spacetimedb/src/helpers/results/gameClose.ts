@@ -2,7 +2,7 @@
 // closeGame, submitGameResult and the Admin-edit recompute. Kept out of scoringHelpers because they call
 // runFinalization: finalizationHelpers already imports scoringHelpers, and a back-import would close a cycle.
 // A67: a lobby hosts one game; the close of the game submits it (no series tally inside a match: the bracket match
-// is the only series, helpers/bracketResults.ts).
+// is the only series, helpers/tournament/bracketResults.ts).
 
 import { SenderError } from 'spacetimedb/server';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';

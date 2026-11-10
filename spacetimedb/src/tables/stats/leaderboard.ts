@@ -19,7 +19,6 @@ export const Leaderboard = table({
     public: true,
     primaryKey: ['category', 'rank', 'seasonId'],
     indexes: [
-        { accessor: 'by_category_rank_season', algorithm: 'btree', columns: ['category', 'rank', 'seasonId'] },
         { accessor: 'by_user', algorithm: 'btree', columns: ['userId'] },
     ],
 }, leaderboardColumns);
