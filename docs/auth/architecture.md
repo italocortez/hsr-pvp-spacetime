@@ -166,6 +166,9 @@ Note: `isPrivate` removed from schema (Phase 15.2 D-02 -- dead code, never gated
 
 ```
 performUserDeletion
+  ├─ S10s (A121 / A124): handOverOrganizedTournaments, first: a staff deletion or ban hands each unfinished tournament
+  │   the user organizes to the longest-serving full assistant, else the acting Moderator+; a server deletion
+  │   (opts.serverDeletion) cancels them instead (cancelOrganizedTournaments). See "Phase S10s execution"
   ├─ A94(2) (S10g): settleTournamentTiesForDeletion (helpers/tournament/disqualification.ts), first: per tournament
   │   that is not Completed / Cancelled where the user holds a non-Disqualified enrolment, removeEnrolment (the
   │   withdraw_from_tournament path) while bracketGeneratedAt is unset, disqualifyParticipant (the dq_participant path:
@@ -325,6 +328,53 @@ The calendar invites of a moved tournament entry move with it (A113(5)):
   - **Lobby presets** (`LobbyPreset.creator_user_id`; the system preset is owned by SYSTEM and never matches): deleted unless an unfinished tournament (stage not Completed / Cancelled) has the preset as `lobbyPresetId`. Lobbies hold no preset reference (a preset's values are copied at creation, A116), so a lobby never keeps one. Tournament has no `lobbyPresetId` index: one `Tournament` scan per deletion that has presets. A preset kept for an unfinished tournament is not removed later (no clean-up revisits it when the tournament ends); with its creator gone only an Admin can edit or delete it.
   - **Cost sets** (`CostSet.creator_id`): every set with `isPublished` false (a draft, or a set unpublished later) is deleted with its live and draft rows through `deleteCostSetRows` (`helpers/draft/costSetGuards.ts`, shared with `delete_cost_set`), unless `isCostSetInUse` holds it (any `Lobby` row on the set, or an unfinished tournament), as `delete_cost_set` checks. `isCostSetInUse` scans `Lobby` and `Tournament` once per unpublished set of the deleted user (neither table has a `costSetId` index); guests own no sets or presets, so the guest clean-up path does index probes only. A set kept this way is not removed later either. Published sets stay. Set 0 is never touched.
 
+## Phase S10s execution (DECISIONS.md A121, A124)
+
+- **Organizer hand-over, staff path (A121, L70).** `performUserDeletion(ctx, userId, actorId, opts?)` starts with
+  `handOverOrganizedTournaments(ctx, userId, actorId)` (`helpers/identity/userDeletionHelper.ts`) unless
+  `opts.serverDeletion` is set (below). For every tournament the user organizes (`Tournament.organizer_id`) that is not
+  Completed or Cancelled:
+  1. the heir is the assistant row (`TournamentAssistant.tournament_id`) holding `canManageParticipants`,
+     `canManageBracket` and `canResolveResults`, whose user exists, is not a guest and has no `deletedAt`, with the
+     earliest `createdDate` (equal dates: the lower user id; never the row id, CLAUDE.md §3.4); its row is deleted;
+  2. no heir: the actor, when the actor's `User` row exists, has no `deletedAt` and is Moderator or above;
+  3. neither: the tournament is left as before (Moderator+ manage it).
+  The new organizer's own assistant row in that tournament is deleted; `CalendarEvent` rows of the tournament's bracket
+  matches whose `organizerId` is the deleted user move to the new organizer (audit actor = `actorId`). An heir enrolled
+  as a player keeps the enrolment.
+- **Server deletion (A124).** `opts.serverDeletion` makes `performUserDeletion` run `cancelOrganizedTournaments`
+  instead: each of the user's tournaments that is not Completed or Cancelled goes through `cancelTournament`
+  (`helpers/tournament/tournamentHelpers.ts`, the one cancel path), with no hand-over. The flag is an explicit argument,
+  not read from the actor id inside the helper. It is set at three call sites:
+  - `server_delete_user` (`reducers/identity/server.ts`): always;
+  - `run_user_deletion` (`reducers/identity/userDeletion.ts`): when the job's `createdById` is the SYSTEM user's id.
+    Only `admin_ban_user` and `admin_delete_row('User')` write a job whose creator is not the deleted user, and their
+    actor is the SYSTEM user exactly when the caller is a server identity (the Owner and Delegates map to SYSTEM).
+    `UserDeletionJob` has no other free field and the step adds no column, so the job creator is the only carrier;
+  - `admin_delete_row('UserIdentity')` (`reducers/admin/admin.ts`) when the caller is the SYSTEM user and the guest left
+    without identity is deleted at once.
+  Identity GC (`performIdentityGc`) and `server_link_provider` (case 1b, the replaced guest) also pass a SYSTEM actor but
+  never pass the flag, so they cancel nothing (guests cannot organize in practice either).
+- **Which deletions hand over, cancel, or do nothing.**
+
+  | Path | Actor | Effect on the organizer's unfinished tournaments |
+  |---|---|---|
+  | `admin_ban_user`, `admin_delete_row('User')` by a staff Admin (job, `run_user_deletion`) | the Admin | A121 hand-over |
+  | the same reducers sent by the Owner or a Delegate | the SYSTEM user | A124 cancel |
+  | `server_delete_user` | `SYSTEM_USER_ID` | A124 cancel |
+  | `admin_delete_row('UserIdentity')` (guest without identity) | the Admin / the SYSTEM user | hand-over / cancel |
+  | `delete_my_account` | the user | none (A94(1) refuses an organizer) |
+  | ban found on reconnect (`client_connected`, `index.ts`, D-08 point 2) | the banned user (job creator) | none |
+  | identity GC, `server_link_provider` case 1b | SYSTEM | none |
+
+  Review F4: the reconnect-ban path schedules the job with the banned user as creator, so the hand-over sees a
+  self-deletion and changes nothing, and the A124 flag is not set either; the tournament keeps the deleted organizer
+  (Moderator+ manage it). It is kept as a guard for restored or hand-edited rows (S10e log), so it is rarely reachable;
+  giving that job `BanRecord.bannedByUserId` as creator would bring it under A121 or A124 (not done, no decision).
+  Both ban and admin deletion require Admin today (`ensureAdmin`), so the Moderator fallback of A121 is reachable only
+  if a Moderator path is added. No schema change.
+
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -361,10 +411,12 @@ The calendar invites of a moved tournament entry move with it (A113(5)):
 | `server_link_provider` case 1b moves the guest's entries in unfinished tournaments to the existing user (`moveTournamentTiesToUser`) before the guest is deleted; entries the existing user cannot hold are settled by the deletion | Phase S10l execution (DECISIONS.md A112) | 2026-11-10 |
 | `server_link_provider` case 1b refuses the sign-in (`Finish your current game before signing in to an existing account.`) while the guest that would be deleted holds a non-abandoned player seat in a Drafting, Equipping or Scoring lobby | Phase S10m execution (DECISIONS.md A113(4)) | 2026-11-10 |
 | `performUserDeletion` deletes the user's lobby presets (kept while an unfinished tournament points at one) and unpublished cost sets with their rows (kept while `isCostSetInUse`); published sets stay | Phase S10r execution (DECISIONS.md A122) | 2026-11-10 |
+| `performUserDeletion` first hands the unfinished tournaments of an organizer deleted or banned by staff to the longest-serving full assistant, else the acting Moderator+ (organizerId and the tournament's match calendar events); server-identity and self deletions unchanged | Phase S10s execution (DECISIONS.md A121) | 2026-11-10 |
+| A server deletion or ban of an organizer (`server_delete_user`, or a ban / delete sent as the SYSTEM user) cancels the unfinished tournaments through `cancelTournament` (explicit `serverDeletion` option); the reconnect-ban path documented as no hand-over | Phase S10s execution (DECISIONS.md A124) | 2026-11-10 |
 
 ---
 
-*Last updated: 2026-11-09*
+*Last updated: 2026-11-10 (S10s)*
 *Feature owner: Phase 01 / Phase 12 / Phase 16*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

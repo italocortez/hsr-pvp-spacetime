@@ -11,7 +11,8 @@
 //   4. Every CLI invocation names the database explicitly and passes `--no-config` (the CLI
 //      otherwise insists on the spacetime.json database; see skill references/spacetime-json.md).
 //   5. `--clear-database` / `--delete-data` are refused for prod at the resolver, before any
-//      shell command is built. Prod publishes always carry `--yes=migrate` and nothing more.
+//      shell command is built. Prod publishes always carry `--yes=migrate` and nothing more; every prod command is
+//      checked against an allow-list of exact flags (S10s, assertNoForbiddenProdFlags).
 
 export type Target = 'test' | 'prod';
 
@@ -200,10 +201,36 @@ export function readArgs(target: Target, command: 'describe' | 'sql' | 'logs', e
 /** Forbidden anywhere in automation; listed so a lint/grep gate can assert their absence. */
 export const FORBIDDEN_PROD_FLAGS = ['--clear-database', '--delete-data', '-c', '--yes=delete-data', '--yes=all', '--yes', '-y'] as const;
 
+/**
+ * S10s (A122(23), L100): the only flags a prod command may carry, exactly as written (no `=value` variants except
+ * `--yes=migrate`): the ones publishArgs and readArgs build. `true` = the flag takes the next argument as its value.
+ */
+export const ALLOWED_PROD_FLAGS: Readonly<Record<string, boolean>> = {
+    '--server': true,       // value must be STDB_SERVER_NICKNAME
+    '--no-config': false,
+    '--module-path': true,  // value: any path that is not itself a flag
+    '--yes=migrate': false, // the one confirmation prod accepts (CLAUDE.md §5, skill "Publishing")
+    '--json': false,        // describe
+};
+
+/**
+ * S10s (A122(23), L100): an allow-list. Every argument that starts with `-` must be one of ALLOWED_PROD_FLAGS, spelled
+ * exactly; `--server` must be followed by `maincloud` and `--module-path` by a value that is not a flag. Anything else
+ * (`--yes=migrate,delete-data`, `--yes=break-clients`, `-y`, `--delete-data`, `--anything`) is refused. Positional
+ * arguments (the command, the database name, an SQL text) pass.
+ */
 export function assertNoForbiddenProdFlags(args: readonly string[]): void {
-    for (const a of args) {
-        if ((FORBIDDEN_PROD_FLAGS as readonly string[]).includes(a) || a.startsWith('--delete-data=') || a.startsWith('-c=')) {
+    for (let i = 0; i < args.length; i++) {
+        const a = args[i];
+        if (!a.startsWith('-')) continue;
+        if (!Object.prototype.hasOwnProperty.call(ALLOWED_PROD_FLAGS, a)) {
             throw new EnvConfigError(`argument "${a}" is forbidden against prod.`);
         }
+        if (!ALLOWED_PROD_FLAGS[a]) continue;
+        const value = args[i + 1];
+        if (value === undefined || value.startsWith('-') || (a === '--server' && value !== STDB_SERVER_NICKNAME)) {
+            throw new EnvConfigError(`argument "${a} ${value ?? ''}" is forbidden against prod.`);
+        }
+        i++; // the value is consumed
     }
 }

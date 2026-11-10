@@ -208,7 +208,7 @@ Decisions: DECISIONS.md A22(3), A22(4), A22a; bug review F3, F5, F8, F9.
 
 **Step sequences (F9).** Every `MatchSessionStep` writer takes `sequence` from `helpers/draft/stepSequence.ts::getNextSequence(ctx, lobbyId)` (max existing sequence in the lobby + 1, 0 for the first step): Classic Pick/Ban (`draftClassic.ts`, including the timer-expiry auto-steps), every auction step (`draftAuction.ts`), the manual Pause (`pause_draft`), the auto-Pause (`run_referee_transfer_check`) and the Undo record (`undo_last_step`). `MatchSession.turnIndex` is Classic turn progress, not a sequence number, so Pause/Undo rows never collide with a draft step and the history key `[matchHistoryId, gameNumber, sequence]` stays unique. `postDraft.ts` already computed max + 1 inline (unchanged). Until the first pause or undo the Classic sequences still equal 0, 1, 2, ... as before.
 
-**undo_last_step (F9).** Rejects while paused ("Nothing to undo right now.") and during the auction phase ("Undo is not available during the auction phase."; Phase S10r execution, A122(9): only once a nomination exists, see "Phase S10r execution"). It deletes the highest-sequence **Pick or Ban** step (never a Pause / Undo row), inserts the Undo record with `originalSequenceId = <deleted step's sequence>` and its own sequence, and decrements `turnIndex`. The old "undo crosses back out of the auction phase" branch is gone: unreachable under the auction-phase rejection.
+**undo_last_step (F9).** Rejects while paused ("Nothing to undo right now.") and during the auction phase ("Undo is not available during the auction phase."; Phase S10r execution, A122(9): only once a nomination exists, see "Phase S10r execution"; Phase S10s execution, A125: only once a bid or a sale exists, a first undo cancelling an open nomination, see "Phase S10s execution"). It deletes the highest-sequence **Pick or Ban** step (never a Pause / Undo row), inserts the Undo record with `originalSequenceId = <deleted step's sequence>` and its own sequence, and decrements `turnIndex`. The old "undo crosses back out of the auction phase" branch is gone: unreachable under the auction-phase rejection.
 
 **Auto-pause (A22a, F5).** The disconnect hook no longer pauses. `run_referee_transfer_check` (`reducers/lobby/refereeTransfer.ts`, bound with `onSchedule`) fires 15 s after a user's last device disconnected and inserts the auto-Pause step (`actorUserId = 0`, `isAutoPause = true`, `timeRemainingMs` computed like `pause_draft`) and sets `timerState.isPaused` only when `decideAutoPause` (`shared/lobby-rules`) says so: the subject is still offline, a team player (not a spectator, coach or spectator-referee), the lobby is Drafting under Standard/Deferred and the draft is not already paused. `join_lobby`'s auto-resume on reconnect is unchanged. Details: `docs/lobby/architecture.md`.
 Phase S8f execution (A68(1)(2)(3)): a player's Leave in a live stage is a disconnect (row kept away with `leftAt`, clock stamped, the same 15 s check, so it auto-pauses a Drafting lobby like a disconnect); an away row counts as offline for the check and for `isForfeitEligible` whatever the presence rows say; no reducer concedes automatically.
@@ -568,8 +568,34 @@ execution").
 
 - **Ban names (A122(7), L32).** `ban_character` checks the name after the captain check and before availability: `EMPTY` is refused ("EMPTY is not a character and cannot be banned."); any other name needs the lobby's cost row (`characterCostRow`: cost set, game mode, draft mode, the pool the timer draws from and the check `pick_character` makes through `characterCostAt`), else "<name> has no cost in this lobby's cost set." (`costMissingText`). No system path writes an `EMPTY` ban: the timer's empty ban is the `SKIP` sentinel (`timer_expiry_classic`), which never blocks an `EMPTY` pick. A manual `SKIP` ban has no cost row and is refused by the same check.
 - **Coaches do not pause (A122(8), L33).** `pause_draft`: on the non-referee path a coach is refused ("Coaches cannot pause the draft.") before the `allowPlayerPause` and team-pause checks, so a coach uses none of the team's three pauses. A coach holding the referee flag with `refereeCanPause` pauses as referee, as before. `resume_draft` needs no change: a coach is never the original pauser now, and the auto-pause path already refuses coaches (A85(2)).
-- **Undo of the last Auction ban (A122(9), L34).** `undo_last_step` accepts the call while `isAuctionPhase` is true as long as the auction has not begun: `currentNomination` unset and no `Nominate`, `Bid` or `AuctionSold` step in the lobby. The window is from the last ban (which set `isAuctionPhase`) to the first nomination (manual or the timer's `EMPTY` auto-nomination). The undo then deletes that `Ban` step, writes the `Undo` row, sets `turnIndex` back to the ban turn, `isAuctionPhase = false` and resets the turn timer. Nothing else changed when the phase opened, so nothing else is restored. Once a nomination exists, the old text "Undo is not available during the auction phase." stands.
+- **Undo of the last Auction ban (A122(9), L34).** `undo_last_step` accepts the call while `isAuctionPhase` is true as long as the auction has not begun: `currentNomination` unset and no `Nominate`, `Bid` or `AuctionSold` step in the lobby. The window is from the last ban (which set `isAuctionPhase`) to the first nomination (manual or the timer's `EMPTY` auto-nomination). The undo then deletes that `Ban` step, writes the `Undo` row, sets `turnIndex` back to the ban turn, `isAuctionPhase = false` and resets the turn timer. Nothing else changed when the phase opened, so nothing else is restored. Once a nomination exists, the old text "Undo is not available during the auction phase." stands. **Window end superseded by Phase S10s execution (A125):** the window now closes at the first bid or sale.
 - **Undo cap (A122(10), L35).** `undo_last_step` calls `ensureUndoStepRoom` (`helpers/draft/stepSequence.ts`, next to `ensureEditStepRoom`, same constant `MAX_EDIT_STEPS_PER_LOBBY` = 300) before deleting the step: at 300 `Undo` rows in the lobby's game the call is refused ("This game has reached the limit of 300 undo steps."). The count is per lobby, not per side: undo is the referee's power over the whole draft.
+
+## Phase S10s execution (DECISIONS.md A125)
+
+- **Auction undo window until the first bid (A125).** `undo_last_step` (`reducers/draft/draftControl.ts`) refuses in the
+  auction phase only once a `Bid` or `AuctionSold` step exists in the lobby's game ("Undo is not available during the
+  auction phase.", unchanged text). Inside the window at most one nomination exists (a nomination ends only with a sale).
+- **What a nomination writes.** `nominate_character` (and the A81(2) immediate sale aside, which writes `AuctionSold`
+  and so closes the window): one `Nominate` step (actor, nominator's slot, `characterName`); on `MatchSession`:
+  `currentNomination` = the character, `currentBidAmount` = its base cost (the opening bid; nothing is charged until a
+  sale, `resolveSale` in `completeSale`), `currentBidTeam` = the nominator, a fresh turn clock (`turnStartAt` = now,
+  `accumulatedPauseMs` 0); `Lobby.lastActivityAt`. It does not move `turnIndex`, `nextNominatorTeam`, either character
+  or light-cone budget, the won counts or the reserve banks (no reducer writes `teamBlue/RedReserveMs` after
+  `start_draft`).
+- **The timer's nomination.** `timer_expiry_auction` with no open nomination writes the same: a `Nominate` step with
+  `actorUserId` 0, the nominator's slot and `EMPTY`; `currentNomination` 'EMPTY', `currentBidAmount` 0,
+  `currentBidTeam` the nominator, a fresh clock. It does not pass the nomination turn: the other team now bids or
+  passes. It counts as a nomination step like a manual one.
+- **The undo of an open nomination.** With the window open and a nomination open, a first undo deletes that
+  `Nominate` step, inserts an `Undo` row (`originalSequenceId` = the nomination's sequence; counted by
+  `ensureUndoStepRoom`, the L35 cap of 300), and restores the no-nomination state exactly: `currentNomination` and
+  `currentBidAmount` unset, `currentBidTeam` Spectator (what `start_draft` and every sale leave), a fresh turn clock for
+  `nextNominatorTeam` (unchanged, so the nominator), `Lobby.lastActivityAt`. `turnIndex`, `isAuctionPhase`, budgets and
+  won counts are untouched (they never moved). A further undo takes the A123 / A122(9) path: the last ban is deleted,
+  `turnIndex` back on it, `isAuctionPhase` false. The "No steps to undo." check no longer blocks a nomination undo in an
+  Auction without bans (`turnIndex` 0). The A117 re-roll is unaffected: the Undo row raises the next sequence, which the
+  timer draw keys on (the Auction timer nomination itself is always `EMPTY`, no draw).
 
 ## Phase History
 
@@ -619,10 +645,11 @@ execution").
 | `start_draft`'s `autoRandomPick` account check only under `requireOwnership`; timer pick / ban draw = MurmurHash3 of the transaction timestamp, lobby, turn and next sequence, reduced by multiply-high (`shared/lobby-rules/timerDraw.ts`; re-rolls after an undo; not `ctx.random`, review F1); pools unchanged | Phase S10o execution (DECISIONS.md A117) | 2026-11-10 |
 | No module code draws with `ctx.random`: the three remaining shuffles (seeding, RandomSwap, A36a formation) use `fairShuffle` (`shared/lobby-rules/timerDraw.ts`); timer draw unchanged | Phase S10p execution (DECISIONS.md A120) | 2026-11-10 |
 | `ban_character` needs a priced name of the lobby's pool, `EMPTY` refused; coaches cannot pause; the last Auction ban is undoable until the first nomination; Undo rows capped at 300 per game | Phase S10r execution (DECISIONS.md A122) | 2026-11-10 |
+| `undo_last_step` in Auction: the window stays open until the first Bid / AuctionSold step; a first undo cancels the open nomination (manual or the timer's `EMPTY`) and restores the no-nomination state with a fresh turn for the nominator; a further undo removes the last ban | Phase S10s execution (DECISIONS.md A125) | 2026-11-10 |
 
 ---
 
-*Last updated: 2026-11-10 (S10p)*
+*Last updated: 2026-11-10 (S10s)*
 *Feature owner: Phase 07 / Phase 09 / Phase 12.3 / Phase 15.4 / Phase 15.3*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

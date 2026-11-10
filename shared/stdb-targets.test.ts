@@ -124,6 +124,20 @@ describe('publishArgs', () => {
             expect(() => assertNoForbiddenProdFlags(['publish', 'x', bad])).toThrow(/forbidden against prod/);
         }
     });
+    // T-S10s (A122(23), L100): the prod guard is an allow-list of exact flags and values.
+    it('A122(23) L100: combined or other --yes values, unknown flags and a wrong --server value are refused against prod', () => {
+        for (const bad of ['--yes=migrate,delete-data', '--yes=break-clients', '--yes=migrate,break-clients', '--yes=remote', '--anything', '-x', '--env=prod', '--build-options=x']) {
+            expect(() => assertNoForbiddenProdFlags(['publish', 'hsr-spacetimedb-prod', '--server', 'maincloud', '--no-config', bad]), bad).toThrow(/forbidden against prod/);
+        }
+        expect(() => assertNoForbiddenProdFlags(['publish', 'x', '--server', 'local', '--no-config'])).toThrow(/forbidden against prod/);
+        expect(() => assertNoForbiddenProdFlags(['publish', 'x', '--server', 'maincloud', '--module-path'])).toThrow(/forbidden against prod/);
+        expect(() => assertNoForbiddenProdFlags(['publish', 'x', '--module-path', '--yes=migrate'])).toThrow(/forbidden against prod/);
+    });
+    it('A122(23) L100 (neighbour): the commands publishArgs and readArgs build for prod pass the allow-list', () => {
+        expect(() => assertNoForbiddenProdFlags(publishArgs('prod', { modulePath, yesMigrate: true }).args)).not.toThrow();
+        expect(() => assertNoForbiddenProdFlags(readArgs('prod', 'describe'))).not.toThrow();
+        expect(() => assertNoForbiddenProdFlags(readArgs('prod', 'sql', ['SELECT COUNT(*) AS n FROM hsr_character']))).not.toThrow();
+    });
     it('plain test publish is interactive (no --yes) unless asked', () => {
         expect(publishArgs('test', { modulePath }).args).not.toContain('--yes=migrate');
         expect(publishArgs('test', { modulePath, yesMigrate: true }).args).toContain('--yes=migrate');

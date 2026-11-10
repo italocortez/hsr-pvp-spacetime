@@ -671,6 +671,14 @@ Membership lifecycle after A68 (details in the reducer flows above):
 - **Preset permissions (A122(5), L21).** `ensureCanMutatePreset` (`reducers/lobby/lobbyPresets.ts`): a Moderator edits or deletes a non-system preset of their own or one whose creator's role is Moderator or TournamentHost (`isRoleAtLeast(creator, 'TournamentHost') && !isRoleAtLeast(creator, 'Admin')`); an Admin's preset is refused with the existing text "Moderators can only modify presets created by moderators, TOs, or themselves.". Admins unchanged.
 - **User deletion and presets (A122(6), L22).** `performUserDeletion` deletes the user's lobby presets, keeping one an unfinished tournament points at (`Tournament.lobbyPresetId`). Lobbies hold no preset reference (A116). Details in [../auth/architecture.md](../auth/architecture.md) "Phase S10r execution".
 
+## Phase S10s execution (DECISIONS.md A122)
+
+- **Membership bucket, wider use (A122(4), L93).** The twelve calendar reducers and the seven player roster writes now
+  count on the same `consumeMembershipAllowance` bucket with `MEMBERSHIP_ACTION_TEXT` (20 calls per fixed 10 s window
+  per user, shared with joins, returns, seat moves and the four S10r calls). A user who edits the calendar or the roster
+  in the same 10 s as lobby actions shares the 20. Details: [../calendar/architecture.md](../calendar/architecture.md)
+  and [../roster/architecture.md](../roster/architecture.md) "Phase S10s execution". No new column.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -723,10 +731,11 @@ Membership lifecycle after A68 (details in the reducer flows above):
 | `create_lobby` loses `joinCode` and `presetId` (with the "Preset not found." check), `create_tournament_lobby` loses `joinCode`; the server always generates the code; `join_lobby` unchanged | Phase S10n execution (DECISIONS.md A114, A116) | 2026-11-10 |
 | `shuffle_teams` RandomSwap: `fairShuffle` keyed by the transaction time, `SHUFFLE_DOMAIN.RandomSwap` and the lobby id replaces `ctx.random.shuffle`; join order, dealing, coaches and captain clearing unchanged | Phase S10p execution (DECISIONS.md A120) | 2026-11-10 |
 | `confirm_ready`, `unconfirm_ready`, `shuffle_teams`, `transfer_host` count on the membership allowance; a Moderator edits only Moderator and host presets; user deletion removes the user's unreferenced presets | Phase S10r execution (DECISIONS.md A122) | 2026-11-10 |
+| The membership allowance also counts the calendar reducers and the player roster writes | Phase S10s execution (DECISIONS.md A122) | 2026-11-10 |
 
 ---
 
-*Last updated: 2026-11-10 (S10p)*
+*Last updated: 2026-11-10 (S10s)*
 *Feature owner: Phase 05 / Phase 09 / Phase 10.1 / Phase 10.4 / Phase 12.1 / Phase 16*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

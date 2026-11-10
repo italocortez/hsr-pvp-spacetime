@@ -14,7 +14,10 @@
 // stays allowed, e.g. editing a finished event's title). A90: update rejects reviving an ended event when its organizer
 // already has 40 not-yet-ended events.
 //
-// Lazy cleanup (D-07): the organizer's events older than 90 days are deleted by create_calendar_event
+// Lazy cleanup (D-07, D-27): S10s (A122(22), L86): every calendar reducer first deletes the caller's events ended more
+// than 90 days ago and slots expired more than a week ago (runCalendarCleanup). S10s (A122(4), L93): every calendar
+// reducer counts on the per-user membership allowance (consumeMembershipAllowance: 20 calls per 10 s window).
+// Fix pass (F2, F11): order = authenticate, allowance, clean-up sparing the call's own event, main operation.
 // One event per bracket match enforced (D-19)
 // Length caps (S10f, calendar audit #5): title 1..100 characters, description up to 1000 characters (both trimmed)
 // Auto-invite bracket match participants for tournament-linked events (D-17, D-18)
@@ -25,7 +28,8 @@ import { Timestamp } from 'spacetimedb';
 import { getAuthenticatedUser, isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { ensureTournamentPermission, hasTournamentPermission } from '@module/helpers/tournament/tournamentPermissions';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
-import { cleanupOldEvents } from '@module/helpers/calendar/calendarCleanup';
+import { runCalendarCleanup } from '@module/helpers/calendar/calendarCleanup';
+import { consumeMembershipAllowance, MEMBERSHIP_ACTION_TEXT } from '@module/helpers/lobby/abuseControls';
 import { deleteCalendarEventWithInvites } from '@module/helpers/calendar/calendarCascade';
 
 const MAX_ACTIVE_EVENTS_PER_USER = 40;
@@ -93,6 +97,8 @@ export const create_calendar_event = spacetimedb.reducer(
     }) => {
         const user = getAuthenticatedUser(ctx);
         if (user.isGuest) throw new SenderError('Guests cannot create calendar events.');
+        consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT); // S10s (A122(4), L93; fix pass F11): allowance first
+        runCalendarCleanup(ctx, user.id); // S10s (A122(22), L86): clean-up before the main operation
 
         const texts = eventTexts(title, description);
 
@@ -150,10 +156,7 @@ export const create_calendar_event = spacetimedb.reducer(
             autoInviteCount = autoInviteeIds.length;
         }
 
-        // Lazy cleanup
-        cleanupOldEvents(ctx, user.id);
-
-        // Cap checks (post-cleanup, A79): not-yet-ended events first, then the retained ceiling
+        // Cap checks (the lazy cleanup ran at the top, S10s) (post-cleanup, A79): not-yet-ended events first, then the retained ceiling
         const currentEvents = [...ctx.db.CalendarEvent.organizer_id.filter(user.id)];
         const activeCount = currentEvents.filter((e: any) => e.endAt.microsSinceUnixEpoch >= now).length;
         if (activeCount >= MAX_ACTIVE_EVENTS_PER_USER) {
@@ -242,6 +245,8 @@ export const update_calendar_event = spacetimedb.reducer(
         endAt: string;
     }) => {
         const user = getAuthenticatedUser(ctx);
+        consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT); // S10s (A122(4), L93; fix pass F11): allowance first
+        runCalendarCleanup(ctx, user.id, { eventId }); // S10s (A122(22), L86; fix pass F2): clean-up, sparing this call's target
 
         const event = ctx.db.CalendarEvent.id.find(eventId);
         if (!event) throw new SenderError('Calendar event not found.');
@@ -284,6 +289,8 @@ export const delete_calendar_event = spacetimedb.reducer(
     { eventId: t.u32() },
     (ctx, { eventId }: { eventId: number }) => {
         const user = getAuthenticatedUser(ctx);
+        consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT); // S10s (A122(4), L93; fix pass F11): allowance first
+        runCalendarCleanup(ctx, user.id, { eventId }); // S10s (A122(22), L86; fix pass F2): clean-up, sparing this call's target
 
         const event = ctx.db.CalendarEvent.id.find(eventId);
         if (!event) throw new SenderError('Calendar event not found.');
@@ -300,6 +307,8 @@ export const invite_to_event = spacetimedb.reducer(
     { eventId: t.u32(), inviteeUserId: t.u32() },
     (ctx, { eventId, inviteeUserId }: { eventId: number; inviteeUserId: number }) => {
         const user = getAuthenticatedUser(ctx);
+        consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT); // S10s (A122(4), L93; fix pass F11): allowance first
+        runCalendarCleanup(ctx, user.id, { eventId }); // S10s (A122(22), L86; fix pass F2): clean-up, sparing this call's target
 
         const event = ctx.db.CalendarEvent.id.find(eventId);
         if (!event) throw new SenderError('Calendar event not found.');
@@ -334,6 +343,8 @@ export const remove_invite = spacetimedb.reducer(
     { eventId: t.u32(), inviteeUserId: t.u32() },
     (ctx, { eventId, inviteeUserId }: { eventId: number; inviteeUserId: number }) => {
         const user = getAuthenticatedUser(ctx);
+        consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT); // S10s (A122(4), L93; fix pass F11): allowance first
+        runCalendarCleanup(ctx, user.id, { eventId }); // S10s (A122(22), L86; fix pass F2): clean-up, sparing this call's target
 
         const event = ctx.db.CalendarEvent.id.find(eventId);
         if (!event) throw new SenderError('Calendar event not found.');

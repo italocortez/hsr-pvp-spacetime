@@ -7,6 +7,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
     type BackendEnv,
+    ENV_KEYS,
     envFileFor,
     type ResolveOptions,
     resolveBackendEnv,
@@ -38,11 +39,25 @@ export function readEnvFile(path: string): Record<string, string> {
 }
 
 /**
- * process.env merged with the per-target file. The file wins: a token exported in the shell for
- * another target must never be used against this one.
+ * The shell environment merged with the per-target file; the file wins. S10s (A122(23), L99): for prod the server
+ * token comes only from `.env.prod.local`: a STDB_SERVER_TOKEN exported in the shell is dropped, so a test token can
+ * never be sent to prod. For test the shell value stays a fallback when the file has none (CI and one-off runs against
+ * test1 can export it; a token meant for prod reaching test1 is the harmless direction, and the file still wins).
+ * Pure: takes both records, so it is unit-tested without touching the real files.
  */
+export function mergeTargetEnv(
+    target: Target,
+    shellEnv: Readonly<Record<string, string | undefined>>,
+    fileEnv: Readonly<Record<string, string>>,
+): Record<string, string | undefined> {
+    const merged: Record<string, string | undefined> = { ...shellEnv, ...fileEnv };
+    if (target === 'prod') merged[ENV_KEYS.serverToken] = fileEnv[ENV_KEYS.serverToken];
+    return merged;
+}
+
+/** process.env merged with the per-target file (mergeTargetEnv). */
 export function targetEnvRecord(target: Target): Record<string, string | undefined> {
-    return { ...process.env, ...readEnvFile(envFilePath(target)) };
+    return mergeTargetEnv(target, process.env, readEnvFile(envFilePath(target)));
 }
 
 export function backendEnvFor(target: Target, opts: ResolveOptions = {}): BackendEnv {

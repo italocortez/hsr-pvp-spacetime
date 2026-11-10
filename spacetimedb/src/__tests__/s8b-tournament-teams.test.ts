@@ -225,8 +225,12 @@ describe('naming (A36a)', () => {
         expect(teamRow(test, teamA)!.name).toBe('Ghost');
         const userA = test.db.User.id.find(a.userId)!;
         expect(teamRow(test, teamA)!.name).not.toBe(userA.displayName);
-        tx(test, b, (ctx) => M.set_anonymous_alias(ctx, { tournamentId: id, alias: 'ghost' })); // review fix 6: collision
-        expect(teamRow(test, membership(test, id, b.userId)!.teamId)!.name).toBe('ghost (2)');
+        // S10s re-alignment (A122(20), L69): an alias taken by another entrant (case-insensitive) is now refused;
+        // before S10s it was accepted and the team name got " (2)" (review fix 6).
+        expectReject(test, b, (ctx) => M.set_anonymous_alias(ctx, { tournamentId: id, alias: 'ghost' }),
+            'That alias is already taken in this tournament. Choose another.');
+        tx(test, b, (ctx) => M.set_anonymous_alias(ctx, { tournamentId: id, alias: 'Wraith' }));
+        expect(teamRow(test, membership(test, id, b.userId)!.teamId)!.name).toBe('Wraith');
 
         advanceStage(test, org, id, 'CheckIn');
         tx(test, a, (ctx) => M.set_anonymous_alias(ctx, { tournamentId: id, alias: 'Shade' }));

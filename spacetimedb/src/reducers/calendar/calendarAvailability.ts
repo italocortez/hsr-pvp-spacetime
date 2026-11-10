@@ -6,14 +6,18 @@
 //   - delete_availability_slot: owner OR Admin (D-14)
 //
 // Caps (per D-10): max 10 slots per user; 6-month window (D-12)
-// Lazy cleanup (D-27): the caller's expired slots older than 1 week are deleted by create_availability_slot
+// Lazy cleanup (D-27, D-07): S10s (A122(22), L86): every calendar reducer first deletes the caller's slots expired more
+// than a week ago and events ended more than 90 days ago (runCalendarCleanup). S10s (A122(4), L93): each counts on the
+// per-user membership allowance (consumeMembershipAllowance). Fix pass (F2, F11): order = authenticate, allowance,
+// clean-up sparing the call's own slot, main operation.
 
 import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { Timestamp } from 'spacetimedb';
 import { getAuthenticatedUser, isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
-import { cleanupExpiredSlots } from '@module/helpers/calendar/calendarCleanup';
+import { runCalendarCleanup } from '@module/helpers/calendar/calendarCleanup';
+import { consumeMembershipAllowance, MEMBERSHIP_ACTION_TEXT } from '@module/helpers/lobby/abuseControls';
 
 const SIX_MONTHS_MICROS = BigInt(180 * 24 * 60 * 60) * BigInt(1_000_000);
 const MAX_AVAILABILITY_SLOTS = 10;
@@ -54,6 +58,8 @@ export const create_availability_slot = spacetimedb.reducer(
     }) => {
         const user = getAuthenticatedUser(ctx);
         if (user.isGuest) throw new SenderError('Guests cannot manage availability slots.');
+        consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT); // S10s (A122(4), L93; fix pass F11): allowance first
+        runCalendarCleanup(ctx, user.id); // S10s (A122(22), L86): clean-up before the main operation
 
         const startMicros = BigInt(startAt);
         const endMicros = BigInt(endAt);
@@ -64,10 +70,7 @@ export const create_availability_slot = spacetimedb.reducer(
             throw new SenderError('Availability slots cannot be scheduled more than 6 months in advance.');
         }
 
-        // Lazy cleanup of expired slots
-        cleanupExpiredSlots(ctx, user.id);
-
-        // Cap check
+        // Cap check (the lazy cleanup of expired slots ran at the top, S10s)
         const existing = [...ctx.db.AvailabilitySlot.user_id.filter(user.id)];
         if (existing.length >= MAX_AVAILABILITY_SLOTS) {
             throw new SenderError(`Maximum ${MAX_AVAILABILITY_SLOTS} availability slots per user.`);
@@ -154,6 +157,8 @@ export const update_availability_slot = spacetimedb.reducer(
     }) => {
         const user = getAuthenticatedUser(ctx);
         if (user.isGuest) throw new SenderError('Guests cannot manage availability slots.');
+        consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT); // S10s (A122(4), L93; fix pass F11): allowance first
+        runCalendarCleanup(ctx, user.id, { slotId }); // S10s (A122(22), L86; fix pass F2): clean-up, sparing this call's target
 
         const slot = ctx.db.AvailabilitySlot.id.find(slotId);
         if (!slot) throw new SenderError('Availability slot not found.');
@@ -223,6 +228,8 @@ export const delete_availability_slot = spacetimedb.reducer(
     { slotId: t.u32() },
     (ctx, { slotId }: { slotId: number }) => {
         const user = getAuthenticatedUser(ctx);
+        consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT); // S10s (A122(4), L93; fix pass F11): allowance first
+        runCalendarCleanup(ctx, user.id, { slotId }); // S10s (A122(22), L86; fix pass F2): clean-up, sparing this call's target
 
         const slot = ctx.db.AvailabilitySlot.id.find(slotId);
         if (!slot) throw new SenderError('Availability slot not found.');

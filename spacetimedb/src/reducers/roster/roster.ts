@@ -6,6 +6,8 @@ import { validateUid, deriveRegion, recalcDuplicateUid, ensureDisplayLabelLength
 import { applyBatchUpsert, applyBatchRemove } from '@module/helpers/roster/rosterMutations';
 // S10e review F3 (lobby audit #12): the guards below read accountLobbyLocks, which skips abandoned memberships.
 import { accountLobbyLocks } from '@module/helpers/lobby/lobbyHelpers';
+// S10s (A122(4), L93): every roster write of this file counts on the per-user membership allowance (20 calls per 10 s).
+import { consumeMembershipAllowance, MEMBERSHIP_ACTION_TEXT } from '@module/helpers/lobby/abuseControls';
 
 /**
  * D-G-02 (Phase 12.3): Builds a user-facing SenderError for the lobby-guard
@@ -30,6 +32,7 @@ export const create_hsr_account = spacetimedb.reducer(
     { uid: t.string(), displayLabel: t.string() },
     (ctx, { uid, displayLabel }) => {
         const user = ensureVerifiedUser(ctx);
+        consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT); // S10s (A122(4), L93): per-user allowance
 
         validateUid(uid);
         const region = deriveRegion(uid);
@@ -68,6 +71,7 @@ export const update_hsr_account = spacetimedb.reducer(
     { hsrAccountId: t.u32(), displayLabel: t.string(), isRosterPublic: t.bool(), isRatingPublic: t.bool() },
     (ctx, { hsrAccountId, displayLabel, isRosterPublic, isRatingPublic }) => {
         const user = ensureVerifiedUser(ctx);
+        consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT); // S10s (A122(4), L93): per-user allowance
 
         const account = ctx.db.HsrAccount.id.find(hsrAccountId);
         if (!account) throw new SenderError('HSR account not found');
@@ -92,6 +96,7 @@ export const set_active_hsr_account = spacetimedb.reducer(
     { hsrAccountId: t.u32() },
     (ctx, { hsrAccountId }) => {
         const user = ensureVerifiedUser(ctx);
+        consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT); // S10s (A122(4), L93): per-user allowance
 
         const account = ctx.db.HsrAccount.id.find(hsrAccountId);
         if (!account) throw new SenderError('HSR account not found');
@@ -138,6 +143,7 @@ export const delete_hsr_account = spacetimedb.reducer(
     { hsrAccountId: t.u32() },
     (ctx, { hsrAccountId }) => {
         const user = ensureVerifiedUser(ctx);
+        consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT); // S10s (A122(4), L93): per-user allowance
 
         const account = ctx.db.HsrAccount.id.find(hsrAccountId);
         if (!account) throw new SenderError('HSR account not found');
@@ -194,6 +200,7 @@ export const batch_upsert_characters = spacetimedb.reducer(
     { hsrAccountId: t.u32(), charactersJson: t.string() },
     (ctx, { hsrAccountId, charactersJson }) => {
         const user = ensureVerifiedUser(ctx);
+        consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT); // S10s (A122(4), L93): per-user allowance
 
         const account = ctx.db.HsrAccount.id.find(hsrAccountId);
         if (!account) throw new SenderError('HSR account not found');
@@ -224,6 +231,7 @@ export const batch_remove_characters = spacetimedb.reducer(
     { hsrAccountId: t.u32(), characterNamesJson: t.string() },
     (ctx, { hsrAccountId, characterNamesJson }) => {
         const user = ensureVerifiedUser(ctx);
+        consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT); // S10s (A122(4), L93): per-user allowance
 
         const account = ctx.db.HsrAccount.id.find(hsrAccountId);
         if (!account) throw new SenderError('HSR account not found');
@@ -252,6 +260,7 @@ export const migrate_roster = spacetimedb.reducer(
     { sourceAccountId: t.u32(), targetAccountId: t.u32(), mode: t.string() },
     (ctx, { sourceAccountId, targetAccountId, mode }) => {
         const user = ensureVerifiedUser(ctx);
+        consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT); // S10s (A122(4), L93): per-user allowance
 
         if (mode !== 'copy' && mode !== 'move') {
             throw new SenderError('Mode must be "copy" or "move"');

@@ -312,7 +312,7 @@ views, plus `view_admin_stuck_games` (A60), `view_my_match_lineup_history` (A56)
 
 | View | Auth | Rows | Indexes |
 |---|---|---|---|
-| `view_my_tournaments`, `view_my_tournament_enrolled`, `_teams`, `_team_members`, `_matches`, `_match_results`, `_lobbies` (modified, A105(1)) | per-sender: organizer, assistant (any row, flags not read), **Moderator / Admin** (new) | as before, for tournaments that are **not Completed or Cancelled** only; a Moderator+ caller gets every such tournament | Moderator+: `Tournament.stage` btree, one filter per non-terminal stage (Draft, Registration, CheckIn, Seeding, InProgress); others: `Tournament.organizer_id`, `TournamentAssistant.user_id` + `Tournament.id`; then the per-view indexes as before |
+| `view_my_tournaments`, `view_my_tournament_enrolled`, `_teams`, `_team_members`, `_matches`, `_match_results`, `_lobbies` (modified, A105(1)) | per-sender: organizer, assistant (any row, flags not read; S10s, A122(21): a row with at least one permission), **Moderator / Admin** (new) | as before, for tournaments that are **not Completed or Cancelled** only; a Moderator+ caller gets every such tournament | Moderator+: `Tournament.stage` btree, one filter per non-terminal stage (Draft, Registration, CheckIn, Seeding, InProgress); others: `Tournament.organizer_id`, `TournamentAssistant.user_id` + `Tournament.id`; then the per-view indexes as before |
 | `view_admin_tournament(tournamentId)`, `view_admin_tournament_enrolled(tournamentId)`, `view_admin_tournament_teams(tournamentId)`, `view_admin_tournament_team_members(tournamentId)`, `view_admin_tournament_matches(tournamentId)`, `view_admin_tournament_match_results(tournamentId)`, `view_admin_tournament_lobbies(tournamentId)` (new, A105(2)) | per-sender arg views (`spacetimedb.view(opts, { tournamentId: u32 }, …)`); **Admin** only: the role is checked (`UserIdentity.identity` → `User.id`) before any tournament row is read; anyone else, or an unknown id, gets `[]` | the same row types as the seven staff views, for that one tournament, terminal stages included | `Tournament.id` + the per-view indexes |
 | `view_tournament_registrant_accounts` (modified, audit #10) | per-sender | (a) a hidden row (`isAnonymousDefault`, non-staff reader, not the caller's own) carries `displayLabel = Seat-<seat> account <k>` (k = 1-based order among that player's locked accounts) instead of the owner's free-text label; (b) Completed and Cancelled tournaments are skipped for every reader; (c) a non-staff reader gets another participant's rows only while the reader's own enrolment is in the field (not Disqualified, not waitlisted, approved) and only for participants in the field; the caller's own rows always; staff (organizer, assistant, Moderator+) every registrant | the organizer / assistant path now reads non-terminal tournaments only (`organizedOrAssistedLiveIds`) |
 | `view_tournament_matches_for_me` (modified, audit #11) | per-sender | only tournaments in **InProgress** (a cancelled or completed tournament keeps its Ready / Pending rows for good) | + `Tournament.id` |
@@ -364,6 +364,22 @@ rating-row probe (the `MmrHistory.match_history_id` index is removed again), no 
 winner. `won` is true when the caller's side is the stored winner, false when it is the other side, none when the match
 has no winner.
 
+## Phase S10s execution (DECISIONS.md A121, A122)
+
+- **Staff views (A122(21), L71).** The assistant path of the seven staff views (`organizedOrAssistedLiveIds`,
+  `views/tournamentViews.ts`) counts an assistant row only when it holds at least one of `canManageParticipants`,
+  `canManageBracket`, `canResolveResults`; an assistant with all three off reads no staff view. The views are not
+  gated one by one: teams and matches serve more than one permission (participants manage teams, bracket staff seed and
+  group them; bracket and results staff both work on matches), so the rule is "any permission". Organizer and
+  Moderator+ paths unchanged. After A121 a staff deletion can change `Tournament.organizerId`; the views read it at
+  call time, so the new organizer's views follow. Fix pass F8: the same `organizedOrAssistedLiveIds` feeds
+  `view_tournament_registrant_accounts`, so a no-permission assistant also loses the staff reading of registrant
+  accounts (real ids, every registrant, rosters whatever the roster visibility); with one permission it is kept.
+  `reducers/admin/adminMatchTools.ts` still accepts any assistant row (flags not read) and is left as is.
+- **Calendar view (A122(22), L87).** `view_my_calendar_events` path (c) (the caller's teams' bracket matches) reads
+  `Tournament.id` per enrolment and skips a tournament that is Completed or Cancelled; paths (a), (b), (d) unchanged
+  (a match event the caller organizes or is invited to still shows through them).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -398,6 +414,7 @@ has no winner.
 | `view_cost_set_missing(costSetId)` for the set's owner and Moderator+; draft views keep a published set's draft | Phase S10i execution (DECISIONS.md A107(2)(3)) | 2026-11-10 |
 | Paged history (A115): `view_my_match_history` + `_count`, per-match `view_my_match_history_participants` / `_steps` / `_games` / `_lineups`, `view_my_mmr_history(page, gameMode)`; the five unbounded `view_my_match_*_history` views removed; two history indexes | Phase S10n execution (DECISIONS.md A115) | 2026-11-10 |
 | Fix pass: the list reads the stored `MatchSessionHistory.matchType` / `.winnerTeamSide` (match type, winner, won, match-type filter); derivation and `MmrHistory.match_history_id` removed | Phase S10n execution (S10n review F1 / F2; DECISIONS.md A115) | 2026-11-10 |
+| Staff views: an assistant row with no permission grants nothing (A122(21)); `view_my_calendar_events` skips Completed / Cancelled tournaments on the team-match path (A122(22)) | Phase S10s execution (DECISIONS.md A121, A122) | 2026-11-10 |
 
 ---
 

@@ -38,7 +38,8 @@ function writeSeeds(ctx: any, tournament: any, ordered: any[], actorId: number):
 
 // ─── seed_bracket ─────────────────────────────────────────────────────────────
 // `bracket` (A25); Seeding; Ready teams only (A26). Modes kept from the legacy reducer:
-//   'mmr'    captain's rating for the tournament's default game mode, highest first; ties by team id.
+//   'mmr'    captain's rating for the tournament's default game mode in the active season (S10s, L65), highest
+//            first; ties by team id.
 //   'random' fairShuffle (A120, shared/lobby-rules/timerDraw.ts) of the Ready teams in team-id order (C-a7: the legacy
 //            hash was id order), keyed by the transaction time, SHUFFLE_DOMAIN.BracketSeeding and the tournament id.
 
@@ -54,10 +55,13 @@ export const seed_bracket = spacetimedb.reducer(
 
         let ordered: any[];
         if (mode === 'mmr') {
+            // S10s (A122(18), L65): the captain's rating of the active season (the Season row with isActive, else 0, the
+            // way the rating writer and the A36b registration check resolve it); a captain with no row there counts 0.
+            const activeSeason = [...ctx.db.Season.is_active.filter(true)][0];
+            const seasonId = activeSeason ? activeSeason.id : 0;
             const ratings = new Map<number, number>();
             for (const team of teams) {
-                const modeRating = [...ctx.db.MmrRating.user_id.filter(team.captainUserId)]
-                    .find((r: any) => r.gameMode.tag === tournament.defaultGameMode.tag);
+                const modeRating = [...ctx.db.MmrRating.by_user_mode_season.filter([team.captainUserId, tournament.defaultGameMode, seasonId])][0];
                 ratings.set(team.id, modeRating ? modeRating.rating : 0);
             }
             ordered = [...teams].sort((a: any, b: any) => (ratings.get(b.id)! - ratings.get(a.id)!) || a.id - b.id);

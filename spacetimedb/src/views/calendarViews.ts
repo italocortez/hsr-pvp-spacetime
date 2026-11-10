@@ -35,7 +35,8 @@ function visibleSavedTargets(ctx: any, me: number): number[] {
 //    (b) events the caller is invited to (CalendarEventInvite.invitee_user_id);
 //    (c) tournament-linked events of the bracket matches of the caller's teams (both teams' members see the
 //        match event even without an invite row: TournamentEnrolled.user_id → TournamentTeamMember
-//        .by_tournament_and_user → BracketMatch.tournament_id → CalendarEvent.bracket_match_id);
+//        .by_tournament_and_user → BracketMatch.tournament_id → CalendarEvent.bracket_match_id); S10s (L87): only
+//        tournaments that are not Completed or Cancelled (Tournament.id lookup per enrolment);
 //    (d) events organized by a player whose calendar the caller saved and shows (A45(4): calendars are public
 //        between players; isVisible = shown).
 //    Row: id, organizerId, organizerLabel, title, description?, startAt, endAt, bracketMatchId?. The organizer is
@@ -72,6 +73,9 @@ export const view_my_calendar_events = spacetimedb.view(
         }
         // (c) the caller's teams' bracket matches
         for (const enrolled of ctx.db.TournamentEnrolled.user_id.filter(me)) {
+            // S10s (A122(22), L87): a Completed or Cancelled tournament's brackets are not read.
+            const stage = ctx.db.Tournament.id.find(enrolled.tournamentId)?.stage.tag;
+            if (stage === undefined || stage === 'Completed' || stage === 'Cancelled') continue;
             const myTeamId = [...ctx.db.TournamentTeamMember.by_tournament_and_user.filter([enrolled.tournamentId, me])][0]?.teamId;
             if (myTeamId === undefined) continue;
             for (const match of ctx.db.BracketMatch.tournament_id.filter(enrolled.tournamentId)) {

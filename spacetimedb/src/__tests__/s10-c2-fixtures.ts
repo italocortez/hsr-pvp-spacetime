@@ -94,8 +94,19 @@ export function eventArgs(test: Harness, o: EventOpts = {}) {
     };
 }
 
-/** Creates the event as `who`; returns the new event's id. */
+/**
+ * S10s re-alignment (A122(4), L93): calendar reducers count on the per-user membership allowance (20 calls per 10 s).
+ * Seeding helpers that create dozens of rows in one instant empty the caller's count first, so cap tests keep testing
+ * the caps; the allowance itself is tested in s10s-triage-fixes.test.ts through direct reducer calls.
+ */
+export function clearMembershipCount(test: Harness, who: Actor): void {
+    const row = test.db.UserRateState.userId.find(who.userId);
+    if (row) test.db.UserRateState.userId.update({ ...row, membershipCount: 0 });
+}
+
+/** Creates the event as `who`; returns the new event's id (a seeding helper: clears the allowance count first). */
 export function createEvent(test: Harness, who: Actor, o: EventOpts = {}): number {
+    clearMembershipCount(test, who);
     const before = new Set(eventsOf(test, who).map((e) => e.id));
     const args = eventArgs(test, o);
     tx(test, who, (ctx) => M.create_calendar_event(ctx, args));

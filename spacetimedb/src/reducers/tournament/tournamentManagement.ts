@@ -9,6 +9,7 @@ import {
     cancelTournament,
     capacityCount,
     closeRegistration,
+    deleteTournamentStandIns,
     enterSeeding,
     ensureGuard,
     isGroupFormat,
@@ -71,15 +72,32 @@ interface SettingsArgs {
     has3rdPlaceMatch: boolean;
     lineupFormat: string;
     maxAccountsPerPlayer: number;
+    maxParticipants: number;
     scheduledStartAt: string;
     registrationDeadline: string;
 }
 
 /**
+ * S10s (A122(17), L64): an optional date argument is '' (none) or the microseconds since the epoch as digits. Anything
+ * else is refused with a readable error instead of the plain SyntaxError BigInt would throw.
+ */
+function parseOptionalMicros(value: string, fieldName: string): bigint | undefined {
+    if (!value) return undefined;
+    if (!/^\d+$/.test(value)) {
+        throw new SenderError(`${fieldName} must be a date in microseconds since the epoch (digits only), or empty.`);
+    }
+    return BigInt(value);
+}
+
+/**
  * Validates the settings and returns the normalized name and timestamps. The pure bracket module throws plain
  * `Error` on invalid sizes, so `groupSize` / `groupAdvanceCount` are checked here first (S8a review carry-over).
+ * S10s (A122(17), L64): `stored` is the tournament being updated (update_tournament). A date equal to the stored one is
+ * not re-checked against now, so an organizer can change other settings after the registration deadline (or the start)
+ * has passed; only a date that changes must lie in the future. create_tournament passes nothing: every date given must
+ * lie in the future.
  */
-function validateSettings(ctx: any, a: SettingsArgs) {
+function validateSettings(ctx: any, a: SettingsArgs, stored?: any) {
     const trimmedName = a.name.trim();
     if (trimmedName.length < 1 || trimmedName.length > 100) {
         throw new SenderError('Tournament name must be 1-100 characters.');
@@ -119,15 +137,22 @@ function validateSettings(ctx: any, a: SettingsArgs) {
     if (a.maxAccountsPerPlayer > 10) {
         throw new SenderError('maxAccountsPerPlayer must be 0-10.');
     }
+    // S10s (A122(17), L64; fix pass F7): at least two participants, on create and on update.
+    if (a.maxParticipants < 2) {
+        throw new SenderError('maxParticipants must be at least 2.');
+    }
 
-    // Parse optional timestamps: non-empty string = BigInt microseconds since epoch
-    const parsedScheduledStartAt = a.scheduledStartAt ? BigInt(a.scheduledStartAt) : undefined;
-    const parsedRegistrationDeadline = a.registrationDeadline ? BigInt(a.registrationDeadline) : undefined;
+    // Parse optional timestamps: non-empty string = BigInt microseconds since epoch (S10s: digits only)
+    const parsedScheduledStartAt = parseOptionalMicros(a.scheduledStartAt, 'scheduledStartAt');
+    const parsedRegistrationDeadline = parseOptionalMicros(a.registrationDeadline, 'registrationDeadline');
     const now = ctx.timestamp.microsSinceUnixEpoch;
-    if (parsedScheduledStartAt !== undefined && parsedScheduledStartAt <= now) {
+    // S10s (L64): an unchanged stored date is accepted even once it has passed.
+    const unchanged = (parsed: bigint | undefined, storedTs: any): boolean =>
+        parsed !== undefined && storedTs !== undefined && storedTs.microsSinceUnixEpoch === parsed;
+    if (parsedScheduledStartAt !== undefined && parsedScheduledStartAt <= now && !unchanged(parsedScheduledStartAt, stored?.scheduledStartAt)) {
         throw new SenderError('scheduledStartAt must be in the future.');
     }
-    if (parsedRegistrationDeadline !== undefined && parsedRegistrationDeadline <= now) {
+    if (parsedRegistrationDeadline !== undefined && parsedRegistrationDeadline <= now && !unchanged(parsedRegistrationDeadline, stored?.registrationDeadline)) {
         throw new SenderError('registrationDeadline must be in the future.');
     }
     if (parsedScheduledStartAt !== undefined && parsedRegistrationDeadline !== undefined && parsedRegistrationDeadline >= parsedScheduledStartAt) {
@@ -250,6 +275,9 @@ export const create_tournament = spacetimedb.reducer(
 // format / teamSize / isAnonymousDefault (A103, S10g) change in Draft only; the rest until Seeding (Draft, Registration,
 // CheckIn).
 // defaultGameMode and countTowardsMmr stay fixed after creation (unchanged).
+// S10s (A122(17), L64): a date equal to the stored one is accepted even once it has passed (only a changed date must
+// lie in the future), a non-numeric date is a readable SenderError, and maxParticipants must be at least 2 (fix pass F7:
+// the floor sits in validateSettings, so create_tournament applies it too).
 
 export const update_tournament = spacetimedb.reducer(
     {
@@ -269,7 +297,7 @@ export const update_tournament = spacetimedb.reducer(
         if (stage !== 'Draft' && args.isAnonymousDefault !== tournament.isAnonymousDefault) {
             throw new SenderError('The anonymous setting can only change in Draft.');
         }
-        const v = validateSettings(ctx, args);
+        const v = validateSettings(ctx, args, tournament); // S10s (L64): unchanged past dates stay accepted; at least 2
 
         // A113(1)(2) (S10m): countTowardsMmr is fixed after creation, so the stored value is read. Turning the effective
         // requireVerified on is refused while guests hold an entry; Disqualified rows are not counted (they cannot play
@@ -408,6 +436,7 @@ export const advance_tournament_stage = spacetimedb.reducer(
         if (nextStage === 'Completed') {
             ensureCanComplete(ctx, tournament);
             assignFinalPlacements(ctx, tournament, user.id);
+            deleteTournamentStandIns(ctx, tournamentId); // S10s (A122(19), L66): approvals and stand-in locks end here
         }
 
         ctx.db.Tournament.id.update(updateWithAudit(ctx, ctx.db.Tournament.id.find(tournamentId)!, {

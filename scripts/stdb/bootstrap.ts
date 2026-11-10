@@ -8,9 +8,10 @@
  *
  *   1. Owner token from `spacetime login show --token` (captured from stdout; never written or logged).
  *   2. A token-less connection mints a fresh identity + token (the new delegate).
- *   3. As owner: best-effort server_revoke_delegate of the identity recorded in .env.<target>.local
- *      (STDB_SERVER_IDENTITY), then server_register_delegate(freshHex, 'vercel-auth-<target>').
- *   4. Writes STDB_SERVER_TOKEN and STDB_SERVER_IDENTITY into .env.<target>.local (other lines kept).
+ *   3. As owner: server_register_delegate(freshHex, 'vercel-auth-<target>').
+ *   4. Writes STDB_SERVER_TOKEN and STDB_SERVER_IDENTITY into .env.<target>.local (other lines kept), then (S10s, L101)
+ *      best-effort server_revoke_delegate of the identity the file recorded before (STDB_SERVER_IDENTITY). A failure
+ *      before the revoke leaves the previous delegate working (scripts/stdb/_delegate.ts).
  *   5. As the delegate: seeds data/seed/*, starter achievements, config singletons, GC jobs (_seed.ts).
  *   6. Subscribes only to `achievement` and `archetype`.
  *   7. Any unexpected disconnect exits 1 (R6).
@@ -21,6 +22,7 @@
 import { ENV_KEYS, EnvConfigError } from '../../shared/stdb-targets';
 import { parseCli, runMain } from './_args';
 import { connect } from './_connection';
+import { rotateDelegate } from './_delegate';
 import {
     backendEnvFor,
     envFilePath,
@@ -59,10 +61,10 @@ runMain('bootstrap', async () => {
             '[dry-run] owner token: spacetime login show --token (stdout captured, never printed)',
         );
         console.log(
-            `[dry-run] mint a fresh identity; register it as delegate "${label}" (revoking ${SERVER_IDENTITY_KEY} from ${backend.envFile} if present)`,
+            `[dry-run] mint a fresh identity; register it as delegate "${label}"`,
         );
         console.log(
-            `[dry-run] write ${ENV_KEYS.serverToken}, ${SERVER_IDENTITY_KEY} → ${backend.envFile}`,
+            `[dry-run] write ${ENV_KEYS.serverToken}, ${SERVER_IDENTITY_KEY} → ${backend.envFile}; then revoke the previous ${SERVER_IDENTITY_KEY} if present`,
         );
         console.log(
             '[dry-run] seed as delegate: data/seed/*, achievements, EloConfig, AccountRatingConfig, IdentityGcJob, LobbyGcJob',
@@ -84,27 +86,26 @@ runMain('bootstrap', async () => {
     fresh.close();
     console.log(`[bootstrap] minted delegate identity: ${freshHex}`);
 
-    // 3. Revoke the previous delegate (best effort), register the new one.
+    // 3-4. S10s (L101): register the new delegate, save its credentials for this target only, then revoke the
+    // previous one (best effort). A failure before the revoke leaves the previous delegate working (_delegate.ts).
     const previousHex = readEnvFile(envFilePath(target))[SERVER_IDENTITY_KEY];
-    if (previousHex && previousHex !== freshHex) {
-        try {
-            await owner.conn.reducers.serverRevokeDelegate({ identityHex: previousHex });
-            console.log(`[bootstrap] revoked previous delegate ${previousHex}`);
-        } catch (err) {
-            console.log(
-                `[bootstrap] previous delegate not revoked (${err instanceof Error ? err.message : err})`,
-            );
-        }
-    }
-    await owner.conn.reducers.serverRegisterDelegate({ identityHex: freshHex, label });
-    console.log(`[bootstrap] registered delegate "${label}"`);
-    owner.close();
-
-    // 4. Persist the delegate credentials for this target only.
-    upsertEnvFile(target, { [ENV_KEYS.serverToken]: freshToken, [SERVER_IDENTITY_KEY]: freshHex });
-    console.log(
-        `[bootstrap] wrote ${ENV_KEYS.serverToken} and ${SERVER_IDENTITY_KEY} to ${backend.envFile}`,
+    await rotateDelegate(
+        { freshToken, freshHex, previousHex, label },
+        {
+            register: async (identityHex, delegateLabel) => {
+                await owner.conn.reducers.serverRegisterDelegate({ identityHex, label: delegateLabel });
+            },
+            save: (token, identityHex) => {
+                upsertEnvFile(target, { [ENV_KEYS.serverToken]: token, [SERVER_IDENTITY_KEY]: identityHex });
+                console.log(`[bootstrap] wrote ${ENV_KEYS.serverToken} and ${SERVER_IDENTITY_KEY} to ${backend.envFile}`);
+            },
+            revoke: async (identityHex) => {
+                await owner.conn.reducers.serverRevokeDelegate({ identityHex });
+            },
+            log: (line) => console.log(line),
+        },
     );
+    owner.close();
 
     // 5–6. Seed as the delegate.
     const delegate = await connect({ backend, token: freshToken, label: 'bootstrap:delegate' });

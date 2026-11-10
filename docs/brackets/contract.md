@@ -278,7 +278,7 @@ The brackets feature handles all tournament bracket lifecycle: seeding teams, ge
 ### Seed Bracket (MMR mode)
 **Given:** Tournament in Seeding stage, 4 teams with distinct captain MMR ratings (1800, 1600, 1400, 1200)
 **When:** `seed_bracket(tournamentId, "mmr")`
-**Then:** TournamentTeam.seedNumber assigned by captain's MMR descending -- highest MMR gets seed 1. Ties broken by lower team.id.
+**Then:** TournamentTeam.seedNumber assigned by captain's MMR descending -- highest MMR gets seed 1. Ties broken by lower team.id. _Superseded in Phase S10s execution (DECISIONS.md A122(18)): the rating read is the active season's._
 
 ### Seed Bracket (Random mode -- deterministic)
 > **Superseded (Phase S8c execution):** the hash was team-id order (C-a7); random seeding uses `ctx.random` (S8c-1).
@@ -679,6 +679,7 @@ _Superseded in Phase S8g execution (DECISIONS.md A71)._ The `headStartSide` argu
 | Scenarios S8g-B8..B10: the head start stays on team1 whatever the colours (`headStartSide` removed; S8g-B1 / B2 / B6 / B7 superseded in part); records checked before lobbies (S8g-B4 superseded in part); a slot change unsets `blueTeamId` and resets the stored tally (A71(3)) | Phase S8g execution (DECISIONS.md A71) | 2026-11-08 |
 | A re-resolve, rollback or override that would remove a team from a downstream match is rejected when that match is Decided (unchanged text) or has any lobby or any Pending / Submitted / Disputed / Validated record ("<key> has a lobby or a game result; void or roll that match back first."); Rejected and Voided records do not block; nothing is voided automatically. Staff clear the downstream match first (close its Waiting lobby, override its record to Rejected, or resolve then roll it back) | Phase S10c execution (DECISIONS.md A84) | 2026-11-09 |
 | `rollback_bracket_match` also voids the deciding record when the games already give the recorded winner (a match decided through `override_match_result`, or by a disqualification whose force-concede settled it), so the match really returns to Ready; a staff decision against the games still voids nothing. `override_match_result` on a match decided by a disqualification, or by staff against the games, is refused ("This match was decided by staff or a disqualification; roll the match back first (rollback_bracket_match)."). Group matches are locked once the elimination bracket exists ("Group results are locked: the elimination bracket already exists.") for resolve, rollback and override | Phase S10g execution (backend audit 2026-11-09, tournament findings 3, 4, 5) | 2026-11-09 |
+| `seed_bracket` in `mmr` mode reads the captain's rating of the active season (season 0 when none is active); a captain with no row there counts 0 | Phase S10s execution (DECISIONS.md A122(18)) | 2026-11-10 |
 
 ---
 

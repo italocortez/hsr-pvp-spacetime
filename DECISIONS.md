@@ -1274,3 +1274,45 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   23. L99, L100, L101: the prod target takes its token only from its own env file; the prod publish guard is an allow-list; `bootstrap` saves the new delegate before revoking the old one.
 - **Why:** user, 2026-11-10: "lets run the fixes now then". The numbered rules are the orchestrator's reading of each list entry; the user triages anything a review flags.
 - **Where implemented:** S10r (L1 to L52, L89), S10s (L63 to L102, A121)
+
+### A123 — The last ban of a draft can always be undone
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** the referee can undo the last ban, in Classic and in the Auction ban phase. A122(9) stands as built in S10r: in Auction the undo works after the last ban until the first nomination, where nothing has been nominated, bid or bought.
+- **Why:** user, 2026-11-10: "we should always be able to undo the last ban". The user was told that the triage row for L34 had misread the contract (the S4 entry F9 refused this undo because no budget rollback existed) and confirmed the behaviour.
+- **Supersedes:** the S4 contract entry "Undo During the Auction Phase" for the window before the first nomination.
+- **Open:** whether the window should stay open after a nomination exists (an undo that first cancels a nomination without bids) is not decided.
+- **Where implemented:** S10r
+
+### A124 — A server deletion of a tournament organizer cancels the tournament
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** when the server identity (Owner or Delegate, with no staff user behind the action) deletes or bans a user who organizes a tournament that is not Completed or Cancelled, the tournament is cancelled with the normal cancel effects. No assistant takes over on this path. The hand-over of A121 (assistant first, else the acting Moderator or Admin) applies only when a staff user performs the action.
+- **Why:** user, 2026-11-10: "if the server deletes a user that was a tournament organizer we cancel the tournament, yes".
+- **Supersedes:** the last clause of A121 ("a deletion performed by the server identity ... leaves the tournament as it is today").
+- **Where implemented:** S10s
+
+### A125 — In Auction the undo window stays open until the first bid
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** while a game's auction phase has no bid and no sale yet, the referee can still undo: a first undo cancels the open first nomination (manual or the timer's), giving the turn back to the nominator with a fresh timer; a further undo removes the last ban as in A123. Once a bid or a sale exists, undo is refused with the existing text. No budget or won count has moved inside the window, so nothing is rolled back.
+- **Why:** user, 2026-11-10: "for the undo nomination, Extend to the first bid". Closes the open point of A123.
+- **Orchestrator's reading (not the user's words):** "first bid" means the first bid step placed after a nomination; if a nomination itself commits the nominator to an opening price, that commitment is released by the undo.
+- **Supersedes:** the window end of A122(9) and A123 (first nomination).
+- **Where implemented:** S10s
+
+### A126 — Alias uniqueness compares aliases only
+
+- **Date:** 2026-11-10 · **Status:** decided (orchestrator's correction of A122(20), reported to the user)
+- **Decision:** an anonymous alias must be unique among the aliases of its tournament (trimmed, case-insensitive). It is not compared with other entrants' display names. A tournament needs at least 2 participants at creation as well as on update (A122(17) applied to both).
+- **Why:** S10s review F1: comparing an alias with entrants' display names let anyone who is not enrolled test a display name and learn whether that player is enrolled in an anonymous tournament, against A37 and A103. The display-name half of A122(20) was the orchestrator's wording of triage item L69, not the user's.
+- **Supersedes:** the display-name clause of A122(20).
+- **Where implemented:** S10s
+
+### A127 — Undo removes the last draft step, whatever it is, until the draft is finished
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** while a game's draft is running, the referee's `undo_last_step` removes the last step and returns to the state before it, one step per call, in every draft mode and phase: a ban, a pick, a nomination, a bid, a sale (manual or made by the timer). Each undo restores exactly what the step changed (turn, timer, open nomination, highest bid and bidder, budgets, rosters, won counts, the next nominator). Undo stops when the draft is finished: the equip and eidolon stage is separate and is not undone by it. The cap of 300 Undo rows per game (A122(10)) stays.
+- **Why:** user, 2026-11-10: "wait, after the bids are set, why would the undo not work? undo is always remove the last action ... cant undo just do step by step?" and "yeah i want undo to work on any step to go to the previous one, it would stop working after draft is finished, since the equiping part and eidolon selection is indant of it".
+- **Supersedes:** the refusal "Undo is not available during the auction phase." (S4 contract entry F9), and the window ends of A122(9), A123 and A125.
+- **Where implemented:** S10t

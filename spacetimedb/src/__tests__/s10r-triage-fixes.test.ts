@@ -370,9 +370,13 @@ describe('A122(6), L22, L89: user deletion removes the user\'s presets and unpub
         const tid = createTournament(test, org, { lobbyPresetId: heldId });
         test.db.Tournament.id.update({ ...test.db.Tournament.id.find(tid)!, costSetId: draftHeld });
 
-        tx(test, 'internal', (ctx) => M.admin_delete_row(ctx, { tableName: 'User', primaryKeyJson: String(org.userId) }));
+        // S10s re-alignment (A124): a deletion sent as the SYSTEM user now cancels the organizer's tournaments, which would
+        // end the reference this test needs; a staff Admin deletes instead (A121 hands the tournament to that Admin).
+        const boss = admin(test);
+        tx(test, boss, (ctx) => M.admin_delete_row(ctx, { tableName: 'User', primaryKeyJson: String(org.userId) }));
         fireDeletionJob(test, org.userId);
         expect(test.db.User.id.find(org.userId)).toBeFalsy();
+        expect(test.db.Tournament.id.find(tid)!.stage.tag).toBe('Draft');
 
         expect(test.db.LobbyPreset.id.find(freeId)).toBeFalsy();
         expect(test.db.LobbyPreset.id.find(heldId)).toBeTruthy();
@@ -510,7 +514,8 @@ describe('A122(9), L34: the last ban of the Auction ban phase can be undone', ()
         expect(session(test, s.lobbyId)).toMatchObject({ isAuctionPhase: true, turnIndex: 4 });
     });
 
-    it('A122(9) L34: once a nomination exists the undo is refused and the bans stay', () => {
+    // S10s re-alignment (A125): the window now ends at the first bid, not the first nomination; this test bids first.
+    it('A122(9) L34 / A125: once a bid exists the undo is refused and the bans stay', () => {
         const test = newHarness();
         const s = setupLobby(test, { lobby: AUCTION_FOUR });
         banAll(s, ['ban-a', 'ban-b', 'ban-c', 'ban-d']);
@@ -519,6 +524,7 @@ describe('A122(9), L34: the last ban of the Auction ban phase can be undone', ()
             priceCharacters(ctx, s.lobbyId, ['nominee']);
             return M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: 'nominee' });
         });
+        tx(test, captain(s, nominator === 'Blue' ? 'Red' : 'Blue'), (ctx) => M.place_bid(ctx, { lobbyId: s.lobbyId, bidAmount: 5 }));
         expectReject(test, s.host, undoBody(s), AUCTION_UNDO_TEXT);
         expect(steps(test, s.lobbyId).filter((x) => x.action.tag === 'Ban')).toHaveLength(4);
         expect(session(test, s.lobbyId).isAuctionPhase).toBe(true);

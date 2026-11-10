@@ -204,8 +204,8 @@ describe('account locks (A26a(4), D-21)', () => {
     it('waitlisted: no locks at registration; waitlist_promote locks the chosen accounts, or every account when none were named (T-S10g: A104)', () => {
         const test = newHarness();
         const org = host(test);
-        const id = openTournament(test, org, { maxParticipants: 1, waitlistEnabled: true });
-        const [first] = enrollMany(test, id, 1);
+        const id = openTournament(test, org, { maxParticipants: 2, waitlistEnabled: true }); // S10s re-alignment (A122(17), F7): the floor is 2
+        const [first] = enrollMany(test, id, 2); // S10s re-alignment (F7): two fill the 2 spots
         const w = verified(test, 'w');
         const acc = [insertHsrAccount(test, w.userId, '300'), insertHsrAccount(test, w.userId, '301')];
         register(test, w, id, { hsrAccountIds: [acc[0]] });
@@ -219,8 +219,8 @@ describe('account locks (A26a(4), D-21)', () => {
         expect([...test.db.TournamentWaitlistAccount.by_tournament_and_user.filter([id, w.userId])]).toHaveLength(0);
 
         // none named: every account is locked at promotion
-        const id2 = openTournament(test, org, { name: 'second', maxParticipants: 1, waitlistEnabled: true });
-        const [first2] = enrollMany(test, id2, 1, 'f');
+        const id2 = openTournament(test, org, { name: 'second', maxParticipants: 2, waitlistEnabled: true }); // S10s re-alignment (A122(17), F7): the floor is 2
+        const [first2] = enrollMany(test, id2, 2, 'f'); // S10s re-alignment (F7)
         register(test, w, id2);
         expect(enrolled(test, id2, w.userId).isWaitlisted).toBe(true);
         tx(test, first2, (ctx) => M.withdraw_from_tournament(ctx, { tournamentId: id2 }));

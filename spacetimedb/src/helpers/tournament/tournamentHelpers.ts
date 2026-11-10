@@ -96,7 +96,7 @@ export function transferTournamentCaptain(ctx: any, teamId: number, leavingUserI
  *            Submitted / Disputed record): the record (if any) is marked Voided and the lobby hard-deleted
  *            (voidTournamentLobby); the job deletes the Voided records without effect.
  * Deletes:   TournamentTeamRequest, the calendar events of the bracket matches (D-21), TournamentPlayerAccount,
- *            TournamentWaitlistAccount (A104, S10g).
+ *            TournamentWaitlistAccount (A104, S10g), TournamentStandIn with the stand-ins' locks (S10s, L66).
  */
 export function cascadeCleanupTournament(ctx: any, tournamentId: number, actorId: number): void {
     // 1. Team requests (via teams — no tournamentId on request table)
@@ -131,7 +131,35 @@ export function cascadeCleanupTournament(ctx: any, tournamentId: number, actorId
     }
     deleteTournamentWaitlistAccounts(ctx, tournamentId); // A104 (S10g): no promotion is left
 
+    // 5b. S10s (A122(19), L66): stand-in approvals and the account locks they gave.
+    deleteTournamentStandIns(ctx, tournamentId);
+
     // 6-8. (S8d) Team members, teams and assistants are kept (display).
+}
+
+/**
+ * S10s (A122(19), L66): the tournament ended (Completed or Cancelled), so its stand-in approvals end with it. Every
+ * TournamentStandIn row of the tournament's bracket matches is deleted, and so are the TournamentPlayerAccount locks
+ * of each stand-in who has no TournamentEnrolled row in the tournament (the locks a stand-in receives when joining the
+ * match lobby, lobbyLifecycle.ts). A stand-in who is also enrolled keeps the locks of their enrolment (cancellation
+ * deletes those separately; at Completed enrolled players' locks stay, as before). Index reads only:
+ * BracketMatch.tournament_id, TournamentStandIn.bracket_match_id, TournamentEnrolled / TournamentPlayerAccount
+ * .by_tournament_and_user.
+ */
+export function deleteTournamentStandIns(ctx: any, tournamentId: number): void {
+    const standInUsers = new Set<number>();
+    for (const match of [...ctx.db.BracketMatch.tournament_id.filter(tournamentId)]) {
+        for (const standIn of [...ctx.db.TournamentStandIn.bracket_match_id.filter(match.id)]) {
+            standInUsers.add(standIn.userId);
+            ctx.db.TournamentStandIn.id.delete(standIn.id);
+        }
+    }
+    for (const userId of standInUsers) {
+        if (findEnrolled(ctx, tournamentId, userId)) continue;
+        for (const tpa of [...ctx.db.TournamentPlayerAccount.by_tournament_and_user.filter([tournamentId, userId])]) {
+            ctx.db.TournamentPlayerAccount.delete(tpa);
+        }
+    }
 }
 
 // ─── S8b: registration, teams and the stage machine (A26, A26a, A36a, A36b, review §5.1) ─────────────────────
@@ -214,6 +242,22 @@ export function refreshTeamStatus(ctx: any, tournament: any, teamId: number, act
     if (team.status.tag !== next) {
         ctx.db.TournamentTeam.id.update(updateWithAudit(ctx, team, { status: unit(next) }, actorId));
     }
+}
+
+/**
+ * S10s (A122(16), L63): a solo player promoted from the waitlist in Seeding, before the bracket exists. CheckIn →
+ * Seeding made the player's one-member team Withdrawn (it was not checked in: a waitlisted player's team is not
+ * eligible, so in practice nobody checks it in, although check_in_tournament does not refuse it), and
+ * refreshTeamStatus leaves Withdrawn alone, so the team returns to Forming here; the caller's refresh then makes it
+ * Ready. Only solo tournaments (teamSize 1) and only the Seeding stage: in a team tournament the Withdrawn status
+ * records that the whole team missed check-in.
+ */
+export function reopenWithdrawnSoloTeam(ctx: any, tournament: any, userId: number, actorId: number): void {
+    if (tournament.teamSize !== 1 || tournament.stage.tag !== 'Seeding') return;
+    const ttm = findMembership(ctx, tournament.id, userId);
+    const team = ttm ? ctx.db.TournamentTeam.id.find(ttm.teamId) : undefined;
+    if (!team || team.status.tag !== 'Withdrawn') return;
+    ctx.db.TournamentTeam.id.update(updateWithAudit(ctx, team, { status: unit('Forming') }, actorId));
 }
 
 /** Refreshes the status of the team `userId` belongs to, if any (after an approval or a promotion). */
@@ -438,6 +482,27 @@ export function normalizeAlias(alias: string): string {
         throw new SenderError(`Alias must be 1-${ALIAS_MAX} characters.`);
     }
     return trimmed;
+}
+
+/** S10s (A122(20), L69): the refusal text of a taken alias. */
+export const ALIAS_TAKEN_TEXT = 'That alias is already taken in this tournament. Choose another.';
+
+/**
+ * S10s (A122(20), L69): an anonymous alias (already trimmed by normalizeAlias) is unique within its tournament,
+ * case-insensitively, among the other TournamentEnrolled rows (waitlisted, awaiting approval and Disqualified
+ * included); the caller's own alias is allowed. S10s fix pass (review F1): the alias is NOT compared with the other
+ * entrants' display names: a refusal on a display name would tell anyone which public names are enrolled in an
+ * anonymous tournament (A37, A103). Aliases are public labels, so this check reveals nothing. Index read:
+ * TournamentEnrolled.tournament_id.
+ */
+export function ensureAliasAvailable(ctx: any, tournamentId: number, alias: string, selfUserId: number): void {
+    const lower = alias.toLowerCase();
+    for (const e of ctx.db.TournamentEnrolled.tournament_id.filter(tournamentId)) {
+        if (e.userId === selfUserId) continue;
+        if (e.anonymousAlias !== undefined && e.anonymousAlias.trim().toLowerCase() === lower) {
+            throw new SenderError(ALIAS_TAKEN_TEXT);
+        }
+    }
 }
 
 /**

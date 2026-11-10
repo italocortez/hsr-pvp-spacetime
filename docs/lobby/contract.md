@@ -1418,6 +1418,7 @@ _Superseded in Phase S8g execution (DECISIONS.md A70)._ Read "team1" as "the Blu
 | `transfer_referee` and `set_captain` reject an away or abandoned target ("The member at seat N has left the match and cannot become the referee." / "… a captain."), as `transfer_host` does | Phase S10h execution (DECISIONS.md A98, S10h review F5) | 2026-11-10 |
 | A private lobby needs a password: `create_lobby` with `isPublic = false` and an empty password is rejected ("A private lobby needs a password."), and so is switching a lobby to private while it has no password row. An empty password argument on a lobby that stays private keeps the current password; switching to public deletes the password, so going back to private needs a new one | Phase S10h execution (DECISIONS.md A99) | 2026-11-10 |
 | `create_lobby` takes neither `joinCode` nor `presetId`, and `create_tournament_lobby` takes no `joinCode`: the server always generates the 6-character join code, and a preset is applied by the lobby form, which sends the final settings. A lobby is joined through `join_lobby` by its code or by its id (the lobby list); a private lobby needs its password on both paths. Tournament lobbies still take their settings from the tournament's preset | Phase S10n execution (DECISIONS.md A114, A116) | 2026-11-10 |
+| The per-user membership allowance (20 per 10 s) also counts the calendar reducers and the player roster writes | Phase S10s execution (DECISIONS.md A122(4)) | 2026-11-10 |
 
 ---
 

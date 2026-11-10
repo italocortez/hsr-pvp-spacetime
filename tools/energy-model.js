@@ -35,7 +35,6 @@ const TYPE_BYTES = {
   DraftStep: 2,           // 2 enum tags
   RecurrenceRule: 15,     // enum + u8 + optional u8 + optional u8 + optional timestamp
   LobbyConfigSnapshot: 50, // updated: +characterBudget, +lightconeBudget, -auctionBudget, +minimumBidRaise, +allowMirrorPicks, +autoRandomPick, +referee configs
-  PlayerSnapshot: 54,     // u32 + ~20 char string + ~30 char string (avg)
   StepPayload: 20,        // avg across variants (tag + variant data)
   GameScore: 8,           // u64
 };

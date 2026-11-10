@@ -17,7 +17,14 @@ import { performUserDeletion } from '@module/helpers/identity/userDeletionHelper
 export const run_user_deletion = spacetimedb.reducer(
     { arg: UserDeletionJob.rowType },
     (ctx, { arg }) => {
-        performUserDeletion(ctx, arg.userId, arg.createdById);
+        // S10s fix pass (A124): the job's creator is the requester. Only admin_ban_user and admin_delete_row('User')
+        // write a job naming an actor other than the user (client_connected's reconnect ban names the banned user), and
+        // they act as the SYSTEM user exactly when the caller is a server identity (Owner or Delegate map to SYSTEM). That
+        // job is a server deletion: the user's unfinished tournaments are cancelled. A staff Admin's job hands them over
+        // (A121). The flag is set here and in server_delete_user only; identity GC and server_link_provider never set it.
+        const systemUserId = ctx.db.User.username.find('SYSTEM')?.id;
+        const serverDeletion = systemUserId !== undefined && arg.createdById === systemUserId;
+        performUserDeletion(ctx, arg.userId, arg.createdById, { serverDeletion });
     }
 );
 

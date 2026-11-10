@@ -174,6 +174,16 @@ for their roster while the rows stay for the match (`docs/lobby/architecture.md`
   `recalcDuplicateUid` for each distinct UID of the deleted user's accounts after deleting them, as the two delete
   reducers do: the remaining holder of a UID reverts to `isDuplicateUid = false` when it is alone.
 
+## Phase S10s execution (DECISIONS.md A122)
+
+- **Per-user allowance (A122(4), L93).** The seven player roster writes of `reducers/roster/roster.ts`
+  (`create_hsr_account`, `update_hsr_account`, `set_active_hsr_account`, `delete_hsr_account`,
+  `batch_upsert_characters`, `batch_remove_characters`, `migrate_roster`) call `consumeMembershipAllowance(ctx, user.id,
+  MEMBERSHIP_ACTION_TEXT)` right after `ensureVerifiedUser`: the membership bucket of `UserRateState` (20 calls per fixed
+  10 s window, shared with the lobby and calendar calls; refusal `You are doing that too quickly. Please wait a
+  moment.`). A rejected call consumes nothing (rollback). The `admin_*` proxies of `rosterAdmin.ts` and the cost-set
+  reducers are not counted. No schema change.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -193,10 +203,11 @@ for their roster while the rows stay for the match (`docs/lobby/architecture.md`
 | `is_roster_public` index; `view_public_hsr_accounts` index-only (owner identified by choice); `view_my_roster_visibility` per A40 with `joinSeq` and masked ids | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 | Lobby guards (D-G-01, D-24) ignore abandoned memberships (`accountLobbyLocks`) | Phase S10e execution (lobby audit #12, review F3) | 2026-11-09 |
 | `displayLabel` at most 32 characters; user deletion recomputes `isDuplicateUid` | Phase S10f execution (roster audit #5, #6) | 2026-11-09 |
+| Player roster writes count on the per-user membership allowance (20 calls per 10 s) | Phase S10s execution (DECISIONS.md A122) | 2026-11-10 |
 
 ---
 
-*Last updated: 2026-11-06*
+*Last updated: 2026-11-10 (S10s)*
 *Feature owner: Phase 02 / Phase 10.4 / Phase 12.3*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

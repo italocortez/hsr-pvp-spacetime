@@ -49,6 +49,7 @@ Each executed step writes its log to `docs/log/<date>-<step>.md` (goal, decision
 | S10o | Random auto-pick needs accounts only under ownership, a fair timer draw that changes after an undo (A117); staff remove a guest's approved entry without a disqualification (A118); A119 recorded | S10n | done 2026-11-10 (`docs/log/2026-11-10-s10o.md`) |
 | S10p | Every random draw uses the fair draw: bracket seeding, RandomSwap, team formation (A120); CLAUDE.md and `spacetimedb` skill corrections; A121 and A122 recorded | S10o | done 2026-11-10 (`docs/log/2026-11-10-s10p.md`) |
 | S10r | Closing triage fixes, batch 1: 17 items in admin, lobby, draft, results and stats (A122 rules 1 to 15); `spacetimedb` skill brought in line with this repo | S10p | done 2026-11-10 (`docs/log/2026-11-10-s10r.md`) |
+| S10s | Closing triage fixes, batch 2: 14 items in tournament, calendar, roster, scripts (A122); organizer hand-over and server cancel (A121, A124); Auction undo to the first bid (A125); alias correction (A126); A123 and A127 recorded | S10r | done 2026-11-10 (`docs/log/2026-11-10-s10s.md`) |
 | M3 | Vite shell: tokens, base and media CSS, fonts, standby/404 | S10 | pending |
 | M4 | Router and guards (TanStack Router, typed links) | M3 | pending |
 | M9 | Test strategy wiring and CI workflow | M4 | pending |

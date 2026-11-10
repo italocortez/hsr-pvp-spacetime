@@ -308,9 +308,10 @@ describe('F9: undo skips the audit rows and keeps sequences unique', () => {
         expect(new Set(seqs2).size).toBe(seqs2.length);
     });
 
-    // T-S10r re-aligned (A122(9), L34): the last ban of the Auction ban phase stays undoable until the auction begins;
-    // the rejection now needs a nomination (contract "Undo During the Auction Phase" still holds once it has begun).
-    it('undo during the auction phase is rejected once a nomination exists (A122(9))', () => {
+    // T-S10r re-aligned (A122(9), L34): the last ban of the Auction ban phase stays undoable until the auction begins.
+    // S10s re-alignment (A125): the window now ends at the first bid, so the rejection needs a Bid step after the
+    // nomination (contract "Undo During the Auction Phase" still holds once bidding has begun).
+    it('undo during the auction phase is rejected once a bid exists (A122(9), A125)', () => {
         const test = newHarness();
         const s = setupLobby(test, { lobby: { draftMode: { tag: 'Auction' }, banMode: { tag: 'Four' } } });
         const { lobbyId } = s;
@@ -325,6 +326,8 @@ describe('F9: undo skips the audit rows and keeps sequences unique', () => {
         expect(session(test, lobbyId).isAuctionPhase).toBe(true);
         const nominator = session(test, lobbyId).nextNominatorTeam.tag === 'Blue' ? blueCaptain(s) : redCaptain(s);
         tx(test, nominator, (ctx) => (priceCharacters(ctx, lobbyId, ['Dan Heng']), M.nominate_character(ctx, { lobbyId, characterName: 'Dan Heng' })));
+        const bidder = nominator.userId === blueCaptain(s).userId ? redCaptain(s) : blueCaptain(s);
+        tx(test, bidder, (ctx) => M.place_bid(ctx, { lobbyId, bidAmount: 5 }));
 
         expectReject(test, s.host, (ctx) => M.undo_last_step(ctx, { lobbyId }), 'Undo is not available during the auction phase.');
         expect(steps(test, lobbyId).filter((x) => x.action.tag === 'Ban')).toHaveLength(4);

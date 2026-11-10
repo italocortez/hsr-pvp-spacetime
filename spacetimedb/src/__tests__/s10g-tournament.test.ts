@@ -276,8 +276,8 @@ describe('A94(2): deletion settles the user\'s tournament ties', () => {
             const m3 = bracketRows(test, t3)[0];
             tx(test, org, (ctx) => M.approve_stand_in(ctx, { bracketMatchId: m3.id, teamId: m3.team1Id!, userId: s.userId }));
             // a waitlisted registration with a remembered account choice
-            const t4 = openTournament(test, org, { name: 'Full', maxParticipants: 1, waitlistEnabled: true });
-            enrollMany(test, t4, 1, 'f');
+            const t4 = openTournament(test, org, { name: 'Full', maxParticipants: 2, waitlistEnabled: true }); // S10s re-alignment (A122(17), F7): the floor is 2
+            enrollMany(test, t4, 2, 'f'); // S10s re-alignment (F7)
             register(test, x, t4, { hsrAccountIds: [acct] });
             expect(waitlistRows(test, t4, x.userId)).toEqual([acct]);
 
@@ -406,8 +406,8 @@ describe('A104: lock_tournament_accounts', () => {
     it('A104: a waitlisted player\'s call is remembered and every remembered account is locked at promotion', () => {
         const test = newHarness();
         const org = host(test);
-        const id = openTournament(test, org, { maxParticipants: 1, waitlistEnabled: true });
-        const [first] = enrollMany(test, id, 1);
+        const id = openTournament(test, org, { maxParticipants: 2, waitlistEnabled: true }); // S10s re-alignment (A122(17), F7): the floor is 2
+        const [first] = enrollMany(test, id, 2); // S10s re-alignment (F7): two fill the 2 spots
         const w = verified(test, 'w');
         const a1 = insertHsrAccount(test, w.userId, 'w1');
         register(test, w, id, { hsrAccountIds: [a1] });
@@ -466,11 +466,13 @@ const ADMIN_VIEWS = [
 ];
 
 describe('A105: the tournament staff views and the Admin arg views', () => {
-    it('A105(1): a running tournament: the organizer, an assistant (no flags), a non-staff Moderator and a non-staff Admin read every staff view; a plain user reads nothing', () => {
+    // S10s re-alignment (A122(21), L71): the assistant holds one permission; an assistant with none reads no staff view
+    // since S10s (s10s-triage-fixes.test.ts), so the "(no flags)" reader of this test is gone.
+    it('A105(1): a running tournament: the organizer, an assistant (one permission), a non-staff Moderator and a non-staff Admin read every staff view; a plain user reads nothing', () => {
         const f = duel();
         const { test, org } = f;
         const assistant = verified(test, 'assist');
-        assignAssistant(test, org, f.id, assistant, {});
+        assignAssistant(test, org, f.id, assistant, { results: true });
         openMatchLobby(f, byKey(test, f.id, 'W-R1-M1').id); // Drafting: a lobby and its Pending record
         const mod = moderator(test, 'mod');
         const boss = admin(test);
@@ -1087,8 +1089,8 @@ describe('A104 review F5: lock_tournament_accounts by a waitlisted player', () =
     it('A104 / F5: the first waitlisted call (no accounts named at registration) is stored and applied at promotion: only the chosen account is locked', () => {
         const test = newHarness();
         const org = host(test);
-        const id = openTournament(test, org, { maxParticipants: 1, waitlistEnabled: true });
-        const [first] = enrollMany(test, id, 1);
+        const id = openTournament(test, org, { maxParticipants: 2, waitlistEnabled: true }); // S10s re-alignment (A122(17), F7): the floor is 2
+        const [first] = enrollMany(test, id, 2); // S10s re-alignment (F7): two fill the 2 spots
         const w = verified(test, 'w');
         insertHsrAccount(test, w.userId, 'w1');
         const a2 = insertHsrAccount(test, w.userId, 'w2');

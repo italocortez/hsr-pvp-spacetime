@@ -40,8 +40,8 @@ import { TournamentTeamMember } from '@module/tables/tournament/tournamentTeamMe
 // ---------------------------------------------------------------------------
 // Tournament staff views (Phase 10.3; A105, S10g)
 // A105(1): the seven staff views (1-7) return the tournaments that are not Completed or Cancelled where the caller
-// is the organizer (Tournament.organizer_id), an assistant (TournamentAssistant.user_id; any assistant row, whatever
-// its flags), or a Moderator / Admin (every non-terminal tournament, read through the Tournament.stage btree index one
+// is the organizer (Tournament.organizer_id), an assistant (TournamentAssistant.user_id; S10s, L71: a row holding at
+// least one of the three permissions), or a Moderator / Admin (every non-terminal tournament, read through the Tournament.stage btree index one
 // stage at a time, never a full scan): the three paths of ensureTournamentPermission.
 // A105(2): the Admin-only arg views (1a-7a, `view_admin_tournament*(tournamentId)`) return the same rows for any one
 // tournament, terminal ones included. The caller's Admin role is checked before any tournament row is read; a
@@ -56,13 +56,19 @@ function callerUserId(ctx: any): number | undefined {
     return ctx.db.UserIdentity.identity.find(ctx.sender)?.userId;
 }
 
-/** A105(1): the non-terminal tournaments the caller organizes or assists (no role path). */
+/**
+ * A105(1): the non-terminal tournaments the caller organizes or assists (no role path). S10s (A122(21), L71): an
+ * assistant row counts only when it holds at least one of the three permissions (canManageParticipants,
+ * canManageBracket, canResolveResults); an assistant with all three off reads no staff view. The seven views do not map
+ * one-to-one onto the permissions (teams and matches serve more than one), so the gate is "any permission".
+ */
 function organizedOrAssistedLiveIds(ctx: any, userId: number): Set<number> {
     const ids = new Set<number>();
     for (const t of ctx.db.Tournament.organizer_id.filter(userId)) {
         if (isLiveTournament(t)) ids.add(t.id);
     }
     for (const a of ctx.db.TournamentAssistant.user_id.filter(userId)) {
+        if (!a.canManageParticipants && !a.canManageBracket && !a.canResolveResults) continue;
         const t = ctx.db.Tournament.id.find(a.tournamentId);
         if (t && isLiveTournament(t)) ids.add(t.id);
     }

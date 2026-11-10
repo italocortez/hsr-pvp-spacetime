@@ -207,7 +207,8 @@ function standInMatch(ctx: any, bracketMatchId: number): { user: any; bracketMat
 // A25 `participants`; A35 / review §5.4 (S8d). Approves `userId` as a stand-in of `teamId` (team1 or team2 of the
 // match) for one bracket match: any verified user who is not enrolled on the other team of the match. The row
 // carries teamId, which allowedSlotsFor reads (the team's colour in this match, A70(1); default team1 -> Blue). Approval can happen before or during
-// the lobby.
+// the lobby. S10s (A122(19), L66): the tournament must be InProgress and the team not Disqualified; approvals and the
+// stand-ins' account locks are deleted when the tournament completes or is cancelled (deleteTournamentStandIns).
 
 export const approve_stand_in = spacetimedb.reducer(
     {
@@ -218,8 +219,16 @@ export const approve_stand_in = spacetimedb.reducer(
     (ctx, args) => {
         const { user, bracketMatch } = standInMatch(ctx, args.bracketMatchId);
 
+        // S10s (A122(19), L66): only while the tournament is running (InProgress), for a team that is not disqualified.
+        const tournament = ctx.db.Tournament.id.find(bracketMatch.tournamentId);
+        if (!tournament || tournament.stage.tag !== 'InProgress') {
+            throw new SenderError('Stand-ins can only be approved while the tournament is in progress.');
+        }
         if (args.teamId !== bracketMatch.team1Id && args.teamId !== bracketMatch.team2Id) {
             throw new SenderError('The team does not play this bracket match.');
+        }
+        if (ctx.db.TournamentTeam.id.find(args.teamId)?.status.tag === 'Disqualified') {
+            throw new SenderError('A disqualified team cannot get a stand-in.');
         }
         const targetUser = ctx.db.User.id.find(args.userId);
         if (!targetUser) {

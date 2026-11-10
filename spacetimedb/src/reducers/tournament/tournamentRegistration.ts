@@ -5,6 +5,7 @@ import { ensureTournamentPermission } from '@module/helpers/tournament/tournamen
 import {
     capacityCount,
     createSoloTeam,
+    ensureAliasAvailable,
     ensureBeforeGeneration,
     ensureNotEnrolled,
     findEnrolled,
@@ -15,6 +16,7 @@ import {
     normalizeAlias,
     refreshTeamOf,
     rememberWaitlistAccounts,
+    reopenWithdrawnSoloTeam,
     removeEnrolment,
     soloTeamName,
     updateEnrolled,
@@ -93,6 +95,7 @@ export const register_for_tournament = spacetimedb.reducer(
         if (anonymousAlias !== undefined) {
             if (!tournament.isAnonymousDefault) throw new SenderError('Aliases are only used in anonymous tournaments.');
             alias = normalizeAlias(anonymousAlias);
+            ensureAliasAvailable(ctx, tournamentId, alias, user.id); // S10s (A122(20), L69)
         }
 
         let isWaitlisted = false;
@@ -213,6 +216,10 @@ export const reject_participant = spacetimedb.reducer(
 // D.8.6: Registration through Seeding until the bracket is generated; needs a free spot (capacity = rows neither
 // waitlisted nor Disqualified); implies approval; creates the account locks now (A26a(4)): the accounts the player
 // chose while waitlisted (A104, S10g), or all of them when they named none.
+// S10s (A122(16), L63): in Seeding (bracket not generated yet) a promoted solo player's team that CheckIn → Seeding
+// left Withdrawn (the waitlisted player could not check in) returns to Forming, then the usual refresh makes it Ready
+// (promotion implies approval, so the one-member team is eligible): the player is seeded like any Ready team. The
+// enrolment stays Registered (check-in belongs to the CheckIn stage; activateTeams accepts Registered).
 // Permission: participants (A25).
 
 export const waitlist_promote = spacetimedb.reducer(
@@ -238,6 +245,7 @@ export const waitlist_promote = spacetimedb.reducer(
             approvedByToAt: enrolled.approvedByToAt ?? ctx.timestamp, // promotion implies approval (A26)
         }, user.id);
         lockAccountsAtPromotion(ctx, tournamentId, userId, user.id); // A104: the remembered choice, else every account
+        reopenWithdrawnSoloTeam(ctx, tournament, userId, user.id);   // S10s (A122(16), L63)
         refreshTeamOf(ctx, tournament, userId, user.id);
     }
 );
@@ -284,7 +292,9 @@ export const add_participant = spacetimedb.reducer(
 // ─── set_anonymous_alias ──────────────────────────────────────────────────────
 // A36a: the enrolled player sets their alias (1–32 characters) while the tournament is anonymous and before
 // Seeding. In a solo tournament the player's team takes the alias as its name. Audit #13 (S10g): counted by
-// consumeTournamentAllowance.
+// consumeTournamentAllowance. S10s (A122(20), L69): the alias is unique among the tournament's aliases
+// (case-insensitive; ensureAliasAvailable; register_for_tournament applies the same check). Fix pass F1: no
+// display-name comparison (it would reveal who is enrolled in an anonymous tournament, A37).
 
 export const set_anonymous_alias = spacetimedb.reducer(
     {
@@ -303,6 +313,7 @@ export const set_anonymous_alias = spacetimedb.reducer(
         if (!enrolled) throw new SenderError('You are not registered for this tournament.');
 
         const trimmed = normalizeAlias(alias);
+        ensureAliasAvailable(ctx, tournamentId, trimmed, user.id); // S10s (A122(20), L69)
         consumeTournamentAllowance(ctx, user.id); // S10g (audit #13)
         updateEnrolled(ctx, enrolled, { anonymousAlias: trimmed }, user.id);
 

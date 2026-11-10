@@ -86,6 +86,30 @@ IdentityGcJob (scheduledId: u64 autoInc PK)  [PRIVATE]
 4. Trigger `hardDeleteLobby` for eligible stale lobbies
 5. Insert `GcResult` row: `gcType=Lobby`, counts
 
+## Phase S10s execution (DECISIONS.md A122(23); triage L99 to L102)
+
+Scripts and tools only; no module, schema or binding change. Scenarios: [contract.md](contract.md) (unchanged).
+
+- **Prod token source (L99).** `scripts/stdb/_env.ts` `targetEnvRecord` is now `mergeTargetEnv(target, process.env,
+  fileEnv)`: the shell environment merged with `.env.<target>.local`, the file winning. For `prod`, `STDB_SERVER_TOKEN`
+  is taken from `.env.prod.local` only: a value exported in the shell is dropped, so a privileged prod script with no
+  token in the prod file fails fast (`STDB_SERVER_TOKEN is missing for target "prod"…`) instead of sending a test token.
+  For `test` the shell value stays a fallback when `.env.test.local` has none (CI and one-off runs against test1 may
+  export it; a token from another target reaching test1 is the harmless direction).
+- **Prod flag allow-list (L100).** `shared/stdb-targets.ts` `assertNoForbiddenProdFlags(args)` (called by
+  `publish.ts` and by `_spawn.ts` for every prod command) accepts only the exact flags of `ALLOWED_PROD_FLAGS`:
+  `--server` followed by `maincloud`, `--no-config`, `--module-path` followed by a value that is not a flag,
+  `--yes=migrate`, `--json`; any other argument starting with `-` (`--yes=migrate,delete-data`, `--yes=break-clients`,
+  `-y`, `--delete-data`, an unknown flag) is refused with `argument "<arg>" is forbidden against prod.`; positional
+  arguments pass. `FORBIDDEN_PROD_FLAGS` stays as the grep list.
+- **Delegate rotation order (L101).** `scripts/stdb/bootstrap.ts` steps 3-4 go through `rotateDelegate`
+  (`scripts/stdb/_delegate.ts`): `server_register_delegate` for the new identity, then the new token and identity are
+  written to `.env.<target>.local`, then `server_revoke_delegate` of the identity the file held before (best effort, a
+  failure is logged). A failure before the revoke leaves the previous delegate registered, so the token the auth
+  function holds keeps working. Unit-tested with fakes (`test/backend/scripts/delegate-rotation.unit.test.ts`).
+- **Energy model (L102).** `tools/energy-model.js` no longer sizes the `PlayerSnapshot` struct (removed from the module
+  in S10j; the line was not used by any formula).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -101,10 +125,11 @@ IdentityGcJob (scheduledId: u64 autoInc PK)  [PRIVATE]
 | `init` seeds `AbuseConfig` and the `AbuseBreakerJob` chain (no bootstrap call needed); `server_nuke_test_data` clears `UserRateState` / `AdminAlert` and keeps the `AbuseBreakerJob` chain and keeps `AbuseConfig` | Phase S5 execution (DECISIONS.md A42, A43) | 2026-11-06 |
 | `init` no longer seeds a breaker job (inline breaker, A57) and seeds the system lobby preset (A33a); `server_nuke_test_data` clears `AbuseCounter` and re-seeds the system preset after clearing `LobbyPreset` | Phase S6 execution (DECISIONS.md A57, A33a) | 2026-11-06 |
 | `run_identity_gc` / `admin_gc_identities` delete guest users idle 30 days with no match history (A95(1), 500 per run; `GcResult.details.guests`); the run description above corrected to the code | Phase S10h execution (DECISIONS.md A95) | 2026-11-10 |
+| Prod token only from `.env.prod.local`; prod CLI flags checked against an allow-list (`--yes=migrate` the only confirmation); bootstrap registers and saves the new delegate before revoking the old one; the energy model drops `PlayerSnapshot` | Phase S10s execution (DECISIONS.md A122(23)) | 2026-11-10 |
 
 ---
 
-*Last updated: 2026-11-06*
+*Last updated: 2026-11-10 (S10s)*
 *Feature owner: Phase 01 / Phase 12.1*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

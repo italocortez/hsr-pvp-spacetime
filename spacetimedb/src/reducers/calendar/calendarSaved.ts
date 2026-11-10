@@ -9,6 +9,8 @@ import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser } from '@module/helpers/identity/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
+import { runCalendarCleanup } from '@module/helpers/calendar/calendarCleanup';
+import { consumeMembershipAllowance, MEMBERSHIP_ACTION_TEXT } from '@module/helpers/lobby/abuseControls';
 
 const MAX_SAVED_CALENDARS = 5;
 
@@ -20,6 +22,8 @@ export const save_calendar = spacetimedb.reducer(
     (ctx, { targetUserId }: { targetUserId: number }) => {
         const user = getAuthenticatedUser(ctx);
         if (user.isGuest) throw new SenderError('Guests cannot save calendars.');
+        consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT); // S10s (A122(4), L93; fix pass F11): allowance first
+        runCalendarCleanup(ctx, user.id); // S10s (A122(22), L86): clean-up before the main operation
 
         if (targetUserId === user.id) {
             throw new SenderError('Cannot save your own calendar.');
@@ -54,6 +58,8 @@ export const unsave_calendar = spacetimedb.reducer(
     (ctx, { targetUserId }: { targetUserId: number }) => {
         const user = getAuthenticatedUser(ctx);
         if (user.isGuest) throw new SenderError('Guests cannot manage saved calendars.');
+        consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT); // S10s (A122(4), L93; fix pass F11): allowance first
+        runCalendarCleanup(ctx, user.id); // S10s (A122(22), L86): clean-up before the main operation
 
         const existing = [...ctx.db.SavedCalendar.by_user_and_target.filter([user.id, targetUserId])][0];
         if (!existing) throw new SenderError('Calendar not saved.');
@@ -71,6 +77,8 @@ export const toggle_calendar_visibility = spacetimedb.reducer(
     (ctx, { targetUserId, isVisible }: { targetUserId: number; isVisible: boolean }) => {
         const user = getAuthenticatedUser(ctx);
         if (user.isGuest) throw new SenderError('Guests cannot manage saved calendars.');
+        consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT); // S10s (A122(4), L93; fix pass F11): allowance first
+        runCalendarCleanup(ctx, user.id); // S10s (A122(22), L86): clean-up before the main operation
 
         const existing = [...ctx.db.SavedCalendar.by_user_and_target.filter([user.id, targetUserId])][0];
         if (!existing) throw new SenderError('Calendar not saved.');

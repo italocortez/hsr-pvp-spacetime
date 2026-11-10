@@ -59,7 +59,7 @@ When `ServerIdentity` is empty: inserts `ctx.sender` (the publisher) as `kind = 
 **Flow:**
 1. Reads the owner token from `spacetime login show --token` (stdout only; never written or logged)
 2. Opens a token-less connection to mint a fresh identity + token
-3. As owner: best-effort `server_revoke_delegate` of the `STDB_SERVER_IDENTITY` recorded in `.env.<t>.local`, then `server_register_delegate(freshHex, 'vercel-auth-<t>')`
+3. As owner: best-effort `server_revoke_delegate` of the `STDB_SERVER_IDENTITY` recorded in `.env.<t>.local`, then `server_register_delegate(freshHex, 'vercel-auth-<t>')` _Superseded in Phase S10s execution (DECISIONS.md A122(23)): the new delegate is registered and its token saved first; the old delegate is revoked last, best effort._
 4. Writes `STDB_SERVER_TOKEN` and `STDB_SERVER_IDENTITY` into `.env.<t>.local` (other lines kept)
 5. As the delegate: seeds `data/seed/{characters,lightcones,synergies}.json` through `admin_bulk_upsert` (plus archetypes and junction rows), the starter achievements from `data/seed/achievements.json`, `admin_seed_elo_config`, `admin_seed_rating_config`, `seed_identity_gc_job`, `seed_lobby_gc_job`
 6. Subscribes only to `achievement` and `archetype` (to read back auto-increment ids)
@@ -166,7 +166,7 @@ interface TestHarness {
 ### Bootstrap Re-run (Delegate Rotation)
 **Given:** A previous bootstrap wrote `STDB_SERVER_IDENTITY` and that delegate is still registered
 **When:** Bootstrap runs again
-**Then:** The previous delegate is revoked (its `ServerIdentity` and `UserIdentity` rows deleted), a new delegate is registered, seeding is a no-op apart from upserts.
+**Then:** The previous delegate is revoked (its `ServerIdentity` and `UserIdentity` rows deleted), a new delegate is registered, seeding is a no-op apart from upserts. _Superseded in Phase S10s execution (DECISIONS.md A122(23)): the new delegate is registered and its token saved first; the old delegate is revoked last, best effort._
 
 ### Delegate Management Is Owner-Only
 **Given:** Caller is a Delegate (or any non-owner)
@@ -264,7 +264,7 @@ interface TestHarness {
 
 | Case | Expected Behavior | Notes |
 |------|-------------------|-------|
-| Two bootstrap runs without clearing | Second run revokes the first delegate and registers a new one | The first run's token stops working; `.env.<t>.local` holds the new one |
+| Two bootstrap runs without clearing | Second run revokes the first delegate and registers a new one | The first run's token stops working; `.env.<t>.local` holds the new one | _Superseded in Phase S10s execution (DECISIONS.md A122(23)): the new delegate is registered and its token saved first; the old delegate is revoked last, best effort._
 | Bootstrap run by a CLI login that did not publish | `server_register_delegate` rejects (caller is not the owner) | Only the publisher is registered as Owner by `init` |
 | `STDB_TARGET` / `--target` missing or unknown | Script exits 1 before connecting | No fallback database |
 | Guest harness userId resolution fallback | Falls back to most recently inserted non-SYSTEM user | Handles edge cases where username pattern match fails |
@@ -345,3 +345,4 @@ interface TestHarness {
 *Last updated: 2026-04-09*
 | Env scheme (`shared/stdb-targets.ts`, `STDB_TARGET` / `VITE_STDB_TARGET`, `.env.<t>.local`); `init` registers the Owner + SYSTEM; owner-only `server_register_delegate` / `server_revoke_delegate`; `scripts/stdb/*` with `--target` and `--dry-run`; test-only reducers gated by module env `STDB_TARGET` | Phase M2 execution | 2026-11-06 |
 | Identity clean-up and guests: the weekly run also deletes a guest user that has been idle for 30 days (no live presence, every identity last seen 30 days ago or more), holds no lobby membership, is not enrolled in an unfinished tournament and has no match history at all (no participant, history, stat, rating, relationship, leaderboard, enrolment or achievement row). At most 500 guests per run; when the cap is reached the next run is one hour later instead of seven days. `GcResult.details` carries a `guests` count | Phase S10h execution (DECISIONS.md A95) | 2026-11-10 |
+| `bootstrap` rotates the delegate in the order register, save, revoke: a failure before the save leaves the old delegate working. For the prod target `STDB_SERVER_TOKEN` is read only from `.env.prod.local` (a shell value is dropped); the test target keeps the shell fallback. The prod flag guard is an allow-list: `--server maincloud`, `--no-config`, `--module-path <value>`, `--yes=migrate`, `--json` | Phase S10s execution (DECISIONS.md A122(23)) | 2026-11-10 |

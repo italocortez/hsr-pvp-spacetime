@@ -626,6 +626,7 @@ The calendar tables are private (A37 calendar contexts; supersedes the Phase 08 
 | `update_calendar_event` rejects moving an ended event's `endAt` to now or later when the event's organizer already has 40 not-yet-ended events: "Maximum 40 active calendar events per user." | Phase S10d execution (DECISIONS.md A90) | 2026-11-09 |
 | Event texts: title 1 to 100 characters after trimming, description at most 1000. Duplicate manual invitee ids produce one invite. An `endDate` of '' or '0' means no end date for both `expiresAt` and the recurrence rule | Phase S10f execution (backend audit 2026-11-09, calendar findings 2, 3, 5) | 2026-11-09 |
 | When a guest's tournament entry moves to an existing user at sign-in (A112), the guest's invites for events linked to that tournament's bracket matches are re-pointed to that user with their status kept; if the user already holds an invite for the event the guest's is only removed. Invites of other tournaments and personal events are deleted with the guest as before | Phase S10m execution (DECISIONS.md A113) | 2026-11-10 |
+| Every calendar reducer runs, in order: authentication, the per-user allowance (20 per 10 s, "You are doing that too quickly. Please wait a moment."), the clean-up of the caller's own old events and expired slots (sparing the call's own target), then the operation. `view_my_calendar_events` skips Completed and Cancelled tournaments | Phase S10s execution (DECISIONS.md A122(4), (22)) | 2026-11-10 |
 
 ---
 

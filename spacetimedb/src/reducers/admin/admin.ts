@@ -267,7 +267,8 @@ export const admin_delete_row = spacetimedb.reducer(
                 // A guest with no identity left can never log in again (Guest_<hex> is taken) and no GC sees it.
                 const owner = ctx.db.User.id.find(row.userId);
                 if (owner?.isGuest && [...ctx.db.UserIdentity.user_id.filter(row.userId)].length === 0) {
-                    performUserDeletion(ctx, row.userId, admin.id);
+                    // S10s fix pass (A124): sent by a server identity (the SYSTEM user) = a server deletion.
+                    performUserDeletion(ctx, row.userId, admin.id, { serverDeletion: admin.username === 'SYSTEM' });
                 } else if (!hasLivePresence(ctx, row.userId)) {
                     // S10e review F5: the deleted identity was the user's last live one, and client_disconnected will
                     // never run for it (no mapping). Take the user's memberships offline as a disconnect does

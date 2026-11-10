@@ -342,7 +342,8 @@ export const server_delete_user = spacetimedb.reducer({
         throw new SenderError('The SYSTEM user cannot be deleted.');
     }
 
-    performUserDeletion(ctx, targetUser.id, SYSTEM_USER_ID);
+    // S10s fix pass (A124): a server deletion cancels the user's unfinished tournaments (explicit signal).
+    performUserDeletion(ctx, targetUser.id, SYSTEM_USER_ID, { serverDeletion: true });
 });
 
 /**

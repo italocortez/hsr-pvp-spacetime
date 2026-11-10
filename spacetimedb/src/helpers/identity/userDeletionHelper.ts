@@ -6,6 +6,9 @@ import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { recalcDuplicateUid } from '@module/helpers/roster/rosterHelpers';
 import { settleTournamentTiesForDeletion } from '@module/helpers/tournament/disqualification';
 import { DEFAULT_COST_SET_ID, deleteCostSetRows, isCostSetInUse } from '@module/helpers/draft/costSetGuards';
+import { SYSTEM_USER_ID } from '@module/helpers/admin/auditColumns';
+import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
+import { cancelTournament } from '@module/helpers/tournament/tournamentHelpers';
 
 /**
  * Returns true if the iterator yields at least one element.
@@ -65,9 +68,94 @@ function deleteOwnedPresetsAndCostSets(ctx: any, userId: number): void {
 }
 
 /**
+ * S10s (A121, L70): the assistant who takes over a tournament: the longest-serving assistant row (earliest createdDate;
+ * equal dates by the lower user id, never the row id) that holds all three permissions, whose user exists, is not a
+ * guest, is not pending deletion and is not the user being deleted.
+ */
+function longestServingFullAssistant(ctx: any, tournamentId: number, deletedUserId: number): any | undefined {
+    let best: any | undefined;
+    for (const a of ctx.db.TournamentAssistant.tournament_id.filter(tournamentId)) {
+        if (a.userId === deletedUserId) continue;
+        if (!a.canManageParticipants || !a.canManageBracket || !a.canResolveResults) continue;
+        const u = ctx.db.User.id.find(a.userId);
+        if (!u || u.isGuest || u.deletedAt) continue;
+        const at: bigint = a.createdDate.microsSinceUnixEpoch;
+        const bestAt: bigint | undefined = best?.createdDate.microsSinceUnixEpoch;
+        if (!best || at < bestAt! || (at === bestAt && a.userId < best.userId)) best = a;
+    }
+    return best;
+}
+
+/**
+ * S10s (A121, L70): a staff deletion or ban of the organizer of a tournament that is not Completed or Cancelled hands
+ * the tournament over before the cascade removes the user:
+ *   1. to the longest-serving assistant holding all three permissions (that assistant row is deleted), else
+ *   2. to the acting Moderator or Admin (`actorId`, read at run time: the user must still exist, not be pending
+ *      deletion and hold Moderator or above), else
+ *   3. nothing changes (Moderator+ still manage the tournament, as before).
+ * Not a staff deletion, so nothing changes here: a self-deletion (`actorId === userId`; A94(1) refuses it for an
+ * organizer anyway; also the reconnect-ban path of client_connected, whose job names the banned user), or a SYSTEM
+ * actor (`SYSTEM_USER_ID` or the SYSTEM user). A server deletion proper (A124) does not reach this function: it is
+ * signalled by `serverDeletion` and cancels the tournaments (cancelOrganizedTournaments).
+ * The new organizer loses any assistant row of their own in the tournament (the organizer holds every permission). The
+ * calendar events of the tournament's bracket matches that the old organizer organized move to the new organizer
+ * (CalendarEvent.organizerId), so deleteAllCalendarDataForUser does not delete them; invites are unchanged. Everything
+ * else reads Tournament.organizerId at call time and follows the new organizer. The ban and admin_delete_row paths run
+ * this from the scheduled run_user_deletion, whose actor is the job row's createdById (the Admin who asked).
+ */
+function handOverOrganizedTournaments(ctx: any, userId: number, actorId: number): void {
+    if (actorId === userId || actorId === SYSTEM_USER_ID) return;
+    const actor = ctx.db.User.id.find(actorId);
+    if (actor?.username === 'SYSTEM') return;
+    const actorCanOrganize = !!actor && !actor.deletedAt && isRoleAtLeast(actor.role, 'Moderator');
+    for (const tournament of [...ctx.db.Tournament.organizer_id.filter(userId)]) {
+        if (tournament.stage.tag === 'Completed' || tournament.stage.tag === 'Cancelled') continue;
+        const heir = longestServingFullAssistant(ctx, tournament.id, userId);
+        const newOrganizerId: number | undefined = heir ? heir.userId : actorCanOrganize ? actorId : undefined;
+        if (newOrganizerId === undefined) continue;
+        for (const a of [...ctx.db.TournamentAssistant.by_tournament_and_user.filter([tournament.id, newOrganizerId])]) {
+            ctx.db.TournamentAssistant.id.delete(a.id);
+        }
+        ctx.db.Tournament.id.update(updateWithAudit(ctx, tournament, { organizerId: newOrganizerId }, actorId));
+        for (const match of [...ctx.db.BracketMatch.tournament_id.filter(tournament.id)]) {
+            for (const event of [...ctx.db.CalendarEvent.bracket_match_id.filter(match.id)]) {
+                if (event.organizerId !== userId) continue;
+                ctx.db.CalendarEvent.id.update(updateWithAudit(ctx, event, { organizerId: newOrganizerId }, actorId));
+            }
+        }
+        console.log(`[DELETE] Tournament #${tournament.id} handed from organizer #${userId} to #${newOrganizerId} (${heir ? 'assistant' : 'acting staff'}).`);
+    }
+}
+
+/**
+ * S10s fix pass (A124): a server deletion of an organizer cancels every tournament of that organizer that is not
+ * Completed or Cancelled, through cancelTournament (the cancel_tournament path: cascade clean-up, stage Cancelled,
+ * finalize job). No assistant takes over. Runs only when the caller passes `serverDeletion: true` (see
+ * performUserDeletion), never from the actor id alone.
+ */
+function cancelOrganizedTournaments(ctx: any, userId: number, actorId: number): void {
+    for (const tournament of [...ctx.db.Tournament.organizer_id.filter(userId)]) {
+        if (tournament.stage.tag === 'Completed' || tournament.stage.tag === 'Cancelled') continue;
+        cancelTournament(ctx, tournament, actorId);
+        console.log(`[DELETE] Tournament #${tournament.id} cancelled: its organizer #${userId} was deleted by the server (A124).`);
+    }
+}
+
+/** S10s fix pass (A124): options of performUserDeletion. */
+export interface UserDeletionOptions {
+    /**
+     * True only when a server identity (Owner or Delegate) deleted or banned the user with no staff user behind it:
+     * server_delete_user, and run_user_deletion for a job created by the SYSTEM user (a ban or admin_delete_row sent by
+     * the Owner or a Delegate). Identity GC, server_link_provider and the other paths never set it.
+     */
+    serverDeletion?: boolean;
+}
+
+/**
  * Cascade-delete active-state rows, then remove the User row.
  *
- * Cascade: tournament ties first (A94(2), settleTournamentTiesForDeletion), UserPrivate, lobby memberships (below), calendar data, UserPresence, UserRateState, UserIdentity,
+ * Cascade: the organizer hand-over of a staff deletion (S10s, A121, handOverOrganizedTournaments), tournament ties
+ * (A94(2), settleTournamentTiesForDeletion), UserPrivate, lobby memberships (below), calendar data, UserPresence, UserRateState, UserIdentity,
  * HsrAccount, HsrAccountCharacter, then (S10r, A122(6)) the user's unreferenced lobby presets and unpublished cost sets.
  * Guest users with no history references → hard-delete (row removed entirely).
  * All others → the User row is hard-deleted and archived to DeletedUser (id, displayName, isGuest, deletedAt), which
@@ -76,9 +164,17 @@ function deleteOwnedPresetsAndCostSets(ctx: any, userId: number): void {
  * Safe to call even if UserIdentity rows were already deleted (e.g. identity re-pointed
  * during Discord linking) — the filter returns 0 rows and the loop is a no-op.
  */
-export function performUserDeletion(ctx: any, userId: number, actorId: number): void {
+export function performUserDeletion(ctx: any, userId: number, actorId: number, opts: UserDeletionOptions = {}): void {
     const user = ctx.db.User.id.find(userId);
     if (!user) return;
+
+    // S10s (A121, L70): a staff deletion hands the user's unfinished tournaments to a new organizer first.
+    // Fix pass (A124): a server deletion cancels them instead (explicit opts.serverDeletion signal).
+    if (opts.serverDeletion) {
+        cancelOrganizedTournaments(ctx, userId, actorId);
+    } else {
+        handOverOrganizedTournaments(ctx, userId, actorId);
+    }
 
     // A94(2) (S10g): tournament ties are settled first (withdrawal before the bracket exists, DQ once it exists;
     // requests, assistant rows, stand-in rows, account locks and remembered waitlist accounts deleted).

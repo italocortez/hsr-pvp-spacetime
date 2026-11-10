@@ -217,6 +217,10 @@ export function consumeChatAllowance(ctx: any, userId: number, lastMessageMicros
  * its joins.
  * S10r (A122(4), L17): confirm_ready, unconfirm_ready, shuffle_teams and transfer_host count on the same allowance
  * (each rewrites member or lobby rows every member, and for the lobby row the lobby list, receives).
+ * S10s (A122(4), L93): every calendar reducer (events, invites, invite responses, availability slots, saved calendars)
+ * and every roster write of reducers/roster/roster.ts count on the same allowance with MEMBERSHIP_ACTION_TEXT (an
+ * update_calendar_event loop re-sends the event to every invitee; UserRateState has no other free bucket and no column
+ * may be added).
  */
 /** S10r review F6: the refusal text of confirm_ready, unconfirm_ready, shuffle_teams and transfer_host on the shared bucket. */
 export const MEMBERSHIP_ACTION_TEXT = 'You are doing that too quickly. Please wait a moment.';

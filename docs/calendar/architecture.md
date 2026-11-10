@@ -53,7 +53,7 @@ User (id: u32 autoInc PK)
 
 ### create_availability_slot(startAt, endAt, isRecurring, recurrenceType, interval, dayOfWeek, dayOfMonth, endDate?)
 1. `getAuthenticatedUser(ctx)` -- reject guests
-2. `cleanupExpiredSlots(ctx, userId)` -- lazy delete slots where `expiresAt + 1 week < now` (D-27)
+2. `runCalendarCleanup(ctx, userId)` (Phase S10s execution: every calendar reducer, see below) -- lazy delete slots where `expiresAt + 1 week < now` (D-27) and events where `endAt + 90 days < now` (D-07)
 3. Validate cap: <=10 slots per user (D-10)
 4. Validate creation window: startAt must be within 6 months from now (D-28)
 5. Build `RecurrenceRule` struct with sentinel values for unset optional u8 params:
@@ -89,7 +89,7 @@ User (id: u32 autoInc PK)
 
 ### create_calendar_event(title, description?, startAt, endAt, bracketMatchId?, inviteeUserIds?)
 1. `getAuthenticatedUser(ctx)` -- reject guests
-2. `cleanupOldEvents(ctx, userId)` -- lazy delete events where `endAt + 90 days < now` (D-07)
+2. `runCalendarCleanup(ctx, userId)` (Phase S10s execution: every calendar reducer) -- lazy delete events where `endAt + 90 days < now` (D-07) and slots where `expiresAt + 1 week < now` (D-27)
 3. If `bracketMatchId > 0` (tournament-linked, D-17):
    - Verify TO/Admin/Mod/Assistant access for the bracket match's tournament (D-20)
    - Check no existing event for that `bracketMatchId` via `bracket_match_id` index (D-19)
@@ -185,6 +185,7 @@ invitees of an event (an anonymous tournament's match event would otherwise list
   dispute / override reasons (1000).
 - **LOW.** `create_calendar_event` attaches the invites to the row `insert` returns (no re-read by `createdDate`); the
   file headers say the lazy cleanups run in `create_calendar_event` / `create_availability_slot` (not "every call").
+  **Superseded by Phase S10s execution:** every calendar reducer runs them.
 
 ## Phase S10m execution (DECISIONS.md A113(5))
 
@@ -196,6 +197,34 @@ user (event, `inviteStatus`, `respondedAt`, `createdById` / `createdDate` kept; 
 `SYSTEM_USER_ID`), unless the existing user already has an invite for that event (`by_event_and_invitee`), in which case
 the guest's row is only deleted. The event's invite count never grows, so `MAX_INVITEES_PER_EVENT` holds. Invites to
 personal events and to other tournaments' events stay with the guest and go with its deletion (D-23).
+
+## Phase S10s execution (DECISIONS.md A121, A122)
+
+- **One order in every calendar reducer (A122(4), A122(22); fix pass F2, F11).** All twelve calendar reducers
+  (`create_` / `update_` / `delete_availability_slot`, `save_calendar`, `unsave_calendar`, `toggle_calendar_visibility`,
+  `respond_to_invite`, `create_` / `update_` / `delete_calendar_event`, `invite_to_event`, `remove_invite`) run:
+  1. authentication (and the guest check where there is one);
+  2. `consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT)`: the membership bucket of `UserRateState` (20
+     calls per fixed 10 s window, shared with lobby joins, seat moves and the A122(4) lobby calls; refusal `You are doing
+     that too quickly. Please wait a moment.`). First, so a refused flood does not pay for the clean-up reads (F11). No
+     new column: `UserRateState` has no calendar bucket;
+  3. `runCalendarCleanup(ctx, user.id, keep)` (`helpers/calendar/calendarCleanup.ts`): `cleanupExpiredSlots` then
+     `cleanupOldEvents` for the caller, as the contract's "User calls any calendar reducer" says. `keep` names the call's
+     own target, which the clean-up leaves alone (F2): `{ slotId }` for `update_` / `delete_availability_slot`,
+     `{ eventId }` for `update_` / `delete_calendar_event`, `invite_to_event`, `remove_invite` and `respond_to_invite`.
+     So a user still edits or deletes their own event ended over 90 days ago or slot expired over a week ago, as before
+     S10s; a target left old is cleaned by the next calendar call;
+  4. the main operation (unchanged; the create reducers' cap checks run after the clean-up, as A79 states).
+  Bound of step 3: the caller's own rows only, through `AvailabilitySlot.user_id` (at most 10, the slot cap) and
+  `CalendarEvent.organizer_id` (the caller's retained events, 100 by the create cap; rows moved to a new organizer by
+  A121 can add to that), each deleted event with its invites (at most 9). Other users' rows are never read, so an
+  inactive organizer's old events still wait for that organizer's next calendar call. A rejected call rolls the
+  clean-up back with it.
+- **Calendar view (A122(22), L87).** `view_my_calendar_events` skips Completed and Cancelled tournaments on the
+  team-match path; [../views/architecture.md](../views/architecture.md) "Phase S10s execution".
+- **New organizer (A121, L70).** When staff delete or ban a tournament's organizer, the tournament's bracket-match
+  events that organizer created move to the new organizer instead of being deleted with the user's calendar data;
+  [../tournament/architecture.md](../tournament/architecture.md) "Phase S10s execution".
 
 ## Phase History
 
@@ -224,10 +253,12 @@ personal events and to other tournaments' events stay with the guest and go with
 | Tournament-linked events: update / delete / invite / remove_invite also accept the tournament's organizer and `bracket` staff (`ensureCanManageEvent`); `update_calendar_event` applies the 40-active cap when it revives an ended event | Phase S10d execution (DECISIONS.md A89, A90) | 2026-11-09 |
 | Manual invitees de-duplicated; one `hasEndDate` rule for slots; title 100 / description 1000 caps; invites attach to the inserted row | Phase S10f execution (calendar audit #2, #3, #5) | 2026-11-09 |
 | A guest's invites to a tournament's bracket-match events move to the existing user with the guest's entry (`moveUserInvitesForTournament`; dropped when that user is already invited) | Phase S10m execution (DECISIONS.md A113(5)) | 2026-11-10 |
+| Every calendar reducer runs the caller's lazy clean-up (slots + events) and counts on the per-user membership allowance; `view_my_calendar_events` skips finished tournaments on the team-match path; an organizer's match events move with an A121 hand-over | Phase S10s execution (DECISIONS.md A121, A122) | 2026-11-10 |
+| Fix pass: one order in all twelve calendar reducers (authenticate, allowance, clean-up sparing the call's own event or slot, main operation), so an own old event or expired slot can still be edited or deleted | Phase S10s execution (DECISIONS.md A122) | 2026-11-10 |
 
 ---
 
-*Last updated: 2026-04-09*
+*Last updated: 2026-11-10 (S10s)*
 *Feature owner: Phase 08*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)
