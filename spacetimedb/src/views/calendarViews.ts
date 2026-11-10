@@ -37,6 +37,7 @@ function visibleSavedTargets(ctx: any, me: number): number[] {
 //        match event even without an invite row: TournamentEnrolled.user_id → TournamentTeamMember
 //        .by_tournament_and_user → BracketMatch.tournament_id → CalendarEvent.bracket_match_id); S10s (L87): only
 //        tournaments that are not Completed or Cancelled (Tournament.id lookup per enrolment);
+//    (c') S10v (audit SI16): the events of the bracket matches the caller is an approved stand-in for (same stage rule);
 //    (d) events organized by a player whose calendar the caller saved and shows (A45(4): calendars are public
 //        between players; isVisible = shown).
 //    Row: id, organizerId, organizerLabel, title, description?, startAt, endAt, bracketMatchId?. The organizer is
@@ -82,6 +83,15 @@ export const view_my_calendar_events = spacetimedb.view(
                 if (match.team1Id !== myTeamId && match.team2Id !== myTeamId) continue;
                 for (const event of ctx.db.CalendarEvent.bracket_match_id.filter(match.id)) add(event);
             }
+        }
+        // (c') S10v (audit SI16): the bracket matches the caller is an approved stand-in for (TournamentStandIn.user_id →
+        //      BracketMatch.id → CalendarEvent.bracket_match_id), same tournament-stage rule as (c).
+        for (const standIn of ctx.db.TournamentStandIn.user_id.filter(me)) {
+            const match = ctx.db.BracketMatch.id.find(standIn.bracketMatchId);
+            if (!match) continue;
+            const stage = ctx.db.Tournament.id.find(match.tournamentId)?.stage.tag;
+            if (stage === undefined || stage === 'Completed' || stage === 'Cancelled') continue;
+            for (const event of ctx.db.CalendarEvent.bracket_match_id.filter(match.id)) add(event);
         }
         // (d) visible saved calendars
         for (const targetUserId of visibleSavedTargets(ctx, me)) {

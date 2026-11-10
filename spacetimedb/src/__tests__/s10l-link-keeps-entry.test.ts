@@ -518,7 +518,8 @@ describe('S10l review fixes', () => {
         expect(locks(test, id, at.a.userId)).toEqual(at.accountIds);
     });
 
-    it('A112 / review F2: the existing user\'s stand-in approval for the opposing team of the match is deleted, they can only sit on their own team; a stand-in row for an unrelated match stays', () => {
+    // T-S10v (review F2, A135(3)): the received team is still in, so the approval for the unrelated match goes too.
+    it('A112 / review F2: the existing user\'s stand-in approval for the opposing team of the match is deleted, they can only sit on their own team; S10v: a stand-in row for an unrelated match goes too (team still in)', () => {
         const test = newHarness();
         const org = host(test);
         const id = openTournament(test, org, { teamSize: 2, maxParticipants: 8 });
@@ -544,7 +545,7 @@ describe('S10l review fixes', () => {
 
         expect(membership(test, id, e.a.userId)!.teamId).toBe(gTeam);
         expect(standInRows(test, m.id, e.a.userId)).toEqual([]);
-        expect(standInRows(test, unrelated.id, e.a.userId)).toHaveLength(1);
+        expect(standInRows(test, unrelated.id, e.a.userId)).toEqual([]);
 
         const lobbyId = createTournamentLobby(test, org, m.id);
         join(test, e.a, lobbyId);

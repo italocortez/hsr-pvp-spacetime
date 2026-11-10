@@ -9,21 +9,30 @@ import { autoSeatSlot } from '@module/helpers/tournament/tournamentLobbySides';
 import { findLobbyResult } from '@module/helpers/results/scoringHelpers';
 import { matchGames } from '@module/helpers/tournament/bracketResults';
 import { LOBBY_NAME_MAX, winsNeededFor } from '@module/helpers/tournament/seriesSettings';
+import { ensureEntryRequirements } from '@module/helpers/tournament/tournamentHelpers';
+import {
+    OPEN_MATCH_STATES, STILL_IN_TEAM_STATUSES, inviteStandInToMatchEvents, participateAsStandIn, removeStandIn,
+} from '@module/helpers/tournament/standIns';
+import { MAX_INVITEES_PER_EVENT } from '@module/reducers/calendar/calendarEvents';
 import type { Lobby } from '@bindings/types';
 
-/** A34 / A35: the creator is a member of team1 / team2 of the match or one of its approved stand-ins. */
-function isMatchParticipant(ctx: any, bracketMatch: any, userId: number): boolean {
+/**
+ * A34: the creator is a member of team1 / team2 of the match. A140 (S10v): an approved stand-in no longer qualifies
+ * through the approval (it creates only through a role that allows it by itself, see create_tournament_lobby).
+ */
+function isMatchMember(ctx: any, bracketMatch: any, userId: number): boolean {
     const teams = [bracketMatch.team1Id, bracketMatch.team2Id].filter((id) => id !== undefined);
     const membership = [...ctx.db.TournamentTeamMember.by_tournament_and_user.filter([bracketMatch.tournamentId, userId])][0];
-    if (membership && teams.includes(membership.teamId)) return true;
-    const standIn = [...ctx.db.TournamentStandIn.by_match_and_user.filter([bracketMatch.id, userId])][0];
-    return !!standIn && teams.includes(standIn.teamId);
+    return !!membership && teams.includes(membership.teamId);
 }
 
 // ─── create_tournament_lobby ─────────────────────────────────────────────────
 // A33, A33a, A34, A35, D-45, A67(5) (S8d, S8e). Creates the lobby of one game of a bracket match.
-// Caller (A34): a member of team1 / team2 of the match or an approved stand-in of either, or staff with the `bracket`
-// permission (organizer, Moderator+, assistant with canManageBracket, A25). The match must be Ready (not decided), the
+// Caller (A34, A140): a member of team1 / team2 of the match, or staff with the `bracket` permission (organizer,
+// Moderator+, assistant with canManageBracket, A25). A140 (S10v): a stand-in approval alone does not allow it ("A
+// stand-in cannot create the match lobby: a team member or tournament staff creates it."); a stand-in who holds such a
+// role (a Moderator or Admin approved by someone else; tournament staff cannot be stand-ins, A135(2)) creates through
+// the role and is seated like any staff creator, as a Spectator referee. The match must be Ready (not decided), the
 // tournament InProgress; D-45 (A67(5)): every lobby of the match (Lobby.bracket_match_id) must be settled (its record
 // Validated, parked in AwaitingResult), so one game is in play at a time; and the Validated games of the match must
 // not already reach BracketMatch.bestOf (the game cap).
@@ -56,9 +65,12 @@ export const create_tournament_lobby = spacetimedb.reducer(
             throw new SenderError('Tournament not found.');
         }
 
-        // A34: a participant of the match or `bracket` staff (A25)
-        const isParticipant = isMatchParticipant(ctx, bracketMatch, user.id);
+        // A34: a member of the match's teams or `bracket` staff (A25). A140: a plain stand-in is refused.
+        const isParticipant = isMatchMember(ctx, bracketMatch, user.id);
         if (!isParticipant && !hasTournamentPermission(ctx, user, tournament, 'bracket')) {
+            if ([...ctx.db.TournamentStandIn.by_match_and_user.filter([bracketMatch.id, user.id])].length > 0) {
+                throw new SenderError('A stand-in cannot create the match lobby: a team member or tournament staff creates it.');
+            }
             throw new SenderError('You are not authorized to create a lobby for this bracket match.');
         }
 
@@ -190,6 +202,10 @@ export const create_tournament_lobby = spacetimedb.reducer(
             lastLineupAt: undefined,
         }, user.id));
 
+        // S10v review F11 (SI2), narrowed by A140: only a stand-in creating through a role (Moderator / Admin) reaches
+        // this; seated as a Spectator like any staff creator, the creation is their own act, as a Spectator join is.
+        participateAsStandIn(ctx, lobby, user.id, user.id);
+
         console.log(`[TOURNAMENT_LOBBY] Lobby #${lobby.id} created for bracket match #${args.bracketMatchId} by user #${user.id} (${slot})`);
     }
 );
@@ -206,10 +222,26 @@ function standInMatch(ctx: any, bracketMatchId: number): { user: any; bracketMat
 
 // ─── approve_stand_in ─────────────────────────────────────────────────────────
 // A25 `participants`; A35 / review §5.4 (S8d). Approves `userId` as a stand-in of `teamId` (team1 or team2 of the
-// match) for one bracket match: any verified user who is not enrolled on the other team of the match. The row
-// carries teamId, which allowedSlotsFor reads (the team's colour in this match, A70(1); default team1 -> Blue). Approval can happen before or during
-// the lobby. S10s (A122(19), L66): the tournament must be InProgress and the team not Disqualified; approvals and the
-// stand-ins' account locks are deleted when the tournament completes or is cancelled (deleteTournamentStandIns).
+// match) for one bracket match (every game of it, not the next match). The row carries teamId, which allowedSlotsFor
+// reads (the team's colour in this match, A70(1); default team1 -> Blue). Approval can happen before or during the
+// lobby. S10s (A122(19), L66): the team must not be Disqualified; approvals and the stand-ins' account locks are
+// deleted when the tournament completes or is cancelled (deleteTournamentStandIns).
+// S10v (A135, A136; audit SI6-SI8, SI11, SI13, SI17), checks in this order:
+//   - A136: the bracket exists: Seeding with bracketGeneratedAt set, or InProgress (not before generation, not in
+//     Completed / Cancelled);
+//   - A135(5): not in a solo tournament (teamSize 1: the one member must play every game);
+//   - SI13: the match is open (Pending or Ready) and neither slot is a BYE; the team plays it and is not Disqualified;
+//   - the user exists and is not deleted / banned (deletedAt), is verified (no guest);
+//   - A135(2): not the organizer, not an assistant of the tournament (whatever the assistant's permissions);
+//   - A137(1): not the caller (no self-approval, whatever the role);
+//   - A128: not Disqualified in the tournament;
+//   - A135(3): not a member of a team of the tournament that is still in (Forming, Ready, Active); a member of an
+//     Eliminated / Withdrawn team and a user with no team are accepted; never a member of the match's other team;
+//   - A135(1): the tournament's entry requirements (ensureEntryRequirements, shared with registration; for a stand-in
+//     requireOwnership also needs an active game account);
+//   - one approval per user and match.
+// Then: SI16 an invite to the match's calendar event. No account lock here (review F7): the snapshot comes with the
+// stand-in's own first participation (create_tournament_lobby, join_lobby, a self seat move; participateAsStandIn).
 
 export const approve_stand_in = spacetimedb.reducer(
     {
@@ -220,10 +252,20 @@ export const approve_stand_in = spacetimedb.reducer(
     (ctx, args) => {
         const { user, bracketMatch } = standInMatch(ctx, args.bracketMatchId);
 
-        // S10s (A122(19), L66): only while the tournament is running (InProgress), for a team that is not disqualified.
+        // A136 (S10v): from bracket generation on, until the tournament ends.
         const tournament = ctx.db.Tournament.id.find(bracketMatch.tournamentId);
-        if (!tournament || tournament.stage.tag !== 'InProgress') {
-            throw new SenderError('Stand-ins can only be approved while the tournament is in progress.');
+        const stage = tournament?.stage.tag;
+        const bracketExists = stage === 'InProgress' || (stage === 'Seeding' && tournament?.bracketGeneratedAt !== undefined);
+        if (!tournament || !bracketExists) {
+            throw new SenderError('Stand-ins can be approved once the bracket is generated, until the tournament ends.');
+        }
+        // A135(5) (S10v): a solo tournament cannot field a stand-in (no member would be left to play).
+        if (tournament.teamSize === 1) {
+            throw new SenderError('A solo tournament cannot field a stand-in: a team member must play every game.');
+        }
+        // SI13 (S10v): an open match that will be played.
+        if (!OPEN_MATCH_STATES.has(bracketMatch.state.tag) || bracketMatch.team1IsBye || bracketMatch.team2IsBye) {
+            throw new SenderError('Stand-ins can only be approved for a match that is still open (Pending or Ready).');
         }
         if (args.teamId !== bracketMatch.team1Id && args.teamId !== bracketMatch.team2Id) {
             throw new SenderError('The team does not play this bracket match.');
@@ -232,14 +274,22 @@ export const approve_stand_in = spacetimedb.reducer(
             throw new SenderError('A disqualified team cannot get a stand-in.');
         }
         const targetUser = ctx.db.User.id.find(args.userId);
-        if (!targetUser) {
+        if (!targetUser || targetUser.deletedAt) {
             throw new SenderError('Target user not found.');
         }
         if (targetUser.isGuest) {
             throw new SenderError('A stand-in must be a verified user.');
         }
-        // S10t (A128): a player disqualified from this tournament cannot stand in for any team. Any other enrolment
-        // status (Withdrawn, Eliminated, ...) and no enrolment at all stay accepted, as before.
+        // A135(2) (S10v, SI7): staff of this tournament (organizer, any assistant row) never stand in, whoever approves.
+        if (tournament.organizerId === args.userId
+            || [...ctx.db.TournamentAssistant.by_tournament_and_user.filter([tournament.id, args.userId])].length > 0) {
+            throw new SenderError('Tournament staff (the organizer and the assistants) cannot be a stand-in.');
+        }
+        // A137(1) (S10v review F8): nobody approves themself, whatever the role.
+        if (args.userId === user.id) {
+            throw new SenderError('You cannot approve yourself as a stand-in.');
+        }
+        // S10t (A128): a player disqualified from this tournament cannot stand in for any team.
         const enrolment = [...ctx.db.TournamentEnrolled.by_tournament_and_user.filter([bracketMatch.tournamentId, args.userId])][0];
         if (enrolment?.status.tag === 'Disqualified') {
             throw new SenderError('A disqualified player cannot be a stand-in.');
@@ -249,6 +299,12 @@ export const approve_stand_in = spacetimedb.reducer(
         if (membership && otherTeamId !== undefined && membership.teamId === otherTeamId) {
             throw new SenderError('A stand-in cannot be enrolled on the other team of the match.');
         }
+        // A135(3) (S10v, SI8): the user's own team is still in the tournament.
+        if (membership && STILL_IN_TEAM_STATUSES.has(ctx.db.TournamentTeam.id.find(membership.teamId)?.status.tag ?? '')) {
+            throw new SenderError('A player whose team is still in the tournament cannot be a stand-in.');
+        }
+        // A135(1) (S10v, SI6): the registration checks of this tournament.
+        ensureEntryRequirements(ctx, tournament, targetUser, 'standIn');
         const existing = [...ctx.db.TournamentStandIn.by_match_and_user.filter([args.bracketMatchId, args.userId])][0];
         if (existing) {
             throw new SenderError('Stand-in already approved for this bracket match.');
@@ -261,14 +317,19 @@ export const approve_stand_in = spacetimedb.reducer(
             userId: args.userId,
             approvedByUserId: user.id,
         }, user.id));
+        // Review F7: no lock at approval (the user has agreed to nothing yet); the snapshot comes with the stand-in's own
+        // first participation in a lobby of the match (participateAsStandIn / join_lobby).
+        inviteStandInToMatchEvents(ctx, bracketMatch, args.userId, user.id, MAX_INVITEES_PER_EVENT); // SI16
 
         console.log(`[TOURNAMENT_LOBBY] Stand-in user #${args.userId} approved for team #${args.teamId} in bracket match #${args.bracketMatchId} by user #${user.id}`);
     }
 );
 
 // ─── revoke_stand_in ──────────────────────────────────────────────────────────
-// A25 `participants` (S8d). Deletes the stand-in approval of `userId` for the bracket match. A seat the stand-in
-// already holds in a lobby is not changed (seat rules apply to the next join or move).
+// A25 `participants` (S8d). Deletes the stand-in approval of `userId` for the bracket match, at any stage.
+// S10v (SI4, SI12, SI16; removeStandIn): in every Waiting lobby of the match the user is moved to Spectator; a game
+// already running keeps the seat (its result is recorded with whoever sat). The user's invite to the match's calendar
+// event goes; the locks are released when the user is not enrolled, holds no other open approval and has not played.
 
 export const revoke_stand_in = spacetimedb.reducer(
     {
@@ -281,7 +342,7 @@ export const revoke_stand_in = spacetimedb.reducer(
         if (!existing) {
             throw new SenderError('No stand-in approval for this user in this bracket match.');
         }
-        ctx.db.TournamentStandIn.id.delete(existing.id);
+        removeStandIn(ctx, existing, user.id);
 
         console.log(`[TOURNAMENT_LOBBY] Stand-in user #${args.userId} revoked for bracket match #${args.bracketMatchId} by user #${user.id}`);
     }

@@ -28,6 +28,7 @@
 
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { moveUserInvitesForTournament } from '@module/helpers/calendar/calendarCascade';
+import { STILL_IN_TEAM_STATUSES, removeStandIn, removeUserStandIns } from './standIns';
 import { deleteWaitlistAccounts, findEnrolled, findMembership, lockPlayerAccounts, soloTeamName, updateEnrolled } from './tournamentHelpers';
 
 /**
@@ -72,7 +73,10 @@ function canHoldEntry(ctx: any, tournament: any, target: any): boolean {
     if (findMembership(ctx, tournament.id, target.id)) return false;
     if (!meetsMinimumMmr(ctx, tournament, target)) return false;
     if (tournament.requireVerified && target.isGuest) return false;
-    if (tournament.requireRoster && ![...ctx.db.HsrAccount.user_id.filter(target.id)].some((a: any) => a.isActive)) return false;
+    // S10v review G5 (A137(4)): requireOwnership needs an active account like requireRoster. Unreachable today for
+    // ownership (A113 forces requireVerified with it, so no guest entry sits in such a tournament); kept for the letter.
+    if ((tournament.requireRoster || tournament.requireOwnership)
+        && ![...ctx.db.HsrAccount.user_id.filter(target.id)].some((a: any) => a.isActive)) return false;
     return true;
 }
 
@@ -103,10 +107,17 @@ function moveEntry(ctx: any, tournament: any, enrolled: any, fromGuestId: number
         // (TournamentStandIn.user_id) for a match of this tournament (BracketMatch.id) in which their new team plays
         // are deleted; approve_stand_in refuses a member of the other team, but only at approval time. Stand-in rows
         // for other matches stay.
-        for (const si of [...ctx.db.TournamentStandIn.user_id.filter(toUserId)]) {
-            const match = ctx.db.BracketMatch.id.find(si.bracketMatchId);
-            if (!match || match.tournamentId !== tournamentId) continue;
-            if (match.team1Id === ttm.teamId || match.team2Id === ttm.teamId) ctx.db.TournamentStandIn.delete(si);
+        // S10v review F2 (A135(3)): when the received team is still in (Forming, Ready, Active) every approval of the user
+        // in this tournament goes; otherwise only those of matches the team plays. Through removeStandIn (seat, invite,
+        // lock release) instead of a raw delete.
+        if (STILL_IN_TEAM_STATUSES.has(ctx.db.TournamentTeam.id.find(ttm.teamId)?.status.tag ?? '')) {
+            removeUserStandIns(ctx, tournamentId, toUserId, actorId);
+        } else {
+            for (const si of [...ctx.db.TournamentStandIn.user_id.filter(toUserId)]) {
+                const match = ctx.db.BracketMatch.id.find(si.bracketMatchId);
+                if (!match || match.tournamentId !== tournamentId) continue;
+                if (match.team1Id === ttm.teamId || match.team2Id === ttm.teamId) removeStandIn(ctx, si, actorId);
+            }
         }
     }
 

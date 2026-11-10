@@ -20,7 +20,8 @@
 // Fix pass (F2, F11): order = authenticate, allowance, clean-up sparing the call's own event, main operation.
 // One event per bracket match enforced (D-19)
 // Length caps (S10f, calendar audit #5): title 1..100 characters, description up to 1000 characters (both trimmed)
-// Auto-invite bracket match participants for tournament-linked events (D-17, D-18)
+// Auto-invite bracket match participants for tournament-linked events (D-17, D-18); S10v (audit SI16): the match's
+// approved stand-ins too (approve_stand_in invites a stand-in approved after the event exists).
 
 import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
@@ -34,7 +35,7 @@ import { deleteCalendarEventWithInvites } from '@module/helpers/calendar/calenda
 
 const MAX_ACTIVE_EVENTS_PER_USER = 40;
 const MAX_RETAINED_EVENTS_PER_USER = 100;
-const MAX_INVITEES_PER_EVENT = 9;
+export const MAX_INVITEES_PER_EVENT = 9; // S10v: also read by approve_stand_in (audit SI16)
 const MAX_TITLE_LENGTH = 100;
 const MAX_DESCRIPTION_LENGTH = 1000;
 
@@ -112,6 +113,7 @@ export const create_calendar_event = spacetimedb.reducer(
         let autoInviteCount = 0;
         let autoInviteeIds: number[] = [];
         let linkedBracketMatchId: number | undefined;
+        let standInIds: number[] = [];
 
         if (bracketMatchId > 0) {
             const bracketMatch = ctx.db.BracketMatch.id.find(bracketMatchId);
@@ -152,6 +154,13 @@ export const create_calendar_event = spacetimedb.reducer(
                 }
             }
 
+            // S10v (audit SI16): the match's approved stand-ins are invited after the members (once each).
+            for (const s of ctx.db.TournamentStandIn.bracket_match_id.filter(bracketMatchId)) {
+                if (!team1MemberIds.includes(s.userId) && !team2MemberIds.includes(s.userId) && !standInIds.includes(s.userId)) {
+                    standInIds.push(s.userId);
+                }
+            }
+
             autoInviteeIds = [...team1MemberIds, ...team2MemberIds];
             autoInviteCount = autoInviteeIds.length;
         }
@@ -184,6 +193,13 @@ export const create_calendar_event = spacetimedb.reducer(
         if (autoInviteCount + uniqueManual.length > MAX_INVITEES_PER_EVENT) {
             throw new SenderError(`Maximum ${MAX_INVITEES_PER_EVENT} invitees per event.`);
         }
+
+        // S10v review F4: stand-ins never make the creation fail: they are invited only while room is left under the
+        // cap (after the members and the manual invitees); the others see the event through view_my_calendar_events (c').
+        const manualSet = new Set(uniqueManual);
+        standInIds = standInIds.filter((id) => !manualSet.has(id))
+            .slice(0, Math.max(0, MAX_INVITEES_PER_EVENT - autoInviteCount - uniqueManual.length));
+        autoInviteeIds = [...autoInviteeIds, ...standInIds];
 
         // Validate manual invitees exist
         for (const inviteeId of uniqueManual) {

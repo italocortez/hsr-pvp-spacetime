@@ -7,6 +7,7 @@ import {
     createSoloTeam,
     ensureAliasAvailable,
     ensureBeforeGeneration,
+    ensureEntryRequirements,
     ensureNotEnrolled,
     findEnrolled,
     findMembership,
@@ -23,33 +24,9 @@ import {
 } from '@module/helpers/tournament/tournamentHelpers';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { consumeTournamentAllowance } from '@module/helpers/lobby/abuseControls';
+import { hasOpenStandInApproval } from '@module/helpers/tournament/standIns';
 
 const unit = (tag: string) => ({ tag, value: {} }) as any;
-
-/**
- * A36b: the player's MmrRating for the tournament's game mode in the active season, else EloConfig.initialRating.
- * S10g (audit #6): the active season is resolved the way the rating writer does (finalizationHelpers: the Season row
- * with isActive, else 0); Tournament.seasonId (always 0) is not read.
- */
-function ensureMinimumMmr(ctx: any, tournament: any, user: any): void {
-    if (!tournament.minimumMmr) return;
-    if (user.isGuest) throw new SenderError('Guests cannot join a tournament with a minimum MMR.');
-    const activeSeason = [...ctx.db.Season.is_active.filter(true)][0];
-    const seasonId = activeSeason ? activeSeason.id : 0;
-    const row = [...ctx.db.MmrRating.by_user_mode_season.filter([user.id, tournament.defaultGameMode, seasonId])][0];
-    let rating: number;
-    if (row) {
-        rating = row.rating;
-    } else {
-        // Read the config row the way finalizationHelpers.processMatchMmr does.
-        const config = ctx.db.EloConfigTable.id.find(1);
-        if (!config) throw new SenderError('ELO config not initialized. Call admin_seed_elo_config first.');
-        rating = config.initialRating;
-    }
-    if (rating < tournament.minimumMmr) {
-        throw new SenderError(`This tournament needs an MMR of at least ${tournament.minimumMmr} (yours: ${rating}).`);
-    }
-}
 
 // ─── register_for_tournament ──────────────────────────────────────────────────
 // Registers the caller. Registration stage only (A26a). requireVerified, requireRoster, minimumMmr (A36b);
@@ -80,16 +57,7 @@ export const register_for_tournament = spacetimedb.reducer(
 
         ensureNotEnrolled(findEnrolled(ctx, tournamentId, user.id), true);
 
-        if (tournament.requireVerified && user.isGuest) {
-            throw new SenderError('This tournament requires a verified account. Link your Discord first.');
-        }
-        if (tournament.requireRoster) {
-            const hasActiveAccount = [...ctx.db.HsrAccount.user_id.filter(user.id)].some((a: any) => a.isActive);
-            if (!hasActiveAccount) {
-                throw new SenderError('This tournament requires an active HSR account in your roster.');
-            }
-        }
-        ensureMinimumMmr(ctx, tournament, user);
+        ensureEntryRequirements(ctx, tournament, user, 'self'); // requireVerified, requireRoster, minimumMmr (S10v: shared with approve_stand_in)
 
         let alias: string | undefined;
         if (anonymousAlias !== undefined) {
@@ -337,6 +305,8 @@ export const set_anonymous_alias = spacetimedb.reducer(
 // caller's own. A waitlisted player's accounts are always remembered (TournamentWaitlistAccount, first call included,
 // review F5) and locked at promotion; once promotion is impossible (bracket generated or InProgress) a waitlisted
 // caller is refused. Counted by consumeTournamentAllowance (audit #13).
+// S10v (A135(8), audit SI3): a caller with no enrolment who holds a stand-in approval on an open match of the
+// tournament (Pending / Ready) is accepted under the same limit (first game not started) and gets the locks directly.
 
 export const lock_tournament_accounts = spacetimedb.reducer(
     {
@@ -353,7 +323,18 @@ export const lock_tournament_accounts = spacetimedb.reducer(
         }
         if (hsrAccountIds.length === 0) throw new SenderError('Name at least one account to lock.');
         const enrolled = findEnrolled(ctx, tournamentId, user.id);
-        if (!enrolled) throw new SenderError('You are not registered for this tournament.');
+        if (!enrolled) {
+            // S10v (A135(8), audit SI3): an approved stand-in (a TournamentStandIn row on an open match of this
+            // tournament) who is not enrolled locks accounts under the same A104 limit: until their first game of the
+            // tournament has started.
+            if (!hasOpenStandInApproval(ctx, tournamentId, user.id)) throw new SenderError('You are not registered for this tournament.');
+            if (hasPlayedTournamentGame(ctx, tournamentId, user.id)) {
+                throw new SenderError('Your first game of this tournament has started; accounts can no longer be locked.');
+            }
+            lockPlayerAccounts(ctx, tournamentId, user.id, hsrAccountIds, user.id);
+            consumeTournamentAllowance(ctx, user.id);
+            return;
+        }
         if (enrolled.status.tag === 'Disqualified') throw new SenderError('You were disqualified from this tournament.');
         // S10g review F5: a waitlisted player can only be promoted while waitlist_promote works (ensureBeforeGeneration:
         // Registration through Seeding, bracket not generated); after that a remembered choice would never be applied.

@@ -926,7 +926,7 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(5))._
 **When:** User calls `create_tournament_lobby(bracketMatchId=42, joinCode="")`
 **Then:** Lobby created. Match participants are authorized to create the lobby (D-64).
 
-### Approve Stand-In (Happy Path)
+### Approve Stand-In (Happy Path) _Superseded in Phase S10v execution (DECISIONS.md A135 to A138): see the Phase History rows for the stand-in rules._
 **Given:** Tournament lobby exists for bracket match #42. User #15 is registered but not a participant in the match.
 **When:** TO calls `approve_stand_in(bracketMatchId=42, userId=15)`
 **Then:** TournamentStandIn row inserted with `[bracketMatchId=42, userId=15, approvedByUserId=TO]`. User #15 can now join the lobby and use `set_team_slot` to Blue/Red despite not being a registered tournament participant.
@@ -939,7 +939,7 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(5))._
 ### Approve Stand-In (Unauthorized Caller)
 **Given:** Caller is a regular user (not TO, not assistant, not Admin/Moderator).
 **When:** Caller calls `approve_stand_in(bracketMatchId=42, userId=15)`
-**Then:** Throws "Only a tournament organizer, assistant, moderator, or admin can approve stand-ins."
+**Then:** Throws "Only a tournament organizer, assistant, moderator, or admin can approve stand-ins." _Superseded in Phase S10v execution (DECISIONS.md A135 to A138): see the Phase History rows for the stand-in rules._
 
 ### Approve Stand-In (Target User Not Found)
 **Given:** No user exists with id=999.
@@ -1420,6 +1420,7 @@ _Superseded in Phase S8g execution (DECISIONS.md A70)._ Read "team1" as "the Blu
 | `create_lobby` takes neither `joinCode` nor `presetId`, and `create_tournament_lobby` takes no `joinCode`: the server always generates the 6-character join code, and a preset is applied by the lobby form, which sends the final settings. A lobby is joined through `join_lobby` by its code or by its id (the lobby list); a private lobby needs its password on both paths. Tournament lobbies still take their settings from the tournament's preset | Phase S10n execution (DECISIONS.md A114, A116) | 2026-11-10 |
 | The per-user membership allowance (20 per 10 s) also counts the calendar reducers and the player roster writes | Phase S10s execution (DECISIONS.md A122(4)) | 2026-11-10 |
 | `confirmWindowSeconds` is a lobby and preset setting, 0 to 300, default 60 ("confirmWindowSeconds must be between 0 and 300."), set at `create_lobby`, `update_lobby_settings` (Waiting only), `create_lobby_preset` and `update_lobby_preset`; a tournament lobby takes its preset's value; 0 means the last pick or sale moves to Equipping at once | Phase S10t execution (DECISIONS.md A131) | 2026-11-10 |
+| Tournament lobbies: nobody is moved out of a seat automatically. A member or stand-in joining is seated into a free seat of their side, else as Spectator; a request for a seat on a full side is refused as full; the host moves people by hand, and a team captain may move a stand-in of their own team to Spectator (not blocked by the spectator cap). `start_draft` refuses a side whose seated players are all stand-ins ("... needs at least one of its own members seated as a player; stand-ins cannot play without one.") and, in a tournament with `requireOwnership`, any seated player without a selected account | Phase S10v execution (DECISIONS.md A135, A138) | 2026-11-10 |
 
 ---
 

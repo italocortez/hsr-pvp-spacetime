@@ -39,6 +39,7 @@ import { CONFIRM_WINDOW_SECONDS_DEFAULT, ensureLobbyConfigInRange, ensureTeamAli
 import { normalizeLobbyName } from '@module/helpers/tournament/seriesSettings';
 import { ensureCostSetUsable } from '@module/helpers/draft/costSetGuards';
 import { autoSeatSlot } from '@module/helpers/tournament/tournamentLobbySides';
+import { participateAsStandIn } from '@module/helpers/tournament/standIns';
 
 // ─── create_lobby ─────────────────────────────────────────────────────────────
 // Creates a new lobby and inserts the creator as the host/referee.
@@ -359,6 +360,7 @@ export const join_lobby = spacetimedb.reducer(
         // A26 / A35 (S8d): in a tournament lobby in Waiting a member of either team (or an approved stand-in) is
         // auto-seated on its team's first free player seat; everyone else, staff included, joins as Spectator.
         // join_lobby takes no slot argument; set_team_slot enforces allowedSlotsFor for every later move.
+        // A138 (S10v): no automatic take-over: a member finding the side full joins as Spectator like anyone else.
         const joinSlot = lobby.stage.tag === 'Waiting' ? autoSeatSlot(ctx, lobby, user.id) : 'Spectator';
         // A68(8): maxSpectators caps watchers, not seat candidates. A join that can only be watching is counted: every
         // live-stage join, and a Waiting join of a tournament lobby that auto-seated to Spectator. A casual Waiting
@@ -411,33 +413,10 @@ export const join_lobby = spacetimedb.reducer(
                 }
             }
 
-            // D-26: If this is a stand-in joining a tournament lobby, snapshot their accounts into TPA
-            if (lobby.isTournamentControlled && lobby.tournamentId && lobby.bracketMatchId) {
-                const standIn = [...ctx.db.TournamentStandIn.by_match_and_user.filter([lobby.bracketMatchId, user.id])][0];
-                if (standIn) {
-                    // Check if they already have TPA entries for this tournament
-                    const existingTpa = [...ctx.db.TournamentPlayerAccount.by_tournament_and_user.filter([lobby.tournamentId, user.id])];
-                    if (existingTpa.length === 0) {
-                        // Snapshot active accounts into TPA (same locking as registration)
-                        const userAccounts = [...ctx.db.HsrAccount.user_id.filter(user.id)];
-                        for (const acct of userAccounts) {
-                            ctx.db.TournamentPlayerAccount.insert(insertWithAudit(ctx, {
-                                tournamentId: lobby.tournamentId,
-                                userId: user.id,
-                                hsrAccountId: acct.id,
-                            }, user.id));
-                        }
-                        // Now create LobbyMemberAccount for their active account (first locked)
-                        if (activeAcct && userAccounts.length > 0) {
-                            // Active account was just locked, create/update LMA row
-                            const existingLma = [...ctx.db.LobbyMemberAccount.by_lobby_and_user.filter([lobbyId, user.id])];
-                            if (existingLma.length === 0) {
-                                ctx.db.LobbyMemberAccount.insert({ lobbyId, userId: user.id, hsrAccountId: activeAcct.id });
-                            }
-                        }
-                    }
-                }
-            }
+            // D-26: a stand-in joining a lobby of their match takes part (S10v review F7, G1, G8: participateAsStandIn:
+            // the lock snapshot when they hold none and have not played a game of the tournament (A104), then the active
+            // account, else the first locked one, selected). The approval itself locks nothing.
+            participateAsStandIn(ctx, lobby, user.id, user.id);
         }
 
         // Increment currentPlayerCount; A74(3): record the seat number just handed out

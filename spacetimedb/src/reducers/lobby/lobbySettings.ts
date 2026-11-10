@@ -7,6 +7,7 @@ import { ensureLobbyMember, ensurePresentMember, ensurePresentIfMember, ensureMe
 import { normalizeLobbyName } from '@module/helpers/tournament/seriesSettings';
 import { ensureCostSetCovers, ensureSelectableCostSet } from '@module/helpers/draft/costSetGuards';
 import { ensureSeatAllowed } from '@module/helpers/tournament/tournamentLobbySides';
+import { isCaptainMovingOwnStandIn, participateAsStandIn } from '@module/helpers/tournament/standIns';
 import { ensureForfeitSecondsInRange, ensureNoActionAllowed, ensureNotDeferredOutsideTournament } from '@module/helpers/lobby/disconnectHelpers';
 import { ensureLobbyConfigInRange, ensureTeamAliases, resolveConfirmWindowSeconds } from '@module/helpers/lobby/lobbyConfigBounds';
 import { MEMBERSHIP_ACTION_TEXT, consumeMembershipAllowance } from '@module/helpers/lobby/abuseControls';
@@ -259,7 +260,10 @@ export const update_lobby_settings = spacetimedb.reducer(
 // Moves a member to a different team slot (Blue/Red/Spectator).
 // Per D-27/D-28: free movement during Waiting. Moving resets isConfirmed for the mover.
 // Self-move: any member can move themselves.
-// Moving others: requires host/moderator/admin.
+// Moving others: requires host/moderator/admin. S10v (A135(4) as read by A138): the team captain (present in the
+// lobby) may also move an approved stand-in of their own team to Spectator, without the spectator cap (review F9). No
+// automatic displacement (A138): a full side is full for everyone. Review F7: a stand-in taking a player seat themself
+// takes part (participateAsStandIn: lock snapshot, account selected).
 // A74(1): the target is a seat number (`targetJoinSeq`); omitted = the caller's own seat (the self-move). A seat that
 // resolves to the caller is the self-move too.
 // Guard order: lobby -> (a seat given by a non-member: ensureHostOrAbove) -> seat -> the existing branches.
@@ -297,8 +301,10 @@ export const set_team_slot = spacetimedb.reducer(
         // D-28: free movement only during Waiting
         ensureStageIs(lobby, 'Waiting');
 
-        // If moving someone else, require host or above
-        if (targetUserId !== user.id) {
+        // If moving someone else, require host or above. S10v (A135(4), audit SI10): or the team captain moving an
+        // approved stand-in of their own team to Spectator.
+        const captainMovesStandIn = targetUserId !== user.id && isCaptainMovingOwnStandIn(ctx, lobby, user.id, targetUserId, args.lobbySlot.tag);
+        if (targetUserId !== user.id && !captainMovesStandIn) {
             ensureHostOrAbove(ctx, lobby, user);
         }
 
@@ -344,10 +350,14 @@ export const set_team_slot = spacetimedb.reducer(
                 } else {
                     const playerCount = sameTeamMembers.filter((m: any) => !slotIsCoach(m.lobbySlot)).length;
                     if (playerCount >= lobby.teamSize) {
+                        // A138 (S10v): a full side is full for everyone (no automatic stand-in displacement); the host
+                        // moves the stand-in out first.
                         throw new SenderError(`${newTeam} team is full (max ${lobby.teamSize} players).`);
                     }
                 }
-            } else if (newSlotTag === 'Spectator' && lobby.isTournamentControlled) {
+            } else if (newSlotTag === 'Spectator' && lobby.isTournamentControlled && !captainMovesStandIn) {
+                // S10v review F9: the team captain's move of an own stand-in to Spectator is not capped (like the
+                // automatic displacement).
                 // A68(8): maxSpectators caps watchers, not seat candidates, as in join_lobby: a casual Waiting lobby's
                 // Spectator slot holds seat candidates (D-27) and is not capped; tournament lobbies are (set_team_slot
                 // runs in Waiting only, so the live-stage half of join_lobby's rule never applies here).
@@ -369,6 +379,11 @@ export const set_team_slot = spacetimedb.reducer(
             isConfirmed: false,
             ...(leavesCaptainSeat && targetMember.isCaptain ? { isCaptain: false } : {}),
         }, user.id));
+
+        // S10v review F7 / F11: a stand-in taking a player seat themself participates (lock snapshot, active account).
+        if (targetUserId === user.id && newTeam !== null && !slotIsCoach(args.lobbySlot)) {
+            participateAsStandIn(ctx, lobby, targetUserId, user.id);
+        }
 
         // Update lobby activity timestamp
         ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
@@ -407,6 +422,11 @@ export const confirm_ready = spacetimedb.reducer(
         ctx.db.LobbyMember.insert(updateWithAudit(ctx, member, {
             isConfirmed: true,
         }, user.id));
+        // S10v review G1: a stand-in confirming ready in a player seat takes part (their own act; a seat move by the host
+        // resets the confirmation and start_draft needs every player confirmed, so no seated stand-in starts unlocked).
+        if (slotTeam(member.lobbySlot) !== null && !slotIsCoach(member.lobbySlot)) {
+            participateAsStandIn(ctx, lobby, user.id, user.id);
+        }
 
         ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
             lastActivityAt: ctx.timestamp,

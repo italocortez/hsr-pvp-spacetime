@@ -2331,6 +2331,19 @@ export const ShuffleMode = __t.enum("ShuffleMode", {
 });
 export type ShuffleMode = __Infer<typeof ShuffleMode>;
 
+export const StaffStandInRow = __t.object("StaffStandInRow", {
+  id: __t.u32(),
+  tournamentId: __t.u32(),
+  bracketMatchId: __t.u32(),
+  teamId: __t.u32(),
+  userId: __t.u32(),
+  userLabel: __t.string(),
+  approvedByUserId: __t.u32(),
+  approvedByLabel: __t.string(),
+  approvedAt: __t.timestamp(),
+});
+export type StaffStandInRow = __Infer<typeof StaffStandInRow>;
+
 export const StandInViewRow = __t.object("StandInViewRow", {
   id: __t.u32(),
   bracketMatchId: __t.u32(),
@@ -3118,6 +3131,9 @@ export type ViewMyTournamentMatchResults = __Infer<typeof ViewMyTournamentMatchR
 
 export const ViewMyTournamentMatches = __t.object("ViewMyTournamentMatches", {});
 export type ViewMyTournamentMatches = __Infer<typeof ViewMyTournamentMatches>;
+
+export const ViewMyTournamentStandIns = __t.object("ViewMyTournamentStandIns", {});
+export type ViewMyTournamentStandIns = __Infer<typeof ViewMyTournamentStandIns>;
 
 export const ViewMyTournamentTeamMembers = __t.object("ViewMyTournamentTeamMembers", {});
 export type ViewMyTournamentTeamMembers = __Infer<typeof ViewMyTournamentTeamMembers>;

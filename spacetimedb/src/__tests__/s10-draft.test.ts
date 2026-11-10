@@ -535,8 +535,11 @@ describe('timer_expiry_classic auto-pick pool with requireOwnership (Acceptance:
     });
 
     it('tournament: the pool is the union of every selected account of the acting team (two accounts of one player)', () => {
-        const f = liveField(2, { requireOwnership: true, maxAccountsPerPlayer: 2 });
+        // T-S10v (A137(4)): registration in a requireOwnership tournament now needs an active game account; the fixture
+        // players own none, so the field is built without the flag and the flag is set on the row before the lobby.
+        const f = liveField(2, { maxAccountsPerPlayer: 2 });
         const { test } = f;
+        test.db.Tournament.id.update({ ...test.db.Tournament.id.find(f.id)!, requireOwnership: true });
         const m = byKey(test, f.id, 'W-R1-M1');
         const { blue, red } = sidesOf(f, m.id);
         const p1A = ownedAccount(test, blue.captain.userId, 'p1A', ['ax']);
@@ -569,8 +572,11 @@ describe('timer_expiry_classic auto-pick pool with requireOwnership (Acceptance:
     });
 
     it('stand-in: the stand-in\'s selected account feeds the pool; the replaced player\'s account does not', () => {
-        const f = liveField(2, { requireOwnership: true });
+        // T-S10v (A137(4)): registration in a requireOwnership tournament now needs an active game account; the fixture
+        // players own none, so the field is built without the flag and the flag is set on the row before the lobby.
+        const f = liveField(2);
         const { test } = f;
+        test.db.Tournament.id.update({ ...test.db.Tournament.id.find(f.id)!, requireOwnership: true });
         const m = byKey(test, f.id, 'W-R1-M1');
         const { blue, red } = sidesOf(f, m.id);
         const sub = verified(test, 'sub');
@@ -593,7 +599,7 @@ describe('timer_expiry_classic auto-pick pool with requireOwnership (Acceptance:
             join(test, who, lobbyId);
             tx(test, who, (ctx) => M.confirm_ready(ctx, { lobbyId }));
         }
-        expect(lmaOf(test, lobbyId, sub.userId)).toEqual([subAcct]); // D-26: snapshot + auto-selection on join
+        expect(lmaOf(test, lobbyId, sub.userId)).toEqual([subAcct]); // D-26: snapshot + auto-selection on join (S10v F7: not at approval)
         tx(test, f.org, (ctx) => M.start_draft(ctx, { lobbyId }));
         const s: Lobby = { test, lobbyId, host: f.org, a: { b1: blue.captain, sub, r1: red.captain, r2: red.mate } };
 

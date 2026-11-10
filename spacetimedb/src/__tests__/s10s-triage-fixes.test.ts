@@ -68,7 +68,7 @@ const DEADLINE_PAST = 'registrationDeadline must be in the future.';
 const DEADLINE_NOT_NUMBER = 'registrationDeadline must be a date in microseconds since the epoch (digits only), or empty.';
 const START_NOT_NUMBER = 'scheduledStartAt must be a date in microseconds since the epoch (digits only), or empty.';
 const TWO_PARTICIPANTS = 'maxParticipants must be at least 2.';
-const STANDIN_STAGE = 'Stand-ins can only be approved while the tournament is in progress.';
+const STANDIN_STAGE = 'Stand-ins can be approved once the bracket is generated, until the tournament ends.'; // T-S10v: A136 text
 const STANDIN_DQ_TEAM = 'A disqualified team cannot get a stand-in.';
 const ALIAS_TAKEN = 'That alias is already taken in this tournament. Choose another.';
 
@@ -250,18 +250,26 @@ describe('A122(18), L65: seed_bracket(mmr) reads the captain\'s rating of the ac
 // L66: stand-in approvals end with the tournament; approve needs a running tournament
 // ════════════════════════════════════════════════════════════════════════════
 
-describe('A122(19), L66: stand-in approvals and their locks end with the tournament; approval needs InProgress and a team not disqualified', () => {
-    it('A122(19) L66: approve_stand_in is refused before InProgress (Seeding, bracket generated)', () => {
+describe('A122(19), L66: stand-in approvals and their locks end with the tournament; approval needs a generated bracket (A136) and a team not disqualified', () => {
+    // T-S10v: A136 supersedes the "tournament in progress" clause of A122(19): Seeding after generation is accepted,
+    // Completed and Cancelled stay refused.
+    it('A136 (was A122(19) L66): approve_stand_in is accepted in Seeding once the bracket is generated; refused once Cancelled', () => {
         const s = seedingField(2);
         seedAndGenerate(s.test, s.org, s.id);
         const m = bracketRows(s.test, s.id)[0];
         const sub = verified(s.test, 'sub');
-        expect(rejection(s.test, s.org, approveBody(m.id, m.team1Id!, sub.userId))).toBe(STANDIN_STAGE);
-        expect(standInsOf(s.test, m.id)).toEqual([]);
+        tx(s.test, s.org, approveBody(m.id, m.team1Id!, sub.userId));
+        expect(standInsOf(s.test, m.id).map((r) => r.userId)).toEqual([sub.userId]);
+        tx(s.test, s.org, (ctx) => M.cancel_tournament(ctx, { tournamentId: s.id }));
+        const sub2 = verified(s.test, 'sub2');
+        expect(rejection(s.test, s.org, approveBody(m.id, m.team1Id!, sub2.userId))).toBe(STANDIN_STAGE);
     });
 
     it('A122(19) L66: approve_stand_in is refused for a disqualified team; the other team of the match still gets one', () => {
-        const f = duel();
+        // T-S10v: in InProgress a DQ decides the team's match, which A135 / SI13 now refuses first; in Seeding after
+        // generation (A136) the match stays open, so the disqualified-team refusal is checked there.
+        const f = seedingField(2);
+        seedAndGenerate(f.test, f.org, f.id);
         const m = byKey(f.test, f.id, 'W-R1-M1');
         const dqTeam = f.ts.find((t) => t.teamId === m.team1Id)!;
         tx(f.test, f.org, (ctx) => M.dq_participant(ctx, { tournamentId: f.id, userId: dqTeam.captain.userId, reason: 'x', dqWholeTeam: true }));

@@ -3,6 +3,8 @@
 // runs ensureTournamentPermission, the deletion is already authorized), any audit actor (staff, an admin, the user
 // deleting their own account, or SYSTEM_USER_ID for a server deletion).
 //   - The enrolment becomes Disqualified (row kept: excluded from capacity, blocks re-registration).
+//   - S10v (audit SI5): every stand-in approval of each disqualified user in this tournament is removed
+//     (removeStandIn: the row, the seat in Waiting lobbies of that match, the match event invite).
 //   - The player leaves the team (captain transferred to the lowest remaining user id, D-21); with
 //     `dqWholeTeam` every member of the player's team is disqualified and leaves it.
 //   - A team left empty becomes Disqualified (the team row stays for the bracket record, TD-18). In Seeding
@@ -30,6 +32,7 @@ import { applyBracketResult, matchGames, writeMatchGames } from './bracketResult
 import { voidMatchLobbies } from './tournamentResults';
 import { setSlotBye, settle } from './bracketStore';
 import { teamSideOf } from './matchSides';
+import { removeUserStandIns, unseatInTournamentLobbies } from './standIns';
 
 // Active lobby stages where players are engaged in the match
 const ACTIVE_LOBBY_STAGES = new Set(['Drafting', 'Equipping', 'Scoring']);
@@ -93,6 +96,9 @@ export function disqualifyParticipant(
 
     updateEnrolled(ctx, enrolled, { status: unit('Disqualified') }, actorId);
     console.log(`[TOURNAMENT] Participant #${userId} disqualified from tournament #${tournamentId}${dqWholeTeam ? ' with the whole team' : ''}: ${reason}`);
+    // S10v (audit SI5, follows A128): the user's stand-in approvals in this tournament go, with the seats they gave in
+    // Waiting lobbies (removeStandIn; a game already running plays on, as A68(6)).
+    removeUserStandIns(ctx, tournamentId, userId, actorId);
 
     const ttm = findMembership(ctx, tournamentId, userId);
     if (!ttm) return; // not on a team: nothing more to do
@@ -122,6 +128,7 @@ export function disqualifyParticipant(
             const other = findEnrolled(ctx, tournamentId, member.userId);
             if (other && other.status.tag !== 'Disqualified') {
                 updateEnrolled(ctx, other, { status: unit('Disqualified') }, actorId);
+                removeUserStandIns(ctx, tournamentId, member.userId, actorId); // S10v (SI5)
             }
         }
         if (!dqWholeTeam && team && team.captainUserId === member.userId) {
@@ -129,6 +136,9 @@ export function disqualifyParticipant(
         }
         ctx.db.TournamentTeamMember.delete(member);
     }
+
+    // S10v review F6: a disqualified member no longer holds a player or coach seat in a Waiting lobby of the tournament.
+    for (const member of leaving) unseatInTournamentLobbies(ctx, tournamentId, member.userId, actorId);
 
     const isTeamOut = [...ctx.db.TournamentTeamMember.team_id.filter(teamId)].length === 0;
 

@@ -6,6 +6,7 @@ import { ensureGroupMatchOpen, recordGameSettled, rollbackBracketResult, tallyWi
 import { recordWinnerTeamId, voidTournamentLobby } from '@module/helpers/tournament/tournamentResults';
 import { disqualifyParticipant } from '@module/helpers/tournament/disqualification';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
+import { removeUserStandIns } from '@module/helpers/tournament/standIns';
 
 // Valid override status tags
 const VALID_OVERRIDE_STATUSES = ['Validated', 'Rejected'];
@@ -249,6 +250,8 @@ export const assign_tournament_assistant = spacetimedb.reducer(
             }, callerUser.id));
             console.log(`[TOURNAMENT] Assigned user #${userId} as assistant for tournament #${tournamentId}`);
         }
+        // S10v review F3 (A135(2)): staff never stand in; the new assistant's approvals in the tournament go.
+        removeUserStandIns(ctx, tournamentId, userId, callerUser.id);
     }
 );
 

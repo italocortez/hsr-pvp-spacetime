@@ -380,6 +380,24 @@ has no winner.
   `Tournament.id` per enrolment and skips a tournament that is Completed or Cancelled; paths (a), (b), (d) unchanged
   (a match event the caller organizes or is invited to still shows through them).
 
+## Phase S10v execution (DECISIONS.md A135(6); audit SI15, SI16)
+
+- **`view_my_tournament_stand_ins` (staff, no arguments, `views/tournamentViews.ts`).** Row `StaffStandInRow`: `id` (PK,
+  the `TournamentStandIn` id), `tournamentId`, `bracketMatchId`, `teamId`, `userId`, `userLabel`, `approvedByUserId`,
+  `approvedByLabel`, `approvedAt` (the row's `createdDate`). The tournament set is `staffTournamentIds`, the same as the
+  seven staff views: organizer, an assistant holding at least one permission (L71), Moderator+; non-terminal
+  tournaments only. Reads `BracketMatch.tournament_id` then `TournamentStandIn.bracket_match_id`; labels through
+  `resolveUserLabel` (staff see real identities, A37). Players, opponents included, get no rows. Egress: a separate
+  view rather than columns on `view_my_stand_ins`, so only staff download approvals and the players' rows keep their
+  size; about 60 bytes plus two names per approval, approvals per tournament in the tens at most. No Admin arg twin.
+- **`view_tournament_matches_for_me` (SI16).** Besides the caller's teams' open matches, the open matches (Pending /
+  Ready) of the caller's approvals (`TournamentStandIn.user_id`), InProgress tournaments only, `myTeamId` = the team
+  stood in for; one row per match (PK `bracketMatchId`). Rows only for stand-ins, one per approval.
+- **`view_my_calendar_events` path (c') (SI16).** The events of the bracket matches the caller is approved for
+  (`TournamentStandIn.user_id` → `BracketMatch.id` → `CalendarEvent.bracket_match_id`), same stage rule as (c) (not
+  Completed / Cancelled). At most one event per approval.
+- `view_my_stand_ins` is unchanged (the stand-in and the members of the team stood in for; no approver).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -415,10 +433,11 @@ has no winner.
 | Paged history (A115): `view_my_match_history` + `_count`, per-match `view_my_match_history_participants` / `_steps` / `_games` / `_lineups`, `view_my_mmr_history(page, gameMode)`; the five unbounded `view_my_match_*_history` views removed; two history indexes | Phase S10n execution (DECISIONS.md A115) | 2026-11-10 |
 | Fix pass: the list reads the stored `MatchSessionHistory.matchType` / `.winnerTeamSide` (match type, winner, won, match-type filter); derivation and `MmrHistory.match_history_id` removed | Phase S10n execution (S10n review F1 / F2; DECISIONS.md A115) | 2026-11-10 |
 | Staff views: an assistant row with no permission grants nothing (A122(21)); `view_my_calendar_events` skips Completed / Cancelled tournaments on the team-match path (A122(22)) | Phase S10s execution (DECISIONS.md A121, A122) | 2026-11-10 |
+| `view_my_tournament_stand_ins` (staff, no arguments: approvals with approver and time); `view_tournament_matches_for_me` adds the stand-in's open matches; `view_my_calendar_events` adds the events of the stand-in's matches | Phase S10v execution (DECISIONS.md A135(6); audit SI15, SI16) | 2026-11-10 |
 
 ---
 
-*Last updated: 2026-11-10*
+*Last updated: 2026-11-10 (S10v)*
 *Feature owner: Phase 03 / Phase 06 / Phase 08 / Phase 09 / Phase 10.4 / Phase 15*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

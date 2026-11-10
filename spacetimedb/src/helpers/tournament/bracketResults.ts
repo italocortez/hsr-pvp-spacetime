@@ -12,6 +12,7 @@ import { placeEntrant, settle, slotEntrant, type BracketSlot, type Entrant } fro
 import { winsNeededFor } from './seriesSettings';
 import { sideSlot, slotChangeReset } from './matchSides';
 import { hardDeleteLobby } from '@module/reducers/lobby/lobbyGc';
+import { releaseDecidedMatchStandIns, removeTeamMembersStandIns, removeTeamStandIns } from './standIns';
 
 export type BracketDecisionTag = 'Played' | 'Concede' | 'Dq' | 'Staff';
 export interface SeriesGames { team1: number; team2: number }
@@ -80,6 +81,7 @@ export function applyBracketResult(
     if (row.nextLoserMatchId !== undefined) placeEntrant(ctx, row.nextLoserMatchId, row.nextLoserSlot, loserTeamId, actorId);
     else if (row.bracketSide.tag !== 'Group') setTeamStatus(ctx, loserTeamId, 'Active', 'Eliminated', actorId);
     settle(ctx, row.tournamentId, actorId);
+    releaseDecidedMatchStandIns(ctx, row); // S10v (audit SI12): stand-ins of this match who did not play are released
 }
 
 /**
@@ -118,6 +120,8 @@ function unplaceEntrant(ctx: any, matchId: number, slot: BracketSlot, expected: 
         winnerTeamId: undefined,
         loserTeamId: undefined,
     }, actorId));
+    // S10v (audit SI14): the team taken out of the slot loses its approvals for this match.
+    if (typeof expected === 'number') removeTeamStandIns(ctx, matchId, expected, actorId);
 }
 
 /**
@@ -142,6 +146,8 @@ export function rollbackBracketResult(ctx: any, bracketMatchId: number, actorId:
     if (row.nextLoserMatchId !== undefined) unplaceEntrant(ctx, row.nextLoserMatchId, row.nextLoserSlot, row.loserTeamId, actorId);
     else if (row.bracketSide.tag !== 'Group' && row.loserTeamId !== undefined) {
         setTeamStatus(ctx, row.loserTeamId, 'Eliminated', 'Active', actorId);
+        // S10v review F1 (A135(3)): the team is still in again, so its members' stand-in approvals go.
+        removeTeamMembersStandIns(ctx, row.tournamentId, row.loserTeamId, actorId);
     }
     // S10g (tournament audit #3): the deciding record is voided whenever the games decided the match: decidedBy Played /
     // Concede, or a Staff / Dq decision whose winner the tally already gives (an override to Validated, a DQ whose

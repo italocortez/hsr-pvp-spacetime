@@ -9,6 +9,7 @@ import { groupSpec, type BracketSpec, type SlotSource } from '@shared/bracket';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { deleteCalendarEventForBracketMatch } from '@module/helpers/calendar/calendarCascade';
 import { slotChangeReset } from './matchSides';
+import { releaseStandInLocksIfUnused, removeConflictingStandIns, removeTeamStandIns } from './standIns';
 
 export type Entrant = number | 'BYE';
 export type BracketSlot = 1 | 2;
@@ -150,6 +151,8 @@ export function placeEntrant(ctx: any, matchId: number, slot: BracketSlot, teamI
     const other = slotEntrant(row, slot === 1 ? 2 : 1);
     if (row.state.tag === 'Pending' && typeof teamId === 'number' && typeof other === 'number') changes.state = tag('Ready');
     ctx.db.BracketMatch.id.update(updateWithAudit(ctx, row, changes, actorId));
+    // S10v (A135(3), audit SI1): an approval of a member of the placed team for the other team of this match goes.
+    if (typeof teamId === 'number') removeConflictingStandIns(ctx, matchId, teamId, actorId);
 }
 
 /**
@@ -162,6 +165,9 @@ export function setSlotBye(ctx: any, matchId: number, slot: BracketSlot, actorId
     ctx.db.BracketMatch.id.update(updateWithAudit(ctx, row, slot === 1 // A71(3): colours and tally reset with the slot
         ? { team1Id: undefined, team1IsBye: true, ...slotChangeReset(row) }
         : { team2Id: undefined, team2IsBye: true, ...slotChangeReset(row) }, actorId));
+    // S10v (audit SI14): the team that left the slot loses its approvals for this match.
+    const leaving = slot === 1 ? row.team1Id : row.team2Id;
+    if (leaving !== undefined) removeTeamStandIns(ctx, matchId, leaving, actorId);
 }
 
 /**
@@ -201,13 +207,20 @@ export function settle(ctx: any, tournamentId: number, actorId: number): void {
  * team audit columns (system user when omitted).
  */
 export function deleteBracket(ctx: any, tournamentId: number, actorId?: number): void {
+    const standInUsers = new Map<number, bigint>(); // user -> earliest approval time (review F10)
     for (const row of [...ctx.db.BracketMatch.tournament_id.filter(tournamentId)]) {
         for (const standIn of [...ctx.db.TournamentStandIn.bracket_match_id.filter(row.id)]) {
+            const at: bigint = standIn.createdDate.microsSinceUnixEpoch;
+            const seen = standInUsers.get(standIn.userId);
+            if (seen === undefined || at < seen) standInUsers.set(standIn.userId, at);
             ctx.db.TournamentStandIn.id.delete(standIn.id);
         }
         deleteCalendarEventForBracketMatch(ctx, row.id);
         ctx.db.BracketMatch.id.delete(row.id);
     }
+    // S10v (A136, audit SI12): approvals now exist from generation on, so a regeneration also releases the locks the
+    // approvals gave (stand-ins who are not enrolled; nobody has played before InProgress).
+    for (const [userId, at] of standInUsers) releaseStandInLocksIfUnused(ctx, tournamentId, userId, at);
     for (const team of [...ctx.db.TournamentTeam.tournament_id.filter(tournamentId)]) {
         if (team.groupId !== undefined) {
             ctx.db.TournamentTeam.id.update(updateWithAudit(ctx, team, { groupId: undefined }, actorId));

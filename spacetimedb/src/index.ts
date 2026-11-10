@@ -112,6 +112,7 @@ export {
     view_my_tournament_enrollment,          // S9a: per-sender
     view_my_team_requests,
     view_my_stand_ins,
+    view_my_tournament_stand_ins,
     view_tournament_matches_for_me,
 } from '@module/views/tournamentViews';
 export { broadcast_cursor } from '@module/reducers/lobby/cursor';

@@ -1378,3 +1378,69 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Orchestrator's reading (not the user's words):** bids charge no budget, so removing a round needs no budget change; eidolon selections on other characters made during the round stay with their costs (A132); selections on the character of an undone sale go with it (A132).
 - **Supersedes:** the bid-by-bid undo of A127 inside the auction phase and the bid refusal added in S10t.
 - **Where implemented:** S10u
+
+### A135 — Stand-in rules
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** (ids from `notes/audit-2026-11-09/standin-audit.md`)
+  1. SI6: a stand-in must pass the same checks as a registration in that tournament (verified account, minimum rating, a game account where one is required, and the other entry requirements).
+  2. SI7: staff of the tournament (the organizer and its assistants) cannot be a stand-in in it.
+  3. SI8: a player whose own team is still in the tournament cannot be a stand-in. A player whose team is eliminated or withdrawn, and a user who is not enrolled, can.
+  4. SI10: team members come first. A member always has the seat ahead of a stand-in.
+  5. SI11: there is no fixed number of stand-ins, but at least one real member of the team must play in each game.
+  6. SI15: tournament staff can see the stand-in approvals.
+  7. SI19: no rating ceiling for stand-ins; items 1 and 3 are the limit.
+  8. SI3: a stand-in can lock a game account added later, within the normal lock limit.
+- **Why:** user, 2026-11-10: "SI6, yes, same checks as registration. For SI7, staff itself cannot be stand in. SI8, not while their own team is still in. SI9, SI8 solves this i think. SI10, Yes, members first. For SI11, only at least 1 real member must play. SI15, yes, staff can view. ... SI19 I agree with your recomendation. SI3, yes, within the normal lock limit".
+- **Orchestrator's reading (not the user's words):** item 4 is built as: a member joining a Waiting lobby whose side is held by a stand-in takes the seat and the stand-in moves to Spectator, and the team captain can move a stand-in out; item 5 means a solo tournament (team size 1) cannot field a stand-in; SI9 (a stand-in sees the real names of the team it joins in an anonymous tournament) remains for eliminated players and outsiders, which is inherent to playing together; SI17 (approval between bracket generation and the start) is still open.
+- **Where implemented:** S10v
+
+### A136 — Stand-ins can be approved once the bracket exists
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** `approve_stand_in` is accepted from the moment the bracket is generated (Seeding after generation, and InProgress), not only once the tournament is InProgress. It stays refused before the bracket exists and in a Completed or Cancelled tournament. The message "Bracket generated; use stand-ins." is then true.
+- **Why:** user, 2026-11-10: "for si17, lets go for option A". Audit item SI17: between bracket generation and the start, staff could neither promote from the waitlist nor approve a stand-in.
+- **Supersedes:** the "tournament in progress" clause of A122(19).
+- **Where implemented:** S10v
+
+### A137 — Stand-in details: no self-approval, host moves are manual, ownership tournaments need a game account at registration too
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:**
+  1. Nobody can approve themself as a stand-in, whatever their role (a Moderator or Admin who is not staff of the tournament included).
+  2. An assistant with every permission switched off still counts as staff of the tournament and cannot be a stand-in (A135(2) as built).
+  3. A host (or staff) moving a team member into a full side does not push a stand-in out: the host first moves the stand-in out, then moves the member in. The automatic take-over of A135(4) applies only to the member's own join and the member's own seat request.
+  4. In a tournament that requires ownership, a stand-in needs an active game account, and a registration needs one too (`register_for_tournament` gains the same check).
+- **Why:** user, 2026-11-10: "for #1, yes i approvee your recommendation, #2 yes, #3 well a host would need to manually drag the stand in out and then move the member in through the UI. For #4 correct on your recommendation".
+- **Where implemented:** S10v
+
+### A138 — No automatic seat moves for stand-ins: the host moves people by hand
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** nobody is moved out of a seat automatically. A team member who joins or asks for a seat on a side that is full does not take a stand-in's seat: the member is seated as a spectator like anyone else and the host moves people by hand. Automatic seating on join into a free seat stays. The only refusal about stand-ins in the lobby is the start gate: a game cannot start with a side whose seated players are all stand-ins (A135(5)).
+- **Why:** user, 2026-11-10: "let a host handle the moves of people in the lobby. Only refuse if its a full team of stand ins, we dont need automatic moves, we can keep the automatic seatting but moves should be manual, otherwise it removes agency from a player and makes it feel like something is 'bugged'".
+- **Orchestrator's reading (not the user's words):** the team captain's manual move of a stand-in of their own team to Spectator is kept, because a stand-in who created the lobby is its host and would otherwise be the only one able to free the seat; staff moves stay as today.
+- **Supersedes:** the automatic take-over of A135(4) as built in S10v, and the second sentence of A137(3).
+- **Where implemented:** S10v
+
+### A139 — A disqualified member who hosts a waiting lobby keeps the host flags
+
+- **Date:** 2026-11-10 · **Status:** decided (leave as is)
+- **Decision:** nothing is built to take the host or referee flag from a member who is disqualified while hosting a Waiting tournament lobby. The disqualification already decides the team's match and moves the member out of the player seat; if a game is played anyway, staff invalidate it afterwards.
+- **Why:** user, 2026-11-10: "why is a disqualifiying member hosting a room? if he is already disqualified, i think the best course is either let them play the lobby and then later we invalidate it. either way, players would know that person is disqualified and would drop from that lobby". S10v review 2, G3.
+- **Where implemented:** no change
+
+### A140 — A stand-in cannot create the match lobby
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** a stand-in approval does not give the right to create the lobby of a tournament match. The lobby is created by a member of one of the two teams or by someone whose role allows it by itself (tournament staff, Moderator, Admin). A stand-in who also holds such a role (for example an Admin) can still create it through that role.
+- **Why:** user, 2026-11-10: "stand in should not be able to create tournament matches unless they have some higher power that would overwrite that (like an admin for example)". S10v review 3, N2: a stand-in who created the lobby was its host and referee and could move or kick the team's own members.
+- **Supersedes:** the part of the stand-in rules that let an approved stand-in call `create_tournament_lobby`.
+- **Where implemented:** S10v
+
+### A141 — A full lobby refuses a team member like anyone else
+
+- **Date:** 2026-11-10 · **Status:** decided (leave as is)
+- **Decision:** a member of a match's team gets no exception to the lobby's limits. When the side's seats and the spectator seats are full, the member's join is refused until the host frees a place.
+- **Why:** user, 2026-11-10: "if the lobby is full, then they cannot join yet, let the host handle that by himself, they would be communicating outside the web anyway to say they cannot join because its full". S10v review 3, N3.
+- **Where implemented:** no change

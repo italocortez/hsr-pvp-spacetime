@@ -22,6 +22,9 @@
 // 15. view_my_team_requests              — per-user: requests the caller sent or that target a team they captain
 // 16. view_my_stand_ins                  — per-user: stand-in rows for the caller or the caller's teams
 // 17. view_tournament_matches_for_me     — per-user: Ready / Pending bracket matches of the caller's teams (InProgress)
+//                                          and of the caller's stand-in approvals (S10v, SI16)
+// 18. view_my_tournament_stand_ins       — staff (A105(1) set, L71 gate): every stand-in approval, with the approver
+//                                          and the approval time (S10v, A135(6), SI15)
 
 import spacetimedb from '@module/schema';
 import { t } from 'spacetimedb/server';
@@ -670,6 +673,8 @@ export const view_my_stand_ins = spacetimedb.view(
 //     InProgress tournaments (S10g, audit #11) the caller is enrolled in where one slot is the caller's team: the opponent's name, the colours
 //     (matchSides: unset / stale blueTeamId = team1 Blue), the tally (head start on team1, A71) and scheduledAt.
 //     Team ids only (BracketMatch is public).
+//     S10v (audit SI16): also the open matches the caller is an approved stand-in for (myTeamId = the team stood in
+//     for), once per match.
 // ---------------------------------------------------------------------------
 const MatchForMeRow = t.row('MatchForMeRow', {
     bracketMatchId: t.u32().primaryKey(),
@@ -699,37 +704,106 @@ export const view_tournament_matches_for_me = spacetimedb.view(
         if (!mapping) return [];
         const me = mapping.userId;
         const rows: any[] = [];
+        const listed = new Set<number>();
+        const push = (match: any, myTeamId: number) => {
+            if (listed.has(match.id)) return;
+            listed.add(match.id);
+            const opponentTeamId = match.team1Id === myTeamId ? match.team2Id : match.team1Id;
+            const opponent = opponentTeamId !== undefined ? ctx.db.TournamentTeam.id.find(opponentTeamId) : undefined;
+            const sides = matchSides(match);
+            rows.push({
+                bracketMatchId: match.id,
+                tournamentId: match.tournamentId,
+                myTeamId,
+                opponentTeamId,
+                opponentTeamName: opponent?.name,
+                blueTeamId: sides.blueTeamId,
+                redTeamId: sides.redTeamId,
+                state: match.state,
+                bracketSide: match.bracketSide,
+                roundNumber: match.roundNumber,
+                matchNumber: match.matchNumber,
+                bestOf: match.bestOf,
+                team1Id: match.team1Id,
+                team2Id: match.team2Id,
+                team1Games: match.team1Games,
+                team2Games: match.team2Games,
+                scheduledAt: match.scheduledAt,
+            });
+        };
+        const isOpen = (match: any) => match.state.tag === 'Ready' || match.state.tag === 'Pending';
         for (const enrolled of ctx.db.TournamentEnrolled.user_id.filter(me)) {
             // S10g (audit #11): running tournaments only (a cancelled or completed bracket keeps its rows for good).
             if (ctx.db.Tournament.id.find(enrolled.tournamentId)?.stage.tag !== 'InProgress') continue;
             const myTeamId = teamOf(ctx, enrolled.tournamentId, me);
             if (myTeamId === undefined) continue;
             for (const match of ctx.db.BracketMatch.tournament_id.filter(enrolled.tournamentId)) {
-                const state = match.state.tag;
-                if (state !== 'Ready' && state !== 'Pending') continue;
+                if (!isOpen(match)) continue;
                 if (match.team1Id !== myTeamId && match.team2Id !== myTeamId) continue;
-                const opponentTeamId = match.team1Id === myTeamId ? match.team2Id : match.team1Id;
-                const opponent = opponentTeamId !== undefined ? ctx.db.TournamentTeam.id.find(opponentTeamId) : undefined;
-                const sides = matchSides(match);
-                rows.push({
-                    bracketMatchId: match.id,
-                    tournamentId: match.tournamentId,
-                    myTeamId,
-                    opponentTeamId,
-                    opponentTeamName: opponent?.name,
-                    blueTeamId: sides.blueTeamId,
-                    redTeamId: sides.redTeamId,
-                    state: match.state,
-                    bracketSide: match.bracketSide,
-                    roundNumber: match.roundNumber,
-                    matchNumber: match.matchNumber,
-                    bestOf: match.bestOf,
-                    team1Id: match.team1Id,
-                    team2Id: match.team2Id,
-                    team1Games: match.team1Games,
-                    team2Games: match.team2Games,
-                    scheduledAt: match.scheduledAt,
-                });
+                push(match, myTeamId);
+            }
+        }
+        // S10v (audit SI16): the open matches the caller stands in for (TournamentStandIn.user_id), myTeamId = the team
+        // stood in for; the same InProgress rule.
+        for (const standIn of ctx.db.TournamentStandIn.user_id.filter(me)) {
+            const match = ctx.db.BracketMatch.id.find(standIn.bracketMatchId);
+            if (!match || !isOpen(match)) continue;
+            if (ctx.db.Tournament.id.find(match.tournamentId)?.stage.tag !== 'InProgress') continue;
+            push(match, standIn.teamId);
+        }
+        return rows;
+    }
+);
+
+// ---------------------------------------------------------------------------
+// 18. view_my_tournament_stand_ins (S10v; A135(6), audit SI15) — every TournamentStandIn row of the tournaments in
+//     the staff set (staffTournamentIds: organizer, an assistant holding at least one permission (L71), Moderator+;
+//     non-terminal tournaments). Navigates BracketMatch.tournament_id -> TournamentStandIn.bracket_match_id. Staff see
+//     real identities (A37), so the labels are display names. approvedAt = the row's createdDate. Players (opponents
+//     included) get no rows: view_my_stand_ins stays the players' view. A separate view rather than columns on
+//     view_my_stand_ins: only staff download it, and the players' rows keep their size.
+// ---------------------------------------------------------------------------
+const StaffStandInRow = t.row('StaffStandInRow', {
+    id: t.u32().primaryKey(),
+    tournamentId: t.u32(),
+    bracketMatchId: t.u32(),
+    teamId: t.u32(),
+    userId: t.u32(),
+    userLabel: t.string(),
+    approvedByUserId: t.u32(),
+    approvedByLabel: t.string(),
+    approvedAt: t.timestamp(),
+});
+
+export const view_my_tournament_stand_ins = spacetimedb.view(
+    { name: 'view_my_tournament_stand_ins', public: true },
+    t.array(StaffStandInRow),
+    (ctx) => {
+        const rows: any[] = [];
+        const labels = new Map<number, string>();
+        const label = (userId: number): string => {
+            let l = labels.get(userId);
+            if (l === undefined) {
+                l = resolveUserLabel(ctx, userId).displayName;
+                labels.set(userId, l);
+            }
+            return l;
+        };
+        for (const tid of staffTournamentIds(ctx)) {
+            for (const match of ctx.db.BracketMatch.tournament_id.filter(tid)) {
+                for (const s of ctx.db.TournamentStandIn.bracket_match_id.filter(match.id)) {
+                    rows.push({
+                        id: s.id,
+                        tournamentId: tid,
+                        bracketMatchId: s.bracketMatchId,
+                        teamId: s.teamId,
+                        userId: s.userId,
+                        userLabel: label(s.userId),
+                        approvedByUserId: s.approvedByUserId,
+                        approvedByLabel: label(s.approvedByUserId),
+                        approvedAt: s.createdDate,
+                    });
+                }
             }
         }
         return rows;

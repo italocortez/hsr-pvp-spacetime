@@ -53,6 +53,7 @@ Each executed step writes its log to `docs/log/<date>-<step>.md` (goal, decision
 | S10t | Undo removes the last character step of any kind (A127, A132); confirm window before equipping as a lobby setting (A129 to A131); a disqualified player cannot be a stand-in (A128). Schema: step payload fields and `confirmWindowSeconds` join the S11 clear-publish list | S10s | done 2026-11-10 (`docs/log/2026-11-10-s10t.md`) |
 | S10q | T-task: 29 tests for the gaps the S10k to S10t reviews named; one diagnostic (A113(2) and disqualified guests) and eight pins for the user; A133 and A134 recorded | S10t | done 2026-11-10 (`docs/log/2026-11-10-s10q.md`) |
 | S10u | Auction undo removes the whole nomination round (A134); no light-cone dip at 0 character budget (A133); repairs a deadlock and a budget gain of the S10t undo | S10q | done 2026-11-10 (`docs/log/2026-11-10-s10u.md`) |
+| S10v | Tournament stand-ins: who may stand in, manual seat moves, the start gates, the lock lifecycle, a staff view, lobby creation (A135 to A138, A140); the audited stand-in bugs; A139 and A141 recorded | S10u | done 2026-11-10 (`docs/log/2026-11-10-s10v.md`) |
 | M3 | Vite shell: tokens, base and media CSS, fonts, standby/404 | S10 | pending |
 | M4 | Router and guards (TanStack Router, typed links) | M3 | pending |
 | M9 | Test strategy wiring and CI workflow | M4 | pending |

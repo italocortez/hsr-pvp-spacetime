@@ -83,14 +83,18 @@ describe('create_tournament_lobby: callers (A34)', () => {
         expect(member(f.test, lobbyId, red.captain.userId).isReferee).toBe(true);
     });
 
-    it('an approved stand-in of team2 creates it: seated RedPlayer', () => {
+    // T-S10v (A140): a stand-in approval no longer allows creating the lobby; a member creates and the stand-in joins.
+    it('A140: an approved stand-in of team2 cannot create it; a team member creates and the stand-in joins on RedPlayer', () => {
         const f = liveField(2);
         const m = byKey(f.test, f.id, 'W-R1-M1');
         const sub = verified(f.test, 'sub');
         approve(f.test, f.org, m.id, m.team2Id!, sub.userId);
-        const lobbyId = createTournamentLobby(f.test, sub, m.id);
+        expectReject(f.test, sub, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: m.id }), 'A stand-in cannot create the match lobby: a team member or tournament staff creates it.');
+        const red = f.ts.find((t) => t.teamId === m.team2Id)!;
+        const lobbyId = createTournamentLobby(f.test, red.captain, m.id);
+        join(f.test, sub, lobbyId);
         expect(slotOf(f.test, lobbyId, sub)).toBe('RedPlayer');
-        expect(member(f.test, lobbyId, sub.userId).isReferee).toBe(true);
+        expect(member(f.test, lobbyId, sub.userId).isReferee).toBe(false);
     });
 
     it('bracket staff (organizer, bracket assistant) create it as a Spectator referee and a member (D-22 applies)', () => {
@@ -151,11 +155,14 @@ describe('create_tournament_lobby: callers (A34)', () => {
 
 describe('create_tournament_lobby: the integrity set, the free set, the series (A33, A33a, A27)', () => {
     it('the integrity set is copied from the tournament; no series fields on the lobby (A67(2)); Casual from countTowardsMmr false', () => {
+        // T-S10v (A137(4)): registration in a requireOwnership tournament now needs an active game account; the fixture
+        // players own none, so the field is built without the flag and the flag is set on the row before the lobby.
         const f = liveField(2, {
             lineupFormat: 'Thirds', rosterVisibility: 'ClosedWithRating', isAnonymousDefault: true,
-            disconnectPolicy: 'Deferred', disconnectForfeitSeconds: 45, requireOwnership: true, allowMirrorPicks: true,
+            disconnectPolicy: 'Deferred', disconnectForfeitSeconds: 45, allowMirrorPicks: true,
             defaultGameMode: 'ApocalypticShadow', grandFinalBestOf: 3,
         });
+        f.test.db.Tournament.id.update({ ...tRow(f.test, f.id), requireOwnership: true });
         const t = tRow(f.test, f.id);
         const m = byKey(f.test, f.id, 'W-R1-M1');
         const lobbyId = createTournamentLobby(f.test, f.org, m.id);
@@ -273,9 +280,10 @@ describe('approve_stand_in / revoke_stand_in', () => {
         expect(rows[0]).toMatchObject({ teamId: m.team1Id, userId: sub.userId, approvedByUserId: pAsst.userId });
         expectReject(f.test, f.org, (ctx) => M.approve_stand_in(ctx, { bracketMatchId: m.id, teamId: m.team2Id!, userId: sub.userId }),
             'Stand-in already approved for this bracket match.');
-        // A player of another team of the tournament (not this match's other team) may stand in.
-        approve(f.test, f.org, m.id, m.team2Id!, other.mate.userId);
-        expect(standIns(f.test, m.id)).toHaveLength(2);
+        // T-S10v (A135(3), SI8): a player of another team still in the tournament may no longer stand in.
+        expectReject(f.test, f.org, (ctx) => M.approve_stand_in(ctx, { bracketMatchId: m.id, teamId: m.team2Id!, userId: other.mate.userId }),
+            'A player whose team is still in the tournament cannot be a stand-in.');
+        expect(standIns(f.test, m.id)).toHaveLength(1);
     });
 
     it('revoke: participants permission; deletes the row; a missing approval rejected; the next seat rule follows', () => {

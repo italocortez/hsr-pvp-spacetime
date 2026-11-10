@@ -9,6 +9,7 @@ import { DEFAULT_COST_SET_ID, deleteCostSetRows, isCostSetInUse } from '@module/
 import { SYSTEM_USER_ID } from '@module/helpers/admin/auditColumns';
 import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { cancelTournament } from '@module/helpers/tournament/tournamentHelpers';
+import { removeUserStandIns } from '@module/helpers/tournament/standIns';
 
 /**
  * Returns true if the iterator yields at least one element.
@@ -117,6 +118,7 @@ function handOverOrganizedTournaments(ctx: any, userId: number, actorId: number)
             ctx.db.TournamentAssistant.id.delete(a.id);
         }
         ctx.db.Tournament.id.update(updateWithAudit(ctx, tournament, { organizerId: newOrganizerId }, actorId));
+        removeUserStandIns(ctx, tournament.id, newOrganizerId, actorId); // S10v review F3 (A135(2)): staff never stand in
         for (const match of [...ctx.db.BracketMatch.tournament_id.filter(tournament.id)]) {
             for (const event of [...ctx.db.CalendarEvent.bracket_match_id.filter(match.id)]) {
                 if (event.organizerId !== userId) continue;

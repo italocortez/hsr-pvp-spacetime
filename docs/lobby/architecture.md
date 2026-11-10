@@ -116,12 +116,15 @@ RefereeTransferCheck (scheduledId: u64 autoInc PK)  [PRIVATE, scheduled, no audi
   window; a leaver's row keeps its check, A68(2)) or consumed by run_referee_transfer_check. Bound through
   `spacetimedb.reducer({ onSchedule: RefereeTransferCheck }, ...)`.
 
-TournamentStandIn (PK: [bracketMatchId, userId])  [public: true]
-  bracketMatchId -> BracketMatch.id  [btree: bracket_match_id]
+TournamentStandIn (PK: id u32 autoInc)  [PRIVATE since S3, A37; read through view_my_stand_ins, view_my_tournament_stand_ins (staff)]
+  bracketMatchId -> BracketMatch.id
+  teamId -> TournamentTeam.id  (the team stood in for; its colour in the match decides the side, A35 / A70(1))
   userId -> User.id
   approvedByUserId -> User.id
   audit columns
-  Indexes: bracket_match_id (btree), by_match_and_user (btree, [bracketMatchId, userId])
+  Indexes: bracket_match_id, by_match_and_user ([bracketMatchId, userId]), team_id, user_id (all btree)
+  One row per (bracketMatchId, userId), enforced by approve_stand_in (the multi-column index is no engine constraint).
+  (S10v doc correction, audit SI20: this block used to say public and a two-column key.)
 ```
 
 > **Composite-PK update pattern:** `LobbyMember`, `LobbyBan`, and `LobbyMemberAccount` rows cannot be updated in place. All "updates" are `by_lobby_and_user.delete([...])` followed by `insert(updateWithAudit(...))`.
@@ -227,6 +230,9 @@ Phase S6 execution (backlog #2, #6, #7, #9; DECISIONS.md A28, A33, A38(2)/(4), A
 ### confirm_ready(lobbyId) / unconfirm_ready(lobbyId)
 1. `getAuthenticatedUser(ctx)`; load lobby; D-28 `ensureStageIs(Waiting)`; `ensureLobbyMember`.
 2. Delete+reinsert caller `LobbyMember` with `isConfirmed=true` (confirm) or `false` (unconfirm).
+2a. Phase S10v execution (review G1): `confirm_ready` by a caller in a Blue / Red player seat (not coach) then calls
+   `participateAsStandIn`: for an approved stand-in of the lobby's match it takes the account-lock snapshot (when the
+   user holds no lock and has not played) and selects an account; for anyone else it does nothing.
 3. Phase S10r execution (A122(4)): each call counts on the caller's membership allowance (`consumeMembershipAllowance`) before the write.
 
 ### set_captain(lobbyId, targetJoinSeq)
@@ -281,8 +287,8 @@ B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3
 3. `deselect`: find and delete the matching `LobbyMemberAccount` row (throw if not selected). No snapshot hook.
 
 ### create_tournament_lobby(bracketMatchId, abandonCurrentMatch?) / approve_stand_in(bracketMatchId, userId)
-- `create_tournament_lobby`: resolve BracketMatch + Tournament; D-64 authorize (Moderator+, organizer, `TournamentAssistant`, or a team member of `team1Id`/`team2Id`); D-45 reject a duplicate non-Finished lobby for the match; D-22 / A68(4) `ensureNotInLobby(ctx, userId, abandonCurrentMatch ?? false)`; `maxSpectators` copied from the preset's free set (A68(8)); D-67 `matchType` from `countTowardsMmr`; insert `Lobby` with `isTournamentControlled=true` inheriting tournament fields + hardcoded tournament defaults; D-24/D-27 insert creator as `Spectator` + `isReferee=true`, `joinSeq=1` (R4, S4); `Lobby.lastJoinSeq=1` (A74(3), S9c).
-- `approve_stand_in`: resolve BracketMatch + Tournament; D-68 authorize (Moderator+, organizer, or assistant); validate target user; reject duplicate; insert `TournamentStandIn` (PK `[bracketMatchId, userId]`, `approvedByUserId=caller`). There is no `remove_stand_in` reducer.
+- `create_tournament_lobby`: resolve BracketMatch + Tournament; D-64 authorize (Moderator+, organizer, `TournamentAssistant`, or a team member of `team1Id`/`team2Id`; A140 (S10v): a stand-in approval alone is refused, "A stand-in cannot create the match lobby: a team member or tournament staff creates it."); D-45 reject a duplicate non-Finished lobby for the match; D-22 / A68(4) `ensureNotInLobby(ctx, userId, abandonCurrentMatch ?? false)`; `maxSpectators` copied from the preset's free set (A68(8)); D-67 `matchType` from `countTowardsMmr`; insert `Lobby` with `isTournamentControlled=true` inheriting tournament fields + hardcoded tournament defaults; D-24/D-27 insert creator as `Spectator` + `isReferee=true`, `joinSeq=1` (R4, S4); `Lobby.lastJoinSeq=1` (A74(3), S9c).
+- `approve_stand_in(bracketMatchId, teamId, userId)` and `revoke_stand_in(bracketMatchId, userId)` (permission `participants`, A25): the checks, the seat and lock rules are in [../tournament/architecture.md](../tournament/architecture.md) "Phase S10v execution". The row is `TournamentStandIn` (autoInc `id`, one row per match and user). (S10v doc correction, audit SI20: this line used to list `approve_stand_in(bracketMatchId, userId)` only and say there was no removal reducer; `revoke_stand_in` exists since S8d.)
 
 ### claim_forfeit(lobbyId, forfeitingTeamSide) (concede.ts; F7, Phase S4 execution)
 1. `getAuthenticatedUser(ctx)`; `ensureLobbyMember`; load lobby; stage must be Drafting / Equipping / Scoring (A67(1)).
@@ -682,6 +688,41 @@ Membership lifecycle after A68 (details in the reducer flows above):
   in the same 10 s as lobby actions shares the 20. Details: [../calendar/architecture.md](../calendar/architecture.md)
   and [../roster/architecture.md](../roster/architecture.md) "Phase S10s execution". No new column.
 
+## Phase S10v execution (DECISIONS.md A135, A136, A137, A138)
+
+Stand-ins in tournament lobbies; the full rule set is in [../tournament/architecture.md](../tournament/architecture.md)
+"Phase S10v execution".
+- **No automatic seat moves (A138).** `join_lobby` auto-seats into a free player seat as before S10v; a member who
+  joins a full side is a Spectator like anyone else, and a member's own request for a full side is refused as full.
+  The host (and staff) move people by hand: the stand-in to Spectator, then the member in. The team captain may move an
+  approved stand-in of the own team to Spectator through `set_team_slot` with `targetJoinSeq`, without the spectator
+  cap (review F9). A stand-in moved out who created the lobby stays host and referee (review F13); so does a member
+  disqualified while host and referee (review G3, known, not changed).
+- **Ownership start gate (review N1).** In a tournament lobby whose tournament has `requireOwnership`, `start_draft`
+  refuses while a seated Blue / Red player (member or stand-in) has no selected match account: "The player at seat N
+  has no account selected for this match. All players must select an account before starting a match that requires
+  ownership." Casual lobbies and other tournaments are unchanged.
+- **Start gate (A135(5)).** `start_draft` refuses a tournament lobby whose Blue or Red seated players include no member
+  of the team playing that side among its non-coach players: "Blue team needs at least one of its own members seated
+  as a player; stand-ins cannot play without one." (Red likewise; review F12).
+- **Seats after a revoke or a disqualification (SI4, SI5, review F6).** The stand-in is moved to Spectator in every
+  Waiting lobby of the match; a disqualified member leaves the player and coach seats of every Waiting lobby of the
+  tournament; a game already running keeps the seat.
+- **SI1.** `allowedSlotsFor` never gives a member of one team of the match the other side.
+- **SI2, review F7 / F11 / G1 / G8.** No lock at approval. `participateAsStandIn` takes the stand-in's lock snapshot
+  (all owned accounts, when none is locked and the user has not played a game of the tournament, A104) and selects the
+  active account, else the first locked one. Entry points, each the stand-in's own act: `create_tournament_lobby`
+  (since A140 only for a stand-in creating through a role, Moderator / Admin, seated as a Spectator referee),
+  `join_lobby` (D-26, any seat), a self move to a player seat in `set_team_slot`, and `confirm_ready` in a player seat
+  (G1: a host move resets the confirmation and `start_draft` needs every player confirmed, so a host-seated stand-in is
+  locked and selected before any start). Released stand-in locks take the user's selections in Waiting lobbies of the
+  tournament with them.
+- **SI20.** The `TournamentStandIn` block and the `approve_stand_in` line above are corrected. Contract line for the
+  orchestrator (contracts are not edited during execution): `docs/lobby/contract.md` "Approve Stand-In (Unauthorized
+  Caller)" (about line 942) quotes "Only a tournament organizer, assistant, moderator, or admin can approve stand-ins.";
+  the code's refusal is the A25 permission text "This action needs the participants permission.", and the stand-in
+  scenarios there predate `teamId`, `revoke_stand_in` and the S10v rules.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -736,10 +777,14 @@ Membership lifecycle after A68 (details in the reducer flows above):
 | `confirm_ready`, `unconfirm_ready`, `shuffle_teams`, `transfer_host` count on the membership allowance; a Moderator edits only Moderator and host presets; user deletion removes the user's unreferenced presets | Phase S10r execution (DECISIONS.md A122) | 2026-11-10 |
 | The membership allowance also counts the calendar reducers and the player roster writes | Phase S10s execution (DECISIONS.md A122) | 2026-11-10 |
 | `confirmWindowSeconds` (0-300, default 60) on `Lobby`, `LobbyPreset` and the history config snapshot: optional argument of `create_lobby`, `update_lobby_settings` (Waiting, free set), `create_lobby_preset` / `update_lobby_preset`; the system preset carries 60; tournament lobbies copy it from the preset | Phase S10t execution (DECISIONS.md A131) | 2026-11-10 |
+| Members first in Waiting tournament seats (a member takes a stand-in's seat on join or seat request; the team captain moves an own stand-in to Spectator); `start_draft` needs a member per tournament side; revoke / DQ unseat stand-ins in Waiting; a member never gets the other side; the `TournamentStandIn` block and the stand-in reducer line corrected (audit SI20) | Phase S10v execution (DECISIONS.md A135) | 2026-11-10 |
+| `create_tournament_lobby` refuses a plain stand-in (members of the two teams and staff create the match lobby) | Phase S10v execution (DECISIONS.md A140) | 2026-11-10 |
+| Second fix pass: no automatic stand-in displacement at all (A138); `confirm_ready` in a player seat is a stand-in snapshot entry point; selections go with released stand-in locks | Phase S10v execution (DECISIONS.md A138; S10v review G1) | 2026-11-10 |
+| Fix pass: only the member's own join or seat request displaces a stand-in (A137(3), replaced by A138); the captain's stand-in move skips the spectator cap; a disqualified member is unseated in Waiting; stand-in locks at the stand-in's own participation (create, join, self seat move); start-gate text "seated as a player" | Phase S10v execution (DECISIONS.md A137; S10v review F6, F7, F9, F11, F12, F13) | 2026-11-10 |
 
 ---
 
-*Last updated: 2026-11-10 (S10s)*
+*Last updated: 2026-11-10 (S10v)*
 *Feature owner: Phase 05 / Phase 09 / Phase 10.1 / Phase 10.4 / Phase 12.1 / Phase 16*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

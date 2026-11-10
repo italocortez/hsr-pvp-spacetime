@@ -291,6 +291,7 @@ import ViewMyTournamentEnrollmentRow from "./view_my_tournament_enrollment_table
 import ViewMyTournamentLobbiesRow from "./view_my_tournament_lobbies_table";
 import ViewMyTournamentMatchResultsRow from "./view_my_tournament_match_results_table";
 import ViewMyTournamentMatchesRow from "./view_my_tournament_matches_table";
+import ViewMyTournamentStandInsRow from "./view_my_tournament_stand_ins_table";
 import ViewMyTournamentTeamMembersRow from "./view_my_tournament_team_members_table";
 import ViewMyTournamentTeamsRow from "./view_my_tournament_teams_table";
 import ViewMyTournamentsRow from "./view_my_tournaments_table";
@@ -1012,6 +1013,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, ViewMyTournamentMatchesRow),
+  viewMyTournamentStandIns: __table({
+    name: 'view_my_tournament_stand_ins',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, ViewMyTournamentStandInsRow),
   viewMyTournamentTeamMembers: __table({
     name: 'view_my_tournament_team_members',
     indexes: [
@@ -1448,6 +1456,8 @@ type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "ta
     readonly "view_my_tournament_match_results": Omit<typeof tablesSchema.schemaType.tables["viewMyTournamentMatchResults"], "accessorName"> & { readonly accessorName: "view_my_tournament_match_results" };
     /** @deprecated Use `viewMyTournamentMatches` instead. This alias will be removed in the next major version. */
     readonly "view_my_tournament_matches": Omit<typeof tablesSchema.schemaType.tables["viewMyTournamentMatches"], "accessorName"> & { readonly accessorName: "view_my_tournament_matches" };
+    /** @deprecated Use `viewMyTournamentStandIns` instead. This alias will be removed in the next major version. */
+    readonly "view_my_tournament_stand_ins": Omit<typeof tablesSchema.schemaType.tables["viewMyTournamentStandIns"], "accessorName"> & { readonly accessorName: "view_my_tournament_stand_ins" };
     /** @deprecated Use `viewMyTournamentTeamMembers` instead. This alias will be removed in the next major version. */
     readonly "view_my_tournament_team_members": Omit<typeof tablesSchema.schemaType.tables["viewMyTournamentTeamMembers"], "accessorName"> & { readonly accessorName: "view_my_tournament_team_members" };
     /** @deprecated Use `viewMyTournamentTeams` instead. This alias will be removed in the next major version. */
@@ -1573,6 +1583,7 @@ const tableAccessorAliases = {
   "view_my_tournament_lobbies": "viewMyTournamentLobbies",
   "view_my_tournament_match_results": "viewMyTournamentMatchResults",
   "view_my_tournament_matches": "viewMyTournamentMatches",
+  "view_my_tournament_stand_ins": "viewMyTournamentStandIns",
   "view_my_tournament_team_members": "viewMyTournamentTeamMembers",
   "view_my_tournament_teams": "viewMyTournamentTeams",
   "view_my_tournaments": "viewMyTournaments",
@@ -1766,6 +1777,8 @@ export type DbView = __DbViewBase & {
   readonly "view_my_tournament_match_results": __DbViewBase["viewMyTournamentMatchResults"];
   /** @deprecated Use `viewMyTournamentMatches` instead. This alias will be removed in the next major version. */
   readonly "view_my_tournament_matches": __DbViewBase["viewMyTournamentMatches"];
+  /** @deprecated Use `viewMyTournamentStandIns` instead. This alias will be removed in the next major version. */
+  readonly "view_my_tournament_stand_ins": __DbViewBase["viewMyTournamentStandIns"];
   /** @deprecated Use `viewMyTournamentTeamMembers` instead. This alias will be removed in the next major version. */
   readonly "view_my_tournament_team_members": __DbViewBase["viewMyTournamentTeamMembers"];
   /** @deprecated Use `viewMyTournamentTeams` instead. This alias will be removed in the next major version. */
@@ -1956,6 +1969,8 @@ export type Tables = __TablesBase & {
   readonly "view_my_tournament_match_results": __TablesBase["viewMyTournamentMatchResults"];
   /** @deprecated Use `viewMyTournamentMatches` instead. This alias will be removed in the next major version. */
   readonly "view_my_tournament_matches": __TablesBase["viewMyTournamentMatches"];
+  /** @deprecated Use `viewMyTournamentStandIns` instead. This alias will be removed in the next major version. */
+  readonly "view_my_tournament_stand_ins": __TablesBase["viewMyTournamentStandIns"];
   /** @deprecated Use `viewMyTournamentTeamMembers` instead. This alias will be removed in the next major version. */
   readonly "view_my_tournament_team_members": __TablesBase["viewMyTournamentTeamMembers"];
   /** @deprecated Use `viewMyTournamentTeams` instead. This alias will be removed in the next major version. */

@@ -14,6 +14,7 @@ import { confirmWindowOpenText, draftCompleteText, finishDraft, finishDraftWitho
 import { characterCostAt, characterCostRow, costMissingText, pricedCharacterNames } from '@module/helpers/draft/costSetGuards';
 import { trimChatForInsert } from '@module/helpers/lobby/chatWindow';
 import { microsWords, timerDrawIndex as drawPoolIndex } from '@shared/lobby-rules';
+import { sideHasTeamMember } from '@module/helpers/tournament/standIns';
 
 /**
  * A87: the picked characters a team may not pick again. Without allowMirrorPicks every pick of either team; with it,
@@ -62,6 +63,7 @@ function timerDrawIndex(ctx: any, lobbyId: number, turnIndex: number, poolLength
 // Initializes the draft for a lobby.
 // Per D-29: All Blue+Red non-coach players must be confirmed before starting.
 // Per D-30: Assigns captains to first non-coach player per team if none set.
+// Per A135(5) (S10v): in a tournament lobby each side seats at least one member of its team (no side of stand-ins only).
 // Per D-43b / A117(1): If autoRandomPick=true and requireOwnership, validates all players have characters.
 // Creates MatchSession, MatchResultRecord, MatchResultParticipant rows.
 // Transitions lobby stage to Drafting.
@@ -120,6 +122,11 @@ export const start_draft = spacetimedb.reducer(
             if (players.length > lobby.teamSize) {
                 throw new SenderError(`${team} team has ${players.length} players; the team size is ${lobby.teamSize}.`);
             }
+            // S10v (A135(5), audit SI11): in a tournament lobby each side seats at least one member of the team that
+            // plays it; a side of stand-ins only does not start.
+            if (!sideHasTeamMember(ctx, lobby, team, players)) {
+                throw new SenderError(`${team} team needs at least one of its own members seated as a player; stand-ins cannot play without one.`);
+            }
         }
 
         // D-08: Ranked/MMR-tournament gate — all players must have at least one LobbyMemberAccount row
@@ -133,6 +140,22 @@ export const start_draft = spacetimedb.reducer(
                 if (accountRows.length === 0) {
                     throw new SenderError(
                         `The player at seat ${member.joinSeq} has no account selected for this match. All players must select an account before starting a ranked or MMR-counted match.`
+                    );
+                }
+            }
+        }
+
+        // S10v review N1: in a tournament lobby whose tournament requires ownership every seated Blue / Red player
+        // (members and stand-ins alike) has a selected match account, else picks would be impossible (a stand-in who
+        // deleted the account after approval, a player who deselected after confirming). Named by seat, as D-08 does.
+        // Not applied to casual lobbies or to tournaments without requireOwnership.
+        const tournamentRequiresOwnership = lobby.isTournamentControlled && lobby.tournamentId
+            && ctx.db.Tournament.id.find(lobby.tournamentId)?.requireOwnership === true;
+        if (tournamentRequiresOwnership) {
+            for (const member of playersOnly) {
+                if ([...ctx.db.LobbyMemberAccount.by_lobby_and_user.filter([lobbyId, member.userId])].length === 0) {
+                    throw new SenderError(
+                        `The player at seat ${member.joinSeq} has no account selected for this match. All players must select an account before starting a match that requires ownership.`
                     );
                 }
             }

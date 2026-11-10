@@ -226,6 +226,19 @@ personal events and to other tournaments' events stay with the guest and go with
   events that organizer created move to the new organizer instead of being deleted with the user's calendar data;
   [../tournament/architecture.md](../tournament/architecture.md) "Phase S10s execution".
 
+## Phase S10v execution (DECISIONS.md A135; audit SI16)
+
+- **Stand-ins get the match event like the members, never at the members' cost (review F4).** `create_calendar_event`
+  for a bracket match invites the two teams' members and the manual invitees as before (the 9-invite cap,
+  `MAX_INVITEES_PER_EVENT`, now exported for `approve_stand_in`, is checked on them only), then the match's approved
+  stand-ins (`TournamentStandIn.bracket_match_id`, once each, not a member or manual invitee) while room is left under
+  the cap. Approvals therefore never make the creation fail; the stand-ins left out see the event through path (c'). A stand-in approved after the event exists gets a Pending invite from `approve_stand_in` (actor
+  the approver), skipped when the event is at the cap. Every removal of the approval (revoke, disqualification, the team
+  leaving the match) deletes that invite unless the user is a member of one of the match's teams
+  ([../tournament/architecture.md](../tournament/architecture.md) "Phase S10v execution").
+- **Visibility.** `view_my_calendar_events` path (c') shows the events of the caller's approved matches
+  ([../views/architecture.md](../views/architecture.md) "Phase S10v execution").
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -255,10 +268,12 @@ personal events and to other tournaments' events stay with the guest and go with
 | A guest's invites to a tournament's bracket-match events move to the existing user with the guest's entry (`moveUserInvitesForTournament`; dropped when that user is already invited) | Phase S10m execution (DECISIONS.md A113(5)) | 2026-11-10 |
 | Every calendar reducer runs the caller's lazy clean-up (slots + events) and counts on the per-user membership allowance; `view_my_calendar_events` skips finished tournaments on the team-match path; an organizer's match events move with an A121 hand-over | Phase S10s execution (DECISIONS.md A121, A122) | 2026-11-10 |
 | Fix pass: one order in all twelve calendar reducers (authenticate, allowance, clean-up sparing the call's own event or slot, main operation), so an own old event or expired slot can still be edited or deleted | Phase S10s execution (DECISIONS.md A122) | 2026-11-10 |
+| A tournament match event invites the match's approved stand-ins at creation; `approve_stand_in` invites a stand-in to an existing event (within the 9-invite cap), every removal of the approval deletes that invite; `view_my_calendar_events` path (c') for the stand-in's matches | Phase S10v execution (DECISIONS.md A135; audit SI16) | 2026-11-10 |
+| Fix pass: stand-ins are invited at event creation only while room is left under the cap (members and manual invitees first), so approvals never refuse the creation | Phase S10v execution (S10v review F4) | 2026-11-10 |
 
 ---
 
-*Last updated: 2026-11-10 (S10s)*
+*Last updated: 2026-11-10 (S10v)*
 *Feature owner: Phase 08*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)
