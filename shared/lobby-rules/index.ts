@@ -3,3 +3,4 @@
 // `@shared/lobby-rules/refereeTransfer`), so consumers import this index.
 export * from './refereeTransfer';
 export * from './allowedSlots';
+export * from './timerDraw';

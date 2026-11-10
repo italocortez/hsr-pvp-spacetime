@@ -517,6 +517,45 @@ priced and keeps accepting any name. A cost set can be patched (A107(3)) only wh
 Equipping or Scoring, so a price never changes under a live draft (docs/cost-sets/architecture.md "Phase S10i
 execution").
 
+## Phase S10o execution (DECISIONS.md A117)
+
+- **Start check (A117(1)).** `start_draft`'s `autoRandomPick` check (every seated player has a selected account with
+  characters: "The player at seat N has no account selected. autoRandomPick requires ...", "... has no characters on
+  their selected account(s). ...") runs only when `lobby.requireOwnership` is on. Without ownership the draft starts
+  with no accounts, guests included. The D-08 account check of Ranked lobbies and MMR-counted tournament lobbies is a
+  separate block and is unchanged.
+- **Pools (A117(2)), unchanged.** Ownership on: the acting team's owned characters on its selected accounts that the
+  lobby's cost set prices. Ownership off: every character priced in the lobby's cost set, game mode and draft mode
+  (`pricedCharacterNames`). Both minus bans and `picksBlockingTeam` (A87); the ban pool minus bans, picks and the Ban
+  Restriction (A45(2)).
+- **Timer draw (A117(3)).** `timerDrawIndex(ctx, lobbyId, turnIndex, n, nextSequence)` in `draftClassic.ts` calls the
+  pure `timerDrawIndex` of `shared/lobby-rules/timerDraw.ts`. It hashes five 32-bit words, the transaction timestamp
+  in microseconds (low and high word, all 64 bits kept), the lobby id, the session's `turnIndex` and `nextSequence` (the
+  `MatchSessionStep.sequence` the auto step takes: `getNextSequence`, read once per call and also written on the
+  step), with MurmurHash3 x86_32 (seed 0, `fmix32` finalizer), and reduces the 32-bit hash `h` to the pool by
+  multiply-high: `index = floor(h * n / 2^32)`. Every index gets `floor(2^32 / n)` or `ceil(2^32 / n)` hash values, so
+  the residual bias is at most `n / 2^32` relative (about 2e-8 at n = 80). It replaces `(turnIndex * 31 + lobbyId) % n`,
+  which gave the same entry every time a turn was replayed. Used by the Classic auto-pick, the Classic auto-ban and the
+  Auction ban phase (which runs through `timer_expiry_classic`); `timer_expiry_auction` auto-nominates `EMPTY` and
+  draws nothing.
+  - Why not `ctx.random` (fix pass, review F1): on the host SDK 2.14.1 seeds it with `pcg32` of the transaction
+    timestamp, whose signed shift sign-fills the high bits of the 32-bit seed, and the first output is the seed
+    complemented, so one pool position was about 3.3 times as likely as average at n = 80. Measured over 200,000
+    structured inputs (timestamps 13.3 s apart over a month, five lobby ids, 40 sequences), the new draw gives every
+    position a share between 49.96% and 50.04% at n = 2, 8.13% and 8.44% at n = 12, 1.17% and 1.32% at n = 80
+    (`shared/lobby-rules/timerDraw.test.ts`).
+  - Why it changes after an undo: the replayed expiry is a later transaction (new timestamp), and `undo_last_step`
+    inserts an Undo row that takes the next sequence, so `nextSequence` is higher too. A pool of one entry gives index 0
+    every time. The same transaction on the same state gives the same draw (CLAUDE.md §3.2), on the host and in the
+    in-memory harness (where the timestamp is the TestClock's).
+  - Who fires it: the expiry is client-triggered. Any present member of the lobby (spectators included) may call
+    `timer_expiry_classic` once the turn clock reads 0; the accepted call advances the turn, so a turn is fired once.
+    The draw depends on the host's microsecond commit time, which a client cannot aim (network jitter is thousands of
+    microseconds), and no check after the draw lets a caller reject the result and retry.
+  - Follow-up, not changed here: the other `ctx.random` users, `ctx.random.shuffle` in random bracket seeding
+    (`seed_bracket` mode `random`, `bracketGeneration.ts`), the RandomSwap of `shuffle_teams` (`lobbySettings.ts`) and
+    the A36a random team formation (`tournamentHelpers.ts`), still carry the same seed skew.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -562,10 +601,11 @@ execution").
 | A98: `pick_character`, `ban_character`, `timer_expiry_classic`, the Auction reducers, `undo_last_step`, `pause_draft`, `resume_draft` reject an away / abandoned caller (`ensurePresentMember`); `start_draft` / `advance_stage` through `ensureRefereeOrAbove` (Moderator+ exempt). Full list: [../lobby/architecture.md](../lobby/architecture.md) "Phase S10h execution" | Phase S10h execution (DECISIONS.md A98) | 2026-11-10 |
 | `advance_stage` from Drafting needs `charactersPerTeam` characters per team; every character / light-cone price from the lobby's own set, game mode and draft mode, no fallback, a missing row rejects; timer pools draw priced characters only | Phase S10i execution (DECISIONS.md A100, A101, A107) | 2026-11-10 |
 | `doesCostSetCover` no longer exempts set 0 (review F2); a cost row without the requested eidolon / superimposition field is rejected, no `?? 0` (review F3); the manual Drafting branch of `advance_stage` kept with a note (review F7) | Phase S10i execution (DECISIONS.md A108) | 2026-11-10 |
+| `start_draft`'s `autoRandomPick` account check only under `requireOwnership`; timer pick / ban draw = MurmurHash3 of the transaction timestamp, lobby, turn and next sequence, reduced by multiply-high (`shared/lobby-rules/timerDraw.ts`; re-rolls after an undo; not `ctx.random`, review F1); pools unchanged | Phase S10o execution (DECISIONS.md A117) | 2026-11-10 |
 
 ---
 
-*Last updated: 2026-11-08*
+*Last updated: 2026-11-10*
 *Feature owner: Phase 07 / Phase 09 / Phase 12.3 / Phase 15.4 / Phase 15.3*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

@@ -177,7 +177,7 @@ The match session system manages the entire draft lifecycle within a lobby: char
 4. Read current step from `draftSequence[turnIndex]`
 5. **If Pick turn:**
    - Default: `characterName="EMPTY"`, `eidolon=0`
-   - If `autoRandomPick=true`: build available pool — Phase 12.3 D-I-01/02: if `requireOwnership=true`, pool is union of characters from all `LobbyMemberAccount` rows for `(lobbyId, userId)` for each acting team member (migrated from `HsrAccount.isActive` global account); if `requireOwnership=false`, pool is all cost table characters for the game mode — exclude banned+picked, deterministic hash `(turnIndex * 31 + lobbyId) % poolSize`
+   - If `autoRandomPick=true`: build available pool — Phase 12.3 D-I-01/02: if `requireOwnership=true`, pool is union of characters from all `LobbyMemberAccount` rows for `(lobbyId, userId)` for each acting team member (migrated from `HsrAccount.isActive` global account); if `requireOwnership=false`, pool is all cost table characters for the game mode — exclude banned+picked, deterministic hash `(turnIndex * 31 + lobbyId) % poolSize` _Superseded in Phase S10o execution (DECISIONS.md A117)._
    - Insert Pick step with `actorUserId=0` (system), `costPaid=0` _Superseded in Phase S10d execution (DECISIONS.md A86)._
 6. **If Ban turn:**
    - Default: `characterName="SKIP"`
@@ -714,7 +714,7 @@ The match session system manages the entire draft lifecycle within a lobby: char
 
 **Given:** Active Classic draft, current step is Pick for Blue, autoRandomPick=true, requireOwnership=false
 **When:** Turn timer expires
-**Then:** System deterministically selects from available pool using hash `(turnIndex * 31 + lobbyId) % poolSize`. Pick step recorded with selected character, actorUserId=0.
+**Then:** System deterministically selects from available pool using hash `(turnIndex * 31 + lobbyId) % poolSize`. Pick step recorded with selected character, actorUserId=0. _Superseded in Phase S10o execution (DECISIONS.md A117)._
 
 ### Classic Draft: Timer Expiry Auto-Pick Uses Match-Selected Account (Phase 12.3 D-I)
 
@@ -1129,7 +1129,7 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 | Draft sequence generation (Classic + Auction ban phases) | Phase 9 execution | 2026-03-29 |
 | EMPTY CHARACTER on timer expiry (autoRandomPick=false) | Phase 9 execution | 2026-03-29 |
 | SKIP ban on timer expiry | Phase 9 execution | 2026-03-29 |
-| autoRandomPick deterministic hash: (turnIndex * 31 + lobbyId) % poolSize | Phase 9 execution | 2026-03-29 |
+| autoRandomPick deterministic hash: (turnIndex * 31 + lobbyId) % poolSize | Phase 9 execution | 2026-03-29 _Superseded in Phase S10o execution (DECISIONS.md A117)._ |
 | Coach guard on all draft/equip actions (D-39/MOUS-03) | Phase 9 execution | 2026-03-29 |
 | Captain-or-sole-player restriction on all team actions | Phase 9 execution | 2026-03-29 |
 | Auto-captain assignment at start_draft (D-30) | Phase 9 execution | 2026-03-29 |
@@ -1192,6 +1192,8 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 | Post-draft edit steps are capped per team side: 300 `SetEidolon` / `EquipLightcone` / `UnequipLightcone` steps per edited side and 300 `ConfirmGame` steps per confirming side ("The <Side> side of this game has reached the limit of 300 edit steps; the referee or staff can still close it." / "… confirmation steps; …"); `close_game`, the Admin closed-game edit and concede are not capped. A manual `pause_draft` is rejected within 10 s of the same party's previous manual pause (Blue, Red, or the referee); auto-pauses are neither counted nor rejected | Phase S10f execution (backend audit 2026-11-09, draft finding 8) | 2026-11-09 |
 | `advance_stage` from Drafting is rejected until both teams hold all their characters, `EMPTY` placeholders included ("The draft is not finished: Blue holds b of N characters and Red holds r of N."); the automatic end-of-draft transitions are unchanged | Phase S10i execution (DECISIONS.md A100) | 2026-11-10 |
 | `equip_lightcone` reads the light-cone row of the lobby's cost set, game mode and draft mode (Auction rows in an Auction lobby), with no fallback to the default set; character prices in `pick_character`, the timer auto-pick, Auction nomination, bid and sale, and `set_eidolon` follow the same rule. A cost row that exists but lacks the requested level is rejected ("The cost row of <name> has no <field> value.") | Phase S10i execution (DECISIONS.md A107) | 2026-11-10 |
+| `start_draft`: the `autoRandomPick` account check (every seated player has a selected game account with characters) applies only when the lobby requires ownership; without it the draft starts with guests and players who have no game account, and the timer draws from every character priced in the lobby's cost set. The Ranked and rated-tournament account check is unchanged | Phase S10o execution (DECISIONS.md A117) | 2026-11-10 |
+| Timer auto-pick and auto-ban draw: a well-mixed hash of the transaction time, the lobby, the turn and the next step sequence, reduced to the pool size; even over the pool, reproducible for a given transaction, not aimable by the member who fires the expired turn, and different after the referee undoes the auto step and the turn expires again (a pool of one entry always gives that entry). This replaces the fixed formula of the turn and the lobby | Phase S10o execution (DECISIONS.md A117) | 2026-11-10 |
 
 ---
 

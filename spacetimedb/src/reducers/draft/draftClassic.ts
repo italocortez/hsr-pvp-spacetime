@@ -12,6 +12,7 @@ import { lobbySteps, getNextSequence } from '@module/helpers/draft/stepSequence'
 import { turnRemainingMs } from '@module/helpers/draft/turnClock';
 import { characterCostAt, pricedCharacterNames } from '@module/helpers/draft/costSetGuards';
 import { trimChatForInsert } from '@module/helpers/lobby/chatWindow';
+import { microsWords, timerDrawIndex as drawPoolIndex } from '@shared/lobby-rules';
 
 /**
  * A87: the picked characters a team may not pick again. Without allowMirrorPicks every pick of either team; with it,
@@ -39,11 +40,28 @@ function classicPickCost(ctx: any, lobby: any, characterName: string, eidolon: n
     return characterCostAt(ctx, lobby, characterName, eidolon);
 }
 
+/**
+ * A117(3) (S10o, fix pass F1): the index a timer auto-pick or auto-ban draws from a pool of `poolLength` (> 0) entries.
+ * It does not use ctx.random (its host seed is skewed, review F1). shared/lobby-rules/timerDraw.ts hashes the transaction
+ * timestamp (microseconds, both 32-bit words), the lobby id, the turn index and nextSequence (the MatchSessionStep.sequence
+ * the auto step is about to take) with MurmurHash3 x86_32 (fmix32 finalizer) and reduces the hash by multiply-high,
+ * floor(h * n / 2^32): uniform up to a relative bias of n / 2^32. Deterministic for a given transaction and state.
+ * After undo_last_step the same turn expires again in a later transaction (new timestamp) with a higher nextSequence (the
+ * Undo row takes one), so the re-rolled turn can land on another entry. A pool of one entry always gives index 0.
+ * The expiry is client-triggered (any present member may fire an expired turn, once: the accepted call advances the
+ * turn); the draw depends on the host's microsecond commit time, which a client cannot aim, and nothing after the draw
+ * lets a caller reject it and retry.
+ */
+function timerDrawIndex(ctx: any, lobbyId: number, turnIndex: number, poolLength: number, nextSequence: number): number {
+    const { lo, hi } = microsWords(ctx.timestamp.microsSinceUnixEpoch);
+    return drawPoolIndex({ timestampLo: lo, timestampHi: hi, lobbyId, turnIndex, nextSequence }, poolLength);
+}
+
 // ─── start_draft ──────────────────────────────────────────────────────────────
 // Initializes the draft for a lobby.
 // Per D-29: All Blue+Red non-coach players must be confirmed before starting.
 // Per D-30: Assigns captains to first non-coach player per team if none set.
-// Per D-43b: If autoRandomPick=true, validates all players have characters.
+// Per D-43b / A117(1): If autoRandomPick=true and requireOwnership, validates all players have characters.
 // Creates MatchSession, MatchResultRecord, MatchResultParticipant rows.
 // Transitions lobby stage to Drafting.
 
@@ -119,8 +137,10 @@ export const start_draft = spacetimedb.reducer(
             }
         }
 
-        // D-43b: If autoRandomPick=true, validate ALL Blue+Red players have characters (D-12: check selected accounts)
-        if (lobby.autoRandomPick) {
+        // D-43b: If autoRandomPick=true, validate ALL Blue+Red players have characters (D-12: check selected accounts).
+        // A117(1) (S10o): only when the lobby requires ownership (the timer then draws from owned characters); without
+        // it the pool is the lobby's priced characters and the draft starts without accounts, guests included.
+        if (lobby.autoRandomPick && lobby.requireOwnership) {
             for (const member of playersOnly) {
                 const selectedAccounts = [...ctx.db.LobbyMemberAccount.by_lobby_and_user.filter([lobbyId, member.userId])];
                 if (selectedAccounts.length === 0) {
@@ -603,9 +623,10 @@ export const ban_character = spacetimedb.reducer(
 // ─── timer_expiry_classic ─────────────────────────────────────────────────────
 // Called by the frontend when the turn timer expires.
 // Per D-43: Validates server-side that timer actually expired.
-// Per D-43b: If autoRandomPick=true, deterministically picks from available pool
-//            using hash (turnIndex * 31 + lobbyId) % availablePool.length; A86: the pool holds what the acting
-//            team may legally pick, and the pick is priced like pick_character (cost row, owned eidolon).
+// Per D-43b: If autoRandomPick=true, picks from the available pool at timerDrawIndex (A117(3), S10o: a hash of the
+//            transaction timestamp, lobby, turn and step sequence, so a turn re-rolled after an undo can land elsewhere);
+//            A86: the pool holds what the acting team may legally pick, and the pick is priced like pick_character
+//            (cost row, owned eidolon).
 //            Otherwise auto-picks EMPTY CHARACTER (characterName="EMPTY", eidolon=0, costPaid=0).
 // For ban expiry: auto-bans a random character if autoRandomPick, else skips (empty ban).
 
@@ -645,12 +666,15 @@ export const timer_expiry_classic = spacetimedb.reducer(
             throw new SenderError('No more steps in draft sequence.');
         }
 
+        // The auto step's sequence (F9), also an input of the timer draw (A117(3)).
+        const stepSequence = getNextSequence(ctx, lobbyId);
+
         if (currentStep.actionRequired.tag === 'Pick') {
             let characterName = 'EMPTY';
             let eidolon = 0;
             let costPaid = 0;
 
-            // D-43b: autoRandomPick — deterministic selection from available pool
+            // D-43b: autoRandomPick — a draw from the available pool (A117(3): timerDrawIndex)
             if (lobby.autoRandomPick) {
                 const existingSteps = lobbySteps(ctx, lobbyId); // A67(3): the lobby's one game
                 const bannedChars = new Set(
@@ -694,9 +718,7 @@ export const timer_expiry_classic = spacetimedb.reducer(
                 }
 
                 if (availablePool.length > 0) {
-                    // Deterministic hash: (turnIndex * 31 + lobbyId) % availablePool.length
-                    const hashIndex = (session.turnIndex * 31 + lobbyId) % availablePool.length;
-                    characterName = availablePool[hashIndex];
+                    characterName = availablePool[timerDrawIndex(ctx, lobbyId, session.turnIndex, availablePool.length, stepSequence)]; // A117(3)
                     // A86: priced like pick_character: E0 without ownership, else the highest level the acting team
                     // owns on its selected accounts (resolveOwnedEidolon per player, the maximum over the team).
                     if (lobby.requireOwnership) {
@@ -713,7 +735,7 @@ export const timer_expiry_classic = spacetimedb.reducer(
             ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
                 id: 0,
                 lobbyId,
-                sequence: getNextSequence(ctx, lobbyId), // F9: never collides with Pause/Undo audit rows
+                sequence: stepSequence, // F9: never collides with Pause/Undo audit rows
                 actorUserId: 0,  // System actor
                 anonymousLabel: undefined,
                 actorSlot: currentStep.teamTurn,
@@ -728,7 +750,7 @@ export const timer_expiry_classic = spacetimedb.reducer(
         } else if (currentStep.actionRequired.tag === 'Ban') {
             let characterName = 'SKIP';
 
-            // D-43b: autoRandomPick — deterministic selection from unban/unpicked pool
+            // D-43b: autoRandomPick — a draw from the unbanned/unpicked pool (A117(3): timerDrawIndex)
             if (lobby.autoRandomPick) {
                 const existingSteps = lobbySteps(ctx, lobbyId); // A67(3): the lobby's one game
                 const bannedChars = new Set(
@@ -754,8 +776,7 @@ export const timer_expiry_classic = spacetimedb.reducer(
                 );
 
                 if (availablePool.length > 0) {
-                    const hashIndex = (session.turnIndex * 31 + lobbyId) % availablePool.length;
-                    characterName = availablePool[hashIndex];
+                    characterName = availablePool[timerDrawIndex(ctx, lobbyId, session.turnIndex, availablePool.length, stepSequence)]; // A117(3)
                 }
             }
 
@@ -763,7 +784,7 @@ export const timer_expiry_classic = spacetimedb.reducer(
             ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
                 id: 0,
                 lobbyId,
-                sequence: getNextSequence(ctx, lobbyId), // F9: never collides with Pause/Undo audit rows
+                sequence: stepSequence, // F9: never collides with Pause/Undo audit rows
                 actorUserId: 0,  // System actor
                 anonymousLabel: undefined,
                 actorSlot: currentStep.teamTurn,

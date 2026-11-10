@@ -180,7 +180,9 @@ export const approve_participant = spacetimedb.reducer(
 // ─── reject_participant ───────────────────────────────────────────────────────
 // Rejects a participant who awaits approval or sits on the waitlist: the enrolment is deleted like a withdrawal
 // (A26a(1)), so the player may register again. Before the bracket is generated (D.8.6 window).
-// Permission: participants (A25). Approved, active participants are disqualified instead (dq_participant).
+// Permission: participants (A25). Approved, active participants are disqualified instead (dq_participant), except a
+// guest's (A118, S10o): before the bracket exists that entry is removed the same way (no Disqualified row).
+// Registration, CheckIn and Seeding before generation (ensureBeforeGeneration).
 
 export const reject_participant = spacetimedb.reducer(
     {
@@ -194,7 +196,12 @@ export const reject_participant = spacetimedb.reducer(
         const enrolled = findEnrolled(ctx, tournamentId, userId);
         if (!enrolled) throw new SenderError('Participant not found.');
         if (enrolled.approvedByToAt !== undefined && !enrolled.isWaitlisted) {
-            throw new SenderError('Participant is already approved; disqualify them instead.');
+            // A118 (S10o): a guest's approved entry is removed like a withdrawal (no Disqualified row) so the guest can
+            // register again once verified; a verified player's, or a row already Disqualified, keeps the rule.
+            const isGuest = ctx.db.User.id.find(userId)?.isGuest === true;
+            if (!isGuest || enrolled.status.tag === 'Disqualified') {
+                throw new SenderError('Participant is already approved; disqualify them instead.');
+            }
         }
 
         removeEnrolment(ctx, tournament, enrolled, user.id);

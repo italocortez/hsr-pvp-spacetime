@@ -567,7 +567,8 @@ describe('lobby audit #9: start_draft names the seat, never a user id (anonymous
     it('autoRandomPick: "no account selected" and "no characters" texts name the seat (lobby audit #9)', () => {
         const test = newHarness();
         pad(test);
-        const s = anonLobby(test, { autoRandomPick: true });
+        // S10o: A117(1) runs the autoRandomPick account check only when the lobby requires ownership.
+        const s = anonLobby(test, { autoRandomPick: true, requireOwnership: true });
         selectAccount(test, s.lobbyId, s.host.userId, 900, { c1: 0 });
         selectAccount(test, s.lobbyId, s.a.b1.userId, 901, { c2: 0 });
         const seat = seatOf(test, s.lobbyId, s.a.r1.userId);

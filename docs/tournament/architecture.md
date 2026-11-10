@@ -165,7 +165,7 @@ CheckIn stage; `teamId` omitted = the caller's team and the caller must captain 
 ### approve_participant / reject_participant / waitlist_promote / add_participant (tournamentId, userId)
 All `participants`.
 1. `approve_participant`: sets `approvedByToAt`; refreshes the player's team.
-2. `reject_participant`: before generation (`ensureBeforeGeneration`); only a row awaiting approval or waitlisted (`Participant is already approved; disqualify them instead.`); `removeEnrolment`.
+2. `reject_participant`: before generation (`ensureBeforeGeneration`); a row awaiting approval or waitlisted, or (S10o, A118) the approved, non-Disqualified row of a guest user; otherwise `Participant is already approved; disqualify them instead.`; `removeEnrolment`.
 3. `waitlist_promote` (D.8.6): Registration through Seeding until `bracketGeneratedAt` (`Bracket generated; use stand-ins.`); a free spot (`No free spot: the tournament is full.`); `isWaitlisted = false`, approval implied, `lockAccountsAtPromotion` (S10g, A104: the remembered accounts the player still owns, else all accounts; the remembered rows deleted), team refreshed.
 4. `add_participant`: same window; the target exists, is not deleted and is verified; not enrolled (Disqualified blocks); a free spot; inserts an approved, non-waitlisted Registered row; solo auto-team; account locks.
 
@@ -487,6 +487,25 @@ No schema change; index reads only.
   removed (A114(2)); the server generates the code as before. Players of the match join through `join_lobby` by that
   code or by the lobby id (A114(1)). `Tournament.lobbyPresetId` (A33a) is unchanged.
 
+## Phase S10o execution (DECISIONS.md A118)
+
+- **Entry point.** `reject_participant(tournamentId, userId)` is extended rather than a new reducer: it already removes
+  an enrolment as a withdrawal (`removeEnrolment`) under the `participants` permission and the before-generation
+  window, which is exactly the A118 path. When the row is approved and not waitlisted it now also accepts it if the
+  target `User.isGuest` is true and the row's status is not `Disqualified`. No binding change.
+- **Window.** `ensureBeforeGeneration`: Registration, CheckIn, and Seeding while `bracketGeneratedAt` is unset; after
+  that the existing texts (`Bracket generated; use stand-ins.`, `Tournament is in <stage>; the field can change from
+  Registration through Seeding only.`), so a guest's entry is then handled by `dq_participant` as before.
+- **Effect (`removeEnrolment`, unchanged).** The enrolment row is deleted (no Disqualified row, so the guest may
+  register again, and after signing in the verified account may too); the membership goes through `removeTeamMember`
+  (captain handed to the next member by `transferTournamentCaptain`; an empty team deleted in Registration, marked
+  Withdrawn from CheckIn on); the user's team requests, calendar invites for the tournament, account locks and
+  remembered waitlist accounts are deleted. Capacity (`capacityCount`) drops by one. A withdrawal promotes nobody from
+  the waitlist, and neither does this path: staff promote with `waitlist_promote`, which the freed spot now allows.
+- **Unchanged.** A verified user's approved entry: `Participant is already approved; disqualify them instead.`; a
+  caller without the permission: `This action needs the participants permission.`
+- **A113(2).** Guests removed this way no longer count, so a settings change refused for them passes afterwards.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -526,6 +545,7 @@ No schema change; index reads only.
 | A guest signing in to an existing account keeps its entries in unfinished tournaments (`moveTournamentTiesToUser`): enrolment, membership, captaincy and requests re-keyed, solo team renamed, locks rebuilt from the existing user's accounts; entries the existing user cannot hold are settled as a deletion | Phase S10l execution (DECISIONS.md A112) | 2026-11-10 |
 | `requireVerified` forced on by `countTowardsMmr`, `requireRoster`, `minimumMmr`, `requireOwnership` or a roster visibility other than `ClosedNoRating`; `update_tournament` refuses to turn it on while non-Disqualified guest enrolments exist (count in the text); a moved entry takes the guest's match calendar invites; guests cannot be assistants | Phase S10m execution (DECISIONS.md A113) | 2026-11-10 |
 | `create_tournament_lobby` loses its ignored `joinCode` argument | Phase S10n execution (DECISIONS.md A114) | 2026-11-10 |
+| `reject_participant` also removes a guest's approved, non-Disqualified entry before the bracket exists (withdrawal path, no Disqualified row); verified players and post-generation unchanged | Phase S10o execution (DECISIONS.md A118) | 2026-11-10 |
 
 ---
 
