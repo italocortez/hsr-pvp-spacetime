@@ -1,14 +1,14 @@
 <!-- Sources:
   - SpacetimeDB CLI reference (v2.14.1 tag; upstream moved it from 00300-resources/01000-reference/ after 1a1fe78): https://github.com/clockworklabs/SpacetimeDB/blob/a0bf6be10a146b03acbe3f4f9ad7fe20f114988d/docs/docs/00300-resources/00100-cli-reference/00300-spacetime-json.md
   - Environment-variable config: https://github.com/clockworklabs/SpacetimeDB/blob/a0bf6be10a146b03acbe3f4f9ad7fe20f114988d/docs/docs/00200-core-concepts/00100-databases/00700-environment-variables.md
-  - Publish flags cross-checked against the installed 2.6.1 CLI (`spacetime publish --help`)
+  - Publish flags cross-checked against the then-installed 2.6.1 CLI (`spacetime publish --help`); the active CLI is now 2.14.1, whose `publish`/`generate --help` list `--parent`, `--bindings`, `--import-extension` and the env flags
 -->
 
 # spacetime.json Configuration Reference
 
-The `spacetime.json` file provides project-level configuration for the SpacetimeDB CLI, eliminating repetitive flags for `publish`, `generate`, and `dev`. Commands that act on an already-published database (`spacetime call`, `sql`, `logs`) also resolve their database/server from it. From CLI v2.10.1 (#5883), `spacetime list`, `rename`, and `mcp` use the config's `server` too, when it is unambiguous; before that they fell back to the CLI's global default server. This repo's active CLI is 2.6.1, so pass `-s maincloud` explicitly to those commands.
+The `spacetime.json` file provides project-level configuration for the SpacetimeDB CLI, eliminating repetitive flags for `publish`, `generate`, and `dev`. Commands that act on an already-published database (`spacetime call`, `sql`, `logs`) also resolve their database/server from it. From CLI v2.10.1 (#5883), `spacetime list`, `rename`, and `mcp` use the config's `server` too, when it is unambiguous; before that they fell back to the CLI's global default server. This repo's active CLI is 2.14.1, but the repo rule still applies: pass `--server maincloud --no-config` explicitly on every call.
 
-**Version tags:** fields and flags marked `(vX+)` are post-2.6.1. The CLI rejects or ignores them until the CLI is upgraded — don't add them to `spacetime.json` yet.
+**Version tags:** fields and flags marked `(vX+)` or "post-2.6.1" arrived after the old 2.6.1 baseline. All of them exist in the active 2.14.1 CLI; adding one to `spacetime.json` is still a config change to make only when a task needs it.
 
 ---
 

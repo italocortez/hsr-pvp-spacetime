@@ -1,5 +1,6 @@
 import { SenderError } from 'spacetimedb/server';
 import { canStartInProgress, isEligibleTeam } from '@shared/bracket';
+import { fairShuffle, SHUFFLE_DOMAIN, shuffleKeyAt } from '@shared/lobby-rules';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { deleteCalendarEventsForTournament, deleteUserInvitesForTournament } from '@module/helpers/calendar/calendarCascade';
 import { findLobbyResult } from '@module/helpers/results/scoringHelpers';
@@ -488,12 +489,13 @@ export function isTeamCheckedIn(ctx: any, tournamentId: number, teamId: number):
 /**
  * A36a: random team formation for opted-in solo players at registration close. Eligible = approved (when
  * required), not waitlisted, Registered or CheckedIn, on no team, `allowRandomTeamAssignment`. The pool is sorted
- * by user id and shuffled with ctx.random (deterministic per transaction); full teams of `teamSize` are formed,
+ * by user id and shuffled with fairShuffle (A120, shared/lobby-rules/timerDraw.ts; keyed by the transaction time,
+ * SHUFFLE_DOMAIN.TeamFormation and the tournament id, so it never correlates with seeding); full teams of `teamSize` are formed,
  * named "Team <n>" (the first free number), captained by their first member; leftovers stay enrolled without a team.
  */
 export function formRandomTeams(ctx: any, tournament: any, actorId: number): number {
     if (tournament.teamSize < 2) return 0; // solo players always have their auto team
-    const pool = [...ctx.db.TournamentEnrolled.tournament_id.filter(tournament.id)]
+    const sorted = [...ctx.db.TournamentEnrolled.tournament_id.filter(tournament.id)]
         .filter((e: any) =>
             e.allowRandomTeamAssignment &&
             !e.isWaitlisted &&
@@ -502,7 +504,7 @@ export function formRandomTeams(ctx: any, tournament: any, actorId: number): num
             !findMembership(ctx, tournament.id, e.userId))
         .map((e: any) => e.userId as number)
         .sort((a: number, b: number) => a - b);
-    ctx.random.shuffle(pool);
+    const pool = fairShuffle(sorted, shuffleKeyAt(ctx.timestamp.microsSinceUnixEpoch, [SHUFFLE_DOMAIN.TeamFormation, tournament.id]));
     const taken = new Set([...ctx.db.TournamentTeam.tournament_id.filter(tournament.id)].map((t: any) => t.name.toLowerCase()));
     let n = 1;
     let formed = 0;

@@ -1,6 +1,7 @@
 import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { allowsThirdPlace, generateDoubleElim, generateSingleElim, groupCount, splitIntoGroups } from '@shared/bracket';
+import { fairShuffle, SHUFFLE_DOMAIN, shuffleKeyAt } from '@shared/lobby-rules';
 import { ensureTournamentPermission } from '@module/helpers/tournament/tournamentPermissions';
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { isGroupFormat } from '@module/helpers/tournament/tournamentHelpers';
@@ -38,7 +39,8 @@ function writeSeeds(ctx: any, tournament: any, ordered: any[], actorId: number):
 // ─── seed_bracket ─────────────────────────────────────────────────────────────
 // `bracket` (A25); Seeding; Ready teams only (A26). Modes kept from the legacy reducer:
 //   'mmr'    captain's rating for the tournament's default game mode, highest first; ties by team id.
-//   'random' ctx.random shuffle of the Ready teams in team-id order (C-a7: the legacy hash was id order).
+//   'random' fairShuffle (A120, shared/lobby-rules/timerDraw.ts) of the Ready teams in team-id order (C-a7: the legacy
+//            hash was id order), keyed by the transaction time, SHUFFLE_DOMAIN.BracketSeeding and the tournament id.
 
 export const seed_bracket = spacetimedb.reducer(
     { tournamentId: t.u32(), mode: t.string() },
@@ -60,7 +62,8 @@ export const seed_bracket = spacetimedb.reducer(
             }
             ordered = [...teams].sort((a: any, b: any) => (ratings.get(b.id)! - ratings.get(a.id)!) || a.id - b.id);
         } else {
-            ordered = ctx.random.shuffle([...teams]);
+            // A120: the fair shuffle, keyed by the transaction time, the seeding domain word and the tournament id.
+            ordered = fairShuffle(teams, shuffleKeyAt(ctx.timestamp.microsSinceUnixEpoch, [SHUFFLE_DOMAIN.BracketSeeding, tournamentId]));
         }
 
         writeSeeds(ctx, tournament, ordered, user.id);

@@ -12,7 +12,7 @@ Migration in progress: `ROADMAP.md` lists which steps have landed; a path or scr
 | `spacetimedb/` | the module: `src/{tables,reducers,helpers}/<domain>/` (identity, lobby, draft, results, tournament, stats, roster, calendar, admin), `src/views/`, `src/types/`; cross-folder imports use `@module/<kind>/<domain>/<file>`, declared per folder in `tsconfig.base.json` (mirrored in `test/tsconfig.json`) because the CLI bundler matches a paths wildcard against one segment, so a new domain folder needs its entries there; in-memory tests (S10) |
 | `shared/` | pure TS used by both sides: `stdb-targets.ts`, `scoring/`, `bracket/`, `lobby-rules/`; no runtime import of `spacetimedb` or `react` (M2, S7, S8) |
 | `api/auth/discord/` | the one Vercel function pair (M5) |
-| `scripts/stdb/` | publish, bootstrap, seed, generate, describe, manage-user, backup, restore; all take `--target test\|prod` (M2) |
+| `scripts/stdb/` | publish, bootstrap, seed, generate, describe, manage-user (M2); backup, restore (S13); all take `--target test\|prod` |
 | `data/seed/` | public reference data: characters, light cones, synergies, achievements (A18) |
 | `test/` | live residue + harness, `frontend/screenshots/<page>/` |
 | `docs/` | `<feature>/{contract,architecture}.md`, `ERD.md`, `frontend/`, `research/`, `log/<date>-<step>.md` |
@@ -44,7 +44,7 @@ Two databases: `hsr-spacetimedb-test1` and `hsr-spacetimedb-prod`. The names liv
 ## 4. Frontend rules
 
 - Subscribe only to **views and the public reference set**. `subscribeToAllTables` is banned in `web/` (CI grep).
-- No page except the **admin Users tab** subscribes the `User` table; names and avatars are denormalized into the views that need them (PAGE-MAP D2).
+- No page subscribes the `User` table: it is private (A77, lands at S11). The admin Users tab reads `view_admin_users`; names and avatars are denormalized into the views that need them (PAGE-MAP D2).
 - One subscription per table per route; keep the handles and unsubscribe on route leave. The reference set is subscribed by the first route that needs it and kept for the session; `/` and `/profile` never trigger it.
 - Match views and cursor events subscribe only once the lobby stage is past Waiting; cursor events are consumed via `onInsert`.
 - Styling: CSS Modules + `web/src/styles/tokens.css` (from `design/DESIGN.md`); no Tailwind; no repeated inline SVG.
@@ -113,7 +113,6 @@ Load the relevant skill before writing code: **`spacetimedb`** for anything touc
 |---|---|
 | `spacetimedb` | backend patterns, API reference, guardrails |
 | `frontend-design:frontend-design` | plugin: intentional visual design for UI work |
-| `grill-me` | planning: interrogates a plan before a step starts |
 | `uat` | behavior specs, test integrity, UAT and failure diagnostics |
 | `vercel-setup` / `vercel-deploy` / `vercel-logs` | Vercel CLI project setup, deploys, logs |
 | `pr-description` | PR descriptions |

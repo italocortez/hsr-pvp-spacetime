@@ -556,6 +556,14 @@ execution").
     (`seed_bracket` mode `random`, `bracketGeneration.ts`), the RandomSwap of `shuffle_teams` (`lobbySettings.ts`) and
     the A36a random team formation (`tournamentHelpers.ts`), still carry the same seed skew.
 
+## Phase S10p execution (DECISIONS.md A120)
+
+- The follow-up noted under Phase S10o is done: random bracket seeding, the RandomSwap of `shuffle_teams` and the
+  A36a random team formation use `fairShuffle` of `shared/lobby-rules/timerDraw.ts` (same MurmurHash3 and
+  multiply-high as the timer draw, one hash per Fisher-Yates position, a domain word per site). No module code
+  outside tests calls `ctx.random`. The timer draw itself is unchanged. Details: brackets, lobby and tournament
+  architecture docs, Phase S10p (formula and limits: [lobby/architecture.md](../lobby/architecture.md#phase-s10p-execution-decisionsmd-a120)).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -602,10 +610,11 @@ execution").
 | `advance_stage` from Drafting needs `charactersPerTeam` characters per team; every character / light-cone price from the lobby's own set, game mode and draft mode, no fallback, a missing row rejects; timer pools draw priced characters only | Phase S10i execution (DECISIONS.md A100, A101, A107) | 2026-11-10 |
 | `doesCostSetCover` no longer exempts set 0 (review F2); a cost row without the requested eidolon / superimposition field is rejected, no `?? 0` (review F3); the manual Drafting branch of `advance_stage` kept with a note (review F7) | Phase S10i execution (DECISIONS.md A108) | 2026-11-10 |
 | `start_draft`'s `autoRandomPick` account check only under `requireOwnership`; timer pick / ban draw = MurmurHash3 of the transaction timestamp, lobby, turn and next sequence, reduced by multiply-high (`shared/lobby-rules/timerDraw.ts`; re-rolls after an undo; not `ctx.random`, review F1); pools unchanged | Phase S10o execution (DECISIONS.md A117) | 2026-11-10 |
+| No module code draws with `ctx.random`: the three remaining shuffles (seeding, RandomSwap, A36a formation) use `fairShuffle` (`shared/lobby-rules/timerDraw.ts`); timer draw unchanged | Phase S10p execution (DECISIONS.md A120) | 2026-11-10 |
 
 ---
 
-*Last updated: 2026-11-10*
+*Last updated: 2026-11-10 (S10p)*
 *Feature owner: Phase 07 / Phase 09 / Phase 12.3 / Phase 15.4 / Phase 15.3*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

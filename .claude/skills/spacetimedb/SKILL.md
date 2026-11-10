@@ -22,7 +22,7 @@ Read `references/api-guide.md` when you need detailed syntax for any of:
 - Scheduled tables and timestamps
 - Common mistakes table (server-side and client-side)
 - Reducer context surface (`ctx.random`, `ctx.newUuidV4/V7`, nullable `ctx.connectionId`)
-- § 12 post-2.6.1 features (env vars, views with arguments, submodules, async IDC). Recognise them in upstream examples, but don't use them until the SDK upgrade lands
+- § 12 features added after 2.6.1 (env vars, views with arguments, submodules, async IDC, in-memory module tests). All exist in this repo's SDK 2.14.1; the repo already uses module env vars, views with arguments and `spacetimedb/server/test-utils`
 
 **Module bindings** — read the generated files directly (always up-to-date, never stale):
 
@@ -47,9 +47,9 @@ Read `references/how-to-guides.md` for operational topics:
 - Confirmed reads toggle for latency-sensitive apps
 - PostgreSQL wire protocol for admin/debugging queries
 - Maincloud deployment (hot-swap, dashboard, database states)
-- Known 2.6.1 TS SDK bugs fixed upstream (check here before debugging an odd SDK symptom)
-- MCP access to a live database (server-side on maincloud; `spacetime mcp` needs CLI 2.8.1+)
-- Module unit testing (v2.12+, post-upgrade)
+- Known 2.6.1 TS SDK bugs fixed upstream (history; all fixed on this repo's 2.14.1)
+- MCP access to a live database (server-side on maincloud; `spacetime mcp` needs CLI 2.8.1+, the active CLI is 2.14.1)
+- Module unit testing (v2.12+; in use here under `spacetimedb/src/__tests__/`)
 
 Read `references/multiplayer-sync-patterns.md` when implementing:
 - Real-time multiplayer features (movement, projectiles, combat)
@@ -464,7 +464,7 @@ The SpacetimeDB v2.2.0 engine itself rejects external WebSocket calls to schedul
 | `getAuthenticatedUser(ctx)` | "Resolve `ctx.sender → UserIdentity → User → role.tag`" | NO — project auth model is not JWT-claims-based; `AuthCtx.jwt` is for native OIDC, which the project intentionally does not use (guest-play UX, see `notes/v09-frontend-subscription-strategy.md`). |
 | `ensureModerator/Admin(ctx)` | Role-tag-based admin gates | NO — same reason as above. |
 
-Use `requireServer` / `getAuthenticatedUser` / `ensureXxx` for ALL application-level gating. Do not use `ctx.senderAuth.isInternal` until/unless a future SDK release fixes the unreachable-factory bug; the engine's "no such reducer" rejection is the operational defense for scheduled reducers in the meantime.
+Use `requireServer` / `getAuthenticatedUser` / `ensureXxx` for ALL application-level gating. The unreachable-factory bug is fixed on 2.14.1 (see the paragraph above), but `isInternal` guards on scheduled reducers stay deferred; the engine's "no such reducer" rejection remains the operational defense until they are re-added.
 
 Reference: the guards were added during the old repo's v2.2.0 refactor pass and reverted by the 2026-05-03 diagnostic described above, because `isInternal` was never `true` on that SDK; regression sensor at `test/backend/scheduled-reducer-isInternal-rejection.test.ts`.
 
@@ -571,12 +571,14 @@ These are APIs that don't exist — LLMs hallucinate them frequently:
 | `ctx.db.Table.pkCol.filter(val)` | `ctx.db.Table.pkCol.find(val)` — PK/unique columns only have `.find()`, not `.filter()` (TypeError) |
 | `{ microsSinceUnixEpoch: BigInt }` in server insert/update | `new Timestamp(BigInt)` — plain objects lack the internal `__timestamp_micros_since_unix_epoch__` property, causing PANIC |
 | `null` / `undefined` for optional struct fields | Use sentinel values (e.g. `255` for u8, `new Timestamp(0n)` for timestamp) — optional inside `t.object()` can't serialize null/undefined |
-| `conn.db.ViewMyProfile.iter()` (PascalCase view accessor) | View accessors use snake_case matching the view name: `conn.db.view_my_profile.iter()`. Views must be exported from the module for bindings to generate. (v2.7.0+ adds camelCase `conn.db.viewMyProfile`; snake_case stays as a deprecated alias) |
+| `conn.db.ViewMyProfile.iter()` (PascalCase view accessor) | On this repo's 2.14.1 bindings view handles are camelCase: `conn.db.viewMyProfile.iter()`; the snake_case `conn.db.view_my_profile` is a deprecated alias (it was the only form on 2.6.1). Views must be exported from the module for bindings to generate |
 | `subscribe([...]).onApplied(() => read all tables)` | Combined array subscribe fires `onApplied` before all table data arrives — use separate subscriptions with individual `onApplied` callbacks per table |
 | Bare `spacetimedb.clientConnected(...)` / `clientDisconnected(...)` / `init(...)` | `export const onConnect = spacetimedb.clientConnected(...)` — unexported hooks never register (silent) |
 | `new Range(new Bound.Inclusive(a), new Bound.Inclusive(b))` | `new Range({ tag: 'included', value: a }, { tag: 'included', value: b })` — `Bound` is a type, not a class |
-| `Math.random()` / `crypto.randomUUID()` in a reducer | `ctx.random()`, `ctx.random.integerInRange(min, max)`, `ctx.newUuidV4()` — deterministic, available on 2.6.1 |
-| `spacetimedb.reducer({ onSchedule: table }, ...)` / `.withAutomaticReconnect()` / `ctx.env.X` / `spacetimedb/server/test-utils` on this repo | Real APIs, but post-2.6.1 (v2.7 / v2.12 / v2.12 / v2.12) — they don't exist in the installed SDK. See api-guide § 12 |
+| `Math.random()` / `crypto.randomUUID()` in a reducer | IDs: `ctx.newUuidV4()` (deterministic, fine). Draws and shuffles: the fair draw in `shared/lobby-rules/timerDraw.ts` (`fairShuffle`, timer draw), **not** `ctx.random` — see the guardrail below |
+| Treating `spacetimedb.reducer({ onSchedule: table }, ...)` / `.withAutomaticReconnect()` / `ctx.env.X` / `spacetimedb/server/test-utils` as nonexistent | Real APIs added after 2.6.1 (v2.7 / v2.12 / v2.12 / v2.12), all present in this repo's SDK 2.14.1; the repo uses `ctx.env.STDB_TARGET` and test-utils. See api-guide § 12 |
+
+**`ctx.random` guardrail (S10o review F1, A117, A120):** `ctx.random` is deterministic, but its host seed (the transaction timestamp through a sign-filled 32-bit value) skews the first outputs: one position of 80 came up 4.1% of the time against an ideal 1.25%. This repo does not draw with `ctx.random`. Fair draws and shuffles go through `shared/lobby-rules/timerDraw.ts`, a MurmurHash3 mix of the transaction timestamp and state values (lobby or tournament id, turn, a per-position counter). A120 moves the last `ctx.random.shuffle` callers (bracket seeding, `shuffle_teams` RandomSwap, A36a team formation) to `fairShuffle`; don't add new `ctx.random` draws.
 
 ## Feature implementation checklist
 
@@ -624,9 +626,9 @@ spacetime call <name> <reducer_name> [args...] --server maincloud --no-config  #
 
 **v2.5.0 CLI changes:** `spacetime publish --delete-data` no longer forces a positional db name — it falls back to the name in `spacetime.json` if omitted. `spacetime call` now accepts **hex strings for `Identity` params** (e.g. `spacetime call <name> <reducer> <hex-identity>`) — no more manual byte-array construction for identity args.
 
-**CLI is 2.6.1 too** (`spacetime --version` → `spacetimedb tool version 2.6.1`; a 2.14.1 toolchain is installed side-by-side but not active, and switching is part of the upgrade, not ad-hoc). Commands added after 2.6.1, which won't exist until the CLI is upgraded: `spacetime sql --format json`, `spacetime lock` / `unlock` (v2.7.0, guards against accidental `delete`), `spacetime mcp` (v2.8.1), human-readable `spacetime describe` (v2.11.0), `spacetime env list/get` + `publish --env-only/--unset-env/--replace-env` (v2.12.0), `spacetime auth` for SpacetimeAuth management (v2.13.0), `generate --import-extension` (v2.14.0). From v2.11.0 failed publishes print the full error chain, and from v2.12.0 local schema-validation errors are spelled out. On 2.6.1, expect terse failures.
+**CLI is 2.14.1** (`spacetime --version` → `spacetimedb tool version 2.14.1`, commit `a0bf6be`). Commands added after 2.6.1, all present in this CLI's `--help`: `spacetime sql --format`, `spacetime lock` / `unlock` (v2.7.0, guards against accidental `delete`), `spacetime mcp` (v2.8.1), human-readable `spacetime describe` (v2.11.0), `spacetime env` + `publish --env-only/--unset-env/--replace-env` (v2.12.0), `spacetime auth` for SpacetimeAuth management (v2.13.0), `generate --import-extension` (v2.14.0). From v2.11.0 failed publishes print the full error chain, and from v2.12.0 local schema-validation errors are spelled out. (History: the 2.6.1 CLI gave terse failures.)
 
-**v2.6.1 SQL parser — no constant projections (verified live 2026-07-04):** the `spacetime sql` parser rejects literal/constant SELECT projections — `SELECT 1 AS ok` fails with `Error: Unsupported projection expression: 1` (HTTP 400). A connectivity smoke-test must project a real column from a real table, e.g. `spacetime sql <name> "SELECT COUNT(*) AS n FROM user"`, not `SELECT 1`. (Behavior change in the 2.3–2.6 line; caught during the Phase 16.5 upgrade.)
+**SQL parser — no constant projections (verified live on 2.6.1, 2026-07-04; not re-verified on 2.14.1):** the `spacetime sql` parser rejects literal/constant SELECT projections — `SELECT 1 AS ok` fails with `Error: Unsupported projection expression: 1` (HTTP 400). A connectivity smoke-test must project a real column from a real table, e.g. `spacetime sql <name> "SELECT COUNT(*) AS n FROM user"`, not `SELECT 1`. (Behavior change in the 2.3–2.6 line; caught during the Phase 16.5 upgrade.)
 
 ### Publishing: `--yes=migrate` only for reviewed schema deltas
 
@@ -797,11 +799,11 @@ const row = ctx.db.UserIdentity.identity.find(identity);  // O(1) PK lookup
 
 **`ctx: any` in helper functions** — The SpacetimeDB SDK exports `ReducerCtx` but it's generic and requires the full schema type parameter. Using `any` for `ctx` in standalone helper functions (`ensureAdmin`, `getAuthenticatedUser`, `auditInsert`) is the accepted pattern. Do NOT try to import or construct the generic context type.
 
-*Upstream note (not a rule change):* the official Clockwork `typescript-server` skill now recommends `type Ctx = ReducerCtx<InferSchema<typeof spacetimedb>>` for helpers and warns that `any` erases row types and can let `bigint` math infer as `number`. Both `ReducerCtx` and `InferSchema` are exported from `spacetimedb/server` in **2.6.1**, and a type-only import of `typeof spacetimedb` adds no runtime cycle. Switching is a repo-wide convention decision for the user. Keep `ctx: any` unless that decision is made.
+*Upstream note (not a rule change):* the official Clockwork `typescript-server` skill now recommends `type Ctx = ReducerCtx<InferSchema<typeof spacetimedb>>` for helpers and warns that `any` erases row types and can let `bigint` math infer as `number`. Both `ReducerCtx` and `InferSchema` are exported from `spacetimedb/server` (since 2.6.1; still in 2.14.1), and a type-only import of `typeof spacetimedb` adds no runtime cycle. Switching is a repo-wide convention decision for the user. Keep `ctx: any` unless that decision is made.
 
 **`as any` on enum values** — When constructing enum values from runtime strings (e.g. `{ tag: roleTag, value: {} } as any`), the `as any` cast is necessary because TypeScript can't narrow a `string` variable to the specific literal union the enum type expects. This is expected.
 
-**`export let` for scheduled table reducers** — The `userDeletionJob.ts` pattern (`export let _reducer: any` + setter function) is the documented way to avoid circular dependencies between scheduled tables and their reducers. Do not refactor this. (v2.7.0+, PR #5435: the reducer-side `spacetimedb.reducer({ onSchedule: table }, params, fn)` option removes the cycle at its source and is upstream's recommended form. It is the natural replacement **after** the SDK upgrade. See api-guide § 5.)
+**`export let` for scheduled table reducers** — The `userDeletionJob.ts` pattern (`export let _reducer: any` + setter function) is the documented way to avoid circular dependencies between scheduled tables and their reducers. Do not refactor this. (v2.7.0+, PR #5435: the reducer-side `spacetimedb.reducer({ onSchedule: table }, params, fn)` option removes the cycle at its source and is upstream's recommended form. It exists in this repo's SDK 2.14.1, whose types mark the table-side `scheduled` option `@deprecated` in its favor; moving to it is a refactor for the user to decide, not a drive-by. See api-guide § 5.)
 
 ## User table special fields
 
@@ -887,7 +889,7 @@ This project runs on SpacetimeDB maincloud with a **100,000 energy/month budget*
 ### Fan-out reducers are egress amplifiers (ENFORCED)
 
 A reducer whose writes reach many subscribers costs **writes × subscribers** in egress. Any client can call it in a loop with the SDK; there's no website in between. Every such reducer needs:
-- **A per-identity rate limit.** Store the last-accepted time per user and drop calls that come too fast. A manual throttle works on any version. **(v2.13+, post-upgrade)** the reusable `@spacetimedb/rate-limit` submodule is an option.
+- **A per-identity rate limit.** Store the last-accepted time per user and drop calls that come too fast. A manual throttle works on any version. **(v2.13+)** the reusable `@spacetimedb/rate-limit` submodule is an option; it is a separate package, not installed in this repo.
 - **Input bounds:** clamp or reject out-of-range values and cap payload sizes.
 - **Membership and state checks** before inserting.
 
@@ -926,7 +928,7 @@ When proposing any design that adds tables, columns, or changes visibility:
 
 ## Updating docs from SpacetimeDB GitHub
 
-The skill references are synced to **SpacetimeDB v2.14.1** (released 2026-11-04). Upstream docs are pinned at tag commit `a0bf6be10a146b03acbe3f4f9ad7fe20f114988d`, and the official agent skills at master `17a3f3a649a3ad55e1520353a53ec5de8ea97b0a`. **The project's SDK and CLI are still 2.6.1** (`package.json` `spacetimedb: ^2.6.1`, `spacetime --version` 2.6.1). Untagged guidance is valid on 2.6.1. Anything newer carries an inline `(v2.X+ …)` tag and must not be used until the upgrade lands. Server-side behavior (migration rules, HTTP API, scheduler, MCP endpoint) follows maincloud's server version, so those notes may apply already. Last audit: 2026-11-05, items SK-10..SK-29 (previous: Phase 16.5 SK-1..SK-9).
+The skill references are synced to **SpacetimeDB v2.14.1** (released 2026-11-04). Upstream docs are pinned at tag commit `a0bf6be10a146b03acbe3f4f9ad7fe20f114988d`, and the official agent skills at master `17a3f3a649a3ad55e1520353a53ec5de8ea97b0a`. **The project's SDK and CLI are 2.14.1** (`spacetimedb/package.json` `spacetimedb: 2.14.1`, `node_modules/spacetimedb` 2.14.1, `spacetime --version` 2.14.1; the 2.6.1 baseline is history). Inline `(v2.X+ …)` tags record when an API arrived; every tag up to v2.14.1 is available here. Notes marked "on 2.6.1" describe the old baseline. Server-side behavior (migration rules, HTTP API, scheduler, MCP endpoint) follows maincloud's server version, so those notes may apply already. Last audit: 2026-11-05, items SK-10..SK-29 (previous: Phase 16.5 SK-1..SK-9).
 
 When the user asks to update the skill docs (e.g. "update spacetimedb docs", "check for new SpacetimeDB changes", "sync with upstream"), or when you notice `spacetimedb` in `package.json` has been bumped:
 
@@ -945,4 +947,4 @@ Key upstream doc paths (as of v2.14.1):
 - Official agent skills: `skills/` (Claude plugin manifest: `.claude-plugin/marketplace.json`; agent setup: `https://spacetimedb.com/agent-setup.md`; `https://spacetimedb.com/llms.txt`)
 - Releases: `https://github.com/clockworklabs/SpacetimeDB/releases`
 
-**Official plugin vs this skill:** `claude plugin install spacetimedb@spacetimedb-plugins` (marketplace `clockworklabs/SpacetimeDB`, shipped v2.8.2) bundles the generic skills plus a `spacetime mcp` server entry. That server needs CLI 2.8.1+, and the active CLI here is 2.6.1. Its skills target the latest SDK, use different conventions (camelCase index accessors, inline `.index('btree')`, typed `ctx`), and teach post-2.6.1 APIs (`onSchedule`, `withAutomaticReconnect`). If both are loaded, **this skill wins** for anything project-specific or version-sensitive.
+**Official plugin vs this skill:** `claude plugin install spacetimedb@spacetimedb-plugins` (marketplace `clockworklabs/SpacetimeDB`, shipped v2.8.2) bundles the generic skills plus a `spacetime mcp` server entry. That server needs CLI 2.8.1+; the active CLI here is 2.14.1, so it would run. Its skills target the latest SDK, use different conventions (camelCase index accessors, inline `.index('btree')`, typed `ctx`), and teach APIs this repo's SDK has but its code does not use yet (e.g. `onSchedule`). If both are loaded, **this skill wins** for anything project-specific or version-sensitive.

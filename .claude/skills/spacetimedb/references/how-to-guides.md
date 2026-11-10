@@ -23,7 +23,7 @@
 5. [PostgreSQL Wire Protocol](#postgresql-wire-protocol)
 6. [Maincloud Deployment](#maincloud-deployment)
 7. [Reconnection](#reconnection)
-8. [Row Level Security (deprecated)](#row-level-security)
+8. [Row Level Security (experimental; use views)](#row-level-security)
 9. [v2.1.0 Bug Fixes](#v210-bug-fixes-relevant-to-clients)
 10. [Known 2.6.1 TS SDK bugs fixed upstream](#known-261-ts-sdk-bugs-fixed-upstream)
 11. [MCP (agent access to a live database)](#mcp-agent-access-to-a-live-database)
@@ -112,7 +112,7 @@ conn.subscriptionBuilder().subscribe(
 conn.db.LobbyCursorEvent.onInsert((ctx, ev) => { /* move the cursor */ });
 ```
 
-**A filter is not access control.** It cuts egress, but any SDK client can subscribe without it, views can't wrap event tables, and RLS isn't available. Never put data meant only for specific recipients in a public event table; anything in it is readable by every connected client that asks.
+**A filter is not access control.** It cuts egress, but any SDK client can subscribe without it, and views can't wrap event tables. The row filter (`clientVisibilityFilter`, § Row Level Security) exists in SDK 2.14.1 but is experimental, and whether it restricts event-table rows is not verified (A111 tests it on `LobbyCursorEvent` at S11). Never put data meant only for specific recipients in a public event table; anything in it is readable by every connected client that asks.
 
 This project uses `LobbyCursorEvent` as an event table.
 
@@ -181,7 +181,7 @@ spacetime publish <db-name> --server maincloud
 - `spacetime login` authenticates with GitHub or Google; databases then appear on the dashboard
 - Compiles module, uploads, runs `init` reducer
 - Subsequent deploys **hot-swap code without disconnecting clients** (some migrations, e.g. removing a table, do disconnect clients so they reconnect against the new schema)
-- Reset data: `spacetime publish <db-name> --server maincloud --delete-data` (2.6.1 CLI: `--delete-data[=always|on-conflict|never]`; `on-conflict` wipes only when the schema change is breaking; short form `-c`)
+- Reset data: `spacetime publish <db-name> --server maincloud --delete-data` (2.6.1 and 2.14.1 CLI: `--delete-data[=always|on-conflict|never]`; `on-conflict` wipes only when the schema change is breaking; short form `-c`)
 
 ### Dashboard
 - URL: `https://spacetimedb.com/<db-name>` or `https://spacetimedb.com/@<username>/<db-name>`
@@ -200,7 +200,7 @@ spacetime delete <db-name> --server maincloud --yes
 
 ## Reconnection
 
-**Current (SDK 2.6.1):** there is no built-in reconnect; the only reliable way is to unmount and remount the `SpacetimeDBProvider` by toggling a key prop:
+**History (SDK 2.6.1; obsolete on this repo's 2.14.1):** there was no built-in reconnect; the only reliable way is to unmount and remount the `SpacetimeDBProvider` by toggling a key prop:
 
 ```typescript
 const [connectionKey, setConnectionKey] = useState(0);
@@ -231,21 +231,21 @@ const builder = DbConnection.builder()
 - Register subscriptions and row callbacks **once**, not inside a per-connect callback; the SDK replays subscriptions in one batch and emits only net row changes. `onApplied` fires again after replay.
 - `onDisconnect` / `onConnectError` gain `(ctx, error, nextReconnectAttempt?, nextReconnectDelayMs?)` — both `undefined` when no retry is scheduled. Direct connections expose `conn.isReconnecting`.
 - While disconnected, reducer/procedure calls fail immediately (`DisconnectedError`); calls in flight when the socket dropped reject with `UnknownCallResultError` — they **may have executed**, so never auto-retry non-idempotent reducers on that error.
-- Uncertain: the v2.14.1 TS reference says `onConnect` does not fire on automatic reconnect (use `onAutomaticReconnect(conn, identity, token)` for per-reconnect work), while the official client skill and PR #5927 say `onConnect` re-fires. Verify against the installed version before relying on either.
+- `onConnect` fires for the first successful connection only; automatic reconnects call `onAutomaticReconnect(conn, identity, token)` instead (installed 2.14.1 `dist/sdk/db_connection_builder.d.ts`, `onConnect` JSDoc; matches the v2.14.1 TS reference). The official client skill and PR #5927 said `onConnect` re-fires; the installed types say otherwise.
 
 ---
 
 ## Row Level Security
 
-**Deprecated.** Use Views instead. See `api-guide.md` section 7 for the recommended view pattern.
+**Experimental and unstable; use Views instead.** The v2.14.1 upstream RLS page is headed "Experimental Feature - Use Views Instead" and says the API may change or be removed. It does not call RLS deprecated, and the installed SDK types carry no `@deprecated` marker on it. See `api-guide.md` section 7 for the recommended view pattern.
 
-RLS is experimental/unstable. Rust/C# need an explicit opt-in; TypeScript needs none — the API (present in 2.6.1) is an exported filter:
+Rust/C# need an explicit opt-in; TypeScript needs none. The API exists in the installed SDK 2.14.1 (it was present in 2.6.1 too) as a member of the schema object, `clientVisibilityFilter: { sql: (filter: string) => ModuleExport }` (`dist/server/schema.d.ts`); the export it returns adds the SQL to the module's `rowLevelSecurity` list, so it must be a named export of the module entry:
 ```typescript
 export const accountFilter = spacetimedb.clientVisibilityFilter.sql(
   'SELECT * FROM account WHERE account.identity = :sender'
 );
 ```
-Mutually dependent rules still publish, but client queries on those tables then fail with a cyclic-dependency error. Views are simpler, more performant, and provide full row/column access control — don't introduce RLS in this repo.
+Mutually dependent rules still publish, but client queries on those tables then fail with a cyclic-dependency error. Views are simpler, more performant, and provide full row/column access control, so they stay this repo's access control. Don't introduce RLS elsewhere. The one planned exception is a test (A111, step S11): one row filter on the public `LobbyCursorEvent` event table on test1, to see whether it limits cursor events to the lobby's members and at what cost. Adoption is the user's call after that test.
 
 ---
 
@@ -267,7 +267,7 @@ These fixes landed in v2.1.0 (released 2026-03-24). No client code changes requi
 
 ## Known 2.6.1 TS SDK bugs fixed upstream
 
-If you hit one of these symptoms on the current SDK, it is a known upstream bug, not app logic. Each fix ships only with the SDK upgrade (module rebuild and/or client bump):
+History: these were known upstream bugs on the old 2.6.1 baseline. All are fixed in this repo's SDK 2.14.1, but a database keeps a module-side bug until a build against 2.14.1 is published to it. If one of these symptoms shows up, check the published build before debugging app logic:
 
 | Symptom on 2.6.1 | Fixed in |
 |---|---|
@@ -296,7 +296,7 @@ SpacetimeDB speaks the Model Context Protocol. Status for this repo:
 | Path | Requires | Available here? |
 |---|---|---|
 | `POST /v1/mcp` (host-wide) and `POST /v1/database/<name>/mcp` (scoped) over HTTP | Server v2.10.0+ on maincloud (server-side) | Yes on the maincloud side — MCP is **unstable** |
-| `spacetime mcp` stdio bridge (what the official Claude Code plugin registers) | CLI v2.8.1+ | **No** — the active CLI is 2.6.1 (`spacetime --version`; do not `spacetime version use` just for MCP) |
+| `spacetime mcp` stdio bridge (what the official Claude Code plugin registers) | CLI v2.8.1+ | **Available** — the active CLI is 2.14.1 and lists `mcp` (marked unstable in `--help`); it acts as the CLI identity on maincloud, so CLAUDE.md's energy rules (§2) and maincloud-write pause rule (§8) apply |
 
 Tools: `list_databases` (host-wide only; databases owned by your identity), `get_schema`, `sql` (optional `confirmed`), `call` (`reducer`, `args` as a positional JSON array), `ping`. Errors come back in-band (`isError: true`) — read the text before retrying.
 - Host-wide servers need a `database` argument on every data tool; scoped servers reject it. Check `tools/list` first.

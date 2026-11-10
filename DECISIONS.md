@@ -1227,3 +1227,50 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Decision:** a guest account lives in the browser that created it. If its data is cleared or the device changes, the account and anything tied to it (a tournament entry included) is unreachable unless it is reconnected by hand through admin tools or server functions; no self-service recovery is built. The tournament pages tell a registering guest that the entry lives in this browser and that signing in keeps it.
 - **Why:** user, 2026-11-10: "if they clear the browser data, we can assume that guest account will remain unreachable unless we manually connect it through admin tools or server functions, nothing we can do about that" and "agree on the notes you said".
 - **Where implemented:** recorded; the page note is for M6 / M7
+
+### A120 — Every random draw of the module uses the fair draw
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** the three remaining users of `ctx.random` move to the mixed-hash draw of A117 (`shared/lobby-rules/timerDraw.ts`): random bracket seeding (`bracketGeneration.ts`), the RandomSwap of `shuffle_teams` (`lobbySettings.ts`) and the random team formation of A36a (`tournamentHelpers.ts`). A shuffle is a Fisher-Yates pass whose every index comes from the mixed hash, keyed by the transaction time and values of the acting state (the tournament or lobby id and a per-position counter). No module code draws with `ctx.random` afterwards.
+- **Why:** user, 2026-11-10: "for the decisions, we can move the same fair draw". S10o review F1: the host seeds `ctx.random` from the transaction timestamp through a sign-filled 32-bit value, which skews the first outputs (one position of 80 came up 4.1% of the time against an ideal 1.25%).
+- **Supersedes:** the `ctx.random` shuffles of C-a7 (bracket seeding), `shuffle_teams` RandomSwap and A36a.
+- **Where implemented:** S10p
+
+### A121 — A tournament whose organizer is deleted or banned gets a new organizer
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** when staff delete or ban the organizer of a tournament that is not Completed or Cancelled, the tournament passes to the longest-serving assistant who holds all three permissions (that assistant row is removed and the user becomes the organizer). If no such assistant exists, the Moderator or Admin who performed the deletion or ban becomes the organizer. A deletion performed by the server identity with no staff user behind it leaves the tournament as it is today (Moderator and above manage it). The organizer still cannot self-delete (A94).
+- **Why:** user, 2026-11-10: "pass the assistant or make the admin/moderator the new organizer". Triage item L70: the tournament kept pointing at the deleted user and only a Moderator could advance or cancel it.
+- **Orchestrator's reading (not the user's words):** "the assistant" is taken as the longest-serving one with all three permissions; "the admin/moderator" as the staff member who performed the action; the server-identity fallback is added because no staff user exists there.
+- **Supersedes:** nothing; completes A94.
+- **Where implemented:** S10s
+
+### A122 — The 31 "fix now" items of the closing triage are fixed before M3
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** the items marked "fix now" in `notes/audit-2026-11-09/low-findings-triage.md` (L1, L4, L16, L17, L21, L22, L32, L33, L34, L35, L40, L42, L44, L46, L51, L52, L63, L64, L65, L66, L69, L70, L71, L86, L87, L89, L93, L99, L100, L101, L102) are fixed as the list states them. Rules the fixes introduce:
+  1. L1: `admin_update_user` applies the same name rules as a player's own rename, renames the solo team, and refuses a user pending deletion.
+  2. L4: an admin delete of a match history row removes its participant, step, game and lineup history rows.
+  3. L16: every system chat line goes through the 50-message trim, which drops the oldest message by time.
+  4. L17, L93: `confirm_ready`, `unconfirm_ready`, `shuffle_teams`, `transfer_host` and the calendar and roster writes use the per-user allowance.
+  5. L21: a Moderator edits or deletes only presets created by Moderators and hosts.
+  6. L22, L89: user deletion removes the user's lobby presets and unpublished cost sets; a preset or set still referenced by an unfinished tournament or a live lobby is kept.
+  7. L32: a ban must name a real character of the lobby's pool; `EMPTY` is not a manual ban.
+  8. L33: a coach cannot pause.
+  9. L34: the last ban of the Auction ban phase can be undone.
+  10. L35: undo rows count toward a cap.
+  11. L40: a match that ended during the draft archives the budget actually spent.
+  12. L42, L44: achievement criteria and the rating config reject unknown fields, unknown tags, a divisor of 0 and inverted thresholds.
+  13. L46: a tournament host awards only manual achievements.
+  14. L51: finalizing a result is a power of the lobby's referee and staff, not of whoever closed the game.
+  15. L52: a seated referee conceding their own team is a surrender.
+  16. L63: a solo player promoted from the waitlist during Seeding is seeded.
+  17. L64: `update_tournament` after the registration deadline refuses only a change of the deadline to the past; a bad date gives a readable error; at least 2 participants.
+  18. L65: seeding by rating reads the active season.
+  19. L66: stand-in approvals and their locks end with the tournament; an approval needs a running tournament and a team that is not disqualified.
+  20. L69: an anonymous alias is unique in its tournament and cannot equal another entrant's display name.
+  21. L71: an assistant with no permission reads no staff view.
+  22. L86, L87: every calendar action runs the clean-up; the calendar view skips finished tournaments.
+  23. L99, L100, L101: the prod target takes its token only from its own env file; the prod publish guard is an allow-list; `bootstrap` saves the new delegate before revoking the old one.
+- **Why:** user, 2026-11-10: "lets run the fixes now then". The numbered rules are the orchestrator's reading of each list entry; the user triages anything a review flags.
+- **Where implemented:** S10r (L1 to L52, L89), S10s (L63 to L102, A121)

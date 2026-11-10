@@ -103,7 +103,7 @@ All rejections are `SenderError`s. Permissions per A25 (`ensureTournamentPermiss
 
 | Reducer | Permission; stage | Behaviour | Messages |
 |---|---|---|---|
-| `seed_bracket(tournamentId, mode: 'mmr' \| 'random')` | `bracket`; Seeding | Ready teams only (A26). `mmr`: captain's `MmrRating` for `defaultGameMode` (any season; 0 when none), highest first, ties by team id. `random`: `ctx.random.shuffle` of the Ready teams in id order (C-a7). Writes `seedNumber` 1..n, stamps `lastSeedChangeAt` | "Tournament is not in Seeding." · "Seeding mode must be "mmr" or "random"." · "No Ready teams to seed." |
+| `seed_bracket(tournamentId, mode: 'mmr' \| 'random')` | `bracket`; Seeding | Ready teams only (A26). `mmr`: captain's `MmrRating` for `defaultGameMode` (any season; 0 when none), highest first, ties by team id. `random`: `fairShuffle` of the Ready teams in id order (C-a7; A120, Phase S10p: keyed by the transaction time, `SHUFFLE_DOMAIN.BracketSeeding` and the tournament id; was `ctx.random.shuffle`). Writes `seedNumber` 1..n, stamps `lastSeedChangeAt` | "Tournament is not in Seeding." · "Seeding mode must be "mmr" or "random"." · "No Ready teams to seed." |
 | `set_seed_order(tournamentId, teamIds: u32[])` | `bracket`; Seeding | `teamIds` = exactly the Ready teams, each once; position i -> seed i + 1; stamps `lastSeedChangeAt`. Replaces `swap_seeds` | "A team appears twice in the seed order." · "The seed order must list every Ready team exactly once." |
 | `generate_bracket(tournamentId)` | `bracket`; Seeding | (1) teams still Forming -> Withdrawn, members stay enrolled (A26a); (2) >= 2 Ready teams, every one seeded, seeds unique; format checks (A29 third place, `groupSize` >= 2, `groupAdvanceCount` 1..2, >= 2 qualifiers) and manual groups read; (3) `deleteBracket` (rows, stand-ins, calendar rows, `groupId`; T20); (4) rows per format (below); (5) stamps `bracketGeneratedAt` | "At least 2 Ready teams are needed." · "Seed every Ready team first." · "Seed numbers must be unique." · "A third-place match exists only in single elimination." · "groupSize must be at least 2." · "groupAdvanceCount must be 1 or 2." · "At least 2 teams must qualify from the groups." · manual: "Team "X" has no group." / "… only N groups exist." / "Every group needs at least N teams." / "Group sizes may differ by one team at most." |
 | `advance_group_stage(tournamentId)` | `bracket`; InProgress | GroupInto* only; every group match Decided / Walkover / Void; no elimination row yet (checked by `bracketSide`, since `GF` also starts with G); qualifiers = `qualifiersFor` (A30 ranking, Withdrawn / Disqualified / Eliminated dropped, T7 placement); `generateSingleElim(n, { thirdPlace })` / `generateDoubleElim(n, { winnerAdvantage })` + `insertBracket`; grouped teams that did not qualify and are still Active -> Eliminated | "Tournament is not in progress." · "A group-only tournament has no elimination stage." · "This tournament has no group stage." · "Generate the bracket first." · "The elimination bracket already exists." · "N group match(es) are not settled." · "At least 2 teams must qualify." |
@@ -258,6 +258,13 @@ every lobby without a Validated record) and deletes that match's calendar event 
   `ensureResultsMatch` (`resolve_bracket_match`, `rollback_bracket_match`) and by `override_match_result` (tournament
   branch).
 
+## Phase S10p execution (DECISIONS.md A120)
+
+- **Random seeding.** `seed_bracket` mode `random` orders the Ready teams (team-id order, C-a7) with `fairShuffle` (`shared/lobby-rules/timerDraw.ts`); formula, uniformity and its 2^32-orders limit: [lobby/architecture.md, Phase S10p execution](../lobby/architecture.md#phase-s10p-execution-decisionsmd-a120).
+- **Key words.** `[SHUFFLE_DOMAIN.BracketSeeding ('SEED', 0x53454544), tournamentId]`. Two tournaments seeded in the
+  same microsecond hash different words; re-seeding later draws again. `mmr` mode, `set_seed_order` and
+  `generate_bracket` are unchanged. No table, column, index or binding change.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -285,10 +292,11 @@ every lobby without a Validated record) and deletes that match's calendar event 
 | Head start on team1 whatever the colours, `headStartSide` removed, `set_match_sides(bracketMatchId, blueTeamId)`, records checked before lobbies, `slotChangeReset` on every slot change | Phase S8g execution (DECISIONS.md A71) | 2026-11-08 |
 | `unplaceEntrant` also refuses a downstream match with a lobby or a Pending / Submitted / Disputed / Validated record | Phase S10c execution (DECISIONS.md A84) | 2026-11-09 |
 | DQ voids the unsettled lobbies of the matches it settles and needs Registration through InProgress; rollback voids the deciding record of a Staff / Dq decision the tally gives; override refused on a Dq decision or a staff decision against the tally; group matches locked once the elimination bracket exists | Phase S10g execution (tournament audit #2, #3, #4, #5, #8) | 2026-11-09 |
+| `seed_bracket` random mode: `fairShuffle` (MurmurHash3 Fisher-Yates keyed by the transaction time, `SHUFFLE_DOMAIN.BracketSeeding` and the tournament id) replaces `ctx.random.shuffle`; input order (team id) unchanged | Phase S10p execution (DECISIONS.md A120) | 2026-11-10 |
 
 ---
 
-*Last updated: 2026-11-09*
+*Last updated: 2026-11-10 (S10p)*
 *Feature owner: Phase 04 / Phase 10.1*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

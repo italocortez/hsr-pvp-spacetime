@@ -10,6 +10,7 @@ import { ensureSeatAllowed } from '@module/helpers/tournament/tournamentLobbySid
 import { ensureForfeitSecondsInRange, ensureNoActionAllowed, ensureNotDeferredOutsideTournament } from '@module/helpers/lobby/disconnectHelpers';
 import { ensureLobbyConfigInRange, ensureTeamAliases } from '@module/helpers/lobby/lobbyConfigBounds';
 import { consumeMembershipAllowance } from '@module/helpers/lobby/abuseControls';
+import { fairShuffle, SHUFFLE_DOMAIN, shuffleKeyAt } from '@shared/lobby-rules';
 
 // ─── update_lobby_settings ────────────────────────────────────────────────────
 // Updates all mutable lobby configuration fields.
@@ -520,7 +521,8 @@ export const set_captain = spacetimedb.reducer(
 // client does not fire N set_team_slot calls (racy, N confirmation resets).
 //   TeamSwap:   every Blue seat moves to Red and every Red seat to Blue (players and coaches); captains keep their
 //               flag, since each captain stays with their own team.
-//   RandomSwap: the non-coach Blue + Red players are shuffled with ctx.random (deterministic per transaction) and
+//   RandomSwap: the non-coach Blue + Red players are shuffled with fairShuffle (A120, shared/lobby-rules/timerDraw.ts,
+//               keyed by the transaction time, SHUFFLE_DOMAIN.RandomSwap and the lobby id; deterministic per transaction) and
 //               dealt alternately Blue, Red, Blue, ... ; coaches and spectators stay; captain flags are cleared
 //               (start_draft assigns one per team, D-30).
 // Host or Moderator+ (ensureHostOrAbove); Waiting only; one confirmation reset for everyone (A38(4)).
@@ -557,11 +559,14 @@ export const shuffle_teams = spacetimedb.reducer(
                 if (target) newSlot.set(m.userId, { tag: target });
             }
         } else {
-            // Players only, in join order before the shuffle so the result depends on ctx.random alone.
+            // Players only, in join order before the shuffle so the result depends on the hash alone (A120).
             const players = members
                 .filter((m: any) => slotTeam(m.lobbySlot) !== null && !slotIsCoach(m.lobbySlot))
                 .sort((a: any, b: any) => a.joinSeq - b.joinSeq);
-            const pool = ctx.random.shuffle(players.map((m: any) => m.userId));
+            const pool = fairShuffle(
+                players.map((m: any) => m.userId as number),
+                shuffleKeyAt(ctx.timestamp.microsSinceUnixEpoch, [SHUFFLE_DOMAIN.RandomSwap, lobbyId]),
+            );
             pool.forEach((userId: number, i: number) => {
                 newSlot.set(userId, { tag: i % 2 === 0 ? 'BluePlayer' : 'RedPlayer' });
             });

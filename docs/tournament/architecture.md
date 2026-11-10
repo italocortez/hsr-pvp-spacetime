@@ -195,7 +195,7 @@ Enrolled caller; tournament anonymous; Registration or CheckIn; alias 1–32 tri
 `participants` (A25). **Phase S8c execution:** the enrolment becomes Disqualified (row kept, A26a(2)); the player (with `dqWholeTeam` every member, enrolments Disqualified too) leaves the team, captain transferred (D-21); a team left non-empty gets `refreshTeamStatus` only before generation (after it the team keeps its status and plays with stand-ins, A26a(3)); a team left empty becomes **Disqualified** (no longer deleted). In Seeding after generation `lastSeedChangeAt` is stamped (regenerate). InProgress: every open match of the team is settled through `applyBracketResult` (decidedBy Dq) or, while the opponent is unknown, its slot becomes a BYE; rule and messages in [brackets/architecture.md](../brackets/architecture.md) "Phase S8c execution". Live lobby handling unchanged (D-25 / D-26; S8d). **Phase S10g:** the body is `disqualifyParticipant` (`helpers/tournament/disqualification.ts`), shared with user deletion (A94(2)); Registration through InProgress only (`Tournament is <stage>; participants can be disqualified from Registration through InProgress only.`, audit #8); every match the DQ settles has its unsettled lobbies voided except the live one, which is force-conceded (audit #2, A68(6)).
 
 ### Bracket reducers (Phase S8c execution)
-Removed: `swap_seeds`, `advance_bracket_match`, `submit_and_advance_bracket`, `advance_group_to_elimination`, `admin_set_bracket_winner`. Added: `set_seed_order(tournamentId, teamIds)`, `advance_group_stage(tournamentId)`, `resolve_bracket_match(bracketMatchId, winnerTeamId, reason)`. Changed: `seed_bracket` (Ready teams, `ctx.random`), `generate_bracket` (A26a Withdraw, groups, `bracketGeneratedAt`), `rollback_bracket_match(bracketMatchId, reason)`. Reference: [brackets/architecture.md](../brackets/architecture.md).
+Removed: `swap_seeds`, `advance_bracket_match`, `submit_and_advance_bracket`, `advance_group_to_elimination`, `admin_set_bracket_winner`. Added: `set_seed_order(tournamentId, teamIds)`, `advance_group_stage(tournamentId)`, `resolve_bracket_match(bracketMatchId, winnerTeamId, reason)`. Changed: `seed_bracket` (Ready teams, `ctx.random`; since S10p `fairShuffle`, A120), `generate_bracket` (A26a Withdraw, groups, `bracketGeneratedAt`), `rollback_bracket_match(bracketMatchId, reason)`. Reference: [brackets/architecture.md](../brackets/architecture.md).
 
 ### select_match_account(lobbyId, hsrAccountId) / deselect_match_account(lobbyId, hsrAccountId)
 1. `getAuthenticatedUser(ctx)` -- must be active LobbyMember
@@ -506,6 +506,14 @@ No schema change; index reads only.
   caller without the permission: `This action needs the participants permission.`
 - **A113(2).** Guests removed this way no longer count, so a settings change refused for them passes afterwards.
 
+## Phase S10p execution (DECISIONS.md A120)
+
+- **Random team formation (A36a).** `formRandomTeams` (`helpers/tournament/tournamentHelpers.ts`) orders the
+  eligible opted-in solos (user-id order, as before) with `fairShuffle` (`shared/lobby-rules/timerDraw.ts`); formula, uniformity and its 2^32-orders limit: [lobby/architecture.md, Phase S10p execution](../lobby/architecture.md#phase-s10p-execution-decisionsmd-a120).
+- **Key words.** `[SHUFFLE_DOMAIN.TeamFormation ('TEAM', 0x5445414d), tournament.id]`: a different domain word from
+  random seeding (`SEED`, brackets/architecture.md), so the two draws never share a hash in one transaction.
+  Teams, names, captains (first member) and the leftover rule are unchanged. No schema or binding change.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -546,10 +554,11 @@ No schema change; index reads only.
 | `requireVerified` forced on by `countTowardsMmr`, `requireRoster`, `minimumMmr`, `requireOwnership` or a roster visibility other than `ClosedNoRating`; `update_tournament` refuses to turn it on while non-Disqualified guest enrolments exist (count in the text); a moved entry takes the guest's match calendar invites; guests cannot be assistants | Phase S10m execution (DECISIONS.md A113) | 2026-11-10 |
 | `create_tournament_lobby` loses its ignored `joinCode` argument | Phase S10n execution (DECISIONS.md A114) | 2026-11-10 |
 | `reject_participant` also removes a guest's approved, non-Disqualified entry before the bracket exists (withdrawal path, no Disqualified row); verified players and post-generation unchanged | Phase S10o execution (DECISIONS.md A118) | 2026-11-10 |
+| A36a random team formation: `fairShuffle` keyed by the transaction time, `SHUFFLE_DOMAIN.TeamFormation` and the tournament id replaces `ctx.random.shuffle`; pool order (user id), team building and leftovers unchanged; `seed_bracket` random likewise (brackets) | Phase S10p execution (DECISIONS.md A120) | 2026-11-10 |
 
 ---
 
-*Last updated: 2026-11-10*
+*Last updated: 2026-11-10 (S10p)*
 *Feature owner: Phase 04 / Phase 06 / Phase 08 / Phase 10.1 / Phase 10.4 / Phase 12.3*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

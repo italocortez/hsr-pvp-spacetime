@@ -1,7 +1,17 @@
 // T-S10o fix pass (review F1, F2): the pure timer draw (A117(3)). Distribution over structured, realistic inputs, and
 // the dependence of the draw on the transaction time and on the step sequence.
 import { describe, expect, it } from 'vitest';
-import { fmix32, microsWords, murmur3Words, timerDrawIndex, type TimerDrawInput } from './timerDraw';
+import {
+    fairShuffle,
+    fmix32,
+    microsWords,
+    murmur3Words,
+    SHUFFLE_DOMAIN,
+    shuffleKeyAt,
+    timerDrawIndex,
+    type ShuffleKey,
+    type TimerDrawInput,
+} from './timerDraw';
 
 // 2026-09 in microseconds; consecutive inputs 13.337777 s apart (about 31 days over 200,000 draws, so the high word moves).
 const BASE_MICROS = 1_790_000_000_000_000n;
@@ -97,5 +107,119 @@ describe('timerDraw helpers', () => {
         expect(h >= 0 && h <= 0xffffffff && Number.isInteger(h)).toBe(true);
         // MurmurHash3 x86_32, seed 0, of the 4 bytes 00 00 00 00 (one zero word) is 0x2362f9de.
         expect(murmur3Words([0])).toBe(0x2362f9de);
+    });
+});
+
+// ─── T-S10p (A120): fairShuffle, the Fisher-Yates pass every other random draw of the module uses ──────────────────
+
+const microsAt = (i: number) => BASE_MICROS + BigInt(i) * STEP_MICROS + BigInt((i * i) % 1_000_003);
+const seedKey = (i: number, id = 7): ShuffleKey => shuffleKeyAt(microsAt(i), [SHUFFLE_DOMAIN.BracketSeeding, id]);
+const range = (n: number) => Array.from({ length: n }, (_, i) => i);
+
+describe('fairShuffle: shape (A120)', () => {
+    it('A120: returns a permutation of the input and does not mutate it', () => {
+        for (const n of [3, 8, 16, 80]) {
+            const input = range(n).map((k) => k * 10);
+            const frozen = Object.freeze([...input]);
+            for (let i = 0; i < 50; i++) {
+                const out = fairShuffle(frozen, seedKey(i));
+                expect(out).not.toBe(frozen);
+                expect([...out].sort((a, b) => a - b)).toEqual(input);
+            }
+            expect(frozen).toEqual(input);
+        }
+    });
+
+    it('A120: lengths 0, 1 and 2', () => {
+        expect(fairShuffle([], seedKey(0))).toEqual([]);
+        expect(fairShuffle(['a'], seedKey(0))).toEqual(['a']);
+        const seen = new Set<string>();
+        for (let i = 0; i < 200; i++) {
+            const out = fairShuffle(['a', 'b'], seedKey(i));
+            expect([...out].sort()).toEqual(['a', 'b']);
+            seen.add(out.join(''));
+        }
+        expect(seen).toEqual(new Set(['ab', 'ba']));
+    });
+
+    it('A120: deterministic for the same timestamp and key words', () => {
+        const input = range(16);
+        expect(fairShuffle(input, seedKey(3))).toEqual(fairShuffle(input, seedKey(3)));
+        expect(fairShuffle(input, shuffleKeyAt(microsAt(3), [SHUFFLE_DOMAIN.RandomSwap, 42])))
+            .toEqual(fairShuffle(input, shuffleKeyAt(microsAt(3), [SHUFFLE_DOMAIN.RandomSwap, 42])));
+    });
+
+    it('A120: differs across timestamps (1 µs to 40 s apart) and across the high word', () => {
+        const input = range(8);
+        for (const step of [1n, 1_000n, 40_000_000n]) {
+            const orders = new Set<string>();
+            for (let i = 0; i < 40; i++) orders.add(fairShuffle(input, shuffleKeyAt(BASE_MICROS + BigInt(i) * step, [SHUFFLE_DOMAIN.BracketSeeding, 7])).join());
+            expect(orders.size).toBeGreaterThanOrEqual(35);
+        }
+        const byHi = new Set<string>();
+        const base = seedKey(0);
+        for (let hi = 0; hi < 40; hi++) byHi.add(fairShuffle(input, { ...base, timestampHi: base.timestampHi + hi }).join());
+        expect(byHi.size).toBeGreaterThanOrEqual(35);
+    });
+
+    it('A120: differs across domain words and ids at one timestamp; the three domain words are distinct', () => {
+        const domains = Object.values(SHUFFLE_DOMAIN);
+        expect(new Set(domains).size).toBe(3);
+        const input = range(8);
+        let differ = 0;
+        for (let i = 0; i < 100; i++) {
+            const micros = microsAt(i);
+            const orders = domains.map((d) => fairShuffle(input, shuffleKeyAt(micros, [d, 5])).join());
+            if (new Set(orders).size === 3) differ++;
+        }
+        expect(differ).toBeGreaterThanOrEqual(95); // 8! = 40,320 orders: a coincidence is rare
+        const byId = new Set<string>();
+        for (let id = 1; id <= 40; id++) byId.add(fairShuffle(input, shuffleKeyAt(microsAt(0), [SHUFFLE_DOMAIN.BracketSeeding, id])).join());
+        expect(byId.size).toBeGreaterThanOrEqual(35);
+    });
+});
+
+describe('fairShuffle: distribution (A120)', () => {
+    // Tolerance: every frequency within 5% (relative) of the ideal. n = 4: 240,000 shuffles, 10,000 expected per
+    // permutation, one standard deviation about 1%; n = 16: 160,000 shuffles, 10,000 expected per (element, position)
+    // cell, one standard deviation about 1%. Each step's index is uniform within (i + 1) / 2^32; the whole order is a
+    // function of one 32-bit hash state (at most 2^32 orders reachable: every order up to n = 12, so all 24 at n = 4).
+    // n = 4 runs for every domain word over three timestamp families: jittered (13.3 s apart plus a quadratic term),
+    // consecutive microseconds, and round seconds.
+    const ROUND_SECOND_BASE = (BASE_MICROS / 1_000_000n) * 1_000_000n;
+    const FAMILIES: Array<[string, (i: number) => bigint]> = [
+        ['jittered', microsAt],
+        ['consecutive microseconds', (i) => BASE_MICROS + BigInt(i)],
+        ['round seconds', (i) => ROUND_SECOND_BASE + BigInt(i) * 1_000_000n],
+    ];
+    for (const [domainName, domain] of Object.entries(SHUFFLE_DOMAIN)) {
+        for (const [familyName, micros] of FAMILIES) {
+            it(`A120: n = 4, ${domainName}, ${familyName}: each of the 24 permutations appears within 5% of 1/24 over 240,000 timestamps`, () => {
+                const N = 240_000;
+                const counts = new Map<string, number>();
+                for (let i = 0; i < N; i++) {
+                    const key = fairShuffle(range(4), shuffleKeyAt(micros(i), [domain, 7])).join('');
+                    counts.set(key, (counts.get(key) ?? 0) + 1);
+                }
+                expect(counts.size).toBe(24);
+                const ideal = N / 24;
+                for (const c of counts.values()) {
+                    expect(c).toBeGreaterThan(ideal * 0.95);
+                    expect(c).toBeLessThan(ideal * 1.05);
+                }
+            });
+        }
+    }
+
+    it('A120: n = 16: each element lands in each position within 5% of 1/16 over 160,000 timestamps', () => {
+        const N = 160_000;
+        const n = 16;
+        const cells = new Array<number>(n * n).fill(0);
+        for (let i = 0; i < N; i++) {
+            fairShuffle(range(n), seedKey(i, 1000 + (i % 5))).forEach((element, position) => cells[element * n + position]++);
+        }
+        const ideal = N / n;
+        expect(Math.min(...cells)).toBeGreaterThan(ideal * 0.95);
+        expect(Math.max(...cells)).toBeLessThan(ideal * 1.05);
     });
 });

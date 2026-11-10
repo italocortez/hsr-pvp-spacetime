@@ -248,7 +248,7 @@ Phase S6 execution (backlog #2, #6, #7, #9; DECISIONS.md A28, A33, A38(2)/(4), A
 ### shuffle_teams(lobbyId, mode: ShuffleMode) (lobbySettings.ts; Phase S6 execution, A45(3))
 1. `getAuthenticatedUser(ctx)`; load lobby; `ensureHostOrAbove`; `ensureStageIs(Waiting)`.
 2. `TeamSwap`: every BluePlayer/BlueCoach becomes RedPlayer/RedCoach and vice versa; captain flags stay (each captain stays with their team).
-3. `RandomSwap`: the non-coach Blue + Red players (ordered by `joinSeq`) are shuffled with `ctx.random.shuffle` and dealt Blue, Red, Blue, ...; coaches and spectators stay; captain flags are cleared (`start_draft` assigns them, D-30).
+3. `RandomSwap`: the non-coach Blue + Red players (ordered by `joinSeq`) are shuffled with `fairShuffle` (A120, Phase S10p: keyed by the transaction time, `SHUFFLE_DOMAIN.RandomSwap` and the lobby id; was `ctx.random.shuffle`) and dealt Blue, Red, Blue, ...; coaches and spectators stay; captain flags are cleared (`start_draft` assigns them, D-30).
 4. One pass over the members: new slot, `isConfirmed=false`, cleared captain flag (delete + reinsert only for rows that change); bump `lastActivityAt`.
 
 ### transfer_referee(lobbyId, targetJoinSeq) / reclaim_referee(lobbyId)
@@ -653,6 +653,15 @@ Membership lifecycle after A68 (details in the reducer flows above):
   reducers and `Tournament.lobbyPresetId` (A33a, read by `create_tournament_lobby`) are unchanged.
 - Bindings: `create_lobby_reducer.ts` loses two fields, `create_tournament_lobby_reducer.ts` one.
 
+## Phase S10p execution (DECISIONS.md A120)
+
+- **RandomSwap.** `shuffle_teams` mode `RandomSwap` orders the non-coach Blue + Red players (`joinSeq` order, as
+  before) with `fairShuffle(items, key)` (`shared/lobby-rules/timerDraw.ts`), the shuffle of all three A120 sites (this paragraph is the one reference; the brackets and tournament docs link here): a Fisher-Yates pass over a copy of the input, for i = n - 1 down to 1, `j = floor(murmur3Words([tsLo, tsHi, domain, id, i]) * (i + 1) / 2^32)`, swap i and j (`tsLo` / `tsHi` = the transaction timestamp in microseconds, both 32-bit words; `domain` = a `SHUFFLE_DOMAIN` word; `id` = the tournament or lobby id). Each step's index is uniform over its i + 1 positions within a relative bias of (i + 1) / 2^32. The steps share the hash state after the timestamp and key words, so the whole order is a function of one 32-bit state: at most 2^32 orders are reachable for a given site and id (all of them up to n = 12; from n = 13 some orders cannot occur). A generator seeded from the timestamp alone, as `ctx.random` was, has the same limit. Measured: for each of the three domain words and three timestamp families (jittered, consecutive microseconds, round seconds), over 240,000 timestamps every one of the 24 orders of 4 elements is within 2.8% of 1/24, and over 160,000 every element of 16 lands in every position within 3.2% of 1/16 (sampling noise; `shared/lobby-rules/timerDraw.test.ts`). Why not `ctx.random`: its host seed skews the first outputs (S10o review F1; see match-session/architecture.md, Phase S10o).
+- **Key words.** `[SHUFFLE_DOMAIN.RandomSwap ('SWAP', 0x53574150), lobbyId]`. The input is the join order, not the
+  current seats, so each call depends only on its transaction time; repeated swaps at different times redeal.
+  Dealing (Blue, Red, Blue, ...), coaches, spectators, cleared captains and the confirmation reset are unchanged.
+  No schema or binding change.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -703,10 +712,11 @@ Membership lifecycle after A68 (details in the reducer flows above):
 | A98 present-member guard on every lobby action reducer (`ensurePresentMember` / `ensurePresentIfMember`, two texts); A99 a private lobby needs a password (create and the switch to private); A96 `LobbyCursorEvent.senderJoinSeq` replaces `senderUserId` / `anonymousLabel` (member restriction not available on 2.14.1, reported); A97 seat labels | Phase S10h execution (DECISIONS.md A96, A97, A98, A99) | 2026-11-09 |
 | Fix pass: `transfer_referee` / `set_captain` refuse an away or abandoned target (F5); stored chat labels preferred over live ones, member-event lines store the label in every lobby (F6, F7); `ensureMemberPresentUnlessStaff` for kick / ban / captain and the `set_team_slot` staff exemption (F8); `finalize_match_result` referee path guarded, `dispute_match_result` unguarded on purpose (F9); A96 RLS statement corrected (F2); `AbuseConfig` clear-publish note (F10) | Phase S10h execution (S10h review F2, F5-F10; DECISIONS.md A96, A97, A98) | 2026-11-10 |
 | `create_lobby` loses `joinCode` and `presetId` (with the "Preset not found." check), `create_tournament_lobby` loses `joinCode`; the server always generates the code; `join_lobby` unchanged | Phase S10n execution (DECISIONS.md A114, A116) | 2026-11-10 |
+| `shuffle_teams` RandomSwap: `fairShuffle` keyed by the transaction time, `SHUFFLE_DOMAIN.RandomSwap` and the lobby id replaces `ctx.random.shuffle`; join order, dealing, coaches and captain clearing unchanged | Phase S10p execution (DECISIONS.md A120) | 2026-11-10 |
 
 ---
 
-*Last updated: 2026-11-10 (S10n)*
+*Last updated: 2026-11-10 (S10p)*
 *Feature owner: Phase 05 / Phase 09 / Phase 10.1 / Phase 10.4 / Phase 12.1 / Phase 16*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)
