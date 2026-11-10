@@ -16,6 +16,8 @@ import {
     resolveSeat,
     slotIsCoach,
     slotIsSpectator,
+    isSeatedPlayer,
+    anySeatedPlayerAway,
     LIVE_STAGES,
     memberHasLeft,
     resolveMaxSpectators,
@@ -295,8 +297,9 @@ export const join_lobby = spacetimedb.reducer(
             if (isReturn) {
                 postMemberEventChat(ctx, lobby, 'back', user.id, user.displayName, user.id); // S9a fix (A37)
             }
-            // Auto-resume if draft was auto-paused (D-11, D-39)
-            if (lobby.stage.tag === 'Drafting') {
+            // Auto-resume if draft was auto-paused (D-11, D-39), as narrowed by A85(1): only a seated player's return
+            // lifts it, and only when no seated player of either team is still offline, away or abandoned.
+            if (lobby.stage.tag === 'Drafting' && isSeatedPlayer(existingMember) && !anySeatedPlayerAway(ctx, lobbyId)) {
                 const session = ctx.db.MatchSession.lobbyId.find(lobbyId);
                 if (session && session.timerState.isPaused) {
                     // Check if the latest Pause step was an auto-pause (S7b hand-off: a SetEidolon or other step

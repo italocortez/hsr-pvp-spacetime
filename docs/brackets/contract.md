@@ -485,7 +485,7 @@ Reducers on the shared engine and the single writer (A23); every scenario tagged
 ### S8c-14 Rollback refused downstream
 **Given:** match M Decided and the match its winner went to also Decided
 **When:** `rollback_bracket_match(M, reason)` or `resolve_bracket_match(M, otherTeam, reason)`
-**Then:** rejected ("<key> is decided; roll that back first."); nothing changes. Rolling back the downstream match first, then M, succeeds: M returns to Ready, games 0-0, its calendar event deleted.
+**Then:** rejected ("<key> is decided; roll that back first."); nothing changes. Rolling back the downstream match first, then M, succeeds: M returns to Ready, games 0-0, its calendar event deleted. _Superseded in Phase S10c execution (DECISIONS.md A84)._
 
 ### S8c-15 DQ settles an open match
 **Given:** Tournament in progress, team T (one member) in a Ready match against U; caller has `participants`
@@ -669,7 +669,7 @@ _Superseded in Phase S8g execution (DECISIONS.md A71)._ The `headStartSide` argu
 | `seed_bracket` random mode through `ctx.random`; Ready teams only; `set_seed_order` replaces `swap_seeds` (A23, A26, C-a7) | Phase S8c execution | 2026-11-07 |
 | `generate_bracket` withdraws still-Forming teams, requires unique seeds, builds manual or snake groups, leaves the GroupInto* elimination part to `advance_group_stage`, stamps `bracketGeneratedAt` (A26a, A32, A36a, T7, T20) | Phase S8c execution | 2026-11-07 |
 | `advance_group_stage` replaces `advance_group_to_elimination`: status-gated qualifiers, A30 ranking, elimination generated from the standings (A23, A26, A30) | Phase S8c execution | 2026-11-07 |
-| `resolve_bracket_match` replaces `admin_set_bracket_winner`; `rollback_bracket_match` takes a reason and refuses while downstream is Decided (A24(3), A25) | Phase S8c execution | 2026-11-07 |
+| `resolve_bracket_match` replaces `admin_set_bracket_winner`; `rollback_bracket_match` takes a reason and refuses while downstream is Decided (A24(3), A25) | Phase S8c execution | 2026-11-07 _Superseded in Phase S10c execution (DECISIONS.md A84)._ |
 | `dq_participant` settles open matches with decidedBy Dq; a Pending slot becomes a BYE; empty team → Disqualified (row kept); optional `dqWholeTeam` (A23, A26a(2)) | Phase S8c execution | 2026-11-07 |
 | A concede advances the bracket through the single writer, decidedBy Concede (A38(1)) | Phase S8c execution | 2026-11-07 |
 | Scenarios S8d-B1..B4: rollback / resolve side effects on records and lobbies, validation hand-off | Phase S8d execution (DECISIONS.md A24(1)(3)) | 2026-11-07 |
@@ -677,6 +677,7 @@ _Superseded in Phase S8g execution (DECISIONS.md A71)._ The `headStartSide` argu
 | Scenario S8e-B5: the A27 head start is stored on the bracket row at generation (`team1Games = winnerAdvantage`), so the public row and the derived tally agree before the first game | Phase S8e execution (DECISIONS.md A69(1)) | 2026-11-08 |
 | Scenarios S8g-B1..B7: colours per bracket match (`blueTeamId`, default team1 = Blue, stale falls back), head start by colour (`headStartSide`), `set_match_sides` until the first game, group matches included; S8e-B1's fixed mapping superseded | Phase S8g execution (DECISIONS.md A70) | 2026-11-08 |
 | Scenarios S8g-B8..B10: the head start stays on team1 whatever the colours (`headStartSide` removed; S8g-B1 / B2 / B6 / B7 superseded in part); records checked before lobbies (S8g-B4 superseded in part); a slot change unsets `blueTeamId` and resets the stored tally (A71(3)) | Phase S8g execution (DECISIONS.md A71) | 2026-11-08 |
+| A re-resolve, rollback or override that would remove a team from a downstream match is rejected when that match is Decided (unchanged text) or has any lobby or any Pending / Submitted / Disputed / Validated record ("<key> has a lobby or a game result; void or roll that match back first."); Rejected and Voided records do not block; nothing is voided automatically. Staff clear the downstream match first (close its Waiting lobby, override its record to Rejected, or resolve then roll it back) | Phase S10c execution (DECISIONS.md A84) | 2026-11-09 |
 
 ---
 

@@ -351,6 +351,23 @@ reaches ceil(bestOf / 2) or staff resolve it). Stage list: Drafting, Equipping, 
   flag, or both on an unresolved level-4 tie (`isUnresolvedTie`); `{ lobbyId, joinCode, stage, blueConfirmed,
   redConfirmed, isTie, sinceAt = game.lastModifiedDate }`. Catalogue: [../views/architecture.md](../views/architecture.md).
 
+## Phase S10c execution (audit 2026-11-09; DECISIONS.md A82, A83)
+
+- **Finalization step 16, character stats (A82;** `helpers/results/finalizationHelpers.ts`**).** An `AuctionSold` step no
+  longer reads its actor (the passer, or the system `0` / Spectator slot on a timer or immediate timer sale). The owning
+  side is `payload.value.winningTeam`; a step whose winning team is not Blue / Red writes nothing. Every participant of
+  the owning side (`effectiveParticipants`: the non-coach `MatchResultParticipant` rows, or the concede fallback rows,
+  which exclude coaches and spectators) gets `incrementPlayerCharacterStat` with the owning side's win flag; every
+  participant of the other side gets `incrementFacedStat`; `incrementGlobalCharacterStat` runs once with the owning
+  side's win flag. No row is written for the system user. Classic `Pick` (picker = actor, "played"; the other side
+  "faced") and `Ban` are unchanged.
+- **`view_my_match_result` (A83;** `views/matchResultViews.ts`**).** `concedeSummary` is emitted only when the caller's
+  `User.role` is Moderator or above (`isRoleAtLeast`); every other caller gets no value, whatever the lobby's anonymity
+  flags. The stored text (D-71, with user ids) is unchanged. A83 narrows this member view only:
+  `view_my_tournament_match_results` (tournament staff view, `views/tournamentViews.ts`) still returns the column to the
+  tournament's organizer and assistants, who resolve deferred and conceded matches and already see real ids in their own
+  tournament (A37).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -377,6 +394,8 @@ reaches ceil(bestOf / 2) or staff resolve it). Stage list: Drafting, Equipping, 
 | Admin edit window ends at validation (`ensureEditableRecord` / `findEditableResult(ctx, lobbyId, user)`, three rejections); `ensureOpenGame` loses its status throws; `recomputeAfterAdminEdit` loses its Pending branch | Phase S8e execution (DECISIONS.md A69(2)(3)) | 2026-11-08 |
 | `recordWinnerTeamId` maps the winning colour through the bracket match's colour mapping | Phase S8g execution (DECISIONS.md A70) | 2026-11-08 |
 | `refereeFullControl` dropped; `view_my_match_result`, `view_my_match_result_games` (nested group scores and adjustments), staff-only `view_admin_stuck_games` | Phase S9a execution (DECISIONS.md A37, A54, A56, A60(9), A63) | 2026-11-08 |
+| Finalization step 16: `AuctionSold` stats follow `winningTeam` (played for every player of that side, faced for the other, one global row), never the step actor | Phase S10c execution (DECISIONS.md A82) | 2026-11-09 |
+| `view_my_match_result.concedeSummary` only for Moderator / Admin callers | Phase S10c execution (DECISIONS.md A83) | 2026-11-09 |
 
 ---
 

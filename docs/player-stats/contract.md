@@ -218,6 +218,7 @@ All flat structured rows, zero JSON blobs (D-55). Self-contained for replay rend
 | Update 38 existing tests for new PK shapes (D-65) | Phase 6 CONTEXT.md | 2026-03-21 |
 | create_season creates inactive season; set_active_season enforces single-active guarantee | Phase 9 execution | 2026-03-29 |
 | Full hydration from codebase; Feature Overview and Stat Computation section added | Phase 13 normalization | 2026-04-09 |
+| Auction character stats: for an `AuctionSold` step the owning side is the sale's `winningTeam`; every player of that team gets the played stat, every player of the other team the faced stat, the global character stat is written once with the owning side's win flag; no row for the system user. Classic picks unchanged (the picker) | Phase S10c execution (DECISIONS.md A82) | 2026-11-09 |
 
 ---
 

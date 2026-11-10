@@ -3,6 +3,7 @@ import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { transferFlagsOnRemoval } from './flagTransferHelpers';
 import { memberHasLeft, slotTeam } from './memberPredicates';
+import { hasLivePresence } from '@module/helpers/identity/presenceHelpers';
 
 // ─── Server-generated join codes ──────────────────────────────────────────────
 // Deterministic hash-based code generation (no Math.random — reducers must be deterministic).
@@ -208,6 +209,21 @@ export function slotIsCoach(slot: any): boolean {
 /** Check if slot is a spectator */
 export function slotIsSpectator(slot: any): boolean {
     return slot.tag === 'Spectator';
+}
+
+/** A85: a seated player = a Blue or Red player seat (not a coach, not a spectator). */
+export function isSeatedPlayer(member: any): boolean {
+    return slotTeam(member.lobbySlot) !== null && !slotIsCoach(member.lobbySlot);
+}
+
+/**
+ * A85(1): whether a seated player of either team is still offline, away or abandoned, by the A22a "still offline"
+ * test of run_referee_transfer_check (away / abandoned rows count as offline; otherwise the membership flag or a
+ * live presence row of the user counts as online).
+ */
+export function anySeatedPlayerAway(ctx: any, lobbyId: number): boolean {
+    return [...ctx.db.LobbyMember.lobby_id.filter(lobbyId)].some((m: any) =>
+        isSeatedPlayer(m) && (memberHasLeft(m) || !(m.isOnline || hasLivePresence(ctx, m.userId))));
 }
 
 /** Check if two slots are on the same team (both Blue* or both Red*) */

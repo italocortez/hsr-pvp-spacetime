@@ -510,7 +510,26 @@ export function runFinalization(
 
             const actorTeamSide = step.actorSlot?.tag;
 
-            if (actionTag === 'Pick' || actionTag === 'AuctionSold') {
+            // A82: an AuctionSold step's actor is the passer or the system (timer sale); the owning side is the sale's
+            // winningTeam. Every player of that side (the non-coach participants) gets "played", every player of the
+            // other side "faced", the global stat is written once; no row for the system user or a spectator side.
+            if (actionTag === 'AuctionSold') {
+                const ownerSide = step.payload?.tag === 'AuctionSold' ? step.payload.value?.winningTeam?.tag : undefined;
+                if (ownerSide !== 'Blue' && ownerSide !== 'Red') continue;
+                const didOwnerWin = winnerTeamSideTag !== undefined && ownerSide === winnerTeamSideTag;
+                for (const p of effectiveParticipants) {
+                    if (p.teamSide.tag === ownerSide) {
+                        incrementPlayerCharacterStat(ctx, p.userId, charName, gameMode, draftMode, seasonId, matchType, teamSize, didOwnerWin, actingUserId);
+                    } else if (p.teamSide.tag === 'Blue' || p.teamSide.tag === 'Red') {
+                        const didOpponentWin = winnerTeamSideTag !== undefined && p.teamSide.tag === winnerTeamSideTag;
+                        incrementFacedStat(ctx, p.userId, charName, gameMode, draftMode, seasonId, matchType, teamSize, didOpponentWin, actingUserId);
+                    }
+                }
+                // S9b (R2(3), A37): the helper stamps SYSTEM_USER_ID on the public GlobalCharacterStat rows.
+                incrementGlobalCharacterStat(ctx, charName, gameMode, draftMode, seasonId, matchType, teamSize, true, didOwnerWin);
+            }
+
+            if (actionTag === 'Pick') {
                 const didActorWin = winnerTeamSideTag !== undefined && actorTeamSide === winnerTeamSideTag;
                 incrementPlayerCharacterStat(ctx, step.actorUserId, charName, gameMode, draftMode, seasonId, matchType, teamSize, didActorWin, actingUserId);
                 for (const p of effectiveParticipants) {

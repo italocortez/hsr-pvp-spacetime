@@ -106,6 +106,7 @@ One call = one row. Editing both classic and auction for the same character = tw
 2. No JSON parsing -- `costModifier: f32` is a scalar payload
 3. 5-tuple draft lookup `(sourceName, targetName, gameMode, draftMode, costSetId)`; delete+insert upsert on `CostSetDraftSynergy` (Phase 15.4 D-18). First-ever synergy auction support.
 4. Phase S7 execution (A21, backlog #3): synergies are unordered pairs. The two names are stored as `characterA` / `characterB` in canonical (alphabetical) order (`canonicalPair`, `shared/scoring`), so B + A updates the A + B row instead of creating a reversed duplicate. The arguments keep their names. `admin_bulk_upsert` (HsrSynergyCost) canonicalizes each row the same way, matches an existing pair in either order, and rejects a payload listing the same pair twice in either order. The surcharge itself is computed by `synergySurcharge` (docs/match-session/architecture.md "Phase S7 execution").
+5. Phase S10c execution (audit 2026-11-09): after the ownership and draft-state checks, both names must be `HsrCharacter` rows, else `'Character <name> not found.'` (`admin_bulk_upsert` HsrSynergyCost does the same).
 
 ### publish_cost_set(costSetId)
 1. Ownership check -- creator or Moderator+; reject if `!isDraft`

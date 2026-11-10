@@ -173,9 +173,11 @@ function draftAuctionGame(s: Lobby, game: number) {
         const sess = session(s.test, s.lobbyId);
         const nominator = sess.nextNominatorTeam.tag as 'Blue' | 'Red';
         const other = nominator === 'Blue' ? 'Red' : 'Blue';
+        // T-S10c (A81(2)): with the other team full (8, Halves) the nomination sells at once: no pass_bid follows.
+        const otherFull = (other === 'Blue' ? sess.blueCharactersWon : sess.redCharactersWon) >= 8;
         tx(s.test, captain(s, nominator), (ctx) =>
             M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: `a${game}_${guard}` }));
-        tx(s.test, captain(s, other), (ctx) => M.pass_bid(ctx, { lobbyId: s.lobbyId }));
+        if (!otherFull) tx(s.test, captain(s, other), (ctx) => M.pass_bid(ctx, { lobbyId: s.lobbyId }));
     }
 }
 

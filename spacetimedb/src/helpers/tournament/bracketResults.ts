@@ -18,6 +18,9 @@ export interface SeriesGames { team1: number; team2: number }
 
 const tag = (t: string) => ({ tag: t, value: {} }) as any;
 
+/** A84: record statuses of a downstream match that block un-placing a team from it. */
+const DOWNSTREAM_BLOCKING_STATUSES = new Set(['Pending', 'Submitted', 'Disputed', 'Validated']);
+
 function ensureGames(games: SeriesGames): void {
     for (const g of [games.team1, games.team2]) {
         if (!Number.isInteger(g) || g < 0 || g > 255) throw new SenderError('Series games must be integers 0..255.');
@@ -80,9 +83,13 @@ export function applyBracketResult(
 }
 
 /**
- * Removes `expected` from a downstream slot. A downstream Decided match refuses ("roll that back first"); a
- * downstream Walkover / Void (settled because the other slot is a BYE) is unwound first, recursively, so it
- * returns to Pending and re-settles when the slot is filled again.
+ * Removes `expected` from a downstream slot. A downstream Decided match refuses ("roll that back first"); A84: so does
+ * a downstream match with any lobby still alive (Lobby.bracket_match_id) or any Pending / Submitted / Disputed /
+ * Validated record, because the team placed there next would inherit those games; staff clear that match first
+ * (close_lobby on a Waiting lobby, override_match_result Rejected on a Submitted / Disputed / Validated record,
+ * resolve_bracket_match then rollback_bracket_match for a lobby still drafting or scoring). Nothing is voided
+ * automatically. A downstream Walkover / Void (settled because the other slot is a BYE) is unwound first,
+ * recursively, so it returns to Pending and re-settles when the slot is filled again.
  */
 function unplaceEntrant(ctx: any, matchId: number, slot: BracketSlot, expected: Entrant, actorId: number): void {
     const row = ctx.db.BracketMatch.id.find(matchId);
@@ -91,6 +98,13 @@ function unplaceEntrant(ctx: any, matchId: number, slot: BracketSlot, expected: 
         throw new SenderError(`${row.positionKey} slot ${slot} does not hold ${expected}.`);
     }
     if (row.state.tag === 'Decided') throw new SenderError(`${row.positionKey} is decided; roll that back first.`);
+    // A84: a live lobby or a game result on the downstream match blocks the un-place.
+    const hasLobby = [...ctx.db.Lobby.bracket_match_id.filter(matchId)].length > 0;
+    const hasRecord = [...ctx.db.MatchResultRecord.bracket_match_id.filter(matchId)]
+        .some((r: any) => DOWNSTREAM_BLOCKING_STATUSES.has(r.status.tag));
+    if (hasLobby || hasRecord) {
+        throw new SenderError(`${row.positionKey} has a lobby or a game result; void or roll that match back first.`);
+    }
     if (row.state.tag === 'Walkover' || row.state.tag === 'Void') {
         const winner: Entrant = row.state.tag === 'Walkover' ? row.winnerTeamId : 'BYE';
         if (row.nextWinnerMatchId !== undefined) unplaceEntrant(ctx, row.nextWinnerMatchId, row.nextWinnerSlot, winner, actorId);

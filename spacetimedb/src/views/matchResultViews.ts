@@ -21,7 +21,8 @@ import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 // ---------------------------------------------------------------------------
 // 1. view_my_match_result (§A.4 P1): status, winner, settlement, concede and override fields of the lobby's one
 //    record (A54). refereeUserId is not emitted (the live seat decides, A63); disputedByUserId / winnerOverrideById
-//    are 0 when that user is anonymized for the caller; no audit columns.
+//    are 0 when that user is anonymized for the caller; concedeSummary (stored with user ids, D-71) is emitted only
+//    to a Moderator or Admin caller (A83); no audit columns.
 // ---------------------------------------------------------------------------
 const MatchResultViewRow = t.row('MatchResultViewRow', {
     id: t.u32().primaryKey(),
@@ -49,6 +50,8 @@ export const view_my_match_result = spacetimedb.view(
     (ctx) => {
         const me = callerMemberships(ctx);
         if (!me) return [];
+        const caller = ctx.db.User.id.find(me.userId);
+        const isStaff = !!caller && isRoleAtLeast(caller.role, 'Moderator');
         const rows: any[] = [];
         for (const membership of me.memberships) {
             const lobby = ctx.db.Lobby.id.find(membership.lobbyId);
@@ -65,7 +68,7 @@ export const view_my_match_result = spacetimedb.view(
                 matchType: record.matchType,
                 matchEndReason: record.matchEndReason,
                 concedeTrigger: record.concedeTrigger,
-                concedeSummary: record.concedeSummary,
+                concedeSummary: isStaff ? record.concedeSummary : undefined, // A83
                 concedeAtStage: record.concedeAtStage,
                 disputedByUserId: maskUserId(ctx, lobby, membership, record.disputedByUserId),
                 disputeReason: record.disputeReason,

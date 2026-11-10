@@ -2,7 +2,7 @@ import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser } from '@module/helpers/identity/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
-import { ensureLobbyMember, ensureStageIs, slotToTeamSide } from '@module/helpers/lobby/lobbyHelpers';
+import { ensureLobbyMember, ensureStageIs, slotToTeamSide, isSeatedPlayer, memberHasLeft } from '@module/helpers/lobby/lobbyHelpers';
 import { ensureMatchAlive } from '@module/helpers/lobby/disconnectHelpers';
 import { lobbySteps, getNextSequence } from '@module/helpers/draft/stepSequence';
 
@@ -219,7 +219,9 @@ export const pause_draft = spacetimedb.reducer(
 
 // ─── resume_draft ─────────────────────────────────────────────────────────────
 // Resumes a paused draft.
-// Per D-62: referee OR the original pausing player can resume.
+// Per D-62: referee OR the original pausing player can resume a manual pause.
+// A85(2): an auto-pause (disconnect) is resumed by the referee or any seated player of either team; coaches and
+// spectators without the referee flag are rejected.
 // Sets accumulatedPauseMs to the timeRemainingMs stored in the Pause step so the
 // clock continues from where it was paused.
 
@@ -257,13 +259,21 @@ export const resume_draft = spacetimedb.reducer(
             .sort((a: any, b: any) => b.sequence - a.sequence);
         const lastPauseStep = pauseSteps[0];
 
-        // D-62: referee OR the original pausing player can resume
         const isReferee = member.isReferee;
-        const isOriginalPauser =
-            lastPauseStep && lastPauseStep.actorUserId === user.id;
+        const isAutoPause = lastPauseStep?.payload?.tag === 'Pause' && lastPauseStep.payload.value?.isAutoPause === true;
+        if (isAutoPause) {
+            // A85(2): the referee or any seated player of either team; a seated row that is away or abandoned is not
+            if (!isReferee && !(isSeatedPlayer(member) && !memberHasLeft(member))) {
+                throw new SenderError('Only the referee or a seated player can resume an auto-paused draft.');
+            }
+        } else {
+            // D-62: referee OR the original pausing player can resume
+            const isOriginalPauser =
+                lastPauseStep && lastPauseStep.actorUserId === user.id;
 
-        if (!isReferee && !isOriginalPauser) {
-            throw new SenderError('Only the referee or the player who paused can resume the draft.');
+            if (!isReferee && !isOriginalPauser) {
+                throw new SenderError('Only the referee or the player who paused can resume the draft.');
+            }
         }
 
         // Restore timeRemainingMs from the Pause step

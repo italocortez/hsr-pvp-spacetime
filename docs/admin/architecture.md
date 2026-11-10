@@ -91,7 +91,7 @@ BanRecord (id: u32 autoInc PK)  [PRIVATE -- public: false]
    - `HsrCharacter`: validate path/element/role enums, upsert by name PK. If `maxPossible` changes, auto-recompute all account ratings (D-33)
    - `HsrLightcone`: validate path enum, upsert by name PK
    - `HsrCharacterCost`, `HsrLightconeCost`: validate gameMode enum, delete+insert (composite PK)
-   - `HsrSynergyCost`: validate gameMode enum, upsert via id.update() on existing or insert new
+   - `HsrSynergyCost`: validate gameMode enum, upsert via id.update() on existing or insert new. Phase S10c execution (audit 2026-11-09): each row's `characterA` and `characterB` must be `HsrCharacter` rows, else `'Character <name> not found.'` (the whole payload is rejected); the seed (`scripts/stdb/_seed.ts`) upserts `HsrCharacter` in an earlier call
    - `Archetype`: upsert by name unique index
    - Unknown table: `SenderError`
 

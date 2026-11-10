@@ -1242,7 +1242,7 @@ _Superseded in Phase S8g execution (DECISIONS.md A70)._ Read "team1" as "the Blu
 ### S8f-L3 The away player returns (A68(1)(2))
 **Given** #11 is away in a live stage
 **When** #11 calls `join_lobby` for that lobby
-**Then** `leftAt` and `disconnectedAt` are cleared, `isOnline = true`, the pool is decremented by the time away, an auto-paused draft resumes; system chat "{name} is back."; flags that moved stay where they are
+**Then** `leftAt` and `disconnectedAt` are cleared, `isOnline = true`, the pool is decremented by the time away, an auto-paused draft resumes; system chat "{name} is back."; flags that moved stay where they are _Superseded in Phase S10c execution (DECISIONS.md A85)._
 
 ### S8f-L4 No automatic forfeit (A68(3))
 **Given** the last Blue player leaves (or disconnects) in a live stage under Standard
@@ -1400,6 +1400,7 @@ _Superseded in Phase S8g execution (DECISIONS.md A70)._ Read "team1" as "the Blu
 | Scenarios S9c-L1..L4: `kick_member`, `ban_member`, `set_team_slot` (optional, omitted = self), `set_captain`, `transfer_referee` take `targetJoinSeq`, `unban_member` takes `bannedJoinSeq`; rejection "No member sits at seat N of this lobby." / "No ban is recorded for seat N of this lobby."; `LobbyBan.bannedJoinSeq`; `Lobby.lastJoinSeq` (seat numbers never reused; supersedes R4's max + 1); the `targetUserId` parameter rows and scenario calls and "Ban Non-Member" marked superseded | Phase S9c execution (DECISIONS.md A74) | 2026-11-08 |
 | `broadcast_cursor` by a Spectator seat or by a non-member returns silently (no event, no error); coaches broadcast (D-34, as implemented since Phase 10 and documented here for the first time; tests `s10-chat`) | Phase S10 execution (DECISIONS.md A76) | 2026-11-09 |
 | `start_draft` and `advance_stage` are referee powers: accepted from the lobby member holding the referee flag (any seat) or a Moderator / Admin; everyone else, the host included, gets "Only the referee, moderators, or admins can perform this action." with nothing changed. A host who gave the flag away takes it back with `reclaim_referee`. Scenarios that say "the host starts the draft" / "the host calls `advance_stage`" read "the referee" | Phase S10b execution (DECISIONS.md A80) | 2026-11-09 |
+| Reconnect and auto-pause: the reconnect branch of `join_lobby` lifts an automatic pause only when the caller is a seated player (not a coach, not a spectator) and, after the caller's own return, no seated player of either team is offline, away or abandoned. A reload by an opponent, a coach or a spectator no longer resumes the draft. The pool, the forfeit grace and `claim_forfeit` are unchanged | Phase S10c execution (DECISIONS.md A85) | 2026-11-09 |
 
 ---
 

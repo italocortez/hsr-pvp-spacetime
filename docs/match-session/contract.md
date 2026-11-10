@@ -514,7 +514,7 @@ The match session system manages the entire draft lifecycle within a lobby: char
 2. Verify lobby is in `Drafting` stage
 3. Reject if not currently paused
 4. Find most recent Pause step to identify original pauser and stored `timeRemainingMs`
-5. Allow resume if caller is referee OR is the original pauser
+5. Allow resume if caller is referee OR is the original pauser _Superseded in Phase S10c execution (DECISIONS.md A85)._
 6. Set `timerState.isPaused=false`, `turnStartAt=ctx.timestamp`, `accumulatedPauseMs=timeRemainingMs` (so timer resumes from paused position)
 
 **Expected State Changes:**
@@ -1043,7 +1043,7 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 | advance_stage from Waiting | Rejected | ensureHostOrAbove passes but stage check fails _Superseded in Phase S10b execution (DECISIONS.md A80)._ |
 | advance_stage from Finished | Rejected | "Cannot advance stage from Finished." |
 | Duplicate LobbyMember.isCaptain on same team | First captain wins captain check | Only one captain should exist per team |
-| Auction sold when only one team needs characters | Normal flow, no short circuit | Other team's won count already at 8, one team still filling |
+| Auction sold when only one team needs characters | Normal flow, no short circuit | Other team's won count already at 8, one team still filling _Superseded in Phase S10c execution (DECISIONS.md A81)._ |
 | Timer expiry with paused timer (Phase S4 execution, F3) | Rejected: "Draft is paused." Supersedes the "Not validated" row above | Non-members rejected too |
 | Undo auction phase boundary (Phase S4 execution, F9) | Rejected: "Undo is not available during the auction phase." Supersedes the "isAuctionPhase reverts" row above | No budget / won-count rollback exists |
 | Undo when the highest-sequence row is a Pause or Undo record (Phase S4 execution, F9) | The last Pick/Ban is undone; audit rows are skipped | Audit rows carry their own sequence |
@@ -1143,7 +1143,7 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 | LC budget strict enforcement (D-55) | Phase 9 execution | 2026-03-29 |
 | Referee undo: one step, turnIndex decremented (D-60) | Phase 9 execution | 2026-03-29 |
 | Player pause 3-per-team limit, referee unlimited (D-61) | Phase 9 execution | 2026-03-29 |
-| Resume: referee or original pauser only (D-62) | Phase 9 execution | 2026-03-29 |
+| Resume: referee or original pauser only (D-62) | Phase 9 execution | 2026-03-29 _Superseded in Phase S10c execution (DECISIONS.md A85)._ |
 | Timer is client-driven with server-side elapsed time validation | Phase 9 execution | 2026-03-29 |
 | System chat messages on stage transitions (D-11) | Phase 9 execution | 2026-03-29 |
 | Scoring to Finished blocked in advance_stage (must use finalize_match_result) | Phase 9 execution | 2026-03-29 |
@@ -1181,6 +1181,9 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 | Game-package callers unified: `set_eidolon`, `equip_lightcone`, `unequip_lightcone` and `arrange_lineup` accept the captain of the named team or any lobby referee (seated or not); a non-captain teammate, a coach, a non-referee spectator and the other team's captain are rejected with "Only the <Side> captain or a referee can set an eidolon for that team." / "… can equip lightcones." / "… can unequip lightcones." / "… can arrange the lineup."; the caller check runs before the stage check. Admin edits of a closed game unchanged (A60(7), A69(2)). Scenarios that say "a Blue player" / "a Red player" for these edits read "the Blue captain" / "the Red captain" | Phase S10b execution (DECISIONS.md A78) | 2026-11-09 |
 | `equip_lightcone(lobbyId, teamSide, characterName, lightconeName, superimposition)` and `unequip_lightcone(lobbyId, teamSide, characterName)`: the team is named by `teamSide` ("teamSide must be Blue or Red."); the character must be in that team's draft ("<name> is not in the <Side> team's draft of this game."); budget, step and refund belong to that side, so under `allowMirrorPicks` each team's copy is edited separately, also on the Admin path. Both use the lineup throttle on the open game ("Lineup changes are too frequent. Please wait a moment.", shared per member with `set_eidolon` and `arrange_lineup`): a swap is an unequip and an equip at least `AbuseConfig.lineupMinIntervalMs` apart | Phase S10b execution (DECISIONS.md A78) | 2026-11-09 |
 | `start_draft` and `advance_stage` are referee powers: accepted from the lobby member holding the referee flag (any seat) or a Moderator / Admin; everyone else, the host included, gets "Only the referee, moderators, or admins can perform this action." with nothing changed. A host who gave the flag away takes it back with `reclaim_referee`. Scenarios that say "the host starts the draft" / "the host calls `advance_stage`" read "the referee" | Phase S10b execution (DECISIONS.md A80) | 2026-11-09 |
+| Input bounds: `pick_character` rejects an eidolon above 6 when ownership is not required ("eidolon must be between 0 and 6."); `equip_lightcone` rejects a superimposition outside 1 to 5 on the open and the Admin closed-game path ("superimposition must be between 1 and 5."); `place_bid` rejects a bid that is not finite or is negative ("bidAmount must be a finite, non-negative number.") | Phase S10c execution (backend audit 2026-11-09, draft findings 1 to 3) | 2026-11-09 |
+| Auction, full team sits out: a team holding `charactersPerTeam` characters is rejected by `nominate_character` and `place_bid` ("Your team already has all its characters."); the rotation and the timer hand the nomination to the team that is not full; while one team is full, a nomination by the other team is sold to it at once at base cost with no bidding round (the nominating team's budget, ownership and exclusivity checks unchanged; the timer's EMPTY nomination sells at 0). No team can exceed `charactersPerTeam` | Phase S10c execution (DECISIONS.md A81) | 2026-11-09 |
+| `resume_draft` on an automatic (disconnect) pause: accepted from the referee or from any seated player of either team who is present; a coach, a non-referee spectator and an away or abandoned player are rejected ("Only the referee or a seated player can resume an auto-paused draft."). A manual pause keeps D-62 and its text | Phase S10c execution (DECISIONS.md A85) | 2026-11-09 |
 
 ---
 

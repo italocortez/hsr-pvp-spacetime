@@ -158,12 +158,110 @@ function resolveSale(ctx: any, lobby: any, session: any, winningSide: string, ch
 // and 12 for Thirds ("the character count is the format"), not teamSize.
 // teamSize only controls how many human players share the draft.
 
-function isAuctionComplete(session: any, lobby: any): boolean {
+/** A81(1): a team is full once it holds charactersPerTeam characters in the current game. */
+function teamIsFull(session: any, lobby: any, side: string): boolean {
     const targetCount = charactersPerTeam(lobby.lineupFormat.tag as LineupFormatTag);
-    return (
-        session.blueCharactersWon >= targetCount &&
-        session.redCharactersWon >= targetCount
-    );
+    const won = side === 'Blue' ? session.blueCharactersWon : side === 'Red' ? session.redCharactersWon : 0;
+    return won >= targetCount;
+}
+
+function otherTeamTag(side: string): 'Blue' | 'Red' {
+    return side === 'Blue' ? 'Red' : 'Blue';
+}
+
+/** A81(3): the auction ends when both teams are full (unchanged). */
+function isAuctionComplete(session: any, lobby: any): boolean {
+    return teamIsFull(session, lobby, 'Blue') && teamIsFull(session, lobby, 'Red');
+}
+
+/**
+ * The sale of the active nomination, shared by pass_bid, the timer sale and the A81(2) immediate sale: the AuctionSold
+ * step, the winner's budgets (resolveSale), the won counts, the D-46 rotation (A81(1): a full team is skipped), the end
+ * check with the D-50 rollover, and the session / lobby writes. Returns the next nominator and whether the auction ended.
+ */
+function completeSale(
+    ctx: any,
+    lobby: any,
+    session: any,
+    sale: {
+        characterName: string;
+        winningTeam: any;
+        winningAmount: number;
+        nominatingTeamTag: string;
+        actorUserId: number;
+        actorSlot: any;
+        auditUserId: number;
+    },
+): { nextNominatorTeam: any; auctionComplete: boolean } {
+    const { characterName, winningTeam, winningAmount, nominatingTeamTag, actorUserId, actorSlot, auditUserId } = sale;
+    const lobbyId = lobby.id;
+
+    // A61(3)(5), A64: the winning team's default (lowest owned) eidolon and extra, charged now (character budget first).
+    const budgets = resolveSale(ctx, lobby, session, winningTeam.tag, characterName, winningAmount);
+
+    ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
+        id: 0,
+        lobbyId,
+        sequence: getNextSequence(ctx, lobbyId),
+        actorUserId,
+        anonymousLabel: undefined,
+        actorSlot,
+        action: { tag: 'AuctionSold', value: {} } as any,
+        payload: {
+            tag: 'AuctionSold',
+            value: {
+                characterName,
+                winningAmount,
+                winningTeam,
+                eidolon: budgets.eidolon,
+                eidolonCost: budgets.eidolonCost,
+            },
+        } as any,
+        timestamp: ctx.timestamp,
+    }, auditUserId));
+
+    let blueCharactersWon = session.blueCharactersWon;
+    let redCharactersWon = session.redCharactersWon;
+    if (winningTeam.tag === 'Blue') blueCharactersWon += 1;
+    else if (winningTeam.tag === 'Red') redCharactersWon += 1;
+    const counts = { ...session, blueCharactersWon, redCharactersWon };
+    const auctionComplete = isAuctionComplete(counts, lobby);
+
+    // ─── Steal-skip logic (D-46) ──────────────────────────────────────────
+    // Normal: if nominating team === winning team → other team nominates next.
+    // Steal:  if nominating team !== winning team → nominating team nominates again.
+    // A81(1): a full team never takes the nomination; it passes to the other team.
+    let nextTag = nominatingTeamTag === winningTeam.tag ? otherTeamTag(nominatingTeamTag) : nominatingTeamTag;
+    if (!auctionComplete && teamIsFull(counts, lobby, nextTag)) nextTag = otherTeamTag(nextTag);
+    const nextNominatorTeam = { tag: nextTag, value: {} } as any;
+
+    // D-50: on completion the leftover character budget rolls over into the light-cone budget.
+    ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
+        currentNomination: undefined,
+        currentBidAmount: undefined,
+        currentBidTeam: { tag: 'Spectator', value: {} } as any,
+        teamBlueCharBudget: auctionComplete ? 0 : budgets.teamBlueCharBudget,
+        teamRedCharBudget: auctionComplete ? 0 : budgets.teamRedCharBudget,
+        teamBlueLcBudget: budgets.teamBlueLcBudget + (auctionComplete ? budgets.teamBlueCharBudget : 0),
+        teamRedLcBudget: budgets.teamRedLcBudget + (auctionComplete ? budgets.teamRedCharBudget : 0),
+        blueCharactersWon,
+        redCharactersWon,
+        nextNominatorTeam,
+        timerState: {
+            ...session.timerState,
+            turnStartAt: ctx.timestamp,
+            accumulatedPauseMs: 0,
+        },
+    }, auditUserId));
+
+    ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, auctionComplete
+        ? { stage: { tag: 'Equipping', value: {} } as any, lastActivityAt: ctx.timestamp }
+        : { lastActivityAt: ctx.timestamp }, auditUserId));
+
+    if (auctionComplete) {
+        console.log(`[AUCTION] Auction complete! Both teams reached target count. Lobby #${lobbyId} → Equipping.`);
+    }
+    return { nextNominatorTeam, auctionComplete };
 }
 
 // ─── nominate_character ──────────────────────────────────────────────────────
@@ -218,6 +316,11 @@ export const nominate_character = spacetimedb.reducer(
         // Member must be on a team (Blue or Red)
         if (slotTeam(member.lobbySlot) === null) {
             throw new SenderError('Spectators cannot nominate characters.');
+        }
+
+        // A81(1): a full team sits out of the auction.
+        if (teamIsFull(session, lobby, slotTeam(member.lobbySlot)!)) {
+            throw new SenderError('Your team already has all its characters.');
         }
 
         // Turn check: only the nominating team can nominate
@@ -287,6 +390,24 @@ export const nominate_character = spacetimedb.reducer(
             timestamp: ctx.timestamp,
         }, user.id));
 
+        // A81(2): while the other team is full, the nomination sells to the nominating team at once at base cost
+        // (no bidding round); the budget checks above apply unchanged.
+        if (teamIsFull(session, lobby, otherTeamTag(side))) {
+            completeSale(ctx, lobby, session, {
+                characterName,
+                winningTeam: slotToTeamSide(member.lobbySlot),
+                winningAmount: baseCost,
+                nominatingTeamTag: side,
+                actorUserId: user.id,
+                actorSlot: slotToTeamSide(member.lobbySlot),
+                auditUserId: user.id,
+            });
+            console.log(
+                `[AUCTION] nominate_character: User #${user.id} (${side}) nominated '${characterName}'; sold at once at base cost ${baseCost} (the other team is full) in lobby #${lobbyId}`
+            );
+            return;
+        }
+
         // Set auction state: nomination = first bid by nominating team at base cost
         ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
             currentNomination: characterName,
@@ -319,6 +440,10 @@ export const place_bid = spacetimedb.reducer(
         bidAmount: t.f32(),
     },
     (ctx, { lobbyId, bidAmount }) => {
+        // NaN fails every < / > guard below, so reject it (and negatives) before any other use.
+        if (!Number.isFinite(bidAmount) || bidAmount < 0) {
+            throw new SenderError('bidAmount must be a finite, non-negative number.');
+        }
         const user = getAuthenticatedUser(ctx);
 
         const lobby = ctx.db.Lobby.id.find(lobbyId);
@@ -358,6 +483,11 @@ export const place_bid = spacetimedb.reducer(
         // Member must be on a team
         if (slotTeam(member.lobbySlot) === null) {
             throw new SenderError('Spectators cannot bid.');
+        }
+
+        // A81(1): a full team sits out of the auction.
+        if (teamIsFull(session, lobby, slotTeam(member.lobbySlot)!)) {
+            throw new SenderError('Your team already has all its characters.');
         }
 
         // Bidder must be on the OPPOSITE team from the current bid holder (alternating bids per D-48)
@@ -528,133 +658,15 @@ export const pass_bid = spacetimedb.reducer(
         // Find the nominating team from the Nominate step
         const nominatingTeam = nominateStep ? nominateStep.actorSlot : session.nextNominatorTeam;
 
-        // A61(3)(5), A64: the winning team's default (lowest owned) eidolon and extra, charged now (character budget first).
-        const sale = resolveSale(ctx, lobby, session, winningTeam.tag, nominatedChar, winningAmount);
-
-        const nextSeq = getNextSequence(ctx, lobbyId);
-
-        // Insert AuctionSold step
-        ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
-            id: 0,
-            lobbyId,
-            sequence: nextSeq,
+        const { nextNominatorTeam } = completeSale(ctx, lobby, session, {
+            characterName: nominatedChar,
+            winningTeam,
+            winningAmount,
+            nominatingTeamTag: nominatingTeam.tag,
             actorUserId: user.id,
-            anonymousLabel: undefined,
             actorSlot: slotToTeamSide(member.lobbySlot),
-            action: { tag: 'AuctionSold', value: {} } as any,
-            payload: {
-                tag: 'AuctionSold',
-                value: {
-                    characterName: nominatedChar,
-                    winningAmount,
-                    winningTeam,
-                    eidolon: sale.eidolon,
-                    eidolonCost: sale.eidolonCost,
-                },
-            } as any,
-            timestamp: ctx.timestamp,
-        }, user.id));
-
-        // Deduct budget from winning team (winning amount + A61 eidolon extra, see resolveSale)
-        const newBlueCharBudget = sale.teamBlueCharBudget;
-        const newRedCharBudget = sale.teamRedCharBudget;
-        let newBlueCharactersWon = session.blueCharactersWon;
-        let newRedCharactersWon = session.redCharactersWon;
-
-        if (winningTeam.tag === 'Blue') {
-            newBlueCharactersWon += 1;
-        } else {
-            newRedCharactersWon += 1;
-        }
-
-        // ─── Steal-skip logic (D-46) ──────────────────────────────────────────
-        // Normal: if nominating team === winning team → other team nominates next.
-        // Steal:  if nominating team !== winning team → nominating team nominates again.
-        // (The opponent "spent" the nominating team's turn by winning, so nominator keeps their turn.)
-
-        let nextNominatorTeam: any;
-        if (nominatingTeam.tag === winningTeam.tag) {
-            // Normal result — rotate to the other team
-            nextNominatorTeam =
-                nominatingTeam.tag === 'Blue'
-                    ? { tag: 'Red', value: {} }
-                    : { tag: 'Blue', value: {} };
-        } else {
-            // Steal — nominating team nominates again
-            nextNominatorTeam = { tag: nominatingTeam.tag, value: {} };
-        }
-
-        // Check if auction is complete (both teams have target character count)
-        const updatedSessionForCheck = {
-            ...session,
-            blueCharactersWon: newBlueCharactersWon,
-            redCharactersWon: newRedCharactersWon,
-        };
-        const auctionComplete = isAuctionComplete(updatedSessionForCheck, lobby);
-
-        if (auctionComplete) {
-            // Clear auction state and transition to Equipping
-            // D-50: Budget rollover — carry leftover charBudget into lcBudget
-            const finalBlueCharBudget = newBlueCharBudget;
-            const finalRedCharBudget = newRedCharBudget;
-            ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
-                currentNomination: undefined,
-                currentBidAmount: undefined,
-                currentBidTeam: { tag: 'Spectator', value: {} } as any,
-                teamBlueCharBudget: 0,
-                teamRedCharBudget: 0,
-                teamBlueLcBudget: sale.teamBlueLcBudget + finalBlueCharBudget,
-                teamRedLcBudget: sale.teamRedLcBudget + finalRedCharBudget,
-                blueCharactersWon: newBlueCharactersWon,
-                redCharactersWon: newRedCharactersWon,
-                nextNominatorTeam,
-                timerState: {
-                    ...session.timerState,
-                    turnStartAt: ctx.timestamp,
-                    accumulatedPauseMs: 0,
-                },
-            }, user.id));
-
-            ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
-                stage: { tag: 'Equipping', value: {} } as any,
-                lastActivityAt: ctx.timestamp,
-            }, user.id));
-
-            console.log(
-                `[AUCTION] Auction complete! Both teams reached target count. Lobby #${lobbyId} → Equipping.`
-            );
-        } else {
-            // ─── Budget exhaustion check ─────────────────────────────────────
-            // Per D-54: if the next nominator cannot afford any character,
-            // skip to the other team. (0-cost characters are always available as fallback.)
-            // Since EMPTY CHARACTER costs 0, a team with 0 budget can still nominate EMPTY.
-            // Therefore, budget exhaustion = budget < 0 is impossible due to validation.
-            // The team nominates EMPTY CHARACTER as per D-43/D-54 (auto-handled by timer expiry or client UI).
-            // We do NOT auto-skip here; we just set the next nominator and let the timer handle it.
-
-            // Clear auction state and set next nominator
-            ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
-                currentNomination: undefined,
-                currentBidAmount: undefined,
-                currentBidTeam: { tag: 'Spectator', value: {} } as any,
-                teamBlueCharBudget: newBlueCharBudget,
-                teamRedCharBudget: newRedCharBudget,
-                teamBlueLcBudget: sale.teamBlueLcBudget,
-                teamRedLcBudget: sale.teamRedLcBudget,
-                blueCharactersWon: newBlueCharactersWon,
-                redCharactersWon: newRedCharactersWon,
-                nextNominatorTeam,
-                timerState: {
-                    ...session.timerState,
-                    turnStartAt: ctx.timestamp,
-                    accumulatedPauseMs: 0,
-                },
-            }, user.id));
-
-            ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
-                lastActivityAt: ctx.timestamp,
-            }, user.id));
-        }
+            auditUserId: user.id,
+        });
 
         console.log(
             `[AUCTION] pass_bid: '${nominatedChar}' sold to ${winningTeam.tag} for ${winningAmount} in lobby #${lobbyId}. ` +
@@ -708,11 +720,14 @@ export const timer_expiry_auction = spacetimedb.reducer(
             throw new SenderError('Turn timer has not yet expired.');
         }
 
-        const nextSeq = getNextSequence(ctx, lobbyId);
-
         if (!session.currentNomination) {
             // ─── Nomination phase: auto-nominate EMPTY CHARACTER (D-43/D-54) ───
-            const nominatingTeam = session.nextNominatorTeam;
+            const nextSeq = getNextSequence(ctx, lobbyId);
+            // A81(1): a full team never nominates; the turn falls to the other team.
+            // Defensive: unreachable through the reducers today (the rotation never leaves a full nominator).
+            const nominatingTeam = teamIsFull(session, lobby, session.nextNominatorTeam.tag)
+                ? { tag: otherTeamTag(session.nextNominatorTeam.tag), value: {} } as any
+                : session.nextNominatorTeam;
             const baseCost = 0; // EMPTY CHARACTER always 0-cost
 
             // Insert Nominate step for EMPTY CHARACTER
@@ -730,6 +745,23 @@ export const timer_expiry_auction = spacetimedb.reducer(
                 } as any,
                 timestamp: ctx.timestamp,
             }));
+
+            // A81(2): while the other team is full, the nomination sells to the nominating team at once at base cost.
+            if (teamIsFull(session, lobby, otherTeamTag(nominatingTeam.tag))) {
+                completeSale(ctx, lobby, session, {
+                    characterName: 'EMPTY',
+                    winningTeam: nominatingTeam,
+                    winningAmount: baseCost,
+                    nominatingTeamTag: nominatingTeam.tag,
+                    actorUserId: 0, // System actor
+                    actorSlot: { tag: 'Spectator', value: {} } as any, // System resolution
+                    auditUserId: 0,
+                });
+                console.log(
+                    `[AUCTION] timer_expiry_auction: Auto-nominated EMPTY CHARACTER for ${nominatingTeam.tag}; sold at once (the other team is full) in lobby #${lobbyId}`
+                );
+                return;
+            }
 
             // Set auction state: EMPTY nomination, auto-bid by nominating team at 0
             // The other team must now bid or pass
@@ -771,115 +803,15 @@ export const timer_expiry_auction = spacetimedb.reducer(
 
             const nominatingTeam = nominateStep ? nominateStep.actorSlot : session.nextNominatorTeam;
 
-            // A61(3)(5), A64: the winning team's default (lowest owned) eidolon and extra, charged now (character budget first).
-            const sale = resolveSale(ctx, lobby, session, winningTeam.tag, nominatedChar, winningAmount);
-
-            // Insert AuctionSold step (system resolves the auction)
-            ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
-                id: 0,
-                lobbyId,
-                sequence: nextSeq,
+            completeSale(ctx, lobby, session, {
+                characterName: nominatedChar,
+                winningTeam,
+                winningAmount,
+                nominatingTeamTag: nominatingTeam.tag,
                 actorUserId: 0, // System actor
-                anonymousLabel: undefined,
                 actorSlot: { tag: 'Spectator', value: {} } as any, // System resolution
-                action: { tag: 'AuctionSold', value: {} } as any,
-                payload: {
-                    tag: 'AuctionSold',
-                    value: {
-                        characterName: nominatedChar,
-                        winningAmount,
-                        winningTeam,
-                        eidolon: sale.eidolon,
-                        eidolonCost: sale.eidolonCost,
-                    },
-                } as any,
-                timestamp: ctx.timestamp,
-            }));
-
-            // Deduct budget (winning amount + A61 eidolon extra, see resolveSale) and increment won count
-            const newBlueCharBudget = sale.teamBlueCharBudget;
-            const newRedCharBudget = sale.teamRedCharBudget;
-            let newBlueCharactersWon = session.blueCharactersWon;
-            let newRedCharactersWon = session.redCharactersWon;
-
-            if (winningTeam.tag === 'Blue') {
-                newBlueCharactersWon += 1;
-            } else if (winningTeam.tag === 'Red') {
-                newRedCharactersWon += 1;
-            }
-
-            // Steal-skip logic (D-46): same as pass_bid
-            let nextNominatorTeam: any;
-            if (nominatingTeam.tag === winningTeam.tag) {
-                nextNominatorTeam =
-                    nominatingTeam.tag === 'Blue'
-                        ? { tag: 'Red', value: {} }
-                        : { tag: 'Blue', value: {} };
-            } else {
-                nextNominatorTeam = { tag: nominatingTeam.tag, value: {} };
-            }
-
-            // Check auction completion
-            const updatedSessionForCheck = {
-                ...session,
-                blueCharactersWon: newBlueCharactersWon,
-                redCharactersWon: newRedCharactersWon,
-            };
-            const auctionComplete = isAuctionComplete(updatedSessionForCheck, lobby);
-
-            if (auctionComplete) {
-                // D-50: Budget rollover — carry leftover charBudget into lcBudget
-                const finalBlueChar = newBlueCharBudget;
-                const finalRedChar = newRedCharBudget;
-                ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
-                    currentNomination: undefined,
-                    currentBidAmount: undefined,
-                    currentBidTeam: { tag: 'Spectator', value: {} } as any,
-                    teamBlueCharBudget: 0,
-                    teamRedCharBudget: 0,
-                    teamBlueLcBudget: sale.teamBlueLcBudget + finalBlueChar,
-                    teamRedLcBudget: sale.teamRedLcBudget + finalRedChar,
-                    blueCharactersWon: newBlueCharactersWon,
-                    redCharactersWon: newRedCharactersWon,
-                    nextNominatorTeam,
-                    timerState: {
-                        ...session.timerState,
-                        turnStartAt: ctx.timestamp,
-                        accumulatedPauseMs: 0,
-                    },
-                }, 0));
-
-                ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
-                    stage: { tag: 'Equipping', value: {} } as any,
-                    lastActivityAt: ctx.timestamp,
-                }, 0));
-
-                console.log(
-                    `[AUCTION] timer_expiry_auction: Auction complete (timer expiry). Lobby #${lobbyId} → Equipping.`
-                );
-            } else {
-                ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
-                    currentNomination: undefined,
-                    currentBidAmount: undefined,
-                    currentBidTeam: { tag: 'Spectator', value: {} } as any,
-                    teamBlueCharBudget: newBlueCharBudget,
-                    teamRedCharBudget: newRedCharBudget,
-                    teamBlueLcBudget: sale.teamBlueLcBudget,
-                    teamRedLcBudget: sale.teamRedLcBudget,
-                    blueCharactersWon: newBlueCharactersWon,
-                    redCharactersWon: newRedCharactersWon,
-                    nextNominatorTeam,
-                    timerState: {
-                        ...session.timerState,
-                        turnStartAt: ctx.timestamp,
-                        accumulatedPauseMs: 0,
-                    },
-                }, 0));
-
-                ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
-                    lastActivityAt: ctx.timestamp,
-                }, 0));
-            }
+                auditUserId: 0,
+            });
 
             console.log(
                 `[AUCTION] timer_expiry_auction: Auto-passed bid. '${nominatedChar}' sold to ${winningTeam.tag} for ${winningAmount} in lobby #${lobbyId}.`

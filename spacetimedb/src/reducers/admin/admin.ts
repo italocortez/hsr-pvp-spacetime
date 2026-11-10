@@ -600,6 +600,10 @@ export const admin_bulk_upsert = spacetimedb.reducer(
                 const seenPairs = new Set<string>();
                 for (const raw of rows) {
                     const [characterA, characterB] = canonicalPair(raw.characterA, raw.characterB);
+                    // Audit 2026-11-09 (roster finding 1): both names must be HsrCharacter rows (a misspelt name never matches a group).
+                    for (const name of [characterA, characterB]) {
+                        if (!ctx.db.HsrCharacter.name.find(name)) throw new SenderError(`Character ${name} not found.`);
+                    }
                     const r = { ...raw, characterA, characterB };
                     validateEnumIfPresent('gameMode', r.gameMode, ctx, tableName);
                     validateEnumIfPresent('draftMode', r.draftMode, ctx, tableName);

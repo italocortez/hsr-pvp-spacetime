@@ -157,7 +157,7 @@ Abuse guards (Phase S5 execution; DECISIONS.md A42, A43; ACCESS-SECURITY-OPS B-7
 ### join_lobby(lobbyId, joinCode, password, abandonCurrentMatch?)
 1. `getAuthenticatedUser(ctx)`.
 2. D-03: resolve lobby by `id` (if `lobbyId>0`) else by `joinCode`; throw "Lobby not found." if neither resolves.
-3. **Reconnect / return path** (existing LobbyMember row; F1 / Phase S4 execution: evaluated BEFORE the one-lobby check, which counts the row being rejoined and used to reject every reconnect; `abandonCurrentMatch` is ignored here): require a reconnect stage (Waiting, Drafting, Equipping, Scoring, AwaitingResult; A67(1)); A68(4) reject an abandoned row ("You left this match for another lobby and cannot return."); D-39 recompute `disconnectPoolRemainingMs`; delete+reinsert member `isOnline=true`, clear `disconnectedAt` and `leftAt` (A68(2): the only path that clears `leftAt`); auto-resume the MatchSession timer if it was auto-paused; bump activity; a returning away player (the row had `leftAt`) gets the System chat line "{name} is back."; return (no count change).
+3. **Reconnect / return path** (existing LobbyMember row; F1 / Phase S4 execution: evaluated BEFORE the one-lobby check, which counts the row being rejoined and used to reject every reconnect; `abandonCurrentMatch` is ignored here): require a reconnect stage (Waiting, Drafting, Equipping, Scoring, AwaitingResult; A67(1)); A68(4) reject an abandoned row ("You left this match for another lobby and cannot return."); D-39 recompute `disconnectPoolRemainingMs`; delete+reinsert member `isOnline=true`, clear `disconnectedAt` and `leftAt` (A68(2): the only path that clears `leftAt`); auto-resume the MatchSession timer if it was auto-paused (A85(1): only when the caller is a seated player and no seated player is still away, see "Phase S10c execution"); bump activity; a returning away player (the row had `leftAt`) gets the System chat line "{name} is back."; return (no count change).
 4. **New-join path** only: D-22 / A68(4) `ensureNotInLobby(ctx, userId, abandonCurrentMatch ?? false)`; D-23 guest restrictions; D-21 `ensureNotBanned` (reject if a `LobbyBan` row exists).
 5. D-04 / A68(8): require stage Waiting, Drafting, Equipping or Scoring (AwaitingResult: "Cannot join a lobby in stage: AwaitingResult"); D-02 verify password against `LobbyPassword` if `!isPublic`.
 6. Cap enforcement: reject if total members >= 20 ("Lobby is full (max 20 members)."); a join that can only be watching is rejected when the lobby already has `maxSpectators` spectators ("Spectator slots are full (max N)." with N = `Lobby.maxSpectators`, A68(8)): every live-stage join, and a Waiting join of a tournament lobby that auto-seated to Spectator. A casual Waiting joiner lands on Spectator as a seat candidate (D-27) and is not counted against `maxSpectators` (Phase S8f fix pass: the setting caps watchers, not seat candidates; the 20-member cap still applies). Only new joins are tested: members already in the Spectator slot are unaffected by a later lower setting.
@@ -422,6 +422,19 @@ Membership lifecycle after A68 (details in the reducer flows above):
 - `LobbyBan.bannedJoinSeq` (written by `ban_member`); `view_my_lobby_bans` and `view_admin_lobby_bans` carry it.
 - `view_my_lobby_members`: the no-op `Math.round` on `accountRating` removed (the helper returns an integer, A40 exact).
 
+## Phase S10c execution (DECISIONS.md A85)
+
+- **`join_lobby` auto-resume (A85(1)).** The reconnect branch lifts an auto-pause (Drafting, paused, latest Pause step
+  `isAutoPause`) only when the caller's row is a seated player (`isSeatedPlayer`, `helpers/lobby/lobbyHelpers.ts`: a
+  Blue / Red player seat, not a coach, not a spectator) and, after the caller's own row is written back online,
+  `anySeatedPlayerAway(ctx, lobbyId)` is false: no seated player of either team is away / abandoned
+  (`memberHasLeft`) or offline (`isOnline` false and no live `UserPresence` row), the same "still offline" test as
+  `run_referee_transfer_check`. Otherwise the draft stays paused; the rest of the reconnect branch is unchanged.
+- **Other paths.** `client_connected` restores memberships and cancels pending checks but never resumes a draft
+  (unchanged, consistent with A85(1)); the only other path that lifts a pause is `resume_draft` (A85(2), see
+  [../match-session/architecture.md](../match-session/architecture.md)). The disconnect pool, forfeit grace and
+  `claim_forfeit` are unchanged (A85(3)).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -464,6 +477,7 @@ Membership lifecycle after A68 (details in the reducer flows above):
 | `LobbyPreset` private + `view_lobby_presets`; `view_lobby_browser` without user ids (name label, joinCode only when public, hostLabel, counts); `view_my_lobby_members` row with `presence` (A68(10)) and A40 ratings; `view_my_lobby`, layer-0 `view_my_lobbies`, `view_my_lobby_bans` | Phase S9a execution (DECISIONS.md A37, A40, A44(1), A48, A68(10)) | 2026-11-08 |
 | S9a fix pass: spectator targets follow `isAnonymousSpectators`; browser host label per the host's seat kind; member-event chat lines rendered per reader; banned user masked in `view_my_lobby_bans`; `Lobby` header marked private | Phase S9a execution (DECISIONS.md A37) | 2026-11-08 |
 | Seat targeting: `kick_member`, `ban_member`, `set_captain`, `transfer_referee` take `targetJoinSeq`, `set_team_slot` an optional `targetJoinSeq` (omitted = self), `unban_member` takes `bannedJoinSeq`; `resolveSeat`; `Lobby.lastJoinSeq` replaces the `max + 1` join counter (seat numbers never reused); `LobbyBan.bannedJoinSeq`; no preventive ban of a non-member | Phase S9c execution (DECISIONS.md A74) | 2026-11-08 |
+| `join_lobby` auto-resume only for a seated player's return and only when no seated player of either team is still offline, away or abandoned (`isSeatedPlayer`, `anySeatedPlayerAway`) | Phase S10c execution (DECISIONS.md A85) | 2026-11-09 |
 | Fix pass: `maxSpectators` caps watchers, not seat candidates (casual Waiting joins and `set_team_slot` moves into Spectator are not counted; live-stage joins and tournament Waiting spectators are); `ensureNotInLobby` runs `transferFlagsOnRemoval` on the away row before writing `abandonedAt` | Phase S8f execution (DECISIONS.md A68(4)(7)(8)) | 2026-11-08 |
 
 ---

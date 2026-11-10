@@ -848,3 +848,53 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** user, 2026-11-09: "start draft or advance stage should be referee powers". The referee already pauses, undoes, edits the package (A78), closes games (A60(4)) and triggers concedes; a referee who is not the host could run the whole match except starting it and moving it between stages.
 - **Supersedes:** the host rule of `start_draft` (D-era) and of `advance_stage` (D-58 / D-59; A60(5)'s wording "a host signal" becomes "a referee signal").
 - **Where implemented:** S10b
+
+### A81 — Auction: a full team sits out
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:**
+  1. A team that already holds `charactersPerTeam` characters in the current game neither nominates nor bids: `nominate_character` and `place_bid` reject it, and the nomination rotation (D-46) and the timer's auto-nomination skip it.
+  2. While one team is full, the other team nominates and the nominated character is sold to it at once at its base cost, with no bidding round. The nominating team's existing budget checks apply unchanged.
+  3. The auction ends when both teams hold `charactersPerTeam` characters (unchanged).
+- **Why:** user, 2026-11-09: "For 4, I agree with recomendation". Backend closing audit, draft slice finding 4: the rotation kept handing the nomination to a full team, which could win a ninth character; the lineup could then never be valid and only a staff close ended the game.
+- **Supersedes:** the match-session contract edge case "Auction sold when only one team needs characters: normal flow".
+- **Where implemented:** S10c
+
+### A82 — Auction character stats follow the winning team
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:**
+  1. For an `AuctionSold` step, the owning side is the sale's `winningTeam`, never the step's actor (the passer, or the system on a timer sale).
+  2. Every player of the winning team (the non-coach participants of that side) gets the "played" stat for the character; every player of the other team gets the "faced" stat; the global character stat is written once, with the win flag of the owning side.
+  3. No stat row is ever written for the system user or for a spectator side.
+  4. Classic picks are unchanged (the picker gets "played").
+- **Why:** user, 2026-11-09: "For 5, every player of the winning team". Audit, results slice finding 1: stats went to the passer, so the public win rate of auctioned characters was inverted.
+- **Supersedes:** the actor rule of finalization step 16 for `AuctionSold` (D-54 wording).
+- **Where implemented:** S10c
+
+### A83 — The concede summary is staff-only
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:** `MatchResult.concedeSummary` keeps its text (D-71: audit trail with user ids). Member-facing views return it only to a Moderator or Admin; every other caller gets no value, in anonymous and identified lobbies alike.
+- **Why:** user, 2026-11-09: "For 6, do the recommendation". Audit, results slice finding 2: the text carried real user ids to every member of an anonymous lobby.
+- **Supersedes:** nothing; narrows `view_my_match_result`.
+- **Where implemented:** S10c
+
+### A84 — Re-resolving a bracket match is refused while the next match is live
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:** a re-resolve, rollback or override that would remove a team from a downstream match is rejected when that downstream match is Decided (unchanged) or has any lobby still alive or any match record that is Pending, Submitted, Disputed or Validated. Staff void or roll back the downstream match first. Nothing is voided automatically.
+- **Why:** user, 2026-11-09: "For 7, do recomendation". Audit, tournament slice finding 1: the replacement team inherited the games the removed team had played.
+- **Supersedes:** the "Decided only" refusal of `unplaceEntrant`.
+- **Where implemented:** S10c
+
+### A85 — Lifting a disconnect auto-pause
+
+- **Date:** 2026-11-09 · **Status:** decided
+- **Decision:**
+  1. Re-entering the room (`join_lobby` reconnect branch) lifts an auto-pause only when the caller is a seated player (not a coach, not a spectator) and, after the caller's own return, no seated player of either team is still offline, away or abandoned.
+  2. `resume_draft` on an auto-pause is open to the referee (unchanged) and to any seated player of either team. Coaches and spectators who do not hold the referee flag are rejected. A manual pause keeps D-62 (the referee or the player who paused).
+  3. The disconnect pool, the forfeit grace and `claim_forfeit` are unchanged.
+- **Why:** user, 2026-11-09: "We can reply on a player's good sport, we can limit this to referee's and seated players (both sides), not coaches or spectators", then "yeah lets do the split" (the automatic path stays tied to the away player's return because the page calls `join_lobby` on every reload). Audit, lobby slice finding 1.
+- **Supersedes:** D-11 / D-39's "any reconnect resumes"; extends D-62 for auto-pauses.
+- **Where implemented:** S10c

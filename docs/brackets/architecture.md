@@ -213,6 +213,28 @@ to the derived one (a match whose slot changes has no counted game: `team1Games 
 |---|---|---|
 | `set_match_sides(bracketMatchId, blueTeamId)` (A71(2)) | `bracket` (A25) | checks in order: match exists ("Bracket match not found."); tournament exists; permission ("You are not authorized to set the sides of this match."); tournament not Completed / Cancelled ("Tournament is over."); match Ready ("{positionKey} is {state}; sides are set on a Ready match."); `blueTeamId` ∈ {team1Id, team2Id} ("blueTeamId must be one of the match's two teams."); no `MatchResultRecord` of the match Pending / Submitted / Disputed / Validated ("The sides can no longer be changed: a game of this match has started."; Voided / Rejected do not block); then no `Lobby` of the match ("Close the open lobby of this match before changing its sides."; by then only a Waiting lobby, or one whose records are all Voided / Rejected). Records before lobbies (A70(3), fixed in the A71 pass). Then `blueTeamId` (`updateWithAudit`, the caller's id, A37; skipped when unchanged) and `writeMatchGames`. Any Ready match, group-stage included |
 
+## Phase S10c execution (DECISIONS.md A84)
+
+`unplaceEntrant` (`helpers/tournament/bracketResults.ts`), reached through `rollbackBracketResult` from
+`rollback_bracket_match`, `resolve_bracket_match` (a Decided match with another winner) and `override_match_result` (a
+Decided match), now refuses when the downstream match has any lobby (`Lobby.bracket_match_id`: Waiting, playing, or
+parked in AwaitingResult) or any `MatchResultRecord` (`bracket_match_id`) that is Pending, Submitted, Disputed or
+Validated: `'<key> has a lobby or a game result; void or roll that match back first.'` The Decided refusal ("<key> is
+decided; roll that back first.") comes first and is unchanged. Nothing is voided automatically; the transaction rolls
+back whole. Staff clear the downstream match with existing reducers, so the refusal is never a dead end:
+
+- a Waiting lobby: `close_lobby` (host, Moderator, Admin; Waiting only);
+- a lobby with a Submitted / Disputed / Validated record: `override_match_result(…, 'Rejected', …)` (`results`; the lobby
+  is voided, the record kept as Rejected, which does not block);
+- a lobby still drafting or scoring (Pending record): `resolve_bracket_match` on the downstream match (its
+  `voidMatchLobbies` voids the unsettled lobby), then `rollback_bracket_match` on it (a Staff decision voids nothing and
+  returns it to Ready);
+- a downstream match that is itself Decided: `rollback_bracket_match` first, as before.
+
+`close_lobby` needs the host, a Moderator or an Admin, so tournament staff holding only the `results` permission clear a
+downstream match with resolve-then-rollback (third path), which also clears a Waiting lobby (`voidMatchLobbies` voids
+every lobby without a Validated record) and deletes that match's calendar event (not restored by the rollback).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -238,6 +260,7 @@ to the derived one (a match whose slot changes has no counted game: `team1Games 
 | The bracket match is the series: derived tally (`matchGames`: head start + Validated records), `recordGameSettled` decides at ceil(bestOf / 2), rollback voids the deciding record only, resolve keeps every Validated game, DQ applies the tally; `seriesGames` deleted (A67(4)(8)) | Phase S8e execution | 2026-11-08 |
 | `blueTeamId` on `BracketMatch`, `helpers/tournament/matchSides.ts` as the one colour mapping, result credit by colour, `set_match_sides` (group matches included) | Phase S8g execution (DECISIONS.md A70) | 2026-11-08 |
 | Head start on team1 whatever the colours, `headStartSide` removed, `set_match_sides(bracketMatchId, blueTeamId)`, records checked before lobbies, `slotChangeReset` on every slot change | Phase S8g execution (DECISIONS.md A71) | 2026-11-08 |
+| `unplaceEntrant` also refuses a downstream match with a lobby or a Pending / Submitted / Disputed / Validated record | Phase S10c execution (DECISIONS.md A84) | 2026-11-09 |
 
 ---
 

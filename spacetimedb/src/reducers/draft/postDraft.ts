@@ -134,6 +134,7 @@ export const equip_lightcone = spacetimedb.reducer(
             ensureLineupThrottle(ctx, member);
         }
         ensureInTeamDraft(ctx, lobbyId, side, characterName);
+        if (superimposition < 1 || superimposition > 5) throw new SenderError('superimposition must be between 1 and 5.');
 
         // Look up LC cost from HsrLightconeCost table (15.4 D-10/D-11/Pitfall 6).
         // (lightconeName, gameMode, draftMode='Classic', costSetId) → SuperimpositionCost → s1..s5 field.

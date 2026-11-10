@@ -382,6 +382,7 @@ Phase 15.4 introduced first-ever synergy auction rows — the default seed set n
 | First-ever Auction synergy rows seeded (D-13 zero-value default on default seed set) | Phase 15.4 execution | 2026-04-15 |
 | Synergy auction round-trip test coverage added: `test/backend/cost-sets/synergy-auction-round-trip.test.ts` (D-25a) | Phase 15.4 execution | 2026-04-15 |
 | `ensureSelectableCostSet` (exists, published, not locked; id 0 passes) + loose `doesCostSetCover` at every selection site; `delete_cost_set` refuses while a non-Finished lobby or non-terminal tournament references the set; scenarios added | Phase S6 execution (backlog #2, R2, D-D6) | 2026-11-06 |
+| Synergy rows name real characters: `admin_bulk_upsert('HsrSynergyCost')` and `edit_draft_synergy_cost` reject a `characterA` / `characterB` with no `HsrCharacter` row ("Character <name> not found."); the two misspelt Trailblazer pairs in `data/seed/synergies.json` are corrected | Phase S10c execution (backend audit 2026-11-09, cross-cutting finding 1) | 2026-11-09 |
 
 ---
 

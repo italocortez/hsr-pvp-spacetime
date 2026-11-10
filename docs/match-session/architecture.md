@@ -346,6 +346,47 @@ signal with no gate (A60(5)). `ensureHostOrAbove` keeps its other callers (`upda
 on another seat, `shuffle_teams`, `close_lobby`). Tournament lobbies: `create_tournament_lobby` seats the creator with
 `isReferee: true` (A34), so the creator starts and advances as before; no server-side path calls either reducer.
 
+## Phase S10c execution (audit 2026-11-09; DECISIONS.md A81, A85)
+
+Input bounds (audit draft slice, findings 1-3):
+
+- `pick_character` (`reducers/draft/draftClassic.ts`): without `requireOwnership` (the argument is used) an `eidolon`
+  above 6 is rejected with `'eidolon must be between 0 and 6.'` (the `set_eidolon` text). Under `requireOwnership` the
+  argument is ignored as before (`resolveOwnedEidolon`).
+- `equip_lightcone` (`reducers/draft/postDraft.ts`): `superimposition` outside 1..5 is rejected with
+  `'superimposition must be between 1 and 5.'`, on the open path and on the Admin closed-game path (after the draft check).
+- `place_bid` (`reducers/draft/draftAuction.ts`): a `bidAmount` that is not finite (`Number.isFinite`) or is negative is
+  rejected first, before the caller lookup: `'bidAmount must be a finite, non-negative number.'`.
+
+A81, a full team sits out of the Auction (`reducers/draft/draftAuction.ts`):
+
+- `teamIsFull(session, lobby, side)` = the side's won count `>= charactersPerTeam(lineupFormat)`; `isAuctionComplete` =
+  both sides full (unchanged meaning).
+- `nominate_character` and `place_bid` reject a caller whose team is full: `'Your team already has all its characters.'`
+  (after the spectator check, before the turn / holder checks).
+- **Shared sale** `completeSale(ctx, lobby, session, { characterName, winningTeam, winningAmount, nominatingTeamTag,
+  actorUserId, actorSlot, auditUserId })`: `resolveSale` (budgets, default eidolon, `chargeExtra`), the `AuctionSold`
+  step, the won counts, the D-46 rotation, the end check with the D-50 rollover, the session and lobby writes. Used by
+  `pass_bid`, the timer sale of `timer_expiry_auction` and the immediate sale below; their outputs are unchanged.
+- **Rotation (A81(1)):** after the D-46 normal / steal rule, a next nominator that is full hands the turn to the other
+  team (unless the auction just ended).
+- **Immediate sale (A81(2)):** when the other team is full, `nominate_character` (after the unchanged budget checks:
+  `baseCost <= charBudget`, `ensureTotalBudgetFits`) logs the `Nominate` step and sells at once to the nominating team at
+  the base cost through `completeSale` (actor = the nominator); no bidding round, `currentNomination` never set.
+- **Timer:** `timer_expiry_auction`'s nomination branch nominates `EMPTY` for `nextNominatorTeam`, or for the other team
+  when that one is full (defensive; the rotation never leaves a full nominator); when the other team is full the
+  `EMPTY` nomination sells at once at 0 (system actor `0`, `actorSlot` Spectator, as the timer sale).
+- A team that cannot afford any base cost nominates `EMPTY` (cost 0, never exclusive) as before; while the other team
+  is full each such nomination is an immediate 0-cost sale, so the team fills its remaining slots with `EMPTY`.
+
+A85(2), `resume_draft` (`reducers/draft/draftControl.ts`): when the latest Pause step is an auto-pause
+(`isAutoPause`), the referee or any seated player of either team (`isSeatedPlayer`: a Blue / Red player seat, not a
+coach, not a spectator) whose row is not away or abandoned (`memberHasLeft`: `leftAt` / `abandonedAt` unset) may
+resume; a seated player who left the room or abandoned the match for another lobby is rejected like the others (the
+referee rule is unchanged). Others get `'Only the referee or a seated player can resume an auto-paused
+draft.'`. A manual pause keeps D-62 (`'Only the referee or the player who paused can resume the draft.'`). The clock
+math is unchanged (F10). The `join_lobby` auto-resume (A85(1)) is described in [../lobby/architecture.md](../lobby/architecture.md).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -381,6 +422,9 @@ on another seat, `shuffle_teams`, `close_lobby`). Tournament lobbies: `create_to
 | `refereeFullControl` write removed from `start_draft`; live views `view_my_match_session`, `view_my_lineups` (A60 flags), replay `view_my_match_lineup_history`; step / participant views mask ids via `hideUserId` | Phase S9a execution (DECISIONS.md A37, A40, A56, A60, A63) | 2026-11-08 |
 | Game-package edits: captain of that side or a referee (`ensureCaptainOrReferee`) for `set_eidolon`, `equip_lightcone`, `unequip_lightcone`; light-cone reducers take `teamSide` (second argument) and the lineup throttle; Admin path uses the given side | Phase S10b execution (DECISIONS.md A78) | 2026-11-09 |
 | `start_draft` and `advance_stage`: referee flag holder or Moderator+ (`ensureRefereeOrAbove`), host as such no longer | Phase S10b execution (DECISIONS.md A80) | 2026-11-09 |
+| Input bounds: `pick_character` eidolon 0..6 when the argument is used, `equip_lightcone` superimposition 1..5 (both paths), `place_bid` finite non-negative `bidAmount` | Phase S10c execution (audit 2026-11-09) | 2026-11-09 |
+| Auction: a full team neither nominates nor bids and is skipped by the rotation and the timer; while one team is full the other's nomination sells at once at base cost (`completeSale` shared by every sale) | Phase S10c execution (DECISIONS.md A81) | 2026-11-09 |
+| `resume_draft` on an auto-pause: the referee or any seated player of either team | Phase S10c execution (DECISIONS.md A85) | 2026-11-09 |
 
 ---
 

@@ -298,6 +298,11 @@ export const edit_draft_synergy_cost = spacetimedb.reducer(
             throw new SenderError('Cannot edit a cost set that is not in draft state.');
         }
 
+        // Audit 2026-11-09 (roster finding 1): both names must be HsrCharacter rows.
+        for (const name of [characterA, characterB]) {
+            if (!ctx.db.HsrCharacter.name.find(name)) throw new SenderError(`Character ${name} not found.`);
+        }
+
         const gameMode = { tag: gameModeTag, value: {} } as any;
         const draftMode = { tag: draftModeTag, value: {} } as any;
 

@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import { M, newHarness, type Harness } from './s4-fixtures';
 import { verified } from './s8-fixtures';
-import { bulkUpsert, rejection } from './s10-c2-fixtures';
+import { bulkUpsert, rejection, seedCharacters } from './s10-c2-fixtures';
 
 // ─── Inline samples, shaped like normalizeCharacters / normalizeLightcones / normalize*Costs / normalizePairings ──
 
@@ -111,6 +111,8 @@ describe('admin_bulk_upsert: seed rows (in memory)', () => {
 
     it('HsrSynergyCost (D-25, A21): Classic and zero-valued Auction rows per game mode, stored in canonical order; the reversed pair updates, a pair listed twice is rejected', () => {
         const test = newHarness();
+        // T-S10c (audit 2026-11-09, roster finding 1): a synergy needs both names as HsrCharacter rows.
+        seedCharacters(test, ['anaxa', 'cerydra', 'kafka', 'acheron']);
         bulkUpsert(test, 'HsrSynergyCost', [
             pairing('cerydra', 'anaxa', 'Classic', 3), pairing('cerydra', 'anaxa', 'Auction', 0),
             pairing('anaxa', 'cerydra', 'Classic', 3, 'ApocalypticShadow'), pairing('anaxa', 'cerydra', 'Auction', 0, 'ApocalypticShadow'),

@@ -30,12 +30,22 @@ import {
     sCost,
     synergyRow,
 } from './s10-c1-fixtures';
+import { seedCharacters } from './s10-c2-fixtures';
 
 const FORBIDDEN_OWNER = 'Forbidden: You do not own this cost set and are not a Moderator.';
 const MOC = 'MemoryOfChaos';
 
+/**
+ * T-S10c (audit 2026-11-09, roster finding 1): synergy writes require both names as HsrCharacter rows, so the
+ * synergy fixtures seed their characters first.
+ */
+function seedSynergyCharacters(test: Harness, names = ['kafka', 'blackswan']) {
+    seedCharacters(test, names);
+}
+
 /** Default set 0 rows for MoC (Classic + Auction) and one ApocalypticShadow row that must never be cloned into a MoC set. */
 function seedDefaultSet(test: Harness) {
+    seedSynergyCharacters(test, ['acheron', 'pela']);
     bulkUpsert(test, 'HsrCharacterCost', [
         charCostRow('acheron', 'Classic', 2), charCostRow('acheron', 'Auction', 20),
         charCostRow('acheron', 'Classic', 9, 0, 'ApocalypticShadow'),
@@ -148,6 +158,7 @@ describe('edit_draft_*_cost (cost-sets contract §§ edit_draft_character_cost /
 
     it('a synergy edit is keyed by the 5-tuple: an Auction row is inserted then updated; editing B + A updates the A + B row (A21)', () => {
         const test = newHarness();
+        seedSynergyCharacters(test);
         const org = tournamentHost(test);
         const id = createSet(test, org, 'synergy');
         editSyn(test, org, id, 'kafka', 'blackswan', 'Auction', 2);
@@ -193,6 +204,7 @@ describe('edit_draft_*_cost (cost-sets contract §§ edit_draft_character_cost /
 describe('publish / lock / unpublish / delete (cost-sets contract; scenarios "Publish", "Lock", "Unpublish", "Delete")', () => {
     it('publish copies every draft row, both draft modes, to the live tables with their values, deletes the drafts and flips the flags (Pitfall 7 guard)', () => {
         const test = newHarness();
+        seedSynergyCharacters(test);
         const org = tournamentHost(test);
         const id = createSet(test, org, 'full');
         editChar(test, org, id, 'kafka', 'Classic', E(3));
@@ -252,6 +264,7 @@ describe('publish / lock / unpublish / delete (cost-sets contract; scenarios "Pu
 
     it('delete: refused while published; after unpublish it removes the set and its live rows of both draft modes, leaving other sets alone', () => {
         const test = newHarness();
+        seedSynergyCharacters(test);
         seedDefaultSet(test);
         const org = tournamentHost(test);
         const keep = createSet(test, org, 'keep');
@@ -315,6 +328,7 @@ describe('publish / lock / unpublish / delete (cost-sets contract; scenarios "Pu
 describe('admin_bulk_upsert on the cost tables: the (name, mode, draftMode, costSetId) key', () => {
     it('Classic and Auction rows of the same character / light cone / synergy pair coexist as separate rows', () => {
         const test = newHarness();
+        seedSynergyCharacters(test);
         bulkUpsert(test, 'HsrCharacterCost', [charCostRow('kafka', 'Classic', 1), charCostRow('kafka', 'Auction', 10)]);
         bulkUpsert(test, 'HsrLightconeCost', [lcCostRow('patience', 'Classic', 1), lcCostRow('patience', 'Auction', 10)]);
         bulkUpsert(test, 'HsrSynergyCost', [synergyRow('kafka', 'blackswan', 'Classic', 0.5), synergyRow('kafka', 'blackswan', 'Auction', 1.5)]);
@@ -336,6 +350,7 @@ describe('admin_bulk_upsert on the cost tables: the (name, mode, draftMode, cost
 
     it('synergy: updating the Classic row keeps its id, never touches the Auction sibling, and a reversed pair is the same row (A21)', () => {
         const test = newHarness();
+        seedSynergyCharacters(test);
         bulkUpsert(test, 'HsrSynergyCost', [synergyRow('kafka', 'blackswan', 'Classic', 0.5), synergyRow('kafka', 'blackswan', 'Auction', 1.5)]);
         const before = new Map(liveSyn(test, 0).map((r) => [r.draftMode.tag, r]));
         bulkUpsert(test, 'HsrSynergyCost', [synergyRow('blackswan', 'kafka', 'Classic', 2)]);
@@ -347,6 +362,7 @@ describe('admin_bulk_upsert on the cost tables: the (name, mode, draftMode, cost
 
     it('the same pair listed twice in one payload, in either order, is rejected (A21)', () => {
         const test = newHarness();
+        seedSynergyCharacters(test);
         expect(() => bulkUpsert(test, 'HsrSynergyCost', [synergyRow('kafka', 'blackswan', 'Auction', 1), synergyRow('blackswan', 'kafka', 'Auction', 2)]))
             .toThrow('Synergy pair blackswan + kafka is listed twice (pairs are unordered).');
         expect(liveSyn(test, 0)).toHaveLength(0);
@@ -398,6 +414,7 @@ describe('admin_bulk_upsert on the cost tables: the (name, mode, draftMode, cost
 describe('synergy Auction round trip (Phase 15.4 D-25a)', () => {
     it('admin_bulk_upsert writes an Auction synergy row with its modifier and set id', () => {
         const test = newHarness();
+        seedSynergyCharacters(test);
         bulkUpsert(test, 'HsrSynergyCost', [synergyRow('kafka', 'blackswan', 'Auction', 3.5, 7)]);
         expect(liveSyn(test, 7)).toEqual([expect.objectContaining({
             characterA: 'blackswan', characterB: 'kafka', costModifier: 3.5, costSetId: 7, gameMode: expect.objectContaining({ tag: MOC }),
@@ -407,6 +424,7 @@ describe('synergy Auction round trip (Phase 15.4 D-25a)', () => {
 
     it('an Auction-only draft synergy publishes to one live Auction row and no Classic row', () => {
         const test = newHarness();
+        seedSynergyCharacters(test);
         const org = tournamentHost(test);
         const id = createSet(test, org, 'auction syn');
         editSyn(test, org, id, 'kafka', 'blackswan', 'Auction', 4);

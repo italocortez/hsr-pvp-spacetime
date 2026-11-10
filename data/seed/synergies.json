@@ -94,7 +94,7 @@
   },
   {
     "source_name": "cyrene",
-    "target_name": "trailblaizerremembrance",
+    "target_name": "trailblazerremembrance",
     "cost": {
       "cost_set_id": 0,
       "memory_of_chaos": {
@@ -249,7 +249,7 @@
   },
   {
     "source_name": "thedahlia",
-    "target_name": "trailblaizerharmony",
+    "target_name": "trailblazerharmony",
     "cost": {
       "cost_set_id": 0,
       "memory_of_chaos": {

@@ -327,6 +327,9 @@ export const pick_character = spacetimedb.reducer(
 
         // CH-S6 / D.8.7: under requireOwnership the server resolves the eidolon from the selected accounts
         // and ignores the argument; otherwise the argument stands. Cost and payload use the resolved value.
+        if (!lobby.requireOwnership && requestedEidolon > 6) {
+            throw new SenderError('eidolon must be between 0 and 6.');
+        }
         const eidolon = lobby.requireOwnership
             ? resolveOwnedEidolon(ctx, lobbyId, user.id, characterName)
             : requestedEidolon;

@@ -5,7 +5,7 @@
 // submitGame / closeGame (close_game) is the explicit submit; confirmAndClose = both ready + a captain's submit;
 // finishGame closes the current game through the host referee's staff close (S4 / S6 / S7b suites).
 import { expect } from 'vitest';
-import { groupCount, type LineupFormatTag } from '@shared/scoring';
+import { charactersPerTeam, groupCount, type LineupFormatTag } from '@shared/scoring';
 import { teamDraft } from '@module/helpers/results/scoringHelpers';
 import { M, advance, captainOf, lobbyRow, session, setupLobby, tx, type Actor, type Harness, type Lobby, type SetupOpts } from './s4-fixtures';
 
@@ -107,15 +107,21 @@ export function draftClassic(s: Lobby, blue: string[], red: string[], eidolons: 
     expect(lobbyRow(s.test, s.lobbyId).stage.tag).toBe('Equipping');
 }
 
-/** Plays an Auction draft with no bans: the nominator's captain nominates (A61: no eidolon), the other captain passes. */
+/**
+ * Plays an Auction draft with no bans: the nominator's captain nominates (A61: no eidolon), the other captain passes.
+ * T-S10c (A81(2)): a nomination made while the other team is full sells at once, so no pass_bid follows it.
+ */
 export function draftAuction(s: Lobby, blue: string[], red: string[]) {
     const queue = { Blue: [...blue], Red: [...red] };
+    const perTeam = charactersPerTeam(lobbyRow(s.test, s.lobbyId).lineupFormat.tag as LineupFormatTag);
     while (lobbyRow(s.test, s.lobbyId).stage.tag === 'Drafting') {
-        const team = session(s.test, s.lobbyId).nextNominatorTeam.tag as 'Blue' | 'Red';
+        const sess = session(s.test, s.lobbyId);
+        const team = sess.nextNominatorTeam.tag as 'Blue' | 'Red';
         const other = team === 'Blue' ? 'Red' : 'Blue';
+        const otherFull = (other === 'Blue' ? sess.blueCharactersWon : sess.redCharactersWon) >= perTeam;
         tx(s.test, captain(s, team), (ctx) =>
             M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: queue[team].shift()! }));
-        tx(s.test, captain(s, other), (ctx) => M.pass_bid(ctx, { lobbyId: s.lobbyId }));
+        if (!otherFull) tx(s.test, captain(s, other), (ctx) => M.pass_bid(ctx, { lobbyId: s.lobbyId }));
     }
     expect(lobbyRow(s.test, s.lobbyId).stage.tag).toBe('Equipping');
 }
