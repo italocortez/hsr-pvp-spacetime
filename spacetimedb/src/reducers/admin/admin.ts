@@ -9,6 +9,8 @@ import { hasLivePresence } from '@module/helpers/identity/presenceHelpers';
 import { findLobbyResult } from '@module/helpers/results/scoringHelpers';
 import { performUserDeletion } from '@module/helpers/identity/userDeletionHelper';
 import { ensureAdmin } from '@module/helpers/identity/ensurePermissions';
+import { checkDisplayName, checkUsername } from '@module/helpers/identity/usernames';
+import { syncSoloTeamNames } from '@module/helpers/tournament/tournamentHelpers';
 import { auditUpdate } from '@module/helpers/admin/auditColumns';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { Path, Element, CharRole, GameMode, DraftMode, Role } from '@module/types/enums';
@@ -397,6 +399,12 @@ export const admin_delete_row = spacetimedb.reducer(
             case 'MatchSessionHistory': {
                 const id = parseNumericPk(primaryKeyJson, 'MatchSessionHistory');
                 if (!ctx.db.MatchSessionHistory.id.find(id)) throw new SenderError('Row not found');
+                // S10r (A122(2), L4): the match's participant, step, game and lineup history rows go with it
+                // (by_match_history btree on each). MmrHistory rows are a user's rating trail and stay.
+                for (const r of [...ctx.db.MatchParticipantHistory.by_match_history.filter(id)]) ctx.db.MatchParticipantHistory.delete(r);
+                for (const r of [...ctx.db.MatchSessionStepHistory.by_match_history.filter(id)]) ctx.db.MatchSessionStepHistory.delete(r);
+                for (const r of [...ctx.db.MatchResultGameHistory.by_match_history.filter(id)]) ctx.db.MatchResultGameHistory.delete(r);
+                for (const r of [...ctx.db.MatchLineupHistory.by_match_history.filter(id)]) ctx.db.MatchLineupHistory.delete(r);
                 ctx.db.MatchSessionHistory.id.delete(id);
                 break;
             }
@@ -787,22 +795,30 @@ export const admin_update_user = spacetimedb.reducer(
         if (!user) throw new SenderError('User not found');
         // Identity audit #9: the server identities' admin rights come from the SYSTEM user (name and role).
         if (user.username === 'SYSTEM') throw new SenderError('The SYSTEM user cannot be changed.');
+        // S10r (A122(1), L1): a user pending deletion (deletedAt set by an admin deletion or a ban) is not edited.
+        if (user.deletedAt) throw new SenderError(`User #${userId} is pending deletion.`);
+
+        // S10r (A122(1), L1): the same name rules as the player's own rename (trim, non-empty, 32 characters).
+        const newDisplayName = checkDisplayName(displayName);
+        const newUsername = checkUsername(username);
 
         // Validate role tag
         validateEnum('userRole', roleTag, ctx, 'User');
 
         // Check username uniqueness if changed
-        if (username !== user.username) {
-            const existing = ctx.db.User.username.find(username);
-            if (existing) throw new SenderError(`Username "${username}" is already taken`);
+        if (newUsername !== user.username) {
+            const existing = ctx.db.User.username.find(newUsername);
+            if (existing) throw new SenderError(`Username "${newUsername}" is already taken`);
         }
 
         ctx.db.User.id.update(
             updateWithAudit(ctx, user, {
-                displayName,
-                username,
+                displayName: newDisplayName,
+                username: newUsername,
                 role: { tag: roleTag, value: {} } as any,
             }, admin.id),
         );
+        // S10r (A122(1), L1): the solo team names follow the display name, as on the player's own rename.
+        syncSoloTeamNames(ctx, userId, newDisplayName, admin.id);
     }
 );

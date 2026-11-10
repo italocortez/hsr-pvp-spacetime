@@ -119,6 +119,21 @@ export function liveLobbiesOnCostSet(ctx: any, costSetId: number): number {
     return count;
 }
 
+/**
+ * Deletes a cost set's live rows (HsrCharacterCost / HsrLightconeCost / HsrSynergyCost), its draft rows
+ * (CostSetDraft*) and the CostSet row. delete_cost_set runs it after its guards; S10r (A122(6), L89): the user
+ * deletion cascade runs it for the user's unpublished sets that isCostSetInUse does not hold.
+ */
+export function deleteCostSetRows(ctx: any, costSetId: number): void {
+    for (const row of [...ctx.db.HsrCharacterCost.cost_set_id.filter(costSetId)]) ctx.db.HsrCharacterCost.delete(row);
+    for (const row of [...ctx.db.HsrLightconeCost.cost_set_id.filter(costSetId)]) ctx.db.HsrLightconeCost.delete(row);
+    for (const row of [...ctx.db.HsrSynergyCost.cost_set_id.filter(costSetId)]) ctx.db.HsrSynergyCost.id.delete(row.id);
+    for (const row of [...ctx.db.CostSetDraftCharacter.cost_set_id.filter(costSetId)]) ctx.db.CostSetDraftCharacter.delete(row);
+    for (const row of [...ctx.db.CostSetDraftLightcone.cost_set_id.filter(costSetId)]) ctx.db.CostSetDraftLightcone.delete(row);
+    for (const row of [...ctx.db.CostSetDraftSynergy.cost_set_id.filter(costSetId)]) ctx.db.CostSetDraftSynergy.delete(row);
+    ctx.db.CostSet.id.delete(costSetId);
+}
+
 /** delete_cost_set guard: any Lobby (A67(1): every lobby stage is live) or a non-terminal Tournament still references the set. */
 export function isCostSetInUse(ctx: any, costSetId: number): boolean {
     // iter() required: neither Lobby nor Tournament has a costSetId index; Lobby holds live lobbies only (GC'd)

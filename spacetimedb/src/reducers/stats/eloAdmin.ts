@@ -78,6 +78,18 @@ export const admin_update_elo_config = spacetimedb.reducer(
             throw new SenderError('No fields provided to update.');
         }
 
+        // S10r (A122(12), L44): the merged config must be computable. Every field is unsigned (u8 / u32), so no value
+        // is below 0; the one divisor read from the config is spreadDivisor (team rating: stdev / spreadDivisor, a 0
+        // gives Infinity or NaN). The other divisions in eloCalculation.ts are by constants (400, 1000) or by the team
+        // size. The K-factor bands need newThreshold <= midThreshold (inverted, the middle band is skipped).
+        const next = { ...existing, ...changes };
+        if (next.spreadDivisor <= 0) {
+            throw new SenderError('spreadDivisor must be greater than 0.');
+        }
+        if (next.newThreshold > next.midThreshold) {
+            throw new SenderError('newThreshold must not be greater than midThreshold.');
+        }
+
         ctx.db.EloConfigTable.id.update(updateWithAudit(ctx, existing, changes, user.id));
 
         console.log(`[ELO] EloConfig updated by admin #${user.id}: ${changedFields.join(', ')}`);

@@ -15,7 +15,7 @@ The system has three admin-tunable config tables: EloConfig (ELO math parameters
 
 **Purpose:** Run the 19-step finalization pipeline on a Validated match result, including inline MMR processing for standalone Ranked matches.
 
-**Permission:** Admin/Moderator, match referee, or tournament TO/assistant.
+**Permission:** Admin/Moderator, match referee, or tournament TO/assistant. _Superseded in Phase S10r execution (DECISIONS.md A122(14)): the match referee is the present lobby member holding the referee flag._
 
 **Parameters:** `matchResultId` (u32)
 
@@ -530,6 +530,7 @@ _Superseded in Phase S8e execution (DECISIONS.md A69(3))._ The ratchet is remove
 | Scenarios S9b-M1, S9b-M2: top-20 leaderboard with the rating / wins / user id order and SYSTEM actor; own ratings through `view_my_mmr_ratings` | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 | The leaderboard rebuild skips rating rows of users with no `User` row or with `deletedAt` set | Phase S10f execution (backend audit 2026-11-09, results finding 9) | 2026-11-09 |
 | `globalCompositeRating` is the average of the user's mode ratings of the season being written, and is written to that season's `MmrRating` rows only; rows of earlier seasons keep their stored value | Phase S10i execution (DECISIONS.md A102) | 2026-11-10 |
+| `admin_update_elo_config` rejects a `spreadDivisor` of 0 and a `newThreshold` above `midThreshold` | Phase S10r execution (DECISIONS.md A122(12)) | 2026-11-10 |
 
 ---
 

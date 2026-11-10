@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { rebuildLeaderboard } from '@module/helpers/stats/leaderboardRebuild';
 import {
+    priceBanNames,
     M,
     advance,
     connect,
@@ -476,7 +477,7 @@ describe('Results #3: finalization step 16 skips EMPTY, SKIP and the system user
                 expect([last().actorUserId, (last().payload.value as any).characterName]).toEqual([0, 'SKIP']);
                 skipDone = true;
             } else if (kind === 'Ban') {
-                tx(test, captain(s, team), (ctx) => M.ban_character(ctx, { lobbyId, characterName: `ban-${n++}` }));
+                tx(test, captain(s, team), (ctx) => { const characterName = `ban-${n++}`; priceBanNames(ctx, lobbyId, [characterName]); return M.ban_character(ctx, { lobbyId, characterName }); }); // T-S10r (A122(7), L32): a ban names a priced character
             } else {
                 const characterName = `${team.toLowerCase()}-p${n++}`;
                 priceCharacters(test, lobbyId, [characterName]); // T-S10i (A107(5)): priced at 0 when picked (after the timer turns)

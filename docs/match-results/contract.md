@@ -181,7 +181,7 @@ Match results manage the full lifecycle of determining a match outcome: per-game
 
 **Purpose:** Finalize a Validated match result, running the full 19-step finalization pipeline (stats, MMR, leaderboard, lobby cleanup).
 
-**Permission:** Moderator+, the match referee, or tournament TO/assistant
+**Permission:** Moderator+, the match referee, or tournament TO/assistant _Superseded in Phase S10r execution (DECISIONS.md A122(14)): Moderator+ or the present lobby member holding the referee flag; `refereeUserId` is not read._
 
 **Parameters:**
 | Param | Type | Required | Description |
@@ -192,7 +192,7 @@ Match results manage the full lifecycle of determining a match outcome: per-game
 1. Authenticate caller
 2. Look up `MatchResultRecord`; throw if not found
 3. Validate status is `Validated`
-4. Authority check: Moderator+, OR `refereeUserId === user.id`, OR tournament access via BracketMatch
+4. Authority check: Moderator+, OR `refereeUserId === user.id`, OR tournament access via BracketMatch _Superseded in Phase S10r execution (DECISIONS.md A122(14)): Moderator+ or the present lobby member holding the referee flag; `refereeUserId` is not read._
 5. Phase 12.3 D-H-01 ordering guard: if match is tournament-controlled, reject unless the parent tournament stage is `Completed` or `Cancelled`
 6. Delegate to `runFinalization(ctx, matchResult, user.id)`
 
@@ -728,6 +728,7 @@ _Superseded in part in Phase S8e execution (DECISIONS.md A69(2)): the window end
 | A39 scope: only the `winnerOverride` on an unresolved tie is refused to a referee seated on a team in a tournament lobby. The same referee may call `set_score_adjustment` for either team and close the game as staff (A34a, A60(4)); adjustments stay audited | Phase S10d execution (DECISIONS.md A88) | 2026-11-09 |
 | Result entry is rate-limited per user: at most 30 `record_group_scores` / `set_score_adjustment` / `confirm_game` calls per 10 s window on the open game ("You are entering results too quickly. Please wait a moment."); staff outside the lobby and the Admin closed-game edit are not counted. At most 20 adjustments per record, and no team's adjustments may add up to more than 100000000 hundredths either way | Phase S10f execution (backend audit 2026-11-09, results finding 7) | 2026-11-09 |
 | `override_match_result` on a standalone record requires the record to be Submitted, Disputed or Validated and its lobby to be in AwaitingResult; a Pending or Voided record is refused (Pending parked records are resolved with `admin_force_finalize` / `admin_void_match`) | Phase S10f execution (backend audit 2026-11-09, results finding 8) | 2026-11-09 |
+| `finalize_match_result` on a standalone record: Moderator+ or the caller whose present (not away, not abandoned) member row in the record's lobby holds the referee flag; with no lobby row only staff finalize. A seated referee conceding their own team is recorded as a surrender (VoluntaryLeave). A match that ended during the draft archives the budget actually spent | Phase S10r execution (DECISIONS.md A122(11), (14), (15)) | 2026-11-10 |
 
 ---
 

@@ -9,7 +9,7 @@ import { ensureCostSetCovers, ensureSelectableCostSet } from '@module/helpers/dr
 import { ensureSeatAllowed } from '@module/helpers/tournament/tournamentLobbySides';
 import { ensureForfeitSecondsInRange, ensureNoActionAllowed, ensureNotDeferredOutsideTournament } from '@module/helpers/lobby/disconnectHelpers';
 import { ensureLobbyConfigInRange, ensureTeamAliases } from '@module/helpers/lobby/lobbyConfigBounds';
-import { consumeMembershipAllowance } from '@module/helpers/lobby/abuseControls';
+import { MEMBERSHIP_ACTION_TEXT, consumeMembershipAllowance } from '@module/helpers/lobby/abuseControls';
 import { fairShuffle, SHUFFLE_DOMAIN, shuffleKeyAt } from '@shared/lobby-rules';
 
 // ─── update_lobby_settings ────────────────────────────────────────────────────
@@ -398,6 +398,8 @@ export const confirm_ready = spacetimedb.reducer(
         ensureStageIs(lobby, 'Waiting');
 
         const member = ensurePresentMember(ctx, lobbyId, user.id); // A98
+        // S10r (A122(4), L17): counted on the per-user membership allowance (each call rewrites the member and lobby rows).
+        consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT);
 
         ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, user.id]);
         ctx.db.LobbyMember.insert(updateWithAudit(ctx, member, {
@@ -434,6 +436,8 @@ export const unconfirm_ready = spacetimedb.reducer(
         ensureStageIs(lobby, 'Waiting');
 
         const member = ensurePresentMember(ctx, lobbyId, user.id); // A98
+        // S10r (A122(4), L17): counted on the per-user membership allowance.
+        consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT);
 
         ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, user.id]);
         ctx.db.LobbyMember.insert(updateWithAudit(ctx, member, {
@@ -545,6 +549,8 @@ export const shuffle_teams = spacetimedb.reducer(
         if (lobby.isTournamentControlled) {
             throw new SenderError("Seats in a tournament lobby follow the bracket's sides (A35 / A70); shuffling is not available.");
         }
+        // S10r (A122(4), L17): counted on the caller's per-user membership allowance (a shuffle rewrites every seat).
+        consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT);
 
         const members = [...ctx.db.LobbyMember.lobby_id.filter(lobbyId)];
         const newSlot = new Map<number, { tag: string }>();

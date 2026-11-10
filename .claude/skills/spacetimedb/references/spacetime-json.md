@@ -47,7 +47,7 @@ Language-specific options:
 - **C#**: `namespace`
 - **Unreal C++**: `unreal-module-name`, `uproject-dir`
 - **All**: `include-private` (boolean — include private tables in generated bindings)
-- **TypeScript**: `import-extension`: `none` (default) | `js` | `ts` (v2.14+). Only for `moduleResolution: "nodenext"` or direct TS execution in Node, Bun, or Deno; not needed for Next.js
+- **TypeScript**: `import-extension`: `none` (default) | `js` | `ts` (v2.14+). Only for `moduleResolution: "nodenext"` or direct TS execution in Node, Bun, or Deno; not needed for a bundler such as Vite (`web/`)
 - **All**: `bindings`: `client` (default) | `module` (post-2.6.1). `module` generates receiver bindings for async inter-database calls; dependencies listed under `dependencies` get module bindings automatically, defaulting to `<module-path>/src/remote_bindings`
 
 ---

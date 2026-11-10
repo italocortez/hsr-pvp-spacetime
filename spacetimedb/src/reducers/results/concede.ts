@@ -5,7 +5,7 @@ import { ensureLobbyMember, slotTeam, slotIsCoach, slotIsSpectator, memberHasLef
 import { buildConcedeSummary, isForfeitEligible, isPastDisconnectThreshold, isThirdPartyReferee } from '@module/helpers/lobby/disconnectHelpers';
 import { runFinalization } from '@module/helpers/results/finalizationHelpers';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
-import { findLobbyResult } from '@module/helpers/results/scoringHelpers';
+import { findLobbyResult, postSystemChat } from '@module/helpers/results/scoringHelpers';
 import { handOffToBracket } from '@module/helpers/tournament/tournamentResults';
 
 /**
@@ -70,16 +70,8 @@ export function performConcede(
         lastActivityAt: ctx.timestamp,
     }, triggerUserId));
 
-    // 7. System chat message
-    ctx.db.ChatMessage.insert(insertWithAudit(ctx, {
-        id: 0,
-        lobbyId: lobby.id,
-        senderUserId: 0,
-        senderType: { tag: 'System', value: {} } as any,
-        content: `Match conceded. ${winnerTeamSide} team wins. Reason: ${concedeTrigger.tag}.`,
-        metadata: undefined,
-        anonymousLabel: undefined,
-    }, triggerUserId));
+    // 7. System chat message (S10r, A122(3): the shared 50-message trim)
+    postSystemChat(ctx, lobby.id, `Match conceded. ${winnerTeamSide} team wins. Reason: ${concedeTrigger.tag}.`, triggerUserId);
 
     // 8. Auto-finalize for casual non-tournament concedes
     // Tournament concedes park in AwaitingResult (A24(2)); the bracket already advanced in step 5 (A38(1)).
@@ -160,8 +152,11 @@ export const concede_match = spacetimedb.reducer(
             throw new SenderError('Cannot determine team for concede.');
         }
 
-        // Determine concedeTrigger (D-70)
-        const concedeTrigger = member.isReferee
+        // Determine concedeTrigger (D-70). S10r (A122(15), L52): a referee seated on a team who concedes that team
+        // surrenders (VoluntaryLeave). A seated caller always concedes their own team (losingTeamSide = 0), so
+        // RefereeDecision is left to the exclusive (Spectator) referee, who names the losing team.
+        const ownsLosingTeam = slotTeam(member.lobbySlot) === losingTeam;
+        const concedeTrigger = member.isReferee && !ownsLosingTeam
             ? { tag: 'RefereeDecision', value: {} }
             : { tag: 'VoluntaryLeave', value: {} };
 
@@ -345,16 +340,8 @@ export const defer_match = spacetimedb.reducer(
             lastActivityAt: ctx.timestamp,
         }, user.id));
 
-        // System chat message
-        ctx.db.ChatMessage.insert(insertWithAudit(ctx, {
-            id: 0,
-            lobbyId: lobby.id,
-            senderUserId: 0,
-            senderType: { tag: 'System', value: {} } as any,
-            content: 'Match deferred to admin/TO resolution.',
-            metadata: undefined,
-            anonymousLabel: undefined,
-        }, user.id));
+        // System chat message (S10r, A122(3): the shared 50-message trim)
+        postSystemChat(ctx, lobby.id, 'Match deferred to admin/TO resolution.', user.id);
 
         console.log(`[DEFER] Lobby #${lobby.id} deferred to AwaitingResult by userId:${user.id}`);
     }

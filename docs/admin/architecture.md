@@ -92,12 +92,12 @@ Called through a server-identity connection (the Owner, or a Delegate token from
      - `Lobby`: `hardDeleteLobby` (the D-19 cascade close_lobby runs: result rows, lineups, chat, account selections, members, bans, password, steps, session, lobby). Fix pass (review F1, the `admin_void_match` guards, D.8.3 / D-56): a tournament-controlled lobby is refused ("This is a tournament lobby: use rollback_bracket_match or the tournament result reducers (results permission)."), and so is a lobby whose `MatchResultRecord` is Validated or has `mmrProcessedAt` ("This lobby's match result is Validated or already processed: use admin_void_match or override_match_result."); nothing is deleted. Other lobbies keep the full cascade
      - `LobbyMember` (key `{"lobbyId","userId"}`): `removeMemberRow` (flags handed over in the A22(5) order, `LobbyMemberAccount` rows deleted, `currentPlayerCount` decremented; an emptied Waiting lobby is hard-deleted). Fix pass (review F4, A68(6)): a seated player row (a team player seat, not a coach, not a spectator) is refused while the lobby is in Drafting, Equipping, Scoring or AwaitingResult ("Players cannot be removed once the draft has started; the match ends by result, concede or forfeit.", the `kick_member` text); coach and spectator rows, and every row in Waiting, still go through `removeMemberRow`
      - `MatchSession` / `MatchSessionStep`: refused while the lobby exists ("Cannot delete a {table} row of lobby #N while the lobby exists. Delete the Lobby row instead."); allowed for orphans
-     - `MatchSessionHistory`: key through `parseNumericPk`
+     - `MatchSessionHistory`: key through `parseNumericPk`. Phase S10r execution (A122(2)): its `MatchParticipantHistory`, `MatchSessionStepHistory`, `MatchResultGameHistory` and `MatchLineupHistory` rows go with it (`by_match_history` on each); `MmrHistory` rows stay
    - Identity audit #14: a malformed JSON key is a `SenderError` ("Invalid primary key for {table}: expected JSON"; fix pass, review N3: also valid JSON that is not an object or array, e.g. `null`, `5`, `"x"`); `admin_bulk_upsert` answers unparsable `jsonData` with "jsonData must be a JSON array"
    - Unknown table: `SenderError`
 
 ### admin_update_user(userId, displayName, username, roleTag)
-Phase S10e execution (identity audit #9): rejects the SYSTEM user ("The SYSTEM user cannot be changed."). Otherwise unchanged (no field validation and no solo team-name sync yet: identity audit #11, open).
+Phase S10e execution (identity audit #9): rejects the SYSTEM user ("The SYSTEM user cannot be changed."). Phase S10r execution (A122(1), identity audit #11 closed): field rules and the solo team-name sync, see "Phase S10r execution" below.
 
 ### admin_bulk_upsert(tableName, jsonData)
 1. `ensureAdmin(ctx)` -- requires Admin role
@@ -117,6 +117,7 @@ Phase S10e execution (identity audit #9): rejects the SYSTEM user ("The SYSTEM u
 3. Validate `roleTag` against Role enum variants
 4. If username changing: check uniqueness via `User.username.find()`
 5. `User.id.update()` with new display name, username, role
+6. Phase S10r execution (A122(1)): before step 3 a user pending deletion is refused and both names go through the rename rules; after step 5 the solo team names are synced. Details in "Phase S10r execution" below
 
 ### admin_ban_user(banTypeTag, providerId, reason)
 1. `ensureAdmin(ctx)` -- requires Admin role
@@ -284,6 +285,11 @@ Not built: `view_admin_lobbies`, `view_admin_match_results`, `view_admin_match_h
 lists them as trimmable; PAGE-MAP's adminpanel section, authoritative by A44(1), does not use them). The Users tab's
 public `User` subscription is the only `User` subscription in the app (PAGE-MAP D2).
 
+## Phase S10r execution (DECISIONS.md A122)
+
+- **`admin_update_user` (A122(1), L1).** After the SYSTEM guard: a user with `deletedAt` set (pending deletion after an admin deletion or a ban) is refused ("User #N is pending deletion."). `displayName` and `username` go through the rules of the player's own rename (`checkDisplayName` / `checkUsername`, `helpers/identity/usernames.ts`, now also used by `update_display_name` / `update_username`): trimmed, not empty, at most 32 characters ("Display name cannot be empty", "Display name must be 32 characters or fewer", "Username cannot be empty", "Username must be 32 characters or fewer"); the trimmed values are stored and the uniqueness check reads the trimmed username. After the update, `syncSoloTeamNames` (`helpers/tournament/tournamentHelpers.ts`, the loop `update_display_name` ran inline, moved there) renames the user's solo team in every active, solo, non-anonymous tournament through `soloTeamName`; audit actor = the admin.
+- **`admin_delete_row('MatchSessionHistory')` (A122(2), L4).** Deletes the row's `MatchParticipantHistory`, `MatchSessionStepHistory`, `MatchResultGameHistory` and `MatchLineupHistory` rows (`by_match_history` btree on each) before the history row. `MmrHistory` rows (a user's rating trail, keyed by user) are kept.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -315,6 +321,7 @@ public `User` subscription is the only `User` subscription in the app (PAGE-MAP 
 | `override_match_result` refuses a match decided by DQ or by staff against the tally, and a locked group match; `UserRateState` tournament-entry window | Phase S10g execution (tournament audit #4, #5, #13) | 2026-11-09 |
 | Guest creation breaker: `AbuseConfig.guestCreationEnabled` / `guestCreationBurstThreshold` (100) / `guestCreationBurstWindowMinutes` (10), `AbuseCounter['guest_create']`, `AdminAlert` kind `guest_create_burst`, new `admin_set_guest_creation`, the three fields in `admin_update_abuse_config`; identity GC deletes idle history-free guests (`docs/auth/architecture.md`) | Phase S10h execution (DECISIONS.md A95; identity audit #7) | 2026-11-10 |
 | Default `guestCreationBurstThreshold` 300; new `server_set_guest_creation(enabled)` / `server_set_guest_lobby_creation(enabled)` (`requireServer`, SYSTEM audit actor, counter reset on re-enable through the helpers shared with the admin reducers) | Phase S10i execution (DECISIONS.md A109) | 2026-11-10 |
+| `admin_update_user`: rename rules (trim, non-empty, 32 characters), solo team rename, a user pending deletion refused; `admin_delete_row('MatchSessionHistory')` deletes its participant, step, game and lineup history rows | Phase S10r execution (DECISIONS.md A122) | 2026-11-10 |
 
 ---
 

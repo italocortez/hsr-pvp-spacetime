@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { computeAccountRating, computeMergedAccountRating } from '@module/helpers/stats/accountRating';
 import {
+    priceBanNames,
     DEFAULT_LOBBY_ARGS,
     M,
     advance,
@@ -245,7 +246,7 @@ function seedRoles(test: Harness, roles: Record<string, 'Dps' | 'Support' | 'Sus
 }
 
 const ban = (s: Lobby, team: 'Blue' | 'Red', characterName: string) =>
-    tx(s.test, captain(s, team), (ctx) => M.ban_character(ctx, { lobbyId: s.lobbyId, characterName }));
+    tx(s.test, captain(s, team), (ctx) => (priceBanNames(ctx, s.lobbyId, [characterName]), M.ban_character(ctx, { lobbyId: s.lobbyId, characterName }))); // T-S10r (A122(7), L32): a ban names a priced character
 const pick = (s: Lobby, team: 'Blue' | 'Red', characterName: string) =>
     tx(s.test, captain(s, team), (ctx) => (priceCharacters(ctx, s.lobbyId, [characterName]), M.pick_character(ctx, { lobbyId: s.lobbyId, characterName, eidolon: 0 })));
 
@@ -265,7 +266,7 @@ describe('A45(2): Ban Restriction', () => {
         ban(s, 'Red', 'sup1');
         expect(session(test, s.lobbyId).draftSequence[session(test, s.lobbyId).turnIndex].teamTurn.tag).toBe('Blue');
         expectReject(test, captain(s, 'Blue'), (ctx) =>
-            M.ban_character(ctx, { lobbyId: s.lobbyId, characterName: 'dps3' }), /at most one DPS/);
+            (priceBanNames(ctx, s.lobbyId, ['dps3']), M.ban_character(ctx, { lobbyId: s.lobbyId, characterName: 'dps3' })), /at most one DPS/); // T-S10r (A122(7), L32): a ban names a priced character
         ban(s, 'Blue', 'unknown-name'); // no HsrCharacter row → no role → legal
         expect(steps(test, s.lobbyId).filter((x) => x.action.tag === 'Ban')).toHaveLength(4);
     });

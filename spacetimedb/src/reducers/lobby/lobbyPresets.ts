@@ -43,8 +43,9 @@ function ensureCanMutatePreset(ctx: any, preset: any, user: any): void {
         // Moderators can edit other moderator presets and TO presets
         const creator = ctx.db.User.id.find(preset.creatorUserId);
         if (creator) {
-            const creatorLevel = isRoleAtLeast(creator.role, 'Moderator')
-                || isRoleAtLeast(creator.role, 'TournamentHost');
+            // S10r (A122(5), L21): Moderator and TournamentHost creators only; an Admin's preset needs an Admin
+            // (isRoleAtLeast(…, 'Moderator') also matched Admins).
+            const creatorLevel = isRoleAtLeast(creator.role, 'TournamentHost') && !isRoleAtLeast(creator.role, 'Admin');
             if (creatorLevel) {
                 return;
             }

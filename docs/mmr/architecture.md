@@ -161,6 +161,10 @@ writes the average to those rows only. Rows of earlier seasons keep the value th
 `rebuildLeaderboard` already read the stored value from the season's rows, so the Global category now ranks a
 season-only average.
 
+## Phase S10r execution (DECISIONS.md A122)
+
+- **Rating config bounds (A122(12), L44).** `admin_update_elo_config` (`reducers/stats/eloAdmin.ts`; the "update_elo_config" flow above lists older field names) validates the merged row (stored values with the given changes) before the update: `spreadDivisor` must be above 0 ("spreadDivisor must be greater than 0."), and `newThreshold` must not be above `midThreshold` ("newThreshold must not be greater than midThreshold."). Every field is unsigned (u8 / u32), so nothing is negative. `spreadDivisor` is the one divisor read from the config (`stdev / spreadDivisor` in the team rating); the other divisions in `helpers/stats/eloCalculation.ts` are by constants (400, 1000) or by the team size. Equal thresholds are accepted (an empty middle band).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -182,6 +186,7 @@ season-only average.
 | Leaderboard: top 20 per category (rating, wins, user id), SYSTEM audit actor, `actingUserId` parameter removed; `view_my_mmr_ratings` (own rows per mode and season) | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 | Leaderboard rebuild skips users with no live `User` row | Phase S10f execution (results audit #9) | 2026-11-09 |
 | `globalCompositeRating` computed from and written to the current season's `MmrRating` rows only | Phase S10i execution (DECISIONS.md A102) | 2026-11-10 |
+| `admin_update_elo_config` rejects `spreadDivisor` 0 and `newThreshold` above `midThreshold` (merged row) | Phase S10r execution (DECISIONS.md A122) | 2026-11-10 |
 
 ---
 

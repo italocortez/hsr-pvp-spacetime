@@ -11,6 +11,7 @@ import lightconeSeed from '../../../data/seed/lightcones.json';
 import { teamDraft } from '@module/helpers/results/scoringHelpers';
 import { characterCostAt, doesCostSetCover, lightconeCostAt } from '@module/helpers/draft/costSetGuards';
 import {
+    priceBanNames,
     DEFAULT_LOBBY_ARGS,
     M,
     advance,
@@ -702,7 +703,7 @@ describe('A107(3)(4): a published set is patched in place', () => {
         expect(lobbyRow(f.test, ts.lobbyId).costSetId).toBe(tid);
         for (let i = 0; session(f.test, ts.lobbyId).draftSequence[session(f.test, ts.lobbyId).turnIndex].actionRequired.tag === 'Ban'; i++) {
             const team = session(f.test, ts.lobbyId).draftSequence[session(f.test, ts.lobbyId).turnIndex].teamTurn.tag as Team;
-            tx(f.test, captainActor(ts, team), (ctx) => M.ban_character(ctx, { lobbyId: ts.lobbyId, characterName: `tb-${i}` }));
+            tx(f.test, captainActor(ts, team), (ctx) => (priceBanNames(ctx, ts.lobbyId, [`tb-${i}`]), M.ban_character(ctx, { lobbyId: ts.lobbyId, characterName: `tb-${i}` }))); // T-S10r (A122(7), L32): a ban names a priced character
         }
         tx(f.test, captainActor(ts, 'Blue'), pickBody(ts, 'k'));
         expect(payloadOf(f.test, ts.lobbyId, 'Pick')).toMatchObject({ characterName: 'k', costPaid: 40 });
@@ -854,7 +855,7 @@ function autoPickGame(seats: SetupOpts['seats'], owned: Record<string, string[]>
     const s = setupLobby(test, { seats, lobby: { autoRandomPick: true, banMode: { tag: 'Four' } }, beforeStart: withAccounts(test) });
     expireTurn(s); // Blue ban → SKIP
     expect(payloadOf(test, s.lobbyId, 'Ban')).toMatchObject({ characterName: 'SKIP' });
-    tx(test, captain(s, 'Red'), (ctx) => M.ban_character(ctx, { lobbyId: s.lobbyId, characterName: 'red-ban' }));
+    tx(test, captain(s, 'Red'), (ctx) => (priceBanNames(ctx, s.lobbyId, ['red-ban']), M.ban_character(ctx, { lobbyId: s.lobbyId, characterName: 'red-ban' }))); // T-S10r (A122(7), L32): a ban names a priced character
     priceCharacterAt(test, key0('Classic'), 'solo', ladder(1));
     expireTurn(s); // Blue pick → solo
     expect(lastStepOf(test, s.lobbyId, 'Pick')).toMatchObject({ actorUserId: 0, actorSlot: { tag: 'Blue' } });

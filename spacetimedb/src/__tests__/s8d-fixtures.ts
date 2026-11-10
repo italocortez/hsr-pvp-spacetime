@@ -4,7 +4,7 @@
 // accounts, roles and the EloConfig row are written straight into the in-memory datastore (or through the internal
 // owner), like the earlier suites. `test.db` is read only outside `tx` bodies. Nothing reaches maincloud.
 import { expect } from 'vitest';
-import { M, advance, disconnect, guest, lobbyRow, priceCharacters, session, tx, type Actor, type Harness, type Lobby } from './s4-fixtures';
+import { M, advance, disconnect, guest, lobbyRow, priceBanNames, priceCharacters, session, tx, type Actor, type Harness, type Lobby } from './s4-fixtures';
 import { finishGame } from './s7-fixtures';
 import { bracketByKey, insertHsrAccount, liveField, matchRow, type TournamentArgs } from './s8-fixtures';
 
@@ -94,6 +94,7 @@ export function draftGame(s: Lobby, prefix = 'c') {
             priceCharacters(s.test, s.lobbyId, [characterName]); // T-S10i (A107(5)): cost 0 unless already priced
             tx(s.test, who, (ctx) => M.pick_character(ctx, { lobbyId: s.lobbyId, characterName, eidolon: 0 }));
         } else {
+            priceBanNames(s.test, s.lobbyId, [characterName]); // T-S10r (A122(7), L32): a ban names a priced character
             tx(s.test, who, (ctx) => M.ban_character(ctx, { lobbyId: s.lobbyId, characterName }));
         }
     }

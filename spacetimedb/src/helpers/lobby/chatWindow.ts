@@ -1,10 +1,10 @@
 // ─── D-13 rolling chat window ─────────────────────────────────────────────────────────────────────────────
-// A lobby keeps at most CHAT_WINDOW_SIZE ChatMessage rows. Three writers call trimChatForInsert right before their
-// insert: send_chat_message (reducers/lobby/chat.ts), postMemberEventChat (helpers/lobby/memberEventChat.ts, the
-// member-event System lines) and start_draft ("Draft has started!", reducers/draft/draftClassic.ts) (lobby audit #6 /
-// #14). The other System writers (reducers/draft/postDraft.ts, reducers/results/concede.ts,
-// helpers/results/scoringHelpers.ts) do not trim (still open, docs/chat/architecture.md); since each trim deletes down
-// to the window, the lobby converges back at the next trimming insert. The oldest rows go first, ordered by `createdDate`, never by the
+// A lobby keeps at most CHAT_WINDOW_SIZE ChatMessage rows. Every ChatMessage writer calls trimChatForInsert right
+// before its insert: send_chat_message (reducers/lobby/chat.ts), postMemberEventChat (helpers/lobby/memberEventChat.ts,
+// the member-event System lines), start_draft ("Draft has started!", reducers/draft/draftClassic.ts) (lobby audit #6 /
+// #14), and, since S10r (A122(3), L16), postSystemChat (helpers/results/scoringHelpers.ts), which carries the
+// stage-change lines of advance_stage (reducers/draft/postDraft.ts), the concede and defer lines
+// (reducers/results/concede.ts) and the game-close line (helpers/results/gameClose.ts). The oldest rows go first, ordered by `createdDate`, never by the
 // auto-increment id (CLAUDE.md §3 rule 4). Rows written in the same transaction share a createdDate; their relative
 // order is then the index order, which only matters when one transaction writes more than the window.
 

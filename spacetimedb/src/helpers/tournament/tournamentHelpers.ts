@@ -462,6 +462,24 @@ export function soloTeamName(ctx: any, tournament: any, displayName: string, ali
     return base + ' (' + k + ')';
 }
 
+/**
+ * Lazy sync of solo team names after a display-name change (update_display_name; S10r, A122(1): admin_update_user
+ * too). A solo player's team in an active (not Completed / Cancelled), solo, non-anonymous tournament takes the new
+ * name through soloTeamName's uniqueness pass (tournament audit #16).
+ */
+export function syncSoloTeamNames(ctx: any, userId: number, displayName: string, actorId: number): void {
+    for (const team of [...ctx.db.TournamentTeam.captain_user_id.filter(userId)]) {
+        const tournament = ctx.db.Tournament.id.find(team.tournamentId);
+        if (!tournament) continue;
+        const isActive = tournament.stage.tag !== 'Completed' && tournament.stage.tag !== 'Cancelled';
+        if (!isActive || tournament.teamSize !== 1 || tournament.isAnonymousDefault) continue;
+        const name = soloTeamName(ctx, tournament, displayName, undefined, team.id);
+        if (name !== team.name) {
+            ctx.db.TournamentTeam.id.update(updateWithAudit(ctx, team, { name }, actorId));
+        }
+    }
+}
+
 /** Creates the auto team of a solo tournament (teamSize = 1) for an enrolled player; status from refreshTeamStatus. */
 export function createSoloTeam(ctx: any, tournament: any, userId: number, name: string, actorId: number): void {
     const team = ctx.db.TournamentTeam.insert(insertWithAudit(ctx, {

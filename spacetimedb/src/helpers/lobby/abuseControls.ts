@@ -215,18 +215,26 @@ export function consumeChatAllowance(ctx: any, userId: number, lastMessageMicros
  * not AbuseConfig columns (no change to the config row); a plain reconnect (page reload) is not counted. leave_lobby is
  * never counted nor rejected (S10e review N8: a user at the cap can always leave), so a join / leave loop is held by
  * its joins.
+ * S10r (A122(4), L17): confirm_ready, unconfirm_ready, shuffle_teams and transfer_host count on the same allowance
+ * (each rewrites member or lobby rows every member, and for the lobby row the lobby list, receives).
  */
+/** S10r review F6: the refusal text of confirm_ready, unconfirm_ready, shuffle_teams and transfer_host on the shared bucket. */
+export const MEMBERSHIP_ACTION_TEXT = 'You are doing that too quickly. Please wait a moment.';
+
 export const MEMBERSHIP_WINDOW_MS = 10_000;
 export const MEMBERSHIP_CHANGES_PER_WINDOW = 20;
 
-/** Counts one membership change of the user, rejecting it once the current window is full. */
-export function consumeMembershipAllowance(ctx: any, userId: number): void {
+/**
+ * Counts one membership change of the user, rejecting it once the current window is full. S10r review F6: `message`
+ * overrides the refusal text for the calls that share the bucket without changing seats (MEMBERSHIP_ACTION_TEXT).
+ */
+export function consumeMembershipAllowance(ctx: any, userId: number, message?: string): void {
     const now: bigint = ctx.timestamp.microsSinceUnixEpoch;
     const state = ctx.db.UserRateState.userId.find(userId);
     const windowOpen = state && now - state.membershipWindowStart.microsSinceUnixEpoch < BigInt(MEMBERSHIP_WINDOW_MS) * 1000n;
     if (windowOpen) {
         if (state.membershipCount >= MEMBERSHIP_CHANGES_PER_WINDOW) {
-            throw new SenderError('You are changing lobbies or seats too quickly. Please wait a moment.');
+            throw new SenderError(message ?? 'You are changing lobbies or seats too quickly. Please wait a moment.');
         }
         writeRateState(ctx, userId, state, { membershipCount: state.membershipCount + 1 });
     } else {

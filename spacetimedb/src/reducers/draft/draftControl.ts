@@ -2,16 +2,18 @@ import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser } from '@module/helpers/identity/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
-import { ensurePresentMember, ensureStageIs, slotToTeamSide, isSeatedPlayer } from '@module/helpers/lobby/lobbyHelpers';
+import { ensurePresentMember, ensureStageIs, slotToTeamSide, isSeatedPlayer, slotIsCoach } from '@module/helpers/lobby/lobbyHelpers';
 import { ensureMatchAlive } from '@module/helpers/lobby/disconnectHelpers';
-import { lobbySteps, getNextSequence, ensurePauseInterval } from '@module/helpers/draft/stepSequence';
+import { lobbySteps, getNextSequence, ensurePauseInterval, ensureUndoStepRoom } from '@module/helpers/draft/stepSequence';
 import { pausedTimerState, resumedTimerState, turnBudgetMs } from '@module/helpers/draft/turnClock';
 
 // ─── undo_last_step ───────────────────────────────────────────────────────────
 // Undoes the last draft step.
 // Per D-60: Referee only (when refereeCanUndo=true). Last step only.
 // F9: "last step" = the highest-sequence Pick/Ban, never a Pause or Undo audit row; rejected while paused
-// and during the auction phase. Decrements turnIndex, deletes that step, inserts an Undo record.
+// and during the auction phase once it has begun (S10r, A122(9): the last ban stays undoable until the first
+// nomination). Decrements turnIndex, deletes that step, inserts an Undo record. S10r (A122(10)): the Undo row counts
+// toward the 300-step cap (ensureUndoStepRoom, next to ensureEditStepRoom in stepSequence.ts).
 
 export const undo_last_step = spacetimedb.reducer(
     {
@@ -50,19 +52,32 @@ export const undo_last_step = spacetimedb.reducer(
         if (session.timerState.isPaused) {
             throw new SenderError('Nothing to undo right now.');
         }
+        // A67(3): the lobby's one game.
+        const allSteps = lobbySteps(ctx, lobbyId);
+        // S10r (A122(9), L34): the last ban of the Auction ban phase can be undone while the auction has not begun: the
+        // phase flag is set but no nomination is open and no Nominate, Bid or AuctionSold step exists. The undo then
+        // restores the ban turn (that Ban deleted, turnIndex back on it, isAuctionPhase false, timer reset); nothing
+        // else changed when the phase opened. Once a nomination exists the undo stays refused (no budget or won-count
+        // rollback exists).
+        let reopenBanPhase = false;
         if (session.isAuctionPhase) {
-            throw new SenderError('Undo is not available during the auction phase.');
+            const auctionBegun = session.currentNomination !== undefined
+                || allSteps.some((s) => s.action.tag === 'Nominate' || s.action.tag === 'Bid' || s.action.tag === 'AuctionSold');
+            if (auctionBegun) {
+                throw new SenderError('Undo is not available during the auction phase.');
+            }
+            reopenBanPhase = true;
         }
 
         // F9: the last *draft action* = the highest-sequence Pick or Ban; Pause / Undo audit rows are skipped.
-        // A67(3): the lobby's one game.
-        const allSteps = lobbySteps(ctx, lobbyId);
         const lastStep = allSteps
             .filter((s) => s.action.tag === 'Pick' || s.action.tag === 'Ban')
             .sort((a, b) => b.sequence - a.sequence)[0];
         if (!lastStep) {
             throw new SenderError('Nothing to undo in this game.');
         }
+        // S10r (A122(10), L35): Undo rows count toward the edit-step cap (300 per game).
+        ensureUndoStepRoom(ctx, lobbyId);
 
         // F9: the Undo record's own sequence, taken before the delete (draft audit LOW #15: taken after it, the Undo row
         // could reuse the deleted step's sequence)
@@ -92,6 +107,7 @@ export const undo_last_step = spacetimedb.reducer(
 
         ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
             turnIndex: newTurnIndex,
+            ...(reopenBanPhase ? { isAuctionPhase: false } : {}),
             timerState: {
                 ...session.timerState,
                 turnStartAt: ctx.timestamp,
@@ -149,6 +165,11 @@ export const pause_draft = spacetimedb.reducer(
         }
 
         if (!isRefereeWithPower) {
+            // S10r (A122(8), L33): a coach is not a player and cannot pause (coaches act nowhere else in the draft, D-39);
+            // the referee power above is unchanged.
+            if (slotIsCoach(member.lobbySlot)) {
+                throw new SenderError('Coaches cannot pause the draft.');
+            }
             // Non-referee player path
             if (!lobby.allowPlayerPause) {
                 throw new SenderError('Player pausing is not allowed in this lobby.');

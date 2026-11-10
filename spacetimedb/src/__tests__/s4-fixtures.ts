@@ -346,6 +346,27 @@ export function priceLightcones(src: Src, lobbyId: number, names: string[], cost
     for (const n of names) priceLightconeAt(src, key, n, cost);
 }
 
+/**
+ * T-S10r (A122(7), L32): a ban names a character of the lobby's pool (a cost row in the lobby's cost set, game mode and
+ * draft mode, as picks). Prices `names` there at 0 (unless already priced) WITHOUT writing an HsrCharacter reference
+ * row, so a ban-restriction test keeps its own role rows (a name with no reference row has no role). EMPTY / SKIP are
+ * never priced. `src` as for priceCharacters (test.db outside a transaction, the reducer ctx inside one).
+ */
+export function priceBanNames(src: Src, lobbyId: number, names: string[]) {
+    if (!src.db.Lobby.id.find(lobbyId)) return;
+    const key = costKeyOf(src, lobbyId);
+    for (const name of names) {
+        if (name === 'EMPTY' || name === 'SKIP') continue;
+        const exists = [...src.db.HsrCharacterCost.cost_set_id.filter(key.costSetId)].some(
+            (r: any) => r.characterName === name && r.gameMode.tag === key.gameMode && r.draftMode.tag === key.draftMode);
+        if (exists) continue;
+        src.db.HsrCharacterCost.insert({
+            characterName: name, gameMode: { tag: key.gameMode }, draftMode: { tag: key.draftMode },
+            costs: { e0: 0, e1: 0, e2: 0, e3: 0, e4: 0, e5: 0, e6: 0 }, costSetId: key.costSetId, ...AUDIT0(src),
+        } as any);
+    }
+}
+
 /** Adds a spectator after the draft started (new joins are allowed in Drafting as Spectator). */
 export function joinAsSpectator(s: Lobby, name: string): Actor {
     const who = guest(s.test, name);

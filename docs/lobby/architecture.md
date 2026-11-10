@@ -225,6 +225,7 @@ Phase S6 execution (backlog #2, #6, #7, #9; DECISIONS.md A28, A33, A38(2)/(4), A
 ### confirm_ready(lobbyId) / unconfirm_ready(lobbyId)
 1. `getAuthenticatedUser(ctx)`; load lobby; D-28 `ensureStageIs(Waiting)`; `ensureLobbyMember`.
 2. Delete+reinsert caller `LobbyMember` with `isConfirmed=true` (confirm) or `false` (unconfirm).
+3. Phase S10r execution (A122(4)): each call counts on the caller's membership allowance (`consumeMembershipAllowance`) before the write.
 
 ### set_captain(lobbyId, targetJoinSeq)
 1. `getAuthenticatedUser(ctx)`; load lobby; `ensureLobbyMember` (caller) and the permission check; then A74(1) `resolveSeat`. Guard order: lobby → caller checks → seat.
@@ -234,7 +235,7 @@ Phase S6 execution (backlog #2, #6, #7, #9; DECISIONS.md A28, A33, A38(2)/(4), A
 
 ### create_lobby_preset / update_lobby_preset / delete_lobby_preset(presetId, ...)
 1. `getAuthenticatedUser(ctx)`.
-2. D-31b permission: `create` requires TournamentHost+ (TO/Mod/Admin). `update`/`delete` use `ensureCanMutatePreset` -- system presets are Admin-only; non-system editable by Admin, the owner, or a Moderator whose target's creator is Moderator+/TournamentHost+.
+2. D-31b permission: `create` requires TournamentHost+ (TO/Mod/Admin). `update`/`delete` use `ensureCanMutatePreset` -- system presets are Admin-only; non-system editable by Admin, the owner, or a Moderator whose target's creator is a Moderator or a TournamentHost (Phase S10r execution, A122(5): an Admin's preset needs an Admin).
 3. Validate `name` length 1-50; resolve `disconnectForfeitSeconds` (0 -> undefined).
 4. `create`: insert `LobbyPreset` (`isSystemPreset=false`, `creatorUserId=user.id`). `update`: `updateWithAudit` all config fields. `delete`: delete row.
 5. B-7 (Phase S5 execution): `create` counts the caller's presets on `creator_user_id` and rejects at `AbuseConfig.maxPresetsPerUser` (D-B5: 10). Guests never reach this check (TournamentHost+ guard, A43).
@@ -593,7 +594,9 @@ Membership lifecycle after A68 (details in the reducer flows above):
   record's `refereeUserId` (the referee snapshot taken at the start of the draft). The referee path is a membership
   power: a caller who is not Moderator+ and holds an away or abandoned `LobbyMember` row in the record's lobby is
   rejected with the A98 texts (`ensurePresentIfMember`); a referee with no row left keeps the snapshot authority, as
-  before; the staff path is unchanged.
+  before; the staff path is unchanged. **Superseded by Phase S10r execution (A122(14)):** `refereeUserId` is no longer
+  read and the snapshot fallback is gone; the caller must be Moderator+ or hold the referee flag on a present
+  `LobbyMember` row of the record's lobby (no row: staff only). See [../match-results/architecture.md](../match-results/architecture.md) "Phase S10r execution".
   Targets (review F5): `transfer_referee` and `set_captain` reject an away or abandoned target with the
   `transfer_host` text shape: "The member at seat N has left the match and cannot become the referee." / "... cannot
   become a captain." (`memberHasLeft`, after the seat is resolved; `set_captain` after its spectator / coach checks);
@@ -662,6 +665,12 @@ Membership lifecycle after A68 (details in the reducer flows above):
   Dealing (Blue, Red, Blue, ...), coaches, spectators, cleared captains and the confirmation reset are unchanged.
   No schema or binding change.
 
+## Phase S10r execution (DECISIONS.md A122)
+
+- **Per-user allowance (A122(4), L17).** `confirm_ready`, `unconfirm_ready`, `shuffle_teams` and `transfer_host` count on the existing membership bucket (`consumeMembershipAllowance`, `helpers/lobby/abuseControls.ts`: `UserRateState.membershipWindowStart` / `membershipCount`, 20 changes per fixed 10 s window, shared with joins, returns and `set_team_slot`), after their guards and before the write. The caller is counted (for `shuffle_teams` and `transfer_host` the host or the Moderator who acts). Over the cap these four answer "You are doing that too quickly. Please wait a moment." (`MEMBERSHIP_ACTION_TEXT`, passed through the new optional `message` parameter of `consumeMembershipAllowance`; S10r review F6); joins, returns and seat moves keep "You are changing lobbies or seats too quickly. Please wait a moment.". The bucket fits because each of these calls rewrites member or lobby rows every member, and for the lobby row the lobby list, receives. No new column.
+- **Preset permissions (A122(5), L21).** `ensureCanMutatePreset` (`reducers/lobby/lobbyPresets.ts`): a Moderator edits or deletes a non-system preset of their own or one whose creator's role is Moderator or TournamentHost (`isRoleAtLeast(creator, 'TournamentHost') && !isRoleAtLeast(creator, 'Admin')`); an Admin's preset is refused with the existing text "Moderators can only modify presets created by moderators, TOs, or themselves.". Admins unchanged.
+- **User deletion and presets (A122(6), L22).** `performUserDeletion` deletes the user's lobby presets, keeping one an unfinished tournament points at (`Tournament.lobbyPresetId`). Lobbies hold no preset reference (A116). Details in [../auth/architecture.md](../auth/architecture.md) "Phase S10r execution".
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -713,6 +722,7 @@ Membership lifecycle after A68 (details in the reducer flows above):
 | Fix pass: `transfer_referee` / `set_captain` refuse an away or abandoned target (F5); stored chat labels preferred over live ones, member-event lines store the label in every lobby (F6, F7); `ensureMemberPresentUnlessStaff` for kick / ban / captain and the `set_team_slot` staff exemption (F8); `finalize_match_result` referee path guarded, `dispute_match_result` unguarded on purpose (F9); A96 RLS statement corrected (F2); `AbuseConfig` clear-publish note (F10) | Phase S10h execution (S10h review F2, F5-F10; DECISIONS.md A96, A97, A98) | 2026-11-10 |
 | `create_lobby` loses `joinCode` and `presetId` (with the "Preset not found." check), `create_tournament_lobby` loses `joinCode`; the server always generates the code; `join_lobby` unchanged | Phase S10n execution (DECISIONS.md A114, A116) | 2026-11-10 |
 | `shuffle_teams` RandomSwap: `fairShuffle` keyed by the transaction time, `SHUFFLE_DOMAIN.RandomSwap` and the lobby id replaces `ctx.random.shuffle`; join order, dealing, coaches and captain clearing unchanged | Phase S10p execution (DECISIONS.md A120) | 2026-11-10 |
+| `confirm_ready`, `unconfirm_ready`, `shuffle_teams`, `transfer_host` count on the membership allowance; a Moderator edits only Moderator and host presets; user deletion removes the user's unreferenced presets | Phase S10r execution (DECISIONS.md A122) | 2026-11-10 |
 
 ---
 

@@ -8,6 +8,7 @@ import { expect } from 'vitest';
 import { charactersPerTeam, groupCount, type LineupFormatTag } from '@shared/scoring';
 import { teamDraft } from '@module/helpers/results/scoringHelpers';
 import {
+    priceBanNames,
     M, advance, captainOf, lobbyRow, priceLightconeAt as priceLightconeAtKey, priceCharacters, priceLightcones, session, setupLobby, tx,
     type Actor, type Harness, type Lobby, type SetupOpts,
 } from './s4-fixtures';
@@ -296,6 +297,7 @@ export function completeDraft(s: Lobby, prefix = 'fill') {
             const team = step.teamTurn.tag as 'Blue' | 'Red';
             if (step.actionRequired.tag === 'Ban') {
                 const characterName = `${prefix}-ban-${++counter.ban}`;
+                priceBanNames(test, lobbyId, [characterName]); // T-S10r (A122(7), L32): a ban names a priced character
                 tx(test, captain(s, team), (ctx) => M.ban_character(ctx, { lobbyId, characterName }));
             } else {
                 const characterName = next(team);

@@ -28,6 +28,7 @@ import {
     isAdminRole,
     isClosedGame,
     lineupCosts,
+    postSystemChat,
     recomputeGame,
     refreshLineupCosts,
     resetConfirmations,
@@ -499,24 +500,8 @@ export const advance_stage = spacetimedb.reducer(
                 lastActivityAt: ctx.timestamp,
             }, user.id));
 
-            // System chat message for stage change (D-11)
-            const existingMessages = [...ctx.db.ChatMessage.lobby_id.filter(lobbyId)];
-
-            // Rolling window: delete oldest if > 50
-            if (existingMessages.length >= 50) {
-                const sorted = [...existingMessages].sort((a: any, b: any) => a.id - b.id);
-                ctx.db.ChatMessage.delete(sorted[0]);
-            }
-
-            ctx.db.ChatMessage.insert(insertWithAudit(ctx, {
-                id: 0, // autoInc
-                lobbyId,
-                senderUserId: 0,
-                senderType: { tag: 'System', value: {} } as any,
-                content: 'Draft complete. Stage: Equipping',
-                metadata: undefined,
-                anonymousLabel: undefined,
-            }, user.id));
+            // System chat message for stage change (D-11); S10r (A122(3)): the shared 50-message trim.
+            postSystemChat(ctx, lobbyId, 'Draft complete. Stage: Equipping', user.id);
 
         } else if (currentStage === 'Equipping') {
             // Transition: Equipping → Scoring
@@ -527,22 +512,8 @@ export const advance_stage = spacetimedb.reducer(
                 lastActivityAt: ctx.timestamp,
             }, user.id));
 
-            // System chat message for stage change (D-11)
-            const existingMessages = [...ctx.db.ChatMessage.lobby_id.filter(lobbyId)];
-            if (existingMessages.length >= 50) {
-                const sorted = [...existingMessages].sort((a: any, b: any) => a.id - b.id);
-                ctx.db.ChatMessage.delete(sorted[0]);
-            }
-
-            ctx.db.ChatMessage.insert(insertWithAudit(ctx, {
-                id: 0, // autoInc
-                lobbyId,
-                senderUserId: 0,
-                senderType: { tag: 'System', value: {} } as any,
-                content: 'Lineups set. Stage: Scoring',
-                metadata: undefined,
-                anonymousLabel: undefined,
-            }, user.id));
+            // System chat message for stage change (D-11); S10r (A122(3)): the shared 50-message trim.
+            postSystemChat(ctx, lobbyId, 'Lineups set. Stage: Scoring', user.id);
 
         } else if (currentStage === 'Scoring') {
             throw new SenderError('Games close through confirm_game or close_game; the stage moves on the close.');

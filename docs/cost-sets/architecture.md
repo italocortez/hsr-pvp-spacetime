@@ -131,6 +131,7 @@ One call = one row. Editing both classic and auction for the same character = tw
 4. Delete all `HsrSynergyCost` rows via `cost_set_id` index (by autoInc `id`)
 5. Delete any remaining `CostSetDraft*` rows (all three tables)
 6. Delete the `CostSet` metadata row
+7. Phase S10r execution: steps 2 to 6 are `deleteCostSetRows` (`helpers/draft/costSetGuards.ts`), also run by the user deletion cascade (A122(6))
 
 ## Data Patterns
 
@@ -251,6 +252,10 @@ applies a default price or a cross-mode fallback (A108(2)). A database published
 for the set's owner and Moderator+ (checked before any read; anyone else and an unknown set get none). It reads the
 whole `HsrCharacter` / `HsrLightcone` reference tables (iter) after the permission check.
 
+## Phase S10r execution (DECISIONS.md A122)
+
+- **Unpublished sets of a deleted user (A122(6), L89).** `delete_cost_set`'s row deletion moved to `deleteCostSetRows` (behaviour unchanged). `performUserDeletion` runs it for each of the user's sets with `isPublished` false that `isCostSetInUse` does not hold (no `Lobby` row on the set, no unfinished tournament). Each such set costs one `Lobby` and one `Tournament` scan (`isCostSetInUse`; no `costSetId` index). A set kept because it was in use is not removed later. Published sets stay with their creator gone. Details in [../auth/architecture.md](../auth/architecture.md) "Phase S10r execution".
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -267,6 +272,7 @@ whole `HsrCharacter` / `HsrLightcone` reference tables (iter) after the permissi
 | `edit_draft_*_cost`: finite costs 0..100000, bounded modifier, tags checked (game mode = the set's), names checked against `HsrCharacter` / `HsrLightcone`; re-seed keeps archetype descriptions | Phase S10f execution (roster audit #9, #10) | 2026-11-09 |
 | Lookups read the lobby's own set, game mode and draft mode with no fallback, a missing row rejects; publish checks completeness (confirm fills at cost 0); the draft stays after publish and a published, unlocked set is patched in place, refused while a lobby on it is live; `view_cost_set_missing` | Phase S10i execution (DECISIONS.md A101, A107) | 2026-11-10 |
 | The seed prices set 0 for Classic and Auction with equal values (249 + 249 character rows, 468 + 468 light-cone rows); no reducer applies a default price; `doesCostSetCover` checks set 0 like any other set (review F2); a cost row without the requested field is rejected (review F3); re-seed after publish | Phase S10i execution (DECISIONS.md A108) | 2026-11-10 |
+| User deletion removes the user's unpublished cost sets not in use (`deleteCostSetRows`, shared with `delete_cost_set`); published sets stay | Phase S10r execution (DECISIONS.md A122) | 2026-11-10 |
 
 ---
 

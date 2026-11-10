@@ -51,12 +51,16 @@ Rate limit (Phase S5 execution; DECISIONS.md A43, D-B5; ACCESS-SECURITY-OPS B-4)
 ### System messages (inserted by other reducers)
 Inserted by: `join_lobby`, `leave_lobby`, `kick_member`, `ban_member`, `advance_stage` (Drafting->Equipping, Equipping->Scoring), `start_draft`.
 - `senderType=System`, `senderUserId=0`, no `anonymousLabel`
-- Subject to the same 50-message rolling window. S10e (lobby audit #6 / #14): `postMemberEventChat` and `start_draft`'s "Draft has started!" call `trimChatForInsert` before their insert (before S10e they inserted without trimming, so join / leave loops grew the table without bound). Still open: the `advance_stage` lines (`postDraft.ts`, trimmed by auto-increment id) and `postSystemChat` (`helpers/results/scoringHelpers.ts`, by id; concede / defer lines) do not use the helper yet.
+- Subject to the same 50-message rolling window. S10e (lobby audit #6 / #14): `postMemberEventChat` and `start_draft`'s "Draft has started!" call `trimChatForInsert` before their insert (before S10e they inserted without trimming, so join / leave loops grew the table without bound). Phase S10r execution (A122(3)): every other System line goes through `postSystemChat` (`helpers/results/scoringHelpers.ts`), which now calls `trimChatForInsert` (by `createdDate`): the `advance_stage` lines, the concede and defer lines and the game-close line.
 - S9a fix (A37): member events (`join_lobby` joined / back, `leave_lobby` left / away, `kick_member` kicked, `ban_member` banned) go through `postMemberEventChat` (`helpers/lobby/memberEventChat.ts`): `content` keeps the plain text with the display name (the table is private), `metadata = {"event","subjectUserId"}`, and `anonymousLabel` holds the subject's seat label (in every lobby since the S10h fix pass, review F7; before, only in an anonymous lobby), read before any row removal. `view_my_lobby_chat` renders these lines per reader through `renderSystemChat` (`helpers/identity/viewAnonymity.ts`): template `{member} joined the lobby.` / `left the lobby.` / `left the match.` / `is back.` / `was kicked from the lobby.` / `was banned from the lobby.`, `{member}` = display name when the subject is visible to the reader, else the stored label, else (nothing stored) the live seat label, else "A player" (`storedOrLiveLabel`, S10h review F6); metadata goes out with `subjectUserId = 0` for a hidden subject. Other System lines pass through unchanged.
 
 ### Lifecycle cleanup (close_lobby / auto-close)
 - All `ChatMessage` rows for the lobby are hard-deleted via `lobby_id` index before the Lobby row is deleted (D-19, CHAT-03)
 - No archival -- chat is not written to any history table
+
+## Phase S10r execution (DECISIONS.md A122)
+
+- **One trim for every System line (A122(3), L16).** `postSystemChat` calls `trimChatForInsert` (oldest rows by `createdDate`, not by id) before its insert. The `advance_stage` lines ("Draft complete. Stage: Equipping", "Lineups set. Stage: Scoring", `reducers/draft/postDraft.ts`) and the concede ("Match conceded. …") and defer ("Match deferred to admin/TO resolution.") lines (`reducers/results/concede.ts`) call `postSystemChat` instead of inserting directly. Every `ChatMessage` writer now trims: `send_chat_message`, `postMemberEventChat`, `start_draft` and `postSystemChat`. The header of `helpers/lobby/chatWindow.ts` says so.
 
 ## Phase History
 
@@ -76,6 +80,7 @@ Inserted by: `join_lobby`, `leave_lobby`, `kick_member`, `ban_member`, `advance_
 | Metadata capped at 200 characters; one window helper (`trimChatForInsert`, by `createdDate`) used by player messages, member-event lines and the draft start line | Phase S10e execution (lobby audit #5, #6) | 2026-11-09 |
 | A97 seat labels ("Blue Player #3"): stored on every Player message; `view_my_lobby_chat` shows the live seat label while the sender holds a row, else the stored one, else "A player" (labels stored before S10h are position-based and are shown only for a sender who left; S11 clear-publish empties the table). A98: away / abandoned senders rejected | Phase S10h execution (DECISIONS.md A97, A98) | 2026-11-09 |
 | Fix pass: `view_my_lobby_chat` and the member-event lines prefer the stored label, the live one only when none was stored (`storedOrLiveLabel`; a rejoin no longer relabels old lines, review F6); member-event lines store the subject's label in every lobby (review F7) | Phase S10h execution (S10h review F6, F7; DECISIONS.md A97) | 2026-11-10 |
+| Every System chat line goes through the 50-message trim by `createdDate` (`postSystemChat` calls `trimChatForInsert`; stage-change, concede and defer lines use it) | Phase S10r execution (DECISIONS.md A122) | 2026-11-10 |
 
 ---
 

@@ -2,6 +2,7 @@ import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser, isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
+import { MEMBERSHIP_ACTION_TEXT, consumeMembershipAllowance } from '@module/helpers/lobby/abuseControls';
 import { hasTournamentPermission } from '@module/helpers/tournament/tournamentPermissions';
 import { ensureMemberPresent, ensurePresentIfMember, memberHasLeft, resolveSeat } from '@module/helpers/lobby/lobbyHelpers';
 
@@ -164,6 +165,9 @@ export const transfer_host = spacetimedb.reducer(
         if (memberHasLeft(target)) {
             throw new SenderError(`The member at seat ${targetJoinSeq} has left the match and cannot become the host.`);
         }
+        // S10r (A122(4), L17): counted on the caller's per-user membership allowance (the lobby row reaches every
+        // member and the lobby list).
+        consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT);
 
         ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
             hostUserId: target.userId,

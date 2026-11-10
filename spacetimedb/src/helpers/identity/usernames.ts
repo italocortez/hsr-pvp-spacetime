@@ -1,9 +1,30 @@
 // User.username helpers shared by login_as_guest (reducers/identity/auth.ts) and server_link_provider
 // (reducers/identity/server.ts). User.username is a unique column: an insert or update with a taken name aborts the
 // whole transaction on the index, so every writer that derives a name picks a free one first.
+import { SenderError } from 'spacetimedb/server';
 
 /** Usernames are at most 32 characters (update_username, update_display_name). */
 export const USERNAME_MAX_LENGTH = 32;
+
+/**
+ * S10r (A122(1), L1): the name rules of a player's own rename, shared by update_display_name / update_username and
+ * admin_update_user: the value is trimmed, must not be empty and is at most USERNAME_MAX_LENGTH characters.
+ * Returns the trimmed value.
+ */
+export function checkDisplayName(raw: string): string {
+    const trimmed = raw.trim();
+    if (trimmed.length === 0) throw new SenderError('Display name cannot be empty');
+    if (trimmed.length > USERNAME_MAX_LENGTH) throw new SenderError(`Display name must be ${USERNAME_MAX_LENGTH} characters or fewer`);
+    return trimmed;
+}
+
+/** S10r (A122(1), L1): see checkDisplayName. */
+export function checkUsername(raw: string): string {
+    const trimmed = raw.trim();
+    if (trimmed.length === 0) throw new SenderError('Username cannot be empty');
+    if (trimmed.length > USERNAME_MAX_LENGTH) throw new SenderError(`Username must be ${USERNAME_MAX_LENGTH} characters or fewer`);
+    return trimmed;
+}
 
 /**
  * S10e (identity audit #3): `base` when no other user holds it, else the first free `base_2`, `base_3`, ... (the base

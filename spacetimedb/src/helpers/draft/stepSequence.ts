@@ -46,6 +46,21 @@ export function ensureEditStepRoom(ctx: any, lobbyId: number, side: 'Blue' | 'Re
 }
 
 /**
+ * S10r (A122(10), L35): the same cap (MAX_EDIT_STEPS_PER_LOBBY) on the Undo rows of the lobby's game. Undo is a referee
+ * power acting for the whole lobby, so the count is per lobby, not per side: every Undo step of the lobby counts.
+ * undo_last_step calls it before deleting the step, so a referee looping pick and undo stops at the cap.
+ */
+export const undoCapText = `This game has reached the limit of ${MAX_EDIT_STEPS_PER_LOBBY} undo steps.`;
+
+export function ensureUndoStepRoom(ctx: any, lobbyId: number): void {
+    let count = 0;
+    for (const s of ctx.db.MatchSessionStep.lobby_id.filter(lobbyId)) {
+        if (s.action.tag === 'Undo') count++;
+    }
+    if (count >= MAX_EDIT_STEPS_PER_LOBBY) throw new SenderError(undoCapText);
+}
+
+/**
  * Draft audit #8 (S10f, per pausing party since review F3): a manual pause_draft is rejected while the latest manual
  * Pause step of the caller's own pausing party is younger than PAUSE_MIN_INTERVAL_MS. The parties are 'Blue' and 'Red'
  * (a team's players, and a seated referee without the pause power, who pauses as a player) and 'Referee' (a referee

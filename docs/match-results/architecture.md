@@ -279,7 +279,7 @@ parks in AwaitingResult until the finalize job ([../tournament/architecture.md](
 | Reducer | Change |
 |---|---|
 | `validate_match_result(matchResultId)` (new) | `results`; tournament InProgress; record Submitted or Disputed (the dispute blocks until staff review, A36); → Validated, `settledAt`, `handOffToBracket('Played')`. Standalone records: "Only tournament results are validated by staff; use admin_force_finalize for a standalone match." |
-| `finalize_match_result` | tournament records rejected first: "Tournament matches finalize when the tournament completes (A24)."; authority = Moderator+ or the record's referee (the tournament branch and the D-H-01 guard are gone) |
+| `finalize_match_result` | tournament records rejected first: "Tournament matches finalize when the tournament completes (A24)."; authority = Moderator+ or the lobby's referee (Phase S10r execution, A122(14): the member holding the referee flag in the record's lobby, not `refereeUserId`) (the tournament branch and the D-H-01 guard are gone) |
 | `process_tournament_mmr` | **deleted**; MMR of tournament records runs in `runFinalization` step 11 inside the job (`options.tournamentMmr`), with the real `matchHistoryId` (the sentinel back-fill, step 12, is gone) |
 | `admin_force_finalize` / `admin_void_match` | reject tournament lobbies: "This is a tournament lobby: use resolve_bracket_match(bracketMatchId, winnerTeamId, reason) or validate_match_result(matchResultId) (results permission)." / "… use rollback_bracket_match(bracketMatchId, reason) …"; standalone unchanged (`winnerTeamId` 1 = Blue, 2 = Red) |
 | `override_match_result` | tournament record (InProgress; status Submitted, Disputed or Validated, else "Only a Submitted, Disputed or Validated tournament result can be overridden (this one is X)."; the lobby still exists, else "The match lobby no longer exists; use resolve_bracket_match."): Validated(winner) → record Validated + `settledAt`, then rollback when the match is Decided for the other team and `applyBracketResult(…, 'Staff')`; Rejected → rollback when the match is Decided for this record's team, lobby voided, status kept Rejected. Standalone unchanged |
@@ -444,6 +444,13 @@ reaches ceil(bestOf / 2) or staff resolve it). Stage list: Drafting, Equipping, 
   account counts. Ownership is read when the match is finalized (A110(5)); the stored stat rows are not rewritten by
   later roster changes.
 
+## Phase S10r execution (DECISIONS.md A122)
+
+- **Archived spent budget (A122(11), L40).** Finalization step 7 writes `teamXSpent = characterBudget + lightconeBudget - teamXCharBudget - teamXLcBudget` (both session budgets subtracted). After the D-50 carryover (character budget 0) this is the old value; for a match that ended during the draft (concede, forfeit, force-finalize) the unspent character budget no longer counts as spent. The value reads the session budgets: Auction sales move them, Classic picks do not (`pick_character` writes no budget). A Classic match that ends during the draft therefore archives 0; a finished Classic match archives what moved after the carryover (light-cone equips and eidolon changes, `postDraft.ts`), as before S10r. Pick costs are in neither value.
+- **Who finalizes (A122(14), L51; A34a, A80).** `finalize_match_result` accepts Moderator+ or the caller whose `LobbyMember` row in the record's lobby holds `isReferee` (present: an away or abandoned row is refused as before, A98). `MatchResultRecord.refereeUserId` is no longer read; `close_game` / `confirm_game` and the concede paths still write the closer or conceder there. Before: Moderator+ or `refereeUserId` (the closer or conceder, possibly a captain or a referee who handed the flag on), plus a snapshot holder with no row left. After: Moderator+ or the current referee; with no row in the lobby (lobby gone) only staff. Text unchanged: "You do not have authority to finalize this match result.".
+- **Seated referee concede (A122(15), L52).** `concede_match`: `concedeTrigger` is `RefereeDecision` only when the caller holds the referee flag and the losing team is not the caller's own seated team; a referee seated on a team who concedes that team is a surrender (`VoluntaryLeave`), like any player. The exclusive (Spectator) referee stays `RefereeDecision`.
+- **System chat (A122(3)).** The concede and defer lines go through `postSystemChat` (the 50-message trim); [../chat/architecture.md](../chat/architecture.md) "Phase S10r execution".
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -477,6 +484,7 @@ reaches ceil(bestOf / 2) or staff resolve it). Stage list: Drafting, Equipping, 
 | A Classic timer pick credits every player of the acting team (one `playedCredit` function shared with the Auction sale); history reads no cost table | Phase S10i execution (DECISIONS.md A106, A107(6)) | 2026-11-10 |
 | Played stat follows ownership for a manual pick, a timer pick and a sale (`playedCredit` + per-finalization `ownedCharacters` cache over `HsrAccount.user_id` / `HsrAccountCharacter.hsr_account_id`); lone player credited when nobody owns it, nobody in a 2+ side | Phase S10k execution (DECISIONS.md A110) | 2026-11-10 |
 | Finalization step 7 stores the record's `matchType` and final `winnerTeamSide` on `MatchSessionHistory` | Phase S10n execution (S10n review F1 / F2; DECISIONS.md A115) | 2026-11-10 |
+| Spent budget = starting budgets minus both remaining budgets; `finalize_match_result` for Moderator+ or the lobby's current referee; a seated referee conceding their own team is `VoluntaryLeave`; concede and defer chat lines trimmed | Phase S10r execution (DECISIONS.md A122) | 2026-11-10 |
 
 ---
 

@@ -2,6 +2,7 @@
 // Replaces the "NOT COVERED: requires clientDisconnected to fire" gap of test/backend/lobby/disconnect-concede.test.ts.
 import { describe, expect, it } from 'vitest';
 import {
+    priceBanNames,
     M,
     advance,
     captainOf,
@@ -307,7 +308,9 @@ describe('F9: undo skips the audit rows and keeps sequences unique', () => {
         expect(new Set(seqs2).size).toBe(seqs2.length);
     });
 
-    it('undo during the auction phase is rejected', () => {
+    // T-S10r re-aligned (A122(9), L34): the last ban of the Auction ban phase stays undoable until the auction begins;
+    // the rejection now needs a nomination (contract "Undo During the Auction Phase" still holds once it has begun).
+    it('undo during the auction phase is rejected once a nomination exists (A122(9))', () => {
         const test = newHarness();
         const s = setupLobby(test, { lobby: { draftMode: { tag: 'Auction' }, banMode: { tag: 'Four' } } });
         const { lobbyId } = s;
@@ -318,8 +321,10 @@ describe('F9: undo skips the audit rows and keeps sequences unique', () => {
             [() => redCaptain(s), 'Boothill'],
             [() => blueCaptain(s), 'Castorice'],
         ];
-        for (const [who, name] of bans) tx(test, who(), (ctx) => M.ban_character(ctx, { lobbyId, characterName: name }));
+        for (const [who, name] of bans) tx(test, who(), (ctx) => (priceBanNames(ctx, lobbyId, [name]), M.ban_character(ctx, { lobbyId, characterName: name }))); // T-S10r (A122(7), L32): a ban names a priced character
         expect(session(test, lobbyId).isAuctionPhase).toBe(true);
+        const nominator = session(test, lobbyId).nextNominatorTeam.tag === 'Blue' ? blueCaptain(s) : redCaptain(s);
+        tx(test, nominator, (ctx) => (priceCharacters(ctx, lobbyId, ['Dan Heng']), M.nominate_character(ctx, { lobbyId, characterName: 'Dan Heng' })));
 
         expectReject(test, s.host, (ctx) => M.undo_last_step(ctx, { lobbyId }), 'Undo is not available during the auction phase.');
         expect(steps(test, lobbyId).filter((x) => x.action.tag === 'Ban')).toHaveLength(4);

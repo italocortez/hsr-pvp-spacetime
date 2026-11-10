@@ -5,6 +5,7 @@ import { LIVE_STAGES, slotIsCoach, slotIsSpectator } from '@module/helpers/lobby
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { recalcDuplicateUid } from '@module/helpers/roster/rosterHelpers';
 import { settleTournamentTiesForDeletion } from '@module/helpers/tournament/disqualification';
+import { DEFAULT_COST_SET_ID, deleteCostSetRows, isCostSetInUse } from '@module/helpers/draft/costSetGuards';
 
 /**
  * Returns true if the iterator yields at least one element.
@@ -35,10 +36,39 @@ export function hasHistoryReferences(ctx: any, userId: number): boolean {
 }
 
 /**
+ * S10r (A122(6), L22, L89): deletes the user's lobby presets (LobbyPreset.creator_user_id; the system preset is owned
+ * by SYSTEM and never matches) and unpublished cost sets (CostSet.creator_id, isPublished false: drafts and unpublished
+ * sets, with their live and draft rows through deleteCostSetRows). Published sets stay. References are detected as
+ * follows, and a referenced row is kept:
+ *   - preset: an unfinished tournament (stage not Completed / Cancelled) whose lobbyPresetId is the preset. Lobbies do
+ *     not reference presets (a preset's values are copied at creation; A116), so a lobby never holds one.
+ *     Tournament has no lobbyPresetId index: one Tournament scan for all of the user's presets (small table, deletion only).
+ *   - cost set: isCostSetInUse, as delete_cost_set: any existing Lobby row on the set, or an unfinished tournament.
+ */
+function deleteOwnedPresetsAndCostSets(ctx: any, userId: number): void {
+    const presets = [...ctx.db.LobbyPreset.creator_user_id.filter(userId)].filter((p: any) => !p.isSystemPreset);
+    if (presets.length > 0) {
+        const heldPresetIds = new Set<number>();
+        // iter() required: Tournament has no lobbyPresetId index (see above).
+        for (const tournament of ctx.db.Tournament.iter()) {
+            if (tournament.stage.tag !== 'Completed' && tournament.stage.tag !== 'Cancelled') heldPresetIds.add(tournament.lobbyPresetId);
+        }
+        for (const preset of presets) {
+            if (!heldPresetIds.has(preset.id)) ctx.db.LobbyPreset.id.delete(preset.id);
+        }
+    }
+    for (const costSet of [...ctx.db.CostSet.creator_id.filter(userId)]) {
+        if (costSet.id === DEFAULT_COST_SET_ID || costSet.isPublished) continue;
+        if (isCostSetInUse(ctx, costSet.id)) continue;
+        deleteCostSetRows(ctx, costSet.id);
+    }
+}
+
+/**
  * Cascade-delete active-state rows, then remove the User row.
  *
  * Cascade: tournament ties first (A94(2), settleTournamentTiesForDeletion), UserPrivate, lobby memberships (below), calendar data, UserPresence, UserRateState, UserIdentity,
- * HsrAccount, HsrAccountCharacter.
+ * HsrAccount, HsrAccountCharacter, then (S10r, A122(6)) the user's unreferenced lobby presets and unpublished cost sets.
  * Guest users with no history references → hard-delete (row removed entirely).
  * All others → the User row is hard-deleted and archived to DeletedUser (id, displayName, isGuest, deletedAt), which
  * resolveUserLabel reads for history rows (Phase 15.2 D-09).
@@ -118,6 +148,9 @@ export function performUserDeletion(ctx: any, userId: number, actorId: number): 
     for (const uid of new Set(hsrAccounts.map((a: any) => a.uid))) {
         recalcDuplicateUid(ctx, uid, actorId);
     }
+
+    // S10r (A122(6), L22, L89): the user's lobby presets and unpublished cost sets go with them.
+    deleteOwnedPresetsAndCostSets(ctx, userId);
 
     // Guest users with no history → hard-delete (no references to preserve)
     if (user.isGuest && !hasHistoryReferences(ctx, userId)) {

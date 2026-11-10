@@ -12,6 +12,7 @@
 // s7b-game-package (A60(7)).
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
+    priceBanNames,
     M,
     advance,
     connect,
@@ -108,11 +109,11 @@ describe('A67(3): one game per lobby, steps without game numbers', () => {
         // An earlier lobby (other host, other players) in which Blue banned dps1.
         const other = setupLobby(test, { lobby, seats: [['ob1', 'BluePlayer'], ['ob2', 'BluePlayer'], ['or1', 'RedPlayer'], ['or2', 'RedPlayer']],
             actors: { host: guest(test, 'ohost') } });
-        tx(test, captain(other, 'Blue'), (ctx) => M.ban_character(ctx, { lobbyId: other.lobbyId, characterName: 'dps1' }));
+        tx(test, captain(other, 'Blue'), (ctx) => (priceBanNames(ctx, other.lobbyId, ['dps1']), M.ban_character(ctx, { lobbyId: other.lobbyId, characterName: 'dps1' }))); // T-S10r (A122(7), L32): a ban names a priced character
 
         const s = setupLobby(test, { lobby });
         expect(session(test, s.lobbyId).draftSequence[0]).toMatchObject({ actionRequired: { tag: 'Ban' }, teamTurn: { tag: 'Blue' } });
-        tx(test, captain(s, 'Blue'), (ctx) => M.ban_character(ctx, { lobbyId: s.lobbyId, characterName: 'dps2' }));
+        tx(test, captain(s, 'Blue'), (ctx) => (priceBanNames(ctx, s.lobbyId, ['dps2']), M.ban_character(ctx, { lobbyId: s.lobbyId, characterName: 'dps2' }))); // T-S10r (A122(7), L32): a ban names a priced character
         for (let guard = 0; guard < 30; guard++) {
             const sess = session(test, s.lobbyId);
             const step = sess.draftSequence[sess.turnIndex];
@@ -121,9 +122,9 @@ describe('A67(3): one game per lobby, steps without game numbers', () => {
             const characterName = `b_${sess.turnIndex}`;
             tx(test, who, (ctx) => step.actionRequired.tag === 'Pick'
                 ? (priceCharacters(ctx, s.lobbyId, [characterName]), M.pick_character(ctx, { lobbyId: s.lobbyId, characterName, eidolon: 0 }))
-                : M.ban_character(ctx, { lobbyId: s.lobbyId, characterName }));
+                : (priceBanNames(ctx, s.lobbyId, [characterName]), M.ban_character(ctx, { lobbyId: s.lobbyId, characterName }))); // T-S10r (A122(7), L32): a ban names a priced character
         }
-        expectReject(test, captain(s, 'Blue'), (ctx) => M.ban_character(ctx, { lobbyId: s.lobbyId, characterName: 'dps3' }), /at most one DPS/);
+        expectReject(test, captain(s, 'Blue'), (ctx) => (priceBanNames(ctx, s.lobbyId, ['dps3']), M.ban_character(ctx, { lobbyId: s.lobbyId, characterName: 'dps3' })), /at most one DPS/); // T-S10r (A122(7), L32): a ban names a priced character
     });
 
     it('auto-resume on reconnect (join_lobby) reads the latest Pause of the lobby; a manual pause is not resumed', () => {

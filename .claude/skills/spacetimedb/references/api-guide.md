@@ -54,7 +54,7 @@ SpacetimeDB automatically creates indexes for:
 
 You can add explicit indexes on non-unique columns for query performance.
 
-**Explicit index `name`s must be unique across your entire module (all tables)** — two tables declaring the same `name` → "name is used for multiple entities". Index **`accessor`s are scoped per table**: when `name` is omitted (this repo's convention) the engine derives a table-qualified canonical name, so the same accessor can repeat across tables (this repo reuses `user_id` in 11 tables).
+**Explicit index `name`s must be unique across your entire module (all tables)** — two tables declaring the same `name` → "name is used for multiple entities". Index **`accessor`s are scoped per table**: when `name` is omitted (this repo's convention) the engine derives a table-qualified canonical name, so the same accessor can repeat across tables (this repo reuses `user_id` in more than a dozen tables).
 
 **Schema ↔ Code coupling:**
 - Your query code references indexes by name
@@ -179,7 +179,7 @@ These cause the most wasted time in this project. If you're working with reducer
 | Missing `auditInsert`/`auditUpdate` | Every insert/update must set audit fields | Missing audit trail |
 | Double `ensureAdmin(ctx)` | Capture once: `const admin = ensureAdmin(ctx)` | Redundant permission check + DB lookup |
 | Missing character validation in `update_avatar` | Check `ctx.db.HsrCharacter.name.find(name)` | Invalid avatar reference |
-| Insert without `isOnline`/`isPrivate` | Include `isOnline: false, isPrivate: false` | Missing required User fields |
+| `User` insert missing a column, or presence fields on `User` | Supply every column of `userColumns` (`tables/identity/user.ts`); presence (`isOnline`, `lastLoginAt`) lives on `UserPresence` (A48) | Missing required User fields |
 
 ### Client-side errors
 
@@ -244,17 +244,14 @@ export const hsrCharacterColumns = {
     element: Element,
     role: CharRole,
     imageUrl: t.string(),
+    // ... more columns and the four audit columns (abridged)
 };
 
 // Pass the columns object as the 2nd arg to table()
+// (the real table declares no extra indexes: its by_path / by_element / by_role indexes were removed as unused in S10j)
 export const HsrCharacter = table({
     name: 'hsr_character',
     public: true,
-    indexes: [
-        { accessor: 'by_path', algorithm: 'btree', columns: ['path'] },
-        { accessor: 'by_element', algorithm: 'btree', columns: ['element'] },
-        { accessor: 'by_role', algorithm: 'btree', columns: ['role'] },
-    ]
 }, hsrCharacterColumns);
 ```
 
@@ -408,6 +405,8 @@ const row = ctx.db.player.identity.find(ctx.sender);
 
 ### Multi-column indexes
 Multi-column btree indexes work in SpacetimeDB 2.0+. Pass a **positional array** to `.filter()` — values map to the `columns` array order.
+
+(`TournamentParticipant` below is an illustrative old-repo table and does not exist here; the same pattern in this repo is `LobbyMember.by_lobby_and_user` on `['lobbyId', 'userId']`.)
 
 ```typescript
 // Define a multi-column index — values in .filter() map to columns order
@@ -659,7 +658,8 @@ if (scheduleAt.tag === 'Time') {
 
 ### Subscription patterns (client-side)
 ```typescript
-// Subscribe to ALL public tables (simplest — not recommended for production)
+// Subscribe to ALL public tables (simplest — not recommended for production;
+// banned in this repo's web/ by CLAUDE.md §4 and a CI grep; only the live test harness uses it)
 conn.subscriptionBuilder().subscribeToAllTables();
 
 // Subscribe with raw SQL
@@ -881,7 +881,7 @@ conn.db.my_player.onUpdate((ctx, oldRow, newRow) => {
   console.log('View row updated:', oldRow, '->', newRow);
 });
 ```
-This project's ~35 procedural views do not declare `.primaryKey()` yet and only emit insert/delete — adopting this is a real opportunity, deferred under D-01 (not applied this phase).
+In this repo some view row types declare `.primaryKey()` (e.g. in `views/adminViews.ts`, `lobbyViews.ts`, `calendarViews.ts`); the other views emit insert/delete only, and views with arguments cannot have a primary key. Check the view's `constraints` in `web/src/module_bindings/index.ts` before relying on `onUpdate`.
 
 ---
 
@@ -899,7 +899,8 @@ const builder = DbConnection.builder()
   .withToken(localStorage.getItem('auth_token') || undefined)
   .onConnect((conn, identity, token) => {
     localStorage.setItem('auth_token', token);
-    conn.subscriptionBuilder().subscribeToAllTables();
+    // Upstream examples call subscribeToAllTables() here. Not in this repo: routes subscribe
+    // views and the reference set themselves and unsubscribe on leave (CLAUDE.md §4).
   })
   .onConnectError((ctx, err) => console.error(err))
   .onDisconnect((ctx, err) => console.log('Disconnected', err));
@@ -1075,7 +1076,7 @@ conn.db.damageEvent.onInsert((ctx, event) => {
 });
 ```
 
-This project uses `LobbyCursorEvent` as an event table for real-time cursor broadcasting.
+This project uses `LobbyCursorEvent` as an event table for real-time cursor broadcasting. Per CLAUDE.md §4 the client subscribes it only for its own lobby, only once the lobby stage is past Waiting, and consumes it via `onInsert`.
 
 ---
 
@@ -1150,9 +1151,12 @@ See SKILL.md for project structure, CLI commands, and naming conventions — tho
 
 ### Avoiding circular imports
 ```
-schema.ts → defines tables AND exports spacetimedb
-index.ts  → imports spacetimedb from ./schema, defines reducers
+schema.ts                → imports every table, exports spacetimedb (default export)
+reducers/<domain>/*.ts   → import spacetimedb from '@module/schema', define reducers
+views/*.ts               → same, define views
+index.ts                 → imports ./schema, defines the lifecycle hooks, named-re-exports every reducer and view
 ```
+Never import `spacetimedb` from `index.ts` in a module file (see § 1, "Cannot access before initialization").
 
 ---
 
@@ -1178,16 +1182,16 @@ index.ts  → imports spacetimedb from ./schema, defines reducers
 
 ## 12) Post-2.6.1 features (version-gated)
 
-**All of this exists in this repo's SDK and CLI 2.14.1** (each row checked 2026-11-10 against `node_modules/spacetimedb@2.14.1` types or `spacetime --help`). On the old 2.6.1 baseline none of it worked. In use here: module env (`ctx.env.STDB_TARGET`), views with arguments (`views/costSetViews.ts`, `views/matchHistoryViews.ts`) and in-memory module tests. Source: release notes + v2.14.1 docs + official `typescript-server` skill (see header).
+**All of this exists in this repo's SDK and CLI 2.14.1** (each row checked 2026-11-10 against `node_modules/spacetimedb@2.14.1` types or `spacetime --help`). On the old 2.6.1 baseline none of it worked. In use here: module env (`ctx.env.STDB_TARGET`), views with arguments (e.g. in `views/costSetViews.ts`, `identityViews.ts`, `matchHistoryViews.ts`, `tournamentViews.ts`) and in-memory module tests. Source: release notes + v2.14.1 docs + official `typescript-server` skill (see header).
 
 | Feature | Since | Shape (TS) | Notes for this repo |
 |---|---|---|---|
 | Typed database environment variables | v2.12.0 | `schema({ ...tables }, { env: { API_KEY: t.string(), MODE: t.enum('Mode', ['dev','prod']), LOG_LEVEL: t.string().optional() } })` → `ctx.env.API_KEY` (string), optional → `string \| undefined`; `ctx.env.get('KEY')` → `string \| null` | Values are read-only strings supplied at publish time (process env → config `env` map → stored value), preserved across publishes, cleared by `--delete-data`. Never return or log them. CLI: `--env-only`, `--unset-env`, `--replace-env`, `spacetime env list/get`; HTTP: see `references/http-api.md` |
-| Views with arguments | v2.13.0 (per official skill; not called out in the 2.13 release notes) | `spacetimedb.view(opts, { level: t.u64() }, t.array(Row), (ctx, { level }) => ...)` | Subscribe via raw SQL only: `SELECT * FROM view_name(42)` (no WHERE/joins); TS query builder can't express them; `subscribeToAllTables` skips them; they cannot have a primary key. Each argument set must be unsubscribed when obsolete |
+| Views with arguments | v2.13.0 (per official skill; not called out in the 2.13 release notes) | `spacetimedb.view(opts, { level: t.u64() }, t.array(Row), (ctx, { level }) => ...)` | Subscribe via raw SQL only: `SELECT * FROM view_name(42)` (no WHERE/joins); TS query builder can't express them; `subscribeToAllTables` skips them; they cannot have a primary key. Each argument set must be unsubscribed when obsolete. All argument sets of one view share one client table, so this repo keeps one set per view subscribed at a time (unsubscribe, then subscribe the next; S10n review F5) |
 | Module unit tests (in-memory datastore) | v2.12.0 | `spacetimedb/server/test-utils` + `spacetimedb/server/test-utils/vitest` plugin (both in the 2.14.1 package `exports`) | In use: `spacetimedb/src/__tests__/` (S10). See `references/how-to-guides.md` § Module Unit Testing. Does NOT simulate subscriptions, RLS, lifecycle hooks, or the scheduler; on 2.14.1 the harness cannot set the module env, so `ctx.env` reads throw there (`harness.smoke.test.ts` (f)) |
 | Submodules (mount another TS module under a namespace) | v2.8.0 (reusable `@spacetimedb/*` packages need 2.12+) | `schema({ ...tables, myAuth: { name: 'auth_data', module: authLib } })` → `ctx.db.myAuth.<table>`, client `conn.db.myAuth.<table>` | Official packages: `@spacetimedb/cron`, `@spacetimedb/retry`, `@spacetimedb/rate-limit`, `@spacetimedb/crypto`, `@spacetimedb/resend` (v2.13.0). Changing a namespace's canonical `name` drops its tables + data |
 | Async inter-database calls (outbox tables) | v2.14.0 | `table({ outbox: { receiver: gw.reducers.admitPlayer } }, { msgId: t.u64().primaryKey().autoInc(), world: gw.identity().target(), ...params })`; optional `spacetimedb.reducer({ onResult: outbox }, ...)` | Requires `dependencies` in `spacetime.json` + generated `src/remote_bindings/`; both DBs on the same server. Not relevant until the project splits databases |
 | `isInternal` = `sender === databaseIdentity` | v2.14.0 (breaking) | `ctx.senderAuth.isInternal` is **true** for scheduled reducers/procedures; `init` is no longer internal; `jwt` is none when internal | Present in 2.14.1 (`AuthCtx.isInternal` JSDoc in `dist/lib/reducers.d.ts`). See SKILL.md "AuthCtx applicability": guards on scheduled reducers stay deferred, and a database keeps the old behavior until a 2.14.1 build is published to it |
 | HTTP handlers get a real sender | v2.14.0 | `ctx.sender` inside `spacetimedb.httpHandler(...)` (HTTP handlers are still unstable) | Repo defines no HTTP handlers |
 | `ctx.random.shuffle(array)` | v2.13.0 | In-place; copy first | Present, but not used for draws here: `fairShuffle` in `shared/lobby-rules/timerDraw.ts` replaces it (A120; skewed `ctx.random` seed) |
-| Generated TS bindings `--import-extension none\|js\|ts` | v2.14.0 (CLI) | `spacetime generate --import-extension js` or per-entry in `spacetime.json` | Only needed for `moduleResolution: "nodenext"` / Node-Bun-Deno direct TS execution; Next.js doesn't need it |
+| Generated TS bindings `--import-extension none\|js\|ts` | v2.14.0 (CLI) | `spacetime generate --import-extension js` or per-entry in `spacetime.json` | Only needed for `moduleResolution: "nodenext"` / Node-Bun-Deno direct TS execution; a bundler such as Vite (`web/`, M3) doesn't need it, and `scripts/stdb/*.ts` run through `tsx` |

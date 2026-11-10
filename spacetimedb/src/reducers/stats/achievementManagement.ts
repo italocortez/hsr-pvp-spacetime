@@ -17,7 +17,14 @@ import {
     isRoleAtLeast,
 } from '@module/helpers/identity/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
-import { AchievementRarity, ComparisonOperator } from '@module/types/enums';
+import { AchievementRarity, ComparisonOperator, GameMode, MatchType } from '@module/types/enums';
+
+/** S10r (A122(12), L42): the stat fields the achievement resolver reads per statTable (achievementChecker getField). */
+const CRITERIA_FIELDS: Record<string, string[]> = {
+    PlayerStat: ['matchesPlayed', 'wins', 'losses', 'matchesSpectated'],
+    PlayerCharacterStat: ['matchesPlayed', 'wins', 'losses', 'timesBannedInMatch', 'timesFaced', 'winsAgainst', 'lossesAgainst'],
+    MmrRating: ['rating', 'matchesPlayed', 'globalCompositeRating'],
+};
 
 // ─── create_achievement ──────────────────────────────────────────────────────
 // Creates a new achievement definition. (D-01, D-20)
@@ -194,6 +201,25 @@ export const add_achievement_criteria = spacetimedb.reducer(
             throw new SenderError(`Invalid statTable "${statTable}". Must be one of: ${validStatTables.join(', ')}.`);
         }
 
+        // S10r (A122(12), L42): the field must be one the resolver reads on that table (achievementChecker getField),
+        // and the filter tags must be GameMode / MatchType variants; an unknown one would resolve to 0.
+        const validFields = CRITERIA_FIELDS[statTable];
+        if (!validFields.includes(statField)) {
+            throw new SenderError(`Invalid statField "${statField}" for ${statTable}. Must be one of: ${validFields.join(', ')}.`);
+        }
+        const gameModes = Object.keys(GameMode.variants);
+        if (filterGameMode !== undefined && !gameModes.includes(filterGameMode)) {
+            throw new SenderError(`Invalid filterGameMode "${filterGameMode}". Must be one of: ${gameModes.join(', ')}.`);
+        }
+        const matchTypes = Object.keys(MatchType.variants);
+        if (filterMatchType !== undefined && !matchTypes.includes(filterMatchType)) {
+            throw new SenderError(`Invalid filterMatchType "${filterMatchType}". Must be one of: ${matchTypes.join(', ')}.`);
+        }
+        // S10r review F4: a character filter names an existing character (HsrCharacter PK); empty or absent = any.
+        if (filterCharacterName !== undefined && filterCharacterName !== '' && !ctx.db.HsrCharacter.name.find(filterCharacterName)) {
+            throw new SenderError(`Invalid filterCharacterName "${filterCharacterName}". No such character.`);
+        }
+
         ctx.db.AchievementCriteria.insert(insertWithAudit(ctx, {
             id: 0,
             achievementId,
@@ -202,7 +228,8 @@ export const add_achievement_criteria = spacetimedb.reducer(
             operator,
             thresholdValue,
             filterGameMode,
-            filterCharacterName,
+            // S10r review F4: an empty name is stored as no filter (the resolver would otherwise match no row).
+            filterCharacterName: filterCharacterName === '' ? undefined : filterCharacterName,
             filterMatchType,
         }, admin.id));
 
@@ -269,6 +296,12 @@ export const manual_award_achievement = spacetimedb.reducer(
         const achievement = ctx.db.Achievement.id.find(achievementId);
         if (!achievement) {
             throw new SenderError(`Achievement #${achievementId} not found.`);
+        }
+
+        // S10r (A122(13), L46): a tournament host (below Moderator) awards only manual achievements: isManualOnly and
+        // no global cap (maxAwards). Automatic and capped ones stay with Moderators and Admins.
+        if (!isRoleAtLeast(caller.role, 'Moderator') && (!achievement.isManualOnly || achievement.maxAwards !== undefined)) {
+            throw new SenderError('Tournament hosts can only award manual achievements without an award limit.');
         }
 
         // Per-user duplicate check

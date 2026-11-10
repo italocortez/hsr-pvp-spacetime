@@ -3,7 +3,7 @@ import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser, ensureTournamentHost, isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { auditInsert, auditUpdate } from '@module/helpers/admin/auditColumns';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
-import { isCostSetInUse, liveLobbiesOnCostSet } from '@module/helpers/draft/costSetGuards';
+import { deleteCostSetRows, isCostSetInUse, liveLobbiesOnCostSet } from '@module/helpers/draft/costSetGuards';
 import {
     ensureCostSetPatchable,
     ensureDraftCopy,
@@ -560,33 +560,8 @@ export const delete_cost_set = spacetimedb.reducer(
             throw new SenderError('This cost set is used by an active lobby or tournament and cannot be deleted.');
         }
 
-        // Delete all live character cost rows with this costSetId
-        for (const row of [...ctx.db.HsrCharacterCost.cost_set_id.filter(costSetId)]) {
-            ctx.db.HsrCharacterCost.delete(row);
-        }
-
-        // Delete all live lightcone cost rows with this costSetId
-        for (const row of [...ctx.db.HsrLightconeCost.cost_set_id.filter(costSetId)]) {
-            ctx.db.HsrLightconeCost.delete(row);
-        }
-
-        // Delete all live synergy cost rows with this costSetId
-        for (const row of [...ctx.db.HsrSynergyCost.cost_set_id.filter(costSetId)]) {
-            ctx.db.HsrSynergyCost.id.delete(row.id);
-        }
-
-        // Delete any remaining draft rows (covers draft-only sets that were never published)
-        for (const row of [...ctx.db.CostSetDraftCharacter.cost_set_id.filter(costSetId)]) {
-            ctx.db.CostSetDraftCharacter.delete(row);
-        }
-        for (const row of [...ctx.db.CostSetDraftLightcone.cost_set_id.filter(costSetId)]) {
-            ctx.db.CostSetDraftLightcone.delete(row);
-        }
-        for (const row of [...ctx.db.CostSetDraftSynergy.cost_set_id.filter(costSetId)]) {
-            ctx.db.CostSetDraftSynergy.delete(row);
-        }
-
-        // Delete the CostSet metadata row
-        ctx.db.CostSet.id.delete(costSetId);
+        // Live rows, draft rows and the CostSet row (S10r: the loop moved to deleteCostSetRows, shared with the user
+        // deletion cascade, A122(6)).
+        deleteCostSetRows(ctx, costSetId);
     }
 );

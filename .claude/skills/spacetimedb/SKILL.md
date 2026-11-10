@@ -1,6 +1,6 @@
 ---
 name: spacetimedb
-description: "Build and debug SpacetimeDB TypeScript modules and React clients, including multiplayer sync patterns. Use this skill whenever the user is working with SpacetimeDB — adding tables, writing reducers, creating views, setting up React subscriptions, publishing modules, debugging connection or query issues, implementing multiplayer features (movement sync, projectiles, combat, client-side prediction, interpolation), or any feature that touches the SpacetimeDB backend or client bindings. Also trigger when the user mentions spacetimedb, reducers, module_bindings, spacetime publish, spacetime generate, ctx.db, multiplayer sync, real-time multiplayer, table schema, subscription, BigInt, SenderError, useTable, or DbConnection."
+description: "Build and debug SpacetimeDB TypeScript modules and React clients (this repo: the `spacetimedb/` module and the Vite + React SPA in `web/`), including multiplayer sync patterns. Use this skill whenever the user is working with SpacetimeDB — adding tables, writing reducers, creating views, setting up React subscriptions, publishing modules, debugging connection or query issues, implementing multiplayer features (movement sync, projectiles, combat, client-side prediction, interpolation), or any feature that touches the SpacetimeDB backend or client bindings. Also trigger when the user mentions spacetimedb, reducers, module_bindings, spacetime publish, spacetime generate, ctx.db, multiplayer sync, real-time multiplayer, table schema, subscription, BigInt, SenderError, useTable, or DbConnection."
 ---
 
 # SpacetimeDB TypeScript Development
@@ -28,14 +28,16 @@ Read `references/api-guide.md` when you need detailed syntax for any of:
 
 | What you need | Read this file |
 |---|---|
-| Table schemas, indexes, constraints, reducer list | `src/module_bindings/index.ts` |
-| Type definitions (enums, structs, tagged unions) | `src/module_bindings/types.ts` |
-| Reducer parameter names for a specific reducer | `src/module_bindings/<reducer_name>_reducer.ts` |
+| Table schemas, indexes, constraints, reducer list | `web/src/module_bindings/index.ts` |
+| Type definitions (enums, structs, tagged unions) | `web/src/module_bindings/types.ts` |
+| Reducer parameter names for a specific reducer | `web/src/module_bindings/<reducer_name>_reducer.ts` |
+
+`web/src/module_bindings/` is the one committed bindings copy (CLAUDE.md §1); `npm run stdb:generate` rewrites it from the local module source.
 
 Read `references/spacetime-json.md` when editing `spacetime.json` or `spacetime.local.json` — covers all config fields, generate targets, environment overrides, `spacetime dev` setup, and child database inheritance.
 
 Read `references/http-api.md` when working with:
-- Server-side SpacetimeDB access from Next.js API routes
+- Server-side SpacetimeDB access outside the WebSocket SDK (this repo's `scripts/stdb/*.ts` use the WebSocket SDK; the auth function under `api/auth/discord/` is planned, M5)
 - Calling reducers or running SQL via HTTP (not WebSocket)
 - Identity/token management, database publishing via API
 - Any scenario where the WebSocket SDK isn't available
@@ -122,7 +124,7 @@ Reducer callbacks exist in 2.0+ but don't return data about what was created. Wh
 
 If you genuinely need immediate response data (rare once you adopt the pattern), two alternatives:
 1. **Procedures** — can return data directly to the caller. See `references/api-guide.md` section 9.
-2. **Event tables** — reducer inserts into an event table, client gets it via onInsert. Event tables auto-delete after delivery (insert + delete), acting as ephemeral response channels. This project uses this pattern with `LobbyCursorEvent`.
+2. **Event tables** — reducer inserts into an event table, client gets it via onInsert. Event tables auto-delete after delivery (insert + delete), acting as ephemeral response channels. This project's one event table, `LobbyCursorEvent`, is a broadcast (cursor positions to a lobby), not a response channel.
 
 **Why reducers can't do this (v2.4.0):** reducers run on a dedicated **synchronous WASM runtime** — a single OS thread that never yields — while procedures run on a separate async runtime. This is the engine-level reason reducers are deterministic with no async/network: the runtime they execute on is physically incapable of yielding mid-call. Procedures get the async runtime, which is why `ctx.http` (outbound HTTP) lives there instead.
 
@@ -169,14 +171,7 @@ The ad-hoc query language (`spacetime sql`, HTTP API) is a strict superset — i
 
 ### No event-driven post-reducer sync
 
-The TypeScript SDK has no `awaitNextUpdate()` API. After calling a reducer, there's no way to wait for the corresponding subscription update to arrive — you either use `_then()` for the reducer callback (confirms commit, but cache may still be updating) or sleep. This project's test harness uses tiered sleep values:
-
-| Operation type | Sleep (ms) | Example |
-|---|---|---|
-| Simple action (pick, ban, leave) | 300 | `await h.sync(300)` |
-| Default / single reducer | 500 | `await h.sync()` |
-| State transition (start_draft, advance_stage) | 1500 | `await h.sync(1500)` |
-| Initial connection (subscribeToAllTables) | 2000 | `setTimeout(resolve, 2000)` |
+The TypeScript SDK has no `awaitNextUpdate()` API. After calling a reducer, there's no way to wait for the corresponding subscription update to arrive — you either use `_then()` for the reducer callback (confirms commit, but cache may still be updating) or sleep. In this repo only the live residue sleeps: the WebSocket harness in `test/shared/connection.ts` resolves on `onApplied` and exposes `h.sync(ms = 500)` as a plain wait. The in-memory module tests (`spacetimedb/src/__tests__/`, the default layer, `test/README.md`) run reducers synchronously inside `withReducerTx` and never sleep.
 
 In production, prefer reactive patterns (`useTable`, `onInsert`, `onUpdate`) over sleeping.
 
@@ -184,9 +179,11 @@ In production, prefer reactive patterns (`useTable`, `onInsert`, `onUpdate`) ove
 
 When changing subscriptions (e.g. user navigates to a different view), **subscribe to the new set first, then unsubscribe from the old**. This avoids unnecessary deserialization/reserialization of rows that appear in both the old and new query sets.
 
+**Exception, views with arguments:** every argument set of one view lands in the same client table, so rows of the old and new set would mix. Keep one argument set per view subscribed at a time: unsubscribe the old set, then subscribe the next (S10n review F5, `docs/log/2026-11-10-s10n.md`; e.g. the A115 match-history page and its filters).
+
 ### Subscription pitfalls
 
-**Combined `subscribe([...])` vs separate subscriptions:** When subscribing to multiple queries, `subscribe(['SELECT * FROM a', 'SELECT * FROM b'])` fires `onApplied` when the subscription message is acknowledged — NOT when all table data has arrived. If your `onApplied` callback reads from table B, the data may not be there yet. (Note: official docs state `on_applied` fires after all rows are cached atomically — see api-guide.md § 7 "Subscription semantics". This project's test harness uses a 2s sleep instead of `onApplied`, suggesting the behavior may differ in practice with combined multi-query subscriptions.)
+**Combined `subscribe([...])` vs separate subscriptions:** When subscribing to multiple queries, `subscribe(['SELECT * FROM a', 'SELECT * FROM b'])` fires `onApplied` when the subscription message is acknowledged — NOT when all table data has arrived. If your `onApplied` callback reads from table B, the data may not be there yet. (Note: official docs state `on_applied` fires after all rows are cached atomically — see api-guide.md § 7 "Subscription semantics". The old repo's live harness slept 2 s instead of trusting `onApplied`; this repo's live harness (`test/shared/connection.ts`) reads the cache inside the `onApplied` of a single `subscribeToAllTables()` call. Whether combined multi-query subscriptions differ in practice is unverified on 2.14.1.)
 
 Use separate subscriptions with individual `onApplied` callbacks when you need to read from specific tables:
 ```typescript
@@ -196,14 +193,15 @@ conn.subscriptionBuilder()
     .subscribe('SELECT * FROM view_my_profile');
 
 conn.subscriptionBuilder()
-    .onApplied(() => { /* user data is ready — safe to read conn.db.User */ })
-    .subscribe('SELECT * FROM user');
+    .onApplied(() => { /* character data is ready — safe to read conn.db.hsrCharacter */ })
+    .subscribe('SELECT * FROM hsr_character');
 
-// ❌ WRONG — onApplied fires but conn.db.User may be empty
+// ❌ WRONG — onApplied fires but conn.db.hsrCharacter may be empty
 conn.subscriptionBuilder()
-    .onApplied(() => { const users = [...conn.db.User.iter()]; /* may be 0! */ })
-    .subscribe(['SELECT * FROM view_my_profile', 'SELECT * FROM user']);
+    .onApplied(() => { const chars = [...conn.db.hsrCharacter.iter()]; /* may be 0! */ })
+    .subscribe(['SELECT * FROM view_my_profile', 'SELECT * FROM hsr_character']);
 ```
+(No page subscribes the `user` table: it becomes private at S11, A77; CLAUDE.md §4.)
 
 **Overlapping queries hurt performance:** Subscribing to datasets that overlap (e.g. `tables.user` AND `tables.user.where(r => r.id.ne(5))`) forces the server to serialize nearly all rows twice. Keep subscription queries disjoint. Subscribing to the *same* query more than once is fine — it's zero-copy with no additional processing overhead.
 
@@ -227,36 +225,45 @@ spacetimedb.clientConnected((ctx) => { /* ... */ });
 // ✅ CORRECT
 export const onConnect = spacetimedb.clientConnected((ctx) => { /* ... */ });
 ```
-**This repo:** the hooks were bare calls until 2026-11-05, so the live maincloud schema listed **0 lifecycle reducers** out of 156 and the `isOnline`, `lastSeenAt`, ban-on-reconnect, and lobby-disconnect logic never ran. They are now `export const client_connected` / `client_disconnected` in `spacetimedb/src/index.ts`. A database only gets them once a build with the fix is published to it. Until then, don't assume those side effects happen there when debugging presence or disconnect features. Conversely, every *named* export of the module entry must be a SpacetimeDB export; a plain helper exported from `index.ts` throws "exporting something that is not a spacetime export".
+**This repo:** in the old repo the hooks were bare calls, so its maincloud schema listed **0 lifecycle reducers** out of 156 and the presence, ban-on-reconnect and lobby-disconnect logic never ran. Here they are `export const init` / `client_connected` / `client_disconnected` in `spacetimedb/src/index.ts`. test1 still holds the pre-migration module until the S11 wipe and publish (M2 log, ROADMAP S11), and a database only gets the hooks once a build with them is published to it. Until then, don't assume those side effects happen there when debugging presence or disconnect features. Conversely, every *named* export of the module entry must be a SpacetimeDB export; a plain helper exported from `index.ts` throws "exporting something that is not a spacetime export".
 
-**v2.4.1 + v2.6.0 — procedural views can declare `.primaryKey()`:** column-level `.primaryKey()` on a procedural view's return row type unlocks client-side `onUpdate` (previously views only fired `onInsert`/`onDelete`). This project's ~35 procedural views currently emit insert/delete only — adopting view PKs for `onUpdate` is a real opportunity but is **deferred under D-01** (not applied this phase). Declare the return row with `t.row('Name', { id: t.u64().primaryKey(), ... })`, not `t.object(...)`. See `references/api-guide.md` § 7 Views for the full note.
+**v2.4.1 + v2.6.0 — procedural views can declare `.primaryKey()`:** column-level `.primaryKey()` on a procedural view's return row type unlocks client-side `onUpdate` (previously views only fired `onInsert`/`onDelete`). In this repo some view row types already declare `.primaryKey()` (e.g. in `views/adminViews.ts`, `lobbyViews.ts`, `calendarViews.ts`); the rest of the module's views (72 exported view functions across 11 files on 2026-11-10) emit insert/delete only, and views with arguments cannot have a primary key. Check `constraints` in `web/src/module_bindings/index.ts` before relying on `onUpdate` for a view. Declare the return row with `t.row('Name', { id: t.u64().primaryKey(), ... })`, not `t.object(...)`. See `references/api-guide.md` § 7 Views for the full note.
 
-### Subscription gating: layer-0 always-on, gated panels use useTable enabled
+### This repo's React subscription rules (CLAUDE.md §4, binding)
+
+The frontend is planned, not built: `web/src/` holds only `module_bindings/` and `lib/legacy/` (reference copies from the old Next.js app, not imported). The Vite shell is M3, the router M4, the provider + subscription layer + dev egress meter M6 (ROADMAP). Whatever code lands there follows these rules:
+- Subscribe only to **views and the public reference set**. `subscribeToAllTables` is banned in `web/` (CI grep). The live test harness under `test/` may use it; `web/` may not.
+- No page subscribes the `User` table: it becomes private at S11 (A77). Names and avatars come denormalized in the views that need them (PAGE-MAP D2); the admin Users tab reads `view_admin_users` (A77, lands at S11).
+- One subscription per table per route. Keep the handles and unsubscribe on route leave. The reference set is subscribed by the first route that needs it and kept for the session; `/` and `/profile` never trigger it (reference tables: `docs/frontend/subscriptions.md` Decision 1).
+- Match views and cursor events subscribe only once the lobby stage is past Waiting. Cursor events (`LobbyCursorEvent`, an event table) are consumed via `onInsert`.
+- Views with arguments: one argument set per view at a time (see "Subscription swap best practice").
+
+### Subscription gating: reference set always-on, gated panels use useTable enabled
 
 `useTable(tables.X, { enabled: <boolean> })` (v2.2.0+, PR #4721) skips establishing the subscription while `enabled === false`. The SDK tears down the sub on `true → false` and re-establishes on `false → true` — no consumer remount needed.
 
 ```typescript
-// GOOD — gated panel
-function AdminPanel({ isActive }: { isActive: boolean }) {
-    const [rows] = useTable(tables.User, { enabled: isActive });
+// GOOD — gated panel (a staff-only view, never the User table)
+function BanRecordsTab({ isActive }: { isActive: boolean }) {
+    const [rows] = useTable(tables.viewAdminBanRecords, { enabled: isActive });
     // ...
 }
 
-// GOOD — layer-0 reference data: ALWAYS-ON, no enabled prop
-const [characters] = useTable(tables.HsrCharacter);
+// GOOD — reference data, once mounted: ALWAYS-ON, no enabled prop
+const [characters] = useTable(tables.hsrCharacter);
 
-// BAD — never gate layer-0 reference data
-const [characters] = useTable(tables.HsrCharacter, { enabled: someCondition });
+// BAD — never gate mounted reference data
+const [characters] = useTable(tables.hsrCharacter, { enabled: someCondition });
 // ↑ would reintroduce "first frame missing portraits" hydration bug
 ```
 
 `enabled` lives in the 2nd-arg callback object alongside `onInsert/onDelete/onUpdate` — NOT a third arg, NOT a separate options bag.
 
-**Layer-0 vs gated:**
-- **Layer-0** (GameDataProvider's 7 reference-data subs): always-on, no `enabled`. Service worker prefetch + anonymous-page hydration depend on this.
+**Reference set vs gated:**
+- **Reference set** (the public reference tables of `docs/frontend/subscriptions.md` Decision 1): mounted by the first route that needs it, then always-on for the session, no `enabled`. Planned (M6); the asset service worker and preloading that rely on it are M10.
 - **Gated panels** (admin tabs, modals, conditionally-visible panels): `enabled` derived from the visibility/active-state. Recovers egress when the panel isn't visible.
 
-Reference: Phase 16.4 Plan 05; `notes/v09-frontend-subscription-strategy.md` Decision 9.
+Reference: `docs/frontend/subscriptions.md` Decision 9 (carried from the old repo; CLAUDE.md §4 wins where they differ). `useTable` takes a query-builder query, so views with arguments (raw SQL only) go through `subscriptionBuilder()` instead (api-guide § 12).
 
 ### Reducer calls in React: useReducer(reducers.X), not getConnection()
 
@@ -264,7 +271,7 @@ Inside React components or hooks, use `const callX = useReducer(reducers.X)` and
 
 ```typescript
 import { useReducer } from 'spacetimedb/react';
-import { reducers } from '@/src/module_bindings';
+import { reducers } from './module_bindings';  // web/src/module_bindings; the web import alias is set at M3
 
 function MyComponent() {
     const updateUsername = useReducer(reducers.updateUsername);
@@ -280,13 +287,13 @@ Empty-param reducers (no schema params) are called as `callX()`, not `callX({})`
 
 Reducers with **optional** params: as of v2.6.1 those keys are optional (`foo?:`), so `callX({ requiredArg })` — omitting the optional key entirely — is also legal. See "Client reducer calls" above for the full omit/optional/2.6.1 note.
 
-Server-side Route Handlers (`getServerConnection()`) do NOT qualify — they continue calling `connection.reducers.X(...)` directly. React hooks only apply in React component / hook contexts.
+Non-React callers do NOT qualify: `scripts/stdb/*.ts` (through `scripts/stdb/_connection.ts`) and the planned auth function (M5) call `conn.reducers.X(...)` on their own `DbConnection`. React hooks only apply in React component / hook contexts.
 
-Use `.catch()` for errors (matches project STATE.md "v0.5 Conventions"). For try/finally lifecycle (e.g. `setIsSubmitting`), use `.then()/.catch()/.finally()` chains — the boolean toggle becomes async.
+Use `.catch()` for errors (the carried project convention: `docs/frontend/subscriptions.md` Decision 10, `docs/research/legacy-decisions.md` v0.5 conventions). For try/finally lifecycle (e.g. `setIsSubmitting`), use `.then()/.catch()/.finally()` chains — the boolean toggle becomes async.
 
-The corresponding `useProcedure(procedures.X)` hook is for SpacetimeDB *procedures*; project defines zero procedures (`__procedures()` is called with no args at `src/module_bindings/index.ts:2037`), so `useProcedure` currently does not apply.
+The corresponding `useProcedure(procedures.X)` hook is for SpacetimeDB *procedures*; the module defines zero procedures (`proceduresSchema = __procedures()` is empty in `web/src/module_bindings/index.ts`), so `useProcedure` currently does not apply.
 
-Reference: Phase 16.4 Plan 06 (v2.2.0+, PR #4752) — 5 adopted sites; `notes/v09-frontend-subscription-strategy.md` Decision 10.
+Reference: `docs/frontend/subscriptions.md` Decision 10 (v2.2.0+, PR #4752). No component uses it yet: `web/` has no components before M3.
 
 ### Handling reducer errors on the client
 Reducers don't return data, so errors surface via callbacks. Use `_then()` to detect failures from a specific call, and `ctx.event.status` to read the `SenderError` message:
@@ -347,7 +354,7 @@ for (const m of [...ctx.db.LobbyMember.iter()]) ctx.db.LobbyMember.delete(m);
 
 Predicate filters (e.g. preserving the `username='SYSTEM'` row) MUST keep iter+filter+delete — `clear()` cannot skip rows. TS declarations do NOT surface a row count from `clear()`; use it as a statement, not as `const n = ctx.db.X.clear()` (n would be untyped).
 
-Reference: `spacetimedb/src/reducers/identity/server.ts → server_nuke_test_data` (Phase 16.4 Plan 01) — 42 cleared sites + 3 SYSTEM-preserving filter blocks demonstrate both patterns.
+Reference: `spacetimedb/src/reducers/identity/server.ts → server_nuke_test_data` (test-only, gated by `requireTestDatabase`) uses both patterns: whole-table `clear()` calls plus SYSTEM-preserving filter blocks.
 
 ### Accessor types — verified runtime behavior (2026-03-18)
 
@@ -388,9 +395,9 @@ Live probe: published such a table, inserted `(x,y,1)` then `(x,y,2)` — both r
 2. Enforce uniqueness in the reducer itself (tuple-match-before-insert pattern) — the engine will not do it.
 3. Optionally keep an autoInc `id: t.u32().primaryKey().autoInc()` as a real unique cursor for `.id.find/update/delete`, separate from the logical tuple key.
 
-**How to verify in future:** Grep `src/module_bindings/index.ts` for the `constraints: [...]` array on any table. If empty, tuple uniqueness is not engine-enforced regardless of what `table()` options declared. The `primaryKey: [...]` option on `table()` is **documentation-only** — it can stay in source as a reader hint, but the real guarantee is in reducer code + the matching btree index.
+**How to verify in future:** Grep `web/src/module_bindings/index.ts` for the `constraints: [...]` array on any table. If empty, tuple uniqueness is not engine-enforced regardless of what `table()` options declared. The `primaryKey: [...]` option on `table()` is **documentation-only** — it can stay in source as a reader hint, but the real guarantee is in reducer code + the matching btree index.
 
-**Multi-column btree index definition and usage:**
+**Multi-column btree index definition and usage** (`TournamentParticipant` is an illustrative old-repo table; this repo's live instance of the pattern is `LobbyMember.by_lobby_and_user`, used e.g. in `reducers/lobby/cursor.ts`):
 ```typescript
 // Table definition with multi-column btree index
 export const TournamentParticipant = table({
@@ -426,7 +433,7 @@ if (!item) throw new SenderError('Item not found.');
 
 #### Why the guard pattern doesn't work in v2.2.0
 
-Plan 02 (Phase 16.4) initially added the guard pattern below to 3 scheduled reducers (`run_user_deletion`, `run_lobby_gc`, `run_identity_gc`) as defense-in-depth:
+The old repo's v2.2.0 refactor initially added the guard pattern below to 3 scheduled reducers (`run_user_deletion`, `run_lobby_gc`, `run_identity_gc`) as defense-in-depth:
 
 ```typescript
 // ❌ DO NOT ADD THIS — rejects legitimate engine dispatch in v2.2.0
@@ -437,7 +444,7 @@ if (!ctx.senderAuth.isInternal) {
 }
 ```
 
-Plan 07's diagnostic (2026-05-03) proved this assumption wrong via SDK source-level analysis (`spacetimedb/node_modules/spacetimedb/dist/server/index.mjs:6383-6442`):
+A diagnostic on 2026-05-03 proved this assumption wrong via SDK source-level analysis (`spacetimedb/node_modules/spacetimedb/dist/server/index.mjs:6383-6442`):
 
 - `AuthCtxImpl.internal()` is the only constructor that sets `isInternal: true` — and it is **unreachable** from any path that produces `ctx.senderAuth`.
 - `ReducerCtxImpl.senderAuth` (the only path that populates the field) calls `AuthCtxImpl.fromSystemTables(...)`, which always sets `isInternal: false`.
@@ -449,24 +456,24 @@ The guards were removed in a hotfix right after that diagnostic: with them in pl
 
 The SpacetimeDB v2.2.0 engine itself rejects external WebSocket calls to scheduled-reducer names with `"no such reducer"` BEFORE any application code runs. Verified:
 
-- The 3 scheduled reducers (`run_user_deletion`, `run_lobby_gc`, `run_identity_gc`) are intentionally absent from the generated client bindings (`src/module_bindings/index.ts`).
-- The regression sensor at `test/backend/scheduled-reducer-isInternal-rejection.test.ts` constructs a low-level `connection.callReducer(name, argsBuffer)` call — exactly what an attacker would do — and confirms the engine returns `"no such reducer"` for all 3 names.
+- The scheduled reducers are intentionally absent from the generated client bindings (`web/src/module_bindings/index.ts`). This repo has five: `run_user_deletion`, `run_lobby_gc`, `run_identity_gc`, `run_referee_transfer_check`, `run_tournament_finalize`.
+- The live residue test `test/live/isinternal-rejection.test.ts` constructs a low-level `connection.callReducer(name, argsBuffer)` call — exactly what an attacker would do — and checks that the engine rejects all five names (`test/README.md`). Like the whole residue, it runs on test1 only, once per release.
 
 **Therefore: do NOT add application-level guards to scheduled reducers in v2.2.0.** The engine is the correct defense layer. If a future SDK version exposes scheduled-reducer names to external callers, revisit this rule and find a working internal-dispatch signal before re-adding any guard.
 
-**On this repo's SDK (2.14.1, since M1) the above is history.** v2.14.0 (PR #5892, breaking) made `isInternal` mean `ctx.sender === ctx.databaseIdentity` in every module language (`AuthCtxImpl.forSender` in the SDK): it is **true for scheduled reducers and procedures**, `init` is **not** internal (its sender is the database owner), and `senderAuth.jwt` is null whenever `isInternal` is true. A deployed module keeps the old behavior until it is rebuilt and republished against the new library. An `isInternal` guard on scheduled reducers is now a working defense-in-depth option, but the guards are **not re-added yet** (deferred, upgrade report §10 Q8); re-verify with the regression sensor before adding one. The project gates in the table below don't change.
+**On this repo's SDK (2.14.1, since M1) the above is history.** v2.14.0 (PR #5892, breaking) made `isInternal` mean `ctx.sender === ctx.databaseIdentity` in every module language (`AuthCtxImpl.forSender` in the SDK): it is **true for scheduled reducers and procedures**, `init` is **not** internal (its sender is the database owner), and `senderAuth.jwt` is null whenever `isInternal` is true. A deployed module keeps the old behavior until it is rebuilt and republished against the new library. An `isInternal` guard on scheduled reducers is now a working defense-in-depth option, but the guards are **not re-added yet** (deferred, upgrade report §10 Q8, see `docs/log/2026-11-06-m1.md`); re-verify with `test/live/isinternal-rejection.test.ts` before adding one. The project gates in the table below don't change.
 
 #### `AuthCtx` is still NOT a substitute for project auth gates
 
 | Project gate | Concept | Replace with `AuthCtx`? |
 |---|---|---|
-| `requireServer(ctx)` | "Caller has a `ServerIdentity` row (Owner from `init`, or a Delegate)" | NO — `scripts/stdb/bootstrap.ts` and the auth function are external WebSocket clients; `AuthCtx.isInternal` would always be `false` for it (and is broken in v2.2.0 anyway). The SERVER_TOKEN/`ServerIdentity` row check is orthogonal. |
-| `getAuthenticatedUser(ctx)` | "Resolve `ctx.sender → UserIdentity → User → role.tag`" | NO — project auth model is not JWT-claims-based; `AuthCtx.jwt` is for native OIDC, which the project intentionally does not use (guest-play UX, see `notes/v09-frontend-subscription-strategy.md`). |
-| `ensureModerator/Admin(ctx)` | Role-tag-based admin gates | NO — same reason as above. |
+| `requireServer(ctx)` (local to `reducers/identity/server.ts`) | "Caller has a `ServerIdentity` row (Owner from `init`, or a Delegate)" | NO — `scripts/stdb/bootstrap.ts` and the auth function (planned, M5) are external WebSocket clients; `AuthCtx.isInternal` would always be `false` for it (and is broken in v2.2.0 anyway). The SERVER_TOKEN/`ServerIdentity` row check is orthogonal. |
+| `getAuthenticatedUser(ctx)` | "Resolve `ctx.sender → UserIdentity → User → role.tag`" | NO — project auth model is not JWT-claims-based; `AuthCtx.jwt` is for native OIDC, which the project does not use: auth is the Vercel function, SpacetimeAuth is deferred (A46). |
+| `ensureModerator/Admin(ctx)` (`helpers/identity/ensurePermissions.ts`) | Role-tag-based admin gates | NO — same reason as above. |
 
 Use `requireServer` / `getAuthenticatedUser` / `ensureXxx` for ALL application-level gating. The unreachable-factory bug is fixed on 2.14.1 (see the paragraph above), but `isInternal` guards on scheduled reducers stay deferred; the engine's "no such reducer" rejection remains the operational defense until they are re-added.
 
-Reference: the guards were added during the old repo's v2.2.0 refactor pass and reverted by the 2026-05-03 diagnostic described above, because `isInternal` was never `true` on that SDK; regression sensor at `test/backend/scheduled-reducer-isInternal-rejection.test.ts`.
+Reference: the guards were added during the old repo's v2.2.0 refactor pass and reverted by the 2026-05-03 diagnostic described above, because `isInternal` was never `true` on that SDK; regression sensor now at `test/live/isinternal-rejection.test.ts`.
 
 ### BigInt — all u64/i64 fields
 Use `0n`, `1n`, `100n` — never plain numbers for ID/u64 fields. JavaScript `number` loses precision above 2^53, so SpacetimeDB maps 64-bit integers to BigInt. Mixing `number` and `BigInt` (e.g. `row.id === 5`) silently returns `false` — no error, just wrong behavior.
@@ -588,9 +595,12 @@ When implementing a feature that spans backend and client:
 2. **Backend:** Define reducer(s) in `reducers/<domain>/`, then re-export in `index.ts`
 3. **Backend:** Publish module to test (`npm run stdb:publish:test`; prod only via the §C.5 checklist)
 4. **Backend:** Generate bindings — `npm run stdb:generate` (local `spacetime generate` into `web/src/module_bindings`, no database contact), then review `git diff --stat web/src/module_bindings`
-5. **Client:** Subscribe to the table(s)
-6. **Client:** Call the reducer(s) from UI
-7. **Client:** Render data from `useTable(tables.tableName)`
+5. **Client:** Subscribe to the view(s) that serve the data (or the public reference set), per the React rules above (CLAUDE.md §4)
+6. **Client:** Call the reducer(s) from UI (`useReducer(reducers.X)`)
+7. **Client:** Render data from `useTable(tables.viewName)`
+8. **Docs:** update `docs/<feature>/architecture.md` with every backend change (CLAUDE.md §7)
+
+Steps 5–7 apply once the frontend exists (M3 onward; until then `web/` holds only the bindings). Step 3 is a user gate (CLAUDE.md §8, ROADMAP hard gates).
 
 Common mistake: building backend tables/reducers but forgetting to wire up the client to call them.
 
@@ -628,7 +638,7 @@ spacetime call <name> <reducer_name> [args...] --server maincloud --no-config  #
 
 **CLI is 2.14.1** (`spacetime --version` → `spacetimedb tool version 2.14.1`, commit `a0bf6be`). Commands added after 2.6.1, all present in this CLI's `--help`: `spacetime sql --format`, `spacetime lock` / `unlock` (v2.7.0, guards against accidental `delete`), `spacetime mcp` (v2.8.1), human-readable `spacetime describe` (v2.11.0), `spacetime env` + `publish --env-only/--unset-env/--replace-env` (v2.12.0), `spacetime auth` for SpacetimeAuth management (v2.13.0), `generate --import-extension` (v2.14.0). From v2.11.0 failed publishes print the full error chain, and from v2.12.0 local schema-validation errors are spelled out. (History: the 2.6.1 CLI gave terse failures.)
 
-**SQL parser — no constant projections (verified live on 2.6.1, 2026-07-04; not re-verified on 2.14.1):** the `spacetime sql` parser rejects literal/constant SELECT projections — `SELECT 1 AS ok` fails with `Error: Unsupported projection expression: 1` (HTTP 400). A connectivity smoke-test must project a real column from a real table, e.g. `spacetime sql <name> "SELECT COUNT(*) AS n FROM user"`, not `SELECT 1`. (Behavior change in the 2.3–2.6 line; caught during the Phase 16.5 upgrade.)
+**SQL parser — no constant projections (verified live on 2.6.1, 2026-07-04; not re-verified on 2.14.1):** the `spacetime sql` parser rejects literal/constant SELECT projections — `SELECT 1 AS ok` fails with `Error: Unsupported projection expression: 1` (HTTP 400). A connectivity smoke-test must project a real column from a real table, e.g. `spacetime sql <name> "SELECT COUNT(*) AS n FROM hsr_character"` (a public table; `user` turns private at S11, A77), not `SELECT 1`. (Behavior change in the 2.3–2.6 line; caught during the old repo's 2.6 upgrade.)
 
 ### Publishing: `--yes=migrate` only for reviewed schema deltas
 
@@ -640,7 +650,7 @@ Related v2.2.0 informational notes:
 - `.withCompression('brotli')` exists on `DbConnection.builder()` as an alternative to gzip; project has not adopted it (browser-support floor too high for current users; realistic ratio gain on BSATN binary frames is 5-15% — not worth the failure mode on older browsers).
 - v2.2.0 also allows dropping empty tables during auto-migration (PR #4593) — relevant when refactoring schemas; no project-side action needed.
 
-Reference: Phase 16.4 Plan 03; `package.json` script line; `docs/smoke/contract.md` operational note.
+Reference: `scripts/stdb/publish.ts`, `publishArgs` in `shared/stdb-targets.ts`; `docs/smoke/contract.md` operational note.
 
 ### `spacetime sql` column name gotcha
 
@@ -674,7 +684,17 @@ views/                 -> Flat, one file per domain; views limiting client data 
 types/                 -> Flat
   ├── enums.ts         -> All enum definitions (Path, Element, CharRole, GameMode, etc.)
   └── structs.ts       -> All struct/object type definitions (EidolonCost, LobbyConfig, etc.)
-docs/ (project root)   -> Feature architecture docs (one folder per domain with architecture.md and contract.md)
+__tests__/             -> In-memory module tests (s4…s10* suites + *-fixtures.ts); config spacetimedb/vitest.config.mts
+```
+
+### Around the module (repo root)
+```
+shared/                -> Pure TS used by module and web: stdb-targets.ts, scoring/, bracket/, lobby-rules/ (barrels; no runtime import of spacetimedb or react)
+scripts/stdb/          -> publish, bootstrap, seed, describe, generate, manage-user, test-integration (+ _args/_connection/_env/_spawn helpers); all target-bound ones take --target test|prod
+web/src/module_bindings/ -> Generated client bindings, the one committed copy (don't edit; npm run stdb:generate)
+test/                  -> Unit tests (backend/**/*.unit.test.ts), live residue (live/, test1 only), harness (shared/), data-templates/; see test/README.md
+data/seed/             -> Public reference data that bootstrap/seed load
+docs/                  -> docs/<feature>/{architecture,contract}.md, ERD.md, frontend/, log/<date>-<step>.md
 ```
 
 **Domain folders (A72):** `tables/`, `reducers/` and `helpers/` share the same nine `<domain>` folders, mirroring `docs/<feature>/`: `identity`, `lobby`, `draft`, `results`, `tournament`, `stats`, `roster`, `calendar`, `admin`. `views/` and `types/` stay flat; `index.ts` and `schema.ts` stay at the root.
@@ -690,23 +710,12 @@ import * as moduleExports from '@module/index';   // tests / fixtures
 ```
 Same-folder imports may stay `./x` (e.g. `index.ts` imports `./schema`). Code outside the module (`test/`, `scripts/`) keeps relative or `@shared` imports. The CLI bundler (Rolldown) matches a tsconfig `paths` wildcard against **one path segment only**, so `@module/*` cannot be a single entry: the alias is declared **per folder** in `tsconfig.base.json` (`"@module/<kind>/<domain>/*": ["./spacetimedb/src/<kind>/<domain>/*"]`, plus `@module/views/*`, `@module/types/*`, `@module/index`, `@module/schema`) and mirrored relative to `test/` in `test/tsconfig.json`; each vitest config has a single `'@module'` alias. **A new domain folder needs its entries in both tsconfigs**: a missing entry fails `npm run typecheck` and `spacetime build` (UNRESOLVED_IMPORT); vitest alone would not notice.
 
-### Frontend
+### Frontend (`web/`, Vite + React 18 + TanStack Router)
 ```
-src/module_bindings/    -> Generated client bindings (don't edit! Regenerate with spacetime generate)
-app/                    -> Next.js App Router pages
-  ├── (authenticated)/  -> Protected routes (admin-view, lobby, profile)
-  ├── (game)/           -> Game routes (draft/[matchId])
-  ├── (landing-page)/   -> Public routes (costs, teambuilder)
-  └── api/              -> API routes (auth, discord linking)
-components/features/    -> Feature-based component organization
-  ├── admin-view/       -> Admin panel components
-  ├── auth/             -> Authentication components + hooks
-  ├── costs/            -> Cost display components + hooks
-  ├── drafting/         -> Draft UI (classic + auction modes)
-  ├── game-data/        -> Game data display components
-  └── landing/          -> Landing page components
-lib/                    -> Shared utilities and configuration
+web/src/module_bindings/ -> Generated client bindings (exists; don't edit)
+web/src/lib/legacy/      -> Verbatim copies from the old Next.js app, reference only: not typechecked, linted or imported; each file is deleted when its feature is ported
 ```
+Everything else is planned: Vite shell, tokens and base CSS (M3), TanStack Router and guards (M4), provider + subscription layer + dev egress meter (M6), auth function `api/auth/discord/` (M5), asset service worker (M10), pages ported one by one (S14.x). The folder layout below `web/src/` is not decided yet; don't assume the old repo's `app/` or `components/features/` tree. Styling: CSS Modules + `web/src/styles/tokens.css`, no Tailwind (CLAUDE.md §4).
 
 ### Key conventions
 - **New tables** go in `spacetimedb/src/tables/<domain>/` as individual files, then import in `schema.ts`
@@ -715,7 +724,8 @@ lib/                    -> Shared utilities and configuration
 - A new file goes into the folder of the feature whose contract describes it; a **new domain** gets a folder in `tables/`, `reducers/` and `helpers/` plus its `@module` entries in `tsconfig.base.json` and `test/tsconfig.json`
 - **New enums/structs** go in `spacetimedb/src/types/enums.ts` or `structs.ts`
 - **New views** go in `spacetimedb/src/views/`, then import in `index.ts`
-- **New frontend features** go in `components/features/<feature-name>/` with `components/` and `hooks/` subdirs
+- **New pure logic shared by module and web** goes in `shared/<area>/`, exported through the folder's barrel `index.ts` (nested `@shared` paths do not bundle, ROADMAP S7/S8)
+- **New frontend code**: no folder convention yet (set from M3); follow CLAUDE.md §4
 - **Private tables** (e.g. `LobbyPassword`) use `public: false` to keep sensitive data off the wire — see pattern below
 
 ## Naming conventions (this repo — ENFORCED)
@@ -725,11 +735,11 @@ lib/                    -> Shared utilities and configuration
 | Table columns | `camelCase` | `hostUserId`, `avatarCharacterName`, `createdById` |
 | Struct/object fields | `camelCase` | `teamSize`, `characterName`, `isPaused` |
 | Enum variants | `PascalCase` | `MemoryOfChaos`, `BlueWins`, `TournamentHost` |
-| Reducer export names | `snake_case` | `login_as_guest`, `server_link_discord` |
+| Reducer export names | `snake_case` | `login_as_guest`, `server_link_provider` |
 | Index accessors (code-facing) | `snake_case` | `host_user_id`, `discord_id`, `user_id` |
 | Table names (in `table()`) | `snake_case` | `'user'`, `'hsr_character'`, `'lobby_member'` |
 | Helper functions | `camelCase` | `getAuthenticatedUser`, `ensureAdmin`, `auditInsert` |
-| Constants | `UPPER_SNAKE_CASE` | `SYSTEM_USER_ID`, `DISCORD_INTENT_KEY` |
+| Constants | `UPPER_SNAKE_CASE` | `SYSTEM_USER_ID`, `ABUSE_CONFIG_ID` |
 
 **Never mix conventions within a layer.** All struct fields and table columns MUST be camelCase. Enum variants MUST be PascalCase (standard TypeScript enum convention).
 
@@ -753,7 +763,7 @@ indexes: [{ name: 'my_table_owner_id_idx_btree', accessor: 'owner_id', algorithm
 
 Every table MUST have these 4 columns at the end of its column definition. Exceptions:
 - `ServerIdentity`
-- **event tables** (`event: true`, e.g. `LobbyCursorEvent`). Their rows are delivered once and never persist, so audit columns are pure per-event egress. User decision, 2026-11-06; the `LobbyCursorEvent` cleanup lands in the new repo's backend reset.
+- **event tables** (`event: true`, e.g. `LobbyCursorEvent`). Their rows are delivered once and never persist, so audit columns are pure per-event egress. User decision, 2026-11-06 (A19). Done in the module source (`LobbyCursorEvent` carries lobby id, seat, x, y, timestamp); test1 gets it with the S11 clear-publish.
 
 ```typescript
 createdById: t.u32(),
@@ -803,13 +813,13 @@ const row = ctx.db.UserIdentity.identity.find(identity);  // O(1) PK lookup
 
 **`as any` on enum values** — When constructing enum values from runtime strings (e.g. `{ tag: roleTag, value: {} } as any`), the `as any` cast is necessary because TypeScript can't narrow a `string` variable to the specific literal union the enum type expects. This is expected.
 
-**`export let` for scheduled table reducers** — The `userDeletionJob.ts` pattern (`export let _reducer: any` + setter function) is the documented way to avoid circular dependencies between scheduled tables and their reducers. Do not refactor this. (v2.7.0+, PR #5435: the reducer-side `spacetimedb.reducer({ onSchedule: table }, params, fn)` option removes the cycle at its source and is upstream's recommended form. It exists in this repo's SDK 2.14.1, whose types mark the table-side `scheduled` option `@deprecated` in its favor; moving to it is a refactor for the user to decide, not a drive-by. See api-guide § 5.)
+**`export let` for scheduled table reducers** — The `tables/identity/userDeletionJob.ts` pattern (`export let _runUserDeletionReducer: any` + setter function; same in `identityGcJob.ts` and `lobby/lobbyGcJob.ts`) is the documented way to avoid circular dependencies between scheduled tables and their reducers. Do not refactor this. (v2.7.0+, PR #5435: the reducer-side `spacetimedb.reducer({ onSchedule: table }, params, fn)` option removes the cycle at its source and is upstream's recommended form. It exists in this repo's SDK 2.14.1, whose types mark the table-side `scheduled` option `@deprecated` in its favor; moving to it is a refactor for the user to decide, not a drive-by. See api-guide § 5.)
 
 ## User table special fields
 
-- `isOnline: t.bool()` — set `true` in `clientConnected`, `false` in `clientDisconnected`
-- `isPrivate: t.bool()` — defaults to `false`, for future privacy features
-- `deletedAt: t.timestamp().optional()` — soft-delete pattern, triggers scheduled hard-delete after 5s
+- Presence is **not** on `User`: `isOnline` / `lastLoginAt` / `lastSeenAt` live on the private `UserPresence` table (one row per identity, A48), written by `client_connected` / `client_disconnected`; a user is online when any of their rows is. `LobbyMember.isOnline` follows the user.
+- `deletedAt: t.timestamp().optional()` — soft-delete pattern; an admin deletion or a ban sets it and the scheduled `run_user_deletion` hard-deletes after 5 s (`delete_my_account` and `server_delete_user` delete at once).
+- Planned at S11 (A77): `User` becomes `public: false` and absorbs `UserPrivate` (`loginMethod`, `providerId`, `providerUsername`, `linkedAt`); `hasDiscordLinked` is dropped and derived in the views. Read the current `tables/identity/user.ts` before relying on its columns.
 
 ## Private tables — keeping sensitive data off the wire
 
@@ -819,10 +829,9 @@ When a table has columns that should never reach the client (passwords, tokens, 
 // lobbyPassword.ts — private table, never broadcast to clients
 export const LobbyPassword = table({
   name: 'lobby_password',
-  // public: false is the default, but explicit is better
-  indexes: [{ accessor: 'lobby_id', algorithm: 'btree', columns: ['lobbyId'] }]
+  public: false, // the default, but explicit is better
 }, {
-  lobbyId: t.u64().primaryKey(),  // FK to Lobby.id
+  lobbyId: t.u32().primaryKey(),  // FK to Lobby.id, 1:1; the PK is already indexed (.find())
   passwordHash: t.string(),
   // audit columns...
 });
@@ -832,8 +841,9 @@ Reducers can still read/write private tables — only client subscriptions are b
 
 **Bindings for private tables:** `spacetime generate` always includes type definitions for private tables (so views can reference them in return types). It does NOT generate subscription/query code for private tables by default. To include subscription code (for admin tools or testing), add `--include-private`:
 ```bash
-spacetime generate --lang typescript --out-dir src/module_bindings --module-path spacetimedb --include-private
+spacetime generate --lang typescript --out-dir web/src/module_bindings --module-path spacetimedb --include-private
 ```
+This repo's `npm run stdb:generate` (`scripts/stdb/generate.ts`) does **not** pass `--include-private`: the committed bindings carry subscription code for public tables and views only, and private data reaches clients through views.
 
 ## Admin proxy reducer pattern
 
@@ -857,7 +867,7 @@ SpacetimeDB does NOT support FK constraints. Referential integrity must be enfor
 
 ## Energy budget & bandwidth rules (ENFORCED)
 
-This project runs on SpacetimeDB maincloud with a **100,000 energy/month budget** (the user's plan maximum, confirmed 2026-11-06; earlier text said 40,000, and `tools/energy-model.js:19` still says 90,000). "Energy" here is maincloud's TeV: the 200-per-GB egress rate below matches the pricing page. Egress is the dominant cost driver (~99% of energy in growth scenarios). Every table and reducer decision must consider bandwidth impact.
+This project runs on SpacetimeDB maincloud with a **100,000 energy/month budget**: Free tier with a permanent referral bonus, a hard cap with no pay-as-you-go (CLAUDE.md §2, A16, A41; `tools/energy-model.js` `MONTHLY_BUDGET: 100000`). "Energy" here is maincloud's TeV: the 200-per-GB egress rate below matches the pricing page. Egress is the dominant cost driver (~99% of energy in growth scenarios). Every table and reducer decision must consider bandwidth impact.
 
 **Energy rates:**
 - 1M reducer calls = 840 energy
@@ -868,12 +878,11 @@ This project runs on SpacetimeDB maincloud with a **100,000 energy/month budget*
 
 ### Subscription strategy (MUST follow)
 
-- **Never subscribe to all tables.** Users subscribe only to tables relevant to their current view.
-- **Match history tables are on-demand** — `match_session_history`, `match_session_step_history` are NOT in default subscriptions. Load only when user views match history.
-- **Cost tables**: Subscribe only to the active `costSetId`, not all cost sets.
-- **Tournament data**: Subscribe only for tournaments the user is viewing/participating in.
-- **Static data** (characters, lightcones, archetypes): Safe to subscribe globally — small and rarely updated.
-- **Transient tables** (lobby, match_session, chat): Subscribe only when in a lobby.
+- **Never subscribe to all tables** (`subscribeToAllTables` is banned in `web/`). Clients subscribe to **views and the public reference set** only (CLAUDE.md §4); see "This repo's React subscription rules" above.
+- **Match history is paginated and on-demand** — the history tables (`match_session_history`, `match_session_step_history`, …) are private; pages read them through `view_my_match_history(page, filters)`, `view_my_match_history_count` and the per-match detail views (A115), one argument set at a time.
+- **Reference set** (characters, light cones, cost tables, cost sets: `docs/frontend/subscriptions.md` Decision 1): small, rarely updated; mounted on first need and kept for the session.
+- **Tournament data**: through the tournament views with arguments (`view_tournament_*(id)`), only for the tournament being viewed.
+- **Lobby and match data** (lobby, members, match session, chat): through the per-viewer `view_my_*` views, only while in a lobby; match views and cursor events only past the Waiting stage.
 
 ### Table design rules for bandwidth
 
@@ -893,11 +902,11 @@ A reducer whose writes reach many subscribers costs **writes × subscribers** in
 - **Input bounds:** clamp or reject out-of-range values and cap payload sizes.
 - **Membership and state checks** before inserting.
 
-Example: `broadcast_cursor` (`reducers/lobby/cursor.ts`) checks lobby membership but has **no rate limit and no x/y bounds**, as of 2026-11-06. Put tunable thresholds (cursor Hz, spam limits) in a config singleton row the reducers read, like `elo_config`, so they change without a redeploy. Seed that row in `scripts/stdb/bootstrap.ts` (or idempotently in `init`, which only runs on first publish or a wipe).
+Example: `broadcast_cursor` (`reducers/lobby/cursor.ts`) has all three since S5: membership and seat checks (spectators and away members are dropped silently), x/y outside [0, 1] dropped, and a per-member throttle read from `AbuseConfig.cursorMinIntervalMs` (20 Hz) against `LobbyMember.lastCursorAt`. Put tunable thresholds (cursor Hz, spam limits) in a config singleton row the reducers read, like `AbuseConfig` (`helpers/lobby/abuseControls.ts`) or `elo_config`, so they change without a redeploy. `AbuseConfig` is seeded idempotently by `init` (S5), which only runs on first publish or a wipe; `scripts/stdb/bootstrap.ts` is the other place to seed.
 
 ### Measuring egress in the app (dev-only)
 
-To see which subscription costs what:
+To see which subscription costs what (this repo's version is the dev egress meter, planned at M6; page PRs report its numbers, CLAUDE.md §2; `tools/capture-ws-frames.ts` exists):
 - **Bytes on the wire:** subclass or wrap `globalThis.WebSocket` **before** `DbConnection.builder()...build()` runs, and count received bytes. These are compressed bytes, as billed.
 - **Cache size per table:** serialize each cached row with `AlgebraicType.makeSerializer(Row.algebraicType)` into a `BinaryWriter` and read `.offset`.
 
@@ -928,7 +937,7 @@ When proposing any design that adds tables, columns, or changes visibility:
 
 ## Updating docs from SpacetimeDB GitHub
 
-The skill references are synced to **SpacetimeDB v2.14.1** (released 2026-11-04). Upstream docs are pinned at tag commit `a0bf6be10a146b03acbe3f4f9ad7fe20f114988d`, and the official agent skills at master `17a3f3a649a3ad55e1520353a53ec5de8ea97b0a`. **The project's SDK and CLI are 2.14.1** (`spacetimedb/package.json` `spacetimedb: 2.14.1`, `node_modules/spacetimedb` 2.14.1, `spacetime --version` 2.14.1; the 2.6.1 baseline is history). Inline `(v2.X+ …)` tags record when an API arrived; every tag up to v2.14.1 is available here. Notes marked "on 2.6.1" describe the old baseline. Server-side behavior (migration rules, HTTP API, scheduler, MCP endpoint) follows maincloud's server version, so those notes may apply already. Last audit: 2026-11-05, items SK-10..SK-29 (previous: Phase 16.5 SK-1..SK-9).
+The skill references are synced to **SpacetimeDB v2.14.1** (released 2026-11-04). Upstream docs are pinned at tag commit `a0bf6be10a146b03acbe3f4f9ad7fe20f114988d`, and the official agent skills at master `17a3f3a649a3ad55e1520353a53ec5de8ea97b0a`. **The project's SDK and CLI are 2.14.1** (`spacetimedb/package.json` `spacetimedb: 2.14.1`, `node_modules/spacetimedb` 2.14.1, `spacetime --version` 2.14.1; the 2.6.1 baseline is history). Inline `(v2.X+ …)` tags record when an API arrived; every tag up to v2.14.1 is available here. Notes marked "on 2.6.1" describe the old baseline. Server-side behavior (migration rules, HTTP API, scheduler, MCP endpoint) follows maincloud's server version, so those notes may apply already. Last audit: 2026-11-05, items SK-10..SK-29 (previous: the old repo's Phase 16.5 audit, SK-1..SK-9); project-layout pass 2026-11-10 (Next.js-era paths and patterns replaced).
 
 When the user asks to update the skill docs (e.g. "update spacetimedb docs", "check for new SpacetimeDB changes", "sync with upstream"), or when you notice `spacetimedb` in `package.json` has been bumped:
 

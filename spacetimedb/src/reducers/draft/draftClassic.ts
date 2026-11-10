@@ -10,7 +10,7 @@ import { banRestrictionError, isBanLegal } from '@module/helpers/lobby/banRestri
 import { ensureMatchAlive, scheduleChecksForOfflineStaff } from '@module/helpers/lobby/disconnectHelpers';
 import { lobbySteps, getNextSequence } from '@module/helpers/draft/stepSequence';
 import { turnRemainingMs } from '@module/helpers/draft/turnClock';
-import { characterCostAt, pricedCharacterNames } from '@module/helpers/draft/costSetGuards';
+import { characterCostAt, characterCostRow, costMissingText, pricedCharacterNames } from '@module/helpers/draft/costSetGuards';
 import { trimChatForInsert } from '@module/helpers/lobby/chatWindow';
 import { microsWords, timerDrawIndex as drawPoolIndex } from '@shared/lobby-rules';
 
@@ -540,6 +540,16 @@ export const ban_character = spacetimedb.reducer(
             if (hasCaptain) {
                 throw new SenderError('Only the team captain can ban characters.');
             }
+        }
+
+        // S10r (A122(7), L32): a ban names a real character of the lobby's pool, the check picks make (the lobby's
+        // cost row: cost set, game mode, draft mode; the pool the timer draws from). EMPTY is the no-pick placeholder,
+        // never a manual ban. The timer's empty ban is the SKIP sentinel (timer_expiry_classic), not EMPTY.
+        if (characterName === 'EMPTY') {
+            throw new SenderError('EMPTY is not a character and cannot be banned.');
+        }
+        if (!characterCostRow(ctx, lobby, characterName)) {
+            throw new SenderError(costMissingText(characterName));
         }
 
         // Character availability: not already banned or picked

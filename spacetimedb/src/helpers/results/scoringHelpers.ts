@@ -23,6 +23,7 @@ import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHel
 import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { ensureMemberPresent, slotIsCoach, slotTeam } from '@module/helpers/lobby/lobbyHelpers';
 import { lobbySteps } from '@module/helpers/draft/stepSequence';
+import { trimChatForInsert } from '@module/helpers/lobby/chatWindow';
 
 export type TeamTag = 'Blue' | 'Red';
 
@@ -423,13 +424,13 @@ export function ensureAuctionSurchargeFits(ctx: any, lobby: any, session: any, s
     }
 }
 
-/** System chat line in the lobby (D-11), keeping the 50-message rolling window. */
+/**
+ * System chat line in the lobby (D-11), keeping the 50-message rolling window. S10r (A122(3), L16): the window goes
+ * through the shared trim (trimChatForInsert, oldest by createdDate, not by id); the stage-change, concede and defer
+ * lines call this helper.
+ */
 export function postSystemChat(ctx: any, lobbyId: number, content: string, actorId: number): void {
-    const existing = [...ctx.db.ChatMessage.lobby_id.filter(lobbyId)];
-    if (existing.length >= 50) {
-        const oldest = [...existing].sort((a: any, b: any) => a.id - b.id)[0];
-        ctx.db.ChatMessage.id.delete(oldest.id);
-    }
+    trimChatForInsert(ctx, lobbyId);
     ctx.db.ChatMessage.insert(insertWithAudit(ctx, {
         id: 0, // autoInc
         lobbyId,

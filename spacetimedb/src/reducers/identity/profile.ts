@@ -3,7 +3,8 @@ import { t, SenderError } from 'spacetimedb/server';
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { performUserDeletion } from '@module/helpers/identity/userDeletionHelper';
 import { membershipHold } from '@module/helpers/lobby/lobbyHelpers';
-import { soloTeamName } from '@module/helpers/tournament/tournamentHelpers';
+import { syncSoloTeamNames } from '@module/helpers/tournament/tournamentHelpers';
+import { checkDisplayName, checkUsername } from '@module/helpers/identity/usernames';
 
 /**
  * Helper: resolve ctx.sender → UserIdentity → User.
@@ -80,13 +81,8 @@ export const delete_my_account = spacetimedb.reducer((ctx) => {
 export const update_display_name = spacetimedb.reducer({
     newDisplayName: t.string(),
 }, (ctx, { newDisplayName }) => {
-    const trimmed = newDisplayName.trim();
-    if (trimmed.length === 0) {
-        throw new SenderError('Display name cannot be empty');
-    }
-    if (trimmed.length > 32) {
-        throw new SenderError('Display name must be 32 characters or fewer');
-    }
+    // S10r (A122(1)): the name rules live in checkDisplayName, shared with admin_update_user.
+    const trimmed = checkDisplayName(newDisplayName);
 
     const resolved = resolveUser(ctx);
     if (!resolved) {
@@ -97,23 +93,9 @@ export const update_display_name = spacetimedb.reducer({
         displayName: trimmed,
     }, resolved.user.id));
 
-    // Lazy sync: update TournamentTeam.name for active solo non-anonymous tournaments
-    // A solo player's team name = their displayName (invisible team for bracket purposes)
-    for (const team of [...ctx.db.TournamentTeam.captain_user_id.filter(resolved.user.id)]) {
-        const tournament = ctx.db.Tournament.id.find(team.tournamentId);
-        if (!tournament) continue;
-        // Only sync if: tournament is active (not Completed/Cancelled), solo tournament, and not anonymous
-        const isActive = tournament.stage.tag !== 'Completed' && tournament.stage.tag !== 'Cancelled';
-        const isSolo = tournament.teamSize === 1;
-        const isNotAnonymous = !tournament.isAnonymousDefault;
-        if (isActive && isSolo && isNotAnonymous) {
-            // Tournament audit #16 (S10g): the solo name goes through soloTeamName's uniqueness pass (" (2)" …).
-            const name = soloTeamName(ctx, tournament, trimmed, undefined, team.id);
-            if (name !== team.name) {
-                ctx.db.TournamentTeam.id.update(updateWithAudit(ctx, team, { name }, resolved.user.id));
-            }
-        }
-    }
+    // Lazy sync of the solo team names (S10r, A122(1): the loop moved to syncSoloTeamNames, shared with
+    // admin_update_user).
+    syncSoloTeamNames(ctx, resolved.user.id, trimmed, resolved.user.id);
 });
 
 /**
@@ -124,13 +106,8 @@ export const update_display_name = spacetimedb.reducer({
 export const update_username = spacetimedb.reducer({
     newUsername: t.string(),
 }, (ctx, { newUsername }) => {
-    const trimmed = newUsername.trim();
-    if (trimmed.length === 0) {
-        throw new SenderError('Username cannot be empty');
-    }
-    if (trimmed.length > 32) {
-        throw new SenderError('Username must be 32 characters or fewer');
-    }
+    // S10r (A122(1)): the name rules live in checkUsername, shared with admin_update_user.
+    const trimmed = checkUsername(newUsername);
 
     const resolved = resolveUser(ctx);
     if (!resolved) {

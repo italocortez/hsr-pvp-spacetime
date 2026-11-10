@@ -360,10 +360,12 @@ export function runFinalization(
             deathPenalty: 0,
         },
         outcome: matchEndReason,
-        // D-88: Budget analysis (after carryover: charBudget=0, lcBudget = original LC + leftover char)
-        // totalSpent = characterBudget + lightconeBudget - remainingLcBudget (correct carryover math)
-        teamBlueSpent: session && lobby ? (lobby.characterBudget + lobby.lightconeBudget - session.teamBlueLcBudget) : 0,
-        teamRedSpent: session && lobby ? (lobby.characterBudget + lobby.lightconeBudget - session.teamRedLcBudget) : 0,
+        // D-88: Budget analysis. S10r (A122(11), L40): spent = both starting budgets - both remaining budgets. After the
+        // carryover (charBudget = 0, lcBudget = original LC + leftover char) this is the D-88 value; for a match that
+        // ended during the draft (concede, forfeit, force-finalize: no carryover yet) the unspent character budget is
+        // no longer counted as spent.
+        teamBlueSpent: session && lobby ? (lobby.characterBudget + lobby.lightconeBudget - session.teamBlueCharBudget - session.teamBlueLcBudget) : 0,
+        teamRedSpent: session && lobby ? (lobby.characterBudget + lobby.lightconeBudget - session.teamRedCharBudget - session.teamRedLcBudget) : 0,
         // A21: net handicap advantage Blue received over Red, hundredths, summed over the games (scoringHelpers).
         handicapApplied: netHandicapApplied(ctx, matchResult.id, games, gameMode.tag),
         // A24/A37: tournament linkage instead of the D-84 public-visibility flag (history is never public)

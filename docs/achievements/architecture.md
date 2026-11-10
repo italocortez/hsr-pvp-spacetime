@@ -71,7 +71,8 @@ User (id: u32 autoInc PK)
 2. Find achievement -- reject if not found
 3. Criteria lock check: `UserAchievement.by_achievement.filter(achievementId)` -- reject if any award exists (D-25)
 4. Validate `statTable` is one of: `['PlayerStat', 'PlayerCharacterStat', 'MmrRating']`
-5. Insert `AchievementCriteria` row with audit columns
+5. Phase S10r execution (A122(12)): validate `statField` against the table and the filter tags (see "Phase S10r execution")
+6. Insert `AchievementCriteria` row with audit columns
 
 ### remove_achievement_criteria(criteriaId)
 1. `ensureModerator(ctx)` -- requires Admin or Moderator role
@@ -85,7 +86,7 @@ User (id: u32 autoInc PK)
    - Moderator+: unrestricted
    - TournamentHost: only own tournament participants (via `Tournament.organizer_id` + `TournamentEnrolled.by_tournament_and_user`)
    - Otherwise: reject
-3. Find achievement -- reject if not found
+3. Find achievement -- reject if not found. Phase S10r execution (A122(13)): a caller below Moderator awards only an achievement with `isManualOnly` and no `maxAwards`
 4. Per-user duplicate check via `UserAchievement.by_user_achievement.filter([targetUserId, achievementId])`
 5. Global cap check: if `maxAwards` set, count via `by_achievement` index -- reject if at cap (D-04)
 6. Verify target user exists
@@ -127,6 +128,11 @@ Criteria resolution uses a hardcoded resolver map:
   profile subscribes `SELECT * FROM view_user_achievements(<own id>)` + the public `Achievement` table. The award instant is
   the A40 residual risk.
 
+## Phase S10r execution (DECISIONS.md A122)
+
+- **Criteria validation (A122(12), L42).** `add_achievement_criteria` checks `statField` against the fields `achievementChecker.getField` reads for the table: `PlayerStat`: matchesPlayed, wins, losses, matchesSpectated; `PlayerCharacterStat`: matchesPlayed, wins, losses, timesBannedInMatch, timesFaced, winsAgainst, lossesAgainst; `MmrRating`: rating, matchesPlayed, globalCompositeRating ("Invalid statField \"<f>\" for <table>. Must be one of: …"). `filterGameMode` must be a `GameMode` variant and `filterMatchType` a `MatchType` variant, when given ("Invalid filterGameMode \"<v>\". Must be one of: …", same for filterMatchType). S10r review F4: a non-empty `filterCharacterName` must name an `HsrCharacter` row ("Invalid filterCharacterName \"<v>\". No such character."); an empty one is stored as no filter (any character).
+- **Host awards (A122(13), L46).** `manual_award_achievement`: a TournamentHost (below Moderator) awards only an achievement with `isManualOnly` true and no `maxAwards`; an automatic or capped one is refused ("Tournament hosts can only award manual achievements without an award limit."). The participant rule is unchanged. Moderators and Admins are unchanged.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -142,6 +148,7 @@ Criteria resolution uses a hardcoded resolver map:
 | Title = Achievement.name; no separate title table; displayedAchievementId FK on User (D-17, D-18) | Phase 07 CONTEXT.md | 2026-03-14 |
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
 | Auto-awards stamped SYSTEM (`awardedById` + audit), `actingUserId` parameter removed; `view_user_achievements(userId)` | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
+| `add_achievement_criteria` rejects unknown stat fields and filter tags; tournament hosts award only uncapped manual achievements | Phase S10r execution (DECISIONS.md A122) | 2026-11-10 |
 
 ---
 

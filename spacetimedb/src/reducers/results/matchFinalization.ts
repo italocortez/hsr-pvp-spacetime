@@ -34,17 +34,20 @@ export const finalize_match_result = spacetimedb.reducer(
             throw new SenderError('Match result must be Validated before finalization.');
         }
 
-        // 3. Authority check (Mod+ or the match referee)
+        // 3. Authority check. S10r (A122(14), L51; A34a / A80): Mod+ or the lobby's referee, i.e. the member who holds
+        // the referee flag in the match's lobby now. MatchResultRecord.refereeUserId is not read: close_game /
+        // confirm_game and the concede paths write the closer or conceder there (possibly a captain). A caller with no
+        // LobbyMember row in the lobby (row removed, lobby gone) is not the lobby's referee: staff finalize then.
         const isStaff = isRoleAtLeast(user.role, 'Moderator');
-        const hasAuthority = isStaff || matchResult.refereeUserId === user.id;
-        if (!hasAuthority) {
-            throw new SenderError('You do not have authority to finalize this match result.');
+        if (!isStaff) {
+            const row = [...ctx.db.LobbyMember.by_lobby_and_user.filter([matchResult.lobbyId, user.id])][0];
+            if (!row || !row.isReferee) {
+                throw new SenderError('You do not have authority to finalize this match result.');
+            }
+            // A98 (S10h review F9): the referee authority is a membership power: an away or abandoned referee row is
+            // rejected (AWAY_MEMBER_TEXT / ABANDONED_MEMBER_TEXT). Staff are unaffected.
+            ensurePresentIfMember(ctx, matchResult.lobbyId, user.id);
         }
-        // A98 (S10h review F9): the referee authority is a membership power: a referee who is not staff and whose
-        // LobbyMember row in the match's lobby is away or abandoned is rejected (AWAY_MEMBER_TEXT /
-        // ABANDONED_MEMBER_TEXT). A referee with no row left (the row removed, the lobby gone) keeps the snapshot
-        // authority, as before. Staff are unaffected.
-        if (!isStaff) ensurePresentIfMember(ctx, matchResult.lobbyId, user.id);
 
         // 4. Run the 19-step finalization pipeline
         runFinalization(ctx, matchResult, user.id);

@@ -5,6 +5,7 @@
 // `advance`. Nothing reaches maincloud.
 import { describe, expect, it } from 'vitest';
 import {
+    priceBanNames,
     M,
     advance,
     captainOf,
@@ -32,7 +33,11 @@ const pick = (s: Lobby, characterName: string) => (ctx: any) => {
     priceCharacters(ctx, s.lobbyId, [characterName]);
     return M.pick_character(ctx, { lobbyId: s.lobbyId, characterName, eidolon: 0 });
 };
-const ban = (s: Lobby, characterName: string) => (ctx: any) => M.ban_character(ctx, { lobbyId: s.lobbyId, characterName });
+// T-S10r (A122(7), L32): a ban names a character of the lobby's pool (a cost row), so the banned name is priced like a pick.
+const ban = (s: Lobby, characterName: string) => (ctx: any) => {
+    priceBanNames(ctx, s.lobbyId, [characterName]);
+    return M.ban_character(ctx, { lobbyId: s.lobbyId, characterName });
+};
 const expire = (s: Lobby) => (ctx: any) => M.timer_expiry_classic(ctx, { lobbyId: s.lobbyId });
 const undo = (s: Lobby) => (ctx: any) => M.undo_last_step(ctx, { lobbyId: s.lobbyId });
 const pause = (s: Lobby) => (ctx: any) => M.pause_draft(ctx, { lobbyId: s.lobbyId });

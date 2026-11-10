@@ -8,6 +8,7 @@
 // Everything runs through the module's reducers on the in-memory datastore and TestClock; nothing reaches maincloud.
 import { describe, expect, it } from 'vitest';
 import {
+    priceBanNames,
     M,
     advance,
     dropDefaultCostCoverage,
@@ -291,7 +292,7 @@ describe('A110: team shapes, coaches, the system user and the sentinels', () => 
         const s = setupLobby(test, { lobby: { autoRandomPick: true, banMode: { tag: 'Four' } }, beforeStart: selectFillerAccounts(test) });
         expireTurn(s); // Blue ban, nothing priced → SKIP
         expect(lastStep(test, s.lobbyId, 'Ban').payload.value).toMatchObject({ characterName: 'SKIP' });
-        tx(test, captain(s, 'Red'), (ctx) => M.ban_character(ctx, { lobbyId: s.lobbyId, characterName: 'red-ban' }));
+        tx(test, captain(s, 'Red'), (ctx) => (priceBanNames(ctx, s.lobbyId, ['red-ban']), M.ban_character(ctx, { lobbyId: s.lobbyId, characterName: 'red-ban' }))); // T-S10r (A122(7), L32): a ban names a priced character
         expireTurn(s); // Blue pick, nothing priced → EMPTY
         expect(lastStep(test, s.lobbyId, 'Pick')).toMatchObject({ actorUserId: 0 });
         expect(lastStep(test, s.lobbyId, 'Pick').payload.value).toMatchObject({ characterName: 'EMPTY' });

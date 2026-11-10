@@ -108,7 +108,7 @@ Publishing can also carry values: repeat a `spacetime-environment: KEY=VALUE` he
 | POST | `/v1/database/:name_or_identity/sql` | Optional | Execute SQL queries (semicolon-separated); anonymous callers see public tables only |
 | GET | `/v1/database/:name_or_identity/logs` | Yes (owner) | Stream logs (`?num_lines=N&follow=true`) |
 
-**Confirmed HTTP calls wait for durability (server v2.13.0+, #6101/#6154):** with the default `confirmed=true`, `/call` reports success only once the transaction is durable (procedures also wait after each successful `withTx`). The wait has a 5 s deadline — on timeout the call returns **`504 Gateway Timeout` with an unknown outcome** (the reducer may have committed; don't blindly retry non-idempotent calls). Pass `?confirmed=false` when the guarantee isn't needed. (This repo's Route Handlers use the WebSocket SDK via `getServerConnection()`, not `/call`, so this matters only for new HTTP integrations.)
+**Confirmed HTTP calls wait for durability (server v2.13.0+, #6101/#6154):** with the default `confirmed=true`, `/call` reports success only once the transaction is durable (procedures also wait after each successful `withTx`). The wait has a 5 s deadline — on timeout the call returns **`504 Gateway Timeout` with an unknown outcome** (the reducer may have committed; don't blindly retry non-idempotent calls). Pass `?confirmed=false` when the guarantee isn't needed. (This repo's server-side callers, `scripts/stdb/*.ts` via `scripts/stdb/_connection.ts` and the planned auth function (M5), use the WebSocket SDK, not `/call`, so this matters only for new HTTP integrations.)
 
 ### WebSocket
 
@@ -157,12 +157,12 @@ curl -X PUT \
 
 ---
 
-## Using from Next.js API Routes
+## Using from a server-side function
 
-The HTTP API is useful for server-side operations in Next.js API routes where you can't use the WebSocket SDK:
+The HTTP API is useful for server-side code (a serverless function, a script) where you can't use the WebSocket SDK. This repo has no such caller today: `scripts/stdb/*.ts` use the WebSocket SDK, and the Vercel auth function under `api/auth/discord/` (planned, M5, A46; secret `STDB_SERVER_TOKEN`, CLAUDE.md §5) is planned to call reducers on a connection too (`docs/frontend/subscriptions.md` Decision 10). Generic example (a fetch-style handler; names are placeholders, never hard-code this repo's database names, CLAUDE.md §1):
 
 ```typescript
-// app/api/example/route.ts
+// example handler file
 const SPACETIMEDB_URL = 'https://maincloud.spacetimedb.com';
 const DB_NAME = 'my-database';
 

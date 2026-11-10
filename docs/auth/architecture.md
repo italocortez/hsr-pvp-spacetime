@@ -177,6 +177,7 @@ performUserDeletion
   │   transferred, row kept as away + abandoned (offline for the forfeit test, never a flag candidate).
   │   See docs/lobby/architecture.md "User deletion".
   ├─ Cascade: hard-delete UserPrivate, calendar data, UserIdentity rows, HsrAccount + characters
+  ├─ S10r (A122(6)): the user's unreferenced lobby presets and unpublished cost sets (deleteOwnedPresetsAndCostSets)
   │
   ├─ [isGuest && !hasHistoryReferences(ctx, userId)]
   │     → hard-delete User row (fast path, no archive)
@@ -318,6 +319,12 @@ spectator and coach seats do not block; the first-time link (case 1a, the guest 
 The calendar invites of a moved tournament entry move with it (A113(5)):
 [../tournament/architecture.md](../tournament/architecture.md) "Phase S10m execution".
 
+## Phase S10r execution (DECISIONS.md A122)
+
+- **Presets and cost sets in the deletion cascade (A122(6), L22, L89).** `performUserDeletion` (`helpers/identity/userDeletionHelper.ts`) runs `deleteOwnedPresetsAndCostSets` after the HSR accounts, before the User row:
+  - **Lobby presets** (`LobbyPreset.creator_user_id`; the system preset is owned by SYSTEM and never matches): deleted unless an unfinished tournament (stage not Completed / Cancelled) has the preset as `lobbyPresetId`. Lobbies hold no preset reference (a preset's values are copied at creation, A116), so a lobby never keeps one. Tournament has no `lobbyPresetId` index: one `Tournament` scan per deletion that has presets. A preset kept for an unfinished tournament is not removed later (no clean-up revisits it when the tournament ends); with its creator gone only an Admin can edit or delete it.
+  - **Cost sets** (`CostSet.creator_id`): every set with `isPublished` false (a draft, or a set unpublished later) is deleted with its live and draft rows through `deleteCostSetRows` (`helpers/draft/costSetGuards.ts`, shared with `delete_cost_set`), unless `isCostSetInUse` holds it (any `Lobby` row on the set, or an unfinished tournament), as `delete_cost_set` checks. `isCostSetInUse` scans `Lobby` and `Tournament` once per unpublished set of the deleted user (neither table has a `costSetId` index); guests own no sets or presets, so the guest clean-up path does index probes only. A set kept this way is not removed later either. Published sets stay. Set 0 is never touched.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -353,6 +360,7 @@ The calendar invites of a moved tournament entry move with it (A113(5)):
 | Default guest creation threshold 300 per 10 minutes; `server_set_guest_creation(enabled)` (server identity) turns the switch on or off without an Admin session, resetting the counter on re-enable | Phase S10i execution (DECISIONS.md A109) | 2026-11-10 |
 | `server_link_provider` case 1b moves the guest's entries in unfinished tournaments to the existing user (`moveTournamentTiesToUser`) before the guest is deleted; entries the existing user cannot hold are settled by the deletion | Phase S10l execution (DECISIONS.md A112) | 2026-11-10 |
 | `server_link_provider` case 1b refuses the sign-in (`Finish your current game before signing in to an existing account.`) while the guest that would be deleted holds a non-abandoned player seat in a Drafting, Equipping or Scoring lobby | Phase S10m execution (DECISIONS.md A113(4)) | 2026-11-10 |
+| `performUserDeletion` deletes the user's lobby presets (kept while an unfinished tournament points at one) and unpublished cost sets with their rows (kept while `isCostSetInUse`); published sets stay | Phase S10r execution (DECISIONS.md A122) | 2026-11-10 |
 
 ---
 

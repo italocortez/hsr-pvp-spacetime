@@ -945,7 +945,7 @@ D-50 applies to ALL Drafting→Equipping transitions: auto (last Classic pick, l
 ### Undo During the Auction Phase (Phase S4 execution, F9)
 **Given:** Auction lobby, ban phase complete, isAuctionPhase=true
 **When:** Referee calls `undo_last_step`
-**Then:** Throws "Undo is not available during the auction phase." Supersedes "Referee Undo: Reverts Auction Phase Transition" above.
+**Then:** Throws "Undo is not available during the auction phase." Supersedes "Referee Undo: Reverts Auction Phase Transition" above. _Superseded in Phase S10r execution (DECISIONS.md A122(9)): undo works after the last ban until the first nomination and restores the ban turn; it is refused once a nomination exists._
 
 ### Auto-Pause Comes From the Grace Check (Phase S4 execution, A22a, F5)
 **Given:** Lobby #10 in Drafting (Standard), Blue player #10 connected on one device
@@ -1045,7 +1045,7 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 | Duplicate LobbyMember.isCaptain on same team | First captain wins captain check | Only one captain should exist per team |
 | Auction sold when only one team needs characters | Normal flow, no short circuit | Other team's won count already at 8, one team still filling _Superseded in Phase S10c execution (DECISIONS.md A81)._ |
 | Timer expiry with paused timer (Phase S4 execution, F3) | Rejected: "Draft is paused." Supersedes the "Not validated" row above | Non-members rejected too |
-| Undo auction phase boundary (Phase S4 execution, F9) | Rejected: "Undo is not available during the auction phase." Supersedes the "isAuctionPhase reverts" row above | No budget / won-count rollback exists |
+| Undo auction phase boundary (Phase S4 execution, F9) | Rejected: "Undo is not available during the auction phase." Supersedes the "isAuctionPhase reverts" row above | No budget / won-count rollback exists | _Superseded in Phase S10r execution (DECISIONS.md A122(9)): undo works after the last ban until the first nomination and restores the ban turn; it is refused once a nomination exists._
 | Undo when the highest-sequence row is a Pause or Undo record (Phase S4 execution, F9) | The last Pick/Ban is undone; audit rows are skipped | Audit rows carry their own sequence |
 | arrange_lineup with invalid JSON (Phase S7 execution) | Rejected: "groups must be a JSON array of arrays of character names." Supersedes the `positions` row above | `groups` capped at 2000 characters |
 | confirm_lineup before any arrangement (Phase S7 execution) | Rejected: "Arrange the lineup before confirming it." | |
@@ -1194,6 +1194,8 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 | `equip_lightcone` reads the light-cone row of the lobby's cost set, game mode and draft mode (Auction rows in an Auction lobby), with no fallback to the default set; character prices in `pick_character`, the timer auto-pick, Auction nomination, bid and sale, and `set_eidolon` follow the same rule. A cost row that exists but lacks the requested level is rejected ("The cost row of <name> has no <field> value.") | Phase S10i execution (DECISIONS.md A107) | 2026-11-10 |
 | `start_draft`: the `autoRandomPick` account check (every seated player has a selected game account with characters) applies only when the lobby requires ownership; without it the draft starts with guests and players who have no game account, and the timer draws from every character priced in the lobby's cost set. The Ranked and rated-tournament account check is unchanged | Phase S10o execution (DECISIONS.md A117) | 2026-11-10 |
 | Timer auto-pick and auto-ban draw: a well-mixed hash of the transaction time, the lobby, the turn and the next step sequence, reduced to the pool size; even over the pool, reproducible for a given transaction, not aimable by the member who fires the expired turn, and different after the referee undoes the auto step and the turn expires again (a pool of one entry always gives that entry). This replaces the fixed formula of the turn and the lobby | Phase S10o execution (DECISIONS.md A117) | 2026-11-10 |
+| `undo_last_step` in Auction: after the last ban and before the first nomination (manual or the timer's) the last ban is undone, `turnIndex` returns to the ban turn, `isAuctionPhase` becomes false and the timer resets; once a Nominate step exists: "Undo is not available during the auction phase." | Phase S10r execution (DECISIONS.md A122(9)) | 2026-11-10 |
+| A coach cannot pause ("Coaches cannot pause the draft."); a manual ban must name a character priced in the lobby's cost set and `EMPTY` cannot be banned; Undo rows are capped at 300 per game ("This game has reached the limit of 300 undo steps.") | Phase S10r execution (DECISIONS.md A122(7), (8), (10)) | 2026-11-10 |
 
 ---
 

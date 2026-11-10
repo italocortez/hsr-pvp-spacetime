@@ -114,7 +114,7 @@ conn.db.LobbyCursorEvent.onInsert((ctx, ev) => { /* move the cursor */ });
 
 **A filter is not access control.** It cuts egress, but any SDK client can subscribe without it, and views can't wrap event tables. The row filter (`clientVisibilityFilter`, § Row Level Security) exists in SDK 2.14.1 but is experimental, and whether it restricts event-table rows is not verified (A111 tests it on `LobbyCursorEvent` at S11). Never put data meant only for specific recipients in a public event table; anything in it is readable by every connected client that asks.
 
-This project uses `LobbyCursorEvent` as an event table.
+This project uses `LobbyCursorEvent` as an event table (rows carry the lobby id, the sender's seat, x, y and a timestamp; no user id, A96). The client subscribes it filtered to its own lobby, only once the lobby stage is past Waiting, and reads it via `onInsert` (CLAUDE.md §4). A111: it stays public for now.
 
 ---
 
@@ -172,12 +172,13 @@ spacetime login show --token
 
 ### Transport: v3 protocol (v2.3.0)
 
-The WebSocket client transport uses the **v3 protocol**, which **batches and pipelines** responses — significantly reducing per-message overhead under high load compared to sending one message per update. This project already runs on the v3 baseline (adopted Phase 16.4 Plan 04); it's the reason egress dominates the energy budget less per-message than a naive one-frame-per-update transport would, and it matters directly for the maincloud energy/egress budget (see SKILL.md "Energy budget & bandwidth rules").
+The WebSocket client transport uses the **v3 protocol**, which **batches and pipelines** responses — significantly reducing per-message overhead under high load compared to sending one message per update. This project's SDK (2.14.1) uses it with no project code involved; it's the reason egress dominates the energy budget less per-message than a naive one-frame-per-update transport would, and it matters directly for the maincloud energy/egress budget (see SKILL.md "Energy budget & bandwidth rules").
 
 ### Publishing
 ```bash
 spacetime publish <db-name> --server maincloud
 ```
+**This repo:** never call `spacetime publish` by hand; use `npm run stdb:publish:test` / `stdb:publish:test:clear` / `stdb:publish:prod` (`scripts/stdb/publish.ts`, CLAUDE.md §3 rule 7), and every publish is a user gate (ROADMAP hard gates). The generic notes below explain what the scripts do.
 - `spacetime login` authenticates with GitHub or Google; databases then appear on the dashboard
 - Compiles module, uploads, runs `init` reducer
 - Subsequent deploys **hot-swap code without disconnecting clients** (some migrations, e.g. removing a table, do disconnect clients so they reconnect against the new schema)
@@ -310,7 +311,9 @@ Tools: `list_databases` (host-wide only; databases owned by your identity), `get
 
 **v2.12.0+ (PRs #5558, #6139).** Also: this repo's `test/` directory is the verification layer — don't create or change tests without an explicit task (CLAUDE.md).
 
-Tests run module logic against an in-memory datastore, with no publish (unlike `npm run test:integration`, which republishes maincloud). Run from the module project (`spacetimedb/`) with Node 22+, `"type": "module"` in its `package.json`, and `vitest@^3.2.4`:
+Tests run module logic against an in-memory datastore, with no publish (unlike `npm run test:integration`, which wipes and re-bootstraps test1 before the live residue). Run from the module project (`spacetimedb/`) with Node 22+, `"type": "module"` in its `package.json`, and `vitest@^3.2.4` (upstream minimums).
+
+**This repo:** config `spacetimedb/vitest.config.mts` (one `'@module'` alias), suites in `spacetimedb/src/__tests__/` with shared `*-fixtures.ts`, run by `npm test` after the unit tests and never touching maincloud. Harness gotchas (no `test.db` reads inside `withReducerTx`, views called as functions, `ctx.env` throws, scheduled reducers fired by hand, seats via `seatOf`) are in `test/README.md` § In-memory harness. Upstream's generic setup:
 
 ```typescript
 // vitest.config.ts
