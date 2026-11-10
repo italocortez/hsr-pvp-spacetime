@@ -681,7 +681,7 @@ describe('A107(3)(4): a published set is patched in place', () => {
         editChar(test, owner, id, 'k', 'Classic', ladder(20));
         publish(test, owner, id);
         expect(snap(test.db.LobbyPreset.id.find(preset.id))).toBe(presetBefore);
-        const s = lobbyOn(test, id, 'p', { lobby: { presetId: preset.id, costSetId: preset.costSetId } });
+        const s = lobbyOn(test, id, 'p', { lobby: { costSetId: preset.costSetId } });
         tx(test, captain(s, 'Blue'), pickBody(s, 'k'));
         expect(payloadOf(test, s.lobbyId, 'Pick')).toMatchObject({ characterName: 'k', costPaid: 20 });
 
@@ -747,9 +747,13 @@ describe('A107(3)(4): a published set is patched in place', () => {
 // B.6 A107(6): history keeps its stored costs
 // ════════════════════════════════════════════════════════════════════════════
 
-const HISTORY_VIEWS = [
-    'view_my_match_session_history', 'view_my_match_session_step_history', 'view_my_match_lineup_history',
-    'view_my_match_result_game_history', 'view_my_match_participant_history', 'view_my_mmr_history',
+// T-S10n (A115): the history views are the paged list, its count, the per-match detail views and the paged ratings.
+const HISTORY_VIEWS = (matchHistoryId: number): Array<[string, Record<string, unknown>]> => [
+    ['view_my_match_history', { page: 0, gameMode: '', draftMode: '', matchType: '' }],
+    ['view_my_match_history_count', { gameMode: '', draftMode: '', matchType: '' }],
+    ['view_my_match_history_steps', { matchHistoryId }], ['view_my_match_history_lineups', { matchHistoryId }],
+    ['view_my_match_history_games', { matchHistoryId }], ['view_my_match_history_participants', { matchHistoryId }],
+    ['view_my_mmr_history', { page: 0, gameMode: '' }],
 ];
 
 describe('A107(6): a patch never touches history', () => {
@@ -762,10 +766,11 @@ describe('A107(6): a patch never touches history', () => {
         finishGame(s, 'Blue');
         expect(test.db.Lobby.id.find(s.lobbyId)).toBeFalsy(); // casual: finalized at the close
         const reader = s.a['h-b'];
+        const matchHistoryId = [...test.db.MatchParticipantHistory.by_user.filter(reader.userId)][0].matchHistoryId;
         const history = () => snap(
             [...test.db.MatchSessionHistory.iter()], [...test.db.MatchSessionStepHistory.iter()], [...test.db.MatchLineupHistory.iter()],
             [...test.db.MatchResultGameHistory.iter()], [...test.db.MatchParticipantHistory.iter()],
-            HISTORY_VIEWS.map((v) => (M as any)[v](test.viewContext(reader.auth), {})),
+            HISTORY_VIEWS(matchHistoryId).map(([v, args]) => (M as any)[v](test.viewContext(reader.auth), args)),
         );
         // The archived step payload is the step's StepPayload as a JSON string.
         const stepPayloads = [...test.db.MatchSessionStepHistory.iter()].map((r: any) => JSON.parse(r.payload));

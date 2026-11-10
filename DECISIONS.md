@@ -1201,3 +1201,29 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** user, 2026-11-10: "yeah we can drop the preset number then". S10j listed the ignored argument; this completes A114(3).
 - **Supersedes:** the `presetId` parameter of `create_lobby` in the lobby contract.
 - **Where implemented:** S10n
+
+### A117 — The random auto-pick needs accounts only where the lobby requires ownership
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:**
+  1. `start_draft`'s `autoRandomPick` check (every seated player has a selected game account with characters, D-43b) applies only when the lobby requires ownership. In a lobby that does not, the draft starts without it, guests included.
+  2. The pool is unchanged: with ownership required, the acting team's owned and priced characters; without it, every character priced in the lobby's cost set and draft mode.
+  3. A player who gets a character they do not have asks the referee to undo the pick (`undo_last_step`, as today) and the turn is played again. The random draw must not repeat itself after an undo: a re-rolled turn can land on a different character.
+- **Why:** user, 2026-11-10: "Is there to make the random autopick tied behavior tied to match settings that require an account or not? If its a lobby that allows guest, it cannot be ranked, so we can actually just randomly pick from the pool of characters, if they dont have the character, they can undo the pick and roll it again". Found while checking the guest flow: a guest cannot have a game account, so any lobby or tournament preset with `autoRandomPick` on could never start a draft with a guest seated.
+- **Supersedes:** D-43b's unconditional account check at `start_draft`; the fixed draw of the timer pick (a function of the turn and the lobby only).
+- **Where implemented:** S10o
+
+### A118 — An organizer can remove a guest's approved entry without a disqualification
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** before the bracket exists, tournament staff with the participants permission can remove the approved entry of a guest user as a withdrawal (enrolment, solo team or membership, requests and locks removed; no Disqualified row, capacity freed), so the guest can register again once verified. After the bracket exists, and for verified players, the rules are unchanged (disqualification).
+- **Why:** user, 2026-11-10: "i agree on your #1 suggestion". S10m review F3: to turn on a setting guests cannot meet (A113(2)) an organizer had to disqualify approved guests, and the permanent Disqualified row moved to the account the guest later signed in to (A112).
+- **Supersedes:** nothing; adds a path next to `reject_participant` and `dq_participant`.
+- **Where implemented:** S10o
+
+### A119 — A guest who loses their browser loses the guest account
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** a guest account lives in the browser that created it. If its data is cleared or the device changes, the account and anything tied to it (a tournament entry included) is unreachable unless it is reconnected by hand through admin tools or server functions; no self-service recovery is built. The tournament pages tell a registering guest that the entry lives in this browser and that signing in keeps it.
+- **Why:** user, 2026-11-10: "if they clear the browser data, we can assume that guest account will remain unreachable unless we manually connect it through admin tools or server functions, nothing we can do about that" and "agree on the notes you said".
+- **Where implemented:** recorded; the page note is for M6 / M7

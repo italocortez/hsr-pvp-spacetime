@@ -21,5 +21,7 @@ export const MatchParticipantHistory = table({
     primaryKey: ['userId', 'matchHistoryId'],
     indexes: [
         { accessor: 'by_user', algorithm: 'btree', columns: ['userId'] },
+        // S10n (A115(3)): the per-match detail views read one match's participants (membership check + rows)
+        { accessor: 'by_match_history', algorithm: 'btree', columns: ['matchHistoryId'] },
     ],
 }, matchParticipantHistoryColumns);

@@ -305,7 +305,8 @@ records its step (or lineup row) on that game and recomputes it; it does not cha
   the referee's live seat decides neutrality).
 - New per-sender views (subscribed past Waiting, PAGE-MAP D3): `view_my_match_session` (the `MatchSession` row without
   audit columns, PK `lobbyId`), `view_my_lineups` (both teams' live `MatchLineup` rows with the game's
-  `blueConfirmed` / `redConfirmed` / `closedAt`), `view_my_match_lineup_history` (replay, participated matches, A56(1)).
+  `blueConfirmed` / `redConfirmed` / `closedAt`), `view_my_match_lineup_history` (replay, participated matches, A56(1);
+  replaced in S10n by the per-match `view_my_match_history_lineups(matchHistoryId)`, DECISIONS.md A115).
   `view_my_match_steps` and `view_my_match_participants` mask user ids through `hideUserId`; the participant row adds
   `accountRatingSnapshot?` per A40. Catalogue: [../views/architecture.md](../views/architecture.md).
 

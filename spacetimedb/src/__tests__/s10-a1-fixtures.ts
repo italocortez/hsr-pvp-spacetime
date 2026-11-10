@@ -52,7 +52,7 @@ export const systemPreset = (test: Harness) => [...test.db.LobbyPreset.iter()].f
 
 /** update_lobby_settings arguments mirroring the create defaults, with overrides (as s6-series-presets). */
 export const settingsArgs = (lobbyId: number, over: Record<string, unknown> = {}) => {
-    const { joinCode: _j, presetId: _p, ...rest } = DEFAULT_LOBBY_ARGS;
+    const rest = DEFAULT_LOBBY_ARGS; // A114 / A116 (S10n): no joinCode / presetId to strip
     return { lobbyId, ...rest, refereeExclusiveConcede: true, ...over } as any;
 };
 

@@ -1,5 +1,5 @@
 import { table, t } from 'spacetimedb/server';
-import { DraftMode, GameMode, MatchEndReason, TeamSide } from '@module/types/enums';
+import { DraftMode, GameMode, MatchEndReason, MatchType, TeamSide } from '@module/types/enums';
 import { LobbyConfigSnapshot } from '@module/types/structs';
 
 export const matchSessionHistoryColumns = {
@@ -32,6 +32,13 @@ export const matchSessionHistoryColumns = {
     winnerOverride: TeamSide.optional(),
     winnerOverrideById: t.u32().optional(),
     winnerOverrideReason: t.string().optional(),
+
+    // S10n (A115(1)): stored at finalization so the history list neither derives nor guesses them.
+    // matchType: the record's match type (the lobby's, copied at start_draft; a rated tournament's lobby is Ranked, D-67),
+    // the value finalization rates and counts stats by. winnerTeamSide: the record's final winner (concede, forfeit,
+    // staff override and force-finalize included), the one finalization uses for stats and ratings; none = no winner.
+    matchType: MatchType,
+    winnerTeamSide: TeamSide.optional(),
 
     createdById: t.u32(),
     createdDate: t.timestamp(),

@@ -22,8 +22,6 @@ import {
 } from "./types";
 
 export default {
-  joinCode: __t.string(),
-  presetId: __t.u32(),
   teamSize: __t.u8(),
   get draftMode() {
     return DraftMode;

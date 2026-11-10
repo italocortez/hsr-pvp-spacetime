@@ -50,8 +50,8 @@ import { autoSeatSlot } from '@module/helpers/tournament/tournamentLobbySides';
 
 export const create_lobby = spacetimedb.reducer(
     {
-        joinCode: t.string(),
-        presetId: t.u32(),
+        // A114(2) / A116 (S10n): no joinCode (the server generates it) and no presetId (the lobby form applies a
+        // preset and sends the final settings).
         teamSize: t.u8(),
         draftMode: DraftMode,
         banMode: BanMode,
@@ -98,14 +98,6 @@ export const create_lobby = spacetimedb.reducer(
     },
     (ctx, args) => {
         const user = getAuthenticatedUser(ctx);
-
-        // Per D-31b: validate presetId when provided (> 0 sentinel)
-        if (args.presetId > 0) {
-            const preset = ctx.db.LobbyPreset.id.find(args.presetId);
-            if (!preset) {
-                throw new SenderError('Preset not found.');
-            }
-        }
 
         // A99: a private lobby needs a password (join_lobby rejects every caller of a private lobby without one).
         if (!args.isPublic && args.password.length === 0) {

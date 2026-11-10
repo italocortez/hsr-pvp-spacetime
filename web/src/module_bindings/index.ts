@@ -265,15 +265,16 @@ import ViewMyLobbyRow from "./view_my_lobby_table";
 import ViewMyLobbyBansRow from "./view_my_lobby_bans_table";
 import ViewMyLobbyChatRow from "./view_my_lobby_chat_table";
 import ViewMyLobbyMembersRow from "./view_my_lobby_members_table";
-import ViewMyMatchLineupHistoryRow from "./view_my_match_lineup_history_table";
-import ViewMyMatchParticipantHistoryRow from "./view_my_match_participant_history_table";
+import ViewMyMatchHistoryRow from "./view_my_match_history_table";
+import ViewMyMatchHistoryCountRow from "./view_my_match_history_count_table";
+import ViewMyMatchHistoryGamesRow from "./view_my_match_history_games_table";
+import ViewMyMatchHistoryLineupsRow from "./view_my_match_history_lineups_table";
+import ViewMyMatchHistoryParticipantsRow from "./view_my_match_history_participants_table";
+import ViewMyMatchHistoryStepsRow from "./view_my_match_history_steps_table";
 import ViewMyMatchParticipantsRow from "./view_my_match_participants_table";
 import ViewMyMatchResultRow from "./view_my_match_result_table";
-import ViewMyMatchResultGameHistoryRow from "./view_my_match_result_game_history_table";
 import ViewMyMatchResultGamesRow from "./view_my_match_result_games_table";
 import ViewMyMatchSessionRow from "./view_my_match_session_table";
-import ViewMyMatchSessionHistoryRow from "./view_my_match_session_history_table";
-import ViewMyMatchSessionStepHistoryRow from "./view_my_match_session_step_history_table";
 import ViewMyMatchStepsRow from "./view_my_match_steps_table";
 import ViewMyMmrHistoryRow from "./view_my_mmr_history_table";
 import ViewMyMmrRatingsRow from "./view_my_mmr_ratings_table";
@@ -829,20 +830,48 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, ViewMyLobbyMembersRow),
-  viewMyMatchLineupHistory: __table({
-    name: 'view_my_match_lineup_history',
+  viewMyMatchHistory: __table({
+    name: 'view_my_match_history',
     indexes: [
     ],
     constraints: [
     ],
-  }, ViewMyMatchLineupHistoryRow),
-  viewMyMatchParticipantHistory: __table({
-    name: 'view_my_match_participant_history',
+  }, ViewMyMatchHistoryRow),
+  viewMyMatchHistoryCount: __table({
+    name: 'view_my_match_history_count',
     indexes: [
     ],
     constraints: [
     ],
-  }, ViewMyMatchParticipantHistoryRow),
+  }, ViewMyMatchHistoryCountRow),
+  viewMyMatchHistoryGames: __table({
+    name: 'view_my_match_history_games',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, ViewMyMatchHistoryGamesRow),
+  viewMyMatchHistoryLineups: __table({
+    name: 'view_my_match_history_lineups',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, ViewMyMatchHistoryLineupsRow),
+  viewMyMatchHistoryParticipants: __table({
+    name: 'view_my_match_history_participants',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, ViewMyMatchHistoryParticipantsRow),
+  viewMyMatchHistorySteps: __table({
+    name: 'view_my_match_history_steps',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, ViewMyMatchHistoryStepsRow),
   viewMyMatchParticipants: __table({
     name: 'view_my_match_participants',
     indexes: [
@@ -857,13 +886,6 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, ViewMyMatchResultRow),
-  viewMyMatchResultGameHistory: __table({
-    name: 'view_my_match_result_game_history',
-    indexes: [
-    ],
-    constraints: [
-    ],
-  }, ViewMyMatchResultGameHistoryRow),
   viewMyMatchResultGames: __table({
     name: 'view_my_match_result_games',
     indexes: [
@@ -878,20 +900,6 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, ViewMyMatchSessionRow),
-  viewMyMatchSessionHistory: __table({
-    name: 'view_my_match_session_history',
-    indexes: [
-    ],
-    constraints: [
-    ],
-  }, ViewMyMatchSessionHistoryRow),
-  viewMyMatchSessionStepHistory: __table({
-    name: 'view_my_match_session_step_history',
-    indexes: [
-    ],
-    constraints: [
-    ],
-  }, ViewMyMatchSessionStepHistoryRow),
   viewMyMatchSteps: __table({
     name: 'view_my_match_steps',
     indexes: [
@@ -1388,24 +1396,26 @@ type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "ta
     readonly "view_my_lobby_chat": Omit<typeof tablesSchema.schemaType.tables["viewMyLobbyChat"], "accessorName"> & { readonly accessorName: "view_my_lobby_chat" };
     /** @deprecated Use `viewMyLobbyMembers` instead. This alias will be removed in the next major version. */
     readonly "view_my_lobby_members": Omit<typeof tablesSchema.schemaType.tables["viewMyLobbyMembers"], "accessorName"> & { readonly accessorName: "view_my_lobby_members" };
-    /** @deprecated Use `viewMyMatchLineupHistory` instead. This alias will be removed in the next major version. */
-    readonly "view_my_match_lineup_history": Omit<typeof tablesSchema.schemaType.tables["viewMyMatchLineupHistory"], "accessorName"> & { readonly accessorName: "view_my_match_lineup_history" };
-    /** @deprecated Use `viewMyMatchParticipantHistory` instead. This alias will be removed in the next major version. */
-    readonly "view_my_match_participant_history": Omit<typeof tablesSchema.schemaType.tables["viewMyMatchParticipantHistory"], "accessorName"> & { readonly accessorName: "view_my_match_participant_history" };
+    /** @deprecated Use `viewMyMatchHistory` instead. This alias will be removed in the next major version. */
+    readonly "view_my_match_history": Omit<typeof tablesSchema.schemaType.tables["viewMyMatchHistory"], "accessorName"> & { readonly accessorName: "view_my_match_history" };
+    /** @deprecated Use `viewMyMatchHistoryCount` instead. This alias will be removed in the next major version. */
+    readonly "view_my_match_history_count": Omit<typeof tablesSchema.schemaType.tables["viewMyMatchHistoryCount"], "accessorName"> & { readonly accessorName: "view_my_match_history_count" };
+    /** @deprecated Use `viewMyMatchHistoryGames` instead. This alias will be removed in the next major version. */
+    readonly "view_my_match_history_games": Omit<typeof tablesSchema.schemaType.tables["viewMyMatchHistoryGames"], "accessorName"> & { readonly accessorName: "view_my_match_history_games" };
+    /** @deprecated Use `viewMyMatchHistoryLineups` instead. This alias will be removed in the next major version. */
+    readonly "view_my_match_history_lineups": Omit<typeof tablesSchema.schemaType.tables["viewMyMatchHistoryLineups"], "accessorName"> & { readonly accessorName: "view_my_match_history_lineups" };
+    /** @deprecated Use `viewMyMatchHistoryParticipants` instead. This alias will be removed in the next major version. */
+    readonly "view_my_match_history_participants": Omit<typeof tablesSchema.schemaType.tables["viewMyMatchHistoryParticipants"], "accessorName"> & { readonly accessorName: "view_my_match_history_participants" };
+    /** @deprecated Use `viewMyMatchHistorySteps` instead. This alias will be removed in the next major version. */
+    readonly "view_my_match_history_steps": Omit<typeof tablesSchema.schemaType.tables["viewMyMatchHistorySteps"], "accessorName"> & { readonly accessorName: "view_my_match_history_steps" };
     /** @deprecated Use `viewMyMatchParticipants` instead. This alias will be removed in the next major version. */
     readonly "view_my_match_participants": Omit<typeof tablesSchema.schemaType.tables["viewMyMatchParticipants"], "accessorName"> & { readonly accessorName: "view_my_match_participants" };
     /** @deprecated Use `viewMyMatchResult` instead. This alias will be removed in the next major version. */
     readonly "view_my_match_result": Omit<typeof tablesSchema.schemaType.tables["viewMyMatchResult"], "accessorName"> & { readonly accessorName: "view_my_match_result" };
-    /** @deprecated Use `viewMyMatchResultGameHistory` instead. This alias will be removed in the next major version. */
-    readonly "view_my_match_result_game_history": Omit<typeof tablesSchema.schemaType.tables["viewMyMatchResultGameHistory"], "accessorName"> & { readonly accessorName: "view_my_match_result_game_history" };
     /** @deprecated Use `viewMyMatchResultGames` instead. This alias will be removed in the next major version. */
     readonly "view_my_match_result_games": Omit<typeof tablesSchema.schemaType.tables["viewMyMatchResultGames"], "accessorName"> & { readonly accessorName: "view_my_match_result_games" };
     /** @deprecated Use `viewMyMatchSession` instead. This alias will be removed in the next major version. */
     readonly "view_my_match_session": Omit<typeof tablesSchema.schemaType.tables["viewMyMatchSession"], "accessorName"> & { readonly accessorName: "view_my_match_session" };
-    /** @deprecated Use `viewMyMatchSessionHistory` instead. This alias will be removed in the next major version. */
-    readonly "view_my_match_session_history": Omit<typeof tablesSchema.schemaType.tables["viewMyMatchSessionHistory"], "accessorName"> & { readonly accessorName: "view_my_match_session_history" };
-    /** @deprecated Use `viewMyMatchSessionStepHistory` instead. This alias will be removed in the next major version. */
-    readonly "view_my_match_session_step_history": Omit<typeof tablesSchema.schemaType.tables["viewMyMatchSessionStepHistory"], "accessorName"> & { readonly accessorName: "view_my_match_session_step_history" };
     /** @deprecated Use `viewMyMatchSteps` instead. This alias will be removed in the next major version. */
     readonly "view_my_match_steps": Omit<typeof tablesSchema.schemaType.tables["viewMyMatchSteps"], "accessorName"> & { readonly accessorName: "view_my_match_steps" };
     /** @deprecated Use `viewMyMmrHistory` instead. This alias will be removed in the next major version. */
@@ -1473,7 +1483,7 @@ const REMOTE_MODULE = {
     cliVersion: "2.14.1" as const,
   },
   tables: tablesSchema.schemaType.tables as __SchemaWithTableAccessorAliases["tables"],
-  viewsWithArgs: ["view_admin_tournament", "view_admin_tournament_enrolled", "view_admin_tournament_lobbies", "view_admin_tournament_match_results", "view_admin_tournament_matches", "view_admin_tournament_team_members", "view_admin_tournament_teams", "view_cost_set_missing", "view_tournament_participants", "view_tournament_staff", "view_tournament_team_members", "view_tournament_teams", "view_user_achievements", "view_user_by_username"],
+  viewsWithArgs: ["view_admin_tournament", "view_admin_tournament_enrolled", "view_admin_tournament_lobbies", "view_admin_tournament_match_results", "view_admin_tournament_matches", "view_admin_tournament_team_members", "view_admin_tournament_teams", "view_cost_set_missing", "view_my_match_history", "view_my_match_history_count", "view_my_match_history_games", "view_my_match_history_lineups", "view_my_match_history_participants", "view_my_match_history_steps", "view_my_mmr_history", "view_tournament_participants", "view_tournament_staff", "view_tournament_team_members", "view_tournament_teams", "view_user_achievements", "view_user_by_username"],
   reducers: reducersSchema.reducersType.reducers,
   ...proceduresSchema,
 } satisfies __RemoteModule<
@@ -1537,15 +1547,16 @@ const tableAccessorAliases = {
   "view_my_lobby_bans": "viewMyLobbyBans",
   "view_my_lobby_chat": "viewMyLobbyChat",
   "view_my_lobby_members": "viewMyLobbyMembers",
-  "view_my_match_lineup_history": "viewMyMatchLineupHistory",
-  "view_my_match_participant_history": "viewMyMatchParticipantHistory",
+  "view_my_match_history": "viewMyMatchHistory",
+  "view_my_match_history_count": "viewMyMatchHistoryCount",
+  "view_my_match_history_games": "viewMyMatchHistoryGames",
+  "view_my_match_history_lineups": "viewMyMatchHistoryLineups",
+  "view_my_match_history_participants": "viewMyMatchHistoryParticipants",
+  "view_my_match_history_steps": "viewMyMatchHistorySteps",
   "view_my_match_participants": "viewMyMatchParticipants",
   "view_my_match_result": "viewMyMatchResult",
-  "view_my_match_result_game_history": "viewMyMatchResultGameHistory",
   "view_my_match_result_games": "viewMyMatchResultGames",
   "view_my_match_session": "viewMyMatchSession",
-  "view_my_match_session_history": "viewMyMatchSessionHistory",
-  "view_my_match_session_step_history": "viewMyMatchSessionStepHistory",
   "view_my_match_steps": "viewMyMatchSteps",
   "view_my_mmr_history": "viewMyMmrHistory",
   "view_my_mmr_ratings": "viewMyMmrRatings",
@@ -1703,24 +1714,26 @@ export type DbView = __DbViewBase & {
   readonly "view_my_lobby_chat": __DbViewBase["viewMyLobbyChat"];
   /** @deprecated Use `viewMyLobbyMembers` instead. This alias will be removed in the next major version. */
   readonly "view_my_lobby_members": __DbViewBase["viewMyLobbyMembers"];
-  /** @deprecated Use `viewMyMatchLineupHistory` instead. This alias will be removed in the next major version. */
-  readonly "view_my_match_lineup_history": __DbViewBase["viewMyMatchLineupHistory"];
-  /** @deprecated Use `viewMyMatchParticipantHistory` instead. This alias will be removed in the next major version. */
-  readonly "view_my_match_participant_history": __DbViewBase["viewMyMatchParticipantHistory"];
+  /** @deprecated Use `viewMyMatchHistory` instead. This alias will be removed in the next major version. */
+  readonly "view_my_match_history": __DbViewBase["viewMyMatchHistory"];
+  /** @deprecated Use `viewMyMatchHistoryCount` instead. This alias will be removed in the next major version. */
+  readonly "view_my_match_history_count": __DbViewBase["viewMyMatchHistoryCount"];
+  /** @deprecated Use `viewMyMatchHistoryGames` instead. This alias will be removed in the next major version. */
+  readonly "view_my_match_history_games": __DbViewBase["viewMyMatchHistoryGames"];
+  /** @deprecated Use `viewMyMatchHistoryLineups` instead. This alias will be removed in the next major version. */
+  readonly "view_my_match_history_lineups": __DbViewBase["viewMyMatchHistoryLineups"];
+  /** @deprecated Use `viewMyMatchHistoryParticipants` instead. This alias will be removed in the next major version. */
+  readonly "view_my_match_history_participants": __DbViewBase["viewMyMatchHistoryParticipants"];
+  /** @deprecated Use `viewMyMatchHistorySteps` instead. This alias will be removed in the next major version. */
+  readonly "view_my_match_history_steps": __DbViewBase["viewMyMatchHistorySteps"];
   /** @deprecated Use `viewMyMatchParticipants` instead. This alias will be removed in the next major version. */
   readonly "view_my_match_participants": __DbViewBase["viewMyMatchParticipants"];
   /** @deprecated Use `viewMyMatchResult` instead. This alias will be removed in the next major version. */
   readonly "view_my_match_result": __DbViewBase["viewMyMatchResult"];
-  /** @deprecated Use `viewMyMatchResultGameHistory` instead. This alias will be removed in the next major version. */
-  readonly "view_my_match_result_game_history": __DbViewBase["viewMyMatchResultGameHistory"];
   /** @deprecated Use `viewMyMatchResultGames` instead. This alias will be removed in the next major version. */
   readonly "view_my_match_result_games": __DbViewBase["viewMyMatchResultGames"];
   /** @deprecated Use `viewMyMatchSession` instead. This alias will be removed in the next major version. */
   readonly "view_my_match_session": __DbViewBase["viewMyMatchSession"];
-  /** @deprecated Use `viewMyMatchSessionHistory` instead. This alias will be removed in the next major version. */
-  readonly "view_my_match_session_history": __DbViewBase["viewMyMatchSessionHistory"];
-  /** @deprecated Use `viewMyMatchSessionStepHistory` instead. This alias will be removed in the next major version. */
-  readonly "view_my_match_session_step_history": __DbViewBase["viewMyMatchSessionStepHistory"];
   /** @deprecated Use `viewMyMatchSteps` instead. This alias will be removed in the next major version. */
   readonly "view_my_match_steps": __DbViewBase["viewMyMatchSteps"];
   /** @deprecated Use `viewMyMmrHistory` instead. This alias will be removed in the next major version. */
@@ -1891,24 +1904,26 @@ export type Tables = __TablesBase & {
   readonly "view_my_lobby_chat": __TablesBase["viewMyLobbyChat"];
   /** @deprecated Use `viewMyLobbyMembers` instead. This alias will be removed in the next major version. */
   readonly "view_my_lobby_members": __TablesBase["viewMyLobbyMembers"];
-  /** @deprecated Use `viewMyMatchLineupHistory` instead. This alias will be removed in the next major version. */
-  readonly "view_my_match_lineup_history": __TablesBase["viewMyMatchLineupHistory"];
-  /** @deprecated Use `viewMyMatchParticipantHistory` instead. This alias will be removed in the next major version. */
-  readonly "view_my_match_participant_history": __TablesBase["viewMyMatchParticipantHistory"];
+  /** @deprecated Use `viewMyMatchHistory` instead. This alias will be removed in the next major version. */
+  readonly "view_my_match_history": __TablesBase["viewMyMatchHistory"];
+  /** @deprecated Use `viewMyMatchHistoryCount` instead. This alias will be removed in the next major version. */
+  readonly "view_my_match_history_count": __TablesBase["viewMyMatchHistoryCount"];
+  /** @deprecated Use `viewMyMatchHistoryGames` instead. This alias will be removed in the next major version. */
+  readonly "view_my_match_history_games": __TablesBase["viewMyMatchHistoryGames"];
+  /** @deprecated Use `viewMyMatchHistoryLineups` instead. This alias will be removed in the next major version. */
+  readonly "view_my_match_history_lineups": __TablesBase["viewMyMatchHistoryLineups"];
+  /** @deprecated Use `viewMyMatchHistoryParticipants` instead. This alias will be removed in the next major version. */
+  readonly "view_my_match_history_participants": __TablesBase["viewMyMatchHistoryParticipants"];
+  /** @deprecated Use `viewMyMatchHistorySteps` instead. This alias will be removed in the next major version. */
+  readonly "view_my_match_history_steps": __TablesBase["viewMyMatchHistorySteps"];
   /** @deprecated Use `viewMyMatchParticipants` instead. This alias will be removed in the next major version. */
   readonly "view_my_match_participants": __TablesBase["viewMyMatchParticipants"];
   /** @deprecated Use `viewMyMatchResult` instead. This alias will be removed in the next major version. */
   readonly "view_my_match_result": __TablesBase["viewMyMatchResult"];
-  /** @deprecated Use `viewMyMatchResultGameHistory` instead. This alias will be removed in the next major version. */
-  readonly "view_my_match_result_game_history": __TablesBase["viewMyMatchResultGameHistory"];
   /** @deprecated Use `viewMyMatchResultGames` instead. This alias will be removed in the next major version. */
   readonly "view_my_match_result_games": __TablesBase["viewMyMatchResultGames"];
   /** @deprecated Use `viewMyMatchSession` instead. This alias will be removed in the next major version. */
   readonly "view_my_match_session": __TablesBase["viewMyMatchSession"];
-  /** @deprecated Use `viewMyMatchSessionHistory` instead. This alias will be removed in the next major version. */
-  readonly "view_my_match_session_history": __TablesBase["viewMyMatchSessionHistory"];
-  /** @deprecated Use `viewMyMatchSessionStepHistory` instead. This alias will be removed in the next major version. */
-  readonly "view_my_match_session_step_history": __TablesBase["viewMyMatchSessionStepHistory"];
   /** @deprecated Use `viewMyMatchSteps` instead. This alias will be removed in the next major version. */
   readonly "view_my_match_steps": __TablesBase["viewMyMatchSteps"];
   /** @deprecated Use `viewMyMmrHistory` instead. This alias will be removed in the next major version. */

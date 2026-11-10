@@ -92,7 +92,7 @@ describe('Backlog #2: cost-set selectability and coverage', () => {
         seedDefaultCostCoverage(test);
         const s = setupLobby(test, { noStart: true });
         const base = (() => {
-            const { joinCode: _j, presetId: _p, ...rest } = DEFAULT_LOBBY_ARGS;
+            const rest = DEFAULT_LOBBY_ARGS; // A114 / A116 (S10n): no joinCode / presetId to strip
             return { lobbyId: s.lobbyId, ...rest, refereeExclusiveConcede: true };
         })();
         expectReject(test, s.host, (ctx) => M.update_lobby_settings(ctx, { ...base, costSetId: empty } as any), NO_COSTS);

@@ -1353,6 +1353,60 @@ export const MatchForMeRow = __t.object("MatchForMeRow", {
 });
 export type MatchForMeRow = __Infer<typeof MatchForMeRow>;
 
+export const MatchHistoryCountRow = __t.object("MatchHistoryCountRow", {
+  total: __t.u32(),
+});
+export type MatchHistoryCountRow = __Infer<typeof MatchHistoryCountRow>;
+
+export const MatchHistoryListRow = __t.object("MatchHistoryListRow", {
+  matchHistoryId: __t.u32(),
+  lobbyCode: __t.string(),
+  playedAt: __t.timestamp(),
+  get draftMode() {
+    return DraftMode;
+  },
+  get gameMode() {
+    return GameMode;
+  },
+  get matchType() {
+    return MatchType;
+  },
+  teamBlueAlias: __t.string(),
+  teamRedAlias: __t.string(),
+  get snapshotConfig() {
+    return LobbyConfigSnapshot;
+  },
+  get outcome() {
+    return MatchEndReason;
+  },
+  teamBlueSpent: __t.option(__t.f32()),
+  teamRedSpent: __t.option(__t.f32()),
+  handicapApplied: __t.option(__t.i32()),
+  tournamentId: __t.option(__t.u32()),
+  bracketMatchId: __t.option(__t.u32()),
+  voidedAt: __t.option(__t.timestamp()),
+  get winnerOverride() {
+    return __t.option(TeamSide);
+  },
+  winnerOverrideById: __t.option(__t.u32()),
+  winnerOverrideReason: __t.option(__t.string()),
+  get winnerTeamSide() {
+    return __t.option(TeamSide);
+  },
+  get teamSide() {
+    return TeamSide;
+  },
+  displayName: __t.string(),
+  isReferee: __t.bool(),
+  isCoach: __t.bool(),
+  isCaptain: __t.bool(),
+  won: __t.option(__t.bool()),
+  previousRating: __t.option(__t.u32()),
+  newRating: __t.option(__t.u32()),
+  ratingDelta: __t.option(__t.i32()),
+});
+export type MatchHistoryListRow = __Infer<typeof MatchHistoryListRow>;
+
 export const MatchLineup = __t.object("MatchLineup", {
   id: __t.u32(),
   lobbyId: __t.u32(),
@@ -1705,6 +1759,12 @@ export const MatchSessionHistory = __t.object("MatchSessionHistory", {
   },
   winnerOverrideById: __t.option(__t.u32()),
   winnerOverrideReason: __t.option(__t.string()),
+  get matchType() {
+    return MatchType;
+  },
+  get winnerTeamSide() {
+    return __t.option(TeamSide);
+  },
   createdById: __t.u32(),
   createdDate: __t.timestamp(),
   lastModifiedById: __t.u32(),
@@ -2952,11 +3012,40 @@ export type ViewMyLobbyChat = __Infer<typeof ViewMyLobbyChat>;
 export const ViewMyLobbyMembers = __t.object("ViewMyLobbyMembers", {});
 export type ViewMyLobbyMembers = __Infer<typeof ViewMyLobbyMembers>;
 
-export const ViewMyMatchLineupHistory = __t.object("ViewMyMatchLineupHistory", {});
-export type ViewMyMatchLineupHistory = __Infer<typeof ViewMyMatchLineupHistory>;
+export const ViewMyMatchHistory = __t.object("ViewMyMatchHistory", {
+  page: __t.u32(),
+  gameMode: __t.string(),
+  draftMode: __t.string(),
+  matchType: __t.string(),
+});
+export type ViewMyMatchHistory = __Infer<typeof ViewMyMatchHistory>;
 
-export const ViewMyMatchParticipantHistory = __t.object("ViewMyMatchParticipantHistory", {});
-export type ViewMyMatchParticipantHistory = __Infer<typeof ViewMyMatchParticipantHistory>;
+export const ViewMyMatchHistoryCount = __t.object("ViewMyMatchHistoryCount", {
+  gameMode: __t.string(),
+  draftMode: __t.string(),
+  matchType: __t.string(),
+});
+export type ViewMyMatchHistoryCount = __Infer<typeof ViewMyMatchHistoryCount>;
+
+export const ViewMyMatchHistoryGames = __t.object("ViewMyMatchHistoryGames", {
+  matchHistoryId: __t.u32(),
+});
+export type ViewMyMatchHistoryGames = __Infer<typeof ViewMyMatchHistoryGames>;
+
+export const ViewMyMatchHistoryLineups = __t.object("ViewMyMatchHistoryLineups", {
+  matchHistoryId: __t.u32(),
+});
+export type ViewMyMatchHistoryLineups = __Infer<typeof ViewMyMatchHistoryLineups>;
+
+export const ViewMyMatchHistoryParticipants = __t.object("ViewMyMatchHistoryParticipants", {
+  matchHistoryId: __t.u32(),
+});
+export type ViewMyMatchHistoryParticipants = __Infer<typeof ViewMyMatchHistoryParticipants>;
+
+export const ViewMyMatchHistorySteps = __t.object("ViewMyMatchHistorySteps", {
+  matchHistoryId: __t.u32(),
+});
+export type ViewMyMatchHistorySteps = __Infer<typeof ViewMyMatchHistorySteps>;
 
 export const ViewMyMatchParticipants = __t.object("ViewMyMatchParticipants", {});
 export type ViewMyMatchParticipants = __Infer<typeof ViewMyMatchParticipants>;
@@ -2964,25 +3053,19 @@ export type ViewMyMatchParticipants = __Infer<typeof ViewMyMatchParticipants>;
 export const ViewMyMatchResult = __t.object("ViewMyMatchResult", {});
 export type ViewMyMatchResult = __Infer<typeof ViewMyMatchResult>;
 
-export const ViewMyMatchResultGameHistory = __t.object("ViewMyMatchResultGameHistory", {});
-export type ViewMyMatchResultGameHistory = __Infer<typeof ViewMyMatchResultGameHistory>;
-
 export const ViewMyMatchResultGames = __t.object("ViewMyMatchResultGames", {});
 export type ViewMyMatchResultGames = __Infer<typeof ViewMyMatchResultGames>;
 
 export const ViewMyMatchSession = __t.object("ViewMyMatchSession", {});
 export type ViewMyMatchSession = __Infer<typeof ViewMyMatchSession>;
 
-export const ViewMyMatchSessionHistory = __t.object("ViewMyMatchSessionHistory", {});
-export type ViewMyMatchSessionHistory = __Infer<typeof ViewMyMatchSessionHistory>;
-
-export const ViewMyMatchSessionStepHistory = __t.object("ViewMyMatchSessionStepHistory", {});
-export type ViewMyMatchSessionStepHistory = __Infer<typeof ViewMyMatchSessionStepHistory>;
-
 export const ViewMyMatchSteps = __t.object("ViewMyMatchSteps", {});
 export type ViewMyMatchSteps = __Infer<typeof ViewMyMatchSteps>;
 
-export const ViewMyMmrHistory = __t.object("ViewMyMmrHistory", {});
+export const ViewMyMmrHistory = __t.object("ViewMyMmrHistory", {
+  page: __t.u32(),
+  gameMode: __t.string(),
+});
 export type ViewMyMmrHistory = __Infer<typeof ViewMyMmrHistory>;
 
 export const ViewMyMmrRatings = __t.object("ViewMyMmrRatings", {});

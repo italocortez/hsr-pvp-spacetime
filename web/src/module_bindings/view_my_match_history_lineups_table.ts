@@ -15,7 +15,7 @@ import {
 
 
 export default __t.row({
-  id: __t.u32().primaryKey(),
+  id: __t.u32(),
   matchHistoryId: __t.u32().name("match_history_id"),
   get teamSide() {
     return TeamSide.name("team_side");

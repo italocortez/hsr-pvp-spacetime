@@ -155,8 +155,7 @@ export function linkDiscord(test: Harness, a: Actor, providerId: string, name: s
 }
 
 export const DEFAULT_LOBBY_ARGS = {
-    joinCode: '',
-    presetId: 0,
+    // T-S10n (A114 / A116): joinCode and presetId are no longer create_lobby arguments.
     teamSize: 2,
     draftMode: { tag: 'Classic' },
     banMode: { tag: 'None' },

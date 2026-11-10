@@ -75,7 +75,7 @@ const members = (test: Harness, lobbyId: number) => [...test.db.LobbyMember.lobb
 
 /** update_lobby_settings arguments mirroring the create defaults, with overrides (as s6-series-presets). */
 const settingsArgs = (lobbyId: number, over: Record<string, unknown> = {}) => {
-    const { joinCode: _j, presetId: _p, ...rest } = DEFAULT_LOBBY_ARGS;
+    const rest = DEFAULT_LOBBY_ARGS; // A114 / A116 (S10n): no joinCode / presetId to strip
     return { lobbyId, ...rest, refereeExclusiveConcede: true, ...over } as any;
 };
 
@@ -447,8 +447,8 @@ describe('A68(4): an away player may take another lobby only with abandonCurrent
         const casual = setupLobby(f.test, { actors: { b1: f.org } });
         leave(f.test, f.org, casual.lobbyId);
         const code = lobbyRow(f.test, casual.lobbyId).joinCode;
-        expectReject(f.test, f.org, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: m.id, joinCode: '' }), PROMPT(code));
-        tx(f.test, f.org, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: m.id, joinCode: '', abandonCurrentMatch: true }));
+        expectReject(f.test, f.org, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: m.id }), PROMPT(code));
+        tx(f.test, f.org, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: m.id, abandonCurrentMatch: true }));
         expect([...f.test.db.Lobby.bracket_match_id.filter(m.id)]).toHaveLength(1);
         expect(member(f.test, casual.lobbyId, f.org.userId).abandonedAt).toBeDefined();
     });

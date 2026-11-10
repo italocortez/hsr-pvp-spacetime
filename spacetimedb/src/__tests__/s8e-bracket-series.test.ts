@@ -45,7 +45,7 @@ const derived = (test: Harness, matchId: number) => {
     const g = tx(test, 'internal', (ctx) => matchGames(ctx, r));
     return [g.team1, g.team2];
 };
-const createLobby = (f: Field, bracketMatchId: number) => (ctx: any) => M.create_tournament_lobby(ctx, { bracketMatchId, joinCode: '' });
+const createLobby = (f: Field, bracketMatchId: number) => (ctx: any) => M.create_tournament_lobby(ctx, { bracketMatchId });
 const rollback = (f: Field, bracketMatchId: number) =>
     tx(f.test, f.org, (ctx) => M.rollback_bracket_match(ctx, { bracketMatchId, reason: 'replay' }));
 const override = (f: Field, matchResultId: number, newStatusTag: string, winnerTeamSideTag = '') =>

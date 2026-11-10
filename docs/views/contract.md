@@ -588,7 +588,7 @@ _Superseded in Phase S9a execution (DECISIONS.md A37): the public history views 
 
 ### S9a-V9 Public history views are gone (A37)
 **When** a client subscribes `view_match_history`, `view_match_participant_history` or `view_match_step_history`
-**Then** the views do not exist; a participant reads their matches through the `view_my_*_history` set, which now includes `view_my_match_lineup_history` (A56(1)).
+**Then** the views do not exist; a participant reads their matches through the `view_my_*_history` set, which now includes `view_my_match_lineup_history` (A56(1)). _Superseded in Phase S10n execution (DECISIONS.md A115)._
 
 ### S9a-V10 Tournament page arg views (A37, A26a(2), §A.4 P3)
 **Given** an anonymous tournament (`isAnonymousDefault`) with one Disqualified participant
@@ -692,6 +692,7 @@ _Superseded in Phase S9a execution (DECISIONS.md A37): the public history views 
 | Scenarios S9b-V1..V9: profile row, exact username lookup, a user's achievements, own stats and MMR without audit ids, relationships with the other player's card and MMR, roster visibility per A40 with masked ids, public rosters through the index, the five calendar views, the staff-only admin views | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 | Scenarios S9c-V1..V2: a seated referee reads opponents' rosters per `rosterVisibility`, only the spectator referee sees every roster (D-14 narrowed); `view_my_lobby_bans` / `view_admin_lobby_bans` carry `bannedJoinSeq` | Phase S9c execution (DECISIONS.md A75, A74) | 2026-11-08 |
 | Scenario S9c-V3: a captain reads the requester's display name on a request to their team, in every tournament | Phase S9c execution (DECISIONS.md A73) | 2026-11-08 |
+| Match history is paginated: `view_my_match_history(page, gameMode, draftMode, matchType)` returns the caller's matches 10 per page, newest first by the time played (the id only breaks ties), each row with the match fields, the stored match type and winner, the caller's side and `won`, and the caller's own rating change; a filter of '' means any; a page past the end is empty. `view_my_match_history_count(gameMode, draftMode, matchType)` returns one row with the total. `view_my_match_history_participants` / `_steps` / `_games` / `_lineups(matchHistoryId)` return a match's rows only to a caller who has a participant row in it (a coach, a spectator and an outsider get nothing); the participants view lists every player of the match with real identities, as the step history already did (A37). `view_my_mmr_history(page, gameMode)` is 10 per page. The five unbounded views (`view_my_match_participant_history`, `_session_history`, `_session_step_history`, `_result_game_history`, `_lineup_history`) are removed. `MatchSessionHistory` stores `matchType` and `winnerTeamSide` at finalization, so a concede, a forfeit or a staff decision shows the right winner | Phase S10n execution (DECISIONS.md A115) | 2026-11-10 |
 
 ---
 

@@ -15,7 +15,7 @@ import {
 
 
 export default __t.row({
-  id: __t.u32().primaryKey(),
+  id: __t.u32(),
   userId: __t.u32().name("user_id"),
   get gameMode() {
     return GameMode.name("game_mode");

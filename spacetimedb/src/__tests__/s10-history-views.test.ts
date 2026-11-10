@@ -2,9 +2,13 @@
 // overview layer 1 "per-user data scoping" and S9a-V9 "a participant reads their matches through the view_my_*_history
 // set"). The over-the-wire half (two connected clients each receiving only their rows) stays with the S11
 // outsider-isolation residue.
+// T-S10n (A115): re-aligned to the paged history set. view_my_match_session_history / view_my_match_participant_history
+// → view_my_match_history (the list row carries the session fields and the caller's own participant fields);
+// view_my_match_result_game_history → view_my_match_history_games(matchHistoryId); view_my_match_history_participants
+// (matchHistoryId) is probed too; view_my_mmr_history takes (page, gameMode). Same assertions: own rows only.
 // Two finished matches in one harness: match A is Ranked and finalized with admin_force_finalize by the internal owner
 // (the SYSTEM Admin) after seedElo, which writes MmrHistory; match B is Casual and finalizes inline at the close of its
-// game (no MmrHistory). Views are called as `(M as any).view_x(test.viewContext(auth), {})` (s9a method). Nothing
+// game (no MmrHistory). Views are called as `(M as any).view_x(test.viewContext(auth), args)` (s9a method). Nothing
 // reaches maincloud.
 import { describe, expect, it } from 'vitest';
 import { ConnectionId } from 'spacetimedb';
@@ -14,7 +18,8 @@ import { seedElo } from './s8d-fixtures';
 
 type Reader = Actor | TestAuth;
 const authOf = (r: Reader): TestAuth => ('auth' in r ? r.auth : r);
-const view = <T = any>(test: Harness, name: string, who: Reader): T[] => (M as any)[name](test.viewContext(authOf(who)), {}) as T[];
+const view = <T = any>(test: Harness, name: string, who: Reader, args: Record<string, unknown>): T[] =>
+    (M as any)[name](test.viewContext(authOf(who)), args) as T[];
 
 let ghostSeq = 9_000n;
 /** An identity that never logged in (no UserIdentity mapping). */
@@ -45,25 +50,28 @@ const makeRanked = (test: Harness) => (l: Lobby) => {
     }
 };
 
+const ANY = { gameMode: '', draftMode: '', matchType: '' };
+
+/** Each probe: the view and its arguments; the per-match views get the id of the match the probe is about. */
 const HISTORY_VIEWS = [
-    'view_my_mmr_history',
-    'view_my_match_participant_history',
-    'view_my_match_session_history',
-    'view_my_match_result_game_history',
+    ['view_my_mmr_history', () => ({ page: 0, gameMode: '' })],
+    ['view_my_match_history', () => ({ page: 0, ...ANY })],
+    ['view_my_match_history_participants', (matchHistoryId: number) => ({ matchHistoryId })],
+    ['view_my_match_history_games', (matchHistoryId: number) => ({ matchHistoryId })],
 ] as const;
-type HistoryView = (typeof HISTORY_VIEWS)[number];
+type HistoryView = (typeof HISTORY_VIEWS)[number][0];
+const NAMES = HISTORY_VIEWS.map(([n]) => n);
+const argsOf = (name: HistoryView, matchHistoryId: number) => HISTORY_VIEWS.find(([n]) => n === name)![1](matchHistoryId);
 
 /** The match-history ids a user played in (the private MatchParticipantHistory, read module-side). */
 const playedIn = (test: Harness, who: Actor) => new Set([...test.db.MatchParticipantHistory.by_user.filter(who.userId)].map((p) => p.matchHistoryId));
 
-/** I1: every row belongs to the reader: its userId, or for the user-less tables its match id among the reader's matches. */
+/** I1: every row belongs to the reader: its userId (rating rows), or its match id among the reader's matches. */
 function expectOwnRows(test: Harness, name: HistoryView, who: Actor, rows: any[]) {
     const mine = playedIn(test, who);
     for (const r of rows) {
-        if (name === 'view_my_mmr_history' || name === 'view_my_match_participant_history') expect(r.userId).toBe(who.userId);
-        if (name === 'view_my_match_session_history') expect(mine.has(r.id)).toBe(true);
-        if (name === 'view_my_match_result_game_history') expect(mine.has(r.matchHistoryId)).toBe(true);
-        if (name === 'view_my_mmr_history') expect(mine.has(r.matchHistoryId)).toBe(true);
+        if (name === 'view_my_mmr_history') expect(r.userId).toBe(who.userId);
+        expect(mine.has(r.matchHistoryId)).toBe(true);
     }
 }
 
@@ -83,42 +91,44 @@ function world() {
     return { test, ranked, casual, outsider: guest(test, 'outsider') };
 }
 
-describe('A37 history views: per-sender scoping of view_my_*_history', () => {
-    it.each(HISTORY_VIEWS)('%s: a Ranked participant reads only their own rows; an outsider, a player of the other match and an unmapped identity read none of them', (name) => {
+describe('A37 history views: per-sender scoping of the view_my_*_history set (T-S10n: paged list, per-match detail, A115)', () => {
+    it.each(NAMES)('%s: a Ranked participant reads only their own rows; an outsider, a player of the other match and an unmapped identity read none of them', (name) => {
         const { test, ranked, casual, outsider } = world();
         const rankedIds = playedIn(test, ranked.a.Ab1);
         expect(rankedIds.size).toBe(1);
+        const aId = [...rankedIds][0];
+        const args = argsOf(name, aId);
 
         for (const who of [ranked.a.Ab1, ranked.a.Ar2]) {
-            const rows = view(test, name, who);
+            const rows = view(test, name, who, args);
             expect(rows.length).toBeGreaterThan(0);
             expectOwnRows(test, name, who, rows);
         }
-        if (name === 'view_my_match_participant_history' || name === 'view_my_mmr_history') {
-            expect(view(test, name, ranked.a.Ab1)).toHaveLength(1); // one match, one row of their own (not the team's four)
+        if (name === 'view_my_match_history' || name === 'view_my_mmr_history') {
+            expect(view(test, name, ranked.a.Ab1, args)).toHaveLength(1); // one match, one row of their own (not the team's four)
         }
 
-        expect(view(test, name, outsider)).toEqual([]);
-        expect(view(test, name, ghost())).toEqual([]);
+        expect(view(test, name, outsider, args)).toEqual([]);
+        expect(view(test, name, ghost(), args)).toEqual([]);
         // The other match's player sees nothing of match A (their own rows only).
-        const other = view(test, name, casual.a.Bb1);
+        const other = view(test, name, casual.a.Bb1, args);
         expectOwnRows(test, name, casual.a.Bb1, other);
-        const aId = [...rankedIds][0];
         for (const r of other) {
-            expect([r.id, r.matchHistoryId]).not.toContain(aId);
+            expect(r.matchHistoryId).not.toBe(aId);
         }
     });
 
-    it.each(HISTORY_VIEWS)('%s: a Casual participant reads their match rows (no MmrHistory: Casual skips MMR); outsider and unmapped identity read []', (name) => {
+    it.each(NAMES)('%s: a Casual participant reads their match rows (no MmrHistory: Casual skips MMR); outsider and unmapped identity read []', (name) => {
         const { test, casual, outsider } = world();
-        const rows = view(test, name, casual.a.Br1);
+        const args = argsOf(name, [...playedIn(test, casual.a.Br1)][0]);
+        const rows = view(test, name, casual.a.Br1, args);
         if (name === 'view_my_mmr_history') {
             expect(rows).toEqual([]);
         } else {
             expect(rows.length).toBeGreaterThan(0);
             expectOwnRows(test, name, casual.a.Br1, rows);
         }
-        expect(view(test, name, outsider)).toEqual([]);
-        expect(view(test, name, ghost())).toEqual([]);
+        expect(view(test, name, outsider, args)).toEqual([]);
+        expect(view(test, name, ghost(), args)).toEqual([]);
     });
 });

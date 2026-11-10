@@ -95,7 +95,7 @@ const TOURNAMENT_ARGS = {
 
 /** update_lobby_settings arguments mirroring the create defaults, with overrides. */
 const settingsArgs = (lobbyId: number, over: Record<string, unknown> = {}) => {
-    const { joinCode: _j, presetId: _p, ...rest } = DEFAULT_LOBBY_ARGS;
+    const rest = DEFAULT_LOBBY_ARGS; // A114 / A116 (S10n): no joinCode / presetId to strip
     return { lobbyId, ...rest, refereeExclusiveConcede: true, ...over } as any;
 };
 

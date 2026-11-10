@@ -103,7 +103,7 @@ describe('create_tournament_lobby: callers (A34)', () => {
         expect(me.isReferee).toBe(true);
         expect(lobbyRow(f.test, lobbyId).hostUserId).toBe(f.org.userId);
         // D-22: the organizer already sits in a Waiting lobby.
-        expectReject(f.test, f.org, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: m2.id, joinCode: '' }), /already in a lobby/);
+        expectReject(f.test, f.org, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: m2.id }), /already in a lobby/);
 
         const asst = verified(f.test, 'asst');
         assignAssistant(f.test, f.org, f.id, asst, { bracket: true });
@@ -117,20 +117,20 @@ describe('create_tournament_lobby: callers (A34)', () => {
         const m = byKey(f.test, f.id, 'W-R1-M1');
         const final = byKey(f.test, f.id, 'W-R2-M1');
         const AUTH = 'You are not authorized to create a lobby for this bracket match.';
-        expectReject(f.test, verified(f.test, 'out'), (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: m.id, joinCode: '' }), AUTH);
+        expectReject(f.test, verified(f.test, 'out'), (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: m.id }), AUTH);
         const res = verified(f.test, 'res');
         assignAssistant(f.test, f.org, f.id, res, { results: true });
-        expectReject(f.test, res, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: m.id, joinCode: '' }), AUTH);
+        expectReject(f.test, res, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: m.id }), AUTH);
         // A team of the other round-1 match is not a participant of this one.
         const other = f.ts.find((t) => t.teamId !== m.team1Id && t.teamId !== m.team2Id)!;
-        expectReject(f.test, other.captain, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: m.id, joinCode: '' }), AUTH);
+        expectReject(f.test, other.captain, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: m.id }), AUTH);
         expect(final.state.tag).not.toBe('Ready');
-        expectReject(f.test, f.org, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: final.id, joinCode: '' }), /a lobby needs a Ready match/);
-        expectReject(f.test, f.org, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: 99999, joinCode: '' }), 'Bracket match not found.');
+        expectReject(f.test, f.org, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: final.id }), /a lobby needs a Ready match/);
+        expectReject(f.test, f.org, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: 99999 }), 'Bracket match not found.');
 
         const { blue, red } = sidesOf(f, m.id);
         createTournamentLobby(f.test, blue.captain, m.id);
-        expectReject(f.test, red.captain, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: m.id, joinCode: '' }),
+        expectReject(f.test, red.captain, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: m.id }),
             'A lobby for this bracket match is still in play.'); // T-S8e: D-45 as reworded by A67(5)
         expect(lobbiesOf(f.test, m.id)).toHaveLength(1);
 
@@ -142,7 +142,7 @@ describe('create_tournament_lobby: callers (A34)', () => {
         advanceStage(test, org, id, 'Seeding');
         seedAndGenerate(test, org, id);
         const seedingMatch = [...test.db.BracketMatch.tournament_id.filter(id)][0];
-        expectReject(test, org, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: seedingMatch.id, joinCode: '' }),
+        expectReject(test, org, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: seedingMatch.id }),
             'Tournament is not in progress.');
     });
 });
@@ -290,7 +290,7 @@ describe('approve_stand_in / revoke_stand_in', () => {
         expectReject(f.test, f.org, (ctx) => M.revoke_stand_in(ctx, { bracketMatchId: m.id, userId: sub.userId }),
             'No stand-in approval for this user in this bracket match.');
         // Revoked: no longer a participant (cannot create the lobby, joins as Spectator).
-        expectReject(f.test, sub, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: m.id, joinCode: '' }),
+        expectReject(f.test, sub, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: m.id }),
             'You are not authorized to create a lobby for this bracket match.');
         const lobbyId = createTournamentLobby(f.test, f.org, m.id);
         join(f.test, sub, lobbyId);

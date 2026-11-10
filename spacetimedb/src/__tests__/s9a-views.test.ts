@@ -96,10 +96,13 @@ import { seatLabel } from './s10h-fixtures';
 type Reader = Actor | TestAuth;
 const authOf = (r: Reader): TestAuth => ('auth' in r ? r.auth : r);
 
-/** A per-sender view as `who` reads it. */
-function view<T = any>(test: Harness, name: string, who: Reader): T[] {
-    return (M as any)[name](test.viewContext(authOf(who)), {}) as T[];
+/** A per-sender view as `who` reads it (T-S10n: with arguments for the per-match history views). */
+function view<T = any>(test: Harness, name: string, who: Reader, args: Record<string, unknown> = {}): T[] {
+    return (M as any)[name](test.viewContext(authOf(who)), args) as T[];
 }
+
+/** T-S10n (A115(3)): the history id of the one archived match `who` played in. */
+const onlyMatchOf = (test: Harness, who: Actor) => [...test.db.MatchParticipantHistory.by_user.filter(who.userId)][0].matchHistoryId;
 
 /** An anonymous shared view (no sender), optionally with arguments (arg views). */
 function shared<T = any>(test: Harness, name: string, args: Record<string, unknown> = {}): T[] {
@@ -288,7 +291,6 @@ describe('A37 outsider isolation: per-sender views', () => {
             ['view_my_lineups', s.a.b1],
             ['view_my_match_result', s.a.b1],
             ['view_my_match_result_games', s.a.b1],
-            ['view_my_match_lineup_history', done.a.Zb1],
         ];
         for (const [name, memberReader] of views) {
             expect(view(test, name, memberReader).length, `${name}: member`).toBeGreaterThan(0);
@@ -296,6 +298,13 @@ describe('A37 outsider isolation: per-sender views', () => {
             expect(view(test, name, ghost()), `${name}: unmapped identity`).toEqual([]);
             expect(view(test, name, mod), `${name}: non-member Moderator`).toEqual([]);
         }
+        // T-S10n (A115(3)): the replay lineups (was view_my_match_lineup_history) are read per match.
+        const lineups = { matchHistoryId: onlyMatchOf(test, done.a.Zb1) };
+        const name = 'view_my_match_history_lineups';
+        expect(view(test, name, done.a.Zb1, lineups).length, `${name}: member`).toBeGreaterThan(0);
+        expect(view(test, name, outsider, lineups), `${name}: outsider`).toEqual([]);
+        expect(view(test, name, ghost(), lineups), `${name}: unmapped identity`).toEqual([]);
+        expect(view(test, name, mod, lineups), `${name}: non-member Moderator`).toEqual([]);
     });
 
     it('view_lobby_presets: [] for an unmapped identity; any mapped user reads the system preset only', () => {
@@ -992,19 +1001,20 @@ describe('live match views: view_my_match_session / view_my_lineups / view_my_ma
 // Replay set (S9a-V9; A37, A56(1))
 // ════════════════════════════════════════════════════════════════════════════
 
-describe('replay set: view_my_match_lineup_history and the removed public history views', () => {
-    it('the archived lineups of a finalized casual match go to its participants only', () => {
+describe('replay set: view_my_match_history_lineups (was view_my_match_lineup_history) and the removed public history views', () => {
+    it('the archived lineups of a finalized casual match go to its participants only (T-S10n: per match, A115(3))', () => {
         const test = newHarness();
         const s = scoringOf(test, '');
         finishGame(s, 'Blue'); // Casual: the close validates and finalizes inline (A60(6))
         const history = [...test.db.MatchLineupHistory.iter()];
         expect(history).toHaveLength(2);
+        const args = { matchHistoryId: onlyMatchOf(test, s.a.b1) };
         for (const who of [s.a.b1, s.a.r2]) {
-            const rows = view<{ matchHistoryId: number; teamSide: { tag: string } }>(test, 'view_my_match_lineup_history', who);
+            const rows = view<{ matchHistoryId: number; teamSide: { tag: string } }>(test, 'view_my_match_history_lineups', who, args);
             expect(rows.map((r) => r.teamSide.tag).sort(), who.sub).toEqual(['Blue', 'Red']);
         }
-        expect(view(test, 'view_my_match_lineup_history', s.host)).toEqual([]); // the spectator host did not play
-        expect(view(test, 'view_my_match_lineup_history', guest(test, 'outsider'))).toEqual([]);
+        expect(view(test, 'view_my_match_history_lineups', s.host, args)).toEqual([]); // the spectator host did not play
+        expect(view(test, 'view_my_match_history_lineups', guest(test, 'outsider'), args)).toEqual([]);
     });
 
     it('view_match_history, view_match_participant_history and view_match_step_history are gone (module and bindings)', () => {
@@ -1017,7 +1027,7 @@ describe('replay set: view_my_match_lineup_history and the removed public histor
         for (const name of ['view_match_history', 'view_match_participant_history', 'view_match_step_history']) {
             expect(name in M, name).toBe(false);
         }
-        expect('view_my_match_lineup_history' in M).toBe(true);
+        expect('view_my_match_history_lineups' in M).toBe(true); // T-S10n (A115): the per-match replay lineups
     });
 });
 
@@ -1595,11 +1605,13 @@ describe('step labels (S9a-A1, review #2) and the step history reveal (A37)', ()
 
     // The fix pass kept the step history unlabelled: A37 reveals the match's real identities to its participants after
     // the match, so the history row carries actorUserId + actorDisplayName and no label column.
-    it('view_my_match_session_step_history after an anonymous match: a participant reads the real actor ids and names of both teams; an outsider reads nothing', () => {
+    // T-S10n (A115(3)): the step history is read per match (view_my_match_history_steps, was view_my_match_session_step_history).
+    it('view_my_match_history_steps after an anonymous match: a participant reads the real actor ids and names of both teams; an outsider reads nothing', () => {
         const test = newHarness();
         const s = scoringOf(test, '', { lobby: ANON });
         finishGame(s, 'Blue');
-        const rows = view<{ actorUserId: number; actorDisplayName: string }>(test, 'view_my_match_session_step_history', s.a.r1);
+        const args = { matchHistoryId: onlyMatchOf(test, s.a.r1) };
+        const rows = view<{ actorUserId: number; actorDisplayName: string }>(test, 'view_my_match_history_steps', s.a.r1, args);
         expect(rows.length).toBeGreaterThan(0);
         const players = [s.a.b1, s.a.b2, s.a.r1, s.a.r2];
         const ids = new Set(rows.map((r) => r.actorUserId));
@@ -1610,7 +1622,7 @@ describe('step labels (S9a-A1, review #2) and the step history reveal (A37)', ()
             if (who) expect(r.actorDisplayName).toBe(displayName(test, who));
             expect('anonymousLabel' in r).toBe(false);
         }
-        expect(view(test, 'view_my_match_session_step_history', guest(test, 'outsider'))).toEqual([]);
+        expect(view(test, 'view_my_match_history_steps', guest(test, 'outsider'), args)).toEqual([]);
     });
 });
 

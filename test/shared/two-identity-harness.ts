@@ -1,12 +1,13 @@
 /**
  * Phase 15 D-20: Two-identity test helper for cross-user isolation tests.
  *
- * All 5 history-view bindings (view_my_mmr_history, view_my_match_participant_history,
- * view_my_match_session_history, view_my_match_session_step_history,
- * view_my_match_result_game_history) are present in src/module_bindings/index.ts and
- * re-exported through DbConnection.db. Views are auto-subscribed via
- * subscribeToAllTables() in createVerifiedTestHarness (test/shared/connection.ts),
- * so isolation tests use the subscription + .iter() path (preferred) rather than SQL fallback.
+ * S10n (A115): the history views are view_my_match_history(page, gameMode, draftMode, matchType),
+ * view_my_match_history_count(gameMode, draftMode, matchType), view_my_match_history_participants /
+ * _steps / _games / _lineups(matchHistoryId) and view_my_mmr_history(page, gameMode); their bindings are
+ * in web/src/module_bindings/index.ts. All of them take arguments, and views with arguments are NOT
+ * delivered by subscribeToAllTables() in createVerifiedTestHarness (test/shared/connection.ts): the SDK
+ * skips them. The S11 isolation tests must subscribe each one explicitly with its argument literals
+ * (e.g. `SELECT * FROM view_my_match_history(0, '', '', '')`) before reading it with .iter().
  *
  * SQL-on-backing-table cross-check is still used in some assertions to verify that
  * VIEW rows are a subset of what the backing table contains for the caller's userId.

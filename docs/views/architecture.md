@@ -335,6 +335,35 @@ at most (characters + light cones) x 2 draft modes, about 480 rows for the curre
 Since S10i the draft rows of a published set stay after publish (A107(3)), so `view_my_draft_*_costs` also return the
 editable copy of the caller's published sets.
 
+## Phase S10n execution (DECISIONS.md A115)
+
+`views/matchHistoryViews.ts`. The five unbounded replay views are removed: `view_my_match_participant_history`,
+`view_my_match_session_history`, `view_my_match_session_step_history`, `view_my_match_result_game_history`,
+`view_my_match_lineup_history` (their bindings were deleted by `npm run stdb:generate`; no other module code or script
+read them). Per-view detail, row shapes and costs: `docs/match/architecture.md`.
+
+| View | Scope | Row | Reads |
+|---|---|---|---|
+| `view_my_match_history(page, gameMode, draftMode, matchType)` (new) | per-sender, the caller's matches, 10 per page, newest first by `playedAt` (id only as tie-break) | `MatchHistoryListRow`: the session columns without audit, the stored `matchType` and `winnerTeamSide?`, the caller's `teamSide` / `displayName` / flags, `won?`, `previousRating?` / `newRating?` / `ratingDelta?` | `MatchParticipantHistory.by_user`, `MatchSessionHistory.id`, `MmrHistory.user_id` |
+| `view_my_match_history_count(gameMode, draftMode, matchType)` (new) | per-sender | `MatchHistoryCountRow { total }`, one row (none for an unmapped identity) | as the list, without `MmrHistory` |
+| `view_my_match_history_participants(matchHistoryId)` (new) | per-sender, participants of that match only | `MatchParticipantHistory` rows, every participant of the match | `MatchParticipantHistory.by_match_history` (**new index**) |
+| `view_my_match_history_steps(matchHistoryId)` (new) | same gate | `MatchSessionStepHistory` rows by `sequence` | gate + `MatchSessionStepHistory.by_match_history` |
+| `view_my_match_history_games(matchHistoryId)` (new) | same gate | `MatchResultGameHistory` rows | gate + `MatchResultGameHistory.by_match_history` |
+| `view_my_match_history_lineups(matchHistoryId)` (new) | same gate | `MatchLineupHistory` rows | gate + `MatchLineupHistory.by_match_history` |
+| `view_my_mmr_history(page, gameMode)` (modified) | per-sender, 10 per page, newest first by `createdDate` | `MmrHistory` row (unchanged; as an argument view it has no primary key) | `MmrHistory.user_id` |
+
+Filters are strings, `''` = any (a SQL literal has no spelling for an absent optional argument); an unknown tag matches
+nothing; a page past the end is empty. History rows keep the A37 rule: no anonymous labels, the real identities go to the
+match's participants. Schema changes (S11 clear-publish list): index `MatchParticipantHistory.by_match_history`; columns
+`MatchSessionHistory.matchType` and `MatchSessionHistory.winnerTeamSide?` (fix pass, review F1 / F2).
+
+Fix pass (review F1 / F2): the list's `matchType`, `winnerTeamSide` and `won` and the match-type filter read the two
+columns finalization now stores (the record's match type and its final winner, so a concede, a forfeit, a staff
+override or a force-finalize is reflected). The derivation of the first pass is gone: no `Tournament` read, no
+rating-row probe (the `MmrHistory.match_history_id` index is removed again), no tournament-gone fallback, no game-row
+winner. `won` is true when the caller's side is the stored winner, false when it is the other side, none when the match
+has no winner.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -367,10 +396,12 @@ editable copy of the caller's published sets.
 | S10h: every anonymous label a view emits (`view_my_lobby_members.label`, `view_my_lobby_chat.anonymousLabel`, the member-event System lines, `view_my_match_steps` / `view_my_match_participants` / `view_my_lobby_bans` through `anonymousLabelOr`) is the A97 seat label "<Seat kind> #<joinSeq>"; `view_my_lobby_chat` uses `anonymousLabelOr` (live seat label, else stored, else "A player") instead of the stored label alone; `view_admin_abuse_config` gains the three A95(2) columns through the spread `AbuseConfig` columns. The leaver fallbacks ("<Side> player", "Banned player") are unchanged | Phase S10h execution (DECISIONS.md A95, A97) | 2026-11-10 |
 | Fix pass: `view_my_lobby_chat` (sender label and member-event lines) prefers the stored label and reads the live seat label only when none was stored (`storedOrLiveLabel`), so a rejoin does not relabel a former membership's lines | Phase S10h execution (S10h review F6; DECISIONS.md A97) | 2026-11-10 |
 | `view_cost_set_missing(costSetId)` for the set's owner and Moderator+; draft views keep a published set's draft | Phase S10i execution (DECISIONS.md A107(2)(3)) | 2026-11-10 |
+| Paged history (A115): `view_my_match_history` + `_count`, per-match `view_my_match_history_participants` / `_steps` / `_games` / `_lineups`, `view_my_mmr_history(page, gameMode)`; the five unbounded `view_my_match_*_history` views removed; two history indexes | Phase S10n execution (DECISIONS.md A115) | 2026-11-10 |
+| Fix pass: the list reads the stored `MatchSessionHistory.matchType` / `.winnerTeamSide` (match type, winner, won, match-type filter); derivation and `MmrHistory.match_history_id` removed | Phase S10n execution (S10n review F1 / F2; DECISIONS.md A115) | 2026-11-10 |
 
 ---
 
-*Last updated: 2026-11-09*
+*Last updated: 2026-11-10*
 *Feature owner: Phase 03 / Phase 06 / Phase 08 / Phase 09 / Phase 10.4 / Phase 15*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

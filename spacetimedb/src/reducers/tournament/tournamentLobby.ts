@@ -36,13 +36,12 @@ function isMatchParticipant(ctx: any, bracketMatch: any, userId: number): boolea
 // A68(4): `abandonCurrentMatch` lets an away creator give up that match (ensureNotInLobby).
 // The creator is host and referee (A34): a participant is seated as a player on its team's side (A26 / A35; the colour from the match's mapping, A70(1)); staff
 // are seated as a spectator referee and become a member like anyone else (the one-lobby-at-a-time rule applies, D-22).
-// isCaptain stays false, as in create_lobby (start_draft assigns captains, D-30). `joinCode` is ignored (the server
-// generates the code, as before).
+// isCaptain stays false, as in create_lobby (start_draft assigns captains, D-30). A114(2) (S10n): no joinCode
+// argument; the server generates the code.
 
 export const create_tournament_lobby = spacetimedb.reducer(
     {
         bracketMatchId: t.u32(),
-        joinCode: t.string(),
         abandonCurrentMatch: t.bool().optional(), // A68(4): give up an away membership; default false
     },
     (ctx, args) => {

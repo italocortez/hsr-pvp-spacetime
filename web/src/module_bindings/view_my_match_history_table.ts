@@ -13,13 +13,14 @@ import {
   GameMode,
   DraftMode,
   TeamSide,
+  MatchType,
   MatchEndReason,
   LobbyConfigSnapshot,
 } from "./types";
 
 
 export default __t.row({
-  id: __t.u32().primaryKey(),
+  matchHistoryId: __t.u32().name("match_history_id"),
   lobbyCode: __t.string().name("lobby_code"),
   playedAt: __t.timestamp().name("played_at"),
   get draftMode() {
@@ -27,6 +28,9 @@ export default __t.row({
   },
   get gameMode() {
     return GameMode.name("game_mode");
+  },
+  get matchType() {
+    return MatchType.name("match_type");
   },
   teamBlueAlias: __t.string().name("team_blue_alias"),
   teamRedAlias: __t.string().name("team_red_alias"),
@@ -47,8 +51,18 @@ export default __t.row({
   },
   winnerOverrideById: __t.option(__t.u32()).name("winner_override_by_id"),
   winnerOverrideReason: __t.option(__t.string()).name("winner_override_reason"),
-  createdById: __t.u32().name("created_by_id"),
-  createdDate: __t.timestamp().name("created_date"),
-  lastModifiedById: __t.u32().name("last_modified_by_id"),
-  lastModifiedDate: __t.timestamp().name("last_modified_date"),
+  get winnerTeamSide() {
+    return __t.option(TeamSide).name("winner_team_side");
+  },
+  get teamSide() {
+    return TeamSide.name("team_side");
+  },
+  displayName: __t.string().name("display_name"),
+  isReferee: __t.bool().name("is_referee"),
+  isCoach: __t.bool().name("is_coach"),
+  isCaptain: __t.bool().name("is_captain"),
+  won: __t.option(__t.bool()),
+  previousRating: __t.option(__t.u32()).name("previous_rating"),
+  newRating: __t.option(__t.u32()).name("new_rating"),
+  ratingDelta: __t.option(__t.i32()).name("rating_delta"),
 });

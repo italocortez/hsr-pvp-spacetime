@@ -23,7 +23,8 @@ export const matchResultGameHistoryColumns = {
     lastModifiedDate: t.timestamp(),
 };
 
-// S3 (A37, R5): private; participants and Moderator+ read view_my_match_result_game_history (S9).
+// S3 (A37, R5): private; participants read it per match through view_my_match_history_games(matchHistoryId) (S10n,
+// A115; replaced the unbounded view_my_match_result_game_history of S9).
 export const MatchResultGameHistory = table({
     name: 'match_result_game_history',
     public: false,

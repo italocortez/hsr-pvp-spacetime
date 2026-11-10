@@ -129,11 +129,11 @@ TournamentStandIn (PK: [bracketMatchId, userId])  [public: true]
 
 Lobby-owned reducers live in `reducers/lobby/lobbyLifecycle.ts`, `lobbySettings.ts`, `lobbyPresets.ts`, `refereeManagement.ts`, `cursor.ts`, `lobbyGc.ts`, `accountSelection.ts`, `concede.ts` (concede / claim_forfeit / defer), `refereeTransfer.ts` (the A22a scheduled check), the lifecycle hooks in `index.ts`, and (tournament-linked) `tournamentLobby.ts`. Draft-stage transitions (`start_draft`, picks/bans) live in the draft feature, not here.
 
-### create_lobby(config fields..., presetId, joinCode, password, name?, banRestriction?, lineupFormat?, hideMmr?, refereeExclusiveConcede?, maxSpectators?, abandonCurrentMatch?)
+### create_lobby(config fields..., password, name?, banRestriction?, lineupFormat?, hideMmr?, refereeExclusiveConcede?, maxSpectators?, abandonCurrentMatch?)
 1. `getAuthenticatedUser(ctx)` -- reject guests.
-2. D-31b: if `presetId > 0`, verify `LobbyPreset` exists (validation only -- preset values are NOT applied server-side).
+2. (S10n, A116: the `presetId` argument and its existence check are removed; the lobby form fills the arguments from the chosen preset.)
 3. D-22 / A68(4): `ensureNotInLobby(ctx, userId, abandonCurrentMatch ?? false)` (see "Phase S8f execution" below). A68(8): `maxSpectators` (default 12) must be 0-12 ("maxSpectators must be between 0 and 12."); stored on the Lobby row.
-4. Generate a server-side `joinCode` (`generateJoinCode`, 6 uppercase alnum, up to 10 retries; the arg is ignored for storage).
+4. Generate a server-side `joinCode` (`generateJoinCode`, 6 uppercase alnum, up to 10 retries; S10n, A114(2): there is no `joinCode` argument).
 5. D-23: reject guest + `matchType=Ranked`; force `rosterVisibility=ClosedNoRating` for guests.
 6. D-42: if `matchType=Ranked`, force `allowMirrorPicks=false`. Resolve `disconnectForfeitSeconds` (0 sentinel -> undefined).
 7. Insert `Lobby` (`insertWithAudit`) with `stage=Waiting`, `currentPlayerCount=1`, `hostUserId`, `isTournamentControlled=false`, `lastActivityAt=now`, `lastJoinSeq=1` (A74(3)).
@@ -276,7 +276,7 @@ B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3
 2. `select`: reject Spectator/Coach; validate the `HsrAccount` belongs to caller. Tournament path (D-04) is additive up to `Tournament.maxAccountsPerPlayer` and requires the account be locked in `TournamentPlayerAccount`; non-tournament path (D-07) replaces (max 1). ~~D-B-03: bumps `accountRatingSnapshot` if a MatchResult already exists. Phase S6 execution (backlog #10): the bump is `max(snapshot, computeLobbyMemberRating(...))`, the merged rating of the member's current selection (one account: its stored rating), instead of the newly selected account's own rating.~~ (removed, A69(3); see step 1).
 3. `deselect`: find and delete the matching `LobbyMemberAccount` row (throw if not selected). No snapshot hook.
 
-### create_tournament_lobby(bracketMatchId, joinCode, abandonCurrentMatch?) / approve_stand_in(bracketMatchId, userId)
+### create_tournament_lobby(bracketMatchId, abandonCurrentMatch?) / approve_stand_in(bracketMatchId, userId)
 - `create_tournament_lobby`: resolve BracketMatch + Tournament; D-64 authorize (Moderator+, organizer, `TournamentAssistant`, or a team member of `team1Id`/`team2Id`); D-45 reject a duplicate non-Finished lobby for the match; D-22 / A68(4) `ensureNotInLobby(ctx, userId, abandonCurrentMatch ?? false)`; `maxSpectators` copied from the preset's free set (A68(8)); D-67 `matchType` from `countTowardsMmr`; insert `Lobby` with `isTournamentControlled=true` inheriting tournament fields + hardcoded tournament defaults; D-24/D-27 insert creator as `Spectator` + `isReferee=true`, `joinSeq=1` (R4, S4); `Lobby.lastJoinSeq=1` (A74(3), S9c).
 - `approve_stand_in`: resolve BracketMatch + Tournament; D-68 authorize (Moderator+, organizer, or assistant); validate target user; reject duplicate; insert `TournamentStandIn` (PK `[bracketMatchId, userId]`, `approvedByUserId=caller`). There is no `remove_stand_in` reducer.
 
@@ -350,7 +350,7 @@ One order for every flag (A22(5), A68(7); D-35's lowest-user-id rule is retired)
   `create_lobby`, `update_lobby_settings`, `create_lobby_preset`, `update_lobby_preset` lose the three arguments; the
   system preset loses the three values; the tournament-lobby lock list keeps `lineupFormat` only. `AdvantageSide` and
   `resolveAdvantage` are deleted; `ensureBestOf` / `ensureWinnerAdvantage` stay for the tournament (A28 chain).
-- **Tournament lobby (A67(5)).** `create_tournament_lobby(bracketMatchId, joinCode)`: caller rule (A34) and D-22
+- **Tournament lobby (A67(5)).** `create_tournament_lobby(bracketMatchId)` (the `joinCode` argument removed in S10n, A114(2)): caller rule (A34) and D-22
   unchanged; the match must be Ready; D-45 rejects while any lobby of the match is not settled (its record not
   Validated) with "A lobby for this bracket match is still in play."; a parked lobby with a Validated record does not
   block; the cap rejects when the Validated records of the match reach `BracketMatch.bestOf`: "This bracket match has
@@ -605,7 +605,7 @@ Membership lifecycle after A68 (details in the reducer flows above):
   `update_lobby_settings` rejects `isPublic = false` with an empty `password` when the lobby has no `LobbyPassword`
   row. An empty `password` argument means "no new password": a lobby that already has a row keeps it (the upsert
   runs only for a non-empty argument, as before). A switch to public still deletes the row. Presets cannot produce
-  a private lobby: `create_lobby` copies nothing from `presetId` (the client fills the arguments, so the check above
+  a private lobby: `create_lobby` takes no preset (S10n, A116: the client fills the arguments, so the check above
   applies) and `create_tournament_lobby` always writes `isPublic = true`.
 - **A96: cursor events carry the seat.** `LobbyCursorEvent` columns: `lobbyId`, `senderJoinSeq` (the sender's
   `LobbyMember.joinSeq`), `x`, `y`, `timestamp`; `senderUserId` and `anonymousLabel` are gone, in anonymous and
@@ -641,6 +641,17 @@ Membership lifecycle after A68 (details in the reducer flows above):
   as `send_chat_message` does for Player messages, so a line written while the lobby was identified still has a
   label after it turns anonymous in Waiting. Cost: a Waiting seat-kind move shows "Spectator #3" on older lines and
   "Blue Player #3" on newer ones (the number ties them).
+
+## Phase S10n execution (DECISIONS.md A114, A116)
+
+- **A114(2): the creator sends no code.** `create_lobby` and `create_tournament_lobby` no longer take `joinCode` (it
+  was accepted and ignored); the code is always `generateJoinCode`'s.
+- **A114(1): two ways in, both kept.** `join_lobby(lobbyId, joinCode, password, abandonCurrentMatch?)` is unchanged: the
+  lobby list passes the lobby id, a typed code passes the code; a private lobby checks the password on both paths.
+- **A116: no preset number.** `create_lobby` no longer takes `presetId`, and its "Preset not found." check is gone. A
+  preset is applied by the lobby form, which sends the final settings. `LobbyPreset`, `view_lobby_presets`, the preset
+  reducers and `Tournament.lobbyPresetId` (A33a, read by `create_tournament_lobby`) are unchanged.
+- Bindings: `create_lobby_reducer.ts` loses two fields, `create_tournament_lobby_reducer.ts` one.
 
 ## Phase History
 
@@ -691,10 +702,11 @@ Membership lifecycle after A68 (details in the reducer flows above):
 | Fix pass: abandoned rows keep their `LobbyMemberAccount` rows and the roster guards ignore them (`accountLobbyLocks`); `start_draft` schedules the 15 s check for an offline host or referee; `leave_lobby` outside the membership rate; signed handicaps -1000000 to 1000000 again (`rosterThreshold` 0-1000000); admin lobby / member deletes guarded | Phase S10e execution (review F1-F5, N1, N8; DECISIONS.md A93(4), A68(6)) | 2026-11-09 |
 | A98 present-member guard on every lobby action reducer (`ensurePresentMember` / `ensurePresentIfMember`, two texts); A99 a private lobby needs a password (create and the switch to private); A96 `LobbyCursorEvent.senderJoinSeq` replaces `senderUserId` / `anonymousLabel` (member restriction not available on 2.14.1, reported); A97 seat labels | Phase S10h execution (DECISIONS.md A96, A97, A98, A99) | 2026-11-09 |
 | Fix pass: `transfer_referee` / `set_captain` refuse an away or abandoned target (F5); stored chat labels preferred over live ones, member-event lines store the label in every lobby (F6, F7); `ensureMemberPresentUnlessStaff` for kick / ban / captain and the `set_team_slot` staff exemption (F8); `finalize_match_result` referee path guarded, `dispute_match_result` unguarded on purpose (F9); A96 RLS statement corrected (F2); `AbuseConfig` clear-publish note (F10) | Phase S10h execution (S10h review F2, F5-F10; DECISIONS.md A96, A97, A98) | 2026-11-10 |
+| `create_lobby` loses `joinCode` and `presetId` (with the "Preset not found." check), `create_tournament_lobby` loses `joinCode`; the server always generates the code; `join_lobby` unchanged | Phase S10n execution (DECISIONS.md A114, A116) | 2026-11-10 |
 
 ---
 
-*Last updated: 2026-11-09 (S10h)*
+*Last updated: 2026-11-10 (S10n)*
 *Feature owner: Phase 05 / Phase 09 / Phase 10.1 / Phase 10.4 / Phase 12.1 / Phase 16*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

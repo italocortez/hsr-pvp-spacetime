@@ -17,8 +17,8 @@ The lobby system manages the lifecycle of match rooms where players assemble, co
 **Parameters:**
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
-| joinCode | string | Yes | Ignored — server generates a 6-char code |
-| presetId | u32 | Yes | Preset to copy config from (0 = no preset) |
+| joinCode | string | Yes | Ignored — server generates a 6-char code _Superseded in Phase S10n execution (DECISIONS.md A114)._ |
+| presetId | u32 | Yes | Preset to copy config from (0 = no preset) _Superseded in Phase S10n execution (DECISIONS.md A116)._ |
 | teamSize | u8 | Yes | Players per team (1, 2, 3) |
 | draftMode | DraftMode | Yes | Classic or Auction |
 | banMode | BanMode | Yes | None, Four, or Six |
@@ -1417,6 +1417,7 @@ _Superseded in Phase S8g execution (DECISIONS.md A70)._ Read "team1" as "the Blu
 | Away and abandoned members cannot act: every action reducer of the lobby rejects a caller whose row is away ("You are away from this lobby. Return to it before acting.") or abandoned ("You left this match for another lobby and can no longer act in it."): account selection, chat, seats and ready, captain, kick / ban / unban, referee and host transfers, settings and close, start and advance, every draft and Auction action including the timer expiries, undo, pause and resume, the package edits, score entry, adjustments, confirm and close, and a referee's `finalize_match_result`. `broadcast_cursor` drops the call silently. `join_lobby` and `leave_lobby` are unaffected; concede, claim and defer keep their A92(4) texts; Moderator and Admin powers never depend on presence; `dispute_match_result` stays open to the record's participants | Phase S10h execution (DECISIONS.md A98) | 2026-11-10 |
 | `transfer_referee` and `set_captain` reject an away or abandoned target ("The member at seat N has left the match and cannot become the referee." / "… a captain."), as `transfer_host` does | Phase S10h execution (DECISIONS.md A98, S10h review F5) | 2026-11-10 |
 | A private lobby needs a password: `create_lobby` with `isPublic = false` and an empty password is rejected ("A private lobby needs a password."), and so is switching a lobby to private while it has no password row. An empty password argument on a lobby that stays private keeps the current password; switching to public deletes the password, so going back to private needs a new one | Phase S10h execution (DECISIONS.md A99) | 2026-11-10 |
+| `create_lobby` takes neither `joinCode` nor `presetId`, and `create_tournament_lobby` takes no `joinCode`: the server always generates the 6-character join code, and a preset is applied by the lobby form, which sends the final settings. A lobby is joined through `join_lobby` by its code or by its id (the lobby list); a private lobby needs its password on both paths. Tournament lobbies still take their settings from the tournament's preset | Phase S10n execution (DECISIONS.md A114, A116) | 2026-11-10 |
 
 ---
 

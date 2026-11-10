@@ -335,6 +335,8 @@ erDiagram
         u32 id PK
         u32 tournamentId FK "A24/A37: replaces isPubliclyVisible"
         u32 bracketMatchId FK
+        string matchType "S10n: stored at finalization (MatchType)"
+        string winnerTeamSide "S10n: optional TeamSide, the record's final winner"
     }
     match_session_step_history {
         u32 matchHistoryId PK_FK

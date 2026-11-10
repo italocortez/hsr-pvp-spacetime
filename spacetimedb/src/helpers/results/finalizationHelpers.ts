@@ -374,6 +374,10 @@ export function runFinalization(
         winnerOverride: matchResult.winnerOverride,
         winnerOverrideById: matchResult.winnerOverrideById,
         winnerOverrideReason: matchResult.winnerOverrideReason,
+        // S10n (A115(1)): the match type and the final winner this finalization rates and counts by (the record's:
+        // a concede, a forfeit, a staff override or a force-finalize is already on it; the game row may disagree).
+        matchType,
+        winnerTeamSide: matchResult.winnerTeamSide,
     }, actingUserId));
     } // end step 7 concede gate
 

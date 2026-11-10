@@ -246,7 +246,7 @@ execution"; bracket side effects: [../brackets/architecture.md](../brackets/arch
 
 | Reducer | Permission; stage | Behaviour |
 |---|---|---|
-| `create_tournament_lobby(bracketMatchId, joinCode)` | a member of team1 / team2 of the match or an approved stand-in of either (A34), or `bracket`; InProgress; match Ready; S8e (A67(5)): every lobby of the match settled (record Validated) and the Validated games below `bestOf` (`Lobby.bracket_match_id`) | Integrity set from the tournament (A33: teamSize, gameMode, matchType from countTowardsMmr, both anonymity flags, rosterVisibility, requireOwnership, costSetId, disconnectPolicy + disconnectForfeitSeconds, allowMirrorPicks (false when ranked, D-42), lineupFormat). Free set from the preset at `lobbyPresetId`, the system preset when that row is gone (A33a). name = tournament name + position key (≤ 50). Creator = host and referee (A34): a participant on its team's player seat (`autoSeatSlot`), staff on Spectator; `ensureNotInLobby` for both; `isCaptain` false (start_draft assigns). `joinCode` is ignored (server-generated, as before) |
+| `create_tournament_lobby(bracketMatchId, abandonCurrentMatch?)` | a member of team1 / team2 of the match or an approved stand-in of either (A34), or `bracket`; InProgress; match Ready; S8e (A67(5)): every lobby of the match settled (record Validated) and the Validated games below `bestOf` (`Lobby.bracket_match_id`) | Integrity set from the tournament (A33: teamSize, gameMode, matchType from countTowardsMmr, both anonymity flags, rosterVisibility, requireOwnership, costSetId, disconnectPolicy + disconnectForfeitSeconds, allowMirrorPicks (false when ranked, D-42), lineupFormat). Free set from the preset at `lobbyPresetId`, the system preset when that row is gone (A33a). name = tournament name + position key (≤ 50). Creator = host and referee (A34): a participant on its team's player seat (`autoSeatSlot`), staff on Spectator; `ensureNotInLobby` for both; `isCaptain` false (start_draft assigns). `joinCode` is ignored (server-generated, as before) |
 | `approve_stand_in(bracketMatchId, teamId, userId)` | `participants` | `teamId` ∈ {team1Id, team2Id}; the user exists, is not a guest, and is not a member of the other team; one approval per (match, user); the row carries `teamId` (A35) |
 | `revoke_stand_in(bracketMatchId, userId)` | `participants` | deletes the approval; a seat already held is not changed |
 | `advance_tournament_stage(…, Completed)` | `owner`; InProgress | `ensureCanComplete`: format check (GroupInto*: elimination rows exist; GroupOnly: group rows only), then `canComplete` (every row Decided / Walkover / Void, no tournament lobby outside AwaitingResult); `assignFinalPlacements`; stage Completed; `startTournamentFinalization` |
@@ -481,6 +481,12 @@ No schema change; index reads only.
 - **Sign-in during a live game** (A113(4)): `server_link_provider`, [../auth/architecture.md](../auth/architecture.md)
   "Phase S10m execution".
 
+## Phase S10n execution (DECISIONS.md A114)
+
+- `create_tournament_lobby(bracketMatchId, abandonCurrentMatch?)`: the `joinCode` argument (accepted and ignored) is
+  removed (A114(2)); the server generates the code as before. Players of the match join through `join_lobby` by that
+  code or by the lobby id (A114(1)). `Tournament.lobbyPresetId` (A33a) is unchanged.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -519,10 +525,11 @@ No schema change; index reads only.
 | User deletion settles tournament ties (withdraw before the bracket, DQ after) and an organizer of a live tournament cannot delete the account (A94); `isAnonymousDefault` Draft-only (A103); `lock_tournament_accounts` + `TournamentWaitlistAccount` (A104); staff views non-terminal + Moderator+, Admin arg views (A105); DQ stage guard and lobby voiding, minimum MMR on the active season, tournament entry throttle (audit #2, #6, #8, #13) | Phase S10g execution (DECISIONS.md A94, A103, A104, A105) | 2026-11-09 |
 | A guest signing in to an existing account keeps its entries in unfinished tournaments (`moveTournamentTiesToUser`): enrolment, membership, captaincy and requests re-keyed, solo team renamed, locks rebuilt from the existing user's accounts; entries the existing user cannot hold are settled as a deletion | Phase S10l execution (DECISIONS.md A112) | 2026-11-10 |
 | `requireVerified` forced on by `countTowardsMmr`, `requireRoster`, `minimumMmr`, `requireOwnership` or a roster visibility other than `ClosedNoRating`; `update_tournament` refuses to turn it on while non-Disqualified guest enrolments exist (count in the text); a moved entry takes the guest's match calendar invites; guests cannot be assistants | Phase S10m execution (DECISIONS.md A113) | 2026-11-10 |
+| `create_tournament_lobby` loses its ignored `joinCode` argument | Phase S10n execution (DECISIONS.md A114) | 2026-11-10 |
 
 ---
 
-*Last updated: 2026-11-09*
+*Last updated: 2026-11-10*
 *Feature owner: Phase 04 / Phase 06 / Phase 08 / Phase 10.1 / Phase 10.4 / Phase 12.3*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

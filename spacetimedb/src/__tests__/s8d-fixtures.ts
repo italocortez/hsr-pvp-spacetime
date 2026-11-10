@@ -31,7 +31,7 @@ export function sidesOf(f: Field, bracketMatchId: number): { blue: TeamEntry; re
 /** create_tournament_lobby as `who`; returns the new lobby's id (T-S8e: earlier lobbies of the match may be parked). */
 export function createTournamentLobby(test: Harness, who: Actor, bracketMatchId: number): number {
     const before = new Set(lobbiesOf(test, bracketMatchId).map((l) => l.id));
-    tx(test, who, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId, joinCode: '' }));
+    tx(test, who, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId }));
     const created = lobbiesOf(test, bracketMatchId).filter((l) => !before.has(l.id));
     expect(created).toHaveLength(1);
     return created[0].id;

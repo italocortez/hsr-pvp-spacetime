@@ -79,12 +79,15 @@ export {
 } from '@module/views/matchResultViews';
 export {
     // S9a (A37): view_match_history, view_match_participant_history, view_match_step_history removed
-    view_my_match_session_history,          // Phase 15 D-13
-    view_my_match_session_step_history,     // Phase 15 D-13
-    view_my_match_participant_history,      // Phase 15 D-13
-    view_my_mmr_history,                    // Phase 15 D-13
-    view_my_match_result_game_history,      // Phase 15 D-13
-    view_my_match_lineup_history,           // S9a (A56)
+    // S10n (A115): the five unbounded view_my_match_*_history views are replaced by the paged list, its count and
+    // the per-match detail views
+    view_my_match_history,                  // S10n (A115)
+    view_my_match_history_count,            // S10n (A115)
+    view_my_match_history_participants,     // S10n (A115)
+    view_my_match_history_steps,            // S10n (A115)
+    view_my_match_history_games,            // S10n (A115)
+    view_my_match_history_lineups,          // S10n (A115)
+    view_my_mmr_history,                    // Phase 15 D-13; paged since S10n (A115(4))
 } from '@module/views/matchHistoryViews';
 export {
     view_my_tournaments,

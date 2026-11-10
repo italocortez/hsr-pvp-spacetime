@@ -12,6 +12,5 @@ import {
 
 export default {
   bracketMatchId: __t.u32(),
-  joinCode: __t.string(),
   abandonCurrentMatch: __t.option(__t.bool()),
 };

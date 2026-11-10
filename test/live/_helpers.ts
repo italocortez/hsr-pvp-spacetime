@@ -177,8 +177,6 @@ export type CreateLobbyArgs = Parameters<Reducers['createLobby']>[0];
 /** create_lobby arguments for a casual 1v1 Classic lobby (current bindings, S9c). */
 export function casualLobbyArgs(overrides: Partial<CreateLobbyArgs> = {}): CreateLobbyArgs {
     return {
-        joinCode: '',
-        presetId: 0,
         teamSize: 1,
         draftMode: { tag: 'Classic' },
         banMode: { tag: 'None' },
