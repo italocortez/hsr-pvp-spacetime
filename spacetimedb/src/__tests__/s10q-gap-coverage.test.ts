@@ -406,8 +406,8 @@ describe('Gap 2, A112: more stages and shapes of a guest signing in to an existi
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('Gap 3, A113: guest counts, the live-game guard, invites, minimumMmr 0 (S10m review F5)', () => {
-    // DIAGNOSTIC S10q: A113(2) refuses "while guest enrolments exist"; update_tournament skips Disqualified rows (tournamentManagement.ts:309), so a Disqualified guest's enrolment does not block the change.
-    it.skip('A113(2) (F5: the Disqualified exclusion): a Disqualified guest enrolment is a guest enrolment: turning requireVerified on is refused with the count', () => {
+    /** An open solo tournament with a verified player and a guest the organizer has disqualified. */
+    function dqGuestCup() {
         const test = newHarness();
         const org = host(test);
         const id = openTournament(test, org, { teamSize: 1, maxParticipants: 8 });
@@ -417,9 +417,38 @@ describe('Gap 3, A113: guest counts, the live-game guard, invites, minimumMmr 0 
         register(test, v, id);
         tx(test, org, (ctx) => M.dq_participant(ctx, { tournamentId: id, userId: g.userId, reason: 'test' }));
         expect(enrolled(test, id, g.userId)!.status.tag).toBe('Disqualified');
+        return { test, org, id, g };
+    }
+    const GUESTS_1_FULL = `${guestsText(1)} Remove them first, or keep the settings that allow guests.`;
+
+    it('A144, A113(2) (F5: the Disqualified exclusion): a tournament whose only guest enrolment is Disqualified accepts the change that turns requireVerified on; the disqualified entry stays, still Disqualified', () => {
+        const { test, org, id, g } = dqGuestCup();
+        const dqBefore = enrolled(test, id, g.userId)!;
+        expect(tRow(test, id)).toMatchObject({ requireRoster: false, requireVerified: false });
+
+        tx(test, org, updateBody(test, id, { requireRoster: true }));
+
+        expect(tRow(test, id)).toMatchObject({ requireRoster: true, requireVerified: true });
+        expect(enrolled(test, id, g.userId)).toEqual(dqBefore);
+        expect(enrolled(test, id, g.userId)!.status.tag).toBe('Disqualified');
+    });
+
+    it('A144, A113(2), A118 (F5: the Disqualified exclusion, neighbour): with a Disqualified guest and one other guest, the change is refused naming 1 guest player; after reject_participant removes the other guest it is accepted', () => {
+        const { test, org, id, g } = dqGuestCup();
+        const o = guest(test, 'g-other');
+        register(test, o, id);
+        expect(enrolled(test, id, o.userId)!.status.tag).not.toBe('Disqualified');
         const before = tRow(test, id);
-        expectReject(test, org, updateBody(test, id, { requireRoster: true }), guestsText(1));
+
+        expectReject(test, org, updateBody(test, id, { requireRoster: true }), GUESTS_1_FULL);
         expect(tRow(test, id)).toEqual(before);
+
+        tx(test, org, (ctx) => M.reject_participant(ctx, { tournamentId: id, userId: o.userId }));
+        expect(enrolled(test, id, o.userId)).toBeUndefined();
+
+        tx(test, org, updateBody(test, id, { requireRoster: true }));
+        expect(tRow(test, id)).toMatchObject({ requireRoster: true, requireVerified: true });
+        expect(enrolled(test, id, g.userId)!.status.tag).toBe('Disqualified');
     });
 
     it('A113(2) (F5): a waitlisted guest and a guest awaiting approval are guest enrolments: the change is refused with the count', () => {

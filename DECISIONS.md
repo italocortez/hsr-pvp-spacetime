@@ -1459,3 +1459,11 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Decision:** at S11 `TournamentPlayerAccount` gains a column that records where a lock came from (the player's own entry, or taking part as a stand-in), and an index by tournament. The release of stand-in locks then reads the origin instead of comparing lock time with approval time, and the end-of-tournament sweep reads only that tournament's rows.
 - **Why:** user, 2026-11-10: "yeah i agree". S10v review 2 (G2) and review 1 (F16): the time-based release keeps a lock too long after a revoke and re-approval, and releases an entrant's own later lock; the sweep scans the whole table.
 - **Where implemented:** S11 (schema change, with the clear publish)
+
+### A144 — A disqualified guest does not block the verified-accounts settings
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** when `update_tournament` would turn the effective `requireVerified` on (A113(2)), only guest enrolments that are not Disqualified count. A tournament whose only guest entries are disqualified accepts the change; the disqualified guest stays disqualified.
+- **Why:** user, 2026-11-10: "go with option A". A disqualified entry is permanent and no reducer removes it, so counting it would lock the organizer out of the setting for the rest of the tournament. S10m review F5 and the S10q diagnostic.
+- **Supersedes:** the wording "while guest enrolments exist" of A113(2), for Disqualified rows.
+- **Where implemented:** S10m (code, unchanged); the S10q diagnostic test is rewritten in S10x
