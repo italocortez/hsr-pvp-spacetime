@@ -159,7 +159,7 @@ export interface UserDeletionOptions {
  * Cascade-delete active-state rows, then remove the User row.
  *
  * Cascade: the organizer hand-over of a staff deletion (S10s, A121, handOverOrganizedTournaments), tournament ties
- * (A94(2), settleTournamentTiesForDeletion), UserPrivate, lobby memberships (below), calendar data, UserPresence, UserRateState, UserIdentity,
+ * (A94(2), settleTournamentTiesForDeletion), lobby memberships (below), calendar data, UserPresence, UserRateState, UserIdentity,
  * HsrAccount, HsrAccountCharacter, then (S10r, A122(6)) the user's unreferenced lobby presets and unpublished cost sets.
  * Guest users with no history references → hard-delete (row removed entirely).
  * All others → the User row is hard-deleted and archived to DeletedUser (id, displayName, isGuest, deletedAt), which
@@ -184,12 +184,8 @@ export function performUserDeletion(ctx: any, userId: number, actorId: number, o
     // requests, assistant rows, stand-in rows, account locks and remembered waitlist accounts deleted).
     settleTournamentTiesForDeletion(ctx, userId, actorId);
 
-    // D-09 audit (Phase 12.1): UserPrivate cascade verified complete -- hard-deleted here
-    // Cascade: hard-delete UserPrivate (D-03: BanRecord retains discordId independently)
-    const userPrivate = ctx.db.UserPrivate.userId.find(userId);
-    if (userPrivate) {
-        ctx.db.UserPrivate.userId.delete(userId);
-    }
+    // A77 (S11a): the provider link (formerly UserPrivate) is on the User row and goes with it below
+    // (D-03: BanRecord retains the provider id independently).
 
     // A68(7): user deletion is a row removal. Waiting / AwaitingResult, a spectator or coach in any stage (A68(5)),
     // or an orphan row: removeMemberRow, as leave_lobby (flags transferred in the A22(5) order, online first then any;

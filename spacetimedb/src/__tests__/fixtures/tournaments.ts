@@ -155,9 +155,9 @@ export const locks = (test: Harness, tournamentId: number, userId: number) =>
     [...test.db.TournamentPlayerAccount.by_tournament_and_user.filter([tournamentId, userId])].map((r) => r.hsrAccountId).sort((a, b) => a - b);
 export const requestsOf = (test: Harness, userId: number) => [...test.db.TournamentTeamRequest.user_id.filter(userId)];
 
-/** A TournamentPlayerAccount lock (what registration writes), inserted directly. */
-export function lockAccount(test: Harness, tournamentId: number, userId: number, hsrAccountId: number) {
-    test.db.TournamentPlayerAccount.insert({ tournamentId, userId, hsrAccountId, ...AUDIT(test) });
+/** A TournamentPlayerAccount lock (what registration writes: origin Entry, A143), inserted directly. */
+export function lockAccount(test: Harness, tournamentId: number, userId: number, hsrAccountId: number, origin: 'Entry' | 'StandIn' = 'Entry') {
+    test.db.TournamentPlayerAccount.insert({ tournamentId, userId, hsrAccountId, origin: { tag: origin } as any, ...AUDIT(test) });
 }
 
 /** The user's waitlist account ids in the tournament, ascending. */

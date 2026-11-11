@@ -47,7 +47,7 @@ const hasIdentity = (test: Harness, a: Actor) => !!test.db.UserIdentity.identity
 function twoDeviceUser(test: Harness, name: string, gapDays = 10, keepOnline?: 'first' | 'second') {
     const first = verified(test, name);
     const second = guest(test, `${name}-2`);
-    linkDiscord(test, second, test.db.UserPrivate.userId.find(first.userId)!.providerId, name);
+    linkDiscord(test, second, test.db.User.id.find(first.userId)!.providerId!, name);
     expect(second.userId).toBe(first.userId);
     advance(test, gapDays * DAY_MS);
     connect(test, second); // bumps the second identity's lastSeenAt (lastSeenAt bump on connect)
@@ -249,7 +249,7 @@ describe('identity GC guards (D-06, D-07, D-08, D-11, D-12)', () => {
         for (let i = 0; i < 501; i++) {
             const u = test.db.User.insert({
                 id: 0, username: `cap_${i}`, displayName: `cap_${i}`, isGuest: true, role: { tag: 'User' } as any,
-                hasDiscordLinked: false, avatarCharacterName: 'march7th', displayedAchievementId: undefined, deletedAt: undefined,
+                avatarCharacterName: 'march7th', displayedAchievementId: undefined, deletedAt: undefined,
                 ...AUDIT(test),
             } as any);
             test.db.UserIdentity.insert({ identity: freshAuth(test, `cap-${i}`).identity, userId: u.id, lastSeenAt: test.clock.now(), ...AUDIT(test) });

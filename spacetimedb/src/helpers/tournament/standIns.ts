@@ -10,11 +10,9 @@ import { allowedSlotsFor } from './tournamentLobbySides';
 import { matchSides } from './matchSides';
 import { hasPlayedTournamentGame, lockPlayerAccounts } from './accountLocks';
 
-// Local index reads (the same as tournamentHelpers' findEnrolled / findMembership / isActingCaptain): this file is
+// Local index reads (the same as tournamentHelpers' findMembership / isActingCaptain): this file is
 // imported by the bracket writers (bracketStore, bracketResults), which tournamentHelpers reaches through
 // tournamentResults, so importing tournamentHelpers here would close an import cycle.
-const findEnrolled = (ctx: any, tournamentId: number, userId: number): any =>
-    [...ctx.db.TournamentEnrolled.by_tournament_and_user.filter([tournamentId, userId])][0];
 const findMembership = (ctx: any, tournamentId: number, userId: number): any =>
     [...ctx.db.TournamentTeamMember.by_tournament_and_user.filter([tournamentId, userId])][0];
 const isActingCaptain = (ctx: any, team: any, userId: number): boolean =>
@@ -49,7 +47,7 @@ export function snapshotStandInLocks(ctx: any, tournamentId: number, userId: num
     if ([...ctx.db.TournamentPlayerAccount.by_tournament_and_user.filter([tournamentId, userId])].length > 0) return;
     // Review G1 (A104): once the user has played a game of the tournament no account is locked any more.
     if (hasPlayedTournamentGame(ctx, tournamentId, userId)) return;
-    lockPlayerAccounts(ctx, tournamentId, userId, undefined, actorId);
+    lockPlayerAccounts(ctx, tournamentId, userId, undefined, actorId, 'StandIn'); // A143
 }
 
 /**
@@ -78,37 +76,27 @@ export function participateAsStandIn(ctx: any, lobby: any, userId: number, actor
  * SI12, review F10: releases a stand-in's locks in the tournament when the user holds no approval on an open match of
  * it and has not played a game of it (hasPlayedTournamentGame, A104: a result-record participant of a bracket match of
  * the tournament, or a player seat in such a lobby past Waiting). Otherwise the locks stay until the tournament ends
- * (deleteTournamentStandIns sweeps the locks of users with no enrolment).
- * An entrant's own locks are never released here: for a user enrolled in the tournament the release applies only when
- * every lock they hold was created at or after their first known approval (`approvedAt`, the earliest createdDate of
- * their approval rows in the tournament, including a row being removed): they held no lock when they were approved, so
- * the locks came through the stand-in path (or were added by the user after the approval: those count as stand-in
- * locks too). There is no column recording a lock's origin.
+ * (deleteTournamentStandIns sweeps them).
+ * A143 (S11a): only the locks whose origin is StandIn are released; Entry locks (the player's own entry: registration,
+ * promotion, lock_tournament_accounts while enrolled, an entry transfer) are never released here. This replaces the
+ * S10v rule that compared each lock's createdDate with the user's first approval time.
  */
-export function releaseStandInLocksIfUnused(ctx: any, tournamentId: number, userId: number, approvedAt?: bigint): void {
+export function releaseStandInLocksIfUnused(ctx: any, tournamentId: number, userId: number): void {
     if (hasOpenStandInApproval(ctx, tournamentId, userId)) return;
     if (hasPlayedTournamentGame(ctx, tournamentId, userId)) return;
-    const tpas = [...ctx.db.TournamentPlayerAccount.by_tournament_and_user.filter([tournamentId, userId])];
-    if (tpas.length === 0) return;
-    if (findEnrolled(ctx, tournamentId, userId)) {
-        let first = approvedAt;
-        for (const row of ctx.db.TournamentStandIn.user_id.filter(userId)) {
-            const match = ctx.db.BracketMatch.id.find(row.bracketMatchId);
-            if (!match || match.tournamentId !== tournamentId) continue;
-            const at: bigint = row.createdDate.microsSinceUnixEpoch;
-            if (first === undefined || at < first) first = at;
-        }
-        if (first === undefined) return;
-        if (tpas.some((tpa: any) => tpa.createdDate.microsSinceUnixEpoch < first!)) return;
-    }
-    for (const tpa of tpas) ctx.db.TournamentPlayerAccount.delete(tpa);
-    // Review G1: a selection never outlives its lock: the user's account selections in Waiting lobbies of the
-    // tournament go (LobbyMember.user_id -> Lobby; a live lobby is not Waiting, so a game in play is never touched).
+    const released = [...ctx.db.TournamentPlayerAccount.by_tournament_and_user.filter([tournamentId, userId])]
+        .filter((tpa: any) => tpa.origin.tag === 'StandIn');
+    if (released.length === 0) return;
+    for (const tpa of released) ctx.db.TournamentPlayerAccount.delete(tpa);
+    // Review G1: a selection never outlives its lock: the user's selections of the released accounts in Waiting lobbies
+    // of the tournament go (LobbyMember.user_id -> Lobby; a live lobby is not Waiting, so a game in play is never
+    // touched). A143: a selection of an account still locked by the entry stays.
+    const releasedIds = new Set(released.map((tpa: any) => tpa.hsrAccountId));
     for (const m of [...ctx.db.LobbyMember.user_id.filter(userId)]) {
         const lobby = ctx.db.Lobby.id.find(m.lobbyId);
         if (!lobby || lobby.tournamentId !== tournamentId || lobby.stage.tag !== 'Waiting') continue;
         for (const lma of [...ctx.db.LobbyMemberAccount.by_lobby_and_user.filter([lobby.id, userId])]) {
-            ctx.db.LobbyMemberAccount.delete(lma);
+            if (releasedIds.has(lma.hsrAccountId)) ctx.db.LobbyMemberAccount.delete(lma);
         }
     }
 }
@@ -178,7 +166,7 @@ export function removeStandIn(ctx: any, row: any, actorId: number): void {
             }
         }
     }
-    releaseStandInLocksIfUnused(ctx, match.tournamentId, row.userId, row.createdDate.microsSinceUnixEpoch);
+    releaseStandInLocksIfUnused(ctx, match.tournamentId, row.userId);
 }
 
 /** SI5: every approval of `userId` in the tournament (disqualification). */

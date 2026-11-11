@@ -4,6 +4,10 @@ export const leaderboardColumns = {
     category: t.string(),
     rank: t.u16(),
     userId: t.u32(),
+    // A77(1) (S11a): `User` is private, so the public top 20 carries the player's card (PAGE-MAP §3 Leaderboard, D2):
+    // written by rebuildLeaderboard, refreshed by syncLeaderboardCard on a display-name or avatar change.
+    displayName: t.string(),
+    avatarCharacterName: t.string(),
     rating: t.u32(),
     matchesPlayed: t.u32(),
     wins: t.u32(),

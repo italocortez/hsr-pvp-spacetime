@@ -4,18 +4,23 @@
 // re-exports both functions.
 
 import { SenderError } from 'spacetimedb/server';
-import { insertWithAudit } from '@module/helpers/admin/auditHelpers';
+import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 
 function findMembership(ctx: any, tournamentId: number, userId: number): any {
     return [...ctx.db.TournamentTeamMember.by_tournament_and_user.filter([tournamentId, userId])][0];
 }
 
+/** A143 (S11a): where a lock came from (TournamentPlayerAccount.origin). */
+export type LockOrigin = 'Entry' | 'StandIn';
+
 /**
  * A26a(4) / D-21: locks the player's HSR accounts for the tournament (at registration for non-waitlisted players,
  * at promotion for waitlisted ones). `accountIds` omitted = every account the player owns (the pre-S8b behaviour);
  * given = those accounts, which must be the player's own. Existing locks are kept (idempotent).
+ * A143 (S11a): every new lock records `origin`. An existing StandIn lock locked again through the entry path becomes an
+ * Entry lock (the entry is the stronger claim: a stand-in release never removes it); an Entry lock is never downgraded.
  */
-export function lockPlayerAccounts(ctx: any, tournamentId: number, userId: number, accountIds: number[] | undefined, actorId: number): void {
+export function lockPlayerAccounts(ctx: any, tournamentId: number, userId: number, accountIds: number[] | undefined, actorId: number, origin: LockOrigin): void {
     const owned = [...ctx.db.HsrAccount.user_id.filter(userId)];
     let ids: number[];
     if (accountIds === undefined) {
@@ -27,11 +32,23 @@ export function lockPlayerAccounts(ctx: any, tournamentId: number, userId: numbe
             if (!ownedIds.has(id)) throw new SenderError(`HSR account #${id} is not one of your accounts.`);
         }
     }
-    const locked = new Set([...ctx.db.TournamentPlayerAccount.by_tournament_and_user.filter([tournamentId, userId])]
-        .map((tpa: any) => tpa.hsrAccountId));
+    const locked = new Map<number, any>();
+    for (const tpa of ctx.db.TournamentPlayerAccount.by_tournament_and_user.filter([tournamentId, userId])) {
+        locked.set(tpa.hsrAccountId, tpa);
+    }
     for (const id of ids) {
-        if (locked.has(id)) continue;
-        ctx.db.TournamentPlayerAccount.insert(insertWithAudit(ctx, { tournamentId, userId, hsrAccountId: id }, actorId));
+        const existing = locked.get(id);
+        if (existing) {
+            if (origin === 'Entry' && existing.origin.tag === 'StandIn') {
+                // No primary-key accessor on this table (composite key): delete + insert, audit kept.
+                ctx.db.TournamentPlayerAccount.delete(existing);
+                ctx.db.TournamentPlayerAccount.insert(updateWithAudit(ctx, existing, { origin: { tag: 'Entry', value: {} } as any }, actorId));
+            }
+            continue;
+        }
+        ctx.db.TournamentPlayerAccount.insert(insertWithAudit(ctx, {
+            tournamentId, userId, hsrAccountId: id, origin: { tag: origin, value: {} } as any,
+        }, actorId));
     }
 }
 

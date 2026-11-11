@@ -1,10 +1,10 @@
 # Auth & Users -- Architecture
 
-Last updated: 2026-11-06
+Last updated: 2026-11-11
 
 ## Overview
 
-Authentication is built on SpacetimeDB identities with optional Discord OAuth linking. Every client gets a SpacetimeDB identity on first connection. `login_as_guest` creates a User row and UserIdentity mapping. A trusted server identity (the auth function, M5) calls `server_link_provider` to upgrade guests to verified accounts after Discord OAuth completes. Private auth data (discordId, email) lives in `UserPrivate` which is never exposed to client subscriptions directly -- clients use the `view_my_profile` view instead.
+Authentication is built on SpacetimeDB identities with optional Discord OAuth linking. Every client gets a SpacetimeDB identity on first connection. `login_as_guest` creates a User row and UserIdentity mapping. A trusted server identity (the auth function, M5) calls `server_link_provider` to upgrade guests to verified accounts after Discord OAuth completes. Since Phase S11a (A77) the `User` table is private and holds the provider link (formerly `UserPrivate`); no client subscribes it. The user reads their own row through `view_my_profile`, staff read users through `view_admin_users` and `view_admin_user_private`, and every other page gets names and avatars denormalized into the views that need them (PAGE-MAP D2).
 
 Ban enforcement runs at three points: at link-time, at reconnect, and when a ban is created.
 
@@ -20,17 +20,22 @@ Ban enforcement runs at three points: at link-time, at reconnect, and when a ban
 ## Table Relationships
 
 ```
-User (id: u32 autoInc PK)  [public: true]
+User (id: u32 autoInc PK)  [PRIVATE -- public: false since Phase S11a, A77]
   +-- username: string (unique)
   +-- displayName: string
   +-- isGuest: bool
   +-- (isOnline / lastLoginAt moved to UserPresence in S3, A48; see below)
   +-- role: Role (User | TournamentHost | Moderator | Admin)
-  +-- hasDiscordLinked: bool
   +-- avatarCharacterName: string -> HsrCharacter.name
   +-- displayedAchievementId: u32? -> Achievement.id
   +-- deletedAt: Timestamp? (transient pending-deletion flag — at most ~1 row set during 5s cascade window)
+  +-- loginMethod: string? / providerId: string? / providerUsername: string? (A46 claim shape; unset for a guest)
+  +-- linkedAt: Timestamp? (when the current provider account was linked)
   +-- audit columns
+  Indexes: id (PK), username (unique), provider_id (btree, providerId),
+           by_method_and_provider (btree, [loginMethod, providerId])
+  (S11a, A77: hasDiscordLinked dropped, derived as loginMethod = 'discord' in view_my_profile / view_admin_users;
+   the four provider columns and the two indexes merged from UserPrivate, which is removed)
 
 DeletedUser (id: u32 PK)  [PRIVATE -- public: false]
   +-- id: u32 (same as was User.id — preserves FK semantics for history tables)
@@ -62,14 +67,6 @@ UserPresence (identity: Identity PK)  [PRIVATE -- public: false]  (S3 table; beh
   heartbeat (energy, A16); until one of those runs the user reads as online on that device and the A22a
   check does not fire.
 
-UserPrivate (userId: u32 PK)  [PRIVATE -- public: false]
-  +-- userId -> User.id (1:1)
-  +-- discordId: string?
-  +-- discordUsername: string?
-  +-- email: string?
-  +-- audit columns
-  Indexes: user_private_discord_id (btree, discordId)
-
 BanRecord (id: u32 autoInc PK)  [PRIVATE -- public: false]
   +-- banType: BanType (DiscordId)
   +-- providerId: string (Discord snowflake)
@@ -94,10 +91,10 @@ BanRecord (id: u32 autoInc PK)  [PRIVATE -- public: false]
 2. `rejectIfBanned(ctx, discordId)` -- check BanRecord via `ban_record_provider_id` index (D-08 point 1)
 3. Look up `UserIdentity` by provided identity
 4. Three merge cases:
-   - **Case 1a**: Identity -> guest, no existing provider owner -- upgrade guest: `isGuest=false`, `hasDiscordLinked=true`, username=providerName
+   - **Case 1a**: Identity -> guest, no existing provider owner -- upgrade guest: `isGuest=false`, provider columns set (`linkedAt = now`), username=providerName
    - **Case 1b**: Identity -> guest, provider already linked to different user -- re-point identity to existing user, delete orphaned guest. Phase S4 execution (A48, S3 review M3): the identity's `UserPresence.userId` + `lastLoginAt` follow the re-point before `performUserDeletion` removes the guest's own presence rows. Phase S10l execution (A112): when the guest is about to be deleted (no other identity of the guest remains), `moveTournamentTiesToUser(ctx, guestId, existingUserId, SYSTEM_USER_ID)` (`helpers/tournament/entryTransfer.ts`) runs first and moves the guest's entries in unfinished tournaments to the existing user; the existing user must meet the tournament's gates as they stand at sign-in (enrolment, membership, `minimumMmr` by the `ensureMinimumMmr` rating test, `requireRoster`), the guest's recorded captaincies follow even without a membership, and the existing user's stand-in approvals for matches their new team plays are deleted; the full rules (move / do-not-move conditions, locks) are in [tournament/architecture.md](../tournament/architecture.md) "Phase S10l execution". What it does not move is settled by `performUserDeletion` as before (A94(2)). Phase S10m execution (A113(4)): on that deletion path, see "Phase S10m execution" below, the link is refused before any change while the guest plays a live game
-   - **Case 1c**: Identity -> verified user, refresh -- update timestamps, upsert `UserPrivate`
-5. Write/upsert `UserPrivate` (discordId, discordUsername, email), set `User.hasDiscordLinked=true`
+   - **Case 1c**: Identity -> verified user, refresh -- update timestamps and the provider name; `linkedAt` kept when the login method and provider id are unchanged, set to now when they change
+5. Phase S11a (A77): the provider columns are written on the `User` row (`loginMethod`, `providerId`, `providerUsername`, `linkedAt`); the provider owner of step 4 is found through `User.provider_id`
 
 Phase S10e execution (identity audit #3): the actual arguments are `(callerIdentityHex, provider, providerId, providerName)`. `providerName` is trimmed and cut to 32 characters (the username length; empty after trim: "providerName is required"); the trimmed name is stored as `displayName` and `providerUsername`. Case 1a takes it as the username through `uniqueUsername`: the name itself when no other user holds it, else the first free `name_2`, `name_3`, ... (the base shortened to stay within 32), so a username taken by another account no longer aborts the link on the unique index. `callerIdentityHex` goes through the file's `parseIdentityHex` (same texts as before); Cases 2 and 3 share one terminal "Identity not registered. Call login_as_guest first."
 
@@ -108,7 +105,7 @@ Phase S10e execution (identity audit #3): the actual arguments are `(callerIdent
 2. Find `UserIdentity.identity.find(ctx.sender)`; return if none (a fresh guest: see `login_as_guest`)
 3. A48 (Phase S4 execution): upsert `UserPresence` for this identity (`userId`, `isOnline=true`, `lastLoginAt=now`, `lastSeenAt=now`); update `UserIdentity.lastSeenAt`
 4. F1 (Phase S4 execution): for every `LobbyMember` of the user: delete pending `RefereeTransferCheck` rows (`by_lobby_and_user`); if the row is offline, delete+reinsert with `isOnline=true`, `disconnectedAt` cleared and `disconnectPoolRemainingMs` decremented by the offline time (`handleDisconnectPoolUpdate`). Idempotent.
-5. D-08 point 2: if `UserPrivate.loginMethod/providerId` is banned -> soft-delete user immediately
+5. D-08 point 2: if the user's `loginMethod/providerId` (on `User` since S11a, A77) is banned -> soft-delete user immediately
 6. Phase 15.2 D-10: insert `UserDeletionJob` (scheduled 5s out) after ban-reconnect soft-delete (R1 fix)
 
 ### clientDisconnected() -- lifecycle hook (exported as `client_disconnected`)
@@ -131,7 +128,7 @@ A95(1) guest retention (Phase S10h execution): the weekly identity clean-up (`pe
 1. `ensureAdmin(ctx)` -- requires Admin role
 2. Validate inputs; check for existing ban (single-column index + in-memory filter)
 3. Insert `BanRecord`
-4. Find user via `UserPrivate.user_private_discord_id.filter(providerId)`, soft-delete if found (D-08 point 3)
+4. Find user via `User.provider_id.filter(providerId)` (same login method; S11a, A77), soft-delete if found (D-08 point 3)
 5. Phase 15.2 D-10: insert `UserDeletionJob` (scheduled 5s out) to complete the two-phase delete (R1 fix)
 
 ### admin_unban_user(banRecordId)
@@ -143,9 +140,10 @@ A95(1) guest retention (Phase S10h execution): the weekly identity clean-up (`pe
 
 | View | Scope | Returns |
 |------|-------|---------|
-| `view_my_profile` | ctx.sender only | Merged User + UserPrivate fields (MyProfileRow; an array of at most one row, PK `id`, since Phase S9b execution) |
+| `view_my_profile` | ctx.sender only | The caller's User row incl. the provider fields (MyProfileRow; an array of at most one row, PK `id`, since Phase S9b execution; row shape kept by A77) |
 | `view_my_identity` | ctx.sender only | Caller's identity mapping: `{ identity, userId }` (Phase S9b execution) |
-| `view_admin_user_private` | Moderator+ only | All UserPrivate rows: userId, loginMethod, providerId, providerUsername (Phase S9b execution: staff-only full read after the role check, no audit columns) |
+| `view_admin_user_private` | Moderator+ only | One row per linked user: userId, loginMethod, providerId, providerUsername (Phase S9b execution: staff-only full read after the role check, no audit columns; since S11a read from `User`, A77) |
+| `view_admin_users` | Moderator+ only | Every User row without the provider columns: id (PK), username, displayName, isGuest, role, hasDiscordLinked (derived), avatarCharacterName, displayedAchievementId?, deletedAt?, the four audit columns (Phase S11a execution, A77(1)) |
 | `view_user_by_username(username)` | anonymous arg view | At most one `User` projection for the exact username (Phase S9b execution, PAGE-MAP D7) |
 | `view_public_hsr_accounts` | Anonymous (projection-based privacy) | HsrAccount rows where `isRosterPublic=true`; rating included when `isRatingPublic=true`. Flat rows (one per character). Renamed from `view_public_accounts` in Phase 15.5 (D-04) — `hsr_` names the source table explicitly. Stays `anonymousView` per Phase 15.5 D-05 (projection body is the privacy gate, not subscription timing). |
 
@@ -179,7 +177,7 @@ performUserDeletion
   │   or lobby gone → removeMemberRow (as a leave); a player row in Drafting / Equipping / Scoring → flags
   │   transferred, row kept as away + abandoned (offline for the forfeit test, never a flag candidate).
   │   See docs/lobby/architecture.md "User deletion".
-  ├─ Cascade: hard-delete UserPrivate, calendar data, UserIdentity rows, HsrAccount + characters
+  ├─ Cascade: hard-delete calendar data, UserIdentity rows, HsrAccount + characters (the provider link goes with the User row, S11a)
   ├─ S10r (A122(6)): the user's unreferenced lobby presets and unpublished cost sets (deleteOwnedPresetsAndCostSets)
   │
   ├─ [isGuest && !hasHistoryReferences(ctx, userId)]
@@ -307,7 +305,7 @@ Any new frontend subscription to a raw table (no projection view body) OR a per-
 
 ### Accepted Tradeoff (from 15.2 D-01 / 15.5 CONTEXT)
 
-`User.public = true` means a malicious actor subscribing directly to `SELECT * FROM user` (not via our frontend) still receives rows. Closing that requires `User.public = false` + on-demand read reducers — explicitly deferred in Phase 15.5 CONTEXT deferred ideas. This phase's scope is "our frontend does not auto-subscribe anonymous," not "adversarial clients cannot query User."
+**Closed by Phase S11a (A77):** `User` is private, so `SELECT * FROM user` is refused. Historical text: `User.public = true` means a malicious actor subscribing directly to `SELECT * FROM user` (not via our frontend) still receives rows. Closing that requires `User.public = false` + on-demand read reducers — explicitly deferred in Phase 15.5 CONTEXT deferred ideas. This phase's scope is "our frontend does not auto-subscribe anonymous," not "adversarial clients cannot query User."
 
 ## Phase S10m execution (DECISIONS.md A113(4))
 
@@ -375,6 +373,27 @@ The calendar invites of a moved tournament entry move with it (A113(5)):
   if a Moderator path is added. No schema change.
 
 
+## Phase S11a execution (DECISIONS.md A77)
+
+`User` is private (`public: false`) and `UserPrivate` is merged into it (`tables/identity/user.ts`; the file
+`tables/identity/userPrivate.ts` is deleted). Schema (clear-publish): `User` loses `hasDiscordLinked` and gains, after
+`deletedAt`, `loginMethod?`, `providerId?`, `providerUsername?` (strings) and `linkedAt?` (timestamp), all unset for a
+guest, plus the two provider indexes `provider_id` and `by_method_and_provider` (the latter still unused, as before).
+`linkedAt` carries the link time that `UserPrivate.createdDate` carried: set on the first link and when the login
+method or provider id changes; a refresh of the same link keeps it.
+
+- Writers: `init` (SYSTEM) and `login_as_guest` write the provider columns unset; `server_link_provider` Case 1a / 1c
+  writes them on the user row (no second table); Case 1b finds the provider owner through `User.provider_id`.
+- Readers: `client_connected` (reconnect ban check), `admin_ban_user` (soft-delete of the linked user),
+  `view_my_profile` (row shape kept, `hasDiscordLinked` derived), `view_admin_user_private` (row shape kept: one row per
+  user with a provider linked), `view_admin_users` (new, Moderator+). `performUserDeletion` and `server_nuke_test_data`
+  no longer have a second table to clear.
+- Clients: no generated accessor for `user` (`web/src/module_bindings/user_table.ts` deleted by `npm run stdb:generate`);
+  a `SELECT * FROM user` subscription is refused by the server. Server scripts never read `User` (bootstrap, seed and
+  manage-user call reducers by username); the live harness resolves a guest's id through `view_my_identity` (A77(3)).
+  `spacetime sql` as the database owner still reads the table (`queryPrivateTable`, `getTestDiscordId`).
+- Where the data a page needs comes from now: [../views/architecture.md](../views/architecture.md) "Phase S11a execution".
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -413,10 +432,11 @@ The calendar invites of a moved tournament entry move with it (A113(5)):
 | `performUserDeletion` deletes the user's lobby presets (kept while an unfinished tournament points at one) and unpublished cost sets with their rows (kept while `isCostSetInUse`); published sets stay | Phase S10r execution (DECISIONS.md A122) | 2026-11-10 |
 | `performUserDeletion` first hands the unfinished tournaments of an organizer deleted or banned by staff to the longest-serving full assistant, else the acting Moderator+ (organizerId and the tournament's match calendar events); server-identity and self deletions unchanged | Phase S10s execution (DECISIONS.md A121) | 2026-11-10 |
 | A server deletion or ban of an organizer (`server_delete_user`, or a ban / delete sent as the SYSTEM user) cancels the unfinished tournaments through `cancelTournament` (explicit `serverDeletion` option); the reconnect-ban path documented as no hand-over | Phase S10s execution (DECISIONS.md A124) | 2026-11-10 |
+| `User` private; `UserPrivate` merged into it (provider columns + `linkedAt`, two indexes); `hasDiscordLinked` derived; `view_admin_users` for the Users tab | Phase S11a execution (DECISIONS.md A77) | 2026-11-11 |
 
 ---
 
-*Last updated: 2026-11-10 (S10s)*
+*Last updated: 2026-11-11 (S11a)*
 *Feature owner: Phase 01 / Phase 12 / Phase 16*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

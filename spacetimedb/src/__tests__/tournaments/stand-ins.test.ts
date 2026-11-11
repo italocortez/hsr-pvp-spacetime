@@ -625,7 +625,7 @@ describe('SI12: stand-in locks are released', () => {
         // review F15: the entrant holds a real enrolment lock before and after
         const cAcct = insertHsrAccount(f.test, c.mate.userId, 'c-own');
         tx(f.test, c.mate, lockAccounts(f.id, [cAcct]));
-        advance(f.test, 1000); // the entrant's lock predates the approval
+        advance(f.test, 1000); // the entrant's lock predates the approval (T-S11a: an Entry lock, A143; the time no longer matters)
         resolveMatch(f.test, f.org, m2.id, m2.team2Id!);
         expect(locks(f.test, f.id, c.mate.userId)).toEqual([cAcct]);
         tx(f.test, f.org, approve(f.m1.id, f.m1.team1Id!, c.mate.userId));
@@ -827,7 +827,7 @@ describe('S10v fix pass: A137 and review findings', () => {
         expect(teamRow(f.test, d.teamId)!.status.tag).toBe('Active');
         expect(rowsOf(f.test)).toEqual([]);
         expect(slotOf(f.test, lobbyId, d.mate)).toBe('Spectator');
-        expect(locks(f.test, f.id, d.mate.userId)).toEqual([]); // F10: the locks came through the stand-in path
+        expect(locks(f.test, f.id, d.mate.userId)).toEqual([]); // F10: the locks came through the stand-in path (T-S11a: origin StandIn, A143)
     });
 
     it('review F2 / A112: an existing user receiving a guest\'s entry on a team still in loses every approval in that tournament', () => {

@@ -46,10 +46,13 @@ export const login_as_guest = spacetimedb.reducer((ctx) => {
         displayName: guestUsername,
         isGuest: true,
         role: { tag: 'User' },
-        hasDiscordLinked: false,
         avatarCharacterName: 'march7th',
         displayedAchievementId: undefined,
         deletedAt: undefined,
+        loginMethod: undefined,      // A77: no provider linked yet
+        providerId: undefined,
+        providerUsername: undefined,
+        linkedAt: undefined,
     }, SYSTEM_USER_ID));
 
     // Link this identity to the new user (identity audit #10: an orphan mapping is repointed, not duplicated)

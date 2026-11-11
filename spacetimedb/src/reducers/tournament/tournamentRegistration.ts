@@ -90,7 +90,7 @@ export const register_for_tournament = spacetimedb.reducer(
         }
 
         if (!isWaitlisted) {
-            lockPlayerAccounts(ctx, tournamentId, user.id, hsrAccountIds, user.id);
+            lockPlayerAccounts(ctx, tournamentId, user.id, hsrAccountIds, user.id, 'Entry');
         } else if (hsrAccountIds !== undefined) {
             rememberWaitlistAccounts(ctx, tournamentId, user.id, hsrAccountIds, user.id); // A104: applied at promotion
         }
@@ -252,7 +252,7 @@ export const add_participant = spacetimedb.reducer(
         if (tournament.teamSize === 1) {
             createSoloTeam(ctx, tournament, userId, soloTeamName(ctx, tournament, target.displayName, undefined), user.id);
         }
-        lockPlayerAccounts(ctx, tournamentId, userId, undefined, user.id);
+        lockPlayerAccounts(ctx, tournamentId, userId, undefined, user.id, 'Entry');
         console.log(`[TOURNAMENT] User #${userId} added to tournament #${tournamentId} by #${user.id}`);
     }
 );
@@ -331,7 +331,7 @@ export const lock_tournament_accounts = spacetimedb.reducer(
             if (hasPlayedTournamentGame(ctx, tournamentId, user.id)) {
                 throw new SenderError('Your first game of this tournament has started; accounts can no longer be locked.');
             }
-            lockPlayerAccounts(ctx, tournamentId, user.id, hsrAccountIds, user.id);
+            lockPlayerAccounts(ctx, tournamentId, user.id, hsrAccountIds, user.id, 'StandIn'); // A143: a stand-in without an enrolment
             consumeTournamentAllowance(ctx, user.id);
             return;
         }
@@ -346,7 +346,7 @@ export const lock_tournament_accounts = spacetimedb.reducer(
         }
 
         if (!enrolled.isWaitlisted) {
-            lockPlayerAccounts(ctx, tournamentId, user.id, hsrAccountIds, user.id);
+            lockPlayerAccounts(ctx, tournamentId, user.id, hsrAccountIds, user.id, 'Entry');
         } else {
             // S10g review F5: always remembered (first call included), applied by lockAccountsAtPromotion.
             rememberWaitlistAccounts(ctx, tournamentId, user.id, hsrAccountIds, user.id);

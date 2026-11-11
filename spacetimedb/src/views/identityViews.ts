@@ -2,19 +2,25 @@
 // Views exposing user identity / profile data plus public roster account rows.
 //
 // 1. view_my_identity          — per-user, own UserIdentity mapping (identity + userId)
-// 2. view_my_profile           — per-user, User + UserPrivate merge for the profile page (D-04; S9b row)
+// 2. view_my_profile           — per-user, the caller's User row for the profile page (D-04; S9b row; A77 shape kept)
 // 3. view_public_hsr_accounts  — anonymous, HsrAccount rows where isRosterPublic=true (D-22; S9b: is_roster_public index)
-// 4. view_admin_user_private   — Moderator+, UserPrivate rows (D-05; S9b: staff-only full read, no audit columns)
+// 4. view_admin_user_private   — Moderator+, the provider link of every linked user (D-05; A77: read from User)
 // 5. view_user_by_username     — anonymous arg view (username): exact lookup on the unique User.username (S9b, D7)
 // 6. view_user_achievements    — anonymous arg view (userId): a user's UserAchievement rows (S9b, A43, A40)
+// 7. view_admin_users          — Moderator+, every User row without the provider columns (A77(1), S11a)
 //
-// No full scan in any view a non-staff client can read (S9b). The Moderator+ listing reads the whole table after the
-// role check (A37 exemption for admin views: small tables, tab-gated).
+// `User` is private since S11a (A77): these views and the denormalized names / avatars of the other views are the only
+// way user data reaches a client. No full scan in any view a non-staff client can read (S9b). The Moderator+ listings
+// read the whole table after the role check (A37 exemption for admin views: small tables, tab-gated).
 
 import spacetimedb from '@module/schema';
 import { t } from 'spacetimedb/server';
 import { Role } from '@module/types/enums';
 import { staffCaller } from '@module/helpers/identity/viewAnonymity';
+import { DISCORD_LOGIN_METHOD } from '@module/helpers/lobby/banHelper';
+
+/** A77(2) (S11a): `hasDiscordLinked` is no longer stored; a user is Discord-linked when its login method is Discord. */
+const hasDiscordLinked = (user: any): boolean => user.loginMethod === DISCORD_LOGIN_METHOD;
 
 // ---------------------------------------------------------------------------
 // 1. My Identity (per-user view) — the caller's own identity mapping. Uses ctx.sender directly on the PK.
@@ -37,11 +43,13 @@ export const view_my_identity = spacetimedb.view(
 );
 
 // ---------------------------------------------------------------------------
-// 2. My Profile (per-user view, layer 0) — User + UserPrivate for the caller (D-04), the profile page's row
+// 2. My Profile (per-user view, layer 0) — the caller's User row (D-04), the profile page's row
 //    (PAGE-MAP profile): id, username ("IPC Battleground UID"), displayName, avatarCharacterName,
 //    displayedAchievementId, hasDiscordLinked, isGuest, role, and the provider fields (A46) when linked.
 //    S9b (S3 hand-off): no presence (UserPresence, A48), no email / discordId / discordUsername (gone in S3),
 //    no deletedAt, no audit columns. One row, PK `id` (updates in place: display name, avatar, title).
+//    A77 (S11a): same row shape; the provider fields come from the User row (UserPrivate merged) and
+//    `hasDiscordLinked` is derived (loginMethod 'discord'). linkedAt is not sent.
 // ---------------------------------------------------------------------------
 const MyProfileRow = t.row('MyProfileRow', {
     id: t.u32().primaryKey(),
@@ -52,7 +60,7 @@ const MyProfileRow = t.row('MyProfileRow', {
     hasDiscordLinked: t.bool(),
     isGuest: t.bool(),
     role: Role,
-    // UserPrivate fields (only visible to the user themselves; A46 provider generalization)
+    // Provider fields (only visible to the user themselves; A46 provider generalization; on User since A77)
     loginMethod: t.string().optional(),
     providerId: t.string().optional(),
     providerUsername: t.string().optional(),
@@ -67,19 +75,18 @@ export const view_my_profile = spacetimedb.view(
         if (!mapping) return [];
         const user = ctx.db.User.id.find(mapping.userId);
         if (!user) return [];
-        const priv = ctx.db.UserPrivate.userId.find(mapping.userId);
         return [{
             id: user.id,
             username: user.username,
             displayName: user.displayName,
             avatarCharacterName: user.avatarCharacterName,
             displayedAchievementId: user.displayedAchievementId,
-            hasDiscordLinked: user.hasDiscordLinked,
+            hasDiscordLinked: hasDiscordLinked(user),
             isGuest: user.isGuest,
             role: user.role,
-            loginMethod: priv?.loginMethod,
-            providerId: priv?.providerId,
-            providerUsername: priv?.providerUsername,
+            loginMethod: user.loginMethod,
+            providerId: user.providerId,
+            providerUsername: user.providerUsername,
         }];
     }
 );
@@ -133,9 +140,11 @@ export const view_public_hsr_accounts = spacetimedb.anonymousView(
 );
 
 // ---------------------------------------------------------------------------
-// 4. Admin User Private (Moderator+) — every UserPrivate row, so staff can look up the provider name / id for
-//    moderation and the ban form (D-05). `[]` for anyone below Moderator. S9b: a staff-only full read after the role
-//    check, no audit columns. PK `userId` (a relink updates the row in place).
+// 4. Admin User Private (Moderator+) — the provider link of every linked user, so staff can look up the provider
+//    name / id for moderation and the ban form (D-05). `[]` for anyone below Moderator. S9b: a staff-only full read
+//    after the role check, no audit columns. PK `userId` (a relink updates the row in place).
+//    A77 (S11a): same row shape, read from User (UserPrivate merged): one row per user with a provider linked
+//    (loginMethod and providerId set); guests and never-linked users give no row, as they had no UserPrivate row.
 // ---------------------------------------------------------------------------
 const AdminUserPrivateRow = t.row('AdminUserPrivateRow', {
     userId: t.u32().primaryKey(),
@@ -152,12 +161,65 @@ export const view_admin_user_private = spacetimedb.view(
         if (!staffCaller(ctx)) return [];
         const rows: any[] = [];
         // staff-only full read (A37 exemption for admin views: small tables, tab-gated)
-        for (const p of ctx.db.UserPrivate.iter()) {
+        for (const u of ctx.db.User.iter()) {
+            if (u.loginMethod === undefined || u.providerId === undefined) continue;
             rows.push({
-                userId: p.userId,
-                loginMethod: p.loginMethod,
-                providerId: p.providerId,
-                providerUsername: p.providerUsername,
+                userId: u.id,
+                loginMethod: u.loginMethod,
+                providerId: u.providerId,
+                providerUsername: u.providerUsername ?? '',
+            });
+        }
+        return rows;
+    }
+);
+
+// ---------------------------------------------------------------------------
+// 7. view_admin_users (Moderator+) — A77(1) (S11a): the admin panel's Users tab, which subscribed the public `User`
+//    table before A77 (PAGE-MAP D6). Every User row with the columns the tab read then: id (PK), username, displayName,
+//    isGuest, role, hasDiscordLinked (derived, A77(2)), avatarCharacterName, displayedAchievementId?, deletedAt? and the
+//    four audit columns (the mockup's hidden-by-default columns). The provider columns stay in
+//    view_admin_user_private (row shape kept, A77(2)); linkedAt is not sent. `[]` for anyone below Moderator
+//    (staffCaller); a staff-only full read after the role check (A37 exemption for admin views: tab-gated).
+// ---------------------------------------------------------------------------
+const AdminUserRow = t.row('AdminUserRow', {
+    id: t.u32().primaryKey(),
+    username: t.string(),
+    displayName: t.string(),
+    isGuest: t.bool(),
+    role: Role,
+    hasDiscordLinked: t.bool(),
+    avatarCharacterName: t.string(),
+    displayedAchievementId: t.u32().optional(),
+    deletedAt: t.timestamp().optional(),
+    createdById: t.u32(),
+    createdDate: t.timestamp(),
+    lastModifiedById: t.u32(),
+    lastModifiedDate: t.timestamp(),
+});
+
+export const view_admin_users = spacetimedb.view(
+    { name: 'view_admin_users', public: true },
+    t.array(AdminUserRow),
+    (ctx) => {
+        if (!staffCaller(ctx)) return [];
+        const rows: any[] = [];
+        // staff-only full read (A37 exemption for admin views: small tables, tab-gated)
+        for (const u of ctx.db.User.iter()) {
+            rows.push({
+                id: u.id,
+                username: u.username,
+                displayName: u.displayName,
+                isGuest: u.isGuest,
+                role: u.role,
+                hasDiscordLinked: hasDiscordLinked(u),
+                avatarCharacterName: u.avatarCharacterName,
+                displayedAchievementId: u.displayedAchievementId,
+                deletedAt: u.deletedAt,
+                createdById: u.createdById,
+                createdDate: u.createdDate,
+                lastModifiedById: u.lastModifiedById,
+                lastModifiedDate: u.lastModifiedDate,
             });
         }
         return rows;
@@ -168,7 +230,9 @@ export const view_admin_user_private = spacetimedb.view(
 // 5. view_user_by_username(username) — S9b (A44(1), PAGE-MAP D7): the calendar's "Add calendar" / "Invite players"
 //    search. Exact match on the unique `User.username` index (the UI asks for the exact IPC UID); no prefix
 //    search (it would need a scan). At most one row; an unknown or soft-deleted user returns []. Shared per
-//    argument (anonymousView): `User` is a public table, so the row discloses nothing new.
+//    argument (anonymousView). Since A77 (S11a) `User` is private and this view stays the exact-match search (A77(1)):
+//    for a username the caller already knows it discloses the id, display name, avatar and title, nothing else (no
+//    role, guest flag, provider or deletion state).
 // ---------------------------------------------------------------------------
 const UserByUsernameRow = t.row('UserByUsernameRow', {
     userId: t.u32(),

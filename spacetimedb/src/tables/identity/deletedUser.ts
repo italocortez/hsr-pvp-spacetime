@@ -13,7 +13,7 @@ import { table, t } from 'spacetimedb/server';
  */
 export const DeletedUser = table({
     name: 'deleted_user',
-    public: false,      // CR-01: MUST be explicit (matches UserPrivate convention)
+    public: false,      // CR-01: MUST be explicit
 }, {
     id: t.u32().primaryKey(),
     displayName: t.string(),

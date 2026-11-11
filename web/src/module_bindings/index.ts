@@ -230,7 +230,6 @@ import LeaderboardRow from "./leaderboard_table";
 import LobbyCursorEventRow from "./lobby_cursor_event_table";
 import SeasonRow from "./season_table";
 import TournamentRow from "./tournament_table";
-import UserRow from "./user_table";
 import UserAchievementRow from "./user_achievement_table";
 import ViewAdminAbuseConfigRow from "./view_admin_abuse_config_table";
 import ViewAdminBanRecordsRow from "./view_admin_ban_records_table";
@@ -247,6 +246,7 @@ import ViewAdminTournamentTeamMembersRow from "./view_admin_tournament_team_memb
 import ViewAdminTournamentTeamsRow from "./view_admin_tournament_teams_table";
 import ViewAdminUserIdentitiesRow from "./view_admin_user_identities_table";
 import ViewAdminUserPrivateRow from "./view_admin_user_private_table";
+import ViewAdminUsersRow from "./view_admin_users_table";
 import ViewCostSetMissingRow from "./view_cost_set_missing_table";
 import ViewEventAttendeesRow from "./view_event_attendees_table";
 import ViewLobbyBrowserRow from "./view_lobby_browser_table";
@@ -565,21 +565,6 @@ const tablesSchema = __schema({
       { name: 'tournament_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, TournamentRow),
-  user: __table({
-    name: 'user',
-    indexes: [
-      { accessor: 'id', name: 'user_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-      { accessor: 'username', name: 'user_username_idx_btree', algorithm: 'btree', columns: [
-        'username',
-      ] },
-    ],
-    constraints: [
-      { name: 'user_id_key', constraint: 'unique', columns: ['id'] },
-      { name: 'user_username_key', constraint: 'unique', columns: ['username'] },
-    ],
-  }, UserRow),
   userAchievement: __table({
     name: 'user_achievement',
     indexes: [
@@ -706,6 +691,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, ViewAdminUserPrivateRow),
+  viewAdminUsers: __table({
+    name: 'view_admin_users',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, ViewAdminUsersRow),
   viewCostSetMissing: __table({
     name: 'view_cost_set_missing',
     indexes: [
@@ -1342,8 +1334,6 @@ type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "ta
     readonly "Season": Omit<typeof tablesSchema.schemaType.tables["season"], "accessorName"> & { readonly accessorName: "Season" };
     /** @deprecated Use `tournament` instead. This alias will be removed in the next major version. */
     readonly "Tournament": Omit<typeof tablesSchema.schemaType.tables["tournament"], "accessorName"> & { readonly accessorName: "Tournament" };
-    /** @deprecated Use `user` instead. This alias will be removed in the next major version. */
-    readonly "User": Omit<typeof tablesSchema.schemaType.tables["user"], "accessorName"> & { readonly accessorName: "User" };
     /** @deprecated Use `userAchievement` instead. This alias will be removed in the next major version. */
     readonly "UserAchievement": Omit<typeof tablesSchema.schemaType.tables["userAchievement"], "accessorName"> & { readonly accessorName: "UserAchievement" };
     /** @deprecated Use `viewAdminAbuseConfig` instead. This alias will be removed in the next major version. */
@@ -1376,6 +1366,8 @@ type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "ta
     readonly "view_admin_user_identities": Omit<typeof tablesSchema.schemaType.tables["viewAdminUserIdentities"], "accessorName"> & { readonly accessorName: "view_admin_user_identities" };
     /** @deprecated Use `viewAdminUserPrivate` instead. This alias will be removed in the next major version. */
     readonly "view_admin_user_private": Omit<typeof tablesSchema.schemaType.tables["viewAdminUserPrivate"], "accessorName"> & { readonly accessorName: "view_admin_user_private" };
+    /** @deprecated Use `viewAdminUsers` instead. This alias will be removed in the next major version. */
+    readonly "view_admin_users": Omit<typeof tablesSchema.schemaType.tables["viewAdminUsers"], "accessorName"> & { readonly accessorName: "view_admin_users" };
     /** @deprecated Use `viewCostSetMissing` instead. This alias will be removed in the next major version. */
     readonly "view_cost_set_missing": Omit<typeof tablesSchema.schemaType.tables["viewCostSetMissing"], "accessorName"> & { readonly accessorName: "view_cost_set_missing" };
     /** @deprecated Use `viewEventAttendees` instead. This alias will be removed in the next major version. */
@@ -1532,7 +1524,6 @@ const tableAccessorAliases = {
   "LobbyCursorEvent": "lobbyCursorEvent",
   "Season": "season",
   "Tournament": "tournament",
-  "User": "user",
   "UserAchievement": "userAchievement",
   "view_admin_abuse_config": "viewAdminAbuseConfig",
   "view_admin_ban_records": "viewAdminBanRecords",
@@ -1549,6 +1540,7 @@ const tableAccessorAliases = {
   "view_admin_tournament_teams": "viewAdminTournamentTeams",
   "view_admin_user_identities": "viewAdminUserIdentities",
   "view_admin_user_private": "viewAdminUserPrivate",
+  "view_admin_users": "viewAdminUsers",
   "view_cost_set_missing": "viewCostSetMissing",
   "view_event_attendees": "viewEventAttendees",
   "view_lobby_browser": "viewLobbyBrowser",
@@ -1666,8 +1658,6 @@ export type DbView = __DbViewBase & {
   readonly "Season": __DbViewBase["season"];
   /** @deprecated Use `tournament` instead. This alias will be removed in the next major version. */
   readonly "Tournament": __DbViewBase["tournament"];
-  /** @deprecated Use `user` instead. This alias will be removed in the next major version. */
-  readonly "User": __DbViewBase["user"];
   /** @deprecated Use `userAchievement` instead. This alias will be removed in the next major version. */
   readonly "UserAchievement": __DbViewBase["userAchievement"];
   /** @deprecated Use `viewAdminAbuseConfig` instead. This alias will be removed in the next major version. */
@@ -1700,6 +1690,8 @@ export type DbView = __DbViewBase & {
   readonly "view_admin_user_identities": __DbViewBase["viewAdminUserIdentities"];
   /** @deprecated Use `viewAdminUserPrivate` instead. This alias will be removed in the next major version. */
   readonly "view_admin_user_private": __DbViewBase["viewAdminUserPrivate"];
+  /** @deprecated Use `viewAdminUsers` instead. This alias will be removed in the next major version. */
+  readonly "view_admin_users": __DbViewBase["viewAdminUsers"];
   /** @deprecated Use `viewCostSetMissing` instead. This alias will be removed in the next major version. */
   readonly "view_cost_set_missing": __DbViewBase["viewCostSetMissing"];
   /** @deprecated Use `viewEventAttendees` instead. This alias will be removed in the next major version. */
@@ -1860,8 +1852,6 @@ export type Tables = __TablesBase & {
   readonly "Season": __TablesBase["season"];
   /** @deprecated Use `tournament` instead. This alias will be removed in the next major version. */
   readonly "Tournament": __TablesBase["tournament"];
-  /** @deprecated Use `user` instead. This alias will be removed in the next major version. */
-  readonly "User": __TablesBase["user"];
   /** @deprecated Use `userAchievement` instead. This alias will be removed in the next major version. */
   readonly "UserAchievement": __TablesBase["userAchievement"];
   /** @deprecated Use `viewAdminAbuseConfig` instead. This alias will be removed in the next major version. */
@@ -1894,6 +1884,8 @@ export type Tables = __TablesBase & {
   readonly "view_admin_user_identities": __TablesBase["viewAdminUserIdentities"];
   /** @deprecated Use `viewAdminUserPrivate` instead. This alias will be removed in the next major version. */
   readonly "view_admin_user_private": __TablesBase["viewAdminUserPrivate"];
+  /** @deprecated Use `viewAdminUsers` instead. This alias will be removed in the next major version. */
+  readonly "view_admin_users": __TablesBase["viewAdminUsers"];
   /** @deprecated Use `viewCostSetMissing` instead. This alias will be removed in the next major version. */
   readonly "view_cost_set_missing": __TablesBase["viewCostSetMissing"];
   /** @deprecated Use `viewEventAttendees` instead. This alias will be removed in the next major version. */

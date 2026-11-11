@@ -11,7 +11,7 @@ import type {
     SavedCalendarAvailabilityRow,
 } from '@bindings/types';
 import { M, guest, newHarness, tx, type Actor, type Harness } from '../fixtures/harness';
-import { admin, verified, displayName } from '../fixtures/identity';
+import { admin, setUserRole, verified, displayName } from '../fixtures/identity';
 import { addSlotAt, createTitledEvent, saveCalendar } from '../fixtures/calendar';
 import { AUDIT_KEYS, keysOf, profileGhost, sorted, view, type Reader } from '../fixtures/views';
 import { duel } from '../fixtures/tournament-matches';
@@ -342,9 +342,10 @@ describe('A161(1): view_event_attendees(eventId) returns one event\'s invites to
         }
     });
 
-    it('personal event: the leaver, the saver, an outsider, a guest, an Admin who is not invited and a client that never logged in read nothing', () => {
+    it('personal event: the leaver, the saver, an outsider, a guest and a client that never logged in read nothing; an Admin who is not invited reads the full list (re-aligned T-S11a, A162(3): was "an Admin who is not invited reads nothing")', () => {
         const w = personalWorld();
-        for (const reader of [w.leo, w.sam, w.otto, w.gus, w.ada]) {
+        expect(idsOf(read(w.test, w.ada, w.p))).toEqual(w.all); // A162(3)
+        for (const reader of [w.leo, w.sam, w.otto, w.gus]) {
             expect(read(w.test, reader, w.p), displayName(w.test, reader)).toEqual([]);
         }
         expect(read(w.test, profileGhost(), w.p)).toEqual([]);
@@ -416,14 +417,112 @@ describe('A161(1): view_event_attendees(eventId) returns one event\'s invites to
         }
     });
 
-    it('a personal event against a match event: a bracket assistant and an Admin read the match event\'s list but not a personal event of the same organizer they are not invited to', () => {
+    it('a personal event against a match event: a bracket assistant reads the match event\'s list but not a personal event of the same organizer they are not invited to; an Admin reads both (re-aligned T-S11a, A162(3): the Admin was refused the personal list)', () => {
         const w = matchWorld(false);
         const p = createTitledEvent(w.test, w.org, 'Personal', [w.members[0]]);
         expect(idsOf(read(w.test, w.members[0], p))).toEqual([w.members[0].userId]);
         expect(idsOf(read(w.test, w.org, p))).toEqual([w.members[0].userId]);
-        for (const reader of [w.bInv, w.bNo, w.ada]) {
+        for (const reader of [w.bInv, w.bNo]) {
             expect(idsOf(read(w.test, reader, w.id)).length).toBeGreaterThan(0);
             expect(read(w.test, reader, p), displayName(w.test, reader)).toEqual([]);
         }
+        expect(idsOf(read(w.test, w.ada, w.id))).toEqual(w.all);
+        expect(idsOf(read(w.test, w.ada, p))).toEqual([w.members[0].userId]); // A162(3)
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// T-S11a (A162): the creator of a match event reads its list only while holding the bracket permission; an Admin
+// reads every list
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('A162: a match event\'s creator needs the bracket permission to read the attendee list; an Admin reads every list', () => {
+    const read = (test: Harness, who: Reader, eventId: number) =>
+        view<EventAttendeeRow>(test, 'view_event_attendees', who, { eventId }).map((r) => r.inviteeUserId).sort((a, b) => a - b);
+    const ownInviteRows = (test: Harness, who: Actor, eventId: number) =>
+        view<MyCalendarInviteRow>(test, 'view_my_calendar_invites', who).filter((r) => r.eventId === eventId)
+            .map((r) => r.inviteeUserId).sort((a, b) => a - b);
+
+    /** A duel's final; `creator` (a bracket assistant) schedules its match event; the four members are invited. */
+    function world(anonymous: boolean) {
+        const f = duel();
+        const { test, org } = f;
+        const m = [...test.db.BracketMatch.tournament_id.filter(f.id)][0];
+        const creator = verified(test, 'a162creator');
+        assignAssistant(test, org, f.id, creator, { bracket: true });
+        const id = createTitledEvent(test, creator, 'Final', [], m.id);
+        if (anonymous) test.db.Tournament.id.update({ ...test.db.Tournament.id.find(f.id)!, isAnonymousDefault: true });
+        const all = [...test.db.CalendarEventInvite.event_id.filter(id)].map((i) => i.inviteeUserId).sort((a, b) => a - b);
+        return { f, test, org, m, creator, id, all };
+    }
+
+    it('A162(1): a bracket assistant who created the event reads the list and every invite row while staff; removed from the staff, they read neither (view_event_attendees, view_my_calendar_invites)', () => {
+        const w = world(false);
+        expect(read(w.test, w.creator, w.id)).toEqual(w.all);
+        expect(ownInviteRows(w.test, w.creator, w.id)).toEqual(w.all);
+        tx(w.test, w.org, (ctx) => M.remove_tournament_assistant(ctx, { tournamentId: w.f.id, userId: w.creator.userId }));
+        expect(read(w.test, w.creator, w.id)).toEqual([]);
+        expect(ownInviteRows(w.test, w.creator, w.id)).toEqual([]);
+        // the event itself stays in their calendar (path (a) of view_my_calendar_events, unchanged)
+        expect(view<MyCalendarEventRow>(w.test, 'view_my_calendar_events', w.creator).map((e) => e.id)).toContain(w.id);
+        // the tournament organizer still reads the list
+        expect(read(w.test, w.org, w.id)).toEqual(w.all);
+    });
+
+    it('A162(1): a Moderator who created the event loses the list when demoted to User, and gets it back when promoted again', () => {
+        const w = world(true);
+        const mod = verified(w.test, 'a162mod');
+        setUserRole(w.test, mod.userId, 'Moderator');
+        tx(w.test, w.creator, (ctx) => M.delete_calendar_event(ctx, { eventId: w.id }));
+        const id = createTitledEvent(w.test, mod, 'Final', [], w.m.id);
+        const all = [...w.test.db.CalendarEventInvite.event_id.filter(id)].map((i) => i.inviteeUserId).sort((a, b) => a - b);
+        expect(read(w.test, mod, id)).toEqual(all);
+        setUserRole(w.test, mod.userId, 'User');
+        expect(read(w.test, mod, id)).toEqual([]);
+        expect(ownInviteRows(w.test, mod, id)).toEqual([]);
+        setUserRole(w.test, mod.userId, 'Moderator');
+        expect(read(w.test, mod, id)).toEqual(all);
+    });
+
+    it('A162(1): a former-staff creator who is invited to the match event is treated as any invitee: their own row; the full list only when the tournament is not anonymous', () => {
+        for (const anonymous of [false, true]) {
+            const f = duel();
+            const { test, org } = f;
+            const m = [...test.db.BracketMatch.tournament_id.filter(f.id)][0];
+            const member = f.ts[0].captain; // a team member of the match: auto-invited at creation
+            assignAssistant(test, org, f.id, member, { bracket: true });
+            const id = createTitledEvent(test, member, 'Final', [], m.id);
+            if (anonymous) test.db.Tournament.id.update({ ...test.db.Tournament.id.find(f.id)!, isAnonymousDefault: true });
+            const all = [...test.db.CalendarEventInvite.event_id.filter(id)].map((i) => i.inviteeUserId).sort((a, b) => a - b);
+            expect(all).toContain(member.userId);
+            tx(test, org, (ctx) => M.remove_tournament_assistant(ctx, { tournamentId: f.id, userId: member.userId }));
+            expect(ownInviteRows(test, member, id), `anonymous ${anonymous}`).toEqual([member.userId]);
+            expect(read(test, member, id), `anonymous ${anonymous}`).toEqual(anonymous ? [] : all);
+        }
+    });
+
+    it('A162(3): an Admin who is neither organizer nor invitee reads the attendee list of a personal event and of a match event of an anonymous tournament', () => {
+        const w = world(true);
+        const ada = admin(w.test, 'a162ada');
+        const carol = verified(w.test, 'a162carol');
+        const bob = verified(w.test, 'a162bob');
+        const p = createTitledEvent(w.test, carol, 'Tea', [bob]);
+        expect(read(w.test, ada, p)).toEqual([bob.userId]);
+        expect(read(w.test, ada, w.id)).toEqual(w.all);
+        // an Admin's own view_my_calendar_invites is unchanged: no rows of events they neither organize nor are invited to
+        expect(ownInviteRows(w.test, ada, p)).toEqual([]);
+    });
+
+    it('A162: nothing changes for the organizer of a personal event: the full list in both views, before and after any role change', () => {
+        const test = newHarness();
+        const carol = verified(test, 'a162pcarol');
+        const bob = verified(test, 'a162pbob');
+        const p = createTitledEvent(test, carol, 'Lunch', [bob]);
+        expect(read(test, carol, p)).toEqual([bob.userId]);
+        expect(ownInviteRows(test, carol, p)).toEqual([bob.userId]);
+        setUserRole(test, carol.userId, 'Moderator');
+        setUserRole(test, carol.userId, 'User');
+        expect(read(test, carol, p)).toEqual([bob.userId]);
+        expect(ownInviteRows(test, carol, p)).toEqual([bob.userId]);
     });
 });

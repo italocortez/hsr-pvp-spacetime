@@ -67,7 +67,10 @@ export function seedUserRow(test: Harness, userId: number, o: { deletedAt?: any 
     if (test.db.User.id.find(userId)) return;
     test.db.User.insert({
         id: userId, username: `user-${userId}`, displayName: `user-${userId}`, isGuest: false, role: { tag: 'User' },
-        hasDiscordLinked: true, avatarCharacterName: '', displayedAchievementId: undefined, deletedAt: o.deletedAt, ...AUDIT(test),
+        avatarCharacterName: '', displayedAchievementId: undefined, deletedAt: o.deletedAt,
+        // T-S11a (A77): the provider columns of a linked user (formerly hasDiscordLinked: true)
+        loginMethod: 'discord', providerId: `pid-user-${userId}`, providerUsername: `user-${userId}`, linkedAt: test.clock.now(),
+        ...AUDIT(test),
     } as any);
 }
 
@@ -81,7 +84,7 @@ export function freshAuth(test: Harness, sub: string) {
     return { auth, identity: test.viewContext(auth).sender };
 }
 
-export const providerOf = (test: Harness, a: Actor) => test.db.UserPrivate.userId.find(a.userId)?.providerId;
+export const providerOf = (test: Harness, a: Actor) => test.db.User.id.find(a.userId)?.providerId; // T-S11a: on User (A77)
 export const jobsFor = (test: Harness, userId: number) => [...test.db.UserDeletionJob.iter()].filter((j) => j.userId === userId);
 export const identitiesOf = (test: Harness, userId: number) => [...test.db.UserIdentity.user_id.filter(userId)];
 export const mappedUser = (test: Harness, a: Actor) => test.db.UserIdentity.identity.find(a.identity)!.userId;

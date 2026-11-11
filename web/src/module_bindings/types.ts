@@ -44,6 +44,13 @@ export const AbuseCounter = __t.object("AbuseCounter", {
 });
 export type AbuseCounter = __Infer<typeof AbuseCounter>;
 
+// The tagged union or sum type for the algebraic type `AccountLockOrigin`.
+export const AccountLockOrigin = __t.enum("AccountLockOrigin", {
+  Entry: __t.unit(),
+  StandIn: __t.unit(),
+});
+export type AccountLockOrigin = __Infer<typeof AccountLockOrigin>;
+
 export const AccountRatingConfig = __t.object("AccountRatingConfig", {
   id: __t.u32(),
   verticalWeight: __t.f64(),
@@ -222,6 +229,25 @@ export const AdminUserPrivateRow = __t.object("AdminUserPrivateRow", {
   providerUsername: __t.string(),
 });
 export type AdminUserPrivateRow = __Infer<typeof AdminUserPrivateRow>;
+
+export const AdminUserRow = __t.object("AdminUserRow", {
+  id: __t.u32(),
+  username: __t.string(),
+  displayName: __t.string(),
+  isGuest: __t.bool(),
+  get role() {
+    return Role;
+  },
+  hasDiscordLinked: __t.bool(),
+  avatarCharacterName: __t.string(),
+  displayedAchievementId: __t.option(__t.u32()),
+  deletedAt: __t.option(__t.timestamp()),
+  createdById: __t.u32(),
+  createdDate: __t.timestamp(),
+  lastModifiedById: __t.u32(),
+  lastModifiedDate: __t.timestamp(),
+});
+export type AdminUserRow = __Infer<typeof AdminUserRow>;
 
 export const AnonymousChatRow = __t.object("AnonymousChatRow", {
   id: __t.u32(),
@@ -912,6 +938,8 @@ export const Leaderboard = __t.object("Leaderboard", {
   category: __t.string(),
   rank: __t.u16(),
   userId: __t.u32(),
+  displayName: __t.string(),
+  avatarCharacterName: __t.string(),
   rating: __t.u32(),
   matchesPlayed: __t.u32(),
   wins: __t.u32(),
@@ -2671,6 +2699,9 @@ export const TournamentPlayerAccount = __t.object("TournamentPlayerAccount", {
   tournamentId: __t.u32(),
   userId: __t.u32(),
   hsrAccountId: __t.u32(),
+  get origin() {
+    return AccountLockOrigin;
+  },
   createdById: __t.u32(),
   createdDate: __t.timestamp(),
   lastModifiedById: __t.u32(),
@@ -2818,10 +2849,13 @@ export const User = __t.object("User", {
   get role() {
     return Role;
   },
-  hasDiscordLinked: __t.bool(),
   avatarCharacterName: __t.string(),
   displayedAchievementId: __t.option(__t.u32()),
   deletedAt: __t.option(__t.timestamp()),
+  loginMethod: __t.option(__t.string()),
+  providerId: __t.option(__t.string()),
+  providerUsername: __t.option(__t.string()),
+  linkedAt: __t.option(__t.timestamp()),
   createdById: __t.u32(),
   createdDate: __t.timestamp(),
   lastModifiedById: __t.u32(),
@@ -2890,18 +2924,6 @@ export const UserPresence = __t.object("UserPresence", {
   lastModifiedDate: __t.timestamp(),
 });
 export type UserPresence = __Infer<typeof UserPresence>;
-
-export const UserPrivate = __t.object("UserPrivate", {
-  userId: __t.u32(),
-  loginMethod: __t.string(),
-  providerId: __t.string(),
-  providerUsername: __t.string(),
-  createdById: __t.u32(),
-  createdDate: __t.timestamp(),
-  lastModifiedById: __t.u32(),
-  lastModifiedDate: __t.timestamp(),
-});
-export type UserPrivate = __Infer<typeof UserPrivate>;
 
 export const UserRateState = __t.object("UserRateState", {
   userId: __t.u32(),
@@ -2986,6 +3008,9 @@ export type ViewAdminUserIdentities = __Infer<typeof ViewAdminUserIdentities>;
 
 export const ViewAdminUserPrivate = __t.object("ViewAdminUserPrivate", {});
 export type ViewAdminUserPrivate = __Infer<typeof ViewAdminUserPrivate>;
+
+export const ViewAdminUsers = __t.object("ViewAdminUsers", {});
+export type ViewAdminUsers = __Infer<typeof ViewAdminUsers>;
 
 export const ViewCostSetMissing = __t.object("ViewCostSetMissing", {
   costSetId: __t.u32(),

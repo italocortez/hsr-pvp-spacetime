@@ -165,6 +165,18 @@ season-only average.
 
 - **Rating config bounds (A122(12), L44).** `admin_update_elo_config` (`reducers/stats/eloAdmin.ts`; the "update_elo_config" flow above lists older field names) validates the merged row (stored values with the given changes) before the update: `spreadDivisor` must be above 0 ("spreadDivisor must be greater than 0."), and `newThreshold` must not be above `midThreshold` ("newThreshold must not be greater than midThreshold."). Every field is unsigned (u8 / u32), so nothing is negative. `spreadDivisor` is the one divisor read from the config (`stdev / spreadDivisor` in the team rating); the other divisions in `helpers/stats/eloCalculation.ts` are by constants (400, 1000) or by the team size. Equal thresholds are accepted (an empty middle band).
 
+## Phase S11a execution (DECISIONS.md A77)
+
+**Leaderboard card.** `User` is private (A77), so the public `Leaderboard` rows carry the player's card: columns
+`displayName` and `avatarCharacterName` after `userId` (schema change, clear-publish). `rebuildLeaderboard` writes them
+from the live `User` row of each ranked user (`User.id`, the users `isLive` kept). `syncLeaderboardCard(ctx, userId)`
+(`helpers/stats/leaderboardRebuild.ts`) rewrites the user's rows (`Leaderboard.by_user`, at most one per category and
+season; delete + insert, audit actor SYSTEM as the rebuild, A37) when the card changed; called after
+`update_display_name`, `update_avatar` (`reducers/identity/profile.ts`) and `admin_update_user`. A user deleted after
+the last rebuild keeps name and avatar on the rows until the next rebuild, as their id did before. Egress: about +30 B
+per row, at most 80 rows per season (implementer's choice of A77(1): columns, not `view_leaderboard`; sizes in
+[../views/architecture.md](../views/architecture.md) "Phase S11a execution").
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -187,10 +199,11 @@ season-only average.
 | Leaderboard rebuild skips users with no live `User` row | Phase S10f execution (results audit #9) | 2026-11-09 |
 | `globalCompositeRating` computed from and written to the current season's `MmrRating` rows only | Phase S10i execution (DECISIONS.md A102) | 2026-11-10 |
 | `admin_update_elo_config` rejects `spreadDivisor` 0 and `newThreshold` above `midThreshold` (merged row) | Phase S10r execution (DECISIONS.md A122) | 2026-11-10 |
+| `Leaderboard` carries `displayName` / `avatarCharacterName` (written by the rebuild, rewritten by `syncLeaderboardCard` on a rename or new avatar) because `User` is private | Phase S11a execution (DECISIONS.md A77) | 2026-11-11 |
 
 ---
 
-*Last updated: 2026-11-08*
+*Last updated: 2026-11-11 (S11a)*
 *Feature owner: Phase 05 / Phase 11*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

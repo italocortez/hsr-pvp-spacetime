@@ -11,6 +11,7 @@ import type {
     AdminPresenceRow,
     AdminUserIdentityRow,
     AdminUserPrivateRow,
+    AdminUserRow,
     MyAvailabilityRow,
     MyCalendarEventRow,
     MyCalendarInviteRow,
@@ -182,7 +183,7 @@ describe('view_my_profile (S9b-V1, S3 hand-off, PAGE-MAP profile)', () => {
         expect(row.username).toBe(test.db.User.id.find(g.userId)!.username);
     });
 
-    it('a verified user: loginMethod / providerId / providerUsername from UserPrivate (A46); role and title from User', () => {
+    it('a verified user: loginMethod / providerId / providerUsername from the User row (A46; A77: UserPrivate merged, row shape kept, hasDiscordLinked derived); role and title from User', () => {
         const test = newHarness();
         const pat = linked(test, 'pat-dev', 'pid-pat', 'Pat');
         test.db.User.id.update({ ...test.db.User.id.find(pat.userId)!, avatarCharacterName: 'Kafka', displayedAchievementId: 4 });
@@ -501,6 +502,7 @@ describe('egress: S9b row types equal the documented column lists (bindings)', (
         expectTypeOf<keyof AdminLobbyBanRow>().toEqualTypeOf<Cols<'adminLobbyBan'>>();
         expectTypeOf<keyof AdminAbuseConfigRow>().toEqualTypeOf<Cols<'adminAbuse'>>();
         expectTypeOf<keyof AdminUserPrivateRow>().toEqualTypeOf<Cols<'adminUserPrivate'>>();
+        expectTypeOf<keyof AdminUserRow>().toEqualTypeOf<Cols<'adminUser'>>(); // T-S11a (A77(1))
     });
 
     it('the S9b views are registered on the module and in the bindings; the trimmed admin views are not', () => {

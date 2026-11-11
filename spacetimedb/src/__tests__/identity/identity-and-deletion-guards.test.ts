@@ -57,7 +57,7 @@ describe('identity audit #1: identity GC and the server identities', () => {
     function twoDevices(test: Harness, name: string) {
         const first = verified(test, name);
         const second = guest(test, `${name}-2`);
-        linkDiscord(test, second, test.db.UserPrivate.userId.find(first.userId)!.providerId, name);
+        linkDiscord(test, second, test.db.User.id.find(first.userId)!.providerId!, name);
         advance(test, 10 * DAY_MS);
         connect(test, second);
         disconnect(test, first);
@@ -125,7 +125,7 @@ describe('identity audit #3: a guest upgrade with a provider name another user h
         const g1 = guest(test, 'g1');
         tx(test, 'internal', link(test, g1, 'p-1', `  ${long}  `));
         expect(userOf(test, g1)).toMatchObject({ username: 'x'.repeat(32), displayName: 'x'.repeat(32) });
-        expect(test.db.UserPrivate.userId.find(g1.userId)?.providerUsername).toBe('x'.repeat(32));
+        expect(test.db.User.id.find(g1.userId)?.providerUsername).toBe('x'.repeat(32));
 
         const g2 = guest(test, 'g2');
         tx(test, 'internal', link(test, g2, 'p-2', long));
@@ -303,7 +303,7 @@ describe('identity audit #5: an identity goes with its presence row', () => {
         const test = newHarness();
         const desk = verified(test, 'u');
         const phone = guest(test, 'u-phone');
-        linkDiscord(test, phone, test.db.UserPrivate.userId.find(desk.userId)!.providerId, 'u');
+        linkDiscord(test, phone, test.db.User.id.find(desk.userId)!.providerId!, 'u');
         expect(phone.userId).toBe(desk.userId);
         connect(test, phone);
         expect(test.db.UserPresence.identity.find(phone.identity)?.isOnline).toBe(true);
@@ -360,7 +360,7 @@ describe('identity audit #5: an identity goes with its presence row', () => {
         const test = newHarness();
         const desk = verified(test, 'u');
         const phone = guest(test, 'u-phone');
-        linkDiscord(test, phone, test.db.UserPrivate.userId.find(desk.userId)!.providerId, 'u');
+        linkDiscord(test, phone, test.db.User.id.find(desk.userId)!.providerId!, 'u');
         connect(test, phone);
         const s = setupLobby(test, { actors: { b1: desk } });
         tx(test, 'internal', delIdentity(phone.identity.toHexString()));

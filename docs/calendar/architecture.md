@@ -181,6 +181,7 @@ the caller's lazy clean-up (Phase S10s execution, below). The numbered steps lis
 - the event's organizer or an Admin, always;
 - for a tournament-linked event (`bracketMatchId` set): also `hasTournamentPermission(ctx, user, tournament, 'bracket')` on the bracket match's tournament (Moderator+, the tournament's organizer, an assistant with `canManageBracket`: the permission that creates such events);
 - otherwise rejected: personal event `'Forbidden: Only the organizer or an Admin can <action>.'` (unchanged texts); tournament-linked event `'Forbidden: Only the organizer, an Admin or tournament staff with the bracket permission can <action>.'`. `<action>` is `update this event`, `delete this event`, `invite users to this event`, `remove invites from this event`. A link whose bracket match or tournament no longer exists falls back to the personal rule (with the tournament-linked text).
+- **Superseded in part by Phase S11a execution (A162(1)):** on a tournament-linked event the organizer is no longer accepted "always"; see below.
 
 ## Cross-Feature Cascades
 
@@ -444,6 +445,29 @@ in "Reducer Flows" above. "Ended" means `endAt <= now` for slots and events alik
   \p{Default_Ignorable_Code_Point}]` with the `u` flag); a title without one gets the empty-title text. The
   description is not checked.
 
+## Phase S11a execution (DECISIONS.md A162)
+
+- **Caller rule (A162(1))**, `ensureCanManageEvent` (`reducers/calendar/calendarEvents.ts`; `update_calendar_event`,
+  `delete_calendar_event`, `invite_to_event`, `remove_invite` on someone else's invite):
+  - an Admin, always;
+  - a tournament-linked event whose bracket match and tournament exist: a holder of that tournament's `bracket`
+    permission (`hasTournamentPermission`: Moderator+, the tournament organizer, an assistant with `canManageBracket`).
+    The event's organizer has no right of their own here: a creator who left the staff (assistant removed or the
+    bracket flag turned off, Moderator demoted) is refused like any other user;
+  - a tournament-linked event whose match or tournament is gone: the event's organizer (the personal rule, as before);
+  - a personal event: the organizer (unchanged);
+  - otherwise rejected: personal event `'Forbidden: Only the organizer or an Admin can <action>.'` (unchanged);
+    tournament-linked event `'Forbidden: Only an Admin or tournament staff with the bracket permission can <action>.'`
+    (the text drops "the organizer", which no longer passes on their own).
+  - An invitee may still remove their own invite (A157(8)), the former-staff creator included when invited (e.g. a team
+    member auto-invited at creation).
+  - `create_calendar_event` already required the `bracket` permission for a match event (D-20); unchanged.
+- **Views (A162(1), A162(3))**: `view_event_attendees` and `view_my_calendar_invites` path (b) follow the same rule on
+  match events; an Admin reads the attendee list of every event. Details and sizes:
+  [../views/architecture.md](../views/architecture.md) "Phase S11a execution".
+- A162(2) (moving an event more than 7 days after its end stays allowed; unanswered invitees may already be gone) and
+  A162(4) (a team member without an invite row does not read the list) need no change.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -478,10 +502,11 @@ in "Reducer Flows" above. "Ended" means `endAt <= now` for slots and events alik
 | The backend follows the calendar mockup: slot kind Available / Blocked and the blocked-overlap rule for personal events; 10 slots per UTC week; recurrence removed; reschedule resets answers; attendee list for invitees; busy blocks for savers; guests and pending-deletion users refused as targets; invitees may leave; past starts refused; weekly sweep in `run_identity_gc`; one time validator with length and lead bounds; avatars in rows; one-call invitee edit; `BracketMatch.scheduledAt` written. Doc fixes: `toggle_calendar_visibility` sets `isVisible`; the composite keys are not engine-enforced; check orders and `save_calendar` checks listed | Phase S10ac execution (DECISIONS.md A157) | 2026-11-11 |
 | Rulings on the S10ac review: 10 Available + 10 Blocked slots per UTC week, ended slots counted; a Blocked slot may not overlap an own personal event that has not ended; Pending invites of ended events removed by the lazy clean-up and the sweep (500 per run); retention keeps `BracketMatch.scheduledAt`; organizer and SYSTEM refused as targets; titles need a visible character. Attendee-list cut-off not built (views have no clock) | Phase S10ad execution (DECISIONS.md A160) | 2026-11-11 |
 | Fix pass: attendee list per opened event (`view_event_attendees(eventId)`; `view_my_calendar_invites` sends an invitee their own row only); Pending invites removed 7 days after the end (worst case end + 14 days); bracket cascades clear `scheduledAt` also after retention | Phase S10ad execution (DECISIONS.md A161) | 2026-11-11 |
+| A match event's organizer edits it, reads its attendee list and its invite rows only with the tournament's bracket permission (linked rejection text without "the organizer"); an Admin reads every attendee list | Phase S11a execution (DECISIONS.md A162) | 2026-11-11 |
 
 ---
 
-*Last updated: 2026-11-11 (S10ad)*
+*Last updated: 2026-11-11 (S11a)*
 *Feature owner: Phase 08*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

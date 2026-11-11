@@ -4,7 +4,8 @@
 // Permission model:
 //   - create: non-guest; tournament-linked events require the bracket permission (D-20, A25)
 //   - update/delete/invite/remove_invite: organizer OR Admin (D-08); a tournament-linked event also accepts the
-//     tournament's organizer and staff holding the bracket permission (A89, ensureCanManageEvent)
+//     tournament's organizer and staff holding the bracket permission (A89, ensureCanManageEvent); A162(1) (S11a): on
+//     a tournament-linked event the event's organizer needs that permission too
 //   - remove_invite: S10ac (A157(8)) an invitee may also remove their own invite
 //
 // Caps (D-04, D-06, A79), counted on the organizer's events after the lazy cleanup:
@@ -161,15 +162,20 @@ const pendingInvite = (ctx: any, eventId: number, inviteeUserId: number, actorId
  * `bracket` permission (hasTournamentPermission: Moderator+, the organizer, an assistant with canManageBracket),
  * the permission that creates such events. A link whose bracket match or tournament is gone falls back to the
  * personal rule.
+ * A162(1) (S11a): on a tournament match event the organizer has no right of their own: they manage it only while they
+ * hold the `bracket` permission of that tournament, like any other staff member (a creator who left the staff, an
+ * assistant removed or a Moderator demoted, is refused). Personal events are unchanged.
  */
 function ensureCanManageEvent(ctx: any, user: any, event: any, action: string): void {
-    if (event.organizerId === user.id || isRoleAtLeast(user.role, 'Admin')) return;
+    if (isRoleAtLeast(user.role, 'Admin')) return;
     if (event.bracketMatchId != null) {
         const bracketMatch = ctx.db.BracketMatch.id.find(event.bracketMatchId);
         const tournament = bracketMatch ? ctx.db.Tournament.id.find(bracketMatch.tournamentId) : undefined;
         if (tournament && hasTournamentPermission(ctx, user, tournament, 'bracket')) return;
-        throw new SenderError(`Forbidden: Only the organizer, an Admin or tournament staff with the bracket permission can ${action}.`);
+        if (!tournament && event.organizerId === user.id) return; // the link is gone: the personal rule
+        throw new SenderError(`Forbidden: Only an Admin or tournament staff with the bracket permission can ${action}.`);
     }
+    if (event.organizerId === user.id) return;
     throw new SenderError(`Forbidden: Only the organizer or an Admin can ${action}.`);
 }
 

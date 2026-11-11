@@ -1,6 +1,8 @@
 # HSRPVP SpacetimeDB ERD
 
-76 tables. Updated 2026-11-06 (S3 backend reset: 27 tables public → private per A37 / ACCESS-SECURITY-OPS Appendix A, 10 new, `group_phase_record` dropped per A23). Visibility: **21 public** (reference data, aggregates, `user`, `tournament`, `bracket_match`, `admin_alert`, the `lobby_cursor_event` event table); every other table is PRIVATE and read through views (S9). Paste into [mermaid.live](https://mermaid.live) to preview.
+76 tables. Updated 2026-11-06 (S3 backend reset: 27 tables public → private per A37 / ACCESS-SECURITY-OPS Appendix A, 10 new, `group_phase_record` dropped per A23). Visibility: **21 public** (reference data, aggregates, `user`, `tournament`, `bracket_match`, `admin_alert`, the `lobby_cursor_event` event table); every other table is PRIVATE and read through views (S9). Paste into [mermaid.live](https://mermaid.live) to preview. **Since S11a: `user` is private and `user_private` is merged into it; 78 table files in `spacetimedb/src/tables/`, 20 of them public (the 76 / 21 above predate later additions).**
+
+Phase S11a execution (DECISIONS.md A77, A143): `user` is PRIVATE (`public: false`) and absorbs `user_private`, which is removed: `user` loses `hasDiscordLinked` and gains, after `deletedAt`, `loginMethod?`, `providerId?`, `providerUsername?` (strings) and `linkedAt?` (timestamp), with the btree indexes `provider_id` and `by_method_and_provider` moved from `user_private`. `leaderboard` gains `displayName` and `avatarCharacterName` (strings) after `userId` (the public top 20 carries the card, A77(1)). `tournament_player_account` gains `origin` (the new enum `AccountLockOrigin` = Entry | StandIn) after `hsrAccountId` and a `tournament_id` btree index (A143). New view `view_admin_users`. Clear-publish (docs/auth, docs/views, docs/tournament, docs/mmr architecture "Phase S11a execution").
 
 Phase S10ac execution (DECISIONS.md A157): `availability_slot` loses `isRecurring`, `recurrenceRule` and `expiresAt` and gains `kind` (the new enum `SlotKind` = Available | Blocked) after `endAt`; the struct `RecurrenceRule` and the enum `RecurrenceType` are removed. `bracket_match.scheduledAt` (optional timestamp, unchanged column) is now written: the start of the match's calendar event, cleared when the event is deleted. No index change (docs/calendar/architecture.md "Phase S10ac execution"). S11 clear-publish.
 
@@ -21,7 +23,7 @@ Phase S7b execution (DECISIONS.md A60): `match_result_game` gains `blueConfirmed
 
 | Color | Tables (PUBLIC unless marked) |
 |-------|--------|
-| blue | user, user_presence (PRIVATE, new S3 A48), user_identity (PRIVATE), user_private (PRIVATE), ban_record (PRIVATE), link_request (PRIVATE, new S3 A46), deleted_user (PRIVATE), server_identity (PRIVATE), user_deletion_job, identity_gc_job, gc_result (PRIVATE) |
+| blue | user (PRIVATE since S11a, A77), user_presence (PRIVATE, new S3 A48), user_identity (PRIVATE), ~~user_private~~ (merged into user, S11a), ban_record (PRIVATE), link_request (PRIVATE, new S3 A46), deleted_user (PRIVATE), server_identity (PRIVATE), user_deletion_job, identity_gc_job, gc_result (PRIVATE) |
 | green | hsr_character, hsr_lightcone, archetype, hsr_character_archetype, season |
 | orange | hsr_account (PRIVATE), hsr_account_character (PRIVATE), cost_set, hsr_character_cost, hsr_lightcone_cost, hsr_synergy_cost (characterA/characterB, A21), cost_set_draft_character (PRIVATE), cost_set_draft_lightcone (PRIVATE), cost_set_draft_synergy (PRIVATE) |
 | purple | tournament, bracket_match, tournament_enrolled (PRIVATE), tournament_team_member (PRIVATE), tournament_assistant (PRIVATE), tournament_team (PRIVATE), tournament_team_request (PRIVATE), tournament_stand_in (PRIVATE), tournament_player_account (PRIVATE), tournament_finalize_job (scheduled, new S3 A24) |
@@ -40,6 +42,8 @@ erDiagram
         string username UK
         string avatarCharacterName FK
         u32 displayedAchievementId FK
+        string loginMethod "S11a A77: from user_private; unset for a guest"
+        string providerId "S11a A77: btree provider_id"
     }
     user_identity {
         Identity identity PK
@@ -49,11 +53,6 @@ erDiagram
         Identity identity PK
         u32 userId FK
         bool isOnline "A48: one row per identity, no per-user count"
-    }
-    user_private {
-        u32 userId PK_FK
-        string loginMethod "A46: 'discord'"
-        string providerId
     }
     ban_record {
         u32 id PK
@@ -204,6 +203,7 @@ erDiagram
         u32 tournamentId PK_FK
         u32 userId PK_FK
         u32 hsrAccountId PK_FK
+        string origin "S11a A143: Entry or StandIn; btree tournament_id"
     }
     bracket_match {
         u32 id PK
@@ -381,6 +381,7 @@ erDiagram
         u16 rank PK
         u32 seasonId PK_FK
         u32 userId FK
+        string displayName "S11a A77: denormalized card"
     }
     player_stat {
         u32 userId PK_FK
@@ -615,7 +616,6 @@ erDiagram
     saved_calendar }o--|| user : "targetUserId (many-to-many junction)"
 
     %% Phase 12: Auth Security Hardening
-    user_private ||--|| user : "userId (one-to-one)"
     ban_record }o--|| user : "bannedByUserId (many-to-one)"
 
     %% S3 backend reset (A46 link codes, A48 presence, §B.5 rate state)

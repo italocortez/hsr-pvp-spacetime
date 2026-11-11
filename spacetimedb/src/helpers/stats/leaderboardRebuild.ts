@@ -8,7 +8,7 @@
 // rebuilds). A37: every row's audit actor is SYSTEM_USER_ID; the finalizing player's id never reaches this public
 // aggregate (it may be a player of an anonymous lobby).
 
-import { insertWithAudit } from '@module/helpers/admin/auditHelpers';
+import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { SYSTEM_USER_ID } from '@module/helpers/admin/auditColumns';
 
 /** Minimum matches required to appear on a leaderboard (D-46). */
@@ -57,14 +57,35 @@ function insertCategory(ctx: any, category: string, seasonId: number, entries: E
     const top = entries.slice(0, LEADERBOARD_MAX_ENTRIES);
     for (let i = 0; i < top.length; i++) {
         const entry = top[i];
+        const user = ctx.db.User.id.find(entry.userId); // a live user (isLive filtered the candidates)
         ctx.db.Leaderboard.insert(insertWithAudit(ctx, {
             category,
             rank: i + 1,
             userId: entry.userId,
+            displayName: user?.displayName ?? '',
+            avatarCharacterName: user?.avatarCharacterName ?? '',
             rating: entry.rating,
             matchesPlayed: entry.matchesPlayed,
             wins: entry.wins,
             seasonId,
+        }, SYSTEM_USER_ID));
+    }
+}
+
+/**
+ * A77(1) (S11a): the leaderboard's denormalized card follows the user's display name and avatar. Called after
+ * update_display_name, update_avatar and admin_update_user; rewrites the user's rows (Leaderboard.by_user, at most one
+ * per category and season) when the card changed. SYSTEM audit actor, as the rebuild (A37).
+ */
+export function syncLeaderboardCard(ctx: any, userId: number): void {
+    const user = ctx.db.User.id.find(userId);
+    if (!user) return;
+    for (const row of [...ctx.db.Leaderboard.by_user.filter(userId)]) {
+        if (row.displayName === user.displayName && row.avatarCharacterName === user.avatarCharacterName) continue;
+        ctx.db.Leaderboard.delete(row);
+        ctx.db.Leaderboard.insert(updateWithAudit(ctx, row, {
+            displayName: user.displayName,
+            avatarCharacterName: user.avatarCharacterName,
         }, SYSTEM_USER_ID));
     }
 }

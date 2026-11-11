@@ -283,7 +283,8 @@ the table; the panel subscribes each view while its tab is open. No `.iter()` in
 
 Not built: `view_admin_lobbies`, `view_admin_match_results`, `view_admin_match_history` (ACCESS-SECURITY-OPS Appendix B
 lists them as trimmable; PAGE-MAP's adminpanel section, authoritative by A44(1), does not use them). The Users tab's
-public `User` subscription is the only `User` subscription in the app (PAGE-MAP D2).
+public `User` subscription is the only `User` subscription in the app (PAGE-MAP D2). **Superseded by Phase S11a
+execution (A77):** `User` is private; the Users tab reads `view_admin_users`.
 
 ## Phase S10r execution (DECISIONS.md A122)
 
@@ -300,6 +301,20 @@ public `User` subscription is the only `User` subscription in the app (PAGE-MAP 
   - Other behaviour of the upsert is unchanged: the cost cases run no recomputation (the rating recomputation of D-33 belongs to the `HsrCharacter` case, and no completeness check runs after an upsert), the reducer returns nothing and these cases log nothing. The only difference for an identical row outside a live game is that it is no longer rewritten (before S10w its audit columns were bumped and a character / light-cone row was deleted and re-inserted).
   - Details in [../cost-sets/architecture.md](../cost-sets/architecture.md).
 - **Roster rows.** The generic editor has no `HsrAccount` / `HsrAccountCharacter` case (`admin_delete_row` and `admin_bulk_upsert` answer "Unknown table" / "Bulk upsert not supported"); the Admin roster reducers refuse a selected account ([../roster/architecture.md](../roster/architecture.md) "Phase S10w execution"). `admin_bulk_upsert('HsrCharacter')` may still recompute every `accountRating` (D-33), which changes no character or cost.
+
+## Phase S11a execution (DECISIONS.md A77)
+
+- **Users tab.** `User` is private; the tab subscribes `view_admin_users` (Moderator+, `views/identityViews.ts`): every
+  `User` row with the columns the tab read from the public table (id, username, displayName, isGuest, role,
+  hasDiscordLinked derived from `loginMethod`, avatarCharacterName, displayedAchievementId?, deletedAt?, the audit
+  columns). The provider link stays in `view_admin_user_private` (same row shape; read from `User` now). Row, size and
+  exposure details: [../views/architecture.md](../views/architecture.md) "Phase S11a execution".
+- **`admin_ban_user`** (`reducers/admin/banAdmin.ts`) finds the linked user through `User.provider_id` (same login method)
+  instead of `UserPrivate.provider_id`; the soft-delete and the 5 s job are unchanged.
+- **`admin_update_user`** also rewrites the user's `Leaderboard` card (`syncLeaderboardCard`, after
+  `syncSoloTeamNames`), since the public leaderboard carries the display name (A77(1); [../mmr/architecture.md](../mmr/architecture.md)).
+- `server_nuke_test_data` has no `UserPrivate` block left; the SYSTEM-preserving blocks are `UserPresence`,
+  `UserIdentity`, `User`.
 
 ## Phase History
 
@@ -335,10 +350,11 @@ public `User` subscription is the only `User` subscription in the app (PAGE-MAP 
 | `admin_update_user`: rename rules (trim, non-empty, 32 characters), solo team rename, a user pending deletion refused; `admin_delete_row('MatchSessionHistory')` deletes its participant, step, game and lineup history rows | Phase S10r execution (DECISIONS.md A122) | 2026-11-10 |
 | `admin_bulk_upsert` / `admin_delete_row` refuse a character, light-cone or synergy cost row (insert, change, delete) of a set with a lobby in Drafting, Equipping or Scoring (`ensureNoLiveGameOnCostSet`, the A107(4) test; set 0 included); an upsert row equal to the stored one (f32) is skipped with no write and no refusal; the Admin roster reducers refuse a selected account | Phase S10w execution (DECISIONS.md A142) | 2026-11-10 |
 | Fix pass: `costSetId` of the cost rows (upsert) and cost keys (delete) must be null (set 0) or a whole number 0..4294967295, refused before any lookup or guard; the seed behaviour under a live game documented per call | Phase S10w execution (DECISIONS.md A142; S10w review F1, F2) | 2026-11-10 |
+| Users tab on `view_admin_users` (`User` private); `admin_ban_user` finds the user through `User.provider_id`; `admin_update_user` rewrites the leaderboard card | Phase S11a execution (DECISIONS.md A77) | 2026-11-11 |
 
 ---
 
-*Last updated: 2026-11-10 (S10w)*
+*Last updated: 2026-11-11 (S11a)*
 *Feature owner: Phase 01 / Phase 09 / Phase 12 / Phase 15*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

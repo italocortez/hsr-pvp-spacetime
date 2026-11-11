@@ -145,7 +145,7 @@ function moveEntry(ctx: any, tournament: any, enrolled: any, fromGuestId: number
     if (enrolled.isWaitlisted) {
         deleteWaitlistAccounts(ctx, tournamentId, toUserId); // no remembered choice: promotion locks every account
     } else if (enrolled.status.tag !== 'Disqualified') {
-        lockPlayerAccounts(ctx, tournamentId, toUserId, undefined, actorId);
+        lockPlayerAccounts(ctx, tournamentId, toUserId, undefined, actorId, 'Entry');
     }
     moveUserInvitesForTournament(ctx, fromGuestId, toUserId, tournamentId, actorId); // A113(5)
     console.log(`[TOURNAMENT] A112: entry of guest #${fromGuestId} in tournament #${tournamentId} moved to user #${toUserId}`);

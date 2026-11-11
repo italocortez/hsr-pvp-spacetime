@@ -6,12 +6,12 @@
  *   1. view_my_profile is per sender: an anonymous connection receives 0 rows; after login_as_guest exactly its own
  *      row arrives (docs/auth/contract.md "Guest Login (First Time)": username Guest_{last hex8}, `_N` on a collision, isGuest).
  *   2. SEC-01b: private tables never reach a client, even one that subscribes everything it can. Type level: the
- *      generated bindings have no accessor for UserPrivate, UserIdentity, HsrAccount, LobbyMember (A37); a
- *      `@ts-expect-error` turns a regression into a compile error. Runtime: subscribeToAllTables delivers none of them
- *      (deliberately used here: the client "that subscribes everything" is the subject), and a direct
- *      `SELECT * FROM <private table>` subscription is refused by the server.
- *   3. What is public today: the User table (PAGE-MAP D2: only the admin Users tab subscribes it); a client
- *      subscribed to its own User row receives it.
+ *      generated bindings have no accessor for User (A77, S11a: UserPrivate merged into it), UserIdentity, HsrAccount,
+ *      LobbyMember (A37); a `@ts-expect-error` turns a regression into a compile error. Runtime: subscribeToAllTables
+ *      delivers none of them (deliberately used here: the client "that subscribes everything" is the subject), and a
+ *      direct `SELECT * FROM <private table>` subscription is refused by the server.
+ *   3. A77(3) (S11a): User is private; a client subscribing its own User row is refused (the admin Users tab reads
+ *      view_admin_users).
  *
  * Estimated runtime: ~25 s (three guest connections; test 2 pulls every public table once).
  */
@@ -27,7 +27,7 @@ import {
     waitFor,
 } from './_helpers';
 
-const PRIVATE_TABLES = ['user_private', 'user_identity', 'hsr_account', 'lobby_member'] as const;
+const PRIVATE_TABLES = ['user', 'user_identity', 'hsr_account', 'lobby_member'] as const; // A77: user (user_private merged)
 
 describe('Auth subscriptions over the wire (§D.5)', () => {
     const open: LiveConn[] = [];
@@ -52,11 +52,11 @@ describe('Auth subscriptions over the wire (§D.5)', () => {
         expect(row.username).toMatch(new RegExp(`^Guest_${c.identity.slice(-8)}(_\\d+)?$`));
     }, 30_000);
 
-    it('SEC-01b: UserPrivate, UserIdentity, HsrAccount and LobbyMember never reach a client that subscribes everything (A37)', async () => {
+    it('SEC-01b: User, UserIdentity, HsrAccount and LobbyMember never reach a client that subscribes everything (A37, A77)', async () => {
         // Type level: no client accessor exists for a private table.
         const typeProbe = (conn: LiveConn['conn']) => [
-            // @ts-expect-error UserPrivate is private (A37): no generated accessor
-            conn.db.userPrivate,
+            // @ts-expect-error User is private (A77, S11a; UserPrivate merged into it): no generated accessor
+            conn.db.user,
             // @ts-expect-error UserIdentity is private (A37): no generated accessor
             conn.db.userIdentity,
             // @ts-expect-error HsrAccount is private (D-20, A37): no generated accessor
@@ -85,7 +85,7 @@ describe('Auth subscriptions over the wire (§D.5)', () => {
         // Runtime: the client cache has no such table, under any spelling.
         expect(typeProbe(c.conn).every((accessor) => accessor === undefined)).toBe(true);
         const cached = Object.keys(c.conn.db).map((k) => k.toLowerCase().replace(/_/g, ''));
-        for (const name of ['userprivate', 'useridentity', 'hsraccount', 'lobbymember']) {
+        for (const name of ['user', 'useridentity', 'hsraccount', 'lobbymember']) {
             expect(cached).not.toContain(name);
         }
 
@@ -96,15 +96,11 @@ describe('Auth subscriptions over the wire (§D.5)', () => {
         }
     }, 90_000);
 
-    it('User is public today (PAGE-MAP D2: only the admin Users tab subscribes it): a client subscribed to its own User row receives it', async () => {
+    it('A77(3): User is private: a client subscribing its own User row is refused', async () => {
         const guest = await connectGuest();
         open.push(guest);
 
-        await subscribe(guest.conn, [`SELECT * FROM user WHERE id = ${guest.userId}`]);
-        const own = await waitFor(
-            () => [...guest.conn.db.user.iter()].find((u) => u.id === guest.userId),
-            'own User row',
-        );
-        expect(own.username).toBe(guest.username);
+        const outcome = await trySubscribe(guest.conn, `SELECT * FROM user WHERE id = ${guest.userId}`);
+        expect(outcome.applied, 'SELECT * FROM user must be refused').toBe(false);
     }, 30_000);
 });

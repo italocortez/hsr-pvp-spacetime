@@ -285,3 +285,11 @@ export const ShuffleMode = t.enum('ShuffleMode', {
     RandomSwap: t.unit(),
     TeamSwap: t.unit(),
 });
+
+// A143 (S11a): where a TournamentPlayerAccount lock came from: the player's own entry (registration, promotion,
+// lock_tournament_accounts while enrolled, an A112 entry transfer) or taking part as a stand-in (the participation
+// snapshot, lock_tournament_accounts by an approved stand-in without an enrolment).
+export const AccountLockOrigin = t.enum('AccountLockOrigin', {
+    Entry: t.unit(),
+    StandIn: t.unit(),
+});

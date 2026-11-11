@@ -1,9 +1,11 @@
 import { table, t } from 'spacetimedb/server';
+import { AccountLockOrigin } from '@module/types/enums';
 
 export const tournamentPlayerAccountColumns = {
     tournamentId: t.u32(),
     userId: t.u32(),
     hsrAccountId: t.u32(),
+    origin: AccountLockOrigin, // A143 (S11a): Entry (the player's own entry) or StandIn (taking part as a stand-in)
     createdById: t.u32(),
     createdDate: t.timestamp(),
     lastModifiedById: t.u32(),
@@ -17,5 +19,6 @@ export const TournamentPlayerAccount = table({
     indexes: [
         { accessor: 'by_tournament_and_user', algorithm: 'btree', columns: ['tournamentId', 'userId'] },
         { accessor: 'by_user', algorithm: 'btree', columns: ['userId'] },
+        { accessor: 'tournament_id', algorithm: 'btree', columns: ['tournamentId'] }, // A143 (S11a): the end-of-tournament sweep
     ],
 }, tournamentPlayerAccountColumns);

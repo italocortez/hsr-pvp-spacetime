@@ -24,6 +24,7 @@ Views are server-side read reducers that return filtered data to authenticated o
 - **Auth:** Admin only (`ensureAdmin`)
 - **Returns:** `UserPrivate` row for a target userId
 - **Purpose:** Admin access to private user data (email, provider tokens)
+- **Superseded:** S9b (Moderator+, every linked user) and S11a (read from `User`, A77); see "Phase S11a execution"
 
 #### view_my_roster
 - **Auth:** Authenticated
@@ -236,7 +237,7 @@ Kept unchanged: the replay set (`view_my_match_session_history`, `_step_history`
 **Known scans outside the view bodies.** `computeLobbyMemberRating` (the merged rating of a member with several
 selected accounts, backlog #10) reads the `HsrCharacter` reference table in full through `computeRosterRating`; a
 member with one account reads the stored `HsrAccount.accountRating`. `views/identityViews.ts` still scans
-`HsrAccount` and `UserPrivate` (S9b).
+`HsrAccount` and `UserPrivate` (S9b). (Resolved in S9b; `UserPrivate` no longer exists since S11a, A77.)
 
 ### S9a fix pass (DECISIONS.md A37)
 
@@ -278,7 +279,7 @@ MMR reading, shared). New files `views/calendarViews.ts`, `views/adminViews.ts`.
 | `view_my_profile` (modified) | identityViews | per-sender, layer 0 | `MyProfileRow` (PK `id`; now an array of at most one row): username, displayName, avatarCharacterName, displayedAchievementId?, hasDiscordLinked, isGuest, role, loginMethod?, providerId?, providerUsername? | own; no presence, deletedAt or audit columns | `UserIdentity.identity`, `User.id`, `UserPrivate.userId` |
 | `view_public_hsr_accounts` (modified) | identityViews | anonymous shared | `PublicHsrAccountRow` (unchanged columns) | owner identified by choice (public roster) | `HsrAccount.is_roster_public` (**new index**), `HsrAccountCharacter.hsr_account_id` |
 | `view_admin_user_private` (modified) | identityViews | Moderator+ (else `[]`) | `AdminUserPrivateRow` (PK `userId`): loginMethod, providerId, providerUsername (no audit columns) | staff | full read (staff-only) |
-| `view_user_by_username(username)` (new) | identityViews | anonymous arg view | `UserByUsernameRow`: userId, username, displayName, avatarCharacterName, displayedAchievementId?; exact match, soft-deleted → `[]` | `User` is public | `User.username` (unique) |
+| `view_user_by_username(username)` (new) | identityViews | anonymous arg view | `UserByUsernameRow`: userId, username, displayName, avatarCharacterName, displayedAchievementId?; exact match, soft-deleted → `[]` | `User` is public (private since S11a, A77: the view stays the exact-match search) | `User.username` (unique) |
 | `view_user_achievements(userId)` (new) | identityViews | anonymous arg view | `UserAchievementViewRow`: achievementId, awardedAt | no awarder, no audit ids (A40 residual risk = timing) | `UserAchievement.by_user` |
 | `view_my_player_stats` (modified) | statsViews | per-sender | `MyPlayerStatRow`: mode, draft, match type, team size, season, matchesPlayed, wins, losses, matchesSpectated | no userId, no audit ids (the writer stamps the finalizing user) | `PlayerStat.by_user` |
 | `view_my_character_stats` (modified) | statsViews | per-sender | `MyCharacterStatRow`: characterName + the stat key + the eight counters | as above | `PlayerCharacterStat.by_user` |
@@ -476,6 +477,92 @@ organizer path (b) and `view_event_attendees` carry the answered invites only; a
 and 10 Blocked slots per UTC week (A160(1)), which bounds `view_my_availability` and
 `view_saved_calendar_availability` (about 560 rows per owner at most, against no bound before).
 
+## Phase S11a execution (DECISIONS.md A77, A162)
+
+### A77: `User` is private; where its fields reach a client now
+
+`User` is `public: false` and holds the former `UserPrivate` columns ([../auth/architecture.md](../auth/architecture.md)
+"Phase S11a execution"). Views still read it server-side; no client subscribes it (no generated accessor). Every field
+a client could read from the public table before, and what delivers it now:
+
+| `User` field (public before S11a) | The user themself | Other players (pages, PAGE-MAP D2) | Staff (Moderator+) |
+|---|---|---|---|
+| `id` | `view_my_identity`, `view_my_profile` | the `userId` columns of the context views (lobby members, chat, steps, participants, tournament views, calendar views, relationships, `view_user_by_username`, `Leaderboard`), masked where A37 applies | `view_admin_users` |
+| `username` | `view_my_profile` | `view_user_by_username(username)` (exact search only) | `view_admin_users` |
+| `displayName` | `view_my_profile` | denormalized labels: `view_my_lobby_members.label`, `view_lobby_browser.hostLabel`, chat and System lines, `view_my_relationships.otherDisplayName`, the calendar labels, the tournament labels, `view_user_by_username`, **`Leaderboard.displayName` (new)** | `view_admin_users`, the labels of the admin views |
+| `avatarCharacterName` | `view_my_profile` | `view_my_lobby_members`, `view_my_relationships`, the calendar views (organizer, invitee, inviter, saved target), `view_user_by_username`, **`Leaderboard.avatarCharacterName` (new)** | `view_admin_users` |
+| `displayedAchievementId` | `view_my_profile` | `view_my_lobby_members`, `view_my_relationships`, `view_user_by_username` (titles list: the public `UserAchievement` table / `view_user_achievements(userId)`) | `view_admin_users` |
+| `isGuest` | `view_my_profile` | not delivered (A77) | `view_admin_users`, `view_admin_deleted_users` (archive) |
+| `role` | `view_my_profile` | not delivered (A77); tournament staff rights through `view_tournament_staff` flags, not the role | `view_admin_users` |
+| `hasDiscordLinked` (dropped, derived from `loginMethod`) | `view_my_profile` | not delivered | `view_admin_users`, `view_admin_user_private` |
+| `deletedAt` | not projected | not delivered (a deleted user reads as the archived label) | `view_admin_users`, `view_admin_deleted_users` |
+| audit columns | not projected | not delivered | `view_admin_users` |
+| provider columns (from `UserPrivate`) | `view_my_profile` (`linkedAt` not sent) | not delivered | `view_admin_user_private` (`linkedAt` not sent) |
+
+- **`view_admin_users`** (new, `views/identityViews.ts`, Moderator+ through `staffCaller`, else `[]`): every `User` row,
+  row `AdminUserRow` (PK `id`): id, username, displayName, isGuest, role, hasDiscordLinked (derived: `loginMethod` is
+  `'discord'`), avatarCharacterName, displayedAchievementId?, deletedAt?, createdById, createdDate, lastModifiedById,
+  lastModifiedDate: the columns the Users tab read from the public table (the mockup's hidden-by-default audit columns
+  included). Staff-only full read after the role check (A37 admin exemption). Replaces PAGE-MAP D6's `User`
+  subscription.
+- **`view_my_profile`**, **`view_admin_user_private`**: row shapes kept (A77(2)); the provider fields come from the
+  `User` row; `view_admin_user_private` emits one row per user with `loginMethod` and `providerId` set (as the
+  `UserPrivate` rows were), so guests give none.
+- **`view_user_by_username`** stays the exact-match search (A77(1)); with `User` private it is the only way to resolve a
+  username, and for a known username it gives id, display name, avatar and title, nothing else.
+- **Leaderboard** (A77(1), implementer's choice of denormalized columns over a `view_leaderboard`, as PAGE-MAP §3 lists):
+  the public `Leaderboard` table gains `displayName` and `avatarCharacterName` (after `userId`), written by
+  `rebuildLeaderboard` and rewritten by `syncLeaderboardCard` after `update_display_name`, `update_avatar` and
+  `admin_update_user` (`helpers/stats/leaderboardRebuild.ts`; `Leaderboard.by_user`, SYSTEM actor). A view was not
+  chosen: the table has no season index, so a view would scan it, and a table subscription costs nothing to evaluate.
+- Not added: `view_user_by_id(userId)` (A77(1): only if a page needs one; no planned page needs it, see below).
+
+**Exposure review.** Every public table and view was checked for what A77 hides (provider id and name, role, guest
+flag, ban and deletion state, rate state, private rating); the in-memory sweep `__tests__/identity/user-private.test.ts`
+reads every exported view as a verified outsider, a lobby member and invitee, a guest and an unmapped identity:
+
+| Exposure | Status |
+|---|---|
+| the public `User` table (every field above, to any raw client) | closed by A77 (private) |
+| `view_my_profile` provider fields, role, guest flag | the caller's own row only (A46, unchanged) |
+| `view_admin_*` (provider link, ban records, deletion archive, presence, role) | Moderator+ only (A37), unchanged |
+| `view_user_by_username` returns `[]` for a soft-deleted user | deletion state inferable during the 5 s soft-delete window only; kept (A77(1) keeps the view as built) |
+| archived labels (`resolveUserLabel`) of deleted users in history and label columns | a deleted account is recognizable by its label; inherent to D-09, not covered by A77 |
+| `Leaderboard` rows of a user deleted after the last rebuild keep the name until the next rebuild | the rebuild skips deleted users (results audit #9); no decision covers removing rows at deletion; reported |
+| `UserAchievement` public table: `userId`, `awardedById` and audit ids (who awarded a title) | A43 keeps it public; not covered by A77; reported |
+| `Tournament.organizerId` and the audit ids of public tables (`createdById`, `lastModifiedById`) | user ids, no private data; not covered by A77 |
+| MMR in `view_my_lobby_members.mmrByMode` / `view_my_relationships` / `Leaderboard` | A40 / A44(2) rules (rating visibility), not A77; unchanged |
+| rate state (`UserRateState`), ban records, presence | private tables, read by staff views only; unchanged |
+
+**Planned pages and the fields they lose.** The leaderboard page (PAGE-MAP §3, no mockup) needed names and avatars:
+added above. The tournament list (no mockup) reads the public `Tournament` table, whose `organizerId` resolved to a
+name through `User` before; after A77 the organizer's name comes from `view_tournament_staff(tournamentId)`, one
+tournament at a time: a list that shows every organizer's name would need a denormalized column or a view (reported,
+not built). Every other page in PAGE-MAP already reads its names through views (D2).
+
+**Size and egress.** No non-staff subscription changes size: pages never subscribed `User` (D2). A raw client can no
+longer download the table (about 85 B per user: id 4, two names about 16 each, flags 3, avatar about 14, title 5,
+deletedAt 1 to 9, audit 24). `view_admin_users` sends the same about 85 B per user to a Moderator+ subscriber, only
+while the tab is open (gated). `view_admin_user_private` rows are unchanged; it now re-evaluates on any `User` write
+instead of `UserPrivate` writes (server compute for staff subscribers, no row change unless a provider field changes).
+`view_my_profile` is unchanged in shape and size and reads one table instead of two. `Leaderboard` rows grow by the two
+strings, about 30 B (4 + about 12 for the name, 4 + about 10 for the avatar): at most 80 rows per season, about
++2.4 KB per subscriber; a rename or new avatar of a ranked player rewrites at most 4 rows (delete + insert each).
+
+### A162: calendar views (calendar architecture "Phase S11a execution")
+
+- `view_event_attendees` (`canReadAttendees`): an **Admin** reads the list of every event, personal events included
+  (A162(3)); on a **match event** the event's organizer reads the list only while holding the tournament's `bracket`
+  permission (`hasTournamentPermission`), otherwise they are treated as anyone else (an invitee reads it when the
+  tournament is not anonymous; A162(1)); a match event whose match or tournament is gone: the organizer only, as before.
+  Personal events: organizer and invitees, unchanged.
+- `view_my_calendar_invites` path (b) (all invites of the caller's events): for a match event only while the caller
+  holds the `bracket` permission (a match event whose link is gone keeps the old rule); without it the caller keeps
+  what path (a) gives, their own invite. New index reads for the caller's match events: `BracketMatch.id`,
+  `Tournament.id`, `TournamentAssistant.by_tournament_and_user` (and `User.id`, once per call).
+- Size: `view_event_attendees` adds at most 9 rows (about 45 B each) per event an Admin opens; a former-staff creator
+  loses the rows. `view_my_calendar_invites` rows only shrink (a former-staff creator's match-event rows go).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -516,9 +603,11 @@ and 10 Blocked slots per UTC week (A160(1)), which bounds `view_my_availability`
 | Calendar views follow the mockup: avatars next to labels; busy blocks for savers; Declined invitees without notes; invitees read the attendee list (not on anonymous tournaments' match events, staff excepted); slot rows carry `kind`, recurrence columns removed | Phase S10ac execution (DECISIONS.md A157) | 2026-11-11 |
 | Calendar views unchanged; the attendee-list cut-off at an event's end (A160(5)) not built, since a view cannot read the time | Phase S10ad execution (DECISIONS.md A160) | 2026-11-11 |
 | Fix pass: new `view_event_attendees(eventId)` (the attendee list of one opened event; organizer, invitees of a personal event, invitees of a non-anonymous tournament's match event, `bracket` permission holders); `view_my_calendar_invites` path (c) removed, an invitee gets their own row only | Phase S10ad execution (DECISIONS.md A161) | 2026-11-11 |
+| `User` private (A77): new `view_admin_users` (Moderator+); `view_my_profile` / `view_admin_user_private` read the merged `User` row (shapes kept, `hasDiscordLinked` derived); `Leaderboard` carries `displayName` / `avatarCharacterName`; exposure review | Phase S11a execution (DECISIONS.md A77) | 2026-11-11 |
+| A match event's organizer reads the attendee list and the organizer rows of `view_my_calendar_invites` only with the bracket permission; an Admin reads every attendee list | Phase S11a execution (DECISIONS.md A162) | 2026-11-11 |
 ---
 
-*Last updated: 2026-11-11 (S10ad)*
+*Last updated: 2026-11-11 (S11a)*
 *Feature owner: Phase 03 / Phase 06 / Phase 08 / Phase 09 / Phase 10.4 / Phase 15*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

@@ -97,25 +97,11 @@ function createHarnessInternal(opts: { verify: boolean }): Promise<TestHarness> 
         // Subscribe with onApplied — resolves when initial data is in client cache
         connInner.subscriptionBuilder()
           .onApplied(async () => {
-            let userId = 0;
-
-            if (opts.verify) {
-              // Read from view_my_identity — returns caller's UserIdentity row.
-              // No spacetime sql CLI roundtrip — the view is subscribed via
-              // subscribeToAllTables() and cached in the client.
-              const idRows = [...connInner.db.view_my_identity.iter()];
-              userId = idRows.length > 0 ? (idRows[0] as any).userId : 0;
-            } else {
-              // Guest path: match Guest_<last 8 hex of the identity> in subscription cache (S10h guestUsernameBase),
-              // with the `_2`, `_3`, ... suffix login_as_guest appends on a collision (uniqueUsername).
-              const shortId = identityHex.slice(-8);
-              const guestUsername = new RegExp(`^Guest_${shortId}(_\\d+)?$`);
-              const allUsers = [...connInner.db.User.iter()];
-              const myUser = allUsers.find((u: any) => guestUsername.test(u.username));
-              if (myUser) {
-                userId = (myUser as any).id;
-              }
-            }
+            // Read from view_my_identity — returns caller's UserIdentity row, for guests and verified users alike.
+            // No spacetime sql CLI roundtrip — the view is subscribed via subscribeToAllTables() and cached in the
+            // client. A77(3) (S11a): the guest path no longer scans the User table, which is private.
+            const idRows = [...connInner.db.view_my_identity.iter()];
+            const userId: number = idRows.length > 0 ? (idRows[0] as any).userId : 0;
 
             const harness: TestHarness = {
               conn: connInner,
@@ -205,14 +191,14 @@ export function unwrapSqlOptional(raw: string): string {
 /**
  * Get the test Discord provider ID for a verified harness user.
  * The test harness uses `test_<timestamp>_<random>` as the Discord provider ID.
- * Returns it by querying UserPrivate via SQL (private table, not in client subscription).
+ * Returns it by querying the private User table via SQL (A77: the provider columns moved there from UserPrivate).
  */
 export async function getTestDiscordId(userId: number): Promise<string> {
   const rows = await queryPrivateTable(
-    `SELECT discord_id FROM user_private WHERE user_id = ${userId}`
+    `SELECT provider_id FROM user WHERE id = ${userId}`
   );
-  if (rows.length === 0) throw new Error(`No UserPrivate found for userId ${userId}`);
-  return unwrapSqlOptional(rows[0].discord_id);
+  if (rows.length === 0) throw new Error(`No User found for userId ${userId}`);
+  return unwrapSqlOptional(rows[0].provider_id);
 }
 
 /**
@@ -242,7 +228,7 @@ export function sleep(ms: number): Promise<void> {
  * Query private tables via `spacetime sql` CLI.
  * Returns parsed rows as key-value objects (snake_case column names).
  *
- * Use this for tables with `public: false` (UserPrivate, BanRecord, UserIdentity,
+ * Use this for tables with `public: false` (User (A77), BanRecord, UserIdentity,
  * PlayerStat, PlayerCharacterStat, PlayerRelationship) that aren't accessible
  * via WebSocket subscriptions.
  */

@@ -18,6 +18,7 @@ import { ScheduleAt } from 'spacetimedb';
 import { resolveUserLabel } from '@module/helpers/identity/userLabel';
 import {
     M,
+    advance,
     connect,
     expectReject,
     guest,
@@ -48,6 +49,8 @@ const DELETED = 'Unauthorized: This account has been deleted.';
 const FIVE_SECONDS = 5_000_000n;
 
 const userRow = (test: Harness, a: Actor) => test.db.User.id.find(a.userId);
+// T-S11a (A77): the provider link is on the User row (UserPrivate merged); "no link" = the four columns unset.
+const NO_LINK = { loginMethod: undefined, providerId: undefined, providerUsername: undefined, linkedAt: undefined };
 const bans = (test: Harness) => [...test.db.BanRecord.iter()];
 const ban = (test: Harness, who: Actor | 'internal', providerId: string, reason = 'abuse', banTypeTag = 'DiscordId') =>
     tx(test, who, (ctx) => M.admin_ban_user(ctx, { banTypeTag, providerId, reason }));
@@ -137,7 +140,7 @@ describe('admin_unban_user (auth contract § admin_unban_user; D-07 permanent ba
         expect(bans(test)).toHaveLength(0);
         const back = guest(test, 'back');
         linkDiscord(test, back, 'pid-lifted', 'Back');
-        expect(userRow(test, back)).toMatchObject({ isGuest: false, hasDiscordLinked: true });
+        expect(userRow(test, back)).toMatchObject({ isGuest: false, loginMethod: 'discord' });
     });
 
     it('an unknown BanRecord id is rejected; a non-Admin is rejected and the record stays', () => {
@@ -186,8 +189,7 @@ describe('ban on reconnect (auth contract § clientConnected; D-08 point 2, D-10
         ban(test, boss, pid);
         const newDevice = guest(test, 'new-device');
         expect(() => linkDiscord(test, newDevice, pid, 'Target again')).toThrow(/banned/);
-        expect(userRow(test, newDevice)).toMatchObject({ isGuest: true, hasDiscordLinked: false });
-        expect(test.db.UserPrivate.userId.find(newDevice.userId)).toBeFalsy();
+        expect(userRow(test, newDevice)).toMatchObject({ isGuest: true, ...NO_LINK });
     });
 });
 
@@ -196,23 +198,25 @@ describe('ban on reconnect (auth contract § clientConnected; D-08 point 2, D-10
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('server_link_provider as the owner server identity', () => {
-    it('Case 1a: a guest is upgraded (isGuest false, hasDiscordLinked, username / displayName = providerName) and gets its UserPrivate row (scenario "Provider Linking (Discord)")', () => {
+    it('Case 1a: a guest is upgraded (isGuest false, username / displayName = providerName) and its User row gets the provider link with linkedAt (A77; scenario "Provider Linking (Discord)")', () => {
         const test = newHarness();
         const g = guest(test, 'fresh');
         link(test, { callerIdentityHex: g.identity.toHexString(), providerId: 'pid-fresh', providerName: 'FreshName' });
-        expect(userRow(test, g)).toMatchObject({ isGuest: false, hasDiscordLinked: true, username: 'FreshName', displayName: 'FreshName' });
-        expect(test.db.UserPrivate.userId.find(g.userId)).toMatchObject({ loginMethod: 'discord', providerId: 'pid-fresh', providerUsername: 'FreshName' });
+        expect(userRow(test, g)).toMatchObject({ isGuest: false, username: 'FreshName', displayName: 'FreshName',
+            loginMethod: 'discord', providerId: 'pid-fresh', providerUsername: 'FreshName' });
+        expect(userRow(test, g)!.linkedAt?.microsSinceUnixEpoch).toBe(now(test));
     });
 
-    it('Case 1c: re-linking the same identity is idempotent: one UserPrivate row, still verified, the username kept, the provider username refreshed (edge case "already-verified user")', () => {
+    it('Case 1c: re-linking the same identity is idempotent: one User row, still verified, the username kept, the provider username refreshed, linkedAt kept (A77; edge case "already-verified user")', () => {
         const test = newHarness();
         const g = guest(test, 'twice');
         const hex = g.identity.toHexString();
         link(test, { callerIdentityHex: hex, providerId: 'pid-twice', providerName: 'First' });
+        const linkedAt = userRow(test, g)!.linkedAt;
+        advance(test, 60_000);
         link(test, { callerIdentityHex: hex, providerId: 'pid-twice', providerName: 'Renamed' });
-        expect([...test.db.UserPrivate.iter()].filter((p) => p.userId === g.userId)).toHaveLength(1);
-        expect(userRow(test, g)).toMatchObject({ isGuest: false, hasDiscordLinked: true, username: 'First' });
-        expect(test.db.UserPrivate.userId.find(g.userId)!.providerUsername).toBe('Renamed');
+        expect([...test.db.User.provider_id.filter('pid-twice')].map((u) => u.id)).toEqual([g.userId]);
+        expect(userRow(test, g)).toMatchObject({ isGuest: false, username: 'First', providerUsername: 'Renamed', linkedAt });
         expect(identitiesOf(test, g.userId)).toHaveLength(1);
     });
 
@@ -227,8 +231,7 @@ describe('server_link_provider as the owner server identity', () => {
         const g = guest(test, 'val');
         const args = { callerIdentityHex: g.identity.toHexString(), provider: 'discord', providerId: 'pid-val', providerName: 'Val', ...over };
         expect(() => link(test, args)).toThrow(msg);
-        expect(userRow(test, g)).toMatchObject({ isGuest: true, hasDiscordLinked: false });
-        expect(test.db.UserPrivate.userId.find(g.userId)).toBeFalsy();
+        expect(userRow(test, g)).toMatchObject({ isGuest: true, ...NO_LINK });
     });
 
     it('an identity with no UserIdentity row is told to log in as a guest first (contract error "Identity not registered")', () => {
@@ -236,7 +239,7 @@ describe('server_link_provider as the owner server identity', () => {
         const { identity } = freshAuth(test, 'never-logged-in');
         expect(() => link(test, { callerIdentityHex: identity.toHexString(), providerId: 'pid-new', providerName: 'New' }))
             .toThrow('Identity not registered. Call login_as_guest first.');
-        expect([...test.db.UserPrivate.iter()]).toHaveLength(0);
+        expect([...test.db.User.iter()].filter((u) => u.providerId !== undefined)).toHaveLength(0); // T-S11a (A77)
     });
 
     it('a caller that is not a registered server identity is rejected, even an Admin', () => {
@@ -249,7 +252,7 @@ describe('server_link_provider as the owner server identity', () => {
         expect(userRow(test, g)!.isGuest).toBe(true);
     });
 
-    it('SEC-03a: a banned provider id cannot be linked; no UserPrivate is written and the user is unchanged (scenario "Ban Enforcement at Link-Time") (text per A76)', () => {
+    it('SEC-03a: a banned provider id cannot be linked; no provider link is written and the user is unchanged (scenario "Ban Enforcement at Link-Time") (text per A76)', () => {
         const test = newHarness();
         const boss = admin(test);
         ban(test, boss, 'pid-banned');
@@ -257,8 +260,7 @@ describe('server_link_provider as the owner server identity', () => {
         const msg = rejection(test, 'internal', (ctx) => M.server_link_provider(ctx, {
             callerIdentityHex: g.identity.toHexString(), provider: 'discord', providerId: 'pid-banned', providerName: 'Wannabe',
         }));
-        expect(userRow(test, g)).toMatchObject({ isGuest: true, hasDiscordLinked: false });
-        expect(test.db.UserPrivate.userId.find(g.userId)).toBeFalsy();
+        expect(userRow(test, g)).toMatchObject({ isGuest: true, ...NO_LINK });
         expect(msg).toBe('This discord account is banned and cannot be linked.');
     });
 });
@@ -302,7 +304,7 @@ describe('admin_delete_row(\'User\') and run_user_deletion (D-09 cascade branchi
         expect(jobsFor(test, s.host.userId)).toHaveLength(0);
     });
 
-    it('the job, fired by hand, archives a verified user: User row gone, DeletedUser { displayName, isGuest false, deletedAt }, identities / UserPrivate gone (D-09 case 3)', () => {
+    it('the job, fired by hand, archives a verified user: User row gone, DeletedUser { displayName, isGuest false, deletedAt }, identities gone, the provider link with the User row (D-09 case 3; A77)', () => {
         const test = newHarness();
         const boss = admin(test);
         const target = verified(test, 'archived');
@@ -313,7 +315,6 @@ describe('admin_delete_row(\'User\') and run_user_deletion (D-09 cascade branchi
         expect(userRow(test, target)).toBeFalsy();
         expect(test.db.DeletedUser.id.find(target.userId)).toEqual({ id: target.userId, displayName: 'archived', isGuest: false, deletedAt });
         expect(identitiesOf(test, target.userId)).toHaveLength(0);
-        expect(test.db.UserPrivate.userId.find(target.userId)).toBeFalsy();
         expect(jobsFor(test, target.userId)).toHaveLength(0);
     });
 

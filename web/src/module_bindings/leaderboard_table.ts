@@ -14,6 +14,8 @@ export default __t.row({
   category: __t.string(),
   rank: __t.u16(),
   userId: __t.u32().name("user_id"),
+  displayName: __t.string().name("display_name"),
+  avatarCharacterName: __t.string().name("avatar_character_name"),
   rating: __t.u32(),
   matchesPlayed: __t.u32().name("matches_played"),
   wins: __t.u32(),

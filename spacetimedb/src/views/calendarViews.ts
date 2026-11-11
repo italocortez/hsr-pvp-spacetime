@@ -21,6 +21,7 @@ import { InviteStatus, SlotKind } from '@module/types/enums';
 import { resolveUserLabel } from '@module/helpers/identity/userLabel';
 import { callerUserId } from '@module/helpers/identity/viewAnonymity';
 import { hasTournamentPermission } from '@module/helpers/tournament/tournamentPermissions';
+import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 
 /** The caller's visible saved calendars' target ids (SavedCalendar.user_id; isVisible is the page's show / hide toggle, D-16). */
 function visibleSavedTargets(ctx: any, me: number): number[] {
@@ -176,7 +177,8 @@ export const view_my_calendar_events = spacetimedb.view(
 //    inviteeUserId, inviteeLabel, inviteeAvatarCharacterName?, inviteStatus, respondedAt?, inviterLabel,
 //    inviterAvatarCharacterName? (the invite's creator: the organizer, or the Admin / staff member who added it).
 //    Index-only: CalendarEventInvite.invitee_user_id / event_id, CalendarEvent.organizer_id / id, User.id,
-//    DeletedUser.id.
+//    DeletedUser.id; S11a (A162(1)): for the caller's match events also BracketMatch.id, Tournament.id,
+//    TournamentAssistant.by_tournament_and_user (path (b) needs the bracket permission there).
 // ---------------------------------------------------------------------------
 const MyCalendarInviteRow = t.row('MyCalendarInviteRow', {
     inviteKey: t.u64().primaryKey(),
@@ -221,8 +223,18 @@ export const view_my_calendar_invites = spacetimedb.view(
         for (const invite of ctx.db.CalendarEventInvite.invitee_user_id.filter(me)) {
             add(invite, ctx.db.CalendarEvent.id.find(invite.eventId)?.organizerId);
         }
-        // (b) the invites of the caller's events
+        // (b) the invites of the caller's events. A162(1) (S11a): on a match event only while the caller holds the
+        //     bracket permission of its tournament (a match event whose link is gone: as before, all rows); without it
+        //     the caller keeps what path (a) gives (their own invite, if any).
+        let user: any;
         for (const event of ctx.db.CalendarEvent.organizer_id.filter(me)) {
+            if (event.bracketMatchId !== undefined) {
+                const tournament = matchEventTournament(ctx, event);
+                if (tournament) {
+                    if (user === undefined) user = ctx.db.User.id.find(me) ?? null;
+                    if (!user || !hasTournamentPermission(ctx, user, tournament, 'bracket')) continue;
+                }
+            }
             for (const invite of ctx.db.CalendarEventInvite.event_id.filter(event.id)) add(invite, event.organizerId);
         }
         return [...rows.values()];
@@ -326,22 +338,34 @@ export const view_my_saved_calendars = spacetimedb.view(
 );
 
 /**
- * S10ad (A161(1), after A157(5)): whether `me` may read the attendee list of `event`. The organizer: yes. A personal
- * event: an invitee (any answer; one who removed their own invite is no longer one). A match event: a holder of the
+ * S10ad (A161(1), after A157(5)): whether `me` may read the attendee list of `event`. A personal event: the organizer
+ * and an invitee (any answer; one who removed their own invite is no longer one). A match event: a holder of the
  * `bracket` permission of its tournament (hasTournamentPermission: Moderator+, the tournament organizer, an assistant
  * with canManageBracket), with or without an invite; an invitee when the tournament is not anonymous
  * (`Tournament.isAnonymousDefault` false). A match event whose match or tournament is gone: the organizer only.
+ * S11a: the event's organizer needs the bracket permission on a match event (A162(1)); an Admin reads every event
+ * (A162(3)).
  */
 function canReadAttendees(ctx: any, event: any, me: number): boolean {
-    if (event.organizerId === me) return true;
-    const invited = [...ctx.db.CalendarEventInvite.by_event_and_invitee.filter([event.id, me])].length > 0;
-    if (event.bracketMatchId === undefined) return invited;
-    const match = ctx.db.BracketMatch.id.find(event.bracketMatchId);
-    const tournament = match ? ctx.db.Tournament.id.find(match.tournamentId) : undefined;
-    if (!tournament) return false;
     const user = ctx.db.User.id.find(me);
+    // A162(3) (S11a): an Admin reads the attendee list of every event, personal events included.
+    if (user && isRoleAtLeast(user.role, 'Admin')) return true;
+    const invited = [...ctx.db.CalendarEventInvite.by_event_and_invitee.filter([event.id, me])].length > 0;
+    if (event.bracketMatchId === undefined) return event.organizerId === me || invited;
+    const tournament = matchEventTournament(ctx, event);
+    // The link is gone: the organizer only (S10ad, unchanged).
+    if (!tournament) return event.organizerId === me;
+    // A162(1) (S11a): the organizer of a match event reads the list only while holding the bracket permission; without
+    // it they are treated as anyone else in their position (an invitee of a non-anonymous tournament's event).
     if (user && hasTournamentPermission(ctx, user, tournament, 'bracket')) return true;
     return invited && !tournament.isAnonymousDefault;
+}
+
+/** The tournament of a match event (CalendarEvent.bracketMatchId → BracketMatch.id → Tournament.id), or undefined. */
+function matchEventTournament(ctx: any, event: any): any | undefined {
+    if (event.bracketMatchId === undefined) return undefined;
+    const match = ctx.db.BracketMatch.id.find(event.bracketMatchId);
+    return match ? ctx.db.Tournament.id.find(match.tournamentId) : undefined;
 }
 
 // ---------------------------------------------------------------------------

@@ -5,7 +5,7 @@ import { table, t } from 'spacetimedb/server';
  * Private (public: false) — never exposed to client subscriptions.
  * D-06, CR-01, WR-01
  *
- * S3 (A46): keyed by loginMethod + providerId like UserPrivate. The former BanType enum (one variant,
+ * S3 (A46): keyed by loginMethod + providerId like the provider columns of User (UserPrivate before A77). The former BanType enum (one variant,
  * DiscordId) became the string `loginMethod`: it mirrors the token claim, and adding a provider later is
  * a value, not an enum variant (an enum change would be a type change, hence a wipe).
  */

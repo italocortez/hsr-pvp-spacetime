@@ -10,6 +10,7 @@ import type {
     AdminPresenceRow,
     AdminUserIdentityRow,
     AdminUserPrivateRow,
+    AdminUserRow,
 } from '@bindings/types';
 import { M, connect, disconnect, guest, newHarness, seatOf, setupLobby, tx } from '../fixtures/harness';
 import { moderator, verified, displayName, linked } from '../fixtures/identity';
@@ -48,7 +49,7 @@ describe('admin views (S9b-AD1..AD3, S9b-V9)', () => {
         return { test, mod, admin, player, bannee, leaver, d1, d2, l, lb, outsider: guest(test, 'aout') };
     }
     const ALL = ['view_admin_user_identities', 'view_admin_ban_records', 'view_admin_deleted_users', 'view_admin_presence',
-        'view_admin_lobby_bans', 'view_admin_abuse_config', 'view_admin_user_private'];
+        'view_admin_lobby_bans', 'view_admin_abuse_config', 'view_admin_user_private', 'view_admin_users'];
 
     it('S9b-AD1: a Moderator and an Admin read rows from every admin view; a User, a guest and an unmapped identity read []', () => {
         const w = world();
@@ -128,6 +129,8 @@ describe('admin views (S9b-AD1..AD3, S9b-V9)', () => {
         for (const r of rows) expect(keysOf(r)).toEqual(sorted('adminUserPrivate'));
         expect(rows.find((r) => r.providerId === 'pid-dev')).toMatchObject({ userId: w.d1.userId, loginMethod: 'discord', providerUsername: 'Dev' });
         expect(rows.find((r) => r.providerId === 'pid-bannee')).toMatchObject({ userId: w.bannee.userId });
-        expect(rows).toHaveLength(Number(w.test.db.UserPrivate.count()));
+        // T-S11a (A77): one row per user with a provider link on the User row (UserPrivate merged)
+        expect(rows).toHaveLength([...w.test.db.User.iter()].filter((u) => u.providerId !== undefined).length);
+        expect(rows.find((r) => r.userId === w.outsider.userId)).toBeUndefined(); // a guest: no link, no row
     });
 });

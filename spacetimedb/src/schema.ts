@@ -1,7 +1,6 @@
 import { schema, t } from 'spacetimedb/server';
 import { User } from '@module/tables/identity/user';
 import { UserPresence } from '@module/tables/identity/userPresence';
-import { UserPrivate } from '@module/tables/identity/userPrivate';
 import { LinkRequest } from '@module/tables/identity/linkRequest';
 import { DeletedUser } from '@module/tables/identity/deletedUser';
 import { BanRecord } from '@module/tables/admin/banRecord';
@@ -130,7 +129,6 @@ const spacetimedb = schema({
     // User / Auth
     User,
     UserPresence,
-    UserPrivate,
     DeletedUser,
     BanRecord,
     UserIdentity,

@@ -207,12 +207,10 @@ export function settle(ctx: any, tournamentId: number, actorId: number): void {
  * team audit columns (system user when omitted).
  */
 export function deleteBracket(ctx: any, tournamentId: number, actorId?: number): void {
-    const standInUsers = new Map<number, bigint>(); // user -> earliest approval time (review F10)
+    const standInUsers = new Set<number>(); // A143 (S11a): the release reads the lock origin, no approval time needed
     for (const row of [...ctx.db.BracketMatch.tournament_id.filter(tournamentId)]) {
         for (const standIn of [...ctx.db.TournamentStandIn.bracket_match_id.filter(row.id)]) {
-            const at: bigint = standIn.createdDate.microsSinceUnixEpoch;
-            const seen = standInUsers.get(standIn.userId);
-            if (seen === undefined || at < seen) standInUsers.set(standIn.userId, at);
+            standInUsers.add(standIn.userId);
             ctx.db.TournamentStandIn.id.delete(standIn.id);
         }
         deleteCalendarEventForBracketMatch(ctx, row.id);
@@ -220,7 +218,7 @@ export function deleteBracket(ctx: any, tournamentId: number, actorId?: number):
     }
     // S10v (A136, audit SI12): approvals now exist from generation on, so a regeneration also releases the locks the
     // approvals gave (stand-ins who are not enrolled; nobody has played before InProgress).
-    for (const [userId, at] of standInUsers) releaseStandInLocksIfUnused(ctx, tournamentId, userId, at);
+    for (const userId of standInUsers) releaseStandInLocksIfUnused(ctx, tournamentId, userId);
     for (const team of [...ctx.db.TournamentTeam.tournament_id.filter(tournamentId)]) {
         if (team.groupId !== undefined) {
             ctx.db.TournamentTeam.id.update(updateWithAudit(ctx, team, { groupId: undefined }, actorId));

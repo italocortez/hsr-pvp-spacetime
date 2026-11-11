@@ -171,7 +171,7 @@ describe('A95(1): the identity clean-up deletes an idle guest with no match hist
         for (let i = 0; i < 501; i++) {
             const u = test.db.User.insert({
                 id: 0, username: `bulk_${i}`, displayName: `bulk_${i}`, isGuest: true, role: { tag: 'User' } as any,
-                hasDiscordLinked: false, avatarCharacterName: 'march7th', displayedAchievementId: undefined, deletedAt: undefined,
+                avatarCharacterName: 'march7th', displayedAchievementId: undefined, deletedAt: undefined,
                 ...AUDIT(test),
             } as any);
             test.db.UserIdentity.insert({ identity: freshAuth(test, `bulk-${i}`).identity, userId: u.id, lastSeenAt: test.clock.now(), ...AUDIT(test) });

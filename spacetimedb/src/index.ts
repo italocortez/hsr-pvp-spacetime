@@ -9,8 +9,7 @@ import { seedAbuseConfigDefaults } from '@module/helpers/lobby/abuseControls';
 import { seedSystemLobbyPreset } from '@module/helpers/lobby/systemPreset';
 import { memberHasLeft } from '@module/helpers/lobby/lobbyHelpers';
 
-// Private auth tables — imported for schema registration
-import '@module/tables/identity/userPrivate';
+// Private auth tables — imported for schema registration (UserPrivate was merged into User, A77)
 import '@module/tables/admin/banRecord';
 
 // Phase 15 D-01/D-02: domain view barrel — each file holds views that match the `tables/` layout.
@@ -33,6 +32,7 @@ export {
     view_admin_user_private,
     view_user_by_username,                  // S9b: arg view (username)
     view_user_achievements,                 // S9b: arg view (userId)
+    view_admin_users,                       // S11a (A77): Moderator+, the admin Users tab
 } from '@module/views/identityViews';
 export {
     view_my_cost_sets,
@@ -191,10 +191,13 @@ export const init = spacetimedb.init((ctx) => {
       displayName: 'SYSTEM',
       isGuest: false,
       role: { tag: 'Admin' },
-      hasDiscordLinked: false,
       avatarCharacterName: 'march7th',
       displayedAchievementId: undefined,
       deletedAt: undefined,
+      loginMethod: undefined,
+      providerId: undefined,
+      providerUsername: undefined,
+      linkedAt: undefined,
     }, SYSTEM_USER_ID));
 
     // Link the owner identity to the SYSTEM user so owner connections pass
@@ -265,9 +268,9 @@ export const client_connected = spacetimedb.clientConnected((ctx) => {
   }
 
   // D-08 enforcement point 2: Check if the user's provider is banned on reconnect (A46: loginMethod + providerId)
-  const userPrivate = ctx.db.UserPrivate.userId.find(mapping.userId);
-  if (userPrivate) {
-    const isBanned = checkProviderBan(ctx, userPrivate.loginMethod, userPrivate.providerId);
+  // A77 (S11a): the provider link is on the User row (merged from UserPrivate).
+  if (user.loginMethod !== undefined && user.providerId !== undefined) {
+    const isBanned = checkProviderBan(ctx, user.loginMethod, user.providerId);
     if (isBanned && !user.deletedAt) {
       ctx.db.User.id.update(updateWithAudit(ctx, user, {
         deletedAt: ctx.timestamp,

@@ -152,6 +152,9 @@ export const COLS = {
         'guestLobbyBurstThreshold', 'guestLobbyBurstWindowMinutes',
         'guestCreationEnabled', 'guestCreationBurstThreshold', 'guestCreationBurstWindowMinutes'] as const, // T-S10h: + A95(2)
     adminUserPrivate: ['userId', 'loginMethod', 'providerId', 'providerUsername'] as const,
+    // T-S11a (A77(1)): the admin Users tab
+    adminUser: ['id', 'username', 'displayName', 'isGuest', 'role', 'hasDiscordLinked', 'avatarCharacterName',
+        'displayedAchievementId', 'deletedAt', 'createdById', 'createdDate', 'lastModifiedById', 'lastModifiedDate'] as const,
 };
 export type Cols<K extends keyof typeof COLS> = (typeof COLS)[K][number];
 export const sorted = <K extends keyof typeof COLS>(k: K) => [...COLS[k]].sort();

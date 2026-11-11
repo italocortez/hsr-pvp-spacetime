@@ -5,6 +5,7 @@ import { performUserDeletion } from '@module/helpers/identity/userDeletionHelper
 import { membershipHold } from '@module/helpers/lobby/lobbyHelpers';
 import { syncSoloTeamNames } from '@module/helpers/tournament/tournamentHelpers';
 import { checkDisplayName, checkUsername } from '@module/helpers/identity/usernames';
+import { syncLeaderboardCard } from '@module/helpers/stats/leaderboardRebuild';
 
 /**
  * Helper: resolve ctx.sender → UserIdentity → User.
@@ -29,7 +30,7 @@ function resolveUser(ctx: any) {
  *
  * Verified users: rejected while they sit in a lobby (as ensureNotInLobby counts it, an away membership included, A68(4)).
  * A live tournament enrolment does not block (A94(2), S10g review F1): the cascade withdraws or disqualifies. The
- * deletion cascades through performUserDeletion at once (UserPrivate, calendars, presence, rate state, identities,
+ * deletion cascades through performUserDeletion at once (calendars, presence, rate state, identities,
  * HSR accounts; the User row is archived to DeletedUser when history references it).
  */
 export const delete_my_account = spacetimedb.reducer((ctx) => {
@@ -52,7 +53,7 @@ export const delete_my_account = spacetimedb.reducer((ctx) => {
         ctx.db.UserIdentity.identity.delete(ctx.sender);
         if (ctx.db.UserPresence.identity.find(ctx.sender)) ctx.db.UserPresence.identity.delete(ctx.sender);
 
-        // No other identity points at this user: run the full cascade (UserPrivate, calendars, remaining presence
+        // No other identity points at this user: run the full cascade (calendars, remaining presence
         // rows, UserRateState, HSR accounts, then the User row or its DeletedUser archive when history references it).
         const remainingLinks = [...ctx.db.UserIdentity.user_id.filter(user.id)];
         if (remainingLinks.length === 0) {
@@ -96,6 +97,7 @@ export const update_display_name = spacetimedb.reducer({
     // Lazy sync of the solo team names (S10r, A122(1): the loop moved to syncSoloTeamNames, shared with
     // admin_update_user).
     syncSoloTeamNames(ctx, resolved.user.id, trimmed, resolved.user.id);
+    syncLeaderboardCard(ctx, resolved.user.id); // A77 (S11a): the public leaderboard carries the name
 });
 
 /**
@@ -152,4 +154,5 @@ export const update_avatar = spacetimedb.reducer({
     ctx.db.User.id.update(updateWithAudit(ctx, resolved.user, {
         avatarCharacterName: characterName,
     }, resolved.user.id));
+    syncLeaderboardCard(ctx, resolved.user.id); // A77 (S11a): the public leaderboard carries the avatar
 });

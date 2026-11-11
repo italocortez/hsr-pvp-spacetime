@@ -147,7 +147,10 @@ export function cascadeCleanupTournament(ctx: any, tournamentId: number, actorId
  * deletes those separately; at Completed enrolled players' locks stay, as before). Index reads:
  * BracketMatch.tournament_id, TournamentStandIn.bracket_match_id, TournamentEnrolled.by_tournament_and_user.
  * S10v (audit SI12): the lock part is a sweep of every TournamentPlayerAccount row of the tournament whose user has no
- * enrolment there (a stand-in revoked earlier included), one table scan per tournament end.
+ * enrolment there (a stand-in revoked earlier included).
+ * A143 (S11a): the sweep reads the tournament's rows only (TournamentPlayerAccount.tournament_id) and also removes the
+ * StandIn-origin locks of an enrolled user (stand-in locks, as releaseStandInLocksIfUnused reads them); Entry locks of
+ * enrolled players stay at Completed, as before.
  */
 export function deleteTournamentStandIns(ctx: any, tournamentId: number): void {
     for (const match of [...ctx.db.BracketMatch.tournament_id.filter(tournamentId)]) {
@@ -156,12 +159,10 @@ export function deleteTournamentStandIns(ctx: any, tournamentId: number): void {
         }
     }
     // S10v (audit SI12): the locks of every user with no enrolment in the tournament go, including a stand-in whose
-    // row was revoked earlier while their locks were kept (they had played). Full scan of TournamentPlayerAccount: the
-    // table has no tournament index (an index change is out of scope for S10v) and the revoked stand-ins leave no other
-    // trace that finds them; this runs once per tournament (Completed / Cancelled), on a private table (no egress).
-    for (const tpa of [...ctx.db.TournamentPlayerAccount.iter()]) {
-        if (tpa.tournamentId !== tournamentId) continue;
-        if (findEnrolled(ctx, tournamentId, tpa.userId)) continue;
+    // row was revoked earlier while their locks were kept (they had played). A143: by the tournament index, and every
+    // StandIn-origin lock.
+    for (const tpa of [...ctx.db.TournamentPlayerAccount.tournament_id.filter(tournamentId)]) {
+        if (tpa.origin.tag !== 'StandIn' && findEnrolled(ctx, tournamentId, tpa.userId)) continue;
         ctx.db.TournamentPlayerAccount.delete(tpa);
     }
 }
@@ -432,12 +433,12 @@ export function rememberWaitlistAccounts(ctx: any, tournamentId: number, userId:
 export function lockAccountsAtPromotion(ctx: any, tournamentId: number, userId: number, actorId: number): void {
     const remembered = [...ctx.db.TournamentWaitlistAccount.by_tournament_and_user.filter([tournamentId, userId])];
     if (remembered.length === 0) {
-        lockPlayerAccounts(ctx, tournamentId, userId, undefined, actorId);
+        lockPlayerAccounts(ctx, tournamentId, userId, undefined, actorId, 'Entry');
         return;
     }
     const ownedIds = new Set([...ctx.db.HsrAccount.user_id.filter(userId)].map((a: any) => a.id));
     const ids = remembered.map((r: any) => r.hsrAccountId as number).filter((id: number) => ownedIds.has(id));
-    lockPlayerAccounts(ctx, tournamentId, userId, ids, actorId);
+    lockPlayerAccounts(ctx, tournamentId, userId, ids, actorId, 'Entry');
     deleteWaitlistAccounts(ctx, tournamentId, userId);
 }
 

@@ -60,12 +60,11 @@ export const admin_ban_user = spacetimedb.reducer({
     }, admin.id));
 
     // D-08 enforcement point 3: soft-delete the user; the scheduled deletion follows.
-    // Find the user via UserPrivate.provider_id index (same login method).
-    const privateRows = [...ctx.db.UserPrivate.provider_id.filter(providerId)]
-        .filter((p: any) => p.loginMethod === loginMethod);
-    for (const priv of privateRows) {
-        const user = ctx.db.User.id.find(priv.userId);
-        if (user && !user.deletedAt) {
+    // Find the user via the User.provider_id index (same login method; A77: merged from UserPrivate).
+    const linkedUsers = [...ctx.db.User.provider_id.filter(providerId)]
+        .filter((u: any) => u.loginMethod === loginMethod);
+    for (const user of linkedUsers) {
+        if (!user.deletedAt) {
             ctx.db.User.id.update(
                 updateWithAudit(ctx, user, { deletedAt: ctx.timestamp }, admin.id),
             );
@@ -74,7 +73,7 @@ export const admin_ban_user = spacetimedb.reducer({
             ctx.db.UserDeletionJob.insert(insertWithAudit(ctx, {
                 scheduledId: 0n,
                 scheduledAt: ScheduleAt.time(deleteAt),
-                userId: priv.userId,
+                userId: user.id,
             }, admin.id));
             console.log(`[BAN] User #${user.id} soft-deleted due to ban on ${banTypeTag}:${providerId}`);
         }

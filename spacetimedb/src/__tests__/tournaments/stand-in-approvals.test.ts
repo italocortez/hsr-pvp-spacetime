@@ -83,10 +83,10 @@ describe('A122(19), L66: stand-in approvals and their locks end with the tournam
         const subAcct = insertHsrAccount(f.test, sub.userId, 'sub-main');
         tx(f.test, f.org, approveBody(m.id, m.team1Id!, sub.userId));
         // the lock a stand-in's lobby join writes (lobbyLifecycle D-26), and an enrolled player's registration lock
-        f.test.db.TournamentPlayerAccount.insert({ tournamentId: f.id, userId: sub.userId, hsrAccountId: subAcct, ...AUDIT(f.test) });
+        f.test.db.TournamentPlayerAccount.insert({ tournamentId: f.id, userId: sub.userId, hsrAccountId: subAcct, origin: { tag: 'StandIn' } as any, ...AUDIT(f.test) }); // T-S11a (A143): a stand-in lock
         const player = f.ts[0].captain;
         const playerAcct = insertHsrAccount(f.test, player.userId, 'player-main');
-        f.test.db.TournamentPlayerAccount.insert({ tournamentId: f.id, userId: player.userId, hsrAccountId: playerAcct, ...AUDIT(f.test) });
+        f.test.db.TournamentPlayerAccount.insert({ tournamentId: f.id, userId: player.userId, hsrAccountId: playerAcct, origin: { tag: 'Entry' } as any, ...AUDIT(f.test) }); // T-S11a (A143): an entry lock
 
         resolveMatch(f.test, f.org, m.id, m.team1Id!);
         advanceStage(f.test, f.org, f.id, 'Completed');

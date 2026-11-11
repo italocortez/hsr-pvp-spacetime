@@ -196,12 +196,11 @@ export const server_link_provider = spacetimedb.reducer({
         currentUser = ctx.db.User.id.find(userMapping.userId);
     }
 
-    // 6. Check if a UserPrivate row with this provider identity already exists
+    // 6. Check if a user already holds this provider identity (A77: the provider columns are on User)
     // M5: switch to by_method_and_provider.filter([loginMethod, providerId]) with the link-code flow.
-    const existingByProvider = [...ctx.db.UserPrivate.provider_id.filter(providerId)]
-        .filter((p: any) => p.loginMethod === loginMethod);
-    const providerOwnerPrivate = existingByProvider.length > 0 ? existingByProvider[0] : null;
-    const providerOwner = providerOwnerPrivate ? ctx.db.User.id.find(providerOwnerPrivate.userId) : null;
+    const existingByProvider = [...ctx.db.User.provider_id.filter(providerId)]
+        .filter((u: any) => u.loginMethod === loginMethod);
+    const providerOwner = existingByProvider.length > 0 ? existingByProvider[0] : null;
 
     if (currentUser) {
         if (providerOwner && providerOwner.id !== currentUser.id) {
@@ -247,34 +246,23 @@ export const server_link_provider = spacetimedb.reducer({
         }
 
         // Case 1a / 1c: Upgrade guest or refresh provider info
-        // Update User table
         // S10e (identity audit #3): a guest upgrade takes the provider name, or a derived free one on a collision.
+        // A77 (S11a): the provider columns are written on the User row (formerly the UserPrivate upsert). linkedAt is
+        // the time the current provider account was linked: set on the first link and when the provider id or login
+        // method changes; a refresh of the same link (Case 1c) keeps it and updates the provider name only.
+        const sameLink = currentUser.loginMethod === loginMethod && currentUser.providerId === providerId;
         ctx.db.User.id.update(updateWithAudit(ctx, currentUser, {
             username: currentUser.isGuest ? uniqueUsername(ctx, name, currentUser.id) : currentUser.username,
             displayName: currentUser.isGuest ? name : currentUser.displayName,
             isGuest: false,
-            hasDiscordLinked: true,
+            loginMethod,
+            providerId,
+            providerUsername: name,
+            linkedAt: sameLink && currentUser.linkedAt !== undefined ? currentUser.linkedAt : ctx.timestamp,
         }, systemUserId));
         ctx.db.UserIdentity.identity.update(updateWithAudit(ctx, userMapping, {
             lastSeenAt: ctx.timestamp,
         }, systemUserId));
-
-        // Upsert UserPrivate row
-        const existingPrivate = ctx.db.UserPrivate.userId.find(currentUser.id);
-        if (existingPrivate) {
-            ctx.db.UserPrivate.userId.update(updateWithAudit(ctx, existingPrivate, {
-                loginMethod,
-                providerId,
-                providerUsername: name,
-            }, systemUserId));
-        } else {
-            ctx.db.UserPrivate.insert(insertWithAudit(ctx, {
-                userId: currentUser.id,
-                loginMethod,
-                providerId,
-                providerUsername: name,
-            }, systemUserId));
-        }
         return;
     }
 
@@ -582,7 +570,7 @@ export const server_nuke_test_data = spacetimedb.reducer({
     let totalDeleted = 0;
 
     // Whole-table wipes use ctx.db.X.clear() (v2.2.0+, PR #4729).
-    // The 3 SYSTEM-preserving blocks below (UserPrivate, UserIdentity, User) keep
+    // The SYSTEM-preserving blocks below (UserPresence, UserIdentity, User) keep
     // iter+filter+delete because they must skip the SYSTEM row by username='SYSTEM'.
 
     // Delete order: children before parents is not strictly required
@@ -693,12 +681,7 @@ export const server_nuke_test_data = spacetimedb.reducer({
     const systemUser = ctx.db.User.username.find('SYSTEM');
     const systemUserRowId = systemUser?.id;
 
-    const userPrivates = [...ctx.db.UserPrivate.iter()]
-        .filter((up: any) => systemUserRowId === undefined || up.userId !== systemUserRowId);
-    for (const up of userPrivates) { ctx.db.UserPrivate.delete(up); }
-    if (userPrivates.length > 0) console.log(`[NUKE] UserPrivate: ${userPrivates.length}`);
-    totalDeleted += userPrivates.length;
-
+    // A77 (S11a): the provider link columns are on User (UserPrivate merged); they go with the User rows below.
     ctx.db.DeletedUser.clear();
 
     // A48: presence rows of every non-SYSTEM user; the server identities' rows survive with their chain.

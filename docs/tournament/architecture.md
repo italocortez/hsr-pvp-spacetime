@@ -69,15 +69,17 @@ Tournament (id: u32 autoInc PK)  [public: true]
   |     canManageBracket: bool
   |     audit columns
   |
-  +-- TournamentPlayerAccount (PK: [tournamentId, userId, hsrAccountId])  [public: true]
+  +-- TournamentPlayerAccount (PK: [tournamentId, userId, hsrAccountId], not engine-enforced)  [private since S3]
         tournamentId -> Tournament.id
         userId -> User.id
         hsrAccountId -> HsrAccount.id
+        origin (AccountLockOrigin: Entry | StandIn; S11a, A143)
         audit columns
-        Indexes: by_tournament_and_user (btree, [tournamentId, userId]), by_user (btree, userId)
+        Indexes: by_tournament_and_user (btree, [tournamentId, userId]), by_user (btree, userId),
+                 tournament_id (btree, tournamentId; S11a, A143)
 
-TournamentWaitlistAccount (private; S10g, A104): same columns as TournamentPlayerAccount; a waitlisted registrant's chosen
-  accounts, locked at promotion. Indexes: tournament_id, by_tournament_and_user, by_user.
+TournamentWaitlistAccount (private; S10g, A104): the columns of TournamentPlayerAccount without `origin`; a waitlisted
+  registrant's chosen accounts, locked at promotion (origin Entry). Indexes: tournament_id, by_tournament_and_user, by_user.
 ```
 
 ## Reducer Flows
@@ -815,6 +817,41 @@ whether or not an event is still there (A161(3), review F1): a match rolled back
 no time. A match without a time is not written. Details in [../calendar/architecture.md](../calendar/architecture.md)
 "Phase S10ad execution".
 
+## Phase S11a execution (DECISIONS.md A143)
+
+`TournamentPlayerAccount` records where each lock came from and gains an index by tournament. Schema (clear-publish):
+column `origin: AccountLockOrigin` (new enum `Entry | StandIn`, `types/enums.ts`), index `tournament_id`
+(`[tournamentId]`). This supersedes the S10v "Review F10, enrolled users" rule and the F16 note above.
+
+- **Writers** (`lockPlayerAccounts(ctx, tournamentId, userId, accountIds, actorId, origin)`, `helpers/tournament/accountLocks.ts`):
+  - `Entry`: `register_for_tournament` (non-waitlisted), `add_participant`, waitlist promotion (`lockAccountsAtPromotion`),
+    `lock_tournament_accounts` by an enrolled caller, the A112 entry transfer (`moveEntry`, `entryTransfer.ts`).
+  - `StandIn`: the stand-in snapshot at the first participation (`snapshotStandInLocks`: create, join, own seat move,
+    `confirm_ready`), `lock_tournament_accounts` by an approved stand-in without an enrolment (A135(8)).
+  - An account already locked as `StandIn` that goes through an `Entry` path becomes an `Entry` lock (delete + insert,
+    audit kept, the entry is the stronger claim); an `Entry` lock is never turned into `StandIn`. Existing locks are
+    otherwise kept (idempotent), as before.
+- **Release** (`releaseStandInLocksIfUnused(ctx, tournamentId, userId)`, `helpers/tournament/standIns.ts`): when the user
+  holds no approval on an open match and has not played (unchanged conditions), the user's `StandIn` locks of the
+  tournament are deleted; `Entry` locks are never released here. The `approvedAt` parameter and the comparison of each
+  lock's `createdDate` with the first approval are gone (S10v review G2: the time rule released an entrant's own lock
+  taken after the approval, and an approval revoked before a later one was no longer known). The Waiting-lobby
+  selections (`LobbyMemberAccount`) deleted with them are those of the released accounts only (review G1 kept: a
+  selection never outlives its lock; a selection of an account still locked by the entry stays). `deleteBracket`
+  passes the stand-in user ids only (no approval times).
+- **Sweep** at Completed and Cancelled (`deleteTournamentStandIns`, `tournamentHelpers.ts`): reads
+  `TournamentPlayerAccount.tournament_id.filter(tournamentId)` instead of scanning the table; deletes a row when its
+  origin is `StandIn` or its user has no enrolment in the tournament. Enrolled players' `Entry` locks stay at Completed
+  as before; an enrolled player's `StandIn` lock (one taken as a stand-in while holding no lock of their own) now ends
+  with the tournament, as the release reads it. A user without an enrolment holds only `StandIn` locks (withdrawal,
+  rejection, deletion and the entry transfer delete the others), so for them nothing changes.
+- Behaviour for players is otherwise unchanged: the lock checks of `select_match_account`, `join_lobby`, the roster
+  guards and the registrant view read the rows without looking at the origin. Readers of the time rule: only
+  `releaseStandInLocksIfUnused` and `deleteBracket`; both changed. Cancellation (`cascadeCleanupTournament` step 5)
+  still deletes enrolled users' locks through `by_tournament_and_user`, then the sweep above.
+- Egress: none (private table, no view returns `origin`). Storage: 1 byte per lock row; the index adds one entry per
+  row.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -868,10 +905,11 @@ no time. A match without a time is not written. Details in [../calendar/architec
 | `BracketMatch.scheduledAt` is written from the match's calendar event (create, start change) and cleared when the event is deleted | Phase S10ac execution (DECISIONS.md A157(12)) | 2026-11-11 |
 | Retention of a match event (lazy clean-up, sweep) keeps `BracketMatch.scheduledAt` | Phase S10ad execution (DECISIONS.md A160(6)) | 2026-11-11 |
 | Fix pass: the bracket cascades clear a set `scheduledAt` also when retention already removed the event | Phase S10ad execution (DECISIONS.md A161(3)) | 2026-11-11 |
+| `TournamentPlayerAccount.origin` (Entry / StandIn) written by every lock path; stand-in release and the end sweep read the origin; index `tournament_id` for the sweep | Phase S11a execution (DECISIONS.md A143) | 2026-11-11 |
 
 ---
 
-*Last updated: 2026-11-11 (S10ad)*
+*Last updated: 2026-11-11 (S11a)*
 *Feature owner: Phase 04 / Phase 06 / Phase 08 / Phase 10.1 / Phase 10.4 / Phase 12.3*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

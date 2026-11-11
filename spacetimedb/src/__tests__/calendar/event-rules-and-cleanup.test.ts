@@ -25,7 +25,8 @@ import { viewAs } from '../fixtures/views';
 import { advanceStage, assignAssistant, liveField } from '../fixtures/tournaments';
 import { byKey, duel, playMatch } from '../fixtures/tournament-matches';
 
-const LINKED = (action: string) => `Forbidden: Only the organizer, an Admin or tournament staff with the bracket permission can ${action}.`;
+// T-S11a (A162(1)): the organizer of a match event no longer passes on their own, so the linked text drops "the organizer".
+const LINKED = (action: string) => `Forbidden: Only an Admin or tournament staff with the bracket permission can ${action}.`;
 const PERSONAL = (action: string) => `Forbidden: Only the organizer or an Admin can ${action}.`;
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -117,6 +118,81 @@ describe('A89: tournament-linked events accept the tournament organizer and brac
         expect(event(test, id)!.title).toBe('By admin');
         tx(test, w.asstA, updateBody(test, id, 'By organizer'));
         expect(event(test, id)!.title).toBe('By organizer');
+    });
+
+    // ── T-S11a (A162(1)): the creator of a match event keeps no right of their own once they leave the staff ──
+
+    const allCalls = (test: Harness, id: number, inviteeId: number, newInviteeId: number): Array<[string, (ctx: any) => unknown]> => [
+        ['update this event', updateBody(test, id, 'hijack')],
+        ['delete this event', (ctx) => M.delete_calendar_event(ctx, { eventId: id })],
+        ['invite users to this event', (ctx) => M.invite_to_event(ctx, { eventId: id, inviteeUserId: newInviteeId })],
+        ['remove invites from this event', (ctx) => M.remove_invite(ctx, { eventId: id, inviteeUserId: inviteeId })],
+    ];
+
+    it('A162(1): an assistant who created a match event and was then removed from the staff is rejected on every edit with the linked text; nothing changes', () => {
+        const w = calendarWorld();
+        const { test } = w;
+        const id = linkedEvent(w); // created by asstA
+        tx(test, w.asstA, (ctx) => M.invite_to_event(ctx, { eventId: id, inviteeUserId: w.invitee.userId }));
+        tx(test, w.org, (ctx) => M.remove_tournament_assistant(ctx, { tournamentId: w.m.tournamentId, userId: w.asstA.userId }));
+        const before = snap(event(test, id), invitesOf(test, id));
+        for (const [action, body] of allCalls(test, id, w.invitee.userId, w.invitee2.userId)) {
+            expect(rejection(test, w.asstA, body)).toBe(LINKED(action));
+            expect(snap(event(test, id), invitesOf(test, id))).toBe(before);
+        }
+        // the staff who hold the permission still manage it
+        tx(test, w.asstB, updateBody(test, id, 'by asstB'));
+        expect(event(test, id)!.title).toBe('by asstB');
+    });
+
+    it('A162(1): an assistant whose bracket flag was turned off loses the creator\'s rights the same way', () => {
+        const w = calendarWorld();
+        const { test } = w;
+        const id = linkedEvent(w);
+        assignAssistant(test, w.org, w.m.tournamentId, w.asstA, { participants: true }); // re-assign without bracket
+        expect(rejection(test, w.asstA, updateBody(test, id, 'hijack'))).toBe(LINKED('update this event'));
+    });
+
+    it('A162(1): a Moderator who created a match event and was demoted to User is rejected; promoted back, they manage it again', () => {
+        const w = calendarWorld();
+        const { test } = w;
+        const id = createEvent(test, w.mod, { title: 'Mod final', bracketMatchId: w.m.id });
+        tx(test, w.mod, (ctx) => M.invite_to_event(ctx, { eventId: id, inviteeUserId: w.invitee.userId }));
+        setUserRole(test, w.mod.userId, 'User');
+        const before = snap(event(test, id), invitesOf(test, id));
+        for (const [action, body] of allCalls(test, id, w.invitee.userId, w.invitee2.userId)) {
+            expect(rejection(test, w.mod, body)).toBe(LINKED(action));
+            expect(snap(event(test, id), invitesOf(test, id))).toBe(before);
+        }
+        setUserRole(test, w.mod.userId, 'Moderator');
+        tx(test, w.mod, updateBody(test, id, 'back'));
+        expect(event(test, id)!.title).toBe('back');
+    });
+
+    it('A162(1): a former-staff creator who is also an invitee of the match event may still remove their own invite (as any invitee), and nothing more', () => {
+        const w = calendarWorld();
+        const { test } = w;
+        // a team member of the match made bracket staff creates the event and is auto-invited as a member (D-17)
+        assignAssistant(test, w.org, w.m.tournamentId, w.participant, { bracket: true });
+        const id = createEvent(test, w.participant, { title: 'Own match', bracketMatchId: w.m.id });
+        expect(invite(test, id, w.participant.userId)).toBeDefined();
+        tx(test, w.org, (ctx) => M.remove_tournament_assistant(ctx, { tournamentId: w.m.tournamentId, userId: w.participant.userId }));
+        expect(rejection(test, w.participant, updateBody(test, id, 'hijack'))).toBe(LINKED('update this event'));
+        tx(test, w.participant, (ctx) => M.remove_invite(ctx, { eventId: id, inviteeUserId: w.participant.userId }));
+        expect(invite(test, id, w.participant.userId)).toBeUndefined();
+    });
+
+    it('A162(1): nothing changes for the organizer of a personal event (update, invite, remove an invite, delete)', () => {
+        const w = calendarWorld();
+        const { test } = w;
+        const id = createEvent(test, w.stranger, { title: 'Mine' });
+        tx(test, w.stranger, updateBody(test, id, 'Mine (moved)'));
+        tx(test, w.stranger, (ctx) => M.invite_to_event(ctx, { eventId: id, inviteeUserId: w.invitee.userId }));
+        tx(test, w.stranger, (ctx) => M.remove_invite(ctx, { eventId: id, inviteeUserId: w.invitee.userId }));
+        expect(event(test, id)!.title).toBe('Mine (moved)');
+        expect(invite(test, id, w.invitee.userId)).toBeUndefined();
+        tx(test, w.stranger, (ctx) => M.delete_calendar_event(ctx, { eventId: id }));
+        expect(event(test, id)).toBeUndefined();
     });
 });
 

@@ -747,7 +747,7 @@ describe('A68(7): host, captain and referee move on every removal (A22(5) order,
  * run_user_deletion fired by hand, as the scheduler would. (admin_delete_user refuses lobby members.)
  */
 function adminDelete(test: Harness, who: Actor) {
-    const providerId = test.db.UserPrivate.userId.find(who.userId)!.providerId;
+    const providerId = test.db.User.id.find(who.userId)!.providerId!;
     tx(test, 'internal', (ctx) => M.admin_ban_user(ctx, { banTypeTag: 'DiscordId', providerId, reason: 'S8f test' }));
     const jobs = [...test.db.UserDeletionJob.iter()].filter((j) => j.userId === who.userId);
     expect(jobs).toHaveLength(1);
