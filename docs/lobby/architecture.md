@@ -63,7 +63,7 @@ Lobby (id: u32 autoInc PK)  [PRIVATE; view_my_lobby / view_lobby_browser; staff 
   |     disconnectedAt: Timestamp?           (D-08: disconnect event time; A22a grace check and isForfeitEligible read it)
   |     disconnectPoolRemainingMs: u32       (D-10: remaining disconnect pool, init 300000 at draft start)
   |     joinSeq: u32                         (R4, S4; A74(3), S9c: the seat number, host = 1 then Lobby.lastJoinSeq + 1, never reused; A22(5) order, S9 labels and the A74 seat targeting derive from it)
-  |     lastCursorAt: Timestamp? / lastLineupAt: Timestamp?   (B-4 throttle stamps, written from S5)
+  |     lastLineupAt: Timestamp?             (B-4 arrange_lineup throttle stamp, written from S5; the cursor stamp moved to LobbyCursorStamp, S11a)
   |     audit columns
   |     Indexes: lobby_id (btree), user_id (btree), by_lobby_and_user (btree, [lobbyId, userId])
   |
@@ -84,9 +84,15 @@ Lobby (id: u32 autoInc PK)  [PRIVATE; view_my_lobby / view_lobby_browser; staff 
   |
   +-- LobbyPassword (PK: lobbyId)  [PRIVATE]
   |     lobbyId -> Lobby.id  (1:1)
-  |     passwordHash: string
+  |     passwordHash: string   (S11a, triage L24: SHA-256 hex of "hsr-lobby-password:<lobbyId>:<password>", helpers/lobby/lobbyPassword.ts; never the typed text)
   |     audit columns
   |     Intentionally NOT public -- never sent to any client.
+  |
+  +-- LobbyCursorStamp (key: [lobbyId, userId])  [PRIVATE, S11a (triage L19)]
+  |     lobbyId -> Lobby.id, userId -> User.id, lastCursorAt: Timestamp (the broadcast_cursor throttle stamp)
+  |     audit columns (the member at the first stamp; later stamps leave them)
+  |     Indexes: lobby_id (btree), by_lobby_and_user (btree, [lobbyId, userId]). No view reads it. Deleted by
+  |     removeMemberRow, by performUserDeletion for a kept live-stage row, by hardDeleteLobby, by server_nuke_test_data.
   |
   +-- LobbyCursorEvent  [public: true, event: true -- broadcasts onInsert, then deletes immediately]
   |     lobbyId -> Lobby.id
@@ -162,7 +168,7 @@ Abuse guards (Phase S5 execution; DECISIONS.md A42, A43; ACCESS-SECURITY-OPS B-7
 2. D-03: resolve lobby by `id` (if `lobbyId>0`) else by `joinCode`; throw "Lobby not found." if neither resolves.
 3. **Reconnect / return path** (existing LobbyMember row; F1 / Phase S4 execution: evaluated BEFORE the one-lobby check, which counts the row being rejoined and used to reject every reconnect; `abandonCurrentMatch` is ignored here): require a reconnect stage (Waiting, Drafting, Equipping, Scoring, AwaitingResult; A67(1)); A68(4) reject an abandoned row ("You abandoned this match and cannot return."); D-39 recompute `disconnectPoolRemainingMs`; delete+reinsert member `isOnline=true`, clear `disconnectedAt` and `leftAt` (A68(2): the only path that clears `leftAt`); auto-resume the MatchSession timer if it was auto-paused (A85(1): only when the caller is a seated player and no seated player is still away, see "Phase S10c execution"; _superseded in Phase S10aa execution, DECISIONS.md A151: the return leaves the auto-pause in place_); bump activity; a returning away player (the row had `leftAt`) gets the System chat line "{name} is back."; return (no count change).
 4. **New-join path** only: D-22 / A68(4) `ensureNotInLobby(ctx, userId, abandonCurrentMatch ?? false)`; D-23 guest restrictions; D-21 `ensureNotBanned` (reject if a `LobbyBan` row exists).
-5. D-04 / A68(8): require stage Waiting, Drafting, Equipping or Scoring (AwaitingResult: "Cannot join a lobby in stage: AwaitingResult"); D-02 verify password against `LobbyPassword` if `!isPublic`.
+5. D-04 / A68(8): require stage Waiting, Drafting, Equipping or Scoring (AwaitingResult: "Cannot join a lobby in stage: AwaitingResult"); D-02 verify password against `LobbyPassword` if `!isPublic` (S11a, L24: `hashLobbyPassword(lobbyId, password)` against the stored hash; an attempt over 64 characters never matches).
 6. Cap enforcement: reject if total members >= 20 ("Lobby is full (max 20 members)."); a join that can only be watching is rejected when the lobby already has `maxSpectators` spectators ("Spectator slots are full (max N)." with N = `Lobby.maxSpectators`, A68(8)): every live-stage join, and a Waiting join of a tournament lobby that auto-seated to Spectator. A casual Waiting joiner lands on Spectator as a seat candidate (D-27) and is not counted against `maxSpectators` (Phase S8f fix pass: the setting caps watchers, not seat candidates; the 20-member cap still applies). Only new joins are tested: members already in the Spectator slot are unaffected by a later lower setting.
 7. D-27: insert `LobbyMember` with `lobbySlot` = the A26 / A35 auto-seat in Waiting (casual lobbies: Spectator) and Spectator in a live stage, `isReferee=false`, `isConfirmed=false`, `leftAt` / `abandonedAt` unset, `joinSeq = nextJoinSeq(lobby)` = `Lobby.lastJoinSeq + 1` (R4; A74(3), S9c: a departed member's number is never handed out again).
 8. D-04 / D-09 / D-26: auto-insert `LobbyMemberAccount` for the user's active HSR account (tournament path validates/snapshots against `TournamentPlayerAccount`; approved stand-ins snapshot all their accounts into TPA first).
@@ -267,19 +273,19 @@ Phase S6 execution (backlog #2, #6, #7, #9; DECISIONS.md A28, A33, A38(2)/(4), A
 - There is no `assign_referee`/`remove_referee` reducer -- the host starts as referee (D-24) and the flag moves via transfer/reclaim/the A68(7) transfers.
 
 ### broadcast_cursor(lobbyId, x, y)
-1. Map `ctx.sender` -> `UserIdentity`; silently return if unregistered. Look up caller's `LobbyMember`; silently return if not a member, or (A98) if the row is away or abandoned.
+1. Map `ctx.sender` -> `UserIdentity`; silently return if unregistered. Look up caller's `LobbyMember`; silently return if not a member; S11a (triage L19): silently return unless the lobby is in Drafting, Equipping or Scoring (`LIVE_STAGES`; nobody consumes cursors in Waiting or AwaitingResult); (A98) silently return if the row is away or abandoned.
 2. D-34: silently return if caller's slot is Spectator (coaches hold Blue/Red slots, so they still broadcast).
 3. Insert `LobbyCursorEvent` (event table): `senderJoinSeq = member.joinSeq` (A96, every lobby), plus x/y/timestamp. No SenderErrors -- all failure modes are silent returns.
 
 B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3:
 - Bounds: silently return unless `0 <= x <= 1` and `0 <= y <= 1` (NaN fails the test too).
-- Throttle: silently return when `now - LobbyMember.lastCursorAt < AbuseConfig.cursorMinIntervalMs` (default 50 ms = 20 Hz).
-- Stamp: delete + reinsert the member row with `lastCursorAt = now` and the audit columns untouched (not a user edit). The event insert carries no audit columns (A19).
+- Throttle: silently return when `now - LobbyCursorStamp.lastCursorAt < AbuseConfig.cursorMinIntervalMs` (default 50 ms = 20 Hz; S11a: was `LobbyMember.lastCursorAt`).
+- Stamp: S11a (triage L19): insert or rewrite the caller's `LobbyCursorStamp` row with `lastCursorAt = now` (audit columns untouched on a rewrite; not a user edit). The `LobbyMember` row is not written, so an accepted cursor no longer re-evaluates the views that read `LobbyMember`. The event insert carries no audit columns (A19).
 
 ### run_lobby_gc / admin_gc_lobbies / seed_lobby_gc_job
-- `run_lobby_gc` (scheduled): `performLobbyGc` scans all lobbies -- D-48 skip AwaitingResult; every other stage (Waiting, Drafting, Equipping, Scoring) is skipped while any member is online (D-47, extended to Waiting by A68(9); an away or abandoned row counts as offline), else hard-deleted after 30 min idle on `lastActivityAt` (A67(1), S8e: the D-16 72 h rule and the D-17 between-games rule are gone with their stages). D-14 writes a `GcResult` audit row if anything was deleted. Requeues itself +15 min.
-- `admin_gc_lobbies`: Moderator+ manual one-shot; same sweep, no self-requeue.
-- `seed_lobby_gc_job`: server-identity-only (called from `scripts/stdb/bootstrap.ts`); idempotent; inserts the first `LobbyGcJob` row to bootstrap the chain.
+- `run_lobby_gc` (scheduled; S11a (triage L11): refused unless the scheduler calls it, `ensureScheduler` in `helpers/admin/schedulerGuard.ts`, `ctx.senderAuth.isInternal`): `performLobbyGc` scans all lobbies -- D-48 skip AwaitingResult; every other stage (Waiting, Drafting, Equipping, Scoring) is skipped while any member is online (D-47, extended to Waiting by A68(9); an away or abandoned row counts as offline), else hard-deleted after 30 min idle on `lastActivityAt` (A67(1), S8e: the D-16 72 h rule and the D-17 between-games rule are gone with their stages). D-14 writes a `GcResult` audit row if anything was deleted. Requeues itself +15 min.
+- `admin_gc_lobbies`: Moderator+ manual one-shot; same sweep, no self-requeue. S11a (triage L6): when `LobbyGcJob` holds no row (a failed scheduled run rolls back its own requeue, or the seed never ran), it inserts the next run 15 min out, so a manual run restarts a stopped chain; a running chain is left alone.
+- `seed_lobby_gc_job`: server-identity-only (called from `scripts/stdb/bootstrap.ts`); idempotent; inserts the first `LobbyGcJob` row to bootstrap the chain (the same `armLobbyGcJobIfMissing` as the manual run).
 
 ### select_match_account(lobbyId, hsrAccountId) / deselect_match_account(lobbyId, hsrAccountId)
 1. `getAuthenticatedUser(ctx)`; load lobby; `ensureLobbyMember`. D-06: stage must be Waiting (A67(1); "Account selection is only allowed during the Waiting stage." / "Account deselection …"). A69(3) (S8e fix pass 2): the D-B-03 snapshot ratchet is gone; the snapshot is taken once at `start_draft` (A66) and selection changes nothing after it (selection is Waiting-only, before any `MatchResultParticipant` exists).
@@ -301,6 +307,7 @@ B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3
 - `client_disconnected`: marks the identity's presence row offline; if the user still has another live `UserPresence` row, stops (A48). Otherwise for every membership without `leftAt` / `abandonedAt` (those are already offline): `markMemberOffline` (helpers/lobby/disconnectHelpers.ts): `isOnline=false`; in an active stage (Drafting, Equipping, Scoring; A67(1) `ACTIVE_STAGES`) one `RefereeTransferCheck { lobbyId, userId, scheduledAt: now + 15 s }` (a stale pending row for the pair is replaced); `disconnectedAt=now` in every live stage (Drafting, Equipping, Scoring: the D-08 forfeit clock; never under NoAction). No flag transfer, no pause (A22a, F5).
 
 ### run_referee_transfer_check(arg: RefereeTransferCheck) (refereeTransfer.ts; scheduled, A22a)
+0. S11a (triage L11): `ensureScheduler`: any caller but the scheduler is refused ("Forbidden: run_referee_transfer_check is a scheduled reducer and runs only from the scheduler.").
 1. Re-read `Lobby` and the `LobbyMember`; no-op if either is gone (the scheduler consumed the row).
 2. "Still offline" = the row has `leftAt` / `abandonedAt` (A68(2): regardless of presence), or `LobbyMember.isOnline=false` and no live `UserPresence` row of the user (A48).
 3. `decideRefereeTransfer` (`shared/lobby-rules`): `transfer` only if still offline, still `isReferee` and the stage is active; `moveRefereeFlag` writes the two rows with the SYSTEM_USER_ID audit actor.
@@ -812,10 +819,11 @@ Stand-ins in tournament lobbies; the full rule set is in [../tournament/architec
 | Fix pass: only the member's own join or seat request displaces a stand-in (A137(3), replaced by A138); the captain's stand-in move skips the spectator cap; a disqualified member is unseated in Waiting; stand-in locks at the stand-in's own participation (create, join, self seat move); start-gate text "seated as a player" | Phase S10v execution (DECISIONS.md A137; S10v review F6, F7, F9, F11, F12, F13) | 2026-11-10 |
 | A151: no return (`join_lobby`, `client_connected`) lifts a disconnect auto-pause; `liftAutoPauseOnReturn` removed; `resume_draft` (referee or a present seated player, A85(2)) is the only lift | Phase S10aa execution (DECISIONS.md A151) | 2026-11-11 |
 | Fix pass: an auto-pause is resumed by a referee or a present seated player of the paused team (the Pause step's `actorSlot`), not by the opponent; a pause on a spent turn stays allowed | Phase S10aa execution (DECISIONS.md A153, A154) | 2026-11-11 |
+| S11a part 2 (closing-triage items): `broadcast_cursor` only in Drafting / Equipping / Scoring and its throttle stamp in the new private `LobbyCursorStamp` (`LobbyMember.lastCursorAt` removed; L19); `LobbyPassword.passwordHash` holds the salted SHA-256 `hashLobbyPassword(lobbyId, password)`, `join_lobby` compares hashes, `create_lobby` / `update_lobby_settings` refuse a password over 64 characters ("The lobby password can be at most 64 characters."; L24; attempts are still not counted, a failed join rolls back); `run_lobby_gc` refuses any caller but the scheduler (L11); `admin_gc_lobbies` restarts a stopped `LobbyGcJob` chain (L6) | Phase S11a execution | 2026-11-11 |
 
 ---
 
-*Last updated: 2026-11-11 (S10aa)*
+*Last updated: 2026-11-11 (S11a part 2)*
 *Feature owner: Phase 05 / Phase 09 / Phase 10.1 / Phase 10.4 / Phase 12.1 / Phase 16*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

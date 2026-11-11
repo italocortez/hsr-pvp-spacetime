@@ -279,7 +279,6 @@ function completeSale(
         lobbyId,
         sequence: saleSequence,
         actorUserId,
-        anonymousLabel: undefined,
         actorSlot,
         action: { tag: 'AuctionSold', value: {} } as any,
         payload: {
@@ -480,7 +479,6 @@ export const nominate_character = spacetimedb.reducer(
             lobbyId,
             sequence: nextSeq,
             actorUserId: user.id,
-            anonymousLabel: undefined,
             actorSlot: slotToTeamSide(member.lobbySlot),
             action: { tag: 'Nominate', value: {} } as any,
             payload: {
@@ -650,7 +648,6 @@ export const place_bid = spacetimedb.reducer(
             lobbyId,
             sequence: nextSeq,
             actorUserId: user.id,
-            anonymousLabel: undefined,
             actorSlot: slotToTeamSide(member.lobbySlot),
             action: { tag: 'Bid', value: {} } as any,
             payload: {
@@ -858,7 +855,6 @@ export const timer_expiry_auction = spacetimedb.reducer(
                 lobbyId,
                 sequence: nextSeq,
                 actorUserId: 0, // System actor
-                anonymousLabel: undefined,
                 actorSlot: nominatingTeam,
                 action: { tag: 'Nominate', value: {} } as any,
                 payload: {

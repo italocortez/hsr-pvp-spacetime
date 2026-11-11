@@ -94,10 +94,10 @@ export const COLS = {
         'closedAt'] as const,
     result: ['id', 'lobbyId', 'bracketMatchId', 'isTournamentControlled', 'status', 'winnerTeamSide', 'matchType',
         'matchEndReason', 'concedeTrigger', 'concedeSummary', 'concedeAtStage', 'disputedByUserId', 'disputeReason',
-        'winnerOverride', 'winnerOverrideById', 'winnerOverrideReason', 'settledAt'] as const,
+        'winnerOverride', 'winnerOverrideById', 'winnerOverrideReason', 'settledAt', 'staffOverrideReason'] as const, // S11a (L49)
     game: ['matchResultId', 'lobbyId', 'gameMode', 'teamBlueScreenshotUrl', 'teamRedScreenshotUrl', 'teamBlueCyclesUsed',
         'teamRedCyclesUsed', 'teamBlueScore', 'teamRedScore', 'teamBlueDeaths', 'teamRedDeaths', 'teamBlueAdjustedResult',
-        'teamRedAdjustedResult', 'tieBreakLevel', 'winnerTeamSide', 'validationStatus', 'validatedByUserId',
+        'teamRedAdjustedResult', 'tieBreakLevel', 'winnerTeamSide', // S11a (L60): validationStatus / validatedByUserId removed
         'blueConfirmed', 'redConfirmed', 'closedAt', 'closedById', 'groupScores', 'adjustments'] as const,
     groupScore: ['teamSide', 'groupIndex', 'value'] as const,
     adjustment: ['id', 'teamSide', 'value', 'reason', 'setById'] as const,

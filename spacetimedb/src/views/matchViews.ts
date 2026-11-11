@@ -51,7 +51,8 @@ export const view_my_match_session = spacetimedb.view(
 
 // ---------------------------------------------------------------------------
 // 2. view_my_match_steps (D-92, A37, A67(3)): actorUserId 0 + a seat label when the actor is anonymized for the
-//    caller (S9a fix: computed at read time, anonymousLabelOr; a stored label or "<side> player" for a leaver);
+//    caller (S9a fix: computed at read time, anonymousLabelOr; "<side> player" for a leaver; S11a (L39): the step
+//    table no longer has a stored label);
 //    no gameNumber (one game per lobby); no audit columns.
 // ---------------------------------------------------------------------------
 const AnonymousMatchStepRow = t.row('AnonymousMatchStepRow', {
@@ -85,7 +86,7 @@ export const view_my_match_steps = spacetimedb.view(
                     actorUserId: anonymize ? 0 : step.actorUserId,
                     // S9a fix (S9a-A1): computed at read time; the step writers store no label
                     anonymousLabel: anonymize
-                        ? anonymousLabelOr(ctx, lobby.id, step.actorUserId, step.anonymousLabel ?? `${step.actorSlot.tag} player`)
+                        ? anonymousLabelOr(ctx, lobby.id, step.actorUserId, `${step.actorSlot.tag} player`)
                         : undefined,
                     actorSlot: step.actorSlot,
                     action: step.action,

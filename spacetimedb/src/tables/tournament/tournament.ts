@@ -32,8 +32,6 @@ export const tournamentColumns = {
     groupAdvanceCount: t.u8(),            // A36: 1 or 2
     // Cost set
     costSetId: t.u32(),
-    // Season (A36: the active season, 0 for now; no season logic in this version)
-    seasonId: t.u32(),
     // MMR
     countTowardsMmr: t.bool(),
     requireResultValidation: t.bool(),    // A36: forced true when countTowardsMmr; a submitted result waits for canResolveResults staff

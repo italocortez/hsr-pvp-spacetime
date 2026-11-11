@@ -11,9 +11,10 @@ Cost sets define per-game-mode + per-draft-mode point values for characters, lig
 ## Table Relationships
 
 ```
-CostSet (id: u32 autoInc PK)  [public: true]
+CostSet (id: u32 autoInc PK)  [public: false since S11a (triage L91); owners read view_my_cost_sets, everyone view_published_cost_sets]
   +-- name: string (1-100 chars)
   +-- creatorId -> User.id  [btree: creator_id]
+  +-- (btree: is_published, S11a: view_published_cost_sets reads it)
   +-- gameMode: GameMode (MemoryOfChaos | ApocalypticShadow | AnomalyArbitration)
   +-- isPublished: bool
   +-- isDraft: bool
@@ -141,7 +142,9 @@ A missing row for the tuple `(name, gameMode, draftMode, costSetId)` means "not 
 
 Seed fan-out enforces this rule symmetrically: a template sub-block (`classic` / `auction`) present in the source data produces one DB row; a sub-block absent means no row is written for that draft mode. No zero-padding.
 
-### Admin tuple-match implementation (Phase 15.4 A2 decision: A2_FALLBACK_ITER)
+### Admin tuple-match implementation (Phase 15.4 A2 decision: A2_FALLBACK_ITER; superseded in Phase S11a execution, triage L92)
+
+S11a: `admin_bulk_upsert` (character, light-cone and synergy cost rows) and `admin_delete_row` (character and light-cone cost keys) read the row through `by_character_mode_and_set`, `by_lightcone_mode_and_set` and `by_tuple` (`findCharacterCostRow` / `findLightconeCostRow` / `findSynergyCostRow` in `reducers/admin/admin.ts`; enum columns filter as `{ tag }`, as `MmrRating.by_user_mode_season` already did; a synergy pair is probed in both orders). A key with a missing or unknown enum tag or a non-string name matches nothing (delete: "Row not found"). The paragraph below is the pre-S11a state.
 
 The existence check in `admin_bulk_upsert` for the three cost tables uses an `iter()` scan with an extended predicate that includes `draftMode.tag === r.draftMode`, not a multi-column btree filter. This follows the Phase 15 precedent documented in `RESEARCH.md` Assumption A2: tuple-filter with a tagged-union enum struct value is not supported by the current bindings, so the reducer-layer tuple match falls back to `O(n)` iteration per row. The 4-col / 5-col btree indexes declared on these tables (`by_character_mode_and_set`, `by_lightcone_mode_and_set`, `by_tuple`) remain useful to downstream views and client subscriptions but are not the path the admin bulk-upsert uses today. Revisiting this requires a bindings-layer enhancement, not a schema change.
 
@@ -304,10 +307,11 @@ whole `HsrCharacter` / `HsrLightcone` reference tables (iter) after the permissi
 | User deletion removes the user's unpublished cost sets not in use (`deleteCostSetRows`, shared with `delete_cost_set`); published sets stay | Phase S10r execution (DECISIONS.md A122) | 2026-11-10 |
 | An Admin cost-row insert, change or deletion (`admin_bulk_upsert`, `admin_delete_row`; character, light-cone and synergy rows) is refused while a lobby on the set is in Drafting, Equipping or Scoring (`ensureNoLiveGameOnCostSet`, the A107(4) test, set 0 included); an upsert row equal to the stored one (f32) is skipped, so an identical re-seed passes | Phase S10w execution (DECISIONS.md A142) | 2026-11-10 |
 | Fix pass: a non-integer or out-of-range `costSetId` refused in the Admin cost paths; the per-call seed behaviour documented | Phase S10w execution (DECISIONS.md A142; S10w review F1, F2) | 2026-11-10 |
+| `CostSet` private (L91): `view_published_cost_sets` (anonymous, `is_published` index) lists the published sets for every caller, `view_my_cost_sets` stays the owner's list; the reference set subscribes the view instead of the table. The Admin cost upserts and deletes read the composite indexes instead of scanning every set (L92) | Phase S11a execution | 2026-11-11 |
 
 ---
 
-*Last updated: 2026-11-10 (S10w)*
+*Last updated: 2026-11-11 (S11a part 2)*
 *Feature owner: Phase 03 (schema), Phase 15.4 (draftMode restructure)*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

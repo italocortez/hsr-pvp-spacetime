@@ -12,6 +12,7 @@ import { ensureForfeitSecondsInRange, ensureNoActionAllowed, ensureNotDeferredOu
 import { ensureLobbyConfigInRange, ensureTeamAliases, resolveConfirmWindowSeconds } from '@module/helpers/lobby/lobbyConfigBounds';
 import { MEMBERSHIP_ACTION_TEXT, consumeMembershipAllowance } from '@module/helpers/lobby/abuseControls';
 import { fairShuffle, SHUFFLE_DOMAIN, shuffleKeyAt } from '@shared/lobby-rules';
+import { ensureLobbyPasswordLength, hashLobbyPassword } from '@module/helpers/lobby/lobbyPassword';
 
 // ─── update_lobby_settings ────────────────────────────────────────────────────
 // Updates all mutable lobby configuration fields.
@@ -97,6 +98,7 @@ export const update_lobby_settings = spacetimedb.reducer(
         if (!args.isPublic && args.password.length === 0 && !ctx.db.LobbyPassword.lobbyId.find(lobbyId)) {
             throw new SenderError(PRIVATE_LOBBY_PASSWORD_TEXT);
         }
+        ensureLobbyPasswordLength(args.password); // S11a (L24)
 
         // D-65: tournament-controlled lobbies lock integrity fields,
         // but allow referee/match QoL fields to change
@@ -225,12 +227,12 @@ export const update_lobby_settings = spacetimedb.reducer(
             if (existing) {
                 ctx.db.LobbyPassword.lobbyId.delete(lobbyId);
                 ctx.db.LobbyPassword.insert(updateWithAudit(ctx, existing, {
-                    passwordHash: args.password,
+                    passwordHash: hashLobbyPassword(lobbyId, args.password), // S11a (L24): stored hashed
                 }, user.id));
             } else {
                 ctx.db.LobbyPassword.insert(insertWithAudit(ctx, {
                     lobbyId,
-                    passwordHash: args.password,
+                    passwordHash: hashLobbyPassword(lobbyId, args.password),
                 }, user.id));
             }
         } else if (args.isPublic) {

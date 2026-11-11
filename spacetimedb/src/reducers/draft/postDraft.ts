@@ -147,7 +147,6 @@ export const equip_lightcone = spacetimedb.reducer(
             lobbyId,
             sequence: getNextSequence(ctx, lobbyId),
             actorUserId: user.id,
-            anonymousLabel: undefined,
             actorSlot: teamSideValue(side),
             action: { tag: 'EquipLightcone', value: {} } as any,
             payload: {
@@ -223,7 +222,6 @@ export const unequip_lightcone = spacetimedb.reducer(
             lobbyId,
             sequence: getNextSequence(ctx, lobbyId),
             actorUserId: user.id,
-            anonymousLabel: undefined,
             actorSlot: teamSideValue(side),
             action: { tag: 'UnequipLightcone', value: {} } as any,
             payload: {
@@ -257,7 +255,7 @@ export const unequip_lightcone = spacetimedb.reducer(
 // or a referee for either team (tightens D-56's any non-coach team member). Upserts the one live MatchLineup row
 // per team per game with the synergy surcharge and the live roster cost (hundredths). A fan-out reducer: throttled
 // per member through AbuseConfig.lineupMinIntervalMs (LobbyMember.lastLineupAt, stamped without an audit bump) and
-// bounded in size. No step is logged here (ArrangeLineupPayload is a position list).
+// bounded in size. No step is logged here (S11a, L39: the unused ArrangeLineup step kind is removed).
 // A60: Equipping or Scoring, open game only; recomputes the game and resets both confirmations (there is no lineup
 // confirmation any more: confirm_lineup was removed). A60(7) Admin path on a closed game: no throttle, no reset.
 
@@ -454,7 +452,6 @@ export const set_eidolon = spacetimedb.reducer(
             lobbyId,
             sequence: getNextSequence(ctx, lobbyId),
             actorUserId: user.id,
-            anonymousLabel: undefined,
             actorSlot: teamSideValue(side),
             action: { tag: 'SetEidolon', value: {} } as any,
             payload: {

@@ -206,7 +206,6 @@ export const undo_last_step = spacetimedb.reducer(
             lobbyId,
             sequence: undoSequence,
             actorUserId: user.id,
-            anonymousLabel: undefined,
             actorSlot: slotToTeamSide(member.lobbySlot),
             action: { tag: 'Undo' },
             payload: {
@@ -310,7 +309,6 @@ export const pause_draft = spacetimedb.reducer(
             lobbyId,
             sequence: getNextSequence(ctx, lobbyId),
             actorUserId: user.id,
-            anonymousLabel: undefined,
             actorSlot: slotToTeamSide(member.lobbySlot),
             action: { tag: 'Pause' },
             payload: {

@@ -2,6 +2,8 @@
 
 76 tables. Updated 2026-11-06 (S3 backend reset: 27 tables public → private per A37 / ACCESS-SECURITY-OPS Appendix A, 10 new, `group_phase_record` dropped per A23). Visibility: **21 public** (reference data, aggregates, `user`, `tournament`, `bracket_match`, `admin_alert`, the `lobby_cursor_event` event table); every other table is PRIVATE and read through views (S9). Paste into [mermaid.live](https://mermaid.live) to preview. **Since S11a: `user` is private and `user_private` is merged into it; 78 table files in `spacetimedb/src/tables/`, 20 of them public (the 76 / 21 above predate later additions).**
 
+Phase S11a execution, part 2 (closing-triage items "fix at S11"): `cost_set` is PRIVATE (L91; the published sets are read through the new anonymous view `view_published_cost_sets`) and gains an `is_published` btree index. New PRIVATE table `lobby_cursor_stamp` (`lobbyId`, `userId`, `lastCursorAt`, audit columns; btree `lobby_id` and `by_lobby_and_user`; the `broadcast_cursor` throttle stamp, L19) and `lobby_member` loses `lastCursorAt`. `match_session_step` loses `anonymousLabel`; the enum `ActionType` and the struct enum `StepPayload` lose `ArrangeLineup`, and the struct `ArrangeLineupPayload` is removed (L39). `match_result_game` loses `validationStatus` and `validatedByUserId`, and the enum `ValidationStatus` is removed (L60). `match_result_record` gains `staffOverrideReason?` (string) after `settledAt` (L49). `tournament` loses `seasonId` and `tournament_finalize_job` loses `cursor` (L84). `leaderboard` and `mmr_rating` gain a `season_id` btree index (S10j review F3). `lobby_password.passwordHash` now holds a salted SHA-256 (L24; data rule, no column change). Clear-publish (docs/admin, docs/lobby, docs/chat, docs/match-session, docs/match-results, docs/tournament, docs/cost-sets, docs/mmr, docs/views architecture "Phase S11a execution, part 2"). Table count: 79 table files, 19 public.
+
 Phase S11a execution (DECISIONS.md A77, A143): `user` is PRIVATE (`public: false`) and absorbs `user_private`, which is removed: `user` loses `hasDiscordLinked` and gains, after `deletedAt`, `loginMethod?`, `providerId?`, `providerUsername?` (strings) and `linkedAt?` (timestamp), with the btree indexes `provider_id` and `by_method_and_provider` moved from `user_private`. `leaderboard` gains `displayName` and `avatarCharacterName` (strings) after `userId` (the public top 20 carries the card, A77(1)). `tournament_player_account` gains `origin` (the new enum `AccountLockOrigin` = Entry | StandIn) after `hsrAccountId` and a `tournament_id` btree index (A143). New view `view_admin_users`. Clear-publish (docs/auth, docs/views, docs/tournament, docs/mmr architecture "Phase S11a execution").
 
 Phase S10ac execution (DECISIONS.md A157): `availability_slot` loses `isRecurring`, `recurrenceRule` and `expiresAt` and gains `kind` (the new enum `SlotKind` = Available | Blocked) after `endAt`; the struct `RecurrenceRule` and the enum `RecurrenceType` are removed. `bracket_match.scheduledAt` (optional timestamp, unchanged column) is now written: the start of the match's calendar event, cleared when the event is deleted. No index change (docs/calendar/architecture.md "Phase S10ac execution"). S11 clear-publish.
@@ -25,9 +27,9 @@ Phase S7b execution (DECISIONS.md A60): `match_result_game` gains `blueConfirmed
 |-------|--------|
 | blue | user (PRIVATE since S11a, A77), user_presence (PRIVATE, new S3 A48), user_identity (PRIVATE), ~~user_private~~ (merged into user, S11a), ban_record (PRIVATE), link_request (PRIVATE, new S3 A46), deleted_user (PRIVATE), server_identity (PRIVATE), user_deletion_job, identity_gc_job, gc_result (PRIVATE) |
 | green | hsr_character, hsr_lightcone, archetype, hsr_character_archetype, season |
-| orange | hsr_account (PRIVATE), hsr_account_character (PRIVATE), cost_set, hsr_character_cost, hsr_lightcone_cost, hsr_synergy_cost (characterA/characterB, A21), cost_set_draft_character (PRIVATE), cost_set_draft_lightcone (PRIVATE), cost_set_draft_synergy (PRIVATE) |
+| orange | hsr_account (PRIVATE), hsr_account_character (PRIVATE), cost_set (PRIVATE since S11a), hsr_character_cost, hsr_lightcone_cost, hsr_synergy_cost (characterA/characterB, A21), cost_set_draft_character (PRIVATE), cost_set_draft_lightcone (PRIVATE), cost_set_draft_synergy (PRIVATE) |
 | purple | tournament, bracket_match, tournament_enrolled (PRIVATE), tournament_team_member (PRIVATE), tournament_assistant (PRIVATE), tournament_team (PRIVATE), tournament_team_request (PRIVATE), tournament_stand_in (PRIVATE), tournament_player_account (PRIVATE), tournament_finalize_job (scheduled, new S3 A24) |
-| cyan | lobby (PRIVATE), lobby_member_account (PRIVATE), lobby_member (PRIVATE), lobby_ban (PRIVATE), lobby_preset (PRIVATE), lobby_password (PRIVATE), lobby_cursor_event (public event, no audit columns A19), lobby_gc_job, referee_transfer_check (scheduled, new S3 A22a), match_session (PRIVATE), match_session_step (PRIVATE), match_lineup (PRIVATE, new S3 A21), chat_message (PRIVATE), elo_config |
+| cyan | lobby (PRIVATE), lobby_member_account (PRIVATE), lobby_member (PRIVATE), lobby_ban (PRIVATE), lobby_preset (PRIVATE), lobby_password (PRIVATE), lobby_cursor_stamp (PRIVATE, new S11a), lobby_cursor_event (public event, no audit columns A19), lobby_gc_job, referee_transfer_check (scheduled, new S3 A22a), match_session (PRIVATE), match_session_step (PRIVATE), match_lineup (PRIVATE, new S3 A21), chat_message (PRIVATE), elo_config |
 | red | match_result_record (PRIVATE), match_result_game (PRIVATE), match_result_participant (PRIVATE), match_result_group_score (PRIVATE, new S3 A21), match_result_adjustment (PRIVATE, new S3 A21) |
 | grey | match_session_history (PRIVATE), match_session_step_history (PRIVATE), match_participant_history (PRIVATE), match_result_game_history (PRIVATE) |
 | pink | mmr_rating (PRIVATE A40), mmr_history (PRIVATE), leaderboard (top 20 per category, A45), player_stat (PRIVATE), player_character_stat (PRIVATE), global_character_stat, player_relationship (PRIVATE), account_rating_config |
@@ -117,6 +119,7 @@ erDiagram
         string lightconeName PK_FK
     }
     cost_set {
+        bool isPublished "S11a L91: PRIVATE table; view_published_cost_sets lists isPublished rows"
         u32 id PK
         u32 creatorId FK
     }
@@ -158,7 +161,6 @@ erDiagram
         u32 id PK
         u32 organizerId FK
         u32 costSetId FK
-        u32 seasonId FK "A36: 0 for now"
         u32 lobbyPresetId FK "A33a: free-set starting values"
         u8 maxAccountsPerPlayer "default 1 — Phase 10.4 D-33"
         bool requireOwnership "character ownership validation in draft — Phase 12.3"
@@ -224,7 +226,6 @@ erDiagram
     tournament_finalize_job {
         u64 scheduledId PK
         u32 tournamentId FK
-        u32 cursor "D.8.1 chunked finalization"
     }
 
     %% cyan  (lobby_member_account is NON-PUBLIC since Phase 10.4 — D-02)
@@ -279,7 +280,13 @@ erDiagram
         u32 confirmWindowSeconds "A131: 0-300 s, default 60, system preset 60"
     }
     lobby_password {
+        string passwordHash "S11a L24: SHA-256 hex of hsr-lobby-password:lobbyId:password"
         u32 lobbyId PK_FK
+    }
+    lobby_cursor_stamp {
+        u32 lobbyId PK_FK
+        u32 userId PK_FK
+        timestamp lastCursorAt "S11a L19: broadcast_cursor throttle, off lobby_member"
     }
     lobby_cursor_event {
         u32 lobbyId FK
@@ -313,11 +320,11 @@ erDiagram
         u32 refereeUserId FK
         u32 disputedByUserId FK
         u32 winnerOverrideById FK "A21/A39 tie-break override"
+        string staffOverrideReason "S11a L49: override_match_result reason, optional"
     }
     match_result_game {
         u32 matchResultId PK_FK "A67: one row per record"
         u8 teamBlueDeaths "A21"
-        u32 validatedByUserId FK
         bool blueConfirmed "A60 (S7b): per-game captain confirmation"
         bool redConfirmed "A60 (S7b)"
         timestamp closedAt "A60 (S7b): closed marker, optional"
@@ -502,7 +509,6 @@ erDiagram
     %% purple: tournament (many-to-many enrollment via junction tables)
     tournament }o--|| user : "organizerId (many-to-one)"
     tournament }o--|| cost_set : "costSetId (many-to-one)"
-    tournament }o--|| season : "seasonId (many-to-one; 0 until seasons are designed, A36)"
     tournament }o--|| lobby_preset : "lobbyPresetId (many-to-one, A33a)"
     tournament_enrolled }o--|| tournament : "tournamentId (many-to-many junction)"
     tournament_enrolled }o--|| user : "userId (many-to-many junction)"
@@ -542,6 +548,8 @@ erDiagram
     lobby_member_account }o--|| hsr_account : "hsrAccountId (many-to-one)"
     lobby_member }o--|| lobby : "lobbyId (many-to-many junction)"
     lobby_member }o--|| user : "userId (many-to-many junction)"
+    lobby_cursor_stamp }o--|| lobby : "lobbyId (many-to-one, S11a)"
+    lobby_cursor_stamp }o--|| user : "userId (many-to-one, S11a)"
     referee_transfer_check }o--|| lobby : "lobbyId (many-to-one, A22a)"
     referee_transfer_check }o--|| user : "userId (many-to-one)"
     match_lineup }o--|| lobby : "lobbyId (many-to-one, A21)"

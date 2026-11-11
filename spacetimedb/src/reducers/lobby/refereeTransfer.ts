@@ -14,6 +14,7 @@ import { memberHasLeft, slotToTeamSide } from '@module/helpers/lobby/lobbyHelper
 import { hasLivePresence } from '@module/helpers/identity/presenceHelpers';
 import { getNextSequence } from '@module/helpers/draft/stepSequence';
 import { pausedTimerState } from '@module/helpers/draft/turnClock';
+import { ensureScheduler } from '@module/helpers/admin/schedulerGuard';
 
 // ─── run_referee_transfer_check ───────────────────────────────────────────────
 // A22a scheduled check (ACCESS-SECURITY-OPS D.8.2), bound to RefereeTransferCheck through `onSchedule`
@@ -41,6 +42,7 @@ export const run_referee_transfer_check = spacetimedb.reducer(
     { onSchedule: RefereeTransferCheck },
     { arg: RefereeTransferCheck.rowType },
     (ctx, { arg }) => {
+        ensureScheduler(ctx, 'run_referee_transfer_check'); // S11a (L11)
         const lobbyId = arg.lobbyId;
         const userId = arg.userId;
 
@@ -105,7 +107,6 @@ export const run_referee_transfer_check = spacetimedb.reducer(
             lobbyId,
             sequence: getNextSequence(ctx, lobbyId), // F9: audit rows never share a sequence with a draft step
             actorUserId: SYSTEM_USER_ID,
-            anonymousLabel: undefined,
             actorSlot: slotToTeamSide(member.lobbySlot),
             action: { tag: 'Pause' },
             payload: { tag: 'Pause', value: { timeRemainingMs: paused.remainingMs, isAutoPause: true } },

@@ -68,7 +68,7 @@ IdentityGcJob (scheduledId: u64 autoInc PK)  [PRIVATE]
 4. Called from `scripts/stdb/bootstrap.ts` (and `seed.ts`) to initialize the GC schedule after a wipe
 
 ### run_identity_gc() -- scheduled reducer
-1. Fired by SpacetimeDB scheduler from `IdentityGcJob.scheduledAt`
+1. Fired by SpacetimeDB scheduler from `IdentityGcJob.scheduledAt`; S11a (triage L11): any other caller is refused before any read ("Forbidden: run_identity_gc is a scheduled reducer and runs only from the scheduler.", `ensureScheduler`, `ctx.senderAuth.isInternal`)
 2. Scan all `UserIdentity` rows grouped by user; orphan mappings are deleted; a verified user loses identities idle 90 days (never the newest, never while online, never server identities or SYSTEM mappings)
 3. Guest users (Phase S10h execution, A95(1)): a guest idle 30 days with no match history at all is deleted through `performUserDeletion`, at most 500 per run (a scheduled run that reaches the cap requeues in one hour, not seven days: S10h review F4); full rule in `docs/auth/architecture.md`
 4. Insert `GcResult` row: `gcType=Identity`, counts of checked and deleted rows
@@ -76,7 +76,7 @@ IdentityGcJob (scheduledId: u64 autoInc PK)  [PRIVATE]
 
 ### admin_gc_identities()
 1. `ensureAdmin(ctx)` -- Admin only
-2. Runs same logic as `run_identity_gc` but on-demand (no reschedule)
+2. Runs same logic as `run_identity_gc` but on-demand (no reschedule); S11a (triage L6): when `IdentityGcJob` holds no row (the chain stopped), it inserts the next run 7 days out
 3. Returns result via `GcResult` insert
 
 ### admin_gc_lobbies()
@@ -85,6 +85,7 @@ IdentityGcJob (scheduledId: u64 autoInc PK)  [PRIVATE]
 3. For each: check if host identity is disconnected and GC timeout has elapsed
 4. Trigger `hardDeleteLobby` for eligible stale lobbies
 5. Insert `GcResult` row: `gcType=Lobby`, counts
+6. S11a (triage L6): when `LobbyGcJob` holds no row (the chain stopped), insert the next `run_lobby_gc` 15 min out
 
 ## Phase S10s execution (DECISIONS.md A122(23); triage L99 to L102)
 
@@ -126,10 +127,11 @@ Scripts and tools only; no module, schema or binding change. Scenarios: [contrac
 | `init` no longer seeds a breaker job (inline breaker, A57) and seeds the system lobby preset (A33a); `server_nuke_test_data` clears `AbuseCounter` and re-seeds the system preset after clearing `LobbyPreset` | Phase S6 execution (DECISIONS.md A57, A33a) | 2026-11-06 |
 | `run_identity_gc` / `admin_gc_identities` delete guest users idle 30 days with no match history (A95(1), 500 per run; `GcResult.details.guests`); the run description above corrected to the code | Phase S10h execution (DECISIONS.md A95) | 2026-11-10 |
 | Prod token only from `.env.prod.local`; prod CLI flags checked against an allow-list (`--yes=migrate` the only confirmation); bootstrap registers and saves the new delegate before revoking the old one; the energy model drops `PlayerSnapshot` | Phase S10s execution (DECISIONS.md A122(23)) | 2026-11-10 |
+| Scheduled reducers refuse every caller but the scheduler (`ensureScheduler`, L11); `admin_gc_identities` / `admin_gc_lobbies` restart a stopped job chain (L6); `server_nuke_test_data` clears `LobbyCursorStamp`; `stdb:guest-switch` script (L12); energy model: `user`, `leaderboard`, `availability_slot` sized to the current schema | Phase S11a execution | 2026-11-11 |
 
 ---
 
-*Last updated: 2026-11-10 (S10s)*
+*Last updated: 2026-11-11 (S11a part 2)*
 *Feature owner: Phase 01 / Phase 12.1*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

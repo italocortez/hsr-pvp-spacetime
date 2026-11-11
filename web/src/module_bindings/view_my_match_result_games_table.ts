@@ -12,7 +12,6 @@ import {
 import {
   GameMode,
   TeamSide,
-  ValidationStatus,
   GroupScoreItem,
   AdjustmentItem,
 } from "./types";
@@ -38,10 +37,6 @@ export default __t.row({
   get winnerTeamSide() {
     return TeamSide.name("winner_team_side");
   },
-  get validationStatus() {
-    return ValidationStatus.name("validation_status");
-  },
-  validatedByUserId: __t.option(__t.u32()).name("validated_by_user_id"),
   blueConfirmed: __t.bool().name("blue_confirmed"),
   redConfirmed: __t.bool().name("red_confirmed"),
   closedAt: __t.option(__t.timestamp()).name("closed_at"),

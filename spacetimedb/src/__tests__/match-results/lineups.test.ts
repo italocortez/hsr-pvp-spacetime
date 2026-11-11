@@ -91,12 +91,13 @@ describe('backlog #3: synergy surcharge and who arranges', () => {
         expect(JSON.parse(lineup(test, s.lobbyId, 'Blue').groups)).toEqual(halves(blueNames()));
 
         // The spectator referee (host) may arrange either team; no step is logged for an arrangement.
+        const stepCount = steps(test, s.lobbyId).length; // S11a (L39): the ArrangeLineup step kind is removed
         arrange(s, s.host, 'Blue', [blueNames().slice(4, 8), blueNames().slice(0, 4)]);
         expect(JSON.parse(lineup(test, s.lobbyId, 'Blue').groups)).toEqual([blueNames().slice(4, 8), blueNames().slice(0, 4)]);
         advance(test, 300);
         arrange(s, s.host, 'Red', halves(redNames()));
         expect(lineup(test, s.lobbyId, 'Red')).toBeDefined();
-        expect(steps(test, s.lobbyId).filter((st) => st.action.tag === 'ArrangeLineup')).toHaveLength(0);
+        expect(steps(test, s.lobbyId)).toHaveLength(stepCount);
     });
 
     it('Auction: a lineup whose surcharge exceeds the remaining budget can be arranged, but confirm_game is rejected (A60(4))', () => {

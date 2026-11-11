@@ -2,6 +2,7 @@ import { hardDeleteLobby } from '@module/reducers/lobby/lobbyGc';
 import { transferFlagsOnRemoval } from './flagTransferHelpers';
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { releaseMemberAccounts } from './lobbyHelpers';
+import { deleteCursorStamps } from './cursorStamps';
 
 // ─── removeMemberRow ─────────────────────────────────────────────────────────
 // A68(5)(6)(7): the one row-removal path (leave in Waiting / AwaitingResult, a spectator's or coach's leave in any
@@ -12,6 +13,7 @@ import { releaseMemberAccounts } from './lobbyHelpers';
 export function removeMemberRow(ctx: any, lobbyId: number, userId: number, actorId: number): boolean {
     transferFlagsOnRemoval(ctx, lobbyId, userId);
     releaseMemberAccounts(ctx, lobbyId, userId);
+    deleteCursorStamps(ctx, lobbyId, userId); // S11a (L19)
     ctx.db.LobbyMember.by_lobby_and_user.delete([lobbyId, userId]);
 
     const lobby = ctx.db.Lobby.id.find(lobbyId);

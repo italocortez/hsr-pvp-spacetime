@@ -314,7 +314,7 @@ export function ensureLineupThrottle(ctx: any, member: any): void {
     }
 }
 
-/** Throttle stamp on the private member row (re-read, so no write of the call is lost): no audit bump, like lastCursorAt. */
+/** Throttle stamp on the private member row (re-read, so no write of the call is lost): no audit bump (§B.5). */
 export function stampLineupThrottle(ctx: any, lobbyId: number, member: any): void {
     const fresh = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, member.userId])][0];
     if (!fresh) return;

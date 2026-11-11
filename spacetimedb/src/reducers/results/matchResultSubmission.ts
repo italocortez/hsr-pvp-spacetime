@@ -98,7 +98,6 @@ export const confirm_game = spacetimedb.reducer(
             lobbyId,
             sequence: getNextSequence(ctx, lobbyId),
             actorUserId: user.id,
-            anonymousLabel: undefined,
             actorSlot: teamSideValue(side),
             action: { tag: 'ConfirmGame', value: {} } as any,
             payload: {

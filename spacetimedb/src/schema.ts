@@ -86,6 +86,7 @@ import { LobbyPreset } from '@module/tables/lobby/lobbyPreset';
 import { LobbyPassword } from '@module/tables/lobby/lobbyPassword';
 import { LobbyMemberAccount } from '@module/tables/lobby/lobbyMemberAccount';
 import { LobbyCursorEvent } from '@module/tables/lobby/lobbyCursorEvent';
+import { LobbyCursorStamp } from '@module/tables/lobby/lobbyCursorStamp';
 
 // Active Game
 import { MatchSession } from '@module/tables/draft/matchSession';
@@ -217,6 +218,7 @@ const spacetimedb = schema({
     LobbyPassword,
     LobbyMemberAccount,
     LobbyCursorEvent,
+    LobbyCursorStamp,       // S11a (L19): the cursor throttle stamp, off LobbyMember; private, no view reads it
 
     // Active Game
     MatchSession,

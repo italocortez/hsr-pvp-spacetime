@@ -15,7 +15,6 @@ export const lobbyMemberColumns = {
     disconnectedAt: t.timestamp().optional(), // D-08: timestamp of disconnect event (A22a: the grace check compares against it)
     disconnectPoolRemainingMs: t.u32(),       // D-10: remaining disconnect pool in ms (init 300000 at draft start)
     joinSeq: t.u32(),                         // R4: per-lobby join counter assigned at join; anonymous labels derive from it, never from the id
-    lastCursorAt: t.timestamp().optional(),   // B-4 (§B.5): broadcast_cursor throttle stamp
     lastLineupAt: t.timestamp().optional(),   // B-4: arrange_lineup throttle stamp (fan-out reducer)
     createdById: t.u32(),
     createdDate: t.timestamp(),

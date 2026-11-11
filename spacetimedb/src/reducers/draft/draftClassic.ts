@@ -265,6 +265,7 @@ export const start_draft = spacetimedb.reducer(
             winnerOverrideById: undefined,
             winnerOverrideReason: undefined,
             settledAt: undefined,
+            staffOverrideReason: undefined, // S11a (L49)
         }, user.id));
 
         // Create MatchResultParticipant rows for each Blue+Red non-coach member
@@ -442,7 +443,6 @@ export const pick_character = spacetimedb.reducer(
             lobbyId,
             sequence: stepSequence,
             actorUserId: user.id,
-            anonymousLabel: undefined,
             actorSlot: slotToTeamSide(member.lobbySlot),
             action: { tag: 'Pick', value: {} } as any,
             payload: {
@@ -601,7 +601,6 @@ export const ban_character = spacetimedb.reducer(
             lobbyId,
             sequence: stepSequence,
             actorUserId: user.id,
-            anonymousLabel: undefined,
             actorSlot: slotToTeamSide(member.lobbySlot),
             action: { tag: 'Ban', value: {} } as any,
             payload: {
@@ -769,7 +768,6 @@ export const timer_expiry_classic = spacetimedb.reducer(
                 lobbyId,
                 sequence: stepSequence, // F9: never collides with Pause/Undo audit rows
                 actorUserId: 0,  // System actor
-                anonymousLabel: undefined,
                 actorSlot: currentStep.teamTurn,
                 action: { tag: 'Pick', value: {} } as any,
                 payload: {
@@ -818,7 +816,6 @@ export const timer_expiry_classic = spacetimedb.reducer(
                 lobbyId,
                 sequence: stepSequence, // F9: never collides with Pause/Undo audit rows
                 actorUserId: 0,  // System actor
-                anonymousLabel: undefined,
                 actorSlot: currentStep.teamTurn,
                 action: { tag: 'Ban', value: {} } as any,
                 payload: {

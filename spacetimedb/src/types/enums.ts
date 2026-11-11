@@ -116,7 +116,6 @@ export const ActionType = t.enum('ActionType', {
     Pause: t.unit(),
     Undo: t.unit(),
     EquipLightcone: t.unit(),
-    ArrangeLineup: t.unit(),
     SetEidolon: t.unit(),    // A60 (S7b); ConfirmLineup removed (A60(8))
     ConfirmGame: t.unit(),   // A60 (S7b)
     UnequipLightcone: t.unit(), // S7b hand-off (landed in S8d): removes the latest light cone of a character, refunded
@@ -153,10 +152,6 @@ export const MatchResultStatus = t.enum('MatchResultStatus', {
     Validated: t.unit(),
     Rejected: t.unit(),
     Voided: t.unit(),      // A24(3): a mid-tournament rollback keeps the record for audit and marks it Voided
-});
-
-export const ValidationStatus = t.enum('ValidationStatus', {
-    Pending: t.unit(),
 });
 
 export const DisconnectPolicy = t.enum('DisconnectPolicy', {

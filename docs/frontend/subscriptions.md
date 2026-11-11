@@ -19,7 +19,7 @@ Visitors open a SpacetimeDB WebSocket connection and subscribe directly to the p
 | `hsr_character_cost` | ~250 | 37 KB |
 | `hsr_lightcone_cost` | ~470 | 70 KB |
 | `hsr_synergy_cost` | ~200 | 24 KB |
-| `cost_set` | <20 | 2 KB |
+| `cost_set` (S11a: private; read through `view_published_cost_sets`, the published rows only) | <20 | 2 KB |
 | **Total** | | ~192 KB raw, ~70–100 KB on the wire |
 
 **Why:** ~80 KB on the wire is smaller than one hero image; a second data plane for this volume would fragment the data model. Reference data changes only through admin reducers, rarely, and ordinary subscription updates propagate the changes with no bespoke cache invalidation.

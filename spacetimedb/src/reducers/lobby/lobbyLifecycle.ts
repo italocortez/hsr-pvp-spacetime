@@ -39,6 +39,7 @@ import { normalizeLobbyName } from '@module/helpers/tournament/seriesSettings';
 import { ensureCostSetUsable } from '@module/helpers/draft/costSetGuards';
 import { autoSeatSlot } from '@module/helpers/tournament/tournamentLobbySides';
 import { participateAsStandIn } from '@module/helpers/tournament/standIns';
+import { ensureLobbyPasswordLength, hashLobbyPassword, LOBBY_PASSWORD_MAX_LENGTH } from '@module/helpers/lobby/lobbyPassword';
 
 // ─── create_lobby ─────────────────────────────────────────────────────────────
 // Creates a new lobby and inserts the creator as the host/referee.
@@ -104,6 +105,7 @@ export const create_lobby = spacetimedb.reducer(
         if (!args.isPublic && args.password.length === 0) {
             throw new SenderError(PRIVATE_LOBBY_PASSWORD_TEXT);
         }
+        ensureLobbyPasswordLength(args.password); // S11a (L24)
 
         // D-22 / A68(4): one lobby at a time
         ensureNotInLobby(ctx, user.id, args.abandonCurrentMatch ?? false);
@@ -228,7 +230,6 @@ export const create_lobby = spacetimedb.reducer(
             disconnectedAt: undefined,
             disconnectPoolRemainingMs: 0,
             joinSeq: 1, // R4 / A74(3): the host's seat; lobby.lastJoinSeq starts at 1
-            lastCursorAt: undefined,
             lastLineupAt: undefined,
         }, user.id));
 
@@ -236,7 +237,7 @@ export const create_lobby = spacetimedb.reducer(
         if (!args.isPublic && args.password.length > 0) {
             ctx.db.LobbyPassword.insert(insertWithAudit(ctx, {
                 lobbyId: lobby.id,
-                passwordHash: args.password,
+                passwordHash: hashLobbyPassword(lobby.id, args.password), // S11a (L24): stored hashed
             }, user.id));
         }
 
@@ -344,7 +345,9 @@ export const join_lobby = spacetimedb.reducer(
         // D-02: password check for private lobbies
         if (!lobby.isPublic) {
             const passwordRow = ctx.db.LobbyPassword.lobbyId.find(lobbyId);
-            if (!passwordRow || passwordRow.passwordHash !== args.password) {
+            // S11a (L24): compared as the hash; an over-long attempt cannot match a stored password
+            if (!passwordRow || [...args.password].length > LOBBY_PASSWORD_MAX_LENGTH
+                || passwordRow.passwordHash !== hashLobbyPassword(lobbyId, args.password)) {
                 throw new SenderError('Incorrect lobby password.');
             }
         }
@@ -385,7 +388,6 @@ export const join_lobby = spacetimedb.reducer(
             disconnectedAt: undefined,
             disconnectPoolRemainingMs: 0,
             joinSeq, // R4: per-lobby join counter; A22(5) order and the S9 labels derive from it
-            lastCursorAt: undefined,
             lastLineupAt: undefined,
         }, user.id));
 

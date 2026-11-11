@@ -26,6 +26,7 @@
         "stdb:describe:prod": "tsx scripts/stdb/describe.ts --target prod",
         "stdb:generate": "tsx scripts/stdb/generate.ts",
         "stdb:manage-user": "tsx scripts/stdb/manage-user.ts",
+        "stdb:guest-switch": "tsx scripts/stdb/guest-switch.ts",
         "energy": "node tools/energy-model.js"
     },
     "devDependencies": {

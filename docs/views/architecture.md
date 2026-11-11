@@ -58,6 +58,11 @@ Views are server-side read reducers that return filtered data to authenticated o
 - **Returns:** `CostSet[]` owned by the caller (via `creator_id` index)
 - **Purpose:** Tournament host manages their draft cost configurations
 
+#### view_published_cost_sets (Phase S11a execution, triage L91)
+- **Auth:** Anonymous view (`anonymousView`, one shared result)
+- **Returns:** `CostSet[]` with `isPublished = true` (via the `is_published` index; a locked set is listed with its flag)
+- **Purpose:** `CostSet` is private since S11a; this is how every client reads the selectable sets (the reference set subscribes it in place of the table)
+
 #### view_my_draft_character_costs
 - **Auth:** Authenticated
 - **Returns:** `CostSetDraftCharacter[]` for all cost sets owned by the caller
@@ -143,7 +148,7 @@ Views 10-20 apply anonymous enforcement (D-92): when `lobby.isAnonymousPlayers=t
 |------|-------|-------|
 | `lobbyViews.ts` | view_lobby_browser, view_my_lobbies, view_my_lobby_chat, view_my_lobby_members | 4 |
 | `identityViews.ts` | view_my_identity, view_my_profile, view_public_hsr_accounts, view_admin_user_private | 4 |
-| `costSetViews.ts` | view_my_cost_sets, view_my_draft_character_costs, view_my_draft_lightcone_costs, view_my_draft_synergy_costs | 4 |
+| `costSetViews.ts` | view_my_cost_sets, view_my_draft_character_costs, view_my_draft_lightcone_costs, view_my_draft_synergy_costs (+ view_cost_set_missing S10i, view_published_cost_sets S11a) | 6 |
 | `statsViews.ts` | view_my_player_stats, view_my_character_stats | 2 |
 | `socialViews.ts` | view_my_relationships, view_my_roster_visibility, view_my_roster | 3 |
 | `matchViews.ts` | view_my_match_steps, view_my_match_participants | 2 |
@@ -213,8 +218,8 @@ seat kind and seat number ("Blue Player #3", "Spectator #7"), computed from the 
 | `view_my_match_steps` (kept) | matchViews | per-sender | `AnonymousMatchStepRow` (PK `id`), no gameNumber | actorUserId 0 + stored label via `hideUserId` | `MatchSessionStep.lobby_id` |
 | `view_my_match_participants` (modified) | matchViews | per-sender | `AnonymousMatchParticipantRow` + `accountRatingSnapshot?` | userId 0 + label; snapshot per `ratingVisible` | `MatchResultRecord.lobby_id`, `MatchResultParticipant.match_result_id` |
 | `view_my_lineups` (new) | matchViews | per-sender, both teams | `MatchLineupViewRow` (PK `id`): lobbyId, teamSide, groups, synergySurcharge, rosterCost, blueConfirmed, redConfirmed, closedAt? | no user id | `MatchLineup.by_lobby`, `MatchResultGame.match_result_id` |
-| `view_my_match_result` (new) | matchResultViews | per-sender, live or parked | `MatchResultViewRow` (PK `id`): status, winner, concede and override fields, settledAt; no refereeUserId; `concedeSummary` only for a Moderator / Admin caller (A83, Phase S10c execution) | disputedByUserId / winnerOverrideById masked | `MatchResultRecord.lobby_id` |
-| `view_my_match_result_games` (new) | matchResultViews | per-sender | `MatchResultGameViewRow` (PK `matchResultId`) with nested `groupScores[]` and `adjustments[]` | validatedByUserId / closedById / setById masked | `MatchResultGame.match_result_id`, `MatchResultGroupScore.by_result`, `MatchResultAdjustment.by_result` |
+| `view_my_match_result` (new) | matchResultViews | per-sender, live or parked | `MatchResultViewRow` (PK `id`): status, winner, concede and override fields, settledAt, `staffOverrideReason` (S11a, L49); no refereeUserId; `concedeSummary` only for a Moderator / Admin caller (A83, Phase S10c execution) | disputedByUserId / winnerOverrideById masked | `MatchResultRecord.lobby_id` |
+| `view_my_match_result_games` (new) | matchResultViews | per-sender | `MatchResultGameViewRow` (PK `matchResultId`) with nested `groupScores[]` and `adjustments[]` | closedById / setById masked (S11a, L60: validationStatus / validatedByUserId removed) | `MatchResultGame.match_result_id`, `MatchResultGroupScore.by_result`, `MatchResultAdjustment.by_result` |
 | `view_admin_stuck_games` (new) | matchResultViews | Moderator+ (else `[]`) | `StuckGameRow` (PK `lobbyId`): joinCode, stage, both flags, isTie, sinceAt | staff only | `User.id`, `Lobby.stage`, `MatchResultRecord.lobby_id`, `MatchResultGame.match_result_id` |
 | `view_my_match_lineup_history` (new) | matchHistoryViews | per-sender, participated (Pattern B) | `MatchLineupHistory` row | revealed after the match (A37) | `MatchParticipantHistory.by_user`, `MatchLineupHistory.by_match_history` |
 | `view_match_history`, `view_match_participant_history`, `view_match_step_history` | — | **removed** (A37) | — | — | — |
@@ -604,6 +609,7 @@ strings, about 30 B (4 + about 12 for the name, 4 + about 10 for the avatar): at
 | Calendar views unchanged; the attendee-list cut-off at an event's end (A160(5)) not built, since a view cannot read the time | Phase S10ad execution (DECISIONS.md A160) | 2026-11-11 |
 | Fix pass: new `view_event_attendees(eventId)` (the attendee list of one opened event; organizer, invitees of a personal event, invitees of a non-anonymous tournament's match event, `bracket` permission holders); `view_my_calendar_invites` path (c) removed, an invitee gets their own row only | Phase S10ad execution (DECISIONS.md A161) | 2026-11-11 |
 | `User` private (A77): new `view_admin_users` (Moderator+); `view_my_profile` / `view_admin_user_private` read the merged `User` row (shapes kept, `hasDiscordLinked` derived); `Leaderboard` carries `displayName` / `avatarCharacterName`; exposure review | Phase S11a execution (DECISIONS.md A77) | 2026-11-11 |
+| `view_published_cost_sets` (anonymous, `CostSet.is_published`; `CostSet` private, L91); `view_my_match_result` gains `staffOverrideReason` (L49); `view_my_match_result_games` loses `validationStatus` / `validatedByUserId` (L60); `view_my_match_steps` no longer reads a stored step label (L39) | Phase S11a execution (part 2) | 2026-11-11 |
 | A match event's organizer reads the attendee list and the organizer rows of `view_my_calendar_invites` only with the bracket permission; an Admin reads every attendee list | Phase S11a execution (DECISIONS.md A162) | 2026-11-11 |
 ---
 

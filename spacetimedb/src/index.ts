@@ -40,6 +40,7 @@ export {
     view_my_draft_lightcone_costs,
     view_my_draft_synergy_costs,
     view_cost_set_missing,                  // S10i: arg view (costSetId), A107(2)
+    view_published_cost_sets,               // S11a (L91): CostSet is private; the published sets for everyone
 } from '@module/views/costSetViews';
 export {
     view_my_player_stats,

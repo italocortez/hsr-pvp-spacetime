@@ -1,5 +1,5 @@
 import { table, t } from 'spacetimedb/server';
-import { GameMode, ValidationStatus, TeamSide } from '@module/types/enums';
+import { GameMode, TeamSide } from '@module/types/enums';
 
 // A21: raw results are entered per group in MatchResultGroupScore rows; this row keeps the per-team
 // totals, deaths (one total per team per game), and the server-computed outcome for audit and replay.
@@ -22,8 +22,6 @@ export const matchResultGameColumns = {
     teamRedAdjustedResult: t.i32().optional(),
     tieBreakLevel: t.u8().optional(),
     winnerTeamSide: TeamSide,
-    validationStatus: ValidationStatus,
-    validatedByUserId: t.u32().optional(),
     // A60(3): one confirmation per captain per game (confirm_game); every open-game edit resets both. The game is
     // closed when closedAt is set (set by close_game: a captain once both flags are set, or staff; A63): every edit reducer then rejects it, except
     // an Admin's edit while the record is Pending or Submitted (A60(7)).

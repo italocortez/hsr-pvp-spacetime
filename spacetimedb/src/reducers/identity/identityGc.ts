@@ -2,16 +2,10 @@ import spacetimedb from '@module/schema';
 import { IdentityGcJob, setRunIdentityGcReducer } from '@module/tables/identity/identityGcJob';
 import { ScheduleAt } from 'spacetimedb';
 import { SenderError } from 'spacetimedb/server';
-// External-invocation defense for `run_identity_gc`: SpacetimeDB v2.2.0 engine returns
-// "no such reducer" for external WS callers attempting to invoke scheduled reducers
-// (verified 2026-05-03 in 16.4-AUDIT-NOTES.md "v0.6 Update"). Application-level
-// `ctx.senderAuth.isInternal` guard was removed by Plan 07 hotfix because the SDK
-// v2.2.0 `senderAuth` factory always set `isInternal: false`. Since SDK 2.14 (M1),
-// `isInternal` is `sender === databaseIdentity`: true for scheduled reducers, false for
-// `init`, and `jwt` is null when internal. The guard is not re-added yet (deferred,
-// upgrade report §10 Q8). `seed_identity_gc_job` and `admin_gc_identities` retain their existing project-level gates (`ServerIdentity`
-// check and `ensureModerator` respectively).
+// S11a (L11): `run_identity_gc` is refused unless the scheduler calls it (ensureScheduler). `seed_identity_gc_job` and
+// `admin_gc_identities` keep their project-level gates (`ServerIdentity` check and `ensureModerator` respectively).
 import { SYSTEM_USER_ID } from '@module/helpers/admin/auditColumns';
+import { ensureScheduler } from '@module/helpers/admin/schedulerGuard';
 import { insertWithAudit } from '@module/helpers/admin/auditHelpers';
 import { ensureModerator } from '@module/helpers/identity/ensurePermissions';
 import { hasLivePresence } from '@module/helpers/identity/presenceHelpers';
@@ -180,6 +174,7 @@ function performIdentityGc(ctx: any, actorId: number): { itemsScanned: number; i
 export const run_identity_gc = spacetimedb.reducer(
     { arg: IdentityGcJob.rowType },
     (ctx, { arg }) => {
+        ensureScheduler(ctx, 'run_identity_gc');
         console.log('[IDENTITY_GC] Scheduled run starting...');
 
         const result = performIdentityGc(ctx, SYSTEM_USER_ID);
@@ -263,7 +258,21 @@ export const admin_gc_identities = spacetimedb.reducer((ctx) => {
 
     console.log(`[IDENTITY_GC] Admin run complete: scanned=${result.itemsScanned}, deleted=${result.itemsDeleted}`);
     // NOTE: No self-requeue -- admin trigger is one-shot (Pitfall 6)
+    // S11a (L6): but a chain that has stopped (no IdentityGcJob row: a failed scheduled run rolled back its own re-arm,
+    // or the seed never ran) is restarted here, so a manual run is the way back without a server identity.
+    armIdentityGcJobIfMissing(ctx);
 });
+
+/** S11a (L6): inserts the next scheduled run (7 days out) when the table holds no row; returns whether it did. */
+function armIdentityGcJobIfMissing(ctx: any): boolean {
+    for (const _ of ctx.db.IdentityGcJob.iter()) return false; // at most a row or two: the chain's next run
+    ctx.db.IdentityGcJob.insert({
+        scheduledId: 0n,
+        scheduledAt: ScheduleAt.time(ctx.timestamp.microsSinceUnixEpoch + GC_INTERVAL_MICROS),
+    });
+    console.log('[IDENTITY_GC] IdentityGcJob was empty: next run scheduled in 7 days.');
+    return true;
+}
 
 // ─── seed_identity_gc_job (server-only, idempotent) ──────────────────────────
 // Inserts the first IdentityGcJob row to kick off the scheduled GC chain.
@@ -278,18 +287,11 @@ export const seed_identity_gc_job = spacetimedb.reducer((ctx) => {
         throw new SenderError('Forbidden: caller is not the registered server identity.');
     }
 
-    // Idempotent: skip if table already has a row
-    const existing = [...ctx.db.IdentityGcJob.iter()];
-    if (existing.length > 0) {
+    // Idempotent: skip if table already has a row; else schedule the first run 7 days from now
+    if (!armIdentityGcJobIfMissing(ctx)) {
         console.log('[IDENTITY_GC] Seed skipped -- IdentityGcJob already has a row.');
         return;
     }
-
-    // Schedule first run 7 days from now
-    ctx.db.IdentityGcJob.insert({
-        scheduledId: 0n,
-        scheduledAt: ScheduleAt.time(ctx.timestamp.microsSinceUnixEpoch + GC_INTERVAL_MICROS),
-    });
     console.log('[IDENTITY_GC] Seed complete -- first run scheduled in 7 days.');
 });
 

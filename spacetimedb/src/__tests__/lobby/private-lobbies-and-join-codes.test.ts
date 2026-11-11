@@ -20,6 +20,7 @@ import {
 import { settingsFrom, join, lobbyOfHost } from '../fixtures/lobby';
 import { liveField } from '../fixtures/tournaments';
 import { byKey, sidesOf } from '../fixtures/tournament-matches';
+import { hashLobbyPassword } from '@module/helpers/lobby/lobbyPassword';
 
 const PRIVATE_NEEDS_PASSWORD = 'A private lobby needs a password.'; // A99
 const BAD_PASSWORD = 'Incorrect lobby password.';
@@ -74,7 +75,7 @@ describe('A99: a private lobby needs a password', () => {
         tx(test, h, (ctx) => M.update_lobby_settings(ctx, args));
         expect(lobbyRow(test, L).standardTurnSeconds).toBe(90);
         expect(lobbyRow(test, L).isPublic).toBe(false);
-        expect(passwordOf(test, L)).toBe('pw');
+        expect(passwordOf(test, L)).toBe(hashLobbyPassword(L, 'pw')); // S11a (L24): stored hashed
         const j = guest(test, 'joiner');
         expect(rejection(test, j, (ctx) => M.join_lobby(ctx, { lobbyId: L, joinCode: '', password: '' }))).toBe(BAD_PASSWORD);
         join(test, j, L, 'pw');
@@ -98,7 +99,7 @@ describe('A99: a private lobby needs a password', () => {
         expect(msg).toBe(PRIVATE_NEEDS_PASSWORD);
         const withNew = settingsFrom(test, L, { isPublic: false, password: 'pw2' });
         tx(test, h, (ctx) => M.update_lobby_settings(ctx, withNew));
-        expect(passwordOf(test, L)).toBe('pw2');
+        expect(passwordOf(test, L)).toBe(hashLobbyPassword(L, 'pw2')); // S11a (L24): stored hashed
     });
 });
 

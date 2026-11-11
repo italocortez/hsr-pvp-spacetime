@@ -10,6 +10,7 @@ import { seedCharacters } from '../fixtures/roster';
 import { bulkUpsert } from '../fixtures/cost-sets';
 import characterSeed from '../../../../data/seed/characters.json';
 import lightconeSeed from '../../../../data/seed/lightcones.json';
+import { newArchetypeRows, type RawCharacter } from '../../../../scripts/stdb/seed-normalizers';
 
 // ─── Inline samples, shaped like normalizeCharacters / normalizeLightcones / normalize*Costs / normalizePairings ──
 
@@ -154,10 +155,30 @@ describe('admin_bulk_upsert: seed rows (in memory)', () => {
 });
 
 describe('Roster #10: re-seed keeps archetype descriptions (cost-sets architecture S10f "Seed")', () => {
-    // scripts/stdb/_seed.ts::seedGameData is a private async function over a live DbConnection (conn.db.Archetype.iter(),
-    // conn.reducers.adminBulkUpsert) that reads data/seed/*.json; it is not exported and the module harness has no
-    // DbConnection, so the filter is not reachable from an in-memory unit test without maincloud.
-    it.todo('re-running the seed does not resend an existing archetype name, so an admin-written description survives (roster audit #10; needs a DbConnection: live residue or an exported pure filter)');
+    // S11a (triage L109): the seed's archetype filter is the pure newArchetypeRows (scripts/stdb/seed-normalizers.ts),
+    // which scripts/stdb/_seed.ts feeds with the names read from conn.db.Archetype; here the names come from test.db and
+    // the rows go through the same admin_bulk_upsert. The live re-seed at S11a is the end-to-end check.
+    it('re-running the seed does not resend an existing archetype name, so an admin-written description survives (roster audit #10)', () => {
+        const test = newBareHarness();
+        const raw = characterSeed as unknown as RawCharacter[];
+        const first = newArchetypeRows(raw, []);
+        expect(first.length).toBeGreaterThan(0);
+        expect(first.every((r) => r.description === '')).toBe(true);
+        bulkUpsert(test, 'Archetype', first);
+        const names = () => [...test.db.Archetype.iter()].map((r) => r.name);
+        expect(names().sort()).toEqual(first.map((r) => r.name).sort());
+
+        const edited = first[0].name;
+        bulkUpsert(test, 'Archetype', [{ name: edited, description: 'Written by an admin' }]);
+
+        const second = newArchetypeRows(raw, names()); // the re-seed reads the existing names first
+        expect(second).toEqual([]);
+        expect(test.db.Archetype.name.find(edited)!.description).toBe('Written by an admin');
+
+        // A name new to the data is still sent, with the empty description.
+        const withNew = [...raw, { ...raw[0], name: 'seed-probe', archetype: ['Brand New Archetype'] }];
+        expect(newArchetypeRows(withNew, names())).toEqual([{ name: 'Brand New Archetype', description: '' }]);
+    });
 });
 
 // ════════════════════════════════════════════════════════════════════════════

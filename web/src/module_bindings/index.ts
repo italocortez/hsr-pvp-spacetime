@@ -217,7 +217,6 @@ import AchievementCriteriaRow from "./achievement_criteria_table";
 import AdminAlertRow from "./admin_alert_table";
 import ArchetypeRow from "./archetype_table";
 import BracketMatchRow from "./bracket_match_table";
-import CostSetRow from "./cost_set_table";
 import EloConfigTableRow from "./elo_config_table_table";
 import GlobalCharacterStatRow from "./global_character_stat_table";
 import HsrCharacterRow from "./hsr_character_table";
@@ -297,6 +296,7 @@ import ViewMyTournamentTeamMembersRow from "./view_my_tournament_team_members_ta
 import ViewMyTournamentTeamsRow from "./view_my_tournament_teams_table";
 import ViewMyTournamentsRow from "./view_my_tournaments_table";
 import ViewPublicHsrAccountsRow from "./view_public_hsr_accounts_table";
+import ViewPublishedCostSetsRow from "./view_published_cost_sets_table";
 import ViewSavedCalendarAvailabilityRow from "./view_saved_calendar_availability_table";
 import ViewTournamentMatchesForMeRow from "./view_tournament_matches_for_me_table";
 import ViewTournamentParticipantsRow from "./view_tournament_participants_table";
@@ -391,20 +391,6 @@ const tablesSchema = __schema({
       { name: 'bracket_match_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, BracketMatchRow),
-  costSet: __table({
-    name: 'cost_set',
-    indexes: [
-      { accessor: 'creator_id', name: 'cost_set_creator_id_idx_btree', algorithm: 'btree', columns: [
-        'creatorId',
-      ] },
-      { accessor: 'id', name: 'cost_set_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-    ],
-    constraints: [
-      { name: 'cost_set_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, CostSetRow),
   eloConfigTable: __table({
     name: 'elo_config',
     indexes: [
@@ -519,6 +505,9 @@ const tablesSchema = __schema({
   leaderboard: __table({
     name: 'leaderboard',
     indexes: [
+      { accessor: 'season_id', name: 'leaderboard_season_id_idx_btree', algorithm: 'btree', columns: [
+        'seasonId',
+      ] },
       { accessor: 'by_user', name: 'leaderboard_user_id_idx_btree', algorithm: 'btree', columns: [
         'userId',
       ] },
@@ -1048,6 +1037,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, ViewPublicHsrAccountsRow),
+  viewPublishedCostSets: __table({
+    name: 'view_published_cost_sets',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, ViewPublishedCostSetsRow),
   viewSavedCalendarAvailability: __table({
     name: 'view_saved_calendar_availability',
     indexes: [
@@ -1308,8 +1304,6 @@ type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "ta
     readonly "Archetype": Omit<typeof tablesSchema.schemaType.tables["archetype"], "accessorName"> & { readonly accessorName: "Archetype" };
     /** @deprecated Use `bracketMatch` instead. This alias will be removed in the next major version. */
     readonly "BracketMatch": Omit<typeof tablesSchema.schemaType.tables["bracketMatch"], "accessorName"> & { readonly accessorName: "BracketMatch" };
-    /** @deprecated Use `costSet` instead. This alias will be removed in the next major version. */
-    readonly "CostSet": Omit<typeof tablesSchema.schemaType.tables["costSet"], "accessorName"> & { readonly accessorName: "CostSet" };
     /** @deprecated Use `eloConfigTable` instead. This alias will be removed in the next major version. */
     readonly "EloConfigTable": Omit<typeof tablesSchema.schemaType.tables["eloConfigTable"], "accessorName"> & { readonly accessorName: "EloConfigTable" };
     /** @deprecated Use `globalCharacterStat` instead. This alias will be removed in the next major version. */
@@ -1468,6 +1462,8 @@ type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "ta
     readonly "view_my_tournaments": Omit<typeof tablesSchema.schemaType.tables["viewMyTournaments"], "accessorName"> & { readonly accessorName: "view_my_tournaments" };
     /** @deprecated Use `viewPublicHsrAccounts` instead. This alias will be removed in the next major version. */
     readonly "view_public_hsr_accounts": Omit<typeof tablesSchema.schemaType.tables["viewPublicHsrAccounts"], "accessorName"> & { readonly accessorName: "view_public_hsr_accounts" };
+    /** @deprecated Use `viewPublishedCostSets` instead. This alias will be removed in the next major version. */
+    readonly "view_published_cost_sets": Omit<typeof tablesSchema.schemaType.tables["viewPublishedCostSets"], "accessorName"> & { readonly accessorName: "view_published_cost_sets" };
     /** @deprecated Use `viewSavedCalendarAvailability` instead. This alias will be removed in the next major version. */
     readonly "view_saved_calendar_availability": Omit<typeof tablesSchema.schemaType.tables["viewSavedCalendarAvailability"], "accessorName"> & { readonly accessorName: "view_saved_calendar_availability" };
     /** @deprecated Use `viewTournamentMatchesForMe` instead. This alias will be removed in the next major version. */
@@ -1511,7 +1507,6 @@ const tableAccessorAliases = {
   "AdminAlert": "adminAlert",
   "Archetype": "archetype",
   "BracketMatch": "bracketMatch",
-  "CostSet": "costSet",
   "EloConfigTable": "eloConfigTable",
   "GlobalCharacterStat": "globalCharacterStat",
   "HsrCharacter": "hsrCharacter",
@@ -1591,6 +1586,7 @@ const tableAccessorAliases = {
   "view_my_tournament_teams": "viewMyTournamentTeams",
   "view_my_tournaments": "viewMyTournaments",
   "view_public_hsr_accounts": "viewPublicHsrAccounts",
+  "view_published_cost_sets": "viewPublishedCostSets",
   "view_saved_calendar_availability": "viewSavedCalendarAvailability",
   "view_tournament_matches_for_me": "viewTournamentMatchesForMe",
   "view_tournament_participants": "viewTournamentParticipants",
@@ -1632,8 +1628,6 @@ export type DbView = __DbViewBase & {
   readonly "Archetype": __DbViewBase["archetype"];
   /** @deprecated Use `bracketMatch` instead. This alias will be removed in the next major version. */
   readonly "BracketMatch": __DbViewBase["bracketMatch"];
-  /** @deprecated Use `costSet` instead. This alias will be removed in the next major version. */
-  readonly "CostSet": __DbViewBase["costSet"];
   /** @deprecated Use `eloConfigTable` instead. This alias will be removed in the next major version. */
   readonly "EloConfigTable": __DbViewBase["eloConfigTable"];
   /** @deprecated Use `globalCharacterStat` instead. This alias will be removed in the next major version. */
@@ -1792,6 +1786,8 @@ export type DbView = __DbViewBase & {
   readonly "view_my_tournaments": __DbViewBase["viewMyTournaments"];
   /** @deprecated Use `viewPublicHsrAccounts` instead. This alias will be removed in the next major version. */
   readonly "view_public_hsr_accounts": __DbViewBase["viewPublicHsrAccounts"];
+  /** @deprecated Use `viewPublishedCostSets` instead. This alias will be removed in the next major version. */
+  readonly "view_published_cost_sets": __DbViewBase["viewPublishedCostSets"];
   /** @deprecated Use `viewSavedCalendarAvailability` instead. This alias will be removed in the next major version. */
   readonly "view_saved_calendar_availability": __DbViewBase["viewSavedCalendarAvailability"];
   /** @deprecated Use `viewTournamentMatchesForMe` instead. This alias will be removed in the next major version. */
@@ -1826,8 +1822,6 @@ export type Tables = __TablesBase & {
   readonly "Archetype": __TablesBase["archetype"];
   /** @deprecated Use `bracketMatch` instead. This alias will be removed in the next major version. */
   readonly "BracketMatch": __TablesBase["bracketMatch"];
-  /** @deprecated Use `costSet` instead. This alias will be removed in the next major version. */
-  readonly "CostSet": __TablesBase["costSet"];
   /** @deprecated Use `eloConfigTable` instead. This alias will be removed in the next major version. */
   readonly "EloConfigTable": __TablesBase["eloConfigTable"];
   /** @deprecated Use `globalCharacterStat` instead. This alias will be removed in the next major version. */
@@ -1986,6 +1980,8 @@ export type Tables = __TablesBase & {
   readonly "view_my_tournaments": __TablesBase["viewMyTournaments"];
   /** @deprecated Use `viewPublicHsrAccounts` instead. This alias will be removed in the next major version. */
   readonly "view_public_hsr_accounts": __TablesBase["viewPublicHsrAccounts"];
+  /** @deprecated Use `viewPublishedCostSets` instead. This alias will be removed in the next major version. */
+  readonly "view_published_cost_sets": __TablesBase["viewPublishedCostSets"];
   /** @deprecated Use `viewSavedCalendarAvailability` instead. This alias will be removed in the next major version. */
   readonly "view_saved_calendar_availability": __TablesBase["viewSavedCalendarAvailability"];
   /** @deprecated Use `viewTournamentMatchesForMe` instead. This alias will be removed in the next major version. */

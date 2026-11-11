@@ -83,7 +83,7 @@ MatchResultRecord (id: u32 autoInc PK)  [public: true]
 2. Find `MatchResultRecord` -- reject if status is `Void` or already `Validated`
 3. Validate `newStatusTag` (Validated | Rejected | Disputed | Submitted)
 4. If setting to `Validated`: set `winnerTeamSide` from `winnerTeamSideTag`; compute `winnerTeamId`
-5. Update record fields; set `resolvedAt`, `resolvedByUserId`
+5. Update record fields; S11a (triage L49): the staff `reason` goes to `MatchResultRecord.staffOverrideReason` (new optional column); `disputeReason` (the player's text) is no longer overwritten
 6. If `newStatusTag=Validated`: trigger `run_finalization`
 
 ### concede_match(lobbyId)
@@ -344,10 +344,10 @@ reaches ceil(bestOf / 2) or staff resolve it). Stage list: Drafting, Equipping, 
   live seat decides neutrality, and the snapshot went stale after a referee transfer. `view_my_tournament_match_results`
   (projects the row type) no longer carries it.
 - **`view_my_match_result`** (per-sender, live or parked lobby): status, winner, concede and override fields, settledAt;
-  no `refereeUserId`; `disputedByUserId` / `winnerOverrideById` masked per A37.
+  no `refereeUserId`; `disputedByUserId` / `winnerOverrideById` masked per A37; S11a: `staffOverrideReason` (L49).
 - **`view_my_match_result_games`**: the record's one `MatchResultGame` with its `MatchResultGroupScore` rows
   (`groupScores[]`) and `MatchResultAdjustment` rows (`adjustments[]`) nested; the A60 flags and closed marker;
-  `validatedByUserId`, `closedById`, `setById` masked per A37; no audit columns.
+  `closedById`, `setById` masked per A37; no audit columns (S11a, L60: `validationStatus` / `validatedByUserId` removed).
 - **`view_admin_stuck_games`** (Moderator+, else `[]`): ranked lobbies in Scoring whose open game has exactly one ready
   flag, or both on an unresolved level-4 tie (`isUnresolvedTie`); `{ lobbyId, joinCode, stage, blueConfirmed,
   redConfirmed, isTie, sinceAt = game.lastModifiedDate }`. Catalogue: [../views/architecture.md](../views/architecture.md).
@@ -490,10 +490,11 @@ reaches ceil(bestOf / 2) or staff resolve it). Stage list: Drafting, Equipping, 
 | Finalization step 7 stores the record's `matchType` and final `winnerTeamSide` on `MatchSessionHistory` | Phase S10n execution (S10n review F1 / F2; DECISIONS.md A115) | 2026-11-10 |
 | A Ranked concede in the confirm window (draft complete, stage Drafting) counts the character stats like an Equipping concede | Phase S10t execution (DECISIONS.md A129, review F2) | 2026-11-10 |
 | Spent budget = starting budgets minus both remaining budgets; `finalize_match_result` for Moderator+ or the lobby's current referee; a seated referee conceding their own team is `VoluntaryLeave`; concede and defer chat lines trimmed | Phase S10r execution (DECISIONS.md A122) | 2026-11-10 |
+| `MatchResultRecord.staffOverrideReason` (optional string, after `settledAt`): `override_match_result` stores its reason there and keeps `disputeReason`; `view_my_match_result` carries it (L49). `MatchResultGame.validationStatus` and `validatedByUserId` removed with the `ValidationStatus` enum, also from `view_my_match_result_games` (L60) | Phase S11a execution | 2026-11-11 |
 
 ---
 
-*Last updated: 2026-11-08*
+*Last updated: 2026-11-11 (S11a part 2)*
 *Feature owner: Phase 06 / Phase 07 / Phase 10.1 / Phase 12.3*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

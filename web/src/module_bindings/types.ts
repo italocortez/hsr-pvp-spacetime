@@ -122,7 +122,6 @@ export const ActionType = __t.enum("ActionType", {
   Pause: __t.unit(),
   Undo: __t.unit(),
   EquipLightcone: __t.unit(),
-  ArrangeLineup: __t.unit(),
   SetEidolon: __t.unit(),
   ConfirmGame: __t.unit(),
   UnequipLightcone: __t.unit(),
@@ -304,11 +303,6 @@ export const Archetype = __t.object("Archetype", {
   lastModifiedDate: __t.timestamp(),
 });
 export type Archetype = __Infer<typeof Archetype>;
-
-export const ArrangeLineupPayload = __t.object("ArrangeLineupPayload", {
-  positions: __t.string(),
-});
-export type ArrangeLineupPayload = __Infer<typeof ArrangeLineupPayload>;
 
 export const AuctionSoldPayload = __t.object("AuctionSoldPayload", {
   characterName: __t.string(),
@@ -1148,6 +1142,17 @@ export const LobbyCursorEvent = __t.object("LobbyCursorEvent", {
 });
 export type LobbyCursorEvent = __Infer<typeof LobbyCursorEvent>;
 
+export const LobbyCursorStamp = __t.object("LobbyCursorStamp", {
+  lobbyId: __t.u32(),
+  userId: __t.u32(),
+  lastCursorAt: __t.timestamp(),
+  createdById: __t.u32(),
+  createdDate: __t.timestamp(),
+  lastModifiedById: __t.u32(),
+  lastModifiedDate: __t.timestamp(),
+});
+export type LobbyCursorStamp = __Infer<typeof LobbyCursorStamp>;
+
 export const LobbyGcJob = __t.object("LobbyGcJob", {
   scheduledId: __t.u64(),
   scheduledAt: __t.scheduleAt(),
@@ -1169,7 +1174,6 @@ export const LobbyMember = __t.object("LobbyMember", {
   disconnectedAt: __t.option(__t.timestamp()),
   disconnectPoolRemainingMs: __t.u32(),
   joinSeq: __t.u32(),
-  lastCursorAt: __t.option(__t.timestamp()),
   lastLineupAt: __t.option(__t.timestamp()),
   createdById: __t.u32(),
   createdDate: __t.timestamp(),
@@ -1549,10 +1553,6 @@ export const MatchResultGame = __t.object("MatchResultGame", {
   get winnerTeamSide() {
     return TeamSide;
   },
-  get validationStatus() {
-    return ValidationStatus;
-  },
-  validatedByUserId: __t.option(__t.u32()),
   blueConfirmed: __t.bool(),
   redConfirmed: __t.bool(),
   closedAt: __t.option(__t.timestamp()),
@@ -1610,10 +1610,6 @@ export const MatchResultGameViewRow = __t.object("MatchResultGameViewRow", {
   get winnerTeamSide() {
     return TeamSide;
   },
-  get validationStatus() {
-    return ValidationStatus;
-  },
-  validatedByUserId: __t.option(__t.u32()),
   blueConfirmed: __t.bool(),
   redConfirmed: __t.bool(),
   closedAt: __t.option(__t.timestamp()),
@@ -1689,6 +1685,7 @@ export const MatchResultRecord = __t.object("MatchResultRecord", {
   winnerOverrideById: __t.option(__t.u32()),
   winnerOverrideReason: __t.option(__t.string()),
   settledAt: __t.option(__t.timestamp()),
+  staffOverrideReason: __t.option(__t.string()),
   createdById: __t.u32(),
   createdDate: __t.timestamp(),
   lastModifiedById: __t.u32(),
@@ -1737,6 +1734,7 @@ export const MatchResultViewRow = __t.object("MatchResultViewRow", {
   winnerOverrideById: __t.option(__t.u32()),
   winnerOverrideReason: __t.option(__t.string()),
   settledAt: __t.option(__t.timestamp()),
+  staffOverrideReason: __t.option(__t.string()),
 });
 export type MatchResultViewRow = __Infer<typeof MatchResultViewRow>;
 
@@ -1820,7 +1818,6 @@ export const MatchSessionStep = __t.object("MatchSessionStep", {
   lobbyId: __t.u32(),
   sequence: __t.u32(),
   actorUserId: __t.u32(),
-  anonymousLabel: __t.option(__t.string()),
   get actorSlot() {
     return TeamSide;
   },
@@ -2411,9 +2408,6 @@ export const StepPayload = __t.enum("StepPayload", {
   get EquipLightcone() {
     return EquipLightconePayload;
   },
-  get ArrangeLineup() {
-    return ArrangeLineupPayload;
-  },
   get SetEidolon() {
     return SetEidolonPayload;
   },
@@ -2524,7 +2518,6 @@ export const Tournament = __t.object("Tournament", {
   },
   groupAdvanceCount: __t.u8(),
   costSetId: __t.u32(),
-  seasonId: __t.u32(),
   countTowardsMmr: __t.bool(),
   requireResultValidation: __t.bool(),
   defaultBestOf: __t.u8(),
@@ -2591,7 +2584,6 @@ export const TournamentFinalizeJob = __t.object("TournamentFinalizeJob", {
   scheduledId: __t.u64(),
   scheduledAt: __t.scheduleAt(),
   tournamentId: __t.u32(),
-  cursor: __t.u32(),
 });
 export type TournamentFinalizeJob = __Infer<typeof TournamentFinalizeJob>;
 
@@ -2944,12 +2936,6 @@ export const UserRateState = __t.object("UserRateState", {
 });
 export type UserRateState = __Infer<typeof UserRateState>;
 
-// The tagged union or sum type for the algebraic type `ValidationStatus`.
-export const ValidationStatus = __t.enum("ValidationStatus", {
-  Pending: __t.unit(),
-});
-export type ValidationStatus = __Infer<typeof ValidationStatus>;
-
 export const ViewAdminAbuseConfig = __t.object("ViewAdminAbuseConfig", {});
 export type ViewAdminAbuseConfig = __Infer<typeof ViewAdminAbuseConfig>;
 
@@ -3185,6 +3171,9 @@ export type ViewMyTournaments = __Infer<typeof ViewMyTournaments>;
 
 export const ViewPublicHsrAccounts = __t.object("ViewPublicHsrAccounts", {});
 export type ViewPublicHsrAccounts = __Infer<typeof ViewPublicHsrAccounts>;
+
+export const ViewPublishedCostSets = __t.object("ViewPublishedCostSets", {});
+export type ViewPublishedCostSets = __Infer<typeof ViewPublishedCostSets>;
 
 export const ViewSavedCalendarAvailability = __t.object("ViewSavedCalendarAvailability", {});
 export type ViewSavedCalendarAvailability = __Infer<typeof ViewSavedCalendarAvailability>;

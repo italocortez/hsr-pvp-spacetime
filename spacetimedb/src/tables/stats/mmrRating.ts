@@ -21,5 +21,7 @@ export const MmrRating = table({
     indexes: [
         { accessor: 'user_id', algorithm: 'btree', columns: ['userId'] },
         { accessor: 'by_user_mode_season', algorithm: 'btree', columns: ['userId', 'gameMode', 'seasonId'] },
+        // S11a (S10j review F3): rebuildLeaderboard reads one season's ratings at every finalization
+        { accessor: 'season_id', algorithm: 'btree', columns: ['seasonId'] },
     ],
 }, mmrRatingColumns);

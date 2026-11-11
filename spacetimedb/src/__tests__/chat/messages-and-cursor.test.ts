@@ -92,6 +92,7 @@ describe('send_chat_message validation (docs/chat/contract.md, D-10, D-12, D-14)
     it('contract "Happy Path: Send a Text Message" + "Metadata Defaults When Empty": metadata {"type":"text"}, Player row with the real sender id, Lobby.lastActivityAt bumped', () => {
         const s = world();
         const { test, lobbyId } = s;
+        advance(test, 60_000); // S11a (L18): a message stamps lastActivityAt only when the stamp is a minute old
         const id = say(test, s.a.b1, lobbyId, 'hello');
         const row = test.db.ChatMessage.id.find(id)!;
         expect(row).toMatchObject({ content: 'hello', metadata: '{"type":"text"}', senderUserId: s.a.b1.userId });
@@ -238,6 +239,7 @@ describe('System messages for member events (D-11; A74 seats)', () => {
 describe('broadcast_cursor silent drops (D-34)', () => {
     it('D-34: a spectator emits no LobbyCursorEvent and does not throw (a seated player in the same lobby does emit)', () => {
         const s = world();
+        tx(s.test, s.a.ref, (ctx) => M.start_draft(ctx, { lobbyId: s.lobbyId })); // S11a (L19): cursors only in the live stages
         const { test, lobbyId } = s;
         expect(cursorEvents(test, s.a.b1, lobbyId)).toBe(1); // control: the call shape emits for a player
         advance(test, 100);
@@ -248,6 +250,7 @@ describe('broadcast_cursor silent drops (D-34)', () => {
 
     it('D-34 / contract "membership required": a non-member emits no LobbyCursorEvent and does not throw', () => {
         const s = world();
+        tx(s.test, s.a.ref, (ctx) => M.start_draft(ctx, { lobbyId: s.lobbyId })); // S11a (L19): cursors only in the live stages
         const { test, lobbyId } = s;
         const outsider = guest(test, 'outsider');
         expect(() => cursorEvents(test, outsider, lobbyId)).not.toThrow();

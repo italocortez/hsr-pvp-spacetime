@@ -85,7 +85,7 @@ Leaderboard (PK: [gameMode, seasonId, rank])  [public: true]
 
 ### server_set_mmr(userId, gameMode, seasonId, rating)
 1. Server identity check (`ensureServerIdentity(ctx)`)
-2. Upsert `MmrRating` row for `[userId, gameMode, seasonId]` with provided rating
+2. Upsert `MmrRating` row for `[userId, gameMode, seasonId]` with provided rating (S11a, triage L5: the code takes no `seasonId` argument; it resolves the active season, the `Season` row with `isActive`, else 0, and reads the row through `by_user_mode_season`; it used to match on the mode only and insert an unset season)
 3. Used by test harness and admin seeding
 
 ### updateEloForMatch(ctx, participants, outcome, gameMode, seasonId) -- internal helper
@@ -138,7 +138,7 @@ is unchanged (`MIN_MATCHES = 2` in the season; Global = the stored `globalCompos
 `PlayerStat.wins` of the user in that mode (every draft mode and match type), summed for Global. The audit actor of
 every row is `SYSTEM_USER_ID` (A37: the finalizing player may sit in an anonymous lobby); the `actingUserId` parameter is
 gone, so `runFinalization` and the S8d finalize job call `rebuildLeaderboard(ctx, seasonId)`. One pass over `MmrRating`
-(was four). No view: `Leaderboard` stays public.
+(was four). No view: `Leaderboard` stays public. S11a (S10j review F3): the pass reads `MmrRating.season_id.filter(seasonId)` and the delete step `Leaderboard.season_id.filter(seasonId)` (new btree indexes on both tables) instead of scanning every season's rows.
 
 **`view_my_mmr_ratings`** (`views/statsViews.ts`, per-sender; A44(1) D1): the caller's `MmrRating` rows (index `user_id`),
 one per mode and season: `gameMode`, `seasonId`, `rating`, `matchesPlayed`, `wins` (the season's PlayerStat wins in that
@@ -200,10 +200,11 @@ per row, at most 80 rows per season (implementer's choice of A77(1): columns, no
 | `globalCompositeRating` computed from and written to the current season's `MmrRating` rows only | Phase S10i execution (DECISIONS.md A102) | 2026-11-10 |
 | `admin_update_elo_config` rejects `spreadDivisor` 0 and `newThreshold` above `midThreshold` (merged row) | Phase S10r execution (DECISIONS.md A122) | 2026-11-10 |
 | `Leaderboard` carries `displayName` / `avatarCharacterName` (written by the rebuild, rewritten by `syncLeaderboardCard` on a rename or new avatar) because `User` is private | Phase S11a execution (DECISIONS.md A77) | 2026-11-11 |
+| `server_set_mmr` writes the active season's row (L5); `Leaderboard` and `MmrRating` gain a `season_id` btree index read by `rebuildLeaderboard` (S10j review F3) | Phase S11a execution (part 2) | 2026-11-11 |
 
 ---
 
-*Last updated: 2026-11-11 (S11a)*
+*Last updated: 2026-11-11 (S11a part 2)*
 *Feature owner: Phase 05 / Phase 11*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

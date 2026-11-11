@@ -1,6 +1,7 @@
 import spacetimedb from '@module/schema';
 import { TournamentFinalizeJob } from '@module/tables/tournament/tournamentFinalizeJob';
 import { runTournamentFinalizeTick } from '@module/helpers/tournament/tournamentFinalization';
+import { ensureScheduler } from '@module/helpers/admin/schedulerGuard';
 
 // ─── run_tournament_finalize ──────────────────────────────────────────────────
 // A24(4)(5)(7) / D.8.1 chunked finalization (S8d), bound to TournamentFinalizeJob through `onSchedule`. One tick =
@@ -12,6 +13,7 @@ export const run_tournament_finalize = spacetimedb.reducer(
     { onSchedule: TournamentFinalizeJob },
     { arg: TournamentFinalizeJob.rowType },
     (ctx, { arg }) => {
+        ensureScheduler(ctx, 'run_tournament_finalize'); // S11a (L11)
         runTournamentFinalizeTick(ctx, arg);
     },
 );

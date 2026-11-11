@@ -243,7 +243,6 @@ export const create_tournament = spacetimedb.reducer(
             groupAssignmentMode: unit(args.groupAssignmentMode),
             groupAdvanceCount: args.groupAdvanceCount,
             costSetId: args.costSetId,
-            seasonId: 0,                         // A36: the active season, 0 for now
             countTowardsMmr: args.countTowardsMmr,
             requireResultValidation: args.countTowardsMmr || args.requireResultValidation, // A36: forced when ranked
             defaultBestOf: args.defaultBestOf,
@@ -444,7 +443,7 @@ export const advance_tournament_stage = spacetimedb.reducer(
         }, user.id));
 
         // A24(4)(7): Completed starts the chunked finalization (finalizationStartedAt, TournamentFinalizeJob
-        // { tournamentId, cursor: 0 } scheduled now); the D-91 reveal is gone (A37: history is never public).
+        // { tournamentId } scheduled now); the D-91 reveal is gone (A37: history is never public).
         if (nextStage === 'Completed') startTournamentFinalization(ctx, tournamentId, user.id);
     }
 );
@@ -522,7 +521,7 @@ export const admin_restart_tournament_finalize = spacetimedb.reducer(
         if ([...ctx.db.TournamentFinalizeJob.tournament_id.filter(tournamentId)].length > 0) {
             throw new SenderError('The finalize job of this tournament is still scheduled.');
         }
-        restartTournamentFinalization(ctx, tournamentId, 0);
+        restartTournamentFinalization(ctx, tournamentId);
         console.log(`[TOURNAMENT_FINALIZE] Job of tournament #${tournamentId} restarted by #${moderator.id}`);
     }
 );

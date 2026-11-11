@@ -8,7 +8,7 @@ export const matchSessionStepHistoryColumns = {
     actorDisplayName: t.string(), // Denormalized for replay (per D-53/D-64)
     teamSide: TeamSide,         // Blue/Red/Spectator
     action: ActionType,          // Pick, Ban, Bid, etc.
-    targetName: t.string().optional(), // Character or LC name; SetEidolon = the character (A60); null for Pause/Undo/ArrangeLineup/ConfirmGame
+    targetName: t.string().optional(), // Character or LC name; SetEidolon = the character (A60); null for Pause/Undo/ConfirmGame
     payload: t.string().optional(),       // JSON for action-specific data (bid amount, etc.)
     createdById: t.u32(),
     createdDate: t.timestamp(),

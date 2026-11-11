@@ -221,7 +221,7 @@ export function ensureNotEnrolled(existing: any, self: boolean): void {
 /**
  * A36b: the user's MmrRating for the tournament's game mode in the active season, else EloConfig.initialRating.
  * S10g (audit #6): the active season is resolved the way the rating writer does (finalizationHelpers: the Season row
- * with isActive, else 0); Tournament.seasonId (always 0) is not read.
+ * with isActive, else 0). (S11a, L84: the unused Tournament.seasonId column is removed.)
  */
 function entryRating(ctx: any, tournament: any, userId: number): number {
     const activeSeason = [...ctx.db.Season.is_active.filter(true)][0];

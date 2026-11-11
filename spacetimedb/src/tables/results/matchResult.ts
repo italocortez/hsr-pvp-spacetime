@@ -25,6 +25,9 @@ export const matchResultColumns = {
     winnerOverrideReason: t.string().optional(),
     // A24(1): when the result became settled (Validated or concede) and the bracket advanced.
     settledAt: t.timestamp().optional(),
+    // S11a (triage L49): the reason of the last staff `override_match_result`. It used to overwrite `disputeReason`, so
+    // players saw the staff text as the dispute reason of the disputer; the dispute text now stays as it was.
+    staffOverrideReason: t.string().optional(),
     createdById: t.u32(),
     createdDate: t.timestamp(),
     lastModifiedById: t.u32(),

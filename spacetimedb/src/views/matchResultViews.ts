@@ -12,7 +12,7 @@
 import spacetimedb from '@module/schema';
 import { t } from 'spacetimedb/server';
 import {
-    TeamSide, MatchResultStatus, MatchType, MatchEndReason, ConcedeTrigger, GameMode, ValidationStatus, LobbyStage,
+    TeamSide, MatchResultStatus, MatchType, MatchEndReason, ConcedeTrigger, GameMode, LobbyStage,
 } from '@module/types/enums';
 import { callerMemberships, maskUserId } from '@module/helpers/identity/viewAnonymity';
 import { findLobbyResult, findGame, isUnresolvedTie } from '@module/helpers/results/scoringHelpers';
@@ -42,6 +42,7 @@ const MatchResultViewRow = t.row('MatchResultViewRow', {
     winnerOverrideById: t.u32().optional(),
     winnerOverrideReason: t.string().optional(),
     settledAt: t.timestamp().optional(),
+    staffOverrideReason: t.string().optional(), // S11a (L49): the staff override text, apart from the dispute text
 });
 
 export const view_my_match_result = spacetimedb.view(
@@ -76,6 +77,7 @@ export const view_my_match_result = spacetimedb.view(
                 winnerOverrideById: maskUserId(ctx, lobby, membership, record.winnerOverrideById),
                 winnerOverrideReason: record.winnerOverrideReason,
                 settledAt: record.settledAt,
+                staffOverrideReason: record.staffOverrideReason,
             });
         }
         return rows;
@@ -85,7 +87,7 @@ export const view_my_match_result = spacetimedb.view(
 // ---------------------------------------------------------------------------
 // 2. view_my_match_result_games (A56(2)(3), A60(2)(3), A63, A67(3)): the record's one MatchResultGame row with its
 //    group scores and itemized adjustments nested (one subscription, one row per lobby; every score edit rewrites
-//    the game row anyway, A60(2)). validatedByUserId, closedById and each adjustment's setById are 0 when that user
+//    the game row anyway, A60(2)). closedById and each adjustment's setById are 0 when that user
 //    is anonymized for the caller (A37); no audit columns.
 // ---------------------------------------------------------------------------
 const GroupScoreItem = t.object('GroupScoreItem', {
@@ -118,8 +120,6 @@ const MatchResultGameViewRow = t.row('MatchResultGameViewRow', {
     teamRedAdjustedResult: t.i32().optional(),
     tieBreakLevel: t.u8().optional(),
     winnerTeamSide: TeamSide,
-    validationStatus: ValidationStatus,
-    validatedByUserId: t.u32().optional(),
     blueConfirmed: t.bool(),
     redConfirmed: t.bool(),
     closedAt: t.timestamp().optional(),
@@ -170,8 +170,6 @@ export const view_my_match_result_games = spacetimedb.view(
                 teamRedAdjustedResult: game.teamRedAdjustedResult,
                 tieBreakLevel: game.tieBreakLevel,
                 winnerTeamSide: game.winnerTeamSide,
-                validationStatus: game.validationStatus,
-                validatedByUserId: maskUserId(ctx, lobby, membership, game.validatedByUserId),
                 blueConfirmed: game.blueConfirmed,
                 redConfirmed: game.redConfirmed,
                 closedAt: game.closedAt,

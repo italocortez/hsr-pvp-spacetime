@@ -149,7 +149,7 @@ Arguments (both): `name, description, format, teamSize, maxParticipants, rosterV
 1. Stage Registration only (`Tournament is not accepting registrations.`).
 2. Existing row: Disqualified → `You were disqualified from this tournament.` (A26a(2)); otherwise already registered.
 3. `requireVerified` rejects guests; `requireRoster` needs an active `HsrAccount`.
-4. `minimumMmr` (A36b): guests → `Guests cannot join a tournament with a minimum MMR.`; rating = `MmrRating.by_user_mode_season[userId, defaultGameMode, <active season id>]?.rating ?? EloConfigTable(1).initialRating` (no config row → the finalization error); below → rejected. S10g (audit #6): the active season is the `Season` row with `isActive` (else 0), as the rating writer resolves it; `Tournament.seasonId` is not read.
+4. `minimumMmr` (A36b): guests → `Guests cannot join a tournament with a minimum MMR.`; rating = `MmrRating.by_user_mode_season[userId, defaultGameMode, <active season id>]?.rating ?? EloConfigTable(1).initialRating` (no config row → the finalization error); below → rejected. S10g (audit #6): the active season is the `Season` row with `isActive` (else 0), as the rating writer resolves it (S11a, L84: the unused `Tournament.seasonId` column is removed).
 5. `anonymousAlias` only in anonymous tournaments, 1–32 characters trimmed; Phase S10s execution (A122(20)): unique among the tournament's aliases (`ensureAliasAvailable`; fix pass F1: not compared with display names, A37).
 6. Capacity = rows neither waitlisted nor Disqualified (`capacityCount`, C-a11); full → waitlisted when `waitlistEnabled`, otherwise `Tournament is full.`
 7. Insert `TournamentEnrolled` (Registered; `approvedByToAt` unset when `requireApproval`).
@@ -271,21 +271,21 @@ voided (`voidTournamentLobby`: record Voided, lobby hard-deleted). The settled o
 counted, MMR skipped.
 
 **Finalize job (`runTournamentFinalizeTick`, D.8.1).** `startTournamentFinalization` stamps
-`finalizationStartedAt` and inserts `TournamentFinalizeJob { tournamentId, cursor: 0 }` scheduled now (none while a row
+`finalizationStartedAt` and inserts `TournamentFinalizeJob { tournamentId }` scheduled now (none while a row
 exists). A tick reads the tournament's surviving records in bracket order (`tournamentRecordsInBracketOrder`: group
 matches, Winners, Losers, third place, grand final, each by roundNumber, matchNumber, id: every team's own matches stay
 in play order) and takes the first K = 4. Empty batch: `rebuildLeaderboard` once when `countTowardsMmr` (SYSTEM actor),
-`finalizedAt = now`, job rows deleted. Otherwise it **reschedules first** (next row, `cursor + batch`), then per record:
+`finalizedAt = now`, job rows deleted. Otherwise it **reschedules first** (next row), then per record:
 Validated → `runFinalization(ctx, record, SYSTEM_USER_ID, { tournamentMmr: countTowardsMmr && stage === Completed })`
 (history with `tournamentId` / `bracketMatchId`, private (A37); MMR in step 11 with the real history id; stats;
 achievements; `MatchLineupHistory` and the A56 deletes; `hardDeleteLobby`); any other status → deleted without effect
-(`hardDeleteLobby` when its lobby still exists, else the row). `cursor` counts processed records; finalized records
+(`hardDeleteLobby` when its lobby still exists, else the row). No progress cursor (S11a, L84: removed); finalized records
 are deleted, so each tick reads the first K survivors. A tick that throws rolls back whole; earlier ticks stay done.
 `server_nuke_test_data` clears `TournamentFinalizeJob`. The final-tick leaderboard rebuild runs only for a Completed
 MMR tournament (A24(5): no MMR on Cancelled).
 
 **Restart (`admin_restart_tournament_finalize(tournamentId)`, Moderator+).** A tick that throws rolls back with its own
-reschedule row, so the job stops. The reducer re-inserts a job row scheduled now (cursor 0, a progress counter only)
+reschedule row, so the job stops. The reducer re-inserts a job row scheduled now
 for a Completed or Cancelled tournament with `finalizedAt` unset and no job row; the next tick starts at the first
 surviving record, since every record an earlier tick processed was finalized or deleted. Rejections: "Tournament not
 found." · "Only a Completed or Cancelled tournament is finalized." · "This tournament is already finalized." · "The
@@ -906,10 +906,11 @@ column `origin: AccountLockOrigin` (new enum `Entry | StandIn`, `types/enums.ts`
 | Retention of a match event (lazy clean-up, sweep) keeps `BracketMatch.scheduledAt` | Phase S10ad execution (DECISIONS.md A160(6)) | 2026-11-11 |
 | Fix pass: the bracket cascades clear a set `scheduledAt` also when retention already removed the event | Phase S10ad execution (DECISIONS.md A161(3)) | 2026-11-11 |
 | `TournamentPlayerAccount.origin` (Entry / StandIn) written by every lock path; stand-in release and the end sweep read the origin; index `tournament_id` for the sweep | Phase S11a execution (DECISIONS.md A143) | 2026-11-11 |
+| Removed (closing triage L84): `Tournament.seasonId` (always 0, no reader) and `TournamentFinalizeJob.cursor` (log lines only); `startTournamentFinalization` / `restartTournamentFinalization(ctx, tournamentId)` / the tick write no cursor. Kept, now read: `BracketMatch.scheduledAt` (A157(12)) and `TournamentStandIn.approvedByUserId` (`view_my_tournament_stand_ins`). `run_tournament_finalize` refuses any caller but the scheduler (`ensureScheduler`, L11) | Phase S11a execution (part 2) | 2026-11-11 |
 
 ---
 
-*Last updated: 2026-11-11 (S11a)*
+*Last updated: 2026-11-11 (S11a part 2)*
 *Feature owner: Phase 04 / Phase 06 / Phase 08 / Phase 10.1 / Phase 10.4 / Phase 12.3*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

@@ -7,7 +7,7 @@ import { table, t } from 'spacetimedb/server';
  */
 export const lobbyPasswordColumns = {
     lobbyId: t.u32().primaryKey(), // FK to Lobby.id, 1:1 relationship
-    passwordHash: t.string(),
+    passwordHash: t.string(), // S11a (L24): hashLobbyPassword(lobbyId, password), SHA-256 hex (helpers/lobby/lobbyPassword.ts)
     createdById: t.u32(),
     createdDate: t.timestamp(),
     lastModifiedById: t.u32(),

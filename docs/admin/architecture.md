@@ -70,13 +70,13 @@ Phase S10e execution (identity audit #9): the SYSTEM user is rejected after the 
 The server-side twins of `admin_set_guest_creation` / `admin_set_guest_lobby_creation`, for when no Admin can sign in (while `guestCreationEnabled` is off a new browser cannot start a session, Discord sign-in included). Both databases; not gated by `requireTestDatabase`.
 1. `requireServer(ctx)` -- Owner or Delegate; any other caller (an Admin or Moderator client included) is rejected with "Forbidden: caller is not a registered server identity."
 2. `setGuestCreationEnabled(ctx, enabled, SYSTEM_USER_ID)` / `setGuestLobbyCreationEnabled(ctx, enabled, SYSTEM_USER_ID)` (`helpers/lobby/abuseControls.ts`, shared with the admin reducers): writes the `AbuseConfig` switch with SYSTEM (0) in the audit columns; a false -> true change deletes `AbuseCounter['guest_create']` / `AbuseCounter['guest_lobby_create']`, so the next creation opens a new window. Turning a switch off keeps the counter.
-Called through a server-identity connection (the Owner, or a Delegate token from bootstrap); no `stdb:*` script wraps it yet.
+Called through a server-identity connection (the Owner, or a Delegate token from bootstrap). S11a (triage L12): `npm run stdb:guest-switch -- --target test|prod accounts|lobbies on|off` (`scripts/stdb/guest-switch.ts`, the delegate token of the target's env file; `--dry-run` prints the call) wraps both.
 
 ### server_set_mmr(userId, gameModeTag, rating) -- test databases only
 1. `requireTestDatabase(ctx)` -- module env `STDB_TARGET` must be `test` ("Not a test database.")
 2. `requireServer(ctx)` -- validate caller is in ServerIdentity table
 2. Validate gameModeTag against GameMode enum variants
-3. Upsert `MmrRating` row for userId + gameMode
+3. Upsert the `MmrRating` row of (userId, gameMode, the active season: the `Season` row with `isActive`, else 0) through `by_user_mode_season` (S11a, triage L5: the season the views and finalization read; it used to match on the mode only and insert an unset season)
 
 ### admin_delete_row(tableName, primaryKeyJson)
 1. `ensureAdmin(ctx)` -- requires Admin role
@@ -351,10 +351,11 @@ execution (A77):** `User` is private; the Users tab reads `view_admin_users`.
 | `admin_bulk_upsert` / `admin_delete_row` refuse a character, light-cone or synergy cost row (insert, change, delete) of a set with a lobby in Drafting, Equipping or Scoring (`ensureNoLiveGameOnCostSet`, the A107(4) test; set 0 included); an upsert row equal to the stored one (f32) is skipped with no write and no refusal; the Admin roster reducers refuse a selected account | Phase S10w execution (DECISIONS.md A142) | 2026-11-10 |
 | Fix pass: `costSetId` of the cost rows (upsert) and cost keys (delete) must be null (set 0) or a whole number 0..4294967295, refused before any lookup or guard; the seed behaviour under a live game documented per call | Phase S10w execution (DECISIONS.md A142; S10w review F1, F2) | 2026-11-10 |
 | Users tab on `view_admin_users` (`User` private); `admin_ban_user` finds the user through `User.provider_id`; `admin_update_user` rewrites the leaderboard card | Phase S11a execution (DECISIONS.md A77) | 2026-11-11 |
+| S11a part 2 (closing-triage items): the five scheduled reducers refuse any caller but the scheduler (`ensureScheduler`, `helpers/admin/schedulerGuard.ts`: `ctx.senderAuth.isInternal`, SDK 2.14 `AuthCtx`; "Forbidden: <name> is a scheduled reducer and runs only from the scheduler."; L11); `admin_gc_identities` / `admin_gc_lobbies` restart a stopped job chain (L6); `admin_bulk_upsert` and `admin_delete_row` find character, light-cone and synergy cost rows through `by_character_mode_and_set`, `by_lightcone_mode_and_set` and `by_tuple` (both pair orders) instead of scanning every set (L92; a key with an unknown enum tag or a non-string name matches nothing, "Row not found" on delete); `server_set_mmr` writes the active season (L5); `stdb:guest-switch` wraps the two server guest switches (L12) | Phase S11a execution | 2026-11-11 |
 
 ---
 
-*Last updated: 2026-11-11 (S11a)*
+*Last updated: 2026-11-11 (S11a part 2)*
 *Feature owner: Phase 01 / Phase 09 / Phase 12 / Phase 15*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

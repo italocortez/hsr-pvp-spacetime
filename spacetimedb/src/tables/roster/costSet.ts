@@ -15,10 +15,13 @@ export const costSetColumns = {
     lastModifiedDate: t.timestamp(),
 };
 
+// S11a (triage L91): private. Owners read view_my_cost_sets; everyone reads the published sets through
+// view_published_cost_sets (is_published index).
 export const CostSet = table({
     name: 'cost_set',
-    public: true,
+    public: false,
     indexes: [
         { accessor: 'creator_id', algorithm: 'btree', columns: ['creatorId'] },
+        { accessor: 'is_published', algorithm: 'btree', columns: ['isPublished'] },
     ],
 }, costSetColumns);

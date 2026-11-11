@@ -7,16 +7,10 @@ import { ensureModerator } from '@module/helpers/identity/ensurePermissions';
 import { memberHasLeft } from '@module/helpers/lobby/lobbyHelpers';
 import { ScheduleAt } from 'spacetimedb';
 import { SenderError } from 'spacetimedb/server';
-// External-invocation defense for `run_lobby_gc`: SpacetimeDB v2.2.0 engine returns
-// "no such reducer" for external WS callers attempting to invoke scheduled reducers
-// (verified 2026-05-03 in 16.4-AUDIT-NOTES.md "v0.6 Update"). Application-level
-// `ctx.senderAuth.isInternal` guard was removed by Plan 07 hotfix because the SDK
-// v2.2.0 `senderAuth` factory always set `isInternal: false`. Since SDK 2.14 (M1),
-// `isInternal` is `sender === databaseIdentity`: true for scheduled reducers, false for
-// `init`, and `jwt` is null when internal. The guard is not re-added yet (deferred,
-// upgrade report §10 Q8). `seed_lobby_gc_job` and
-// `admin_gc_lobbies` retain their existing project-level gates (`ServerIdentity` check
-// and `ensureModerator` respectively).
+import { ensureScheduler } from '@module/helpers/admin/schedulerGuard';
+import { deleteCursorStamps } from '@module/helpers/lobby/cursorStamps';
+// S11a (L11): `run_lobby_gc` is refused unless the scheduler calls it (ensureScheduler). `seed_lobby_gc_job` and
+// `admin_gc_lobbies` keep their project-level gates (`ServerIdentity` check and `ensureModerator` respectively).
 
 // ─── hardDeleteLobby ─────────────────────────────────────────────────────────
 // Shared cascade-delete helper: removes a lobby and all associated data.
@@ -64,6 +58,9 @@ export function hardDeleteLobby(ctx: any, lobbyId: number, keepResultRecord = fa
     for (const lma of [...ctx.db.LobbyMemberAccount.lobby_id.filter(lobbyId)]) {
         ctx.db.LobbyMemberAccount.delete(lma);
     }
+
+    // 1.6. S11a (L19): the cursor throttle stamps
+    deleteCursorStamps(ctx, lobbyId);
 
     // 2. Delete all LobbyMember rows
     for (const member of [...ctx.db.LobbyMember.lobby_id.filter(lobbyId)]) {
@@ -154,6 +151,7 @@ function performLobbyGc(ctx: any): { lobbiesScanned: number; lobbiesDeleted: num
 export const run_lobby_gc = spacetimedb.reducer(
     { arg: LobbyGcJob.rowType },
     (ctx, { arg }) => {
+        ensureScheduler(ctx, 'run_lobby_gc');
         const result = performLobbyGc(ctx);
 
         // D-14: Write GcResult audit row only when something was deleted
@@ -198,7 +196,21 @@ export const admin_gc_lobbies = spacetimedb.reducer((ctx) => {
 
     console.log(`[LOBBY_GC] Admin run complete: scanned=${result.lobbiesScanned}, deleted=${result.lobbiesDeleted}`);
     // NOTE: No self-requeue -- admin trigger is one-shot (Pitfall 6)
+    // S11a (L6): but a chain that has stopped (no LobbyGcJob row: a failed scheduled run rolled back its own re-arm, or
+    // the seed never ran) is restarted here, so a manual run is the way back without a server identity.
+    armLobbyGcJobIfMissing(ctx);
 });
+
+/** S11a (L6): inserts the next scheduled run (15 minutes out) when the table holds no row; returns whether it did. */
+function armLobbyGcJobIfMissing(ctx: any): boolean {
+    for (const _ of ctx.db.LobbyGcJob.iter()) return false; // at most one row: the chain's next run
+    ctx.db.LobbyGcJob.insert({
+        scheduledId: 0n,
+        scheduledAt: ScheduleAt.time(ctx.timestamp.microsSinceUnixEpoch + BigInt(15 * 60 * 1_000_000)),
+    });
+    console.log('[LOBBY_GC] LobbyGcJob was empty: next run scheduled in 15 minutes.');
+    return true;
+}
 
 // ─── seed_lobby_gc_job (server-only, idempotent) ────────────────────────────
 // Inserts the first LobbyGcJob row to kick off the scheduled GC chain.
@@ -211,17 +223,10 @@ export const seed_lobby_gc_job = spacetimedb.reducer((ctx) => {
         throw new SenderError('Forbidden: caller is not the registered server identity.');
     }
 
-    const existing = [...ctx.db.LobbyGcJob.iter()];
-    if (existing.length > 0) {
+    if (!armLobbyGcJobIfMissing(ctx)) {
         console.log('[LOBBY_GC] Seed skipped -- LobbyGcJob already has a row.');
         return;
     }
-
-    const FIFTEEN_MINUTES_MICROS = ctx.timestamp.microsSinceUnixEpoch + BigInt(15 * 60 * 1_000_000);
-    ctx.db.LobbyGcJob.insert({
-        scheduledId: 0n,
-        scheduledAt: ScheduleAt.time(FIFTEEN_MINUTES_MICROS),
-    });
     console.log('[LOBBY_GC] Seed complete -- first run scheduled in 15 minutes.');
 });
 

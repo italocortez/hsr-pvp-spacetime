@@ -81,10 +81,11 @@ Inserted by: `join_lobby`, `leave_lobby`, `kick_member`, `ban_member`, `advance_
 | A97 seat labels ("Blue Player #3"): stored on every Player message; `view_my_lobby_chat` shows the live seat label while the sender holds a row, else the stored one, else "A player" (labels stored before S10h are position-based and are shown only for a sender who left; S11 clear-publish empties the table). A98: away / abandoned senders rejected | Phase S10h execution (DECISIONS.md A97, A98) | 2026-11-09 |
 | Fix pass: `view_my_lobby_chat` and the member-event lines prefer the stored label, the live one only when none was stored (`storedOrLiveLabel`; a rejoin no longer relabels old lines, review F6); member-event lines store the subject's label in every lobby (review F7) | Phase S10h execution (S10h review F6, F7; DECISIONS.md A97) | 2026-11-10 |
 | Every System chat line goes through the 50-message trim by `createdDate` (`postSystemChat` calls `trimChatForInsert`; stage-change, concede and defer lines use it) | Phase S10r execution (DECISIONS.md A122) | 2026-11-10 |
+| `send_chat_message` stamps `Lobby.lastActivityAt` only when the stored stamp is at least 60 s old (`CHAT_ACTIVITY_STAMP_MICROS`), so a chat burst no longer re-sends the whole `Lobby` row to every member per message; lobby GC's 30-minute idle test moves by at most a minute (triage L18; the egress gain is to be measured on test1) | Phase S11a execution | 2026-11-11 |
 
 ---
 
-*Last updated: 2026-11-09*
+*Last updated: 2026-11-11 (S11a part 2)*
 *Feature owner: Phase 09*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

@@ -322,8 +322,6 @@ export function ensureGame(ctx: any, record: any, lobby: any, actorId: number): 
         teamRedAdjustedResult: undefined,
         tieBreakLevel: undefined,
         winnerTeamSide: teamSideValue('Spectator'),
-        validationStatus: { tag: 'Pending', value: {} },
-        validatedByUserId: undefined,
         blueConfirmed: false,
         redConfirmed: false,
         closedAt: undefined,

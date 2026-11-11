@@ -38,6 +38,7 @@ import {
 } from '../fixtures/lobby';
 import { liveField } from '../fixtures/tournaments';
 import { byKey, createTournamentLobby } from '../fixtures/tournament-matches';
+import { hashLobbyPassword } from '@module/helpers/lobby/lobbyPassword';
 
 // ─── Messages (docs/lobby/contract.md error tables) ──────────────────────────
 
@@ -133,7 +134,8 @@ describe('create_lobby', () => {
         const host = guest(test, 'host');
         const lobbyId = createLobby(test, host, { isPublic: false, password: 'secret' });
         expect(lobbyRow(test, lobbyId).isPublic).toBe(false);
-        expect(test.db.LobbyPassword.lobbyId.find(lobbyId)!.passwordHash).toBe('secret');
+        // S11a (L24): the row holds the salted SHA-256 of the password, not the text
+        expect(test.db.LobbyPassword.lobbyId.find(lobbyId)!.passwordHash).toBe(hashLobbyPassword(lobbyId, 'secret'));
 
         const other = guest(test, 'other');
         const lobbiesBefore = [...test.db.Lobby.iter()].length;

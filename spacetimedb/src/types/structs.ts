@@ -136,10 +136,6 @@ export const UnequipLightconePayload = t.object('UnequipLightconePayload', {
     refunded: t.f32(),
 });
 
-export const ArrangeLineupPayload = t.object('ArrangeLineupPayload', {
-    positions: t.string(),         // JSON string of position array (order of characters)
-});
-
 // A60(1): an eidolon edit of a drafted character (S7b; ConfirmLineupPayload was removed, A60(8)).
 // costPaid = the character's roster cost contribution after the edit, in the draft mode's terms: Classic = the
 // cost-set price at the new level; Auction = the eidolon extra at the new level, max(0, cost[e] - cost[e0]) (A61(6)),
@@ -176,7 +172,6 @@ export const StepPayload = t.enum('StepPayload', {
     Undo: UndoPayload,
     Pause: PausePayload,
     EquipLightcone: EquipLightconePayload,
-    ArrangeLineup: ArrangeLineupPayload,
     SetEidolon: SetEidolonPayload,     // A60 (S7b)
     ConfirmGame: ConfirmGamePayload,   // A60 (S7b)
     UnequipLightcone: UnequipLightconePayload, // S7b hand-off (unequip_lightcone)

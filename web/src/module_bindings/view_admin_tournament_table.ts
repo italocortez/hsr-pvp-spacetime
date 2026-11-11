@@ -52,7 +52,6 @@ export default __t.row({
   },
   groupAdvanceCount: __t.u8().name("group_advance_count"),
   costSetId: __t.u32().name("cost_set_id"),
-  seasonId: __t.u32().name("season_id"),
   countTowardsMmr: __t.bool().name("count_towards_mmr"),
   requireResultValidation: __t.bool().name("require_result_validation"),
   defaultBestOf: __t.u8().name("default_best_of"),

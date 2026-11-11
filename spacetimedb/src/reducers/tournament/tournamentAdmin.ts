@@ -174,7 +174,7 @@ export const override_match_result = spacetimedb.reducer(
             matchEndReason: newStatusTag === 'Validated'
                 ? { tag: 'Completed', value: {} } as any
                 : matchResult.matchEndReason,
-            disputeReason: reason, // Reuse disputeReason field to store override reason
+            staffOverrideReason: reason, // S11a (L49): its own column; the player's disputeReason is kept
             ...(newStatusTag === 'Validated' ? { settledAt: ctx.timestamp } : {}),
         }, actingUserId));
 

@@ -1,6 +1,7 @@
 import { deleteAllCalendarDataForUser } from '@module/helpers/calendar/calendarCascade';
 import { transferFlagsOnRemoval } from '@module/helpers/lobby/flagTransferHelpers';
 import { removeMemberRow } from '@module/helpers/lobby/memberRemoval';
+import { deleteCursorStamps } from '@module/helpers/lobby/cursorStamps';
 import { LIVE_STAGES, slotIsCoach, slotIsSpectator } from '@module/helpers/lobby/lobbyHelpers';
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { recalcDuplicateUid } from '@module/helpers/roster/rosterHelpers';
@@ -204,6 +205,7 @@ export function performUserDeletion(ctx: any, userId: number, actorId: number, o
             continue;
         }
         transferFlagsOnRemoval(ctx, membership.lobbyId, userId);
+        deleteCursorStamps(ctx, membership.lobbyId, userId); // S11a (L19): the kept row sends no more cursors
         const row = [...ctx.db.LobbyMember.by_lobby_and_user.filter([membership.lobbyId, userId])][0];
         if (!row) continue;
         const tracksDisconnect = lobby.disconnectPolicy.tag !== 'NoAction';

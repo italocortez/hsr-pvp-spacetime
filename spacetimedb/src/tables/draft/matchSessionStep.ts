@@ -9,7 +9,6 @@ export const matchSessionStepColumns = {
     sequence: t.u32(),     // 0, 1, 2... (getNextSequence; strict ordering within the lobby's one game, A67(3))
 
     actorUserId: t.u32(), // Who performed the action (persistent User ID)
-    anonymousLabel: t.string().optional(),
     actorSlot: TeamSide,  // Blue/Red/Spectator
 
     action: ActionType,    // Pick, Ban, Bid...

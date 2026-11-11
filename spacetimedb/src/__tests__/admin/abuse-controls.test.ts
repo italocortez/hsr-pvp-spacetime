@@ -83,7 +83,9 @@ describe('B-4: broadcast_cursor bounds and throttle', () => {
 
         // The throttle stamp is not an audit bump (§B.5).
         const after = member(test, s.lobbyId, b1.userId);
-        expect(after.lastCursorAt).toBeDefined();
+        // S11a (L19): the stamp lives in LobbyCursorStamp; the member row is not rewritten at all.
+        expect([...test.db.LobbyCursorStamp.by_lobby_and_user.filter([s.lobbyId, b1.userId])][0]?.lastCursorAt).toBeDefined();
+        expect(after).toEqual(before);
         expect(after.lastModifiedDate).toEqual(before.lastModifiedDate);
         expect(after.lastModifiedById).toBe(before.lastModifiedById);
     });
@@ -96,7 +98,7 @@ describe('B-4: broadcast_cursor bounds and throttle', () => {
         cursor(test, b1, s.lobbyId, 0.5, -0.1);
         cursor(test, b1, s.lobbyId, Number.NaN, 0.5);
         expect(cursorRows(test)).toBe(0);
-        expect(member(test, s.lobbyId, b1.userId).lastCursorAt).toBeUndefined();
+        expect([...test.db.LobbyCursorStamp.by_lobby_and_user.filter([s.lobbyId, b1.userId])]).toHaveLength(0); // S11a (L19)
 
         cursor(test, b1, s.lobbyId, 0, 1);
         expect(cursorRows(test)).toBe(1);

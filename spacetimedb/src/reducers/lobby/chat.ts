@@ -10,6 +10,13 @@ import { lobbyChatOldestFirst, trimChatForInsert } from '@module/helpers/lobby/c
 /** S10e (lobby audit #5): the cap on a message's metadata JSON (content: 500, D-12). */
 const CHAT_METADATA_MAX_LENGTH = 200;
 
+/**
+ * S11a (triage L18): a chat message stamps `Lobby.lastActivityAt` only when the stored stamp is at least this old
+ * (60 s). Every Lobby row write goes to each member and to the lobby list; chat at the allowed rate rewrote it per
+ * message. Lobby GC needs the stamp only for its 30-minute idle test.
+ */
+const CHAT_ACTIVITY_STAMP_MICROS = 60_000_000n;
+
 // ---------------------------------------------------------------------------
 // send_chat_message
 // Per D-10: all lobby members can send. Per D-12: 500 char limit.
@@ -83,8 +90,9 @@ export const send_chat_message = spacetimedb.reducer({
         anonymousLabel,
     }, user.id));
 
-    // Update lobby lastActivityAt
-    if (lobby) {
+    // Update lobby lastActivityAt. S11a (triage L18): at most once per CHAT_ACTIVITY_STAMP_MICROS, so a chat burst does not
+    // re-send the whole Lobby row to every member per message; the lobby GC's 30-minute idle test moves by at most that.
+    if (lobby && ctx.timestamp.microsSinceUnixEpoch - lobby.lastActivityAt.microsSinceUnixEpoch >= CHAT_ACTIVITY_STAMP_MICROS) {
         ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
             lastActivityAt: ctx.timestamp,
         }, user.id));

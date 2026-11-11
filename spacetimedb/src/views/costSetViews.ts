@@ -6,6 +6,7 @@
 // 3. view_my_draft_lightcone_costs — draft lightcone cost rows for caller's sets
 // 4. view_my_draft_synergy_costs   — draft synergy cost rows for caller's sets
 // 5. view_cost_set_missing(id)     — A107(2): reference entries the set's draft lacks (owner / Moderator+)
+// 6. view_published_cost_sets      — S11a (L91): the published CostSet rows, for every caller (CostSet is private)
 // Since S10i (A107(3)) the draft rows of a published set stay after publish: they are its editable copy.
 
 import spacetimedb from '@module/schema';
@@ -33,6 +34,18 @@ export const view_my_cost_sets = spacetimedb.view(
         if (!user) return [];
         return [...ctx.db.CostSet.creator_id.filter(user.id)];
     }
+);
+
+// ---------------------------------------------------------------------------
+// 6. view_published_cost_sets — S11a (triage L91): `CostSet` is private, so unpublished drafts (name, creator) are no
+//    longer readable by every client. Every caller reads the published sets (the ones a lobby, preset or tournament may
+//    select, ensureSelectableCostSet; a locked one is listed with its flag). Index read (is_published), no scan.
+//    Part of the reference set (docs/frontend/subscriptions.md Decision 1) in place of the `cost_set` table.
+// ---------------------------------------------------------------------------
+export const view_published_cost_sets = spacetimedb.anonymousView(
+    { name: 'view_published_cost_sets', public: true },
+    t.array(CostSet.rowType),
+    (ctx) => [...ctx.db.CostSet.is_published.filter(true)],
 );
 
 // ---------------------------------------------------------------------------

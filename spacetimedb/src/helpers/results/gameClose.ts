@@ -62,7 +62,6 @@ export function closeGame(
         lobbyId: lobby.id,
         sequence: getNextSequence(ctx, lobby.id),
         actorUserId: actorId,
-        anonymousLabel: undefined,
         actorSlot: teamSideValue(closedBy.actorSlot),
         action: { tag: 'ConfirmGame', value: {} } as any,
         payload: {

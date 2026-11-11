@@ -198,7 +198,6 @@ export const create_tournament_lobby = spacetimedb.reducer(
             disconnectedAt: undefined,
             disconnectPoolRemainingMs: 0,
             joinSeq: 1, // R4 / A74(3): the host's seat; lobby.lastJoinSeq starts at 1
-            lastCursorAt: undefined,
             lastLineupAt: undefined,
         }, user.id));
 

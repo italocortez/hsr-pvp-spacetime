@@ -140,6 +140,18 @@ export function extractArchetypeNames(raw: RawCharacter[]): string[] {
     return [...names].sort();
 }
 
+/**
+ * S10f (roster audit #10), S11a (triage L109): the Archetype rows a seed run sends. Only names not already in the
+ * database go out: the Archetype branch of admin_bulk_upsert has no "keep" merge, so re-sending an existing name with
+ * description '' would wipe a description an admin wrote. Pure, so the in-memory suite can test it.
+ */
+export function newArchetypeRows(raw: RawCharacter[], existingNames: Iterable<string>): Array<{ name: string; description: string }> {
+    const existing = new Set(existingNames);
+    return extractArchetypeNames(raw)
+        .filter((name) => !existing.has(name))
+        .map((name) => ({ name, description: '' }));
+}
+
 /** Build character-to-archetype assignment map from JSON */
 export function extractArchetypeAssignments(raw: RawCharacter[]): Array<{ characterName: string; archetypeNames: string[] }> {
     return raw

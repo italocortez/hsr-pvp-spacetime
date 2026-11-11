@@ -84,7 +84,8 @@ const TABLES = [
   { name: 'cost_set_draft_synergy', vis: 'private', bytes: 4 + strBytes('medium') + strBytes('medium') + 1 + 4 + AUDIT_BYTES, growth: 'transient', category: 'cost_drafts' },
 
   // --- User Data (bounded by user count) ---
-  { name: 'user', vis: 'public', bytes: 4 + strBytes('medium') + strBytes('medium') + 1 + 1 + 1 + 8 + 1 + optionalBytes(strBytes('medium')) + strBytes('medium') + optionalBytes(4) + optionalBytes(8) + AUDIT_BYTES, growth: 'bounded', category: 'users' },
+  // S11a: private since A77 (UserPrivate merged): id, username, displayName, isGuest, role, avatar, displayedAchievementId?, deletedAt?, loginMethod?, providerId?, providerUsername?, linkedAt?
+  { name: 'user', vis: 'private', bytes: 4 + strBytes('medium') + strBytes('medium') + 1 + 1 + strBytes('medium') + optionalBytes(4) + optionalBytes(8) + optionalBytes(strBytes('short')) + optionalBytes(strBytes('short')) + optionalBytes(strBytes('medium')) + optionalBytes(8) + AUDIT_BYTES, growth: 'bounded', category: 'users' },
   { name: 'user_identity', vis: 'public', bytes: 32 + 4 + 8 + AUDIT_BYTES, growth: 'bounded', category: 'users' },
   { name: 'hsr_account', vis: 'public', bytes: 4 + 4 + strBytes('short') + strBytes('short') + strBytes('medium') + 1 + 1 + 1 + 1 + AUDIT_BYTES, growth: 'bounded', category: 'users' },
   { name: 'hsr_account_character', vis: 'public', bytes: 4 + strBytes('medium') + 1 + AUDIT_BYTES, growth: 'bounded', category: 'roster' },
@@ -96,7 +97,8 @@ const TABLES = [
   // mmr_rating PK: [userId, gameMode, seasonId]
   { name: 'mmr_rating', vis: 'public', bytes: 4 + 1 + 4 + 4 + 4 + optionalBytes(4) + optionalBytes(4) + AUDIT_BYTES, growth: 'bounded', category: 'users' },
   { name: 'user_achievement', vis: 'public', bytes: 4 + 4 + 4 + 4 + 1 + AUDIT_BYTES, growth: 'bounded', category: 'users' },
-  { name: 'leaderboard', vis: 'public', bytes: 34 + 4 + 4 + 4 + 4 + 4 + 4 + AUDIT_BYTES, growth: 'bounded', category: 'users' }, // ~82 bytes
+  // S11a: category, rank u16, userId, displayName + avatarCharacterName (A77 card), rating, matchesPlayed, wins, seasonId
+  { name: 'leaderboard', vis: 'public', bytes: strBytes('short') + 2 + 4 + strBytes('medium') + strBytes('medium') + 4 + 4 + 4 + 4 + AUDIT_BYTES, growth: 'bounded', category: 'users' },
   { name: 'global_character_stat', vis: 'public', bytes: 34 + 1 + 1 + 1 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + AUDIT_BYTES, growth: 'bounded', category: 'users' }, // ~107 bytes
   { name: 'player_relationship', vis: 'private', bytes: 4 + 4 + 1 + 1 + 4 + 1 + 4 + 4 + 4 + 4 + AUDIT_BYTES, growth: 'bounded', category: 'users' }, // ~55 bytes
 
@@ -141,7 +143,8 @@ const TABLES = [
   { name: 'group_standing', vis: 'public', bytes: 4 + 4 + 4 + 4 + 4 + 4 + 4 + AUDIT_BYTES, growth: 'unbounded', category: 'tournament' },
 
   // --- Calendar (bounded by users, slots grow slowly) ---
-  { name: 'availability_slot', vis: 'public', bytes: 4 + 4 + 8 + 8 + 1 + 15 + 8 + AUDIT_BYTES, growth: 'bounded', category: 'calendar' },
+  // S11a: private (S3); A157 one dated interval per slot: id, userId, startAt, endAt, kind
+  { name: 'availability_slot', vis: 'private', bytes: 4 + 4 + 8 + 8 + 1 + AUDIT_BYTES, growth: 'bounded', category: 'calendar' },
   { name: 'saved_calendar', vis: 'public', bytes: 4 + 4 + 1 + AUDIT_BYTES, growth: 'bounded', category: 'calendar' },
   { name: 'calendar_event', vis: 'public', bytes: 4 + 4 + strBytes('medium') + 8 + 8 + optionalBytes(4) + AUDIT_BYTES, growth: 'unbounded', category: 'calendar' },
   // calendar_event_invite: added inviteStatus(enum) + respondedAt(optional timestamp)
@@ -265,7 +268,7 @@ function estimateRowCounts(s, months) {
     character_stats: s.users * 20 * gameModes, // 20 chars played * 3 game modes
     mmr_rating: s.users * gameModes,
     user_achievement: s.users * s.avgAchievementsPerUser,
-    leaderboard: Math.min(100, s.users) * gameModes, // top 100 per game mode
+    leaderboard: Math.min(20, s.users) * (gameModes + 1), // top 20 per category (each game mode + Global), active season
     global_character_stat: characters * gameModes * 2, // characters * gameModes * draftModes
     player_relationship: s.users * 10, // avg 10 relationships tracked
 

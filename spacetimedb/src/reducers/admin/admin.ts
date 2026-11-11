@@ -161,6 +161,35 @@ function validateEnumIfPresent(field: string, value: any, ctx: any, tableName: s
     validateEnum(field, value, ctx, tableName);
 }
 
+// ─── Cost-row lookups by the composite indexes (S11a, L92) ───────────────────
+// The full key (name, gameMode, draftMode, costSetId) is read through the table's composite btree index (enum columns
+// filter as `{ tag }`, as `MmrRating.by_user_mode_season` does) instead of a scan of every cost set's rows. A key with a
+// missing or unknown enum tag, or a non-string name, matches nothing (the scan matched nothing either).
+function costKeyFilterable(name: unknown, gameModeTag: unknown, draftModeTag: unknown): boolean {
+    return typeof name === 'string'
+        && typeof gameModeTag === 'string' && ENUM_VARIANTS.gameMode.includes(gameModeTag)
+        && typeof draftModeTag === 'string' && ENUM_VARIANTS.draftMode.includes(draftModeTag);
+}
+function findCharacterCostRow(ctx: any, name: unknown, gameModeTag: unknown, draftModeTag: unknown, costSetId: number): any {
+    if (!costKeyFilterable(name, gameModeTag, draftModeTag)) return null;
+    return [...ctx.db.HsrCharacterCost.by_character_mode_and_set.filter(
+        [name, { tag: gameModeTag }, { tag: draftModeTag }, costSetId])][0] ?? null;
+}
+function findLightconeCostRow(ctx: any, name: unknown, gameModeTag: unknown, draftModeTag: unknown, costSetId: number): any {
+    if (!costKeyFilterable(name, gameModeTag, draftModeTag)) return null;
+    return [...ctx.db.HsrLightconeCost.by_lightcone_mode_and_set.filter(
+        [name, { tag: gameModeTag }, { tag: draftModeTag }, costSetId])][0] ?? null;
+}
+/** A21: a pair is stored in canonical order; both orders are probed so a row written otherwise still matches. */
+function findSynergyCostRow(ctx: any, a: string, b: string, gameModeTag: unknown, draftModeTag: unknown, costSetId: number): any {
+    if (!costKeyFilterable(a, gameModeTag, draftModeTag) || typeof b !== 'string') return null;
+    const gm = { tag: gameModeTag };
+    const dm = { tag: draftModeTag };
+    return [...ctx.db.HsrSynergyCost.by_tuple.filter([a, b, gm, dm, costSetId])][0]
+        ?? (a === b ? null : [...ctx.db.HsrSynergyCost.by_tuple.filter([b, a, gm, dm, costSetId])][0])
+        ?? null;
+}
+
 /**
  * Parse a numeric primary key from the wire string. Throws SenderError with context
  * if the input is not a valid non-negative integer (e.g. malformed admin UI input).
@@ -323,42 +352,23 @@ export const admin_delete_row = spacetimedb.reducer(
                 break;
             }
             case 'HsrCharacterCost': {
-                // Full composite PK: (characterName, gameMode, draftMode, costSetId).
-                // Tuple-filter with enum struct unsupported (RESEARCH.md A2); use iter() with full predicate.
+                // Full composite PK: (characterName, gameMode, draftMode, costSetId), read by the composite index (L92).
                 const key = parseJsonPk(primaryKeyJson, tableName);
                 const keySetId = parseCostSetId(key.costSetId, tableName); // S10w fix pass (review F1)
-                let found = false;
-                for (const row of ctx.db.HsrCharacterCost.iter()) {
-                    if (row.characterName === key.characterName &&
-                        row.gameMode.tag === key.gameModeTag &&
-                        row.draftMode.tag === key.draftModeTag &&
-                        row.costSetId === keySetId) {
-                        ensureNoLiveGameOnCostSet(ctx, row.costSetId); // S10w (A142): the A107(4) test
-                        ctx.db.HsrCharacterCost.delete(row);
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) throw new SenderError('Row not found');
+                const row = findCharacterCostRow(ctx, key.characterName, key.gameModeTag, key.draftModeTag, keySetId);
+                if (!row) throw new SenderError('Row not found');
+                ensureNoLiveGameOnCostSet(ctx, row.costSetId); // S10w (A142): the A107(4) test
+                ctx.db.HsrCharacterCost.delete(row);
                 break;
             }
             case 'HsrLightconeCost': {
-                // Full composite PK: (lightconeName, gameMode, draftMode, costSetId).
+                // Full composite PK: (lightconeName, gameMode, draftMode, costSetId), read by the composite index (L92).
                 const key = parseJsonPk(primaryKeyJson, tableName);
                 const keySetId = parseCostSetId(key.costSetId, tableName); // S10w fix pass (review F1)
-                let found = false;
-                for (const row of ctx.db.HsrLightconeCost.iter()) {
-                    if (row.lightconeName === key.lightconeName &&
-                        row.gameMode.tag === key.gameModeTag &&
-                        row.draftMode.tag === key.draftModeTag &&
-                        row.costSetId === keySetId) {
-                        ensureNoLiveGameOnCostSet(ctx, row.costSetId); // S10w (A142): the A107(4) test
-                        ctx.db.HsrLightconeCost.delete(row);
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) throw new SenderError('Row not found');
+                const row = findLightconeCostRow(ctx, key.lightconeName, key.gameModeTag, key.draftModeTag, keySetId);
+                if (!row) throw new SenderError('Row not found');
+                ensureNoLiveGameOnCostSet(ctx, row.costSetId); // S10w (A142): the A107(4) test
+                ctx.db.HsrLightconeCost.delete(row);
                 break;
             }
             case 'HsrSynergyCost': {
@@ -651,18 +661,8 @@ export const admin_bulk_upsert = spacetimedb.reducer(
                     validateEnumIfPresent('draftMode', r.draftMode, ctx, tableName);
                     const csId = parseCostSetId(r.costSetId, tableName); // S10w fix pass (review F1): before any lookup or guard
 
-                    // Tuple-filter with enum struct is unsupported (RESEARCH.md A2); use iter() fallback
-                    // with extended predicate including draftMode.
-                    let existing: any = null;
-                    for (const e of ctx.db.HsrCharacterCost.iter()) {
-                        if (e.characterName === r.characterName &&
-                            e.gameMode.tag === r.gameMode &&
-                            e.draftMode.tag === r.draftMode &&
-                            e.costSetId === csId) {
-                            existing = e;
-                            break;
-                        }
-                    }
+                    // S11a (L92): the composite index, not a scan of every set's rows.
+                    const existing: any = findCharacterCostRow(ctx, r.characterName, r.gameMode, r.draftMode, csId);
 
                     if (existing) {
                         // Partial-update: preserve existing values where incoming is null.
@@ -707,16 +707,8 @@ export const admin_bulk_upsert = spacetimedb.reducer(
                     validateEnumIfPresent('draftMode', r.draftMode, ctx, tableName);
                     const csId = parseCostSetId(r.costSetId, tableName); // S10w fix pass (review F1): before any lookup or guard
 
-                    let existing: any = null;
-                    for (const e of ctx.db.HsrLightconeCost.iter()) {
-                        if (e.lightconeName === r.lightconeName &&
-                            e.gameMode.tag === r.gameMode &&
-                            e.draftMode.tag === r.draftMode &&
-                            e.costSetId === csId) {
-                            existing = e;
-                            break;
-                        }
-                    }
+                    // S11a (L92): the composite index, not a scan of every set's rows.
+                    const existing: any = findLightconeCostRow(ctx, r.lightconeName, r.gameMode, r.draftMode, csId);
 
                     if (existing) {
                         const incoming: Record<string, any> = {
@@ -774,18 +766,8 @@ export const admin_bulk_upsert = spacetimedb.reducer(
                     }
                     seenPairs.add(pairKey);
 
-                    let existing: any = null;
-                    for (const e of ctx.db.HsrSynergyCost.iter()) {
-                        const [eA, eB] = canonicalPair(e.characterA, e.characterB);
-                        if (eA === r.characterA &&
-                            eB === r.characterB &&
-                            e.gameMode.tag === r.gameMode &&
-                            e.draftMode.tag === r.draftMode &&
-                            e.costSetId === csId) {
-                            existing = e;
-                            break;
-                        }
-                    }
+                    // S11a (S10j review F3): the by_tuple index (both orders), not a scan of every set's rows.
+                    const existing: any = findSynergyCostRow(ctx, r.characterA, r.characterB, r.gameMode, r.draftMode, csId);
                     if (existing) {
                         const incoming: Record<string, any> = {
                             costModifier: r.costModifier,

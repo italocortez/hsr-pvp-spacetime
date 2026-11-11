@@ -76,7 +76,9 @@ describe('override_match_result on a standalone record (contract override_match_
         expect(r.status.tag).toBe('Validated');
         expect(r.winnerTeamSide?.tag).toBe('Blue');
         expect(r.matchEndReason?.tag).toBe('Completed');
-        expect(r.disputeReason).toBe('Reviewed and confirmed');
+        // S11a (L49): the staff reason has its own column; the player's dispute text is kept
+        expect(r.staffOverrideReason).toBe('Reviewed and confirmed');
+        expect(r.disputeReason).toBe('wrong scores');
     });
 
     it('Ranked screenshot gate: Validated without both screenshots is rejected; Rejected needs none', () => {

@@ -24,5 +24,7 @@ export const Leaderboard = table({
     primaryKey: ['category', 'rank', 'seasonId'],
     indexes: [
         { accessor: 'by_user', algorithm: 'btree', columns: ['userId'] },
+        // S11a (S10j review F3): rebuildLeaderboard deletes one season's rows at every finalization
+        { accessor: 'season_id', algorithm: 'btree', columns: ['seasonId'] },
     ],
 }, leaderboardColumns);

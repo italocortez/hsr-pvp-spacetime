@@ -128,8 +128,8 @@ export function assignFinalPlacements(ctx: any, tournament: any, actorId: number
 }
 
 /**
- * Starts the D.8.1 job: Tournament.finalizationStartedAt = now and one TournamentFinalizeJob { tournamentId,
- * cursor: 0 } scheduled now (a second start while a job row exists is a no-op).
+ * Starts the D.8.1 job: Tournament.finalizationStartedAt = now and one TournamentFinalizeJob { tournamentId }
+ * scheduled now (a second start while a job row exists is a no-op).
  */
 export function startTournamentFinalization(ctx: any, tournamentId: number, actorId: number): void {
     const tournament = ctx.db.Tournament.id.find(tournamentId);
@@ -140,32 +140,30 @@ export function startTournamentFinalization(ctx: any, tournamentId: number, acto
         scheduledId: 0n,
         scheduledAt: ScheduleAt.time(ctx.timestamp.microsSinceUnixEpoch),
         tournamentId,
-        cursor: 0,
     });
 }
 
 /**
  * Moderator+ recovery (S8d review): a tick that throws rolls back with its own reschedule row, so the job stops with
- * finalizationStartedAt set and finalizedAt unset. This re-inserts a job row scheduled now with `cursor` (progress
- * only; admin_restart_tournament_finalize passes 0, the stopped row's value is gone). Restarting is safe: every record a finished tick processed was
- * finalized or deleted with its row, so the next tick starts at the first surviving record in bracket order.
+ * finalizationStartedAt set and finalizedAt unset. This re-inserts a job row scheduled now. Restarting is safe: every
+ * record a finished tick processed was finalized or deleted with its row, so the next tick starts at the first
+ * surviving record in bracket order.
  */
-export function restartTournamentFinalization(ctx: any, tournamentId: number, cursor: number): void {
+export function restartTournamentFinalization(ctx: any, tournamentId: number): void {
     ctx.db.TournamentFinalizeJob.insert({
         scheduledId: 0n,
         scheduledAt: ScheduleAt.time(ctx.timestamp.microsSinceUnixEpoch),
         tournamentId,
-        cursor,
     });
 }
 
 /**
- * One tick of the job (one transaction). Reschedules first (F14 lesson): the next row (cursor + batch size) is
- * inserted before any record is processed, so a tick that returns early still leaves the job alive; a tick that
- * throws rolls back as a whole, leaving every earlier tick's matches finalized. `cursor` counts the records already
- * processed (finalized records are deleted, so each tick reads the first K survivors in bracket order).
+ * One tick of the job (one transaction). Reschedules first (F14 lesson): the next row is inserted before any record
+ * is processed, so a tick that returns early still leaves the job alive; a tick that throws rolls back as a whole,
+ * leaving every earlier tick's matches finalized. Finalized records are deleted, so each tick reads the first K
+ * survivors in bracket order (S11a, L84: no progress cursor).
  */
-export function runTournamentFinalizeTick(ctx: any, job: { tournamentId: number; cursor: number }): void {
+export function runTournamentFinalizeTick(ctx: any, job: { tournamentId: number }): void {
     const tournament = ctx.db.Tournament.id.find(job.tournamentId);
     if (!tournament) return; // nothing left to finalize; the job ends with its row
     const batch = tournamentRecordsInBracketOrder(ctx, job.tournamentId).slice(0, FINALIZE_BATCH_SIZE);
@@ -179,7 +177,7 @@ export function runTournamentFinalizeTick(ctx: any, job: { tournamentId: number;
         for (const row of [...ctx.db.TournamentFinalizeJob.tournament_id.filter(job.tournamentId)]) {
             ctx.db.TournamentFinalizeJob.scheduledId.delete(row.scheduledId);
         }
-        console.log(`[TOURNAMENT_FINALIZE] Tournament #${job.tournamentId} finalized (${job.cursor} records)`);
+        console.log(`[TOURNAMENT_FINALIZE] Tournament #${job.tournamentId} finalized`);
         return;
     }
 
@@ -188,7 +186,6 @@ export function runTournamentFinalizeTick(ctx: any, job: { tournamentId: number;
         scheduledId: 0n,
         scheduledAt: ScheduleAt.time(ctx.timestamp.microsSinceUnixEpoch),
         tournamentId: job.tournamentId,
-        cursor: job.cursor + batch.length,
     });
 
     const tournamentMmr = tournament.countTowardsMmr && tournament.stage.tag === 'Completed'; // A24(5)
@@ -201,5 +198,5 @@ export function runTournamentFinalizeTick(ctx: any, job: { tournamentId: number;
             ctx.db.MatchResultRecord.id.delete(record.id); // Voided: its lobby is already gone
         }
     }
-    console.log(`[TOURNAMENT_FINALIZE] Tournament #${job.tournamentId}: ${batch.length} record(s) processed (cursor ${job.cursor + batch.length})`);
+    console.log(`[TOURNAMENT_FINALIZE] Tournament #${job.tournamentId}: ${batch.length} record(s) processed`);
 }

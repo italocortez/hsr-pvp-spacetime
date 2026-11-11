@@ -503,9 +503,10 @@ export const server_set_mmr = spacetimedb.reducer({
         throw new SenderError(`Invalid gameMode "${gameMode}". Must be one of: ${validModes.join(', ')}`);
     }
 
-    // Filter by userId, then find matching gameMode in memory
-    const existing = [...ctx.db.MmrRating.user_id.filter(userId)]
-        .find((r: any) => r.gameMode.tag === gameMode);
+    // S11a (triage L5): the row of the active season (0 when none is active), the one the views and finalization read
+    // (by_user_mode_season); a rating set while a season is active lands in that season.
+    const seasonId = [...ctx.db.Season.is_active.filter(true)][0]?.id ?? 0;
+    const existing = [...ctx.db.MmrRating.by_user_mode_season.filter([userId, { tag: gameMode } as any, seasonId])][0];
 
     if (existing) {
         // Delete + re-insert (composite PK) — P4 delete+insert-carry:
@@ -523,7 +524,7 @@ export const server_set_mmr = spacetimedb.reducer({
             rating,
             matchesPlayed: 0,
             globalCompositeRating: undefined,
-            seasonId: undefined,
+            seasonId,
         }, systemUserId) as any);
     }
 });
@@ -595,6 +596,7 @@ export const server_nuke_test_data = spacetimedb.reducer({
 
     // ── Lobby ephemeral (children first)
     ctx.db.LobbyCursorEvent.clear();
+    ctx.db.LobbyCursorStamp.clear(); // S11a (L19): cursor throttle stamps
     ctx.db.RefereeTransferCheck.clear(); // A22a pending grace checks
     ctx.db.LobbyMemberAccount.clear();
     ctx.db.LobbyMember.clear();

@@ -99,10 +99,9 @@ export function rebuildLeaderboard(ctx: any, seasonId?: number): void {
     const effectiveSeasonId = seasonId !== undefined ? seasonId : getActiveSeasonId(ctx);
 
     // 1. Delete the season's rows of every category (at most 4 × 20 per season, all rewritten below)
-    for (const row of [...ctx.db.Leaderboard.iter()]) {
-        if (row.seasonId === effectiveSeasonId) {
-            ctx.db.Leaderboard.delete(row);
-        }
+    // S11a (S10j review F3): the season_id index, not a scan of every season's rows
+    for (const row of [...ctx.db.Leaderboard.season_id.filter(effectiveSeasonId)]) {
+        ctx.db.Leaderboard.delete(row);
     }
 
     // 2. One pass over the season's ratings: per-mode candidates and the Global candidates' user ids
@@ -121,8 +120,8 @@ export function rebuildLeaderboard(ctx: any, seasonId?: number): void {
         }
         return live;
     };
-    for (const r of ctx.db.MmrRating.iter()) {
-        if (r.seasonId !== effectiveSeasonId || r.matchesPlayed < MIN_MATCHES) continue;
+    for (const r of ctx.db.MmrRating.season_id.filter(effectiveSeasonId)) { // S11a (S10j review F3): index read
+        if (r.matchesPlayed < MIN_MATCHES) continue;
         if (!isLive(r.userId)) continue;
         globalUserIds.add(r.userId);
         const list = byMode.get(r.gameMode.tag);

@@ -48,4 +48,5 @@ export default __t.row({
   winnerOverrideById: __t.option(__t.u32()).name("winner_override_by_id"),
   winnerOverrideReason: __t.option(__t.string()).name("winner_override_reason"),
   settledAt: __t.option(__t.timestamp()).name("settled_at"),
+  staffOverrideReason: __t.option(__t.string()).name("staff_override_reason"),
 });

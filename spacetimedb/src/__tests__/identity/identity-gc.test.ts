@@ -68,7 +68,7 @@ describe('admin_gc_identities / admin_gc_lobbies: role guard and GcResult audit 
         expect([...test.db.GcResult.iter()]).toHaveLength(0);
     });
 
-    it('a Moderator runs both: each writes one GcResult even when nothing was deleted (identity: triggeredBy admin; actor = the Moderator); no IdentityGcJob is queued', () => {
+    it('a Moderator runs both: each writes one GcResult even when nothing was deleted (identity: triggeredBy admin; actor = the Moderator); S11a (L6): with no chain running, the identity run re-arms IdentityGcJob 7 days out and the lobby run LobbyGcJob 15 minutes out', () => {
         const test = newHarness();
         const mod = moderator(test);
         gcIdentities(test, mod);
@@ -81,7 +81,8 @@ describe('admin_gc_identities / admin_gc_lobbies: role guard and GcResult audit 
         expect(JSON.parse(identity.details)).toEqual({ orphaned: 0, stale: 0, guests: 0, triggeredBy: 'admin' }); // T-S10h: + guests (A95(1))
         expect(gcRows(test, 'lobby')).toEqual([expect.objectContaining({ itemsDeleted: 0, createdById: mod.userId })]);
         expect(JSON.parse(gcRows(test, 'lobby')[0].details).triggeredBy).toBe('admin');
-        expect([...test.db.IdentityGcJob.iter()]).toHaveLength(0);
+        expect([...test.db.IdentityGcJob.iter()].map((j) => j.scheduledAt)).toEqual([ScheduleAt.time(now(test) + SEVEN_DAYS_MICROS)]);
+        expect([...test.db.LobbyGcJob.iter()].map((j) => j.scheduledAt)).toEqual([ScheduleAt.time(now(test) + 15n * 60_000_000n)]);
     });
 });
 

@@ -11,8 +11,8 @@
 // deleted without history, the last tick: leaderboard once, finalizedAt, job gone) and the Cancelled path (stats
 // counted, MMR skipped). Scheduled ticks are driven by hand (`tick` in s8d-fixtures.ts). Nothing reaches maincloud.
 import { describe, expect, it } from 'vitest';
-import { M, expectReject, lobbyRow, tx, type Actor, type Harness } from '../fixtures/harness';
-import { verified } from '../fixtures/identity';
+import { M, expectReject, lobbyRow, snap, tx, type Actor, type Harness } from '../fixtures/harness';
+import { admin, verified } from '../fixtures/identity';
 import {
     advanceStage,
     assignAssistant,
@@ -137,7 +137,7 @@ describe('placements on TournamentTeam.finalPlacement ("1224", as landed)', () =
         expect(t.finalizedAt).toBeUndefined();
         const jobs = jobsOf(f.test, f.id);
         expect(jobs).toHaveLength(1);
-        expect(jobs[0].cursor).toBe(0);
+        expect(jobs[0].tournamentId).toBe(f.id); // S11a (L84): the job row has no progress cursor
         // Team statuses are left as they are (A26 names no end state).
         expect(teamRow(f.test, final.winnerTeamId!)!.status.tag).toBe('Active');
         expect(teamRow(f.test, tp.loserTeamId!)!.status.tag).toBe('Eliminated');
@@ -223,10 +223,10 @@ describe('run_tournament_finalize: K = 4 per tick in bracket order (D.8.1)', () 
             expect([...f.test.db.MatchResultRecord.bracket_match_id.filter(r.id)]).toHaveLength(0);
         }
         for (const r of ordered.slice(4)) expect(lobbyRow(f.test, lobbyOf.get(r.id)!).stage.tag).toBe('AwaitingResult');
-        // The reschedule row: cursor advanced by the batch.
+        // The reschedule row (S11a, L84: no progress cursor; the finalized records are gone).
         const after1 = jobsOf(f.test, f.id);
         expect(after1).toHaveLength(1);
-        expect(after1[0].cursor).toBe(4);
+        expect(after1[0].tournamentId).toBe(f.id);
         // A56: lineups archived per finalized match (two per game).
         const lineupHistory = [...f.test.db.MatchLineupHistory.iter()];
         expect(lineupHistory.length).toBe(8);
@@ -236,7 +236,7 @@ describe('run_tournament_finalize: K = 4 per tick in bracket order (D.8.1)', () 
 
         tick(f.test, f.id);
         expect(historyOf(f.test, f.id)).toHaveLength(7);
-        expect(jobsOf(f.test, f.id)[0].cursor).toBe(7);
+        expect(jobsOf(f.test, f.id)).toHaveLength(1);
         expect(tRow(f.test, f.id).finalizedAt).toBeUndefined();
         expect([...f.test.db.Lobby.iter()].filter((l) => l.tournamentId === f.id)).toHaveLength(0);
 
@@ -298,9 +298,24 @@ describe('run_tournament_finalize: K = 4 per tick in bracket order (D.8.1)', () 
         expect([...f.test.db.MmrRating.iter()]).toHaveLength(0);
     });
 
-    // The engine refuses external calls to scheduled reducers (reducers/lobbyGc.ts note); the module has no
-    // application-level guard (deferred, upgrade report §10 Q8), so the in-memory harness cannot observe a rejection.
-    it.todo('a non-scheduler caller of run_tournament_finalize is rejected (engine-level; no app guard to test in-memory)');
+    // S11a (L11): the module guard (ensureScheduler, ctx.senderAuth.isInternal) refuses a caller that is not the
+    // scheduler; the harness's scheduler is TestAuth.internal() (the `tick` fixture).
+    it('a non-scheduler caller of run_tournament_finalize is refused and changes nothing (S11a, L11)', () => {
+        const f = liveField(4, BO1);
+        resolveAll(f.test, f.org, f.id);
+        complete(f);
+        const [row] = jobsOf(f.test, f.id);
+        const state = () => snap([...f.test.db.TournamentFinalizeJob.iter()], [...f.test.db.MatchResultRecord.iter()],
+            [...f.test.db.MatchSessionHistory.iter()], tRow(f.test, f.id));
+        const before = state();
+        for (const who of [f.org, admin(f.test)]) {
+            expectReject(f.test, who, (ctx) => M.run_tournament_finalize(ctx, { arg: row }),
+                'Forbidden: run_tournament_finalize is a scheduled reducer and runs only from the scheduler.');
+        }
+        expect(state()).toBe(before);
+        tick(f.test, f.id); // the scheduler path still runs
+        expect(tRow(f.test, f.id).finalizedAt).toBeDefined();
+    });
 });
 
 // ─── Cancelled (A24(5)) ───────────────────────────────────────────────────────
@@ -384,7 +399,7 @@ describe('admin_restart_tournament_finalize (S8d review, A24(7), D.8.1)', () => 
         restart(g.test, 'internal', g.id);
         const jobs = jobsOf(g.test, g.id);
         expect(jobs).toHaveLength(1);
-        expect(jobs[0].cursor).toBe(0);
+        expect(jobs[0].tournamentId).toBe(g.id); // S11a (L84): no progress cursor
         drain(g.test, g.id);
         expect(historyOf(g.test, g.id)).toHaveLength(3);
         expect(tRow(g.test, g.id).finalizedAt).toBeDefined();

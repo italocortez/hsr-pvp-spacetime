@@ -17,7 +17,7 @@ import { subscribeOnly, waitFor } from './_connection';
 import { REPO_ROOT } from './_env';
 import {
     extractArchetypeAssignments,
-    extractArchetypeNames,
+    newArchetypeRows,
     normalizeCharacterCosts,
     normalizeCharacters,
     normalizeLightconeCosts,
@@ -68,9 +68,8 @@ async function seedGameData(conn: DbConnection): Promise<void> {
     const characters = loadJson<RawCharacter>('characters.json');
     const lightcones = loadJson<RawLightcone>('lightcones.json');
     const pairings = loadJson<RawPairing>('synergies.json');
-    // S10f (roster audit #10): only new archetypes are sent. The Archetype branch of admin_bulk_upsert has no
-    // "keep" merge, so re-sending an existing name with description '' would wipe a description an admin wrote.
-    const existingArchetypes = new Set([...conn.db.Archetype.iter()].map((r) => r.name));
+    // S10f (roster audit #10): only new archetypes are sent (newArchetypeRows, seed-normalizers.ts; S11a L109).
+    const existingArchetypes = [...conn.db.Archetype.iter()].map((r) => r.name);
 
     const payloads = [
         { tableName: 'HsrCharacter', rows: normalizeCharacters(characters) },
@@ -80,9 +79,7 @@ async function seedGameData(conn: DbConnection): Promise<void> {
         { tableName: 'HsrSynergyCost', rows: normalizePairings(pairings) },
         {
             tableName: 'Archetype',
-            rows: extractArchetypeNames(characters)
-                .filter((name) => !existingArchetypes.has(name))
-                .map((name) => ({ name, description: '' })),
+            rows: newArchetypeRows(characters, existingArchetypes),
         },
     ].filter((p) => p.rows.length > 0);
 
