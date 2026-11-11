@@ -107,11 +107,12 @@ Skip it for backend-only edits, pure refactors with no visual delta, and utility
 
 ## 9. Skills
 
-Load the relevant skill before writing code: **`spacetimedb`** for anything touching tables, reducers, views, schema, publishing or bindings.
+Load the relevant skill before writing code: **`spacetimedb`** for anything touching tables, reducers, views, schema, publishing or bindings; **`web-guidance`** before building or changing a UI pattern in `web/` (modal, menu, tabs, table, form control, tooltip, drag, transitions, time-zone logic).
 
 | Skill | Purpose |
 |---|---|
 | `spacetimedb` | backend patterns, API reference, guardrails |
+| `web-guidance` | local copies of web platform guides: how to build a UI pattern with current HTML, CSS and browser APIs; holds the browser support policy |
 | `uat` | behavior specs, test integrity, UAT and failure diagnostics |
 | `vercel-setup` / `vercel-deploy` / `vercel-logs` | Vercel CLI project setup, deploys, logs |
 | `pr-description` | PR descriptions |
