@@ -69,7 +69,7 @@ import { parkedLobby } from '../fixtures/ranked';
 
 const ALREADY_IN = 'You are already in a lobby. Leave it before creating or joining another.';
 const PROMPT = (code: string) => `You left lobby ${code} mid-match. Joining here means you cannot return to it.`;
-const GONE = 'You left this match for another lobby and cannot return.';
+const GONE = 'You abandoned this match and cannot return.';
 const MAX_SPEC_RANGE = 'maxSpectators must be between 0 and 12.';
 const SPEC_FULL = (n: number) => `Spectator slots are full (max ${n}).`;
 const LEAVE_FIRST = 'Leave your lobby before deleting your account.';

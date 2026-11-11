@@ -57,6 +57,7 @@ Each executed step writes its log to `docs/log/<date>-<step>.md` (goal, decision
 | S10w | A game account in use by a live lobby cannot be edited by anyone; Admin cost rows frozen while a game on the set is live (A142) | S10v | done 2026-11-10 (`docs/log/2026-11-10-s10w.md`) |
 | T-REORG | Module in-memory tests regrouped into subject folders under `spacetimedb/src/__tests__/` (test bodies unchanged; 1901 titles identical before and after); mapping in `docs/log/2026-11-10-t-reorg.md`. T-REORG2: duplicate helpers unified (14 fixture files), same-subject pairs merged (93 test files) | S10x | done 2026-11-10 |
 | S10y | One wording for the away and abandoned refusals; "abandoned" when the player left the match (A146) | T-REORG | done 2026-11-10 |
+| S10z | The rejoin refusal of an abandoned member also says "abandoned" (A147) | S10y | done 2026-11-11 |
 | M3 | Vite shell: tokens, base and media CSS, fonts, standby/404 | S10 | pending |
 | M4 | Router and guards (TanStack Router, typed links) | M3 | pending |
 | M9 | Test strategy wiring and CI workflow | M4 | pending |

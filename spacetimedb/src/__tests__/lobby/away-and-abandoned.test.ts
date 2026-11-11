@@ -38,7 +38,7 @@ const AWAY = 'You are away from this match. Return to it before acting.'; // A98
 const ABANDONED = 'You abandoned this match and can no longer act in it.'; // A98, A146
 const A92_AWAY = 'You are away from this match. Return to it before acting.'; // A92(4), one wording since A146
 const A92_ABANDONED = 'You abandoned this match and can no longer act in it.'; // A92(4), one wording since A146
-const NO_RETURN = 'You left this match for another lobby and cannot return.'; // A68(4)
+const NO_RETURN = 'You abandoned this match and cannot return.'; // A68(4)
 
 /** Every table a lobby action can write, as one snapshot. */
 const LOBBY_TABLES = ['Lobby', 'LobbyMember', 'LobbyBan', 'LobbyPassword', 'LobbyMemberAccount', 'ChatMessage', 'MatchSession',

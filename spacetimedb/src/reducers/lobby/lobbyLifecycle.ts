@@ -290,7 +290,7 @@ export const join_lobby = spacetimedb.reducer(
             // reconnect too.
             // A68(4): an abandoned row (the player took another lobby) never returns.
             if (existingMember.abandonedAt !== undefined) {
-                throw new SenderError('You left this match for another lobby and cannot return.');
+                throw new SenderError('You abandoned this match and cannot return.');
             }
             // A68(1)(2): an away row (leftAt) returns here, the only path that clears leftAt.
             const isReturn = existingMember.leftAt !== undefined;
