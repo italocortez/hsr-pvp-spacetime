@@ -1467,3 +1467,19 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** user, 2026-11-10: "go with option A". A disqualified entry is permanent and no reducer removes it, so counting it would lock the organizer out of the setting for the rest of the tournament. S10m review F5 and the S10q diagnostic.
 - **Supersedes:** the wording "while guest enrolments exist" of A113(2), for Disqualified rows.
 - **Where implemented:** S10m (code, unchanged); the S10q diagnostic test is rewritten in S10x
+
+### A145 — The eight behaviours pinned by the S10q tests are accepted
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** the behaviours the S10q tests pin where earlier rows were silent stand as built:
+  1. A110: when the only owner of a picked character is deleted before the tournament completes, on a side of two or more, nobody is credited the played stat.
+  2. A110: a player who abandoned the match and owns the character is still credited.
+  3. A112: a guest that still has a second identity is not deleted at sign-in, so its tournament entry stays with the guest.
+  4. A113(4): such a guest seated in a live game is not refused the sign-in.
+  5. A113(1): the minimum rating is gated by the number alone. There is no separate on/off switch: an empty value and 0 both mean no minimum, are stored the same way (unset), and force nothing.
+  6. A115(4): rating rows written at the same instant list the higher id first.
+  7. A124: the scheduled identity clean-up deleting a guest who organizes a tournament does not cancel it.
+  8. A124: a guest organizer signing in to an existing account does not cancel it.
+  Items 3, 4, 7 and 8 need a state the module never creates (a guest with a second identity; a guest organizer); their tests stay as tripwires.
+- **Why:** user, 2026-11-10, on item 5: "if we are turning on and off a boolean to allow minimum raiting, then 0 is redudant. If the number itself is the only gate to allow minimum raiting or not, then its fine being 0. The others I accept".
+- **Where implemented:** no change (S10q tests)
