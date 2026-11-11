@@ -181,10 +181,10 @@ export function ensureLobbyMember(ctx: any, lobbyId: number, userId: number): an
 }
 
 // ─── A98: away and abandoned members cannot act ──────────────────────────────
-/** A98: the rejection for an away row (`leftAt`, A68(2)); join_lobby is the way back. */
-export const AWAY_MEMBER_TEXT = 'You are away from this lobby. Return to it before acting.';
-/** A98: the rejection for an abandoned row (`abandonedAt`, A68(4)); it never returns. */
-export const ABANDONED_MEMBER_TEXT = 'You left this match for another lobby and can no longer act in it.';
+/** A98 / A146: the rejection for an away row (`leftAt`, A68(2)); join_lobby is the way back. */
+export const AWAY_MEMBER_TEXT = 'You are away from this match. Return to it before acting.';
+/** A98 / A146: the rejection for an abandoned row (`abandonedAt`, A68(4)); it never returns. */
+export const ABANDONED_MEMBER_TEXT = 'You abandoned this match and can no longer act in it.';
 
 /**
  * A98: throws when the member row is abandoned (checked first: an abandoned row keeps its `leftAt`) or away.

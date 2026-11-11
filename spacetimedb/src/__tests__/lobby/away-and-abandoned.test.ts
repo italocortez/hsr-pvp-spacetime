@@ -34,10 +34,10 @@ import { parkedLobby, playRanked } from '../fixtures/ranked';
 
 // ─── Texts ───────────────────────────────────────────────────────────────────
 
-const AWAY = 'You are away from this lobby. Return to it before acting.'; // A98
-const ABANDONED = 'You left this match for another lobby and can no longer act in it.'; // A98
-const A92_AWAY = 'You are away from this match. Return to it first.'; // A92(4), kept by A98
-const A92_ABANDONED = 'You left this match for another lobby and cannot act on it.'; // A92(4), kept by A98
+const AWAY = 'You are away from this match. Return to it before acting.'; // A98, A146
+const ABANDONED = 'You abandoned this match and can no longer act in it.'; // A98, A146
+const A92_AWAY = 'You are away from this match. Return to it before acting.'; // A92(4), one wording since A146
+const A92_ABANDONED = 'You abandoned this match and can no longer act in it.'; // A92(4), one wording since A146
 const NO_RETURN = 'You left this match for another lobby and cannot return.'; // A68(4)
 
 /** Every table a lobby action can write, as one snapshot. */
@@ -382,7 +382,7 @@ describe('review F9 (A98): finalize_match_result by a referee whose row is away 
 });
 
 const NO_AUTHORITY_TEXT = 'You do not have authority to finalize this match result.';
-const AWAY_TEXT = 'You are away from this lobby. Return to it before acting.';
+const AWAY_TEXT = 'You are away from this match. Return to it before acting.';
 
 /** The lobby row of `userId`, re-written with `over` (LobbyMember is updated by delete + insert, as the module does). */
 function rewriteMember(test: Harness, lobbyId: number, userId: number, over: Record<string, unknown>) {

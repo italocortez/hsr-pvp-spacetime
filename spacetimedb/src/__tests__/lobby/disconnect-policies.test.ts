@@ -149,8 +149,8 @@ describe('A85: lifting a disconnect auto-pause', () => {
         expect(snap(session(s.test, s.lobbyId).timerState)).toBe(before);
         expect(isPaused(s)).toBe(true);
         expect(msg).toBe(state === 'abandoned'
-            ? 'You left this match for another lobby and can no longer act in it.'
-            : 'You are away from this lobby. Return to it before acting.');
+            ? 'You abandoned this match and can no longer act in it.'
+            : 'You are away from this match. Return to it before acting.');
         tx(s.test, s.a.r1, (ctx) => M.resume_draft(ctx, { lobbyId: s.lobbyId }));
         expect(isPaused(s)).toBe(false);
     });
@@ -175,8 +175,8 @@ const DEFERRED_ONLY = 'The Deferred disconnect policy is only available for tour
 const NOACTION_ONLY = 'The NoAction disconnect policy is only available for casual lobbies.';
 const FORFEIT_RANGE = 'disconnectForfeitSeconds must be between 30 and 600 (0 keeps the default of 60).';
 const START_ONLINE = 'All Blue and Red players must be online before starting.';
-const AWAY = 'You are away from this match. Return to it first.';
-const ABANDONED = 'You left this match for another lobby and cannot act on it.';
+const AWAY = 'You are away from this match. Return to it before acting.';
+const ABANDONED = 'You abandoned this match and can no longer act in it.';
 
 // ════════════════════════════════════════════════════════════════════════════
 // A91(1): defer_match needs a seated player past the grace or the live pool

@@ -37,7 +37,7 @@ import { rankedHook } from '../fixtures/ranked';
 
 const PAUSED = 'Nothing to undo right now.';
 const NOT_REFEREE = 'Only referees with undo permission can undo.';
-const AWAY = 'You are away from this lobby. Return to it before acting.'; // A98
+const AWAY = 'You are away from this match. Return to it before acting.'; // A98, A146
 const CAP = 'This game has reached the limit of 300 undo steps.';
 const NO_STEPS = 'No steps to undo.';
 const bid = (s: Lobby, side: Side, bidAmount: number) =>

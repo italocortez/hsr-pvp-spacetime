@@ -1,7 +1,7 @@
 import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
 import { getAuthenticatedUser } from '@module/helpers/identity/ensurePermissions';
-import { ensureLobbyMember, slotTeam, slotIsCoach, slotIsSpectator, memberHasLeft, isSeatedPlayer } from '@module/helpers/lobby/lobbyHelpers';
+import { ensureLobbyMember, slotTeam, slotIsCoach, slotIsSpectator, memberHasLeft, isSeatedPlayer, AWAY_MEMBER_TEXT, ABANDONED_MEMBER_TEXT } from '@module/helpers/lobby/lobbyHelpers';
 import { buildConcedeSummary, isForfeitEligible, isPastDisconnectThreshold, isThirdPartyReferee } from '@module/helpers/lobby/disconnectHelpers';
 import { runFinalization } from '@module/helpers/results/finalizationHelpers';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
@@ -11,14 +11,14 @@ import { handOffToBracket } from '@module/helpers/tournament/tournamentResults';
 /**
  * A92(4): a seated player whose row is away (leftAt) cannot concede, claim a forfeit or defer until they return
  * through join_lobby; an abandoned row (abandonedAt, A68(4)) never can. A98 (S10h): called right after the membership
- * check, so it covers every caller (a referee or coach row included); the A92(4) texts are kept for these three reducers.
+ * check, so it covers every caller (a referee or coach row included); A146 (S10y): the texts are the shared A98 constants.
  */
 function ensureSeatPresent(member: any): void {
     if (member.abandonedAt !== undefined) {
-        throw new SenderError('You left this match for another lobby and cannot act on it.');
+        throw new SenderError(ABANDONED_MEMBER_TEXT);
     }
     if (member.leftAt !== undefined) {
-        throw new SenderError('You are away from this match. Return to it first.');
+        throw new SenderError(AWAY_MEMBER_TEXT);
     }
 }
 

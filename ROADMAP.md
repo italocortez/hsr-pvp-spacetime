@@ -56,6 +56,7 @@ Each executed step writes its log to `docs/log/<date>-<step>.md` (goal, decision
 | S10v | Tournament stand-ins: who may stand in, manual seat moves, the start gates, the lock lifecycle, a staff view, lobby creation (A135 to A138, A140); the audited stand-in bugs; A139 and A141 recorded | S10u | done 2026-11-10 (`docs/log/2026-11-10-s10v.md`) |
 | S10w | A game account in use by a live lobby cannot be edited by anyone; Admin cost rows frozen while a game on the set is live (A142) | S10v | done 2026-11-10 (`docs/log/2026-11-10-s10w.md`) |
 | T-REORG | Module in-memory tests regrouped into subject folders under `spacetimedb/src/__tests__/` (test bodies unchanged; 1901 titles identical before and after); mapping in `docs/log/2026-11-10-t-reorg.md`. T-REORG2: duplicate helpers unified (14 fixture files), same-subject pairs merged (93 test files) | S10x | done 2026-11-10 |
+| S10y | One wording for the away and abandoned refusals; "abandoned" when the player left the match (A146) | T-REORG | done 2026-11-10 |
 | M3 | Vite shell: tokens, base and media CSS, fonts, standby/404 | S10 | pending |
 | M4 | Router and guards (TanStack Router, typed links) | M3 | pending |
 | M9 | Test strategy wiring and CI workflow | M4 | pending |

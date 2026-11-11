@@ -1483,3 +1483,9 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   Items 3, 4, 7 and 8 need a state the module never creates (a guest with a second identity; a guest organizer); their tests stay as tripwires.
 - **Why:** user, 2026-11-10, on item 5: "if we are turning on and off a boolean to allow minimum raiting, then 0 is redudant. If the number itself is the only gate to allow minimum raiting or not, then its fine being 0. The others I accept".
 - **Where implemented:** no change (S10q tests)
+
+### A146 — One wording for the away and abandoned refusals; "abandoned" when the player left the match
+
+- **Decision:** a member who left the match for another lobby (membership abandoned) is refused with "You abandoned this match and can no longer act in it." A member who is only away (disconnected or stepped out, can still return) is refused with "You are away from this match. Return to it before acting." Every reducer uses these two texts; the separate wordings in concede / defer are removed. The away wording is the orchestrator's choice, shown to the user before the step.
+- **Why:** user, 2026-11-10, after the two wordings were reported: "would prefer the word abandoned if they actually left the match".
+- **Where implemented:** S10y

@@ -477,8 +477,8 @@ Membership lifecycle after A68 (details in the reducer flows above):
   lobby is cleared by hand (A91(4), no code).
 - **Away callers (A92(4)).** `concede_match`, `claim_forfeit`, `defer_match`: after the spectator / coach guards
   (the exclusive spectator referee is never away, `isThirdPartyReferee` skips such rows) `ensureSeatPresent` rejects an
-  abandoned row ("You left this match for another lobby and cannot act on it.") and an away row ("You are away from
-  this match. Return to it first.").
+  abandoned row (`ABANDONED_MEMBER_TEXT`) and an away row (`AWAY_MEMBER_TEXT`); A146 (S10y): the shared A98 texts,
+  see "A98: away and abandoned members cannot act".
 - **One lift of an auto-pause (A92(7), G10).** `liftAutoPauseOnReturn(ctx, lobby, member, actorId)`
   (`disconnectHelpers.ts`) holds the A85(1) test and the clock write (`isPaused = false`, `turnStartAt = now`;
   `accumulatedPauseMs` untouched, F10 later). Callers: the `join_lobby` reconnect branch and `client_connected`
@@ -566,8 +566,8 @@ Membership lifecycle after A68 (details in the reducer flows above):
   `ensureMemberPresent(member)` (abandoned first, since an abandoned row keeps its `leftAt`),
   `ensurePresentMember(ctx, lobbyId, userId)` (`ensureLobbyMember` + presence) and
   `ensurePresentIfMember(ctx, lobbyId, userId)` (the caller's row, when they hold one, must be present; for reducers a
-  non-member may call). Texts: away "You are away from this lobby. Return to it before acting." (`AWAY_MEMBER_TEXT`),
-  abandoned "You left this match for another lobby and can no longer act in it." (`ABANDONED_MEMBER_TEXT`). An away
+  non-member may call). Texts (A146): away "You are away from this match. Return to it before acting." (`AWAY_MEMBER_TEXT`),
+  abandoned "You abandoned this match and can no longer act in it." (`ABANDONED_MEMBER_TEXT`). An away
   member regains everything through `join_lobby`; an abandoned one never does. Moderator / Admin powers that do not
   depend on membership are unaffected: `ensureHostOrAbove` checks the host's row only when the caller is not
   Moderator+; `ensureRefereeOrAbove` checks the referee's row only when the caller is not Moderator+; the result staff
