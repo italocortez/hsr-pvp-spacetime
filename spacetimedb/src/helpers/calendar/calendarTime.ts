@@ -69,6 +69,18 @@ export function charCount(text: string): number {
     return n;
 }
 
+/**
+ * S10ad (A160, title): one character that is not whitespace or a separator (`\s`, Z*), a control (Cc), a format
+ * character (Cf: zero-width space and joiners, direction overrides, BOM), a lone surrogate (Cs) or another
+ * default-ignorable code point (variation selectors, Hangul fillers, soft hyphen).
+ */
+const VISIBLE_CHAR = /[^\s\p{Z}\p{Cc}\p{Cf}\p{Cs}\p{Default_Ignorable_Code_Point}]/u;
+
+/** S10ad: whether `text` holds at least one visible character. */
+export function hasVisibleChar(text: string): boolean {
+    return VISIBLE_CHAR.test(text);
+}
+
 /** Half-open intervals [aStart, aEnd) and [bStart, bEnd) overlap; touching intervals do not. */
 export function intervalsOverlap(aStart: bigint, aEnd: bigint, bStart: bigint, bEnd: bigint): boolean {
     return aStart < bEnd && bStart < aEnd;

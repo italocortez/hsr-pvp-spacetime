@@ -804,6 +804,17 @@ calendar reducers stamp the audit columns with the caller; the deletion paths ch
 row is already gone is skipped. Readers: `view_tournament_matches_for_me.scheduledAt` (unchanged column) and the public
 `bracket_match` table. Details in [../calendar/architecture.md](../calendar/architecture.md) "Phase S10ac execution".
 
+## Phase S10ad execution (DECISIONS.md A160(6), A161(3))
+
+Retention keeps the match's time: when the lazy calendar clean-up or the `run_identity_gc` sweep removes a match event
+90 days after its end, `BracketMatch.scheduledAt` stays (`deleteCalendarEventWithInvites(..., { keepSchedule: true })`).
+A person's delete or move of the event and a user deletion clear or move it while the event exists. The bracket
+cascades (staff resolve of a Ready match, `rollback_bracket_match`, `cancel_tournament`, a disqualification that settles
+a Ready match, bracket regeneration) go through `deleteCalendarEventForBracketMatch`, which clears a set `scheduledAt`
+whether or not an event is still there (A161(3), review F1): a match rolled back after retention is Ready again with
+no time. A match without a time is not written. Details in [../calendar/architecture.md](../calendar/architecture.md)
+"Phase S10ad execution".
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -855,10 +866,12 @@ row is already gone is skipped. Readers: `view_tournament_matches_for_me.schedul
 | `start_draft` refuses a tournament lobby with `requireOwnership` while a seated Blue / Red player has no selected match account; known limitations N2 to N4 documented | Phase S10v execution (S10v review 3, N1-N5) | 2026-11-10 |
 | `create_tournament_lobby`: a stand-in approval no longer allows creating the match lobby (members of the two teams and `bracket` staff, Moderator+ as before; a stand-in with such a role creates through it, seated as a Spectator referee) | Phase S10v execution (DECISIONS.md A140) | 2026-11-10 |
 | `BracketMatch.scheduledAt` is written from the match's calendar event (create, start change) and cleared when the event is deleted | Phase S10ac execution (DECISIONS.md A157(12)) | 2026-11-11 |
+| Retention of a match event (lazy clean-up, sweep) keeps `BracketMatch.scheduledAt` | Phase S10ad execution (DECISIONS.md A160(6)) | 2026-11-11 |
+| Fix pass: the bracket cascades clear a set `scheduledAt` also when retention already removed the event | Phase S10ad execution (DECISIONS.md A161(3)) | 2026-11-11 |
 
 ---
 
-*Last updated: 2026-11-11 (S10ac)*
+*Last updated: 2026-11-11 (S10ad)*
 *Feature owner: Phase 04 / Phase 06 / Phase 08 / Phase 10.1 / Phase 10.4 / Phase 12.3*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

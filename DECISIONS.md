@@ -1579,3 +1579,28 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Decision:** the `uat` skill folder and section 10 of `CLAUDE.md` are removed. Kept: the test and contract rules of `CLAUDE.md` sections 6 and 7; the contract template, now `docs/contract-template.md`; the post-publish, harness-limit and guided walk-through notes, now in `test/README.md`.
 - **Why:** user, 2026-11-11: "i feel like we have deviated from that workflow" and "retire what we dont need from uat skill and its sections on claude.md (what we won't use)". The manual session was not used in the migration; in-memory tests and independent reviews replaced it.
 - **Where implemented:** CLAUDE.md, `test/README.md`, `docs/contract-template.md`
+
+### A160 — Calendar: rulings on the S10ac review
+
+- **Decision:** on the rule questions of `notes/audit-2026-11-09/s10ac-review.md`:
+  1. **Weekly cap (Q1).** 10 Available slots and 10 Blocked slots per user per UTC week, counted separately. A slot that has ended still counts in its week, so the cap bounds the rows. Replaces the shared cap of A157(2).
+  2. **Leaving a match event (Q2).** Unchanged: a team member or stand-in keeps seeing their match event.
+  3. **Blocked slot onto an event (Q3).** Creating, moving or switching a slot to Blocked is refused when it overlaps an event the user organizes that has not ended; the same rule in both directions as A157(1). Tournament match events stay exempt.
+  4. **Guests in match events (Q4).** Unchanged: guests are invited automatically and cannot answer. New: once an event has ended, its invites that are still Pending are removed, for every invitee, so no dead rows stay.
+  5. **Attendee list (Q5).** The full list of an event's invites goes to an invitee only while the event has not ended.
+  6. **Bracket time (Q6).** When retention (the lazy clean-up or the weekly sweep) removes an old match event, the bracket match keeps its `scheduledAt`. A deletion or move by a person, and a cascade from the bracket, still clear or move it.
+  7. **Targets (Q7).** An organizer cannot invite themselves; the SYSTEM user cannot be invited or saved.
+  8. **Week (Q8).** The week stays UTC.
+  Also: a title must contain at least one visible character.
+- **Why:** user, 2026-11-11: "everything else is good"; on Q1 "keep 10 slots for available and 10 slots for blocked"; on Q4 "we can keep it as is, is there a way to clear that pending invite anyway so we dont keep dead rows? like if the event time has ended, then pending invites should be cleared"; on Q6 "yeah we can leave it" (the orchestrator's recommendation to leave the time in the bracket).
+- **Where implemented:** S10ad
+
+### A161 — Calendar: the attendee list loads per opened event; pending invites go 7 days after the end
+
+- **Decision:** on the S10ad review (`notes/audit-2026-11-09/s10ad-review.md`):
+  1. **Attendee list.** A view cannot read the clock, so A160(5) is not built. Instead a view with an argument returns the invites of one event, and the page subscribes it only for the event that is open. Who may read it follows A157(5): the event's organizer; an invitee of a personal event; for a match event every invitee unless the tournament is anonymous, then only holders of the bracket permission. Holders of the bracket permission may read a match event's list also without an invite (orchestrator's addition: they may edit it; review L8). `view_my_calendar_invites` no longer sends an invitee the other invitees' rows: an invitee gets their own row, the organizer gets all rows of their events. Consequence accepted by the user: tiles of events one is invited to show the organizer's avatar only. Replaces the delivery of A157(5) and A160(5).
+  2. **Pending invites** of an ended event are removed 7 days after its end, not at the end, so an event or match moved to a later time within a week keeps everyone. Replaces the timing of A160(4).
+  3. **Bracket time.** A bracket cascade (staff resolve, rollback, cancel, disqualification, regeneration) clears a match's `scheduledAt` whether or not its calendar event still exists (review F1; A160(6) already said a cascade clears it).
+  4. Accepted as is: moving a running event's end resets the answers (A157(4)), which are then removed with the rule above; received invites have no cap per user.
+- **Why:** user, 2026-11-11. On loading the attendee list on the page side: "yeah lets try C". After the review showed that a filtered subscription on the existing view is unproven on this version and that a small view with an argument gives the same result, and on the 7 days: "i agree wit hyour recomendations here".
+- **Where implemented:** S10ad

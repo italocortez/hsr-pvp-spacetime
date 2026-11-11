@@ -1,6 +1,6 @@
 # Calendar & Scheduling -- Architecture
 
-Last updated: 2026-11-11 (S10ac)
+Last updated: 2026-11-11 (S10ad)
 
 ## Overview
 
@@ -60,15 +60,19 @@ the caller's lazy clean-up (Phase S10s execution, below). The numbered steps lis
 4. Length at most 24 h (`'An availability slot can last at most 24 hours.'`)
 5. Start not in the past (`"You can't schedule something in the past."`)
 6. Start within 6 months from now (D-28, `'Availability slots cannot be scheduled more than 6 months in advance.'`)
-7. Weekly cap: fewer than 10 of the caller's slots that have not ended (`endAt > now`) start in the UTC week (Monday
-   00:00 UTC) of the new start (`'You can set at most 10 availability slots per week.'`)
-8. Insert `AvailabilitySlot`
+7. Weekly cap (S10ad, A160(1)): fewer than 10 of the caller's slots **of the same kind** start in the UTC week (Monday
+   00:00 UTC) of the new start, ended slots included (`'You can set at most 10 available slots per week.'` /
+   `'You can set at most 10 blocked slots per week.'`)
+8. S10ad (A160(3)): a Blocked slot may not overlap a personal event the caller organizes whose `endAt > now`
+   (`'This blocked slot overlaps one of your events.'`; half-open intervals, touching passes; match events exempt)
+9. Insert `AvailabilitySlot`
 
 ### update_availability_slot(slotId, startAt, endAt, kind)
 1. Reject guests; find slot (`'Availability slot not found.'`); owner only (`'Not your availability slot.'`)
-2. Steps 2-7 of create, with two differences: the past check applies only when the start moves (a started slot keeps
-   its start and may change its end or kind), and the weekly cap does not count the slot itself (its new week is
-   checked)
+2. Steps 2-8 of create, with three differences: the past check applies only when the start moves (a started slot keeps
+   its start and may change its end or kind); the weekly cap does not count the slot itself (its new week and new kind
+   are checked); the Blocked-overlap check runs only when the result is Blocked and the start or end moved or the kind
+   switched from Available (S10ad, A160(3))
 3. `AvailabilitySlot.id.update()` (same id)
 
 ### delete_availability_slot(slotId)
@@ -79,8 +83,9 @@ the caller's lazy clean-up (Phase S10s execution, below). The numbered steps lis
 ### save_calendar(targetUserId)
 1. Reject guests (`'Guests cannot save calendars.'`)
 2. Not oneself (`'Cannot save your own calendar.'`)
-3. Target exists (`'Target user not found.'`); S10ac (A157(7)): not a guest (`"A guest's calendar cannot be saved."`),
-   not pending deletion (`"This user's account is being deleted; their calendar cannot be saved."`)
+3. Target exists (`'Target user not found.'`); S10ad (A160(7)): not the SYSTEM user (`"The SYSTEM user's calendar
+   cannot be saved."`); S10ac (A157(7)): not a guest (`"A guest's calendar cannot be saved."`), not pending deletion
+   (`"This user's account is being deleted; their calendar cannot be saved."`)
 4. Not already saved (`'Already saved.'`)
 5. Cap: fewer than 5 saved calendars (D-15, `'Maximum 5 saved calendars per user.'`)
 6. Insert `SavedCalendar` row with `isVisible=true`
@@ -98,7 +103,9 @@ the caller's lazy clean-up (Phase S10s execution, below). The numbered steps lis
 ### create_calendar_event(title, description, startAt, endAt, bracketMatchId, inviteeUserIds)
 1. Reject guests (`'Guests cannot create calendar events.'`)
 2. Texts (`eventTexts`): title trimmed, 1..100 characters; description trimmed, at most 1000 characters; counted in
-   code points (A157(11))
+   code points (A157(11)). S10ad (A160): the title needs at least one visible character (`hasVisibleChar`: not
+   whitespace or a separator, a control, a format character such as a zero-width space or a direction override, a
+   lone surrogate or another default-ignorable code point); otherwise `'Event title must not be empty.'`
 3. `parseInterval` (`'Invalid start time.'` / `'Invalid end time.'`, `'Start time must be before end time.'`); length
    at most 7 days (`'An event can last at most 7 days.'`); start not in the past (`"You can't schedule something in
    the past."`, A157(9); since the start is not past, neither is the end: A79(3)'s end check is implied); start at
@@ -115,8 +122,10 @@ the caller's lazy clean-up (Phase S10s execution, below). The numbered steps lis
    4294967295, and any other token (letters, `3abc`, `3.9`, `1e3`, `-3`, `0`, an empty token such as a trailing comma,
    an id above u32 that would wrap to a real user) refuses the whole call with `'Invalid invitee list.'`;
    then de-duplicated, minus the auto-invitees; members + manual <= 9
-   (`'Maximum 9 invitees per event.'`, D-04); stand-ins fill the room left (S10v review F4); each manual invitee exists
-   (`'User <id> not found.'`), is not a guest (`'Guests cannot be invited to calendar events.'`) and not pending
+   (`'Maximum 9 invitees per event.'`, D-04); stand-ins fill the room left (S10v review F4); each manual invitee is
+   not the organizer (S10ad, A160(7): `'You cannot invite yourself to your own event.'`; an Admin or staff caller adding
+   the organizer gets `'The organizer cannot be invited to their own event.'`), exists (`'User <id> not found.'`), is
+   not the SYSTEM user (`'The SYSTEM user cannot be invited to calendar events.'`, A160(7)), is not a guest (`'Guests cannot be invited to calendar events.'`) and not pending
    deletion (`"This user's account is being deleted; they cannot be invited."`) (A157(7)); server-written invites
    (members, stand-ins) are not checked
 7. Insert `CalendarEvent`, then the Pending invites (auto first, then manual)
@@ -149,7 +158,8 @@ the caller's lazy clean-up (Phase S10s execution, below). The numbered steps lis
 
 ### invite_to_event(eventId, inviteeUserId)
 1. Find event; `ensureCanManageEvent`
-2. Invitee exists (`'Invitee user not found.'`); not a guest / pending deletion (A157(7) texts above)
+2. Not the organizer (A160(7) texts above); invitee exists (`'Invitee user not found.'`); not the SYSTEM user, a
+   guest or pending deletion (A160(7), A157(7) texts above)
 3. Not already invited (`'User is already invited to this event.'`); fewer than 9 invites (D-04)
 4. Insert a Pending `CalendarEventInvite`
 
@@ -189,7 +199,10 @@ All cascades run in the same transaction as the triggering reducer:
 
 Cascade helper functions live in `spacetimedb/src/helpers/calendar/calendarCascade.ts`. Every event deletion goes
 through `deleteCalendarEventWithInvites`, which also clears the match's `BracketMatch.scheduledAt` (Phase S10ac
-execution, A157(12)).
+execution, A157(12)), except retention: the lazy clean-up and the sweep pass `{ keepSchedule: true }`, so the match
+keeps its time (Phase S10ad execution, A160(6)). The bracket cascades (`deleteCalendarEventForBracketMatch`, and so
+`deleteCalendarEventsForTournament`) clear a set `scheduledAt` also when no event is left (Phase S10ad execution,
+A161(3)).
 
 ## Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48)
 
@@ -214,7 +227,8 @@ invitees of an event (an anonymous tournament's match event would otherwise list
 **Superseded by Phase S10ac execution (A157(1), (3), (5), (6), (12)):** slot rows carry `kind` instead of the
 recurrence columns; invitees read the attendee list (not of an anonymous tournament's match event, staff excepted);
 path (d) sends busy blocks; avatars next to labels ([../views/architecture.md](../views/architecture.md) "Phase S10ac
-execution").
+execution"). **Superseded by Phase S10ad execution (A161(1)):** `view_my_calendar_invites` again sends an invitee
+their own row only; the attendee list comes from `view_event_attendees(eventId)` for the opened event.
 
 ## Phase S10f execution (calendar audit #2, #3, #5; LOW #11, #13)
 
@@ -308,7 +322,8 @@ The backend follows the calendar mockup (`design/mockups/calendar.html`); review
 - **Weekly cap (A157(2)).** At most 10 slots (both kinds) per user per UTC week (Monday 00:00 UTC, `utcWeekStart`),
   counted by start; slots with `endAt <= now` do not count; update counts the new week without the slot itself. The old
   total cap (10 rows) and the 7-day count of ended slots are gone (a slot ended less than a week ago still exists until
-  the clean-up but no longer counts).
+  the clean-up but no longer counts). **Superseded by Phase S10ad execution (A160(1)):** one cap per kind, ended slots
+  count.
 - **Recurrence removed (A157(3)).** Columns `isRecurring`, `recurrenceRule`, `expiresAt`; reducer arguments
   `isRecurring`, `recurrenceType`, `interval`, `dayOfWeek`, `dayOfMonth`, `endDate`; the `RecurrenceRule` struct, the
   `RecurrenceType` enum and `hasEndDate`; the view columns. A slot is one dated interval; the clean-up reads `endAt`
@@ -329,7 +344,8 @@ The backend follows the calendar mockup (`design/mockups/calendar.html`); review
 - **Sweep (A157(10), review B4).** The existing weekly scheduled job `run_identity_gc` (`reducers/identity/
   identityGc.ts`) calls `sweepExpiredCalendarRows` (`helpers/calendar/calendarCleanup.ts`) after its identity pass:
   the same retention as the lazy clean-up, for every owner (slots ended more than 7 days ago, events ended more than
-  90 days ago with their invites and their match's `scheduledAt`). Batch: at most 500 slots and 500 events per run,
+  90 days ago with their invites and their match's `scheduledAt`; superseded by Phase S10ad execution (A160(6)):
+  retention keeps the time). Batch: at most 500 slots and 500 events per run,
   oldest `endAt` first (ties by id). Both tables are scanned once per run (`iter()`: there is no `endAt` index; a
   weekly job). When rows are left over the batch the next run comes after one hour instead of 7 days (the job's
   existing backlog interval). A `GcResult` row with `gcType: 'calendar'`, `details: {slots, events}` is written only
@@ -339,8 +355,92 @@ The backend follows the calendar mockup (`design/mockups/calendar.html`); review
   ones keep their answer unless the time changed). `invite_to_event` / `remove_invite` are unchanged otherwise.
 - **Bracket schedule (A157(12)).** `BracketMatch.scheduledAt` = the match event's start (create, a start change),
   cleared by every deletion of the event ([../tournament/architecture.md](../tournament/architecture.md) "Phase S10ac
-  execution").
+  execution"). **Superseded in part by Phase S10ad execution (A160(6)):** retention keeps it.
 - **Avatars (A157(12)).** The event and invite views carry the avatar character name next to each label.
+
+## Phase S10ad execution (DECISIONS.md A160)
+
+Rulings on the S10ac review (`notes/audit-2026-11-09/s10ac-review.md`, M2, M3, L2, L5, L6, L9, L10). Reducer steps are
+in "Reducer Flows" above. "Ended" means `endAt <= now` for slots and events alike.
+
+- **Weekly cap per kind (A160(1), review M2).** `checkSlotTimes` counts the user's slots **of the same kind** whose
+  start falls in the UTC week of the new start, ended or not, the slot under update excluded: 10 Available and 10
+  Blocked per week. Texts name the kind. Interplay with retention: an ended slot is deleted 7 days after its end
+  (lazy clean-up or sweep). A slot that starts in week W ends after its start, so it is deleted no earlier than 7
+  days after its start, when W is over; and no new slot can start in a past week. So a week's
+  count never drops through retention while slots can still be placed in it: only `delete_availability_slot` frees a
+  place. Bound: at most 20 slot rows per user per week; slots start at most 6 months (about 26 weeks) ahead and are
+  kept 7 days past their end, so at most about 28 weeks x 20 = 560 slot rows per user. The S10ac probe (600
+  momentary slots accepted) now stores 10.
+- **Blocked slot onto an event (A160(3), review L2).** `ensureBlockedSlotFree` (`calendarAvailability.ts`):
+  `create_availability_slot` and `update_availability_slot` refuse a Blocked slot (new; moved; or switched from
+  Available) that overlaps a personal event the caller organizes (`CalendarEvent.organizer_id`) with `endAt > now`
+  (`'This blocked slot overlaps one of your events.'`). Half-open intervals: touching passes. Match events are exempt
+  in both directions. Events one is only invited to, and other users' events, do not block. With both directions
+  checked, the S10ac case "a time edit that only shortens an event a Blocked slot overlaps is refused" no longer
+  arises from new data (a slot overlapping a not-ended own personal event cannot be stored; an ended event can only
+  be edited in time by moving its end to now or later, which is not a pure shortening and is checked as before). The
+  event-side check is unchanged; rows stored before S10ad can still hit it.
+- **Pending invites 7 days after the end (A160(4), Q4; timing by A161(2)).** No scheduled reducer per event; the
+  existing clean-ups remove a `Pending` invite once its event ended **more than 7 days ago** (`endAt + 7 days < now`;
+  kept at exactly 7 days), for every invitee (guests and server-written invites included), so an event or match moved
+  to a later time within a week of its end keeps every invitee (review F2). Answered invites (Accepted, Declined,
+  Tentative) stay until the event's own 90-day retention.
+  - Lazy clean-up (`runCalendarCleanup`, every calendar reducer): `cleanupOldEvents` deletes the Pending invites of
+    the caller's events ended more than 7 days ago (`CalendarEvent.organizer_id`, then `CalendarEventInvite.event_id`);
+    `cleanupEndedPendingInvites` deletes the caller's own Pending invites whose event ended more than 7 days ago
+    (`CalendarEventInvite.invitee_user_id`, `CalendarEvent.id`). The call's own target event is spared, as before
+    (so an invitee can still answer, and an organizer still edit, such an event's invites in that call). Bound: the
+    caller's retained events (100) with at most 9 invites each, plus one event lookup per invite the caller holds.
+  - Sweep (`sweepExpiredCalendarRows`, `run_identity_gc`): after the retention batch, the Pending invites of the
+    stored events that ended more than 7 days ago, oldest end first, at most **500 invite rows per run**
+    (`CALENDAR_SWEEP_BATCH`), read through `CalendarEventInvite.event_id` per such event (the `CalendarEvent` scan is
+    the one already made). More left over brings the next run forward to one hour. The calendar `GcResult` row counts
+    them in `itemsDeleted` and adds `pendingInvites` to `details` only when some were deleted (`{slots, events}`
+    otherwise, as before).
+  - Worst case: a Pending invite is gone at the latest at the first `run_identity_gc` run after end + 7 days, i.e.
+    **at most end + 7 days + the sweep interval (7 days) = 14 days after the end** while each run's backlog is at most
+    500 rows; a larger backlog adds one hour per further 500 rows. It goes sooner on the organizer's or that invitee's
+    next calendar call after end + 7 days. The guarantee assumes the job is running (seeded by bootstrap,
+    `seed_identity_gc_job`).
+  - Not changed: `invite_to_event` and the invitee set of `update_calendar_event` still accept new invites on an
+    ended event; those are Pending and follow the same rule. A reschedule still resets the answers (A157(4)); once
+    the moved event has ended, those Pending invites go 7 days later (A161(4), accepted).
+- **Attendee list per opened event (A161(1); replaces the delivery of A157(5) and A160(5)).** A view cannot read the
+  time (`ViewCtx` is `{ sender, db, env, from }`, SDK 2.14.1 `dist/server/views.d.ts:15-25`), so the A160(5) cut-off at
+  the end is not built. Instead:
+  - `view_my_calendar_invites` sends an invitee their own row only (the S10ac path that sent an invitee every invite
+    of the event is removed); the organizer still gets every invite of their events.
+  - `view_event_attendees(eventId)` (new, a view with an argument) returns the invites of one event: inviteeUserId,
+    inviteeLabel, inviteeAvatarCharacterName?, inviteStatus, respondedAt?. Readers: the event's organizer; an invitee
+    of a personal event (any answer); for a match event every invitee unless the tournament is anonymous
+    (`Tournament.isAnonymousDefault`), then nobody but holders of the `bracket` permission; a holder of the `bracket`
+    permission of the match's tournament (Moderator+, the tournament organizer, an assistant with `canManageBracket`)
+    also without an invite. Anyone else, an unknown id or a deleted event: no rows, no error. Full rule and sizes in
+    [../views/architecture.md](../views/architecture.md) "Phase S10ad execution".
+  - **Calendar page:** subscribe `view_my_calendar_invites` always (with the other calendar views); subscribe
+    `SELECT * FROM view_event_attendees(<id>)` only for the event that is open and drop it when the event closes (one
+    argument set at a time: unsubscribe the old id before subscribing the next). Tiles of events one is invited to
+    show the organizer's avatar only (`view_my_calendar_events` carries it); the attendee avatars appear in the open
+    event (A161(1), accepted by the user).
+- **Bracket time kept by retention (A160(6), review L6).** `deleteCalendarEventWithInvites(ctx, id, { keepSchedule })`:
+  the lazy clean-up and the sweep pass `keepSchedule: true`, so `BracketMatch.scheduledAt` stays when a match event
+  goes 90 days after its end. `delete_calendar_event`, a move and a user's deletion (`deleteAllCalendarDataForUser`)
+  behave as in S10ac, and clear or move the time only while the event exists.
+- **Bracket cascades clear the time (A161(3), review F1).** `deleteCalendarEventForBracketMatch` (staff resolve of a
+  Ready match, rollback, `cancel_tournament` through `deleteCalendarEventsForTournament`, a disqualification that
+  settles a Ready match, bracket regeneration through `deleteBracket`) clears `BracketMatch.scheduledAt` when it is set,
+  whether or not an event was found, so a time kept by retention does not outlive a cascade (a rolled-back match is
+  Ready again with no time). A match without a time is not written. Regeneration deletes the match rows anyway.
+- **Targets (A160(7), review L5).** `ensureNotOrganizer` (`calendarEvents.ts`): the organizer cannot be a manual
+  invitee of `create_calendar_event`, an added invitee of `update_calendar_event` or the target of `invite_to_event`
+  (`'You cannot invite yourself to your own event.'`; an Admin or staff caller on someone else's event gets `'The
+  organizer cannot be invited to their own event.'`). `ensureCalendarTarget` refuses the SYSTEM user (found by its
+  unique username `'SYSTEM'`) for saving and inviting. Server-written invites (a staff organizer who is also a team
+  member) are not checked; a self-invite stored before S10ad stays while it is listed in the set.
+- **Title (A160, review L9).** `hasVisibleChar` (`calendarTime.ts`, regex `[^\s\p{Z}\p{Cc}\p{Cf}\p{Cs}
+  \p{Default_Ignorable_Code_Point}]` with the `u` flag); a title without one gets the empty-title text. The
+  description is not checked.
 
 ## Phase History
 
@@ -374,10 +474,12 @@ The backend follows the calendar mockup (`design/mockups/calendar.html`); review
 | A tournament match event invites the match's approved stand-ins at creation; `approve_stand_in` invites a stand-in to an existing event (within the 9-invite cap), every removal of the approval deletes that invite; `view_my_calendar_events` path (c') for the stand-in's matches | Phase S10v execution (DECISIONS.md A135; audit SI16) | 2026-11-10 |
 | Fix pass: stand-ins are invited at event creation only while room is left under the cap (members and manual invitees first), so approvals never refuse the creation | Phase S10v execution (S10v review F4) | 2026-11-10 |
 | The backend follows the calendar mockup: slot kind Available / Blocked and the blocked-overlap rule for personal events; 10 slots per UTC week; recurrence removed; reschedule resets answers; attendee list for invitees; busy blocks for savers; guests and pending-deletion users refused as targets; invitees may leave; past starts refused; weekly sweep in `run_identity_gc`; one time validator with length and lead bounds; avatars in rows; one-call invitee edit; `BracketMatch.scheduledAt` written. Doc fixes: `toggle_calendar_visibility` sets `isVisible`; the composite keys are not engine-enforced; check orders and `save_calendar` checks listed | Phase S10ac execution (DECISIONS.md A157) | 2026-11-11 |
+| Rulings on the S10ac review: 10 Available + 10 Blocked slots per UTC week, ended slots counted; a Blocked slot may not overlap an own personal event that has not ended; Pending invites of ended events removed by the lazy clean-up and the sweep (500 per run); retention keeps `BracketMatch.scheduledAt`; organizer and SYSTEM refused as targets; titles need a visible character. Attendee-list cut-off not built (views have no clock) | Phase S10ad execution (DECISIONS.md A160) | 2026-11-11 |
+| Fix pass: attendee list per opened event (`view_event_attendees(eventId)`; `view_my_calendar_invites` sends an invitee their own row only); Pending invites removed 7 days after the end (worst case end + 14 days); bracket cascades clear `scheduledAt` also after retention | Phase S10ad execution (DECISIONS.md A161) | 2026-11-11 |
 
 ---
 
-*Last updated: 2026-11-11 (S10ac)*
+*Last updated: 2026-11-11 (S10ad)*
 *Feature owner: Phase 08*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

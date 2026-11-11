@@ -114,9 +114,11 @@ Views 10-20 apply anonymous enforcement (D-92): when `lobby.isAnonymousPlayers=t
 #### Calendar views
 - **Auth:** Authenticated (per-sender)
 - **Views:** `view_my_calendar_events`, `view_my_calendar_invites`, `view_my_availability`,
-  `view_saved_calendar_availability`, `view_my_saved_calendars` (`views/calendarViews.ts`). Events and invites are two
+  `view_saved_calendar_availability`, `view_my_saved_calendars`, `view_event_attendees(eventId)` (S10ad)
+  (`views/calendarViews.ts`). Events and invites are two
   separate views; the saved players' slots are `view_saved_calendar_availability` (no `view_saved_calendar_slots`
-  exists). Rows and paths: "Phase S9b execution" below, as changed by "Phase S10ac execution".
+  exists). Rows and paths: "Phase S9b execution" below, as changed by "Phase S10ac execution" and "Phase S10ad
+  execution".
 
 #### view_admin_ban_records
 - **Auth:** Admin only
@@ -413,7 +415,8 @@ a deleted user gets the archived label and no avatar). Still index-only.
   tournament's `isAnonymousDefault` is false, or the caller holds the `bracket` permission there
   (`hasTournamentPermission`: Moderator+, the tournament organizer, a `canManageBracket` assistant); a match event
   whose bracket match or tournament is gone: own row only. Extra indexes read: `BracketMatch.id`, `Tournament.id`,
-  `TournamentAssistant.by_tournament_and_user`, `User.id`. The organizer path (b) is unchanged.
+  `TournamentAssistant.by_tournament_and_user`, `User.id`. The organizer path (b) is unchanged. **Path (c) superseded
+  by Phase S10ad execution (A161(1)):** removed; the list moved to `view_event_attendees(eventId)`.
 - **`view_my_availability`** (`MyAvailabilityRow`): `id`, `startAt`, `endAt`, `kind` (`SlotKind`); `isRecurring`,
   `recurrenceRule`, `expiresAt` removed (A157(1), A157(3)).
 - **`view_saved_calendar_availability`** (`SavedCalendarAvailabilityRow`): `id`, `userId`, `userLabel`, `startAt`,
@@ -427,6 +430,51 @@ CJK per event, with the caps). An invite row gains two avatars (about 20 to 40 B
 for invitees only: up to 8 more rows per personal event the caller is invited to (9 invitees at most), the same for a
 match event of a non-anonymous tournament; the organizer's own rows are unchanged; saved and outsider readers get no
 invite rows. The event and slot views keep their row counts.
+
+## Phase S10ad execution (DECISIONS.md A160, A161)
+
+A160(5) (the attendee list only while the event has not ended) is **not built**: a view cannot read the time.
+`ViewCtx` is `{ sender, db, env, from }` and `AnonymousViewCtx` is `{ db, env, from }` (SDK 2.14.1
+`dist/server/views.d.ts:15-25`); a view is re-evaluated when the tables it reads change, never on the clock. A161(1)
+replaces it, and the delivery of A157(5), with a view per opened event:
+
+- **`view_my_calendar_invites`**: path (c) of S10ac is removed. Rows: (a) the caller's own invites, (b) every invite of
+  the events the caller organizes. An invitee no longer receives the other invitees' rows. Indexes read:
+  `CalendarEventInvite.invitee_user_id` / `event_id`, `CalendarEvent.organizer_id` / `id`, `User.id`,
+  `DeletedUser.id` (no more `BracketMatch`, `Tournament` or `TournamentAssistant` reads).
+- **`view_event_attendees(eventId: u32)`** (new, `views/calendarViews.ts`, a view with an argument): the
+  `CalendarEventInvite` rows of one event. Row `EventAttendeeRow`: `inviteeUserId`, `inviteeLabel`,
+  `inviteeAvatarCharacterName?`, `inviteStatus`, `respondedAt?` (the invitee columns of `MyCalendarInviteRow`; the
+  event id is the argument, the inviter is not sent). No primary key (views with arguments cannot have one): an answer
+  arrives as a delete plus an insert. Readers (`canReadAttendees`):
+  - the event's organizer;
+  - personal event: a holder of an invite to it (any answer; one who removed their own invite is no longer one);
+  - match event: a holder of the `bracket` permission of the match's tournament (`hasTournamentPermission`:
+    Moderator+, the tournament organizer, a `canManageBracket` assistant), with or without an invite; an invitee when
+    `Tournament.isAnonymousDefault` is false;
+  - anyone else, an unknown id, a deleted event, a match event whose match or tournament is gone (except for the
+    organizer), a client that never logged in: no rows, no error.
+  Index-only: `CalendarEvent.id`, `CalendarEventInvite.by_event_and_invitee` / `event_id`, `BracketMatch.id`,
+  `Tournament.id`, `TournamentAssistant.by_tournament_and_user`, `User.id`, `DeletedUser.id`. Subscribe as
+  `SELECT * FROM view_event_attendees(42)`.
+- **Calendar page:** `view_my_calendar_invites` is subscribed always (with the other calendar views);
+  `view_event_attendees` only for the event that is open, dropped when it closes, one argument set at a time
+  (unsubscribe the old id before subscribing the next, SKILL "Subscription swap best practice"). Tiles of events one
+  is invited to show the organizer's avatar only (from `view_my_calendar_events`; accepted by the user in A161(1)).
+
+Size effect: `view_my_calendar_invites` goes back to one row per invite the caller holds plus the organizer's rows.
+The S10ac review's M3 case (one invitee, 5 organizers x 40 events, 9 invitees each) drops from 1800 rows (about
+139 KB) to 200 rows (about 16 KB at about 80 B per row with avatars); per organizer the worst case drops from 900 to
+100 rows. Live fan-out of one answer in this view: the organizer and the answering invitee (2 readers, as before
+S10ac, against 10). `view_event_attendees` adds at most 9 rows per opened event, about 45 B each (id 4, label 4 + 12,
+avatar 1 + 4 + 11, status 1, respondedAt 1 + 8), so about 0.4 KB per open; each answer or reschedule changes rows
+only for the clients that have that event open.
+
+Through the data: Pending invites are removed by the calendar clean-ups 7 days after the event's end (A160(4), timing
+A161(2); [../calendar/architecture.md](../calendar/architecture.md) "Phase S10ad execution"), so from then on the
+organizer path (b) and `view_event_attendees` carry the answered invites only; a slot owner holds at most 10 Available
+and 10 Blocked slots per UTC week (A160(1)), which bounds `view_my_availability` and
+`view_saved_calendar_availability` (about 560 rows per owner at most, against no bound before).
 
 ## Phase History
 
@@ -466,9 +514,11 @@ invite rows. The event and slot views keep their row counts.
 | `view_my_tournament_stand_ins` (staff, no arguments: approvals with approver and time); `view_tournament_matches_for_me` adds the stand-in's open matches; `view_my_calendar_events` adds the events of the stand-in's matches | Phase S10v execution (DECISIONS.md A135(6); audit SI15, SI16) | 2026-11-10 |
 
 | Calendar views follow the mockup: avatars next to labels; busy blocks for savers; Declined invitees without notes; invitees read the attendee list (not on anonymous tournaments' match events, staff excepted); slot rows carry `kind`, recurrence columns removed | Phase S10ac execution (DECISIONS.md A157) | 2026-11-11 |
+| Calendar views unchanged; the attendee-list cut-off at an event's end (A160(5)) not built, since a view cannot read the time | Phase S10ad execution (DECISIONS.md A160) | 2026-11-11 |
+| Fix pass: new `view_event_attendees(eventId)` (the attendee list of one opened event; organizer, invitees of a personal event, invitees of a non-anonymous tournament's match event, `bracket` permission holders); `view_my_calendar_invites` path (c) removed, an invitee gets their own row only | Phase S10ad execution (DECISIONS.md A161) | 2026-11-11 |
 ---
 
-*Last updated: 2026-11-11 (S10ac)*
+*Last updated: 2026-11-11 (S10ad)*
 *Feature owner: Phase 03 / Phase 06 / Phase 08 / Phase 09 / Phase 10.4 / Phase 15*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

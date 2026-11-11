@@ -7,11 +7,11 @@
 //
 // 1. view_my_calendar_events            — own events, events the caller is invited to, events of the caller's
 //                                         tournament matches; busy blocks of the visible saved calendars (S10ac)
-// 2. view_my_calendar_invites           — the caller's invites + the invites of the events the caller organizes +
-//                                         the attendee list of the events the caller is invited to (S10ac)
+// 2. view_my_calendar_invites           — the caller's invites + the invites of the events the caller organizes
 // 3. view_my_availability               — the caller's AvailabilitySlot rows
 // 4. view_saved_calendar_availability   — the slots of the players whose calendars the caller saved (visible ones)
 // 5. view_my_saved_calendars            — the caller's SavedCalendar rows with the target's label and avatar
+// 6. view_event_attendees(eventId)      — the invites of one event, for the readers A161(1) names (S10ad)
 //
 // Index-only: no table scan in any view body.
 
@@ -67,7 +67,8 @@ function userCards(ctx: any): (userId: number) => { label: string; avatar: strin
 //        no bracketMatchId. An event the caller also reaches through (a)..(c') goes out once, in full.
 //    Row: id, organizerId, organizerLabel, organizerAvatarCharacterName?, title, description?, startAt, endAt,
 //    bracketMatchId?, isBusyBlock. The organizer is identified (a personal event's organizer chose the invitees; a
-//    tournament event's organizer is staff); the attendees are in view_my_calendar_invites. PK `id` (edits update it).
+//    tournament event's organizer is staff); the attendees are in view_event_attendees (S10ad, A161(1)). PK `id`
+//    (edits update it).
 // ---------------------------------------------------------------------------
 const MyCalendarEventRow = t.row('MyCalendarEventRow', {
     id: t.u32().primaryKey(),
@@ -166,32 +167,16 @@ export const view_my_calendar_events = spacetimedb.view(
     }
 );
 
-/**
- * S10ac (A157(5)): whether an invitee (`me`) receives every invite of `event`. A personal event: yes. A tournament
- * match event: yes when the tournament is not anonymous (`Tournament.isAnonymousDefault` false), else only for staff
- * holding the `bracket` permission (hasTournamentPermission: Moderator+, the tournament organizer, an assistant with
- * canManageBracket), the permission that manages match events. A link whose match or tournament is gone: no.
- */
-function attendeeListVisible(ctx: any, event: any, me: number): boolean {
-    if (event.bracketMatchId === undefined) return true;
-    const match = ctx.db.BracketMatch.id.find(event.bracketMatchId);
-    const tournament = match ? ctx.db.Tournament.id.find(match.tournamentId) : undefined;
-    if (!tournament) return false;
-    if (!tournament.isAnonymousDefault) return true;
-    const user = ctx.db.User.id.find(me);
-    return !!user && hasTournamentPermission(ctx, user, tournament, 'bracket');
-}
-
 // ---------------------------------------------------------------------------
-// 2. view_my_calendar_invites — CalendarEventInvite rows of (a) the caller (the inbox and RSVP), (b) the events the
-//    caller organizes (the organizer's invitee list and responses; remove_invite takes the invitee's id) and, S10ac
-//    (A157(5)), (c) the events the caller holds an invite to, when attendeeListVisible (the attendee list with
-//    answers: personal events; match events of tournaments that are not anonymous; staff on anonymous ones).
+// 2. view_my_calendar_invites — CalendarEventInvite rows of (a) the caller (the inbox and RSVP) and (b) the events the
+//    caller organizes (the organizer's invitee list and responses; remove_invite takes the invitee's id). S10ad
+//    (A161(1)): an invitee no longer receives the other invitees' rows here (the S10ac path (c), A157(5)); the
+//    attendee list of one event comes from view_event_attendees(eventId) (6. below).
 //    Row: inviteKey (PK = eventId << 32 | inviteeUserId; respond_to_invite updates the row in place), eventId,
 //    inviteeUserId, inviteeLabel, inviteeAvatarCharacterName?, inviteStatus, respondedAt?, inviterLabel,
 //    inviterAvatarCharacterName? (the invite's creator: the organizer, or the Admin / staff member who added it).
-//    Index-only: CalendarEventInvite.invitee_user_id / event_id, CalendarEvent.organizer_id / id, BracketMatch.id,
-//    Tournament.id, TournamentAssistant.by_tournament_and_user, User.id, DeletedUser.id.
+//    Index-only: CalendarEventInvite.invitee_user_id / event_id, CalendarEvent.organizer_id / id, User.id,
+//    DeletedUser.id.
 // ---------------------------------------------------------------------------
 const MyCalendarInviteRow = t.row('MyCalendarInviteRow', {
     inviteKey: t.u64().primaryKey(),
@@ -232,12 +217,9 @@ export const view_my_calendar_invites = spacetimedb.view(
             });
         };
 
-        // (a) the caller's own invites; (c) the attendee list of those events
+        // (a) the caller's own invites
         for (const invite of ctx.db.CalendarEventInvite.invitee_user_id.filter(me)) {
-            const event = ctx.db.CalendarEvent.id.find(invite.eventId);
-            add(invite, event?.organizerId);
-            if (!event || event.organizerId === me || !attendeeListVisible(ctx, event, me)) continue;
-            for (const other of ctx.db.CalendarEventInvite.event_id.filter(event.id)) add(other, event.organizerId);
+            add(invite, ctx.db.CalendarEvent.id.find(invite.eventId)?.organizerId);
         }
         // (b) the invites of the caller's events
         for (const event of ctx.db.CalendarEvent.organizer_id.filter(me)) {
@@ -337,6 +319,68 @@ export const view_my_saved_calendars = spacetimedb.view(
                 targetLabel: user ? user.displayName : resolveUserLabel(ctx, saved.targetUserId).displayName,
                 targetAvatarCharacterName: user?.avatarCharacterName,
                 isVisible: saved.isVisible,
+            });
+        }
+        return rows;
+    }
+);
+
+/**
+ * S10ad (A161(1), after A157(5)): whether `me` may read the attendee list of `event`. The organizer: yes. A personal
+ * event: an invitee (any answer; one who removed their own invite is no longer one). A match event: a holder of the
+ * `bracket` permission of its tournament (hasTournamentPermission: Moderator+, the tournament organizer, an assistant
+ * with canManageBracket), with or without an invite; an invitee when the tournament is not anonymous
+ * (`Tournament.isAnonymousDefault` false). A match event whose match or tournament is gone: the organizer only.
+ */
+function canReadAttendees(ctx: any, event: any, me: number): boolean {
+    if (event.organizerId === me) return true;
+    const invited = [...ctx.db.CalendarEventInvite.by_event_and_invitee.filter([event.id, me])].length > 0;
+    if (event.bracketMatchId === undefined) return invited;
+    const match = ctx.db.BracketMatch.id.find(event.bracketMatchId);
+    const tournament = match ? ctx.db.Tournament.id.find(match.tournamentId) : undefined;
+    if (!tournament) return false;
+    const user = ctx.db.User.id.find(me);
+    if (user && hasTournamentPermission(ctx, user, tournament, 'bracket')) return true;
+    return invited && !tournament.isAnonymousDefault;
+}
+
+// ---------------------------------------------------------------------------
+// 6. view_event_attendees(eventId) — S10ad (A161(1)): the CalendarEventInvite rows of one event, the attendee list of
+//    the event the page has open (subscribed only for that event and dropped on close; one argument set at a time).
+//    Readers: canReadAttendees above. Anyone else, an unknown id, a deleted event: no rows (no error).
+//    Row: inviteeUserId, inviteeLabel, inviteeAvatarCharacterName?, inviteStatus, respondedAt? (the invitee columns of
+//    MyCalendarInviteRow; the event id is the argument). No primary key (a view with arguments cannot have one): an
+//    answer arrives as a delete plus an insert. Subscribe as `SELECT * FROM view_event_attendees(42)`.
+//    Index-only: CalendarEvent.id, CalendarEventInvite.by_event_and_invitee / event_id, BracketMatch.id, Tournament.id,
+//    TournamentAssistant.by_tournament_and_user, User.id, DeletedUser.id.
+// ---------------------------------------------------------------------------
+const EventAttendeeRow = t.row('EventAttendeeRow', {
+    inviteeUserId: t.u32(),
+    inviteeLabel: t.string(),
+    inviteeAvatarCharacterName: t.string().optional(),
+    inviteStatus: InviteStatus,
+    respondedAt: t.timestamp().optional(),
+});
+
+export const view_event_attendees = spacetimedb.view(
+    { name: 'view_event_attendees', public: true },
+    { eventId: t.u32() },
+    t.array(EventAttendeeRow),
+    (ctx, { eventId }) => {
+        const me = callerUserId(ctx);
+        if (me === undefined) return [];
+        const event = ctx.db.CalendarEvent.id.find(eventId);
+        if (!event || !canReadAttendees(ctx, event, me)) return [];
+        const card = userCards(ctx);
+        const rows: any[] = [];
+        for (const invite of ctx.db.CalendarEventInvite.event_id.filter(eventId)) {
+            const invitee = card(invite.inviteeUserId);
+            rows.push({
+                inviteeUserId: invite.inviteeUserId,
+                inviteeLabel: invitee.label,
+                inviteeAvatarCharacterName: invitee.avatar,
+                inviteStatus: invite.inviteStatus,
+                respondedAt: invite.respondedAt,
             });
         }
         return rows;

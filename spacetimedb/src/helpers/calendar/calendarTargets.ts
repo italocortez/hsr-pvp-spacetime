@@ -11,19 +11,25 @@ import { SenderError } from 'spacetimedb/server';
 
 export type CalendarTargetUse = 'save' | 'invite';
 
-const TEXTS: Record<CalendarTargetUse, { guest: string; deleting: string }> = {
+const TEXTS: Record<CalendarTargetUse, { system: string; guest: string; deleting: string }> = {
     save: {
+        system: "The SYSTEM user's calendar cannot be saved.",
         guest: "A guest's calendar cannot be saved.",
         deleting: "This user's account is being deleted; their calendar cannot be saved.",
     },
     invite: {
+        system: 'The SYSTEM user cannot be invited to calendar events.',
         guest: 'Guests cannot be invited to calendar events.',
         deleting: "This user's account is being deleted; they cannot be invited.",
     },
 };
 
-/** Throws the A157(7) refusal for a guest or pending-deletion `target` (a User row). */
+/**
+ * Throws the A157(7) refusal for a guest or pending-deletion `target` (a User row). S10ad (A160(7)): also the SYSTEM
+ * user (the row `init` creates, found by its unique username 'SYSTEM').
+ */
 export function ensureCalendarTarget(target: any, use: CalendarTargetUse): void {
+    if (target.username === 'SYSTEM') throw new SenderError(TEXTS[use].system);
     if (target.isGuest) throw new SenderError(TEXTS[use].guest);
     if (target.deletedAt !== undefined) throw new SenderError(TEXTS[use].deleting);
 }

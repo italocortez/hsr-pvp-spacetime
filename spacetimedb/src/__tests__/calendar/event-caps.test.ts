@@ -142,6 +142,9 @@ describe('A79(4): the 90-day cleanup (D-07)', () => {
         const { test, users: [a, b] } = world(2);
         const old = createEvent(test, a, { title: 'Old', startMs: 0, endMs: HOUR_MS, invitees: [b] });
         expect(invitesOf(test, old)).toHaveLength(1);
+        // re-aligned T-S10ad (A160(4)): a Pending invite of an ended event is removed by the clean-up; an answered one
+        // stays with the event until its retention, which is what this test follows
+        tx(test, b, (ctx) => M.respond_to_invite(ctx, { eventId: old, status: 'Accepted' }));
 
         advance(test, HOUR_MS + 90 * DAY_MS); // endAt + 90 days = now: not past it
         createEvent(test, a, { title: 'Kept' });

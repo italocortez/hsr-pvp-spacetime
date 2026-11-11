@@ -134,7 +134,7 @@ describe('availability slots (rules, caps, cleanup)', () => {
         for (let i = 0; i < 10; i++) addSlot(test, a, { startMs: nextMonday + i * 3 * HOUR_MS, endMs: nextMonday + i * 3 * HOUR_MS + HOUR_MS });
         const msg = rejection(test, a, (ctx) => M.create_availability_slot(ctx, slotArgs(test, { startMs: nextMonday + 6 * DAY_MS })));
         expect(slotsOf(test, a)).toHaveLength(10);
-        expect(msg).toBe('You can set at most 10 availability slots per week.');
+        expect(msg).toBe('You can set at most 10 available slots per week.'); // re-aligned T-S10ad (A160(1)): the text names the kind
         addSlot(test, a, { startMs: nextMonday + 7 * DAY_MS });
         expect(slotsOf(test, a)).toHaveLength(11);
     });

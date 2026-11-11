@@ -1,9 +1,9 @@
 // Calendar: the backend follows the calendar mockup (blocked slots, the weekly slot cap, no recurrence, reschedule
 //   reset, guest and pending-deletion targets, leaving an event, past starts, the scheduled sweep, the time
 //   validator, the one-call invitee edit, the bracket match's scheduledAt).
-// Decisions: A157
-// Contracts: docs/calendar/contract.md (entries for A157 pending, see docs/log)
-// From S10ac (T-S10ac).
+// Decisions: A157, A160
+// Contracts: docs/calendar/contract.md (entries for A157 and A160 pending, see docs/log)
+// From S10ac (T-S10ac); S10ad (T-S10ad): the A160 rulings at the end, the shared-cap cases re-aligned.
 //
 // In-memory harness only (SpacetimeDB test-utils; nothing reaches maincloud). Times are micros strings from the
 // TestClock: START is Thursday 2026-01-01 00:00 UTC, so the next UTC week starts Monday 2026-01-05 00:00 (+96 h).
@@ -23,16 +23,19 @@ import {
     fromNow,
     invite,
     invitesOf,
+    seedInvite,
     slotArgs,
     slotsOf,
 } from '../fixtures/calendar';
-import { duel } from '../fixtures/tournament-matches';
-import { resolveMatch } from '../fixtures/tournaments';
+import { duel, playMatch } from '../fixtures/tournament-matches';
+import { dq, generateBracket, resolveMatch, seedAndGenerate, seedingField } from '../fixtures/tournaments';
 
 // ─── Texts ───────────────────────────────────────────────────────────────────
 
 const PAST = "You can't schedule something in the past.";
-const WEEK_CAP = 'You can set at most 10 availability slots per week.';
+// T-S10ad (A160(1)): one cap per kind, the text names the kind (was 'You can set at most 10 availability slots per week.')
+const WEEK_CAP = 'You can set at most 10 available slots per week.';
+const BLOCKED_WEEK_CAP = 'You can set at most 10 blocked slots per week.';
 const BLOCKED_OWN = 'This time overlaps one of your blocked slots.';
 const BLOCKED_ORG = "This time overlaps one of the organizer's blocked slots.";
 const BAD_KIND = 'Invalid slot kind. Must be Available or Blocked.';
@@ -107,6 +110,17 @@ const respond = (test: Harness, who: Actor, eventId: number, status: string) =>
 const markPendingDeletion = (test: Harness, who: Actor) =>
     test.db.User.id.update({ ...test.db.User.id.find(who.userId)!, deletedAt: test.clock.now() });
 
+/** T-S10ad: writes a slot row directly (no reducer), `fromMs`..`toMs` from now; returns its id. */
+function seedSlot(test: Harness, who: Actor, fromMs: number, toMs: number, kind: 'Available' | 'Blocked'): number {
+    const ts = test.clock.now();
+    return test.db.AvailabilitySlot.insert({
+        id: 0, userId: who.userId,
+        startAt: new Timestamp(BigInt(fromNow(test, fromMs))), endAt: new Timestamp(BigInt(fromNow(test, toMs))),
+        kind: { tag: kind } as any,
+        createdById: who.userId, createdDate: ts, lastModifiedById: who.userId, lastModifiedDate: ts,
+    } as any).id;
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // A157(1): slot kind and the blocked-slot overlap
 // ════════════════════════════════════════════════════════════════════════════
@@ -159,8 +173,9 @@ describe('A157(1): availability slots are Available or Blocked; a personal event
         expect(snap(event(test, id))).toBe(before);
         expect(msg).toBe(BLOCKED_OWN);
 
-        // a block added over the event later does not freeze the event's other fields
-        addSlot(test, a, { startMs: DAY_MS, endMs: DAY_MS + 2 * HOUR_MS, kind: 'Blocked' });
+        // a block over the event (re-aligned T-S10ad: A160(3) refuses placing it through the reducer, so the row is
+        // seeded as data from before S10ad) does not freeze the event's other fields
+        seedSlot(test, a, DAY_MS, DAY_MS + 2 * HOUR_MS, 'Blocked');
         tx(test, a, updateEvent(id, { title: 'Renamed' }));
         expect(event(test, id)!.title).toBe('Renamed');
 
@@ -184,7 +199,9 @@ describe('A157(1): availability slots are Available or Blocked; a personal event
 // A157(2): 10 slots per UTC week
 // ════════════════════════════════════════════════════════════════════════════
 
-describe('A157(2): at most 10 slots per UTC week (Monday 00:00 UTC), counted by start; ended slots do not count', () => {
+// Re-aligned T-S10ad (A160(1) supersedes A157(2)'s shared cap and "ended slots do not count"): the cases below fill
+// one kind (Available); the per-kind and ended-slot rules are in the A160(1) block further down.
+describe('A157(2) / A160(1): at most 10 slots of a kind per UTC week (Monday 00:00 UTC), counted by start; ended slots count', () => {
     /** 10 one-hour slots in the week of Monday 2026-01-05, 3 hours apart. */
     const fillNextWeek = (test: Harness, who: Actor) =>
         Array.from({ length: 10 }, (_, i) => addSlot(test, who, { startMs: NEXT_MONDAY_MS + i * 3 * HOUR_MS, endMs: NEXT_MONDAY_MS + i * 3 * HOUR_MS + HOUR_MS }));
@@ -209,15 +226,17 @@ describe('A157(2): at most 10 slots per UTC week (Monday 00:00 UTC), counted by 
         expect(slotsOf(test, b)).toHaveLength(1);
     });
 
-    it('ended slots do not count: 10 slots in the current week, the 11th is refused, then accepted once the first has ended', () => {
+    // Re-aligned T-S10ad (A160(1)): was "ended slots do not count ... then accepted once the first has ended"
+    // (11 rows); an ended slot now keeps its place, so the 11th stays refused (10 rows).
+    it('ended slots count: 10 slots in the current week, the 11th is refused, and still refused once the first has ended', () => {
         const { test, users: [a] } = world(1);
         for (let i = 0; i < 10; i++) addSlot(test, a, { startMs: i * 2 * HOUR_MS, endMs: i * 2 * HOUR_MS + HOUR_MS });
         const eleventh = () => (ctx: any) => M.create_availability_slot(ctx, slotArgs(test, { startMs: 2 * DAY_MS, endMs: 2 * DAY_MS + HOUR_MS }));
         expect(senderRejection(test, a, eleventh())).toBe(WEEK_CAP);
         advance(test, HOUR_MS); // the first slot ends exactly now: ended (endAt <= now)
         clearMembershipCount(test, a);
-        tx(test, a, eleventh());
-        expect(slotsOf(test, a)).toHaveLength(11);
+        expect(senderRejection(test, a, eleventh())).toBe(WEEK_CAP);
+        expect(slotsOf(test, a)).toHaveLength(10);
     });
 
     it('update across weeks: moving a slot into a full week is refused; moving a slot inside its full week passes (it does not count itself); moving one out of the full week passes', () => {
@@ -237,10 +256,14 @@ describe('A157(2): at most 10 slots per UTC week (Monday 00:00 UTC), counted by 
         expect(slotsOf(test, a)).toHaveLength(11);
     });
 
-    it('Blocked and Available slots share the cap', () => {
+    // Re-aligned T-S10ad (A160(1)): was "Blocked and Available slots share the cap" (5 + 5 fill the week, an 11th
+    // Blocked refused with the shared text); now 5 + 5 leave room in both kinds.
+    it('Blocked and Available slots do not share the cap: 5 + 5 in one week, a further slot of each kind passes', () => {
         const { test, users: [a] } = world(1);
         for (let i = 0; i < 10; i++) addSlot(test, a, { startMs: NEXT_MONDAY_MS + i * 3 * HOUR_MS, endMs: NEXT_MONDAY_MS + i * 3 * HOUR_MS + HOUR_MS, kind: i % 2 ? 'Blocked' : 'Available' });
-        expect(senderRejection(test, a, (ctx) => M.create_availability_slot(ctx, slotArgs(test, { startMs: NEXT_MONDAY_MS + 2 * DAY_MS, kind: 'Blocked' })))).toBe(WEEK_CAP);
+        addSlot(test, a, { startMs: NEXT_MONDAY_MS + 2 * DAY_MS, kind: 'Blocked' });
+        addSlot(test, a, { startMs: NEXT_MONDAY_MS + 3 * DAY_MS, kind: 'Available' });
+        expect(slotsOf(test, a)).toHaveLength(12);
     });
 });
 
@@ -707,5 +730,436 @@ describe('A157(12): a match event writes its start to BracketMatch.scheduledAt',
         const m = [...test.db.BracketMatch.tournament_id.filter(f.id)][0];
         createEvent(test, org, { title: 'Personal' });
         expect(scheduled(test, m.id)).toBeUndefined();
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// S10ad (A160): rulings on the S10ac review (T-S10ad)
+// ════════════════════════════════════════════════════════════════════════════
+
+const BLOCKED_ON_EVENT = 'This blocked slot overlaps one of your events.';
+const SELF_INVITE = 'You cannot invite yourself to your own event.';
+const ORGANIZER_INVITE = 'The organizer cannot be invited to their own event.';
+const SYSTEM_INVITE = 'The SYSTEM user cannot be invited to calendar events.';
+const SYSTEM_SAVE = "The SYSTEM user's calendar cannot be saved.";
+const EMPTY_TITLE = 'Event title must not be empty.';
+
+const runSweep = (test: Harness) => {
+    const jobs = [...test.db.IdentityGcJob.iter()];
+    const arg = jobs[0] ?? { scheduledId: 1n, scheduledAt: ScheduleAt.time(test.clock.now().microsSinceUnixEpoch) };
+    tx(test, 'internal', (ctx) => M.run_identity_gc(ctx, { arg } as any));
+};
+const statusOf = (test: Harness, eventId: number) =>
+    invitesOf(test, eventId).map((i) => [i.inviteeUserId, i.inviteStatus.tag] as [number, string]).sort((x, y) => x[0] - y[0]);
+
+describe('A160(1): 10 Available and 10 Blocked slots per UTC week, counted separately; ended slots count', () => {
+    const at = (i: number) => ({ startMs: NEXT_MONDAY_MS + i * 3 * HOUR_MS, endMs: NEXT_MONDAY_MS + i * 3 * HOUR_MS + HOUR_MS });
+
+    it('10 + 10 in one week pass; the 11th of each kind is refused with the text naming its kind; nothing is written', () => {
+        const { test, users: [a] } = world(1);
+        for (let i = 0; i < 10; i++) addSlot(test, a, { ...at(i), kind: 'Available' });
+        for (let i = 10; i < 20; i++) addSlot(test, a, { ...at(i), kind: 'Blocked' });
+        expect(slotsOf(test, a)).toHaveLength(20);
+        const before = snap(slotsOf(test, a));
+        clearMembershipCount(test, a);
+        const msgs = [
+            senderRejection(test, a, (ctx) => M.create_availability_slot(ctx, slotArgs(test, { ...at(30), kind: 'Available' }))),
+            senderRejection(test, a, (ctx) => M.create_availability_slot(ctx, slotArgs(test, { ...at(31), kind: 'Blocked' }))),
+        ];
+        expect(snap(slotsOf(test, a))).toBe(before);
+        expect(msgs).toEqual([WEEK_CAP, BLOCKED_WEEK_CAP]);
+    });
+
+    it('a kind switch into a full kind is refused (row unchanged); a switch into a kind with room passes; the slot does not count itself', () => {
+        const { test, users: [a] } = world(1);
+        for (let i = 0; i < 10; i++) addSlot(test, a, { ...at(i), kind: 'Blocked' });
+        const avail = addSlot(test, a, { ...at(10), kind: 'Available' });
+        const before = snap(slot(test, avail));
+        expect(senderRejection(test, a, updateSlot(avail, { kind: 'Blocked' }))).toBe(BLOCKED_WEEK_CAP);
+        expect(snap(slot(test, avail))).toBe(before);
+
+        const blocked = slotsOf(test, a).find((s) => s.kind.tag === 'Blocked')!.id;
+        clearMembershipCount(test, a);
+        tx(test, a, updateSlot(blocked, { kind: 'Available' }));
+        expect(slot(test, blocked)!.kind.tag).toBe('Available');
+        clearMembershipCount(test, a);
+        tx(test, a, updateSlot(blocked, { kind: 'Blocked' })); // back: 9 others, it does not count itself
+        expect(slot(test, blocked)!.kind.tag).toBe('Blocked');
+    });
+
+    it('ended slots keep their place in their week; deleting one frees it', () => {
+        const { test, users: [a] } = world(1);
+        const ids = Array.from({ length: 10 }, (_, i) => addSlot(test, a, { startMs: i * HOUR_MS, endMs: i * HOUR_MS + HOUR_MS / 2, kind: 'Blocked' }));
+        advance(test, 10 * HOUR_MS); // all ten have ended, same week (Thursday)
+        clearMembershipCount(test, a);
+        expect(senderRejection(test, a, (ctx) => M.create_availability_slot(ctx, slotArgs(test, { startMs: HOUR_MS, kind: 'Blocked' })))).toBe(BLOCKED_WEEK_CAP);
+        tx(test, a, (ctx) => M.delete_availability_slot(ctx, { slotId: ids[0] }));
+        addSlot(test, a, { startMs: HOUR_MS, kind: 'Blocked' });
+        expect(slotsOf(test, a)).toHaveLength(10);
+    });
+
+    it('600 momentary slots (1 microsecond long, starting now, 500 ms apart): 10 are stored, the other 590 are refused', () => {
+        const { test, users: [a] } = world(1);
+        const msgs = new Map<string, number>();
+        for (let i = 0; i < 600; i++) {
+            clearMembershipCount(test, a);
+            const now = test.clock.now().microsSinceUnixEpoch;
+            try {
+                tx(test, a, (ctx) => M.create_availability_slot(ctx, { startAt: now.toString(), endAt: (now + 1n).toString(), kind: 'Available' }));
+            } catch (e) {
+                expect(e).toBeInstanceOf(SenderError);
+                msgs.set((e as Error).message, (msgs.get((e as Error).message) ?? 0) + 1);
+            }
+            advance(test, 500);
+        }
+        expect(slotsOf(test, a)).toHaveLength(10);
+        expect([...msgs]).toEqual([[WEEK_CAP, 590]]);
+    });
+});
+
+describe('A160(3): a Blocked slot may not overlap a personal event the user organizes that has not ended', () => {
+    it('create: a Blocked slot over an own event is refused; touching on either side, an Available slot, another user\'s event and an event one is only invited to pass', () => {
+        const { test, users: [a, b] } = world(2);
+        const from = DAY_MS + 10 * HOUR_MS;
+        const to = DAY_MS + 12 * HOUR_MS;
+        createEvent(test, a, { startMs: from, endMs: to });
+        createEvent(test, b, { startMs: 3 * DAY_MS, endMs: 3 * DAY_MS + HOUR_MS, invitees: [a] });
+        for (const [s, e] of [[from + HOUR_MS / 2, from + HOUR_MS], [from - HOUR_MS, from + 1], [to - 1, to + HOUR_MS], [from - HOUR_MS, to + HOUR_MS]]) {
+            clearMembershipCount(test, a);
+            expect(senderRejection(test, a, (ctx) => M.create_availability_slot(ctx, slotArgs(test, { startMs: s, endMs: e, kind: 'Blocked' })))).toBe(BLOCKED_ON_EVENT);
+        }
+        expect(slotsOf(test, a)).toEqual([]);
+        addSlot(test, a, { startMs: from - HOUR_MS, endMs: from, kind: 'Blocked' });
+        addSlot(test, a, { startMs: to, endMs: to + HOUR_MS, kind: 'Blocked' });
+        addSlot(test, a, { startMs: from, endMs: to, kind: 'Available' });
+        addSlot(test, a, { startMs: 3 * DAY_MS, endMs: 3 * DAY_MS + HOUR_MS, kind: 'Blocked' });
+        expect(slotsOf(test, a)).toHaveLength(4);
+    });
+
+    it('update: moving a Blocked slot onto an own event and switching an Available slot under it to Blocked are refused; rows unchanged', () => {
+        const { test, users: [a] } = world(1);
+        createEvent(test, a, { startMs: DAY_MS, endMs: DAY_MS + 2 * HOUR_MS });
+        const blocked = addSlot(test, a, { startMs: 2 * DAY_MS, endMs: 2 * DAY_MS + HOUR_MS, kind: 'Blocked' });
+        const avail = addSlot(test, a, { startMs: DAY_MS, endMs: DAY_MS + HOUR_MS, kind: 'Available' });
+        const before = snap(slotsOf(test, a));
+        const msgs = [
+            senderRejection(test, a, updateSlot(blocked, { startAt: fromNow(test, DAY_MS + HOUR_MS), endAt: fromNow(test, DAY_MS + 3 * HOUR_MS) })),
+            senderRejection(test, a, updateSlot(avail, { kind: 'Blocked' })),
+        ];
+        expect(snap(slotsOf(test, a))).toBe(before);
+        expect(msgs).toEqual([BLOCKED_ON_EVENT, BLOCKED_ON_EVENT]);
+    });
+
+    it('an ended event does not block: a started Available slot over an event that has ended may become Blocked', () => {
+        const { test, users: [a] } = world(1);
+        createEvent(test, a, { startMs: 0, endMs: HOUR_MS });
+        const s = addSlot(test, a, { startMs: 0, endMs: 3 * HOUR_MS, kind: 'Available' });
+        advance(test, HOUR_MS); // the event's end is now: ended
+        tx(test, a, updateSlot(s, { kind: 'Blocked' }));
+        expect(slot(test, s)!.kind.tag).toBe('Blocked');
+    });
+
+    it('a tournament match event the user organizes is exempt: a Blocked slot over it passes', () => {
+        const f = duel();
+        const m = [...f.test.db.BracketMatch.tournament_id.filter(f.id)][0];
+        createEvent(f.test, f.org, { bracketMatchId: m.id, startMs: DAY_MS, endMs: DAY_MS + HOUR_MS });
+        addSlot(f.test, f.org, { startMs: DAY_MS, endMs: DAY_MS + 2 * HOUR_MS, kind: 'Blocked' });
+        expect(slotsOf(f.test, f.org).map((s) => s.kind.tag)).toEqual(['Blocked']);
+    });
+});
+
+// Re-aligned T-S10ad fix pass (A161(2) replaces the timing of A160(4)): Pending invites go 7 days after the end, not at
+// the end; each case below moved its clock from "end" to "end + 7 days" (kept at exactly 7 days, removed 1 ms later).
+describe('A160(4) / A161(2): Pending invites are removed 7 days after their event\'s end; answered ones stay until the event\'s retention', () => {
+    const PENDING_GRACE_MS = WEEK_MS;
+    /** a's event (0..1 h) with b Pending, c Accepted, d Declined, e Tentative, and a seeded Pending guest invite. */
+    function endedEvent() {
+        const { test, users: [a, b, c, d, e, x] } = world(6);
+        const g = guest(test, 'mkpendingguest');
+        const id = createEvent(test, a, { startMs: 0, endMs: HOUR_MS, invitees: [b, c, d, e] });
+        respond(test, c, id, 'Accepted');
+        respond(test, d, id, 'Declined');
+        respond(test, e, id, 'Tentative');
+        seedInvite(test, id, g.userId, a.userId);
+        return { test, a, b, c, d, e, g, x, id };
+    }
+    const answered = (o: ReturnType<typeof endedEvent>): Array<[number, string]> =>
+        ([[o.c.userId, 'Accepted'], [o.d.userId, 'Declined'], [o.e.userId, 'Tentative']] as Array<[number, string]>).sort((p, q) => p[0] - q[0]);
+
+    it('(re-aligned: was "removed at the end") the organizer\'s calendar call keeps them at the end and at end + 7 days exactly; 1 ms later it removes every Pending invite (guest too)', () => {
+        const o = endedEvent();
+        const { test, a, id } = o;
+        advance(test, HOUR_MS); // endAt = now: ended
+        addSlot(test, a, { startMs: DAY_MS });
+        expect(invitesOf(test, id)).toHaveLength(5);
+        advance(test, PENDING_GRACE_MS); // end + 7 days exactly: kept
+        addSlot(test, a, { startMs: 2 * DAY_MS });
+        expect(invitesOf(test, id)).toHaveLength(5);
+        advance(test, 1); // end + 7 days + 1 ms: removed
+        addSlot(test, a, { startMs: 3 * DAY_MS });
+        expect(statusOf(test, id)).toEqual(answered(o));
+        expect(event(test, id)).toBeTruthy();
+    });
+
+    it('(re-aligned: was "2 h after the end") an invitee\'s calendar call keeps their own Pending invite at end + 7 days exactly, removes it 1 ms later, and only theirs', () => {
+        const o = endedEvent();
+        const { test, b, g, id } = o;
+        advance(test, HOUR_MS + PENDING_GRACE_MS);
+        addSlot(test, b);
+        expect(invite(test, id, b.userId)).toBeTruthy();
+        advance(test, 1);
+        addSlot(test, b, { startMs: 2 * DAY_MS });
+        expect(invite(test, id, b.userId)).toBeUndefined();
+        expect(invite(test, id, g.userId)).toBeTruthy(); // the guest's row waits for the organizer's call or the sweep
+        expect(invitesOf(test, id)).toHaveLength(4);
+    });
+
+    it('(re-aligned: was "2 h after the end") the call\'s own target is spared: an invitee may still answer a Pending invite of an event ended more than 7 days ago', () => {
+        const o = endedEvent();
+        const { test, b, id } = o;
+        advance(test, HOUR_MS + PENDING_GRACE_MS + 1);
+        respond(test, b, id, 'Accepted');
+        expect(invite(test, id, b.userId)!.inviteStatus.tag).toBe('Accepted');
+    });
+
+    it('(re-aligned: was "2 h after the end") the weekly sweep keeps them at end + 7 days exactly and removes them 1 ms later for organizers and invitees who make no call; one calendar GcResult row with pendingInvites', () => {
+        const o = endedEvent();
+        const { test, id } = o;
+        const recent = createEvent(test, o.x, { startMs: DAY_MS, invitees: [o.b] });
+        advance(test, HOUR_MS + PENDING_GRACE_MS);
+        runSweep(test);
+        expect(invitesOf(test, id)).toHaveLength(5);
+        expect([...test.db.GcResult.iter()].filter((r) => r.gcType === 'calendar')).toEqual([]);
+        advance(test, 1);
+        runSweep(test);
+        expect(statusOf(test, id)).toEqual(answered(o));
+        expect(invitesOf(test, recent).map((i) => i.inviteStatus.tag)).toEqual(['Pending']); // ended less than 7 days ago
+        const rows = [...test.db.GcResult.iter()].filter((r) => r.gcType === 'calendar');
+        expect(rows).toHaveLength(1);
+        expect(JSON.parse(rows[0].details)).toEqual({ slots: 0, events: 0, pendingInvites: 2 });
+        expect(rows[0].itemsDeleted).toBe(2);
+    });
+
+    it('(re-aligned: was "2 h after the end") the sweep is bounded: 501 Pending invites of an event ended more than 7 days ago → 500 removed, the next run in one hour removes the last', () => {
+        const { test, users: [a] } = world(1);
+        const id = createEvent(test, a, { startMs: 0, endMs: HOUR_MS });
+        for (let i = 0; i < 501; i++) seedInvite(test, id, 10_000 + i, a.userId);
+        advance(test, HOUR_MS + PENDING_GRACE_MS + 1);
+        runSweep(test);
+        expect(invitesOf(test, id)).toHaveLength(1);
+        expect([...test.db.IdentityGcJob.iter()].map((j) => j.scheduledAt)).toEqual([ScheduleAt.time(test.clock.now().microsSinceUnixEpoch + 3_600_000_000n)]);
+        runSweep(test);
+        expect(invitesOf(test, id)).toEqual([]);
+    });
+
+    /**
+     * A161(2): day 6 after the end, every calendar path has run and kept the Pending invites; the organizer moves the
+     * event to tomorrow; on day 8 after the old end the invitee's call, the organizer's call and the sweep keep them all.
+     */
+    function moveOnDaySix(test: Harness, organizer: Actor, caller: Actor, id: number, endMs: number) {
+        const before = statusOf(test, id);
+        expect(before.length).toBeGreaterThan(0);
+        advance(test, endMs + 6 * DAY_MS);
+        addSlot(test, caller);
+        addSlot(test, organizer, { startMs: 2 * DAY_MS });
+        runSweep(test);
+        expect(statusOf(test, id)).toEqual(before);
+        clearMembershipCount(test, organizer);
+        tx(test, organizer, updateEvent(id, { startAt: fromNow(test, DAY_MS), endAt: fromNow(test, DAY_MS + HOUR_MS) }));
+        advance(test, 2 * DAY_MS); // the old end is 8 days back; the new end 1 day back
+        addSlot(test, caller, { startMs: 3 * DAY_MS });
+        addSlot(test, organizer, { startMs: 4 * DAY_MS });
+        runSweep(test);
+        expect(statusOf(test, id)).toEqual(before.map(([u]) => [u, 'Pending']));
+    }
+
+    it('a personal event moved to the future on day 6 after its end keeps its unanswered invitees', () => {
+        const { test, users: [a, b, c] } = world(3);
+        const id = createEvent(test, a, { startMs: 0, endMs: HOUR_MS, invitees: [b, c] });
+        moveOnDaySix(test, a, b, id, HOUR_MS);
+        expect(invitesOf(test, id).map((i) => i.inviteeUserId).sort((x, y) => x - y)).toEqual([b.userId, c.userId].sort((x, y) => x - y));
+    });
+
+    it('a match event moved to the future on day 6 after its end keeps the team members\' unanswered invites', () => {
+        const f = duel();
+        const m = [...f.test.db.BracketMatch.tournament_id.filter(f.id)][0];
+        const id = createEvent(f.test, f.org, { bracketMatchId: m.id, startMs: 0, endMs: HOUR_MS });
+        expect(invitesOf(f.test, id).every((i) => i.inviteStatus.tag === 'Pending')).toBe(true);
+        moveOnDaySix(f.test, f.org, f.ts[0].captain, id, HOUR_MS);
+        expect(invite(f.test, id, f.ts[1].mate.userId)!.inviteStatus.tag).toBe('Pending');
+    });
+});
+
+describe('A160(6): retention keeps BracketMatch.scheduledAt; a deletion by a person still clears it', () => {
+    const scheduled = (test: Harness, matchId: number) => test.db.BracketMatch.id.find(matchId)!.scheduledAt?.microsSinceUnixEpoch;
+    function oldMatchEvent() {
+        const f = duel();
+        const m = [...f.test.db.BracketMatch.tournament_id.filter(f.id)][0];
+        const id = createEvent(f.test, f.org, { bracketMatchId: m.id, startMs: DAY_MS, endMs: DAY_MS + HOUR_MS });
+        const at = scheduled(f.test, m.id);
+        expect(at).toBe(BigInt(fromNow(f.test, DAY_MS)));
+        advance(f.test, DAY_MS + HOUR_MS + 90 * DAY_MS + 1); // ended more than 90 days ago
+        return { ...f, m, id, at };
+    }
+
+    it('the lazy clean-up deletes the old match event and the match keeps its time', () => {
+        const { test, org, m, id, at } = oldMatchEvent();
+        addSlot(test, org);
+        expect(event(test, id)).toBeUndefined();
+        expect(scheduled(test, m.id)).toBe(at);
+    });
+
+    it('the sweep deletes the old match event and the match keeps its time', () => {
+        const { test, m, id, at } = oldMatchEvent();
+        runSweep(test);
+        expect(event(test, id)).toBeUndefined();
+        expect(scheduled(test, m.id)).toBe(at);
+    });
+
+    it('an Admin deleting a match event still clears it', () => {
+        const f = duel();
+        const m = [...f.test.db.BracketMatch.tournament_id.filter(f.id)][0];
+        const id = createEvent(f.test, f.org, { bracketMatchId: m.id });
+        tx(f.test, admin(f.test, 'mkdeladmin'), (ctx) => M.delete_calendar_event(ctx, { eventId: id }));
+        expect(scheduled(f.test, m.id)).toBeUndefined();
+    });
+});
+
+describe('A161(3) (review F1): a bracket cascade clears scheduledAt after retention removed the event', () => {
+    const scheduled = (test: Harness, matchId: number) => test.db.BracketMatch.id.find(matchId)?.scheduledAt?.microsSinceUnixEpoch;
+    /** The match event of `matchId` (1 day out, 1 h) is removed by the sweep 90 days after its end; the time stays. */
+    function retained(test: Harness, org: Actor, matchId: number) {
+        const id = createEvent(test, org, { bracketMatchId: matchId, startMs: DAY_MS, endMs: DAY_MS + HOUR_MS });
+        const at = scheduled(test, matchId);
+        expect(at).toBe(BigInt(fromNow(test, DAY_MS)));
+        advance(test, DAY_MS + HOUR_MS + 90 * DAY_MS + 1);
+        runSweep(test);
+        expect(event(test, id)).toBeUndefined();
+        expect(scheduled(test, matchId)).toBe(at); // retention keeps it (A160(6))
+    }
+
+    it('staff resolve of the Ready match clears it', () => {
+        const f = duel();
+        const m = [...f.test.db.BracketMatch.tournament_id.filter(f.id)][0];
+        retained(f.test, f.org, m.id);
+        resolveMatch(f.test, f.org, m.id, m.team1Id!);
+        expect(scheduled(f.test, m.id)).toBeUndefined();
+    });
+
+    it('rollback of a match decided by play clears it (the match is Ready again with no time)', () => {
+        const f = duel();
+        const m = [...f.test.db.BracketMatch.tournament_id.filter(f.id)][0];
+        retained(f.test, f.org, m.id);
+        playMatch(f, m.id, 'Blue'); // a played decision keeps the time
+        expect(scheduled(f.test, m.id)).toBeDefined();
+        tx(f.test, f.org, (ctx) => M.rollback_bracket_match(ctx, { bracketMatchId: m.id, reason: 'replay' }));
+        expect(f.test.db.BracketMatch.id.find(m.id)!.state.tag).toBe('Ready');
+        expect(scheduled(f.test, m.id)).toBeUndefined();
+    });
+
+    it('cancel_tournament clears it', () => {
+        const f = duel();
+        const m = [...f.test.db.BracketMatch.tournament_id.filter(f.id)][0];
+        retained(f.test, f.org, m.id);
+        tx(f.test, f.org, (ctx) => M.cancel_tournament(ctx, { tournamentId: f.id }));
+        expect(scheduled(f.test, m.id)).toBeUndefined();
+    });
+
+    it('a disqualification that settles the match clears it', () => {
+        const f = duel();
+        const m = [...f.test.db.BracketMatch.tournament_id.filter(f.id)][0];
+        retained(f.test, f.org, m.id);
+        const captain = f.ts.find((t) => t.teamId === m.team1Id)!.captain;
+        tx(f.test, f.org, dq(f.id, captain.userId, true));
+        expect(f.test.db.BracketMatch.id.find(m.id)!.state.tag).toBe('Decided');
+        expect(scheduled(f.test, m.id)).toBeUndefined();
+    });
+
+    it('regeneration deletes the match rows: no regenerated match carries a time', () => {
+        const s = seedingField(2);
+        seedAndGenerate(s.test, s.org, s.id);
+        const m = [...s.test.db.BracketMatch.tournament_id.filter(s.id)][0];
+        retained(s.test, s.org, m.id);
+        generateBracket(s.test, s.org, s.id);
+        expect(s.test.db.BracketMatch.id.find(m.id)).toBeFalsy();
+        const rows = [...s.test.db.BracketMatch.tournament_id.filter(s.id)];
+        expect(rows.length).toBeGreaterThan(0);
+        expect(rows.every((r) => r.scheduledAt === undefined)).toBe(true);
+    });
+
+    it('a match with no time is not written by the cascade (audit columns unchanged)', () => {
+        const f = duel();
+        const m = [...f.test.db.BracketMatch.tournament_id.filter(f.id)][0];
+        const before = snap(f.test.db.BracketMatch.id.find(m.id));
+        tx(f.test, f.org, (ctx) => M.cancel_tournament(ctx, { tournamentId: f.id }));
+        expect(snap(f.test.db.BracketMatch.id.find(m.id))).toBe(before);
+    });
+});
+
+describe('A160(7): the organizer is not in their own invitee set; the SYSTEM user cannot be invited or saved', () => {
+    const systemId = (test: Harness) => test.db.User.username.find('SYSTEM')!.id;
+
+    it('self-invite is refused on create, update (added) and invite_to_event; an Admin adding the organizer gets the organizer text; nothing is written', () => {
+        const { test, users: [a, b] } = world(2);
+        const msgs = [senderRejection(test, a, (ctx) => M.create_calendar_event(ctx, eventArgs(test, { invitees: [b, a] })))];
+        expect([...test.db.CalendarEvent.organizer_id.filter(a.userId)]).toEqual([]);
+        const id = createEvent(test, a, { invitees: [b] });
+        const before = snap(event(test, id), invitesOf(test, id));
+        const adm = admin(test, 'mkselfadmin');
+        msgs.push(
+            senderRejection(test, a, updateEvent(id, { title: 'x', inviteeUserIds: `${b.userId},${a.userId}` })),
+            senderRejection(test, a, (ctx) => M.invite_to_event(ctx, { eventId: id, inviteeUserId: a.userId })),
+            senderRejection(test, adm, updateEvent(id, { title: 'x', inviteeUserIds: `${a.userId}` })),
+            senderRejection(test, adm, (ctx) => M.invite_to_event(ctx, { eventId: id, inviteeUserId: a.userId })),
+        );
+        expect(snap(event(test, id), invitesOf(test, id))).toBe(before);
+        expect(msgs).toEqual([SELF_INVITE, SELF_INVITE, SELF_INVITE, ORGANIZER_INVITE, ORGANIZER_INVITE]);
+    });
+
+    it('the SYSTEM user is refused as an invitee (create, update, invite_to_event) and as a saved calendar', () => {
+        const { test, users: [a, b] } = world(2);
+        const sys = systemId(test);
+        const msgs = [senderRejection(test, a, (ctx) => M.create_calendar_event(ctx, eventArgs(test, { invitees: [sys] })))];
+        const id = createEvent(test, a, { invitees: [b] });
+        const before = snap(event(test, id), invitesOf(test, id));
+        msgs.push(
+            senderRejection(test, a, updateEvent(id, { title: 'x', inviteeUserIds: `${b.userId},${sys}` })),
+            senderRejection(test, a, (ctx) => M.invite_to_event(ctx, { eventId: id, inviteeUserId: sys })),
+            senderRejection(test, a, (ctx) => M.save_calendar(ctx, { targetUserId: sys })),
+        );
+        expect(snap(event(test, id), invitesOf(test, id))).toBe(before);
+        expect([...test.db.SavedCalendar.user_id.filter(a.userId)]).toEqual([]);
+        expect(msgs).toEqual([SYSTEM_INVITE, SYSTEM_INVITE, SYSTEM_INVITE, SYSTEM_SAVE]);
+    });
+});
+
+describe('A160: a title must contain at least one visible character', () => {
+    const INVISIBLE: Array<[string, string]> = [
+        ['zero-width space', '​'],
+        ['NUL', '\u0000'],
+        ['lone surrogate', '\uD800'],
+        ['right-to-left override', '‮'],
+        ['spaces and joiners', ' ​‍⁠ '],
+        ['variation selector', '️'],
+        ['Hangul filler', 'ㅤ'],
+        ['tab and newline', '\t\n'],
+        ['no-break and ideographic spaces', ' 　'],
+    ];
+
+    it.each(INVISIBLE)('%s: refused as the empty title on create and on update; nothing is written', (_name, title) => {
+        const { test, users: [a] } = world(1);
+        expect(senderRejection(test, a, (ctx) => M.create_calendar_event(ctx, eventArgs(test, { title })))).toBe(EMPTY_TITLE);
+        expect([...test.db.CalendarEvent.organizer_id.filter(a.userId)]).toEqual([]);
+        const id = createEvent(test, a);
+        const before = snap(event(test, id));
+        expect(senderRejection(test, a, updateEvent(id, { title }))).toBe(EMPTY_TITLE);
+        expect(snap(event(test, id))).toBe(before);
+    });
+
+    it('a visible character among invisible ones passes; one emoji passes', () => {
+        const { test, users: [a] } = world(1);
+        const id = createEvent(test, a, { title: '​a​' });
+        expect(event(test, id)!.title).toBe('​a​');
+        createEvent(test, a, { title: '😀' });
     });
 });

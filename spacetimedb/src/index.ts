@@ -52,6 +52,7 @@ export {
     view_my_availability,
     view_saved_calendar_availability,
     view_my_saved_calendars,
+    view_event_attendees,                   // S10ad (A161(1)): with an argument
 } from '@module/views/calendarViews';
 export {
     view_admin_user_identities,             // S9b: Moderator+

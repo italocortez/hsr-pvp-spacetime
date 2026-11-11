@@ -25,25 +25,32 @@ export function setBracketMatchSchedule(ctx: any, bracketMatchId: number | undef
  * Deletes all CalendarEventInvite rows for an event, then deletes the CalendarEvent itself.
  * Per D-03: event deletion must cascade to invites. S10ac (A157(12)): a match event's bracket match loses its
  * `scheduledAt` (every path that deletes an event comes here: delete_calendar_event, the tournament cascades, user
- * deletion, the lazy clean-up and the scheduled sweep).
+ * deletion, the lazy clean-up and the scheduled sweep). S10ad (A160(6)): retention (the lazy clean-up and the sweep)
+ * passes `keepSchedule`, so the match keeps its time; every other path still clears it.
  */
-export function deleteCalendarEventWithInvites(ctx: any, eventId: number): void {
+export function deleteCalendarEventWithInvites(ctx: any, eventId: number, opts: { keepSchedule?: boolean } = {}): void {
     const event = ctx.db.CalendarEvent.id.find(eventId);
     for (const invite of [...ctx.db.CalendarEventInvite.event_id.filter(eventId)]) {
         ctx.db.CalendarEventInvite.delete(invite);
     }
     ctx.db.CalendarEvent.id.delete(eventId);
-    if (event) setBracketMatchSchedule(ctx, event.bracketMatchId, undefined);
+    if (event && !opts.keepSchedule) setBracketMatchSchedule(ctx, event.bracketMatchId, undefined);
 }
 
 /**
  * Finds all CalendarEvents linked to a bracket match and deletes them with their invites.
  * Per D-22: when a bracket match is deleted, its linked calendar event must also be deleted.
+ * S10ad (A161(3), review F1): the bracket cascades (staff resolve, rollback, tournament cancel, disqualification,
+ * regeneration) all come here, and they clear the match's `scheduledAt` whether or not an event was found: retention
+ * may have removed the event and kept the time (A160(6)). A match with no time is not written.
  */
 export function deleteCalendarEventForBracketMatch(ctx: any, bracketMatchId: number): void {
     const events = [...ctx.db.CalendarEvent.bracket_match_id.filter(bracketMatchId)];
     for (const event of events) {
         deleteCalendarEventWithInvites(ctx, event.id);
+    }
+    if (ctx.db.BracketMatch.id.find(bracketMatchId)?.scheduledAt !== undefined) {
+        setBracketMatchSchedule(ctx, bracketMatchId, undefined);
     }
 }
 

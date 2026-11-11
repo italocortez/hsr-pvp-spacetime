@@ -3,16 +3,17 @@
 // From S9b (s9b-views.test.ts).
 import { describe, expect, it } from 'vitest';
 import type {
+    EventAttendeeRow,
     MyAvailabilityRow,
     MyCalendarEventRow,
     MyCalendarInviteRow,
     MySavedCalendarRow,
     SavedCalendarAvailabilityRow,
 } from '@bindings/types';
-import { M, newHarness, tx, type Actor, type Harness } from '../fixtures/harness';
-import { verified, displayName } from '../fixtures/identity';
+import { M, guest, newHarness, tx, type Actor, type Harness } from '../fixtures/harness';
+import { admin, verified, displayName } from '../fixtures/identity';
 import { addSlotAt, createTitledEvent, saveCalendar } from '../fixtures/calendar';
-import { AUDIT_KEYS, keysOf, sorted, view, type Reader } from '../fixtures/views';
+import { AUDIT_KEYS, keysOf, profileGhost, sorted, view, type Reader } from '../fixtures/views';
 import { duel } from '../fixtures/tournament-matches';
 import { assignAssistant } from '../fixtures/tournaments';
 
@@ -87,14 +88,12 @@ describe('calendar views (S9b-C1..C3, S9b-V8)', () => {
         expect(view<SavedCalendarAvailabilityRow>(w.test, 'view_saved_calendar_availability', w.dave).some((r) => r.userId === w.frank.userId)).toBe(true);
     });
 
-    it('S9b-C2 (re-aligned T-S10ac, A157(5)): Dave reads his own invites with the inviter\'s name, and the other invites only of the events he is invited to; Carol reads every invite of E1; a response updates the row in place', () => {
+    it('S9b-C2 (re-aligned T-S10ac, A157(5); re-aligned T-S10ad fix pass, A161(1)): Dave reads only his own invites with the inviter\'s name (no other invitee\'s row); Carol reads every invite of E1; a response updates the row in place', () => {
         const w = world();
         const mine = w.invites(w.dave);
         for (const r of mine) expect(keysOf(r)).toEqual(sorted('calInvite'));
-        const daveEvents = new Set(mine.filter((r) => r.inviteeUserId === w.dave.userId).map((r) => r.eventId));
-        expect(mine.every((r) => daveEvents.has(r.eventId))).toBe(true); // other invitees only of Dave's own events
-        expect(mine.filter((r) => r.eventId === w.e1).map((r) => r.inviteeUserId).sort((a, b) => a - b))
-            .toEqual([w.dave.userId, w.gina.userId].sort((a, b) => a - b));
+        expect(mine.every((r) => r.inviteeUserId === w.dave.userId)).toBe(true); // A161(1): own rows only
+        expect(mine.filter((r) => r.eventId === w.e1).map((r) => r.inviteeUserId)).toEqual([w.dave.userId]);
         const e1 = mine.find((r) => r.eventId === w.e1 && r.inviteeUserId === w.dave.userId)!;
         expect(e1).toMatchObject({
             inviteKey: key(w.e1, w.dave.userId), inviteeLabel: displayName(w.test, w.dave), inviteStatus: { tag: 'Pending' },
@@ -112,8 +111,7 @@ describe('calendar views (S9b-C1..C3, S9b-V8)', () => {
         expect(after.inviteStatus.tag).toBe('Accepted');
         expect(after.respondedAt).toBeDefined();
         expect(w.invites(w.carol).find((r) => r.inviteKey === key(w.e1, w.dave.userId))!.inviteStatus.tag).toBe('Accepted');
-        expect(w.invites(w.gina).map((r) => r.inviteeUserId).sort((a, b) => a - b)).toEqual([w.dave.userId, w.gina.userId].sort((a, b) => a - b));
-        expect(w.invites(w.gina).find((r) => r.inviteeUserId === w.dave.userId)!.inviteStatus.tag).toBe('Accepted');
+        expect(w.invites(w.gina).map((r) => r.inviteeUserId)).toEqual([w.gina.userId]); // A161(1): own row only
         expect(w.invites(w.outsider)).toEqual([]);
     });
 
@@ -179,20 +177,28 @@ describe('A157: the calendar views per viewer (S10ac)', () => {
         saveCalendar(test, sam, carol);
         const events = (who: Actor) => view<MyCalendarEventRow>(test, 'view_my_calendar_events', who);
         const invites = (who: Actor) => view<MyCalendarInviteRow>(test, 'view_my_calendar_invites', who);
-        return { test, carol, bob, dora, leo, sam, otto, p, events, invites };
+        const attendees = (who: Actor) => view<EventAttendeeRow>(test, 'view_event_attendees', who, { eventId: p });
+        return { test, carol, bob, dora, leo, sam, otto, p, events, invites, attendees };
     }
     const ids = (rows: Array<{ inviteeUserId: number }>) => rows.map((r) => r.inviteeUserId).sort((a, b) => a - b);
 
-    it('A157(5): the organizer and every remaining invitee (the decliner too) read all invites of the personal event with their answers; the leaver, the saver and an outsider read none', () => {
+    it('A157(5) (re-aligned T-S10ad fix pass, A161(1): was "every remaining invitee reads all invites in view_my_calendar_invites"): there the organizer reads all invites of the personal event, each invitee only their own; view_event_attendees gives the organizer and every remaining invitee (the decliner too) the full list with answers; the leaver, the saver and an outsider read none in either', () => {
         const w = personal();
         const all = ids([w.bob, w.dora].map((u) => ({ inviteeUserId: u.userId })));
+        expect(ids(w.invites(w.carol).filter((r) => r.eventId === w.p))).toEqual(all);
+        for (const reader of [w.bob, w.dora]) {
+            expect(ids(w.invites(reader).filter((r) => r.eventId === w.p)), displayName(w.test, reader)).toEqual([reader.userId]);
+        }
         for (const reader of [w.carol, w.bob, w.dora]) {
-            const rows = w.invites(reader).filter((r) => r.eventId === w.p);
+            const rows = w.attendees(reader);
             expect(ids(rows), displayName(w.test, reader)).toEqual(all);
             expect(rows.find((r) => r.inviteeUserId === w.dora.userId)!.inviteStatus.tag).toBe('Declined');
             expect(rows.find((r) => r.inviteeUserId === w.bob.userId)!.inviteStatus.tag).toBe('Pending');
         }
-        for (const reader of [w.leo, w.sam, w.otto]) expect(w.invites(reader)).toEqual([]);
+        for (const reader of [w.leo, w.sam, w.otto]) {
+            expect(w.invites(reader)).toEqual([]);
+            expect(w.attendees(reader)).toEqual([]);
+        }
     });
 
     it('A157(8): the decliner still reads the event row, without the notes; the invitee reads it with the notes; the leaver and the outsider read nothing of it', () => {
@@ -238,22 +244,24 @@ describe('A157: the calendar views per viewer (S10ac)', () => {
         ]);
     });
 
-    it('A157(12): avatars next to the labels: organizer in the event row, invitee and inviter in the invite row; a deleted invitee\'s row goes with the account', () => {
+    it('A157(12) (re-aligned T-S10ad fix pass, A161(1): Bob\'s row was read from Dora\'s view_my_calendar_invites, now from her attendee list): avatars next to the labels: organizer in the event row, invitee and inviter in the invite row, invitee in the attendee row; a deleted invitee\'s row goes with the account', () => {
         const w = personal();
         expect(w.events(w.bob).find((r) => r.id === w.p)!.organizerAvatarCharacterName).toBe('Kafka');
-        const bobsRow = w.invites(w.dora).find((r) => r.inviteeUserId === w.bob.userId)!;
-        expect(bobsRow).toMatchObject({
+        expect(w.invites(w.bob).find((r) => r.inviteeUserId === w.bob.userId)!).toMatchObject({
             inviteeLabel: displayName(w.test, w.bob), inviteeAvatarCharacterName: 'Bronya',
             inviterLabel: displayName(w.test, w.carol), inviterAvatarCharacterName: 'Kafka',
         });
+        const bobsRow = w.attendees(w.dora).find((r) => r.inviteeUserId === w.bob.userId)!;
+        expect(bobsRow).toMatchObject({ inviteeLabel: displayName(w.test, w.bob), inviteeAvatarCharacterName: 'Bronya' });
         const dorasRow = w.invites(w.carol).find((r) => r.inviteeUserId === w.dora.userId)!;
         expect(dorasRow.inviteeAvatarCharacterName).toBe(test_avatar(w.test, w.dora));
         const username = w.test.db.User.id.find(w.bob.userId)!.username;
         tx(w.test, 'internal', (ctx) => M.server_delete_user(ctx, { username }));
         expect(w.invites(w.dora).map((r) => r.inviteeUserId)).toEqual([w.dora.userId]);
+        expect(w.attendees(w.dora).map((r) => r.inviteeUserId)).toEqual([w.dora.userId]);
     });
 
-    it('A157(5): a match event of a tournament that is not anonymous: an invited player reads all invites; of an anonymous tournament (isAnonymousDefault): only their own, while the organizer and an invited bracket assistant read all', () => {
+    it('A157(5) (re-aligned T-S10ad fix pass, A161(1): the full list moved from view_my_calendar_invites to view_event_attendees): a match event of a tournament that is not anonymous: an invited player reads all invites; of an anonymous tournament (isAnonymousDefault): none, while the organizer and an invited bracket assistant read all; view_my_calendar_invites gives each invitee their own row only', () => {
         const f = duel();
         const { test, org } = f;
         const m = [...test.db.BracketMatch.tournament_id.filter(f.id)][0];
@@ -261,21 +269,161 @@ describe('A157: the calendar views per viewer (S10ac)', () => {
         const player = f.ts[0].captain;
         const allInvites = [...test.db.CalendarEventInvite.event_id.filter(id)].map((i) => i.inviteeUserId).sort((a, b) => a - b);
         expect(allInvites.length).toBeGreaterThan(1);
-        const readIds = (who: Actor) => view<MyCalendarInviteRow>(test, 'view_my_calendar_invites', who)
-            .filter((r) => r.eventId === id).map((r) => r.inviteeUserId).sort((a, b) => a - b);
+        const readIds = (who: Actor) => view<EventAttendeeRow>(test, 'view_event_attendees', who, { eventId: id })
+            .map((r) => r.inviteeUserId).sort((a, b) => a - b);
+        const ownIds = (who: Actor) => view<MyCalendarInviteRow>(test, 'view_my_calendar_invites', who)
+            .filter((r) => r.eventId === id).map((r) => r.inviteeUserId);
         expect(readIds(player)).toEqual(allInvites);
+        expect(ownIds(player)).toEqual([player.userId]);
 
         // engineered: the anonymity flag set on the row (update_tournament changes it only in Draft)
         test.db.Tournament.id.update({ ...test.db.Tournament.id.find(f.id)!, isAnonymousDefault: true });
-        expect(readIds(player)).toEqual([player.userId]);
+        expect(readIds(player)).toEqual([]);
+        expect(ownIds(player)).toEqual([player.userId]);
         expect(readIds(org)).toEqual(allInvites);
         const asst = verified(test, 'bracketasst');
         assignAssistant(test, org, f.id, asst, { bracket: true });
         tx(test, org, (ctx) => M.invite_to_event(ctx, { eventId: id, inviteeUserId: asst.userId }));
         expect(readIds(asst)).toEqual([...allInvites, asst.userId].sort((a, b) => a - b));
+        expect(ownIds(asst)).toEqual([asst.userId]);
         const plain = verified(test, 'plainasst');
         assignAssistant(test, org, f.id, plain, { participants: true });
         tx(test, org, (ctx) => M.invite_to_event(ctx, { eventId: id, inviteeUserId: plain.userId }));
-        expect(readIds(plain)).toEqual([plain.userId]);
+        expect(readIds(plain)).toEqual([]);
+        expect(ownIds(plain)).toEqual([plain.userId]);
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// T-S10ad fix pass (A161(1)): view_event_attendees(eventId), the attendee list of one event, per reader
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('A161(1): view_event_attendees(eventId) returns one event\'s invites to the readers A157(5) names', () => {
+    const COLS_ATTENDEE = ['inviteStatus', 'inviteeAvatarCharacterName', 'inviteeLabel', 'inviteeUserId', 'respondedAt'];
+    const read = (test: Harness, who: Reader, eventId: number) =>
+        view<EventAttendeeRow>(test, 'view_event_attendees', who, { eventId });
+    const idsOf = (rows: EventAttendeeRow[]) => rows.map((r) => r.inviteeUserId).sort((a, b) => a - b);
+
+    /**
+     * Carol organizes P inviting Bob (Pending), Ana (Accepted), Dora (Declined), Tom (Tentative) and Leo (leaves); Sam
+     * saved Carol's calendar; Otto is a verified outsider, Gus a guest outsider, Ada an Admin who is not invited.
+     */
+    function personalWorld() {
+        const test = newHarness();
+        const [carol, bob, ana, dora, tom, leo, sam, otto] = ['pcarol', 'pbob', 'pana', 'pdora', 'ptom', 'pleo', 'psam', 'potto']
+            .map((n) => verified(test, n));
+        const gus = guest(test, 'pgus');
+        const ada = admin(test, 'pada');
+        const p = createTitledEvent(test, carol, 'P', [bob, ana, dora, tom, leo]);
+        tx(test, ana, (ctx) => M.respond_to_invite(ctx, { eventId: p, status: 'Accepted' }));
+        tx(test, dora, (ctx) => M.respond_to_invite(ctx, { eventId: p, status: 'Declined' }));
+        tx(test, tom, (ctx) => M.respond_to_invite(ctx, { eventId: p, status: 'Tentative' }));
+        tx(test, leo, (ctx) => M.remove_invite(ctx, { eventId: p, inviteeUserId: leo.userId }));
+        saveCalendar(test, sam, carol);
+        const all = [bob, ana, dora, tom].map((u) => u.userId).sort((a, b) => a - b);
+        return { test, carol, bob, ana, dora, tom, leo, sam, otto, gus, ada, p, all };
+    }
+
+    it('personal event: the organizer and every invitee in each answer state read the full list with answers and the documented columns only', () => {
+        const w = personalWorld();
+        for (const reader of [w.carol, w.bob, w.ana, w.dora, w.tom]) {
+            const rows = read(w.test, reader, w.p);
+            expect(idsOf(rows), displayName(w.test, reader)).toEqual(w.all);
+            for (const r of rows) {
+                expect(keysOf(r)).toEqual(COLS_ATTENDEE);
+                expect(r.inviteeLabel).toBe(w.test.db.User.id.find(r.inviteeUserId)!.displayName);
+            }
+            const status = Object.fromEntries(rows.map((r) => [r.inviteeUserId, r.inviteStatus.tag]));
+            expect(status).toEqual({
+                [w.bob.userId]: 'Pending', [w.ana.userId]: 'Accepted', [w.dora.userId]: 'Declined', [w.tom.userId]: 'Tentative',
+            });
+            expect(rows.find((r) => r.inviteeUserId === w.bob.userId)!.respondedAt).toBeUndefined();
+            expect(rows.find((r) => r.inviteeUserId === w.ana.userId)!.respondedAt).toBeDefined();
+        }
+    });
+
+    it('personal event: the leaver, the saver, an outsider, a guest, an Admin who is not invited and a client that never logged in read nothing', () => {
+        const w = personalWorld();
+        for (const reader of [w.leo, w.sam, w.otto, w.gus, w.ada]) {
+            expect(read(w.test, reader, w.p), displayName(w.test, reader)).toEqual([]);
+        }
+        expect(read(w.test, profileGhost(), w.p)).toEqual([]);
+    });
+
+    it('an unknown event id and a deleted event give no rows (no error); an answer is visible to the other readers at once', () => {
+        const w = personalWorld();
+        expect(read(w.test, w.carol, 999_999)).toEqual([]);
+        tx(w.test, w.bob, (ctx) => M.respond_to_invite(ctx, { eventId: w.p, status: 'Accepted' }));
+        expect(read(w.test, w.dora, w.p).find((r) => r.inviteeUserId === w.bob.userId)!.inviteStatus.tag).toBe('Accepted');
+        tx(w.test, w.carol, (ctx) => M.delete_calendar_event(ctx, { eventId: w.p }));
+        for (const reader of [w.carol, w.bob, w.ana, w.dora, w.tom]) expect(read(w.test, reader, w.p)).toEqual([]);
+    });
+
+    /**
+     * A duel's final with a match event by the organizer: the four team members are invited by the server, plus an
+     * approved stand-in for team 1; a bracket assistant with an invite and one without; a plain assistant with an invite
+     * and one without; a member who removed their own invite; a saver of the organizer's calendar; an outsider; a guest;
+     * an Admin. `anonymous` sets Tournament.isAnonymousDefault on the row (update_tournament changes it only in Draft).
+     */
+    function matchWorld(anonymous: boolean) {
+        const f = duel();
+        const { test, org } = f;
+        const m = [...test.db.BracketMatch.tournament_id.filter(f.id)][0];
+        const sub = verified(test, 'msub');
+        tx(test, org, (ctx) => M.approve_stand_in(ctx, { bracketMatchId: m.id, teamId: m.team1Id!, userId: sub.userId }));
+        const id = createTitledEvent(test, org, 'Final', [], m.id);
+        const [bInv, bNo, pInv, pNo, saver, outsider] = ['mbinv', 'mbno', 'mpinv', 'mpno', 'msaver', 'mout'].map((n) => verified(test, n));
+        assignAssistant(test, org, f.id, bInv, { bracket: true });
+        assignAssistant(test, org, f.id, bNo, { bracket: true });
+        assignAssistant(test, org, f.id, pInv, { participants: true });
+        assignAssistant(test, org, f.id, pNo, { participants: true });
+        tx(test, org, (ctx) => M.invite_to_event(ctx, { eventId: id, inviteeUserId: bInv.userId }));
+        tx(test, org, (ctx) => M.invite_to_event(ctx, { eventId: id, inviteeUserId: pInv.userId }));
+        const leaver = f.ts[1].mate;
+        tx(test, leaver, (ctx) => M.remove_invite(ctx, { eventId: id, inviteeUserId: leaver.userId }));
+        saveCalendar(test, saver, org);
+        const gus = guest(test, 'mgus');
+        const ada = admin(test, 'mada');
+        if (anonymous) test.db.Tournament.id.update({ ...test.db.Tournament.id.find(f.id)!, isAnonymousDefault: true });
+        const all = [...test.db.CalendarEventInvite.event_id.filter(id)].map((i) => i.inviteeUserId).sort((a, b) => a - b);
+        const members = [f.ts[0].captain, f.ts[0].mate, f.ts[1].captain];
+        expect(all).toEqual(expect.arrayContaining([...members, sub, bInv, pInv].map((u) => u.userId)));
+        expect(all).not.toContain(leaver.userId);
+        return { test, org, id, sub, bInv, bNo, pInv, pNo, leaver, saver, outsider, gus, ada, members, all };
+    }
+
+    it('match event of a tournament that is not anonymous: every invitee (team members, stand-in, invited assistants of any kind), the organizer, bracket permission holders without an invite and an Admin read the full list; the leaver, a plain assistant without an invite, the saver, an outsider and a guest read nothing', () => {
+        const w = matchWorld(false);
+        for (const reader of [w.org, ...w.members, w.sub, w.bInv, w.pInv, w.bNo, w.ada]) {
+            expect(idsOf(read(w.test, reader, w.id)), displayName(w.test, reader)).toEqual(w.all);
+        }
+        for (const reader of [w.leaver, w.pNo, w.saver, w.outsider, w.gus]) {
+            expect(read(w.test, reader, w.id), displayName(w.test, reader)).toEqual([]);
+        }
+    });
+
+    it('match event of an anonymous tournament: only the organizer and holders of the bracket permission (assistant with or without an invite, Admin) read the list; team members, the stand-in and an invited plain assistant read nothing here and keep their own row in view_my_calendar_invites', () => {
+        const w = matchWorld(true);
+        for (const reader of [w.org, w.bInv, w.bNo, w.ada]) {
+            expect(idsOf(read(w.test, reader, w.id)), displayName(w.test, reader)).toEqual(w.all);
+        }
+        for (const reader of [...w.members, w.sub, w.pInv, w.pNo, w.leaver, w.saver, w.outsider, w.gus]) {
+            expect(read(w.test, reader, w.id), displayName(w.test, reader)).toEqual([]);
+        }
+        for (const reader of [...w.members, w.sub, w.pInv]) {
+            expect(view<MyCalendarInviteRow>(w.test, 'view_my_calendar_invites', reader).filter((r) => r.eventId === w.id)
+                .map((r) => r.inviteeUserId)).toEqual([reader.userId]);
+        }
+    });
+
+    it('a personal event against a match event: a bracket assistant and an Admin read the match event\'s list but not a personal event of the same organizer they are not invited to', () => {
+        const w = matchWorld(false);
+        const p = createTitledEvent(w.test, w.org, 'Personal', [w.members[0]]);
+        expect(idsOf(read(w.test, w.members[0], p))).toEqual([w.members[0].userId]);
+        expect(idsOf(read(w.test, w.org, p))).toEqual([w.members[0].userId]);
+        for (const reader of [w.bInv, w.bNo, w.ada]) {
+            expect(idsOf(read(w.test, reader, w.id)).length).toBeGreaterThan(0);
+            expect(read(w.test, reader, p), displayName(w.test, reader)).toEqual([]);
+        }
     });
 });

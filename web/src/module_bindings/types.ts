@@ -677,6 +677,17 @@ export const EquipLightconePayload = __t.object("EquipLightconePayload", {
 });
 export type EquipLightconePayload = __Infer<typeof EquipLightconePayload>;
 
+export const EventAttendeeRow = __t.object("EventAttendeeRow", {
+  inviteeUserId: __t.u32(),
+  inviteeLabel: __t.string(),
+  inviteeAvatarCharacterName: __t.option(__t.string()),
+  get inviteStatus() {
+    return InviteStatus;
+  },
+  respondedAt: __t.option(__t.timestamp()),
+});
+export type EventAttendeeRow = __Infer<typeof EventAttendeeRow>;
+
 // The tagged union or sum type for the algebraic type `GameMode`.
 export const GameMode = __t.enum("GameMode", {
   MemoryOfChaos: __t.unit(),
@@ -2980,6 +2991,11 @@ export const ViewCostSetMissing = __t.object("ViewCostSetMissing", {
   costSetId: __t.u32(),
 });
 export type ViewCostSetMissing = __Infer<typeof ViewCostSetMissing>;
+
+export const ViewEventAttendees = __t.object("ViewEventAttendees", {
+  eventId: __t.u32(),
+});
+export type ViewEventAttendees = __Infer<typeof ViewEventAttendees>;
 
 export const ViewLobbyBrowser = __t.object("ViewLobbyBrowser", {});
 export type ViewLobbyBrowser = __Infer<typeof ViewLobbyBrowser>;

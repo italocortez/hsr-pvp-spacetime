@@ -205,18 +205,25 @@ export const run_identity_gc = spacetimedb.reducer(
         // S10ac (A157(10)): the bounded sweep of calendar rows past retention (helpers/calendar/calendarCleanup.ts),
         // after the identity pass (a guest deleted above took its rows with it). Its own GcResult row (gcType
         // 'calendar') only when something was deleted; the identity row's details are unchanged.
+        // S10ad (A160(4), A161(2)): also the Pending invites of events ended more than 7 days ago; `pendingInvites` is in
+        // the details only when some went.
         const calendar = sweepExpiredCalendarRows(ctx);
-        if (calendar.slotsDeleted + calendar.eventsDeleted > 0) {
+        const calendarDeleted = calendar.slotsDeleted + calendar.eventsDeleted + calendar.pendingInvitesDeleted;
+        if (calendarDeleted > 0) {
             ctx.db.GcResult.insert(insertWithAudit(ctx, {
                 id: 0,
                 gcType: 'calendar',
                 ranAt: ctx.timestamp,
                 itemsScanned: calendar.scanned,
-                itemsDeleted: calendar.slotsDeleted + calendar.eventsDeleted,
-                details: JSON.stringify({ slots: calendar.slotsDeleted, events: calendar.eventsDeleted }),
+                itemsDeleted: calendarDeleted,
+                details: JSON.stringify({
+                    slots: calendar.slotsDeleted,
+                    events: calendar.eventsDeleted,
+                    ...(calendar.pendingInvitesDeleted > 0 ? { pendingInvites: calendar.pendingInvitesDeleted } : {}),
+                }),
             }, SYSTEM_USER_ID));
         }
-        console.log(`[CALENDAR_GC] Complete: scanned=${calendar.scanned}, slots=${calendar.slotsDeleted}, events=${calendar.eventsDeleted}`);
+        console.log(`[CALENDAR_GC] Complete: scanned=${calendar.scanned}, slots=${calendar.slotsDeleted}, events=${calendar.eventsDeleted}, pendingInvites=${calendar.pendingInvitesDeleted}`);
 
         // Self-requeue: next run in 7 days (D-03), or in one hour when the guest deletion cap was reached (review F4)
         // or the calendar sweep left rows over its batch (S10ac, A157(10))

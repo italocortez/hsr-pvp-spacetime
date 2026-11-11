@@ -8,8 +8,11 @@
 //
 // Rules (S10ac, A157): times through parseInterval (digits only, 2020..2100, A157(11)); a slot lasts at most 24 h;
 // a start in the past is refused on create and on an update that moves the start (A157(9)); the start lies at most
-// 6 months ahead (D-28); at most 10 slots per UTC week (Monday 00:00 UTC) counted by start, ended slots not counted
-// (A157(2)), the slot under update not counted.
+// 6 months ahead (D-28). S10ad (A160(1)): at most 10 Available and 10 Blocked slots per UTC week (Monday 00:00 UTC),
+// counted separately by start; an ended slot still counts in its week (supersedes A157(2)'s shared cap of 10 and its
+// "ended slots do not count"); the slot under update not counted.
+// S10ad (A160(3)): a Blocked slot (new, moved, or switched from Available) may not overlap a personal event the user
+// organizes that has not ended (endAt > now); touching intervals pass; tournament match events are exempt.
 // Lazy cleanup (D-27, D-07): S10s (A122(22), L86): every calendar reducer first deletes the caller's slots ended more
 // than a week ago and events ended more than 90 days ago (runCalendarCleanup). S10s (A122(4), L93): each counts on the
 // per-user membership allowance (consumeMembershipAllowance). Fix pass (F2, F11): order = authenticate, allowance,
@@ -26,6 +29,7 @@ import {
     MAX_SLOT_LENGTH_MICROS,
     MICROS_PER_DAY,
     ensureStartNotPast,
+    intervalsOverlap,
     parseInterval,
     utcWeekStart,
 } from '@module/helpers/calendar/calendarTime';
@@ -42,10 +46,12 @@ function parseSlotKind(kind: string): any {
 
 /**
  * The checks shared by create and update after the times are parsed: length (24 h), past start (create: always;
- * update: only when the start moves), the 6-month window, then the weekly cap on the week of the (new) start:
- * the user's slots starting in that UTC week that have not ended (endAt > now), the slot under update excluded.
+ * update: only when the start moves), the 6-month window, then the weekly cap of the slot's kind on the week of the
+ * (new) start. S10ad (A160(1)): the user's slots of the same kind starting in that UTC week, ended or not (an ended
+ * slot leaves its week only when retention deletes it, 7 days after its end, by which time its week is over), the slot
+ * under update excluded.
  */
-function checkSlotTimes(ctx: any, userId: number, start: bigint, end: bigint, now: bigint, current?: any): void {
+function checkSlotTimes(ctx: any, userId: number, kind: string, start: bigint, end: bigint, now: bigint, current?: any): void {
     if (end - start > MAX_SLOT_LENGTH_MICROS) {
         throw new SenderError('An availability slot can last at most 24 hours.');
     }
@@ -57,11 +63,26 @@ function checkSlotTimes(ctx: any, userId: number, start: bigint, end: bigint, no
     let inWeek = 0;
     for (const slot of ctx.db.AvailabilitySlot.user_id.filter(userId)) {
         if (current && slot.id === current.id) continue;
-        if (slot.endAt.microsSinceUnixEpoch <= now) continue; // ended slots do not count
+        if (slot.kind.tag !== kind) continue; // S10ad (A160(1)): each kind has its own cap; ended slots count
         if (utcWeekStart(slot.startAt.microsSinceUnixEpoch) === week) inWeek++;
     }
     if (inWeek >= MAX_SLOTS_PER_WEEK) {
-        throw new SenderError(`You can set at most ${MAX_SLOTS_PER_WEEK} availability slots per week.`);
+        throw new SenderError(`You can set at most ${MAX_SLOTS_PER_WEEK} ${kind.toLowerCase()} slots per week.`);
+    }
+}
+
+/**
+ * S10ad (A160(3)): a Blocked slot may not overlap a personal event the user organizes (CalendarEvent.organizer_id)
+ * that has not ended (endAt > now). Half-open intervals: touching passes. Match events (bracketMatchId set) are exempt,
+ * as on the event side (A157(1)).
+ */
+function ensureBlockedSlotFree(ctx: any, userId: number, start: bigint, end: bigint, now: bigint): void {
+    for (const event of ctx.db.CalendarEvent.organizer_id.filter(userId)) {
+        if (event.bracketMatchId !== undefined) continue;
+        if (event.endAt.microsSinceUnixEpoch <= now) continue;
+        if (intervalsOverlap(start, end, event.startAt.microsSinceUnixEpoch, event.endAt.microsSinceUnixEpoch)) {
+            throw new SenderError('This blocked slot overlaps one of your events.');
+        }
     }
 }
 
@@ -81,7 +102,9 @@ export const create_availability_slot = spacetimedb.reducer(
 
         const slotKind = parseSlotKind(kind);
         const { start, end } = parseInterval(startAt, endAt);
-        checkSlotTimes(ctx, user.id, start, end, ctx.timestamp.microsSinceUnixEpoch);
+        const now = ctx.timestamp.microsSinceUnixEpoch;
+        checkSlotTimes(ctx, user.id, slotKind.tag, start, end, now);
+        if (slotKind.tag === 'Blocked') ensureBlockedSlotFree(ctx, user.id, start, end, now); // A160(3)
 
         ctx.db.AvailabilitySlot.insert(insertWithAudit(ctx, {
             id: 0,
@@ -115,7 +138,11 @@ export const update_availability_slot = spacetimedb.reducer(
 
         const slotKind = parseSlotKind(kind);
         const { start, end } = parseInterval(startAt, endAt);
-        checkSlotTimes(ctx, user.id, start, end, ctx.timestamp.microsSinceUnixEpoch, slot);
+        const now = ctx.timestamp.microsSinceUnixEpoch;
+        checkSlotTimes(ctx, user.id, slotKind.tag, start, end, now, slot);
+        // A160(3): checked when the result is Blocked and the slot is new to that time or to that kind
+        const moved = start !== slot.startAt.microsSinceUnixEpoch || end !== slot.endAt.microsSinceUnixEpoch;
+        if (slotKind.tag === 'Blocked' && (moved || slot.kind.tag !== 'Blocked')) ensureBlockedSlotFree(ctx, user.id, start, end, now);
 
         ctx.db.AvailabilitySlot.id.update(updateWithAudit(ctx, slot, {
             startAt: new Timestamp(start),

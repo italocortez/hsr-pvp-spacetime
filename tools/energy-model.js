@@ -33,7 +33,6 @@ const TYPE_BYTES = {
   SuperimpositionCost: 20, // 5 × f32
   TimerState: 21,         // timestamp + u32 + u32 + bool + u32
   DraftStep: 2,           // 2 enum tags
-  RecurrenceRule: 15,     // enum + u8 + optional u8 + optional u8 + optional timestamp
   LobbyConfigSnapshot: 50, // updated: +characterBudget, +lightconeBudget, -auctionBudget, +minimumBidRaise, +allowMirrorPicks, +autoRandomPick, +referee configs
   StepPayload: 20,        // avg across variants (tag + variant data)
   GameScore: 8,           // u64

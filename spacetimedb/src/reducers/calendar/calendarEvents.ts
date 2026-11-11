@@ -21,8 +21,10 @@
 // Reschedule (S10ac, A157(4)): an update that changes the start or end sets every invite back to Pending.
 // Invitee set (S10ac, A157(12)): update_calendar_event takes the full invitee set (optional; omitted = unchanged).
 // Bracket schedule (S10ac, A157(12)): a match event writes its start to BracketMatch.scheduledAt (create, a start
-// change); every deletion of the event clears it (deleteCalendarEventWithInvites).
+// change); every deletion of the event clears it (deleteCalendarEventWithInvites), except retention (S10ad, A160(6)).
 // Targets (S10ac, A157(7)): manual invitees may not be guests or users pending deletion (ensureCalendarTarget).
+// S10ad (A160(7)): nor the SYSTEM user, nor the event's organizer (create, added invitees of update, invite_to_event).
+// S10ad (A160): a title needs at least one visible character (hasVisibleChar).
 //
 // Lazy cleanup (D-07, D-27): S10s (A122(22), L86): every calendar reducer first deletes the caller's events ended more
 // than 90 days ago and slots ended more than a week ago (runCalendarCleanup). S10s (A122(4), L93): every calendar
@@ -49,6 +51,7 @@ import {
     MAX_EVENT_LENGTH_MICROS,
     charCount,
     ensureStartNotPast,
+    hasVisibleChar,
     intervalsOverlap,
     parseInterval,
 } from '@module/helpers/calendar/calendarTime';
@@ -66,7 +69,8 @@ const MAX_DESCRIPTION_LENGTH = 1000;
  */
 function eventTexts(title: string, description: string): { title: string; description: string | undefined } {
     const trimmedTitle = (title ?? '').trim();
-    if (trimmedTitle === '') throw new SenderError('Event title must not be empty.');
+    // S10ad (A160): a title with no visible character (only spaces, zero-width or control characters) counts as empty
+    if (!hasVisibleChar(trimmedTitle)) throw new SenderError('Event title must not be empty.');
     if (charCount(trimmedTitle) > MAX_TITLE_LENGTH) {
         throw new SenderError(`Event title cannot exceed ${MAX_TITLE_LENGTH} characters.`);
     }
@@ -124,8 +128,20 @@ function parseInviteeIds(inviteeUserIds: string): number[] {
     return [...new Set(ids)];
 }
 
-/** A manual invitee: the user exists (`User <id> not found.`) and may be invited (A157(7)). */
-function ensureInvitable(ctx: any, inviteeId: number): void {
+/** S10ad (A160(7)): the organizer is never in their own invitee set. */
+function ensureNotOrganizer(inviteeId: number, organizerId: number, callerId: number): void {
+    if (inviteeId !== organizerId) return;
+    throw new SenderError(organizerId === callerId
+        ? 'You cannot invite yourself to your own event.'
+        : 'The organizer cannot be invited to their own event.');
+}
+
+/**
+ * A manual invitee: not the organizer (S10ad, A160(7)), the user exists (`User <id> not found.`) and may be invited
+ * (A157(7); S10ad: not the SYSTEM user).
+ */
+function ensureInvitable(ctx: any, inviteeId: number, organizerId: number, callerId: number): void {
+    ensureNotOrganizer(inviteeId, organizerId, callerId);
     const invitee = ctx.db.User.id.find(inviteeId);
     if (!invitee) throw new SenderError(`User ${inviteeId} not found.`);
     ensureCalendarTarget(invitee, 'invite');
@@ -275,7 +291,7 @@ export const create_calendar_event = spacetimedb.reducer(
         autoInviteeIds = [...autoInviteeIds, ...standInIds];
 
         // Validate manual invitees: they exist, and are neither guests nor pending deletion (S10ac, A157(7))
-        for (const inviteeId of uniqueManual) ensureInvitable(ctx, inviteeId);
+        for (const inviteeId of uniqueManual) ensureInvitable(ctx, inviteeId, user.id, user.id);
 
         // Insert event (calendar audit LOW #13: the inserted row, with its id, is the one insert returns)
         const newEvent = ctx.db.CalendarEvent.insert(insertWithAudit(ctx, {
@@ -369,7 +385,7 @@ export const update_calendar_event = spacetimedb.reducer(
             const currentIds = new Set(current.map((i: any) => i.inviteeUserId));
             removed = current.filter((i: any) => !desiredSet.has(i.inviteeUserId));
             added = desired.filter((id) => !currentIds.has(id));
-            for (const inviteeId of added) ensureInvitable(ctx, inviteeId);
+            for (const inviteeId of added) ensureInvitable(ctx, inviteeId, event.organizerId, user.id);
         }
 
         ctx.db.CalendarEvent.id.update(updateWithAudit(ctx, event, {
@@ -432,9 +448,10 @@ export const invite_to_event = spacetimedb.reducer(
         if (!event) throw new SenderError('Calendar event not found.');
         ensureCanManageEvent(ctx, user, event, 'invite users to this event');
 
+        ensureNotOrganizer(inviteeUserId, event.organizerId, user.id); // S10ad (A160(7))
         const invitee = ctx.db.User.id.find(inviteeUserId);
         if (!invitee) throw new SenderError('Invitee user not found.');
-        ensureCalendarTarget(invitee, 'invite'); // S10ac (A157(7))
+        ensureCalendarTarget(invitee, 'invite'); // S10ac (A157(7)); S10ad: not the SYSTEM user
 
         // Duplicate check
         const existingInvite = [...ctx.db.CalendarEventInvite.by_event_and_invitee.filter([eventId, inviteeUserId])][0];
