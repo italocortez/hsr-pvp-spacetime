@@ -1604,3 +1604,13 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   4. Accepted as is: moving a running event's end resets the answers (A157(4)), which are then removed with the rule above; received invites have no cap per user.
 - **Why:** user, 2026-11-11. On loading the attendee list on the page side: "yeah lets try C". After the review showed that a filtered subscription on the existing view is unproven on this version and that a small view with an argument gives the same result, and on the 7 days: "i agree wit hyour recomendations here".
 - **Where implemented:** S10ad
+
+### A162 — Calendar: rulings on the second S10ad review
+
+- **Decision:**
+  1. For a tournament match event, the event's organizer reads the attendee list and may edit the event only while holding the bracket permission of that tournament; a creator who is no longer staff has no more rights on it than any other user in their position.
+  2. Moving an event more than 7 days after its end stays allowed; unanswered invitees may already have been removed (documented).
+  3. An Admin reads the attendee list of every event.
+  4. Unchanged: a team member without an invite row does not read their match event's attendee list.
+- **Why:** user, 2026-11-11, on the orchestrator's recommendations (1(b), 2(a), 3(b), 4(a)): "I agree with your recomendations".
+- **Where implemented:** S11a
