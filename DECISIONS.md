@@ -1452,3 +1452,10 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** user, 2026-11-10: "for the eidolon issue, can we just not allow edits to a given game account if its being used in a lobby at that very moment?". S10u review 2, G2.
 - **Orchestrator's reading (not the user's words):** the cost-row part and keeping the fallback for the two remaining routes.
 - **Where implemented:** S10w
+
+### A143 — Account locks record their origin; the lock table gets an index by tournament
+
+- **Date:** 2026-11-10 · **Status:** decided
+- **Decision:** at S11 `TournamentPlayerAccount` gains a column that records where a lock came from (the player's own entry, or taking part as a stand-in), and an index by tournament. The release of stand-in locks then reads the origin instead of comparing lock time with approval time, and the end-of-tournament sweep reads only that tournament's rows.
+- **Why:** user, 2026-11-10: "yeah i agree". S10v review 2 (G2) and review 1 (F16): the time-based release keeps a lock too long after a revoke and re-approval, and releases an entrant's own later lock; the sweep scans the whole table.
+- **Where implemented:** S11 (schema change, with the clear publish)
