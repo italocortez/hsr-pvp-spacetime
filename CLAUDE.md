@@ -87,7 +87,7 @@ Skip it for backend-only edits, pure refactors with no visual delta, and utility
 ## 7. Docs
 
 - `docs/<feature>/architecture.md`: tables, keys, indexes, reducer reference. **Update it with every backend change.**
-- `docs/<feature>/contract.md`: Given/When/Then scenarios, edge cases, integration points, Phase History. Template: `.claude/skills/uat/references/workflow-doc-template.md`; reference example: `docs/tournament/contract.md`.
+- `docs/<feature>/contract.md`: Given/When/Then scenarios, edge cases, integration points, Phase History. Template: `docs/contract-template.md`; reference example: `docs/tournament/contract.md`.
 - **Never modify a contract during execution.** After execution, add the new entries and tag each one `Phase <step> execution` in Phase History so the user can tell their decisions from Claude's. User decisions cite their `DECISIONS.md` id.
 - Every executed step writes `docs/log/<date>-<step>.md`: goal, decisions implemented, files changed, done-check and test results, deviations, and a doc checklist (per touched `docs/<feature>/`: architecture / contract / both / skip with reason). The step is not done until the checklist is answered.
 - Architecture docs cross-reference contracts; no duplication between them.
@@ -113,7 +113,6 @@ Load the relevant skill before writing code: **`spacetimedb`** for anything touc
 |---|---|
 | `spacetimedb` | backend patterns, API reference, guardrails |
 | `web-guidance` | local copies of web platform guides: how to build a UI pattern with current HTML, CSS and browser APIs; holds the browser support policy |
-| `uat` | behavior specs, test integrity, UAT and failure diagnostics |
 | `vercel-setup` / `vercel-deploy` / `vercel-logs` | Vercel CLI project setup, deploys, logs |
 | `pr-description` | PR descriptions |
 | `severity-review` | code review at varying depth |
@@ -121,22 +120,3 @@ Load the relevant skill before writing code: **`spacetimedb`** for anything touc
 | `humanizer` | plain-language rewrite of prose |
 | `skill-creator:skill-creator` | plugin: create and improve skills |
 | `simplify` | review changed code for reuse and efficiency |
-
-## 10. UAT format
-
-During a UAT session, present ONE test at a time in this format:
-
-```
-**STEP N: {who} does {what} on {whom}**
-
-| col | col | col |        ← spacetime sql output as a markdown table
-|-----|-----|-----|
-| val | val | **changed** | ← bold changed values
-
-{who} ({role}) called `{reducer}` on {target}: {field} changed from `old` → `new`.
-```
-
-- `spacetime sql` after EVERY state-changing reducer call, no exceptions; tables grow as rows accumulate (show the full table each step).
-- Give participant/team/user ids colored markers (🔴🔵🟢🟡🟣🟠), the same color across all tables.
-- Rejection tests: one summary table (`caller | action | error`) and one final snapshot proving no state changed.
-- After all steps show a checkpoint box and wait for the user. One test per checkpoint; never batch.

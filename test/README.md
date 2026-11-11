@@ -93,3 +93,21 @@ Test files change only under an explicit T-task of a step (CLAUDE.md §6).
 4. `SKIP_DB_CLEAR=1 npm run test:integration`
 
 Fast wipe of non-seed state: the `server_nuke_test_data` reducer (`confirmation: 'NUKE_TEST_DATA'`) through a delegate connection; it rejects on any database whose `STDB_TARGET` is not `test`.
+
+## Live layer notes (carried from the retired `uat` skill, 2026-11-11)
+
+- **After a wipe publish** (`npm run stdb:publish:test:clear`, user gate): run `npm run stdb:bootstrap:test`. `init` has registered the publisher as Owner and created SYSTEM; bootstrap mints a server identity, registers it as delegate, writes `STDB_SERVER_TOKEN` / `STDB_SERVER_IDENTITY` to `.env.test.local`, then seeds `data/seed/`, achievements, configs and the scheduled jobs. Re-seed alone: `npm run stdb:seed:test`.
+- **Smoke check after a publish**: the module log (`spacetime logs <db> --server maincloud --no-config`) shows no error, and one count query answers.
+- **`sync()` in the live harness is a fixed sleep** (500 ms by default), not a subscription acknowledgement. A live test that passes on retry is a timing problem of the test, not of the module.
+- **Disconnect detection is slow on maincloud**: after `conn.disconnect()` the server may take 30 to 60 s to fire `clientDisconnected`. Tests that need a user offline at once set it through a server-token connection (`server_set_online`).
+
+## Guided walk-through with the user (S11b)
+
+Used only when the user asks to watch a flow on the live test database. One step at a time:
+
+- State who does what to whom, call the reducer, then show the affected rows as a markdown table with changed values in bold.
+- One short sentence under the table: who called which reducer and which field changed from what to what.
+- The same coloured marker per user or team across all tables of the session.
+- Refusals: one summary table (caller, action, error text) and one final snapshot showing nothing changed.
+- Stop after each step and wait for the user.
+- Every query costs energy and `User` is private from S11a: read through views or the server-token connection, and keep the number of queries small.

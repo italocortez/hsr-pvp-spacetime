@@ -1549,3 +1549,33 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Decision:** when every member was offline at the moment of the referee's own check, the paused team is absent and a separate referee with exclusive concede rights stays offline, a returning opponent cannot resume, claim or close. Accepted: the match was left by everyone; the referee, a player of the paused team, staff or the lobby clean-up ends it.
 - **Why:** user, 2026-11-11: "well for the option 2, isnt that everyone drops? because if they are offline... that means they disconnected from the match" and "yeah lets just keep 2 with option A".
 - **Where implemented:** no change
+
+### A157 — Calendar: the backend follows the calendar mockup; the user accepted the review's recommendations
+
+- **Decision:** rulings on `notes/audit-2026-11-09/calendar-review.md` (2026-11-11), each as the orchestrator recommended it unless marked:
+  1. **Blocked slots.** An availability slot has a kind, Available or Blocked. Both availability views carry it. An event whose time overlaps one of the organizer's own Blocked slots is refused (the mockup's "Events can't overlap a blocked slot"; making it a server rule for the organizer's own slots is the orchestrator's reading).
+  2. **Cap.** At most 10 availability slots per week per user; a slot counts in the week its start falls in (weeks start Monday 00:00 UTC, the server stores no user time zone: orchestrator's reading). Ended slots do not count. The old total of 10 and the 7-day count of ended slots are gone; the 6-month window stays.
+  3. **Recurrence is removed**: the recurrence columns, arguments and rules go; every slot is one dated interval. With it the question of recurrence across daylight saving is closed.
+  4. **Reschedule.** Changing an event's start or end sets every invite of that event back to Pending.
+  5. **Attendee list.** An invitee of a personal event sees all invites of that event with their answers. For a tournament match event of an anonymous tournament the list stays with the organizer and staff.
+  6. **Saved players' events.** A saver receives a saved player's events as busy blocks: start and end only, no title, no notes.
+  7. **Guests and users pending deletion** cannot be saved or invited.
+  8. **Leaving.** An invitee may remove their own invite; the event then stops arriving. A Declined invite keeps the event arriving so the answer can change, but without the notes (orchestrator's refinement of "stop sending declined events", because the mockup lets an answer change; told to the user).
+  9. **Past dates.** Creating a slot or an event with a start in the past is refused; so is moving one to a past start. Supersedes the end-only check of A79(3).
+  10. **Old rows.** The existing scheduled clean-up also removes ended slots and expired events of users who do not return, in bounded batches.
+  11. **Input checks (bugs B1, B6).** Every time argument is parsed by one validator (digits only, a sane range, `SenderError` on anything else); a slot lasts at most 24 hours and an event at most 7 days (orchestrator's bounds); an event starts at most 12 months ahead; the title limit counts characters, not UTF-16 units.
+  12. **From the mockup, included by the orchestrator and told to the user:** event and invite rows carry the avatar character name next to each label; `update_calendar_event` accepts the full invitee set so one save is one call; a tournament match event writes its start to the bracket match's `scheduledAt` and clears it when the event is deleted.
+- **Why:** user, 2026-11-11: "for calendar, as recommended and recurrance can go".
+- **Where implemented:** S10ac (schema changes reach maincloud with the S11 clear publish)
+
+### A158 — S11 is split: the live publish to test1 comes before the frontend, the page checks stay at the end
+
+- **Decision:** S11a (carried schema work and fixes, wipe of test1, publish, bootstrap, seed, generate, live tests once) runs right after the calendar step, so the frontend connects to a real database from M6 on. S11b (the two-tabs checks and anything that needs pages) stays after M10. Every gate of S11 is unchanged: the wipe, each publish and the live test run need the user's approval at that moment.
+- **Why:** user, 2026-11-11, on the orchestrator's recommendation (test1 still holds the old project's module; a first live connection eight steps later would bring every surprise at once): "lets do the split".
+- **Where implemented:** ROADMAP.md
+
+### A159 — The `uat` skill and the UAT format are retired
+
+- **Decision:** the `uat` skill folder and section 10 of `CLAUDE.md` are removed. Kept: the test and contract rules of `CLAUDE.md` sections 6 and 7; the contract template, now `docs/contract-template.md`; the post-publish, harness-limit and guided walk-through notes, now in `test/README.md`.
+- **Why:** user, 2026-11-11: "i feel like we have deviated from that workflow" and "retire what we dont need from uat skill and its sections on claude.md (what we won't use)". The manual session was not used in the migration; in-memory tests and independent reviews replaced it.
+- **Where implemented:** CLAUDE.md, `test/README.md`, `docs/contract-template.md`
