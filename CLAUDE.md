@@ -107,12 +107,11 @@ Skip it for backend-only edits, pure refactors with no visual delta, and utility
 
 ## 9. Skills
 
-Load the relevant skill before writing code: **`spacetimedb`** for anything touching tables, reducers, views, schema, publishing or bindings; **`frontend-design:frontend-design`** (plugin) for UI components, pages, layouts and styling.
+Load the relevant skill before writing code: **`spacetimedb`** for anything touching tables, reducers, views, schema, publishing or bindings. UI work has no design skill: pages are ported from the frozen mockups in `design/mockups/` (made in the Open Design project); a state or component the mockup does not show goes back to Open Design, it is not invented here.
 
 | Skill | Purpose |
 |---|---|
 | `spacetimedb` | backend patterns, API reference, guardrails |
-| `frontend-design:frontend-design` | plugin: intentional visual design for UI work |
 | `uat` | behavior specs, test integrity, UAT and failure diagnostics |
 | `vercel-setup` / `vercel-deploy` / `vercel-logs` | Vercel CLI project setup, deploys, logs |
 | `pr-description` | PR descriptions |
