@@ -10,19 +10,10 @@ import type {
     SavedCalendarAvailabilityRow,
 } from '@bindings/types';
 import { M, tx, type Actor, type Harness } from '../fixtures/harness';
-import { verified } from '../fixtures/tournament-builders';
-import { duel } from '../fixtures/tournament-match-builders';
-import {
-    AUDIT_KEYS,
-    addSlot,
-    createEvent,
-    displayName,
-    keysOf,
-    saveCalendar,
-    sorted,
-    view,
-    type Reader,
-} from '../fixtures/profile-view-builders';
+import { verified, displayName } from '../fixtures/identity';
+import { addSlotAt, createTitledEvent, saveCalendar } from '../fixtures/calendar';
+import { AUDIT_KEYS, keysOf, sorted, view, type Reader } from '../fixtures/views';
+import { duel } from '../fixtures/tournament-matches';
 
 const noAudit = (row: object) => AUDIT_KEYS.filter((k) => k in row);
 const showCalendar = (test: Harness, who: Actor, target: Actor, isVisible: boolean) =>
@@ -46,18 +37,18 @@ describe('calendar views (S9b-C1..C3, S9b-V8)', () => {
         const [carol, erin, frank, gina, outsider] = ['carol', 'erin', 'frank', 'gina', 'calout'].map((n) => verified(test, n));
         test.db.User.id.update({ ...test.db.User.id.find(erin.userId)!, avatarCharacterName: 'Kafka' });
         const m = [...test.db.BracketMatch.tournament_id.filter(f.id)][0];
-        const e1 = createEvent(test, carol, 'E1', [dave, gina]);
-        const e2 = createEvent(test, dave, 'E2');
-        const e3 = createEvent(test, org, 'E3', [], m.id);
-        const e4 = createEvent(test, erin, 'E4');
-        const e5 = createEvent(test, frank, 'E5');
+        const e1 = createTitledEvent(test, carol, 'E1', [dave, gina]);
+        const e2 = createTitledEvent(test, dave, 'E2');
+        const e3 = createTitledEvent(test, org, 'E3', [], m.id);
+        const e4 = createTitledEvent(test, erin, 'E4');
+        const e5 = createTitledEvent(test, frank, 'E5');
         saveCalendar(test, dave, erin);
         saveCalendar(test, dave, frank);
         showCalendar(test, dave, frank, false);
-        addSlot(test, dave, 30);
-        addSlot(test, erin, 30);
-        addSlot(test, erin, 40);
-        addSlot(test, frank, 30);
+        addSlotAt(test, dave, 30);
+        addSlotAt(test, erin, 30);
+        addSlotAt(test, erin, 40);
+        addSlotAt(test, frank, 30);
         const events = (who: Reader) => view<MyCalendarEventRow>(test, 'view_my_calendar_events', who);
         const invites = (who: Reader) => view<MyCalendarInviteRow>(test, 'view_my_calendar_invites', who);
         return { f, test, org, m, dave, opponent, carol, erin, frank, gina, outsider, e1, e2, e3, e4, e5, events, invites };

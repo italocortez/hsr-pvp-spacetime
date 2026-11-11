@@ -13,9 +13,19 @@
 // every Validated game (A67(8)); an override of a record of a Decided match reverts the decision (no game or lobby
 // voided), updates the record and re-decides from the new tally (A67(4), S8e review addendum).
 import { describe, expect, it } from 'vitest';
-import { TOURNAMENT_PERM_MESSAGES } from '@module/helpers/tournament/tournamentPermissions';
-import { M, expectReject, lobbyRow, newHarness, session, setupLobby, tx, type Harness, type Lobby } from '../fixtures/harness';
-import { assignAssistant, liveField, matchRow, resolveMatch, verified } from '../fixtures/tournament-builders';
+import {
+    M,
+    expectReject,
+    lobbyRow,
+    newHarness,
+    session,
+    setupLobby,
+    tx,
+    type Harness,
+    type Lobby,
+} from '../fixtures/harness';
+import { verified } from '../fixtures/identity';
+import { assignAssistant, liveField, matchRow, resolveMatch, RESULTS, BO1 } from '../fixtures/tournaments';
 import {
     byKey,
     captainActor,
@@ -27,11 +37,9 @@ import {
     recordsOfMatch,
     seedElo,
     validate,
-} from '../fixtures/tournament-match-builders';
-import { parkedLobby } from '../fixtures/ranked-game-builders';
+} from '../fixtures/tournament-matches';
+import { parkedLobby } from '../fixtures/ranked';
 
-const RESULTS = TOURNAMENT_PERM_MESSAGES.results;
-const BO1 = { defaultBestOf: 1, grandFinalBestOf: 1 };
 
 const nothingDerived = (test: Harness) => {
     expect([...test.db.MatchSessionHistory.iter()]).toHaveLength(0);

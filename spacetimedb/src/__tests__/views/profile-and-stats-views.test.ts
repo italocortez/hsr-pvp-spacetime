@@ -37,69 +37,36 @@ import {
     M,
     SYSTEM_USER_ID,
     guest,
-    lobbyRow,
     newHarness,
     setupLobby,
     tx,
     type Actor,
     type Harness,
-    type Lobby,
+    AUDIT,
 } from '../fixtures/harness';
-import {
-    blueNames,
-    finishGame,
-    playToScoring,
-    redNames,
-    setRole,
-    type ScoringLobbyOpts,
-} from '../fixtures/draft-and-scoring-builders';
-import { AUDIT, moderator, verified } from '../fixtures/tournament-builders';
-import { seedUserRow } from '../fixtures/user-rows';
-import { seedElo } from '../fixtures/tournament-match-builders';
+import { moderator, verified, seedUserRow, displayName, linked } from '../fixtures/identity';
+import { createAchievement } from '../fixtures/achievements';
+import { addSlotAt, createTitledEvent, saveCalendar } from '../fixtures/calendar';
+import { finishGame, playToScoring, setRole } from '../fixtures/draft-and-scoring';
 import {
     ANON,
     AUDIT_KEYS,
-    COLS,
-    addSlot,
-    createEvent,
-    displayName,
-    ghost,
+    profileGhost as ghost,
     keysOf,
-    linked,
-    saveCalendar,
     seatsOf,
-    selectAccount,
+    selectRatedAccount,
     shared,
     sorted,
     view,
     type Reader,
-} from '../fixtures/profile-view-builders';
+    scoringOf,
+    makeRanked,
+    type Cols,
+} from '../fixtures/views';
+import { seedElo } from '../fixtures/tournament-matches';
 
-type Cols<K extends keyof typeof COLS> = (typeof COLS)[K][number];
 const MOC = { tag: 'MemoryOfChaos' } as any;
 const AS = { tag: 'ApocalypticShadow' } as any;
-
-/** playToScoring with prefixed actors and character names (HsrCharacter names are unique per harness). */
-function scoringOf(test: Harness, p: string, opts: ScoringLobbyOpts = {}): Lobby {
-    return playToScoring(test, {
-        seats: seatsOf(p),
-        actors: { host: guest(test, `${p}host`) },
-        blue: blueNames().map((n) => `${p}${n}`),
-        red: redNames().map((n) => `${p}${n}`),
-        ...opts,
-    });
-}
-
-/** beforeStart hook: the lobby becomes Ranked (direct row edit, as s7b / s9a) and every player gets an HSR account. */
-const makeRanked = (test: Harness) => (l: Lobby) => {
-    test.db.Lobby.id.update({ ...lobbyRow(test, l.lobbyId), matchType: { tag: 'Ranked' } as any });
-    let accountId = 800 + l.lobbyId * 10;
-    for (const m of test.db.LobbyMember.lobby_id.filter(l.lobbyId)) {
-        if (m.lobbySlot.tag === 'BluePlayer' || m.lobbySlot.tag === 'RedPlayer') {
-            test.db.LobbyMemberAccount.insert({ lobbyId: l.lobbyId, userId: m.userId, hsrAccountId: accountId++ });
-        }
-    }
-};
 
 /** An MmrRating row (private table) written directly, as the S8 / S9a suites seed ratings. */
 function seedRating(test: Harness, userId: number, rating: number, o: { matchesPlayed?: number; gameMode?: any; seasonId?: number; global?: number } = {}) {
@@ -117,11 +84,6 @@ function seedStat(test: Harness, userId: number, wins: number, o: { gameMode?: a
     } as any);
 }
 
-function createAchievement(test: Harness, mod: Actor, name: string, isManualOnly: boolean): number {
-    tx(test, mod, (ctx) => M.create_achievement(ctx, { name, description: name, rarity: { tag: 'Rare' } as any, isManualOnly, maxAwards: undefined }));
-    return test.db.Achievement.name.find(name)!.id;
-}
-
 // ════════════════════════════════════════════════════════════════════════════
 // Outsider isolation (A37; §A.4 P1): every S9b per-sender view returns [] for an outsider, an unmapped identity and
 // a Moderator who owns nothing, while the owner reads rows (so the [] is not vacuous).
@@ -136,12 +98,12 @@ describe('A37 outsider isolation: S9b per-sender views', () => {
         seedRating(test, s.a.b1.userId, 1300);
         const rhost = verified(test, 'rhost');
         const r = setupLobby(test, { seats: seatsOf('v'), actors: { host: rhost }, noStart: true });
-        selectAccount(test, r.lobbyId, r.a.vb1, 'vb1-acc', 1100, ['vb1-char']);
+        selectRatedAccount(test, r.lobbyId, r.a.vb1, 'vb1-acc', 1100, ['vb1-char']);
         const carol = verified(test, 'carol');
         const dave = verified(test, 'dave');
-        createEvent(test, carol, 'E1', [dave]);
-        addSlot(test, dave, 30);
-        addSlot(test, carol, 30);
+        createTitledEvent(test, carol, 'E1', [dave]);
+        addSlotAt(test, dave, 30);
+        addSlotAt(test, carol, 30);
         saveCalendar(test, dave, carol);
         return { test, s, r, carol, dave, outsider: guest(test, 'outsider'), mod: moderator(test, 'mod') };
     }

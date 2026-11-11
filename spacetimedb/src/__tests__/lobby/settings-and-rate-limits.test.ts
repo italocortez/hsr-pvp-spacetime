@@ -18,9 +18,9 @@ import {
     tx,
     type Actor,
     type Harness,
+    rejection,
 } from '../fixtures/harness';
-import { host, moderator, verified } from '../fixtures/tournament-builders';
-import { byKey, duel, openMatchLobby } from '../fixtures/tournament-match-builders';
+import { host, moderator, verified, admin } from '../fixtures/identity';
 import {
     createLobby,
     joinLobby,
@@ -28,10 +28,12 @@ import {
     presetNamed,
     settingsArgs,
     updatePresetArgs,
-} from '../fixtures/preset-and-account-builders';
-import { rejection } from '../fixtures/calendar-roster-rating-builders';
-import { chatRows, leave, moveSlot, selfSlot } from '../fixtures/lobby-member-helpers';
-import { admin } from '../fixtures/admin-and-turn-helpers';
+    chatRows,
+    leave,
+    moveSlot,
+    selfSlot,
+} from '../fixtures/lobby';
+import { byKey, duel, openMatchLobby } from '../fixtures/tournament-matches';
 
 const ALIAS_CAP = 'Team aliases must be at most 30 characters.';
 const META_CAP = 'Message metadata exceeds 200 character limit.';
@@ -397,7 +399,7 @@ describe('A122(4), L17: confirm_ready, unconfirm_ready, shuffle_teams and transf
 describe('A122(5), L21: a Moderator edits or deletes only presets created by Moderators and hosts', () => {
     it('A122(5) L21: a Moderator cannot update or delete an Admin\'s preset; an Admin can', () => {
         const test = newHarness();
-        const adm = admin(test);
+        const adm = admin(test, 'adm');
         const mod = moderator(test);
         tx(test, adm, (ctx) => M.create_lobby_preset(ctx, presetArgs('Admin preset')));
         const id = presetNamed(test, 'Admin preset')!.id;

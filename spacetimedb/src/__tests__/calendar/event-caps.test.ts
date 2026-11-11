@@ -4,19 +4,9 @@
 // Contracts: docs/calendar/contract.md
 // From S10b, S10d (s10b-calendar-cap.test.ts, s10d-rulings.test.ts).
 import { describe, expect, it } from 'vitest';
-import { M, advance, newHarness, tx, type Actor, type Harness } from '../fixtures/harness';
-import { setUserRole, verified } from '../fixtures/tournament-builders';
-import {
-    DAY_MS,
-    HOUR_MS,
-    createEvent,
-    eventArgs,
-    eventsOf,
-    fromNow,
-    invitesOf,
-    rejection,
-} from '../fixtures/calendar-roster-rating-builders';
-import { snap } from '../fixtures/seat-and-snapshot-helpers';
+import { M, advance, newHarness, tx, type Actor, type Harness, rejection, snap } from '../fixtures/harness';
+import { setUserRole, verified } from '../fixtures/identity';
+import { DAY_MS, HOUR_MS, createEvent, eventArgs, eventsOf, fromNow, invitesOf, event } from '../fixtures/calendar';
 
 const ACTIVE_CAP = 'Maximum 40 active calendar events per user.';
 const RETAINED_CAP = 'Maximum 100 calendar events per user.';
@@ -28,7 +18,6 @@ function world(n = 1) {
     return { test, users };
 }
 
-const event = (test: Harness, id: number) => test.db.CalendarEvent.id.find(id) ?? undefined; // find() returns null when absent
 const tryCreate = (test: Harness, who: Actor, title: string) =>
     rejection(test, who, (ctx) => M.create_calendar_event(ctx, eventArgs(test, { title })));
 

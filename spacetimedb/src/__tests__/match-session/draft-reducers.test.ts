@@ -26,11 +26,16 @@ import {
     tx,
     type Harness,
     type Lobby,
+    TURN_MS,
+    AUCTION,
+    ONE_V_ONE,
 } from '../fixtures/harness';
-import { captain, insertAuctionCost } from '../fixtures/draft-and-scoring-builders';
-import { liveField, verified } from '../fixtures/tournament-builders';
-import { byKey, createTournamentLobby, join, sidesOf } from '../fixtures/tournament-match-builders';
-import { lmaOf, lockAccount, ownedAccount, settingsFrom } from '../fixtures/ranked-game-builders';
+import { verified } from '../fixtures/identity';
+import { ownedAccount } from '../fixtures/roster';
+import { captain, insertAuctionCost, current, blueMate } from '../fixtures/draft-and-scoring';
+import { join, lmaOf, settingsFrom } from '../fixtures/lobby';
+import { liveField, lockAccount } from '../fixtures/tournaments';
+import { byKey, createTournamentLobby, sidesOf } from '../fixtures/tournament-matches';
 
 // T-S10i (A107(5)): the pick and nomination helpers price their name at 0 in the lobby's cost set, game mode and draft
 // mode inside the call's transaction (rolled back with a rejected call), so every name these tests draft has a cost row.
@@ -54,18 +59,9 @@ const nominate = (s: Lobby, characterName: string) => (ctx: any) => {
 const bid = (s: Lobby, bidAmount: number) => (ctx: any) => M.place_bid(ctx, { lobbyId: s.lobbyId, bidAmount });
 const pass = (s: Lobby) => (ctx: any) => M.pass_bid(ctx, { lobbyId: s.lobbyId });
 
-const current = (test: Harness, lobbyId: number) => {
-    const sess = session(test, lobbyId);
-    return sess.draftSequence[sess.turnIndex];
-};
 const lastStep = (test: Harness, lobbyId: number) => steps(test, lobbyId).sort((a, b) => b.sequence - a.sequence)[0];
-/** The non-captain Blue player of a 2v2 lobby. */
-const blueMate = (s: Lobby) => [s.a.b1, s.a.b2].find((a) => a.userId !== captain(s, 'Blue').userId)!;
-const ONE_V_ONE: Array<[string, 'BluePlayer' | 'RedPlayer']> = [['b1', 'BluePlayer'], ['r1', 'RedPlayer']];
 /** teamSize 3: two Blue players, a Blue coach (seated by the host), one Red player. */
 const WITH_COACH: Array<[string, any]> = [['b1', 'BluePlayer'], ['b2', 'BluePlayer'], ['bc', 'BlueCoach'], ['r1', 'RedPlayer']];
-const AUCTION = { draftMode: { tag: 'Auction' } };
-const TURN_MS = 30_000; // DEFAULT_LOBBY_ARGS.standardTurnSeconds
 
 // ─── start_draft ──────────────────────────────────────────────────────────────
 

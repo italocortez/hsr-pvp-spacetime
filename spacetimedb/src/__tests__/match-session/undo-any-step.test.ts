@@ -22,35 +22,18 @@ import {
     tx,
     type Harness,
     type Lobby,
-} from '../fixtures/harness';
-import {
-    captain,
-    completeDraft,
-    selectAccount,
-    setEidolon,
-} from '../fixtures/draft-and-scoring-builders';
-import { rejection } from '../fixtures/calendar-roster-rating-builders';
-import { seedElo } from '../fixtures/tournament-match-builders';
-import { rankedHook } from '../fixtures/ranked-game-builders';
-import {
+    rejection,
     AUCTION,
-    FINISHED,
     ONE_V_ONE,
     TURN_MS,
-    budgets,
-    lobby,
-    nominate,
-    nominatorOf,
     other,
-    pass,
-    playClassic,
-    stage,
-    stepsOf,
-    undo,
-    undoBody,
-    world,
     type Side,
-} from '../fixtures/undo-and-window-builders';
+} from '../fixtures/harness';
+import { captain, completeDraft, selectAccount, setEidolon } from '../fixtures/draft-and-scoring';
+import { budgets, nominatorOf, stepsOf } from '../fixtures/auction';
+import { FINISHED, lobby, nominate, pass, playClassic, stage, undo, undoBody, world } from '../fixtures/undo';
+import { seedElo } from '../fixtures/tournament-matches';
+import { rankedHook } from '../fixtures/ranked';
 
 const PAUSED = 'Nothing to undo right now.';
 const NOT_REFEREE = 'Only referees with undo permission can undo.';

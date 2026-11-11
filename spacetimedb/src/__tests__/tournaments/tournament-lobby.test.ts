@@ -10,26 +10,34 @@
 // by seated staff, and the locked integrity set of update_lobby_settings. Builders in s8d-fixtures.ts. Nothing
 // reaches maincloud. The A67(5) D-45 rule and the game cap are tested in s8e-bracket-series.test.ts.
 import { describe, expect, it } from 'vitest';
-import { TOURNAMENT_PERM_MESSAGES } from '@module/helpers/tournament/tournamentPermissions';
-import { M, expectReject, guest, lobbyRow, member, newHarness, setupLobby, tx, type Actor, type Harness, seatOf } from '../fixtures/harness';
+import {
+    M,
+    expectReject,
+    guest,
+    lobbyRow,
+    member,
+    newHarness,
+    setupLobby,
+    tx,
+    type Actor,
+    type Harness,
+    seatOf,
+} from '../fixtures/harness';
+import { host, verified } from '../fixtures/identity';
+import { join, settingsFrom } from '../fixtures/lobby';
 import {
     advanceStage,
     assignAssistant,
-    host,
     liveField,
     matchRow,
     openTournament,
     fullTeams,
     seedAndGenerate,
     tRow,
-    verified,
-} from '../fixtures/tournament-builders';
-import { byKey, createTournamentLobby, join, lobbiesOf, sidesOf } from '../fixtures/tournament-match-builders';
+    PARTICIPANTS,
+} from '../fixtures/tournaments';
+import { byKey, createTournamentLobby, lobbiesOf, sidesOf, SEAT, slotOf } from '../fixtures/tournament-matches';
 
-const SEAT = 'This seat is not available to you in this tournament lobby.';
-const PARTICIPANTS = TOURNAMENT_PERM_MESSAGES.participants;
-
-const slotOf = (test: Harness, lobbyId: number, who: Actor) => member(test, lobbyId, who.userId)?.lobbySlot.tag;
 const setSlot = (test: Harness, by: Actor, lobbyId: number, target: Actor, slot: string) =>
     tx(test, by, (ctx) => M.set_team_slot(ctx, { lobbyId, targetJoinSeq: seatOf(ctx, lobbyId, target.userId), lobbySlot: { tag: slot } as any }));
 const approve = (test: Harness, by: Actor, bracketMatchId: number, teamId: number, userId: number) =>
@@ -37,27 +45,6 @@ const approve = (test: Harness, by: Actor, bracketMatchId: number, teamId: numbe
 const revoke = (test: Harness, by: Actor, bracketMatchId: number, userId: number) =>
     tx(test, by, (ctx) => M.revoke_stand_in(ctx, { bracketMatchId, userId }));
 const standIns = (test: Harness, bracketMatchId: number) => [...test.db.TournamentStandIn.bracket_match_id.filter(bracketMatchId)];
-
-/** update_lobby_settings arguments built from the lobby row itself (so only the overridden keys change). */
-function settingsFrom(test: Harness, lobbyId: number, over: Record<string, unknown> = {}) {
-    const l = lobbyRow(test, lobbyId);
-    return {
-        lobbyId,
-        teamSize: l.teamSize, draftMode: l.draftMode, banMode: l.banMode, gameMode: l.gameMode, matchType: l.matchType,
-        standardTurnSeconds: l.standardTurnSeconds, reserveBankSeconds: l.reserveBankSeconds,
-        characterBudget: l.characterBudget, lightconeBudget: l.lightconeBudget, minimumBidRaise: l.minimumBidRaise,
-        rosterDiffAdvantage: l.rosterDiffAdvantage, rosterThreshold: l.rosterThreshold,
-        underThresholdAdvantage: l.underThresholdAdvantage, aboveThresholdPenalty: l.aboveThresholdPenalty,
-        deathPenalty: l.deathPenalty, isAnonymousPlayers: l.isAnonymousPlayers, isAnonymousSpectators: l.isAnonymousSpectators,
-        rosterVisibility: l.rosterVisibility, requireOwnership: l.requireOwnership, costSetId: l.costSetId,
-        disconnectPolicy: l.disconnectPolicy, disconnectForfeitSeconds: l.disconnectForfeitSeconds ?? 0,
-        allowMirrorPicks: l.allowMirrorPicks, autoRandomPick: l.autoRandomPick, refereeCanUndo: l.refereeCanUndo,
-        refereeCanPause: l.refereeCanPause, refereeCanSetCaptain: l.refereeCanSetCaptain, refereeCanKick: l.refereeCanKick,
-        allowPlayerPause: l.allowPlayerPause, refereeExclusiveConcede: l.refereeExclusiveConcede,
-        teamBlueAlias: l.teamBlueAlias, teamRedAlias: l.teamRedAlias, isPublic: l.isPublic, password: '',
-        ...over,
-    } as any;
-}
 
 // ─── create_tournament_lobby: callers and guards ──────────────────────────────
 

@@ -17,38 +17,40 @@ import {
     type Harness,
     type Lobby,
     type SetupOpts,
+    rejection,
+    snap,
+    type Team,
 } from '../fixtures/harness';
-import { captain, completeDraft, finishGame } from '../fixtures/draft-and-scoring-builders';
-import {
-    host as tournamentHost,
-    liveField,
-    moderator,
-    verified,
-} from '../fixtures/tournament-builders';
-import { byKey, captainActor, openMatchLobby } from '../fixtures/tournament-match-builders';
-import { rejection, seedReferenceNames } from '../fixtures/calendar-roster-rating-builders';
-import { parkedLobby } from '../fixtures/ranked-game-builders';
+import { host as tournamentHost, moderator, verified } from '../fixtures/identity';
+import { seedReferenceNames } from '../fixtures/roster';
 import {
     MOC,
-    advanceBody,
     charRow,
     createSet,
     eJson,
     editChar,
     editLc,
-    equipBody,
     ladder,
     liveChars,
-    payloadOf,
-    pickBody,
     publish,
     publishBody,
     sJson,
     sLadder,
-    snap,
     type Mode,
-    type Team,
-} from '../fixtures/cost-set-pricing-builders';
+} from '../fixtures/cost-sets';
+import {
+    captain,
+    completeDraft,
+    finishGame,
+    advanceBody,
+    equipBody,
+    payloadOf,
+    pickBody,
+} from '../fixtures/draft-and-scoring';
+import { PRESET_ARGS } from '../fixtures/lobby';
+import { liveField } from '../fixtures/tournaments';
+import { byKey, captainActor, openMatchLobby } from '../fixtures/tournament-matches';
+import { parkedLobby } from '../fixtures/ranked';
 
 const LOCKED = 'This cost set is locked; its costs cannot be changed.';
 const UNPUBLISHED = 'This cost set is unpublished; its costs cannot be changed.';
@@ -365,14 +367,3 @@ describe('A107(6): a patch never touches history', () => {
     });
 });
 
-/** create_lobby_preset arguments (as s8f-membership). */
-const PRESET_ARGS = {
-    teamSize: 2, draftMode: { tag: 'Classic' }, banMode: { tag: 'None' }, gameMode: { tag: 'MemoryOfChaos' },
-    matchType: { tag: 'Casual' }, standardTurnSeconds: 30, reserveBankSeconds: 60, characterBudget: 100,
-    lightconeBudget: 50, minimumBidRaise: 1, rosterDiffAdvantage: 0, rosterThreshold: 0, underThresholdAdvantage: 0,
-    aboveThresholdPenalty: 0, deathPenalty: 0, isPublic: true, isAnonymousPlayers: false, isAnonymousSpectators: false,
-    rosterVisibility: { tag: 'OpenRoster' }, requireOwnership: false, costSetId: 0, disconnectPolicy: { tag: 'Standard' },
-    disconnectForfeitSeconds: 60, allowMirrorPicks: false, autoRandomPick: false, refereeCanUndo: true,
-    refereeCanPause: true, refereeCanSetCaptain: true, refereeCanKick: true, allowPlayerPause: true,
-    refereeExclusiveConcede: true,
-};

@@ -5,12 +5,12 @@
 import { describe, expect, it } from 'vitest';
 import { SHUFFLE_DOMAIN, fairShuffle, shuffleKeyAt } from '@shared/lobby-rules';
 import { advance, newHarness, now, type Harness } from '../fixtures/harness';
+import { host } from '../fixtures/identity';
 import {
     advanceStage,
     enrollMany,
     enrolled,
     fullTeams,
-    host,
     membersOf,
     membership,
     openTournament,
@@ -18,7 +18,7 @@ import {
     seedingField,
     teamRow,
     teams,
-} from '../fixtures/tournament-builders';
+} from '../fixtures/tournaments';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

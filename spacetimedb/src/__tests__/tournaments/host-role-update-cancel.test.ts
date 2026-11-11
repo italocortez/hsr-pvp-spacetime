@@ -11,29 +11,27 @@
 // Nothing reaches maincloud.
 import { describe, expect, it } from 'vitest';
 import { M, expectReject, newHarness, tx, type Actor, type Harness } from '../fixtures/harness';
+import { host, moderator, setUserRole, verified } from '../fixtures/identity';
+import { invitesOf, at } from '../fixtures/calendar';
+import { insertHsrAccount } from '../fixtures/roster';
 import {
     advanceStage,
     assignAssistant,
     bracketRows,
     createTournament,
-    host,
-    insertHsrAccount,
     locks,
     makeTeam,
-    moderator,
     openTournament,
     register,
     requestsOf,
     resolveMatch,
     seedAndGenerate,
-    setUserRole,
     stageOf,
     tRow,
     teams,
     updateBody,
-    verified,
-} from '../fixtures/tournament-builders';
-import { duel } from '../fixtures/tournament-match-builders';
+} from '../fixtures/tournaments';
+import { duel } from '../fixtures/tournament-matches';
 
 const roleOf = (test: Harness, who: Actor) => test.db.User.id.find(who.userId)!.role.tag;
 const promote = (test: Harness, by: Actor, target: Actor) =>
@@ -44,8 +42,6 @@ const cancel = (test: Harness, by: Actor, tournamentId: number) =>
     tx(test, by, (ctx) => M.cancel_tournament(ctx, { tournamentId }));
 const assistantsOf = (test: Harness, tournamentId: number) => [...test.db.TournamentAssistant.tournament_id.filter(tournamentId)];
 const eventsOf = (test: Harness, bracketMatchId: number) => [...test.db.CalendarEvent.bracket_match_id.filter(bracketMatchId)];
-const invitesOf = (test: Harness, eventId: number) => [...test.db.CalendarEventInvite.event_id.filter(eventId)];
-const at = (test: Harness, hours: number) => (test.clock.now().microsSinceUnixEpoch + BigInt(hours) * 3_600_000_000n).toString();
 
 /** create_calendar_event (bracketMatchId 0 = personal); a linked event needs `bracket` and auto-invites the teams. */
 function calendarEvent(test: Harness, who: Actor, title: string, bracketMatchId: number): number {

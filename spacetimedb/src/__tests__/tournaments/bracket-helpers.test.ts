@@ -20,14 +20,19 @@ import { deleteBracket, insertBracket, insertGroupBracket } from '@module/helper
 import { applyBracketResult, rollbackBracketResult, matchGames } from '@module/helpers/tournament/bracketResults';
 import { groupStandings, qualifiersFor } from '@module/helpers/tournament/tournamentStandings';
 import { allowedSlotsFor } from '@module/helpers/tournament/tournamentLobbySides';
-import { DEFAULT_LOBBY_ARGS, M, expectReject, guest, lobbyRow, newHarness, tx, type Harness } from '../fixtures/harness';
+import {
+    DEFAULT_LOBBY_ARGS,
+    M,
+    expectReject,
+    guest,
+    lobbyRow,
+    newHarness,
+    tx,
+    type Harness,
+    AUDIT,
+} from '../fixtures/harness';
 
 const ACTOR = 0; // SYSTEM
-
-const AUDIT = (test: Harness) => {
-    const ts = test.clock.now();
-    return { createdById: 0, createdDate: ts, lastModifiedById: 0, lastModifiedDate: ts };
-};
 
 function insertTournament(test: Harness, over: Record<string, unknown> = {}): any {
     return tx(test, 'internal', (ctx) => ctx.db.Tournament.insert({

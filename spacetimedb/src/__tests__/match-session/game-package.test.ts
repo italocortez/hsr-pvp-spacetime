@@ -60,13 +60,13 @@ import {
     setEidolon,
     setRole,
     side,
-} from '../fixtures/draft-and-scoring-builders';
+} from '../fixtures/draft-and-scoring';
+import { stageMsg } from '../fixtures/lobby';
 import { ensureEditableRecord } from '@module/helpers/results/scoringHelpers';
 
 const NOT_READY = 'Both captains must confirm the game before it can be submitted.';
 const OVERRIDE = 'This game can no longer be edited here; corrections go through override_match_result.';
 const CLOSED = 'This game is closed.'; // A69(2): ensureEditableRecord, non-Admin on a Submitted record
-const stageMsg = (stage: string) => `This action is not allowed in the current lobby stage (${stage}).`;
 
 /** beforeStart hook: the lobby becomes Ranked (guests cannot create one, D-23) with one selected account per player (D-08). */
 const makeRanked = (test: Harness) => (l: Lobby) => {

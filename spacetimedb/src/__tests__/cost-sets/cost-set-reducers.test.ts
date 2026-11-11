@@ -14,7 +14,8 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { DbConnection } from '@bindings/index';
 // T-S10i fix pass (review F2): newBareHarness, no set-0 coverage rows; these tests clone set 0 and count its rows.
 import { M, expectReject, guest, newBareHarness, tx, type Actor, type Harness } from '../fixtures/harness';
-import { host as tournamentHost, moderator, verified } from '../fixtures/tournament-builders';
+import { host as tournamentHost, moderator, verified } from '../fixtures/identity';
+import { seedCharacters, seedReferenceNames } from '../fixtures/roster';
 import {
     E,
     S,
@@ -35,8 +36,8 @@ import {
     liveSyn,
     sCost,
     synergyRow,
-} from '../fixtures/achievement-auth-cost-builders';
-import { seedCharacters, seedReferenceNames } from '../fixtures/calendar-roster-rating-builders';
+    publish,
+} from '../fixtures/cost-sets';
 
 const FORBIDDEN_OWNER = 'Forbidden: You do not own this cost set and are not a Moderator.';
 const MOC = 'MemoryOfChaos';
@@ -72,9 +73,6 @@ const editLc = (test: Harness, who: Actor | 'internal', id: number, lightconeNam
     tx(test, who, (ctx) => M.edit_draft_lightcone_cost(ctx, { costSetId: id, lightconeName, gameModeTag: MOC, draftModeTag, costsJson }));
 const editSyn = (test: Harness, who: Actor | 'internal', id: number, sourceName: string, targetName: string, draftModeTag: string, costModifier: number) =>
     tx(test, who, (ctx) => M.edit_draft_synergy_cost(ctx, { costSetId: id, sourceName, targetName, gameModeTag: MOC, draftModeTag, costModifier }));
-/** publish_cost_set; T-S10i (A107(2)): `confirmFillMissing` writes the draft's gaps at cost 0 before it goes live. */
-const publish = (test: Harness, who: Actor | 'internal', id: number, confirmFillMissing?: boolean) =>
-    tx(test, who, (ctx) => M.publish_cost_set(ctx, { costSetId: id, confirmFillMissing }));
 const LOCKED = 'This cost set is locked; its costs cannot be changed.';
 const UNPUBLISHED = 'This cost set is unpublished; its costs cannot be changed.';
 const lock = (test: Harness, who: Actor | 'internal', id: number) => tx(test, who, (ctx) => M.lock_cost_set(ctx, { costSetId: id }));

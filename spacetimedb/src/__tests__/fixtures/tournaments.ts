@@ -1,48 +1,29 @@
-// Fixtures: tournaments, registration, teams, roles and brackets.
-// From S8 (s8-fixtures.ts).
+// Fixtures: tournaments, registration, teams, staff actions, account locks and brackets.
+// From S8 (s8-fixtures.ts); staff bodies and waitlist rows (S10g), account locks (S10 A1 / A2), live solo entries
+// (S10q) and the permission texts gathered by T-REORG2. Users and roles live in identity.ts, HSR accounts in roster.ts.
 //
-// T-S8b / T-S8c: builders for the S8b / S8c in-memory tournament tests (permissions, stage machine, registration,
-// teams, bracket reducers). Not a test file: imported by s8b-*.test.ts and s8c-*.test.ts. State is built through the
-// module's reducers; roles, HSR accounts and rating rows are written straight into the in-memory datastore, outside
-// any reducer, like the S4 / S7 tests' direct row edits. Since S8c, seed_bracket + generate_bracket stamp
-// lastSeedChangeAt / bracketGeneratedAt themselves (`seedAndGenerate`); `stampGenerated` / `stampSeedChange` stay
-// for the guard tests whose field cannot be generated. `test.db` is read only outside `tx` bodies. Nothing reaches
-// maincloud.
+// T-S8b / T-S8c: builders for the in-memory tournament tests (permissions, stage machine, registration, teams,
+// bracket reducers). Not a test file. State is built through the module's reducers; account locks are written straight
+// into the in-memory datastore, outside any reducer, like the S4 / S7 tests' direct row edits. Since S8c,
+// seed_bracket + generate_bracket stamp lastSeedChangeAt / bracketGeneratedAt themselves (`seedAndGenerate`);
+// `stampGenerated` / `stampSeedChange` stay for the guard tests whose field cannot be generated. `test.db` is read only
+// outside `tx` bodies. Nothing reaches maincloud.
 import { Timestamp } from 'spacetimedb';
-import { M, guest, linkDiscord, newHarness, tx, type Actor, type Harness } from './harness';
+import { TOURNAMENT_PERM_MESSAGES } from '@module/helpers/tournament/tournamentPermissions';
+import { AUDIT, M, newHarness, tx, type Actor, type Harness } from './harness';
+import { host, verified } from './identity';
 
-export const AUDIT = (test: Harness) => {
-    const ts = test.clock.now();
-    return { createdById: 0, createdDate: ts, lastModifiedById: 0, lastModifiedDate: ts };
-};
+// ─── Texts ───────────────────────────────────────────────────────────────────
 
-let nextProvider = 1;
+export const PARTICIPANTS = TOURNAMENT_PERM_MESSAGES.participants;
+export const BRACKET = TOURNAMENT_PERM_MESSAGES.bracket;
+export const RESULTS = TOURNAMENT_PERM_MESSAGES.results;
+export const guestsText = (n: number) => `These settings require verified accounts, and ${n} guest player(s) are registered.`;
 
-/** A verified (Discord-linked) user. */
-export function verified(test: Harness, name: string): Actor {
-    const a = guest(test, name);
-    linkDiscord(test, a, `discord-${name}-${nextProvider++}`, name);
-    return a;
-}
+// ─── Tournaments ─────────────────────────────────────────────────────────────
 
-/** Sets a user's role directly on the row. */
-export function setUserRole(test: Harness, userId: number, role: 'User' | 'TournamentHost' | 'Moderator' | 'Admin') {
-    test.db.User.id.update({ ...test.db.User.id.find(userId)!, role: { tag: role } as any });
-}
-
-/** A verified Tournament Host (may call create_tournament). */
-export function host(test: Harness, name = 'org'): Actor {
-    const a = verified(test, name);
-    setUserRole(test, a.userId, 'TournamentHost');
-    return a;
-}
-
-/** A verified Moderator. */
-export function moderator(test: Harness, name = 'mod'): Actor {
-    const a = verified(test, name);
-    setUserRole(test, a.userId, 'Moderator');
-    return a;
-}
+/** Best of 1 for every round, the grand final included. */
+export const BO1 = { defaultBestOf: 1, grandFinalBestOf: 1 };
 
 /** The full A36 create_tournament argument set: SingleElimination, teamSize 2, 8 spots, no gates. */
 export const TOURNAMENT_ARGS = {
@@ -174,22 +155,21 @@ export const locks = (test: Harness, tournamentId: number, userId: number) =>
     [...test.db.TournamentPlayerAccount.by_tournament_and_user.filter([tournamentId, userId])].map((r) => r.hsrAccountId).sort((a, b) => a - b);
 export const requestsOf = (test: Harness, userId: number) => [...test.db.TournamentTeamRequest.user_id.filter(userId)];
 
-/** An HSR account owned by `userId` (inserted directly). Returns its id. */
-export function insertHsrAccount(test: Harness, userId: number, uid: string): number {
-    return test.db.HsrAccount.insert({
-        id: 0,
-        userId,
-        uid,
-        region: 'eu',
-        displayLabel: uid,
-        isActive: true,
-        isRosterPublic: true,
-        isRatingPublic: true,
-        isDuplicateUid: false,
-        accountRating: 0,
-        ...AUDIT(test),
-    }).id;
+/** A TournamentPlayerAccount lock (what registration writes), inserted directly. */
+export function lockAccount(test: Harness, tournamentId: number, userId: number, hsrAccountId: number) {
+    test.db.TournamentPlayerAccount.insert({ tournamentId, userId, hsrAccountId, ...AUDIT(test) });
 }
+
+/** The user's waitlist account ids in the tournament, ascending. */
+export const waitlistRows = (test: Harness, tournamentId: number, userId: number) =>
+    [...test.db.TournamentWaitlistAccount.by_tournament_and_user.filter([tournamentId, userId])].map((r) => r.hsrAccountId).sort((a, b) => a - b);
+
+// ─── Staff action bodies ─────────────────────────────────────────────────────
+
+export const dq = (tournamentId: number, userId: number, dqWholeTeam = false) =>
+    (ctx: any) => M.dq_participant(ctx, { tournamentId, userId, reason: 'test', dqWholeTeam });
+export const lockBody = (tournamentId: number, hsrAccountIds: number[]) =>
+    (ctx: any) => M.lock_tournament_accounts(ctx, { tournamentId, hsrAccountIds });
 
 /** A tournament assistant row through the reducer (owner permission). */
 export function assignAssistant(
@@ -269,4 +249,16 @@ export function liveField(n: number, over: Partial<TournamentArgs> = {}) {
 /** resolve_bracket_match as `who`. */
 export function resolveMatch(test: Harness, who: Actor, bracketMatchId: number, winnerTeamId: number, reason = 'staff') {
     tx(test, who, (ctx) => M.resolve_bracket_match(ctx, { bracketMatchId, winnerTeamId, reason }));
+}
+
+/** A solo (teamSize 1) tournament in InProgress with `players` registered; the bracket match holding `who`. */
+export function soloLive(test: Harness, org: Actor, players: Actor[], who: Actor) {
+    const id = openTournament(test, org, { teamSize: 1, maxParticipants: Math.max(4, players.length) });
+    for (const p of players) register(test, p, id);
+    advanceStage(test, org, id, 'Seeding');
+    seedAndGenerate(test, org, id);
+    advanceStage(test, org, id, 'InProgress');
+    const teamId = membership(test, id, who.userId)!.teamId;
+    const match = bracketRows(test, id).find((m) => m.team1Id === teamId || m.team2Id === teamId)!;
+    return { id, teamId, match };
 }

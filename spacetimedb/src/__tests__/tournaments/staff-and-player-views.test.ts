@@ -4,31 +4,25 @@
 // From S10g, S10s, S9c (s10g-tournament.test.ts, s10s-triage-fixes.test.ts, s9c-rulings.test.ts).
 import { describe, expect, it } from 'vitest';
 import type { TeamRequestViewRow } from '@bindings/types';
-import { M, newHarness, tx, type Actor, type Harness } from '../fixtures/harness';
+import { M, newHarness, tx } from '../fixtures/harness';
+import { host, host as tournamentHost, moderator, verified, admin, displayName } from '../fixtures/identity';
+import { insertHsrAccount } from '../fixtures/roster';
+import { view, viewAs } from '../fixtures/views';
 import {
     advanceStage,
     assignAssistant,
     enrollMany,
     enrolled,
-    host,
-    host as tournamentHost,
-    insertHsrAccount,
     locks,
-    moderator,
     openTournament,
     register,
     resolveMatch,
     stageOf,
     tRow,
-    verified,
-} from '../fixtures/tournament-builders';
-import { byKey, duel, openMatchLobby, playMatch } from '../fixtures/tournament-match-builders';
-import { admin, dq, lockBody } from '../fixtures/tournament-staff-helpers';
-import { displayName, view } from '../fixtures/seat-view-readers';
-
-/** A per-sender view called as `who` (arg views take `args`). */
-const viewAs = <T = any>(test: Harness, name: string, who: Actor, args: Record<string, unknown> = {}): T[] =>
-    (M as any)[name](test.viewContext(who.auth), args) as T[];
+    dq,
+    lockBody,
+} from '../fixtures/tournaments';
+import { byKey, duel, openMatchLobby, playMatch } from '../fixtures/tournament-matches';
 
 // ════════════════════════════════════════════════════════════════════════════
 // A105: staff views and Admin views
@@ -63,7 +57,7 @@ describe('A105: the tournament staff views and the Admin arg views', () => {
         assignAssistant(test, org, f.id, assistant, { results: true });
         openMatchLobby(f, byKey(test, f.id, 'W-R1-M1').id); // Drafting: a lobby and its Pending record
         const mod = moderator(test, 'mod');
-        const boss = admin(test);
+        const boss = admin(test, 'admin');
         const plain = verified(test, 'plain');
         for (const name of STAFF_VIEWS) {
             const rows = viewAs(test, name, org);
@@ -87,7 +81,7 @@ describe('A105: the tournament staff views and the Admin arg views', () => {
         tx(test, org, (ctx) => M.cancel_tournament(ctx, { tournamentId: cancelled }));
         expect(stageOf(test, cancelled)).toBe('Cancelled');
         const mod = moderator(test, 'mod');
-        const boss = admin(test);
+        const boss = admin(test, 'admin');
         const plain = verified(test, 'plain');
 
         for (const name of STAFF_VIEWS) {

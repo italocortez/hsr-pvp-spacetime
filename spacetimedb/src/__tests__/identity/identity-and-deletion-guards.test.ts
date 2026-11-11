@@ -25,18 +25,14 @@ import {
     tx,
     type Actor,
     type Harness,
+    AUDIT,
+    rejection,
 } from '../fixtures/harness';
-import {
-    insertCharacterCostLadder,
-    insertRoster,
-    selectAccount,
-} from '../fixtures/draft-and-scoring-builders';
-import { AUDIT, verified } from '../fixtures/tournament-builders';
-import { byKey, duel, openMatchLobby } from '../fixtures/tournament-match-builders';
-import { joinLobby, settingsArgs } from '../fixtures/preset-and-account-builders';
-import { freshAuth, identitiesOf } from '../fixtures/achievement-auth-cost-builders';
-import { DAY_MS, rejection } from '../fixtures/calendar-roster-rating-builders';
-import { lmaRows, members } from '../fixtures/lobby-member-helpers';
+import { verified, freshAuth, identitiesOf } from '../fixtures/identity';
+import { DAY_MS } from '../fixtures/calendar';
+import { insertCharacterCostLadder, insertRoster, selectAccount } from '../fixtures/draft-and-scoring';
+import { joinLobby, settingsArgs, lmaRows, members, NO_PLAYER_REMOVAL } from '../fixtures/lobby';
+import { byKey, duel, openMatchLobby } from '../fixtures/tournament-matches';
 
 const SYSTEM_DELETE = 'The SYSTEM user cannot be deleted.';
 const SYSTEM_CHANGE = 'The SYSTEM user cannot be changed.';
@@ -48,7 +44,6 @@ const LOBBY_ALIVE = (table: string, lobbyId: number) =>
 // S10e fix pass texts (review F1, F4, N9).
 const TOURNAMENT_LOBBY = 'This is a tournament lobby: use rollback_bracket_match or the tournament result reducers (results permission).';
 const RECORD_COUNTED = 'This lobby\'s match result is Validated or already processed: use admin_void_match or override_match_result.';
-const NO_PLAYER_REMOVAL = 'Players cannot be removed once the draft has started; the match ends by result, concede or forfeit.';
 const SERVER_MAPPING = 'A server identity mapping cannot be deleted.';
 const SYSTEM_MAPPING = 'A mapping of the SYSTEM user cannot be deleted.';
 const systemUserId = (test: Harness) => test.db.User.username.find('SYSTEM')!.id;

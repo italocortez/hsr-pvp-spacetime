@@ -7,17 +7,16 @@
 // register / withdraw, capacity and waitlist, approval, minimum MMR, account locks, waitlist_promote, add_participant,
 // reject_participant, withdraw_tournament_team. Builders in s8-fixtures.ts.
 import { describe, expect, it } from 'vitest';
-import { M, expectReject, guest, newHarness, tx, type Harness } from '../fixtures/harness';
+import { M, expectReject, guest, newHarness, tx, type Harness, AUDIT } from '../fixtures/harness';
+import { host, verified } from '../fixtures/identity';
+import { insertHsrAccount } from '../fixtures/roster';
 import {
-    AUDIT,
     advanceStage,
     enrollMany,
     enrolled,
     enrolledAll,
     fullTeams,
     seedAndGenerate,
-    host,
-    insertHsrAccount,
     locks,
     makeTeam,
     membersOf,
@@ -29,8 +28,7 @@ import {
     stampGenerated,
     teamRow,
     teams,
-    verified,
-} from '../fixtures/tournament-builders';
+} from '../fixtures/tournaments';
 
 const dq = (test: Harness, by: any, tournamentId: number, userId: number) =>
     tx(test, by, (ctx) => M.dq_participant(ctx, { tournamentId, userId, reason: 'test' }));

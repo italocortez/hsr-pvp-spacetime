@@ -36,6 +36,7 @@ import {
     type Lobby,
     type SetupOpts,
 } from '../fixtures/harness';
+import { NOT_ELIGIBLE_START } from '../fixtures/lobby';
 
 const GRACE_MICROS = 15_000_000n;
 
@@ -285,7 +286,6 @@ describe('A48: multi-device presence', () => {
     });
 });
 
-const NOT_ELIGIBLE = /Opposing team is not eligible for forfeit/;
 const rejoin = (s: Lobby, who: Actor) =>
     tx(s.test, who, (ctx) => M.join_lobby(ctx, { lobbyId: s.lobbyId, joinCode: '', password: '' }));
 
@@ -350,7 +350,7 @@ describe('F1 / A22(2): reconnect', () => {
         // Blue is eligible at this point (the F7 test proves the success path with the same timing);
         // one Blue player reconnecting must close it.
         rejoin(s, s.a.b1);
-        expectReject(test, s.a.r1, (ctx) => M.claim_forfeit(ctx, { lobbyId: s.lobbyId, forfeitingTeamSide: 0 }), NOT_ELIGIBLE);
+        expectReject(test, s.a.r1, (ctx) => M.claim_forfeit(ctx, { lobbyId: s.lobbyId, forfeitingTeamSide: 0 }), NOT_ELIGIBLE_START);
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Drafting');
     });
 });
@@ -390,8 +390,8 @@ describe('F7: claim_forfeit forfeitingTeamSide', () => {
 
         expectReject(test, s.host, claim(0), 'Referee must specify forfeitingTeamSide');
         expectReject(test, s.host, claim(3), /forfeitingTeamSide must be 0/);
-        expectReject(test, s.host, claim(1), NOT_ELIGIBLE);
-        expectReject(test, s.host, claim(2), NOT_ELIGIBLE);
+        expectReject(test, s.host, claim(1), NOT_ELIGIBLE_START);
+        expectReject(test, s.host, claim(2), NOT_ELIGIBLE_START);
 
         disconnect(test, s.a.b1);
         disconnect(test, s.a.b2);

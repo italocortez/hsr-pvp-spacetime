@@ -21,11 +21,13 @@ import {
     type Actor,
     type Harness,
     type Lobby,
+    type Team,
+    auditAt,
+    TURN_MS,
 } from '../fixtures/harness';
-import { blueCaptain, redCaptain } from '../fixtures/captain-actors';
-import { captain } from '../fixtures/draft-and-scoring-builders';
-import type { Team } from '../fixtures/team-and-turn';
-import { AUDIT0, turnOf } from '../fixtures/admin-and-turn-helpers';
+import { blueCaptain, redCaptain, captain, turnOf } from '../fixtures/draft-and-scoring';
+import { nominatorOf, stepsOf } from '../fixtures/auction';
+import { undoBody } from '../fixtures/undo';
 
 describe('F9: undo skips the audit rows and keeps sequences unique', () => {
     it('Pick, pause, undo → "Nothing to undo right now."; resume, undo → the Pick goes, Pause and Undo stay', () => {
@@ -129,7 +131,6 @@ const pricedPick = (s: Lobby, characterName: string) => (ctx: any) => {
     priceCharacters(ctx, s.lobbyId, [characterName]);
     return M.pick_character(ctx, { lobbyId: s.lobbyId, characterName, eidolon: 0 });
 };
-const undoBody = (s: Lobby) => (ctx: any) => M.undo_last_step(ctx, { lobbyId: s.lobbyId });
 
 /** Inserts `n` Undo audit rows for the lobby (sequences far above the draft's). */
 function insertUndoRows(test: Harness, lobbyId: number, n: number) {
@@ -137,7 +138,7 @@ function insertUndoRows(test: Harness, lobbyId: number, n: number) {
     for (let i = 0; i < n; i++) {
         test.db.MatchSessionStep.insert({
             id: 0, lobbyId, sequence: 10_000 + i, actorUserId: 0, anonymousLabel: undefined, actorSlot: { tag: 'Spectator' } as any,
-            action: { tag: 'Undo' } as any, payload: { tag: 'Undo', value: { originalSequenceId: 0 } } as any, timestamp: ts, ...AUDIT0(ts),
+            action: { tag: 'Undo' } as any, payload: { tag: 'Undo', value: { originalSequenceId: 0 } } as any, timestamp: ts, ...auditAt(ts),
         } as any);
     }
 }
@@ -146,8 +147,9 @@ function insertUndoRows(test: Harness, lobbyId: number, n: number) {
 // L34: undo of the last Auction ban
 // ════════════════════════════════════════════════════════════════════════════
 
+const AUCTION_FOUR = { draftMode: { tag: 'Auction' }, banMode: { tag: 'Four' } };
+
 describe('A122(9), L34: the last ban of the Auction ban phase can be undone', () => {
-    const AUCTION_FOUR = { draftMode: { tag: 'Auction' }, banMode: { tag: 'Four' } };
     function banAll(s: Lobby, names: string[]) {
         for (const name of names) {
             tx(s.test, captain(s, turnOf(s).teamTurn.tag as 'Blue' | 'Red'), pricedBan(s, name));
@@ -232,10 +234,25 @@ describe('A122(10), L35: Undo rows count toward the edit-step cap (300 per game)
 // A125: in Auction the undo window stays open until the first bid
 // ════════════════════════════════════════════════════════════════════════════
 
+const otherSide = (side: 'Blue' | 'Red') => (side === 'Blue' ? 'Red' : 'Blue');
+function nominate(s: Lobby, name: string) {
+    tx(s.test, captain(s, nominatorOf(s)), (ctx) => {
+        priceCharacters(ctx, s.lobbyId, [name]);
+        return M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: name });
+    });
+}
+/** The session fields a nomination may write, plus the budgets and won counts that must not move. */
+const snapshot = (s: Lobby) => {
+    const x = session(s.test, s.lobbyId);
+    return {
+        currentNomination: x.currentNomination, currentBidAmount: x.currentBidAmount, currentBidTeam: x.currentBidTeam.tag,
+        nextNominatorTeam: x.nextNominatorTeam.tag, turnIndex: x.turnIndex, isAuctionPhase: x.isAuctionPhase,
+        blue: x.teamBlueCharBudget, red: x.teamRedCharBudget, blueLc: x.teamBlueLcBudget, redLc: x.teamRedLcBudget,
+        blueWon: x.blueCharactersWon, redWon: x.redCharactersWon,
+    };
+};
+
 describe('A125: in Auction the undo cancels an open first nomination until the first bid or sale', () => {
-    const AUCTION_FOUR = { draftMode: { tag: 'Auction' }, banMode: { tag: 'Four' } };
-    const TURN_MS = 30_000; // DEFAULT_LOBBY_ARGS.standardTurnSeconds
-    const undoBody = (s: Lobby) => (ctx: any) => M.undo_last_step(ctx, { lobbyId: s.lobbyId });
     const turnTeam = (s: Lobby) => {
         const sess = session(s.test, s.lobbyId);
         return sess.draftSequence[sess.turnIndex].teamTurn.tag as 'Blue' | 'Red';
@@ -253,25 +270,6 @@ describe('A125: in Auction the undo cancels an open first nomination until the f
         expect(session(test, s.lobbyId)).toMatchObject({ isAuctionPhase: true, turnIndex: 4 });
         return s;
     }
-    const nominatorOf = (s: Lobby) => session(s.test, s.lobbyId).nextNominatorTeam.tag as 'Blue' | 'Red';
-    const otherSide = (side: 'Blue' | 'Red') => (side === 'Blue' ? 'Red' : 'Blue');
-    function nominate(s: Lobby, name: string) {
-        tx(s.test, captain(s, nominatorOf(s)), (ctx) => {
-            priceCharacters(ctx, s.lobbyId, [name]);
-            return M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: name });
-        });
-    }
-    const stepsOf = (s: Lobby, tag: string) => steps(s.test, s.lobbyId).filter((x) => x.action.tag === tag);
-    /** The session fields a nomination may write, plus the budgets and won counts that must not move. */
-    const snapshot = (s: Lobby) => {
-        const x = session(s.test, s.lobbyId);
-        return {
-            currentNomination: x.currentNomination, currentBidAmount: x.currentBidAmount, currentBidTeam: x.currentBidTeam.tag,
-            nextNominatorTeam: x.nextNominatorTeam.tag, turnIndex: x.turnIndex, isAuctionPhase: x.isAuctionPhase,
-            blue: x.teamBlueCharBudget, red: x.teamRedCharBudget, blueLc: x.teamBlueLcBudget, redLc: x.teamRedLcBudget,
-            blueWon: x.blueCharactersWon, redWon: x.redCharactersWon,
-        };
-    };
 
     it('A125: a first undo cancels a manual nomination (state restored exactly, Undo row, fresh timer for the nominator); a second undo removes the last ban', () => {
         const s = auctionReady();
@@ -361,25 +359,6 @@ const UNDO_REFEREE_TEXT = 'Only referees with undo permission can undo.';
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('Gap 7, A125 / A127: Auction undo with no bans configured; undo by a non-referee (S10s re-review N5)', () => {
-    const undoBody = (s: Lobby) => (ctx: any) => M.undo_last_step(ctx, { lobbyId: s.lobbyId });
-    const nominatorOf = (s: Lobby) => session(s.test, s.lobbyId).nextNominatorTeam.tag as 'Blue' | 'Red';
-    const otherSide = (side: 'Blue' | 'Red') => (side === 'Blue' ? 'Red' : 'Blue');
-    function nominate(s: Lobby, name: string) {
-        tx(s.test, captain(s, nominatorOf(s)), (ctx) => {
-            priceCharacters(ctx, s.lobbyId, [name]);
-            return M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: name });
-        });
-    }
-    const stepsOf = (s: Lobby, tag: string) => steps(s.test, s.lobbyId).filter((x) => x.action.tag === tag);
-    const snapshot = (s: Lobby) => {
-        const x = session(s.test, s.lobbyId);
-        return {
-            currentNomination: x.currentNomination, currentBidAmount: x.currentBidAmount, currentBidTeam: x.currentBidTeam.tag,
-            nextNominatorTeam: x.nextNominatorTeam.tag, turnIndex: x.turnIndex, isAuctionPhase: x.isAuctionPhase,
-            blue: x.teamBlueCharBudget, red: x.teamRedCharBudget, blueLc: x.teamBlueLcBudget, redLc: x.teamRedLcBudget,
-            blueWon: x.blueCharactersWon, redWon: x.redCharactersWon,
-        };
-    };
     const auctionNoBans = () => setupLobby(newHarness(), { lobby: { draftMode: { tag: 'Auction' }, banMode: { tag: 'None' } } });
 
     // T-S10u re-alignment (A134): in the auction phase the unit of undo is the round; two rounds (one sold, one open

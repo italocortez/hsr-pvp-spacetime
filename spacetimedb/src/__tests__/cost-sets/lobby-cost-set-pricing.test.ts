@@ -29,7 +29,24 @@ import {
     type Actor,
     type Harness,
     type Lobby,
+    rejection,
+    type Team,
 } from '../fixtures/harness';
+import { host as tournamentHost } from '../fixtures/identity';
+import { seedReferenceNames } from '../fixtures/roster';
+import {
+    MOC,
+    charRow,
+    createSet,
+    editChar,
+    editLc,
+    key0,
+    ladder,
+    liveChars,
+    publish,
+    sLadder,
+    type Mode,
+} from '../fixtures/cost-sets';
 import {
     H,
     arrange,
@@ -43,33 +60,17 @@ import {
     lineup,
     redNames,
     selectAccount,
-} from '../fixtures/draft-and-scoring-builders';
-import { host as tournamentHost } from '../fixtures/tournament-builders';
-import { rejection, seedReferenceNames } from '../fixtures/calendar-roster-rating-builders';
-import {
-    MOC,
     blueMate,
-    charRow,
-    createSet,
-    editChar,
-    editLc,
     equipBody,
     expireTurn,
-    key0,
-    ladder,
     lastStepOf,
-    liveChars,
     lobbyState,
     nominateBody,
     passBody,
     payloadOf,
     pickBody,
-    publish,
-    sLadder,
     withAccounts,
-    type Mode,
-    type Team,
-} from '../fixtures/cost-set-pricing-builders';
+} from '../fixtures/draft-and-scoring';
 
 const COST_MISSING = (name: string) => `${name} has no cost in this lobby's cost set.`;
 

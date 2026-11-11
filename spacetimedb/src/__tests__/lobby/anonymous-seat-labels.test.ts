@@ -23,15 +23,10 @@ import {
     type Actor,
     type Harness,
 } from '../fixtures/harness';
-import { captain, playToScoring } from '../fixtures/draft-and-scoring-builders';
-import { settingsFrom } from '../fixtures/ranked-game-builders';
-import { seatLabel } from '../fixtures/seat-labels';
-import { abandon, chat, cursorEvents, join, leave } from '../fixtures/lobby-action-helpers';
-
-function view<T = any>(test: Harness, name: string, who: Actor): T[] {
-    return (M as any)[name](test.viewContext(who.auth), {}) as T[];
-}
-const displayName = (test: Harness, who: Actor) => test.db.User.id.find(who.userId)!.displayName;
+import { displayName } from '../fixtures/identity';
+import { captain, playToScoring } from '../fixtures/draft-and-scoring';
+import { settingsFrom, seatLabel, abandon, chat, cursorEvents, join, leave } from '../fixtures/lobby';
+import { view } from '../fixtures/views';
 
 describe('A96: a cursor event names the sender by seat, never by user id', () => {
     for (const [kind, lobby] of [['identified', {}], ['anonymous', { isAnonymousPlayers: true, isAnonymousSpectators: true }]] as const) {

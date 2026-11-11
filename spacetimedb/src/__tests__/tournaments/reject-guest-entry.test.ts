@@ -3,22 +3,15 @@
 // Contracts: docs/tournament/contract.md, docs/brackets/contract.md
 // From S10o, S10q (s10o-autopick-guest-entry.test.ts, s10q-gap-coverage.test.ts).
 import { describe, expect, it } from 'vitest';
-import {
-    M,
-    expectReject,
-    guest,
-    linkDiscord,
-    newHarness,
-    tx,
-    type Actor,
-} from '../fixtures/harness';
+import { M, expectReject, guest, linkDiscord, newHarness, tx, type Actor } from '../fixtures/harness';
+import { host, verified } from '../fixtures/identity';
+import { createEvent, invite } from '../fixtures/calendar';
 import {
     advanceStage,
     assignAssistant,
     bracketRows,
     enrolled,
     generateBracket,
-    host,
     makeTeam,
     membersOf,
     membership,
@@ -29,14 +22,12 @@ import {
     tRow,
     teamRow,
     updateBody,
-    verified,
-} from '../fixtures/tournament-builders';
-import { createEvent, invite } from '../fixtures/calendar-roster-rating-builders';
+    guestsText,
+} from '../fixtures/tournaments';
 
 const APPROVED = 'Participant is already approved; disqualify them instead.';
 const GENERATED = 'Bracket generated; use stand-ins.';
 const NO_PERMISSION = 'This action needs the participants permission.';
-const guestsText = (n: number) => `These settings require verified accounts, and ${n} guest player(s) are registered.`;
 
 // ════════════════════════════════════════════════════════════════════════════
 // A118: staff remove a guest's approved entry before the bracket

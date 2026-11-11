@@ -4,27 +4,11 @@
 // From S10e, S10r (s10e-lobby-identity.test.ts, s10r-triage-fixes.test.ts).
 import { describe, expect, it } from 'vitest';
 import { Timestamp } from 'spacetimedb';
-import {
-    M,
-    advance,
-    guest,
-    lobbyRow,
-    newHarness,
-    setupLobby,
-    tx,
-    type Harness,
-} from '../fixtures/harness';
-import { joinLobby } from '../fixtures/preset-and-account-builders';
-import { leave } from '../fixtures/lobby-member-helpers';
-import { completeDraft } from '../fixtures/draft-and-scoring-builders';
-import { liveField } from '../fixtures/tournament-builders';
-import {
-    byKey,
-    deferredDuel,
-    offlinePastGrace,
-    openMatchLobby,
-} from '../fixtures/tournament-match-builders';
-import { AUDIT0 } from '../fixtures/admin-and-turn-helpers';
+import { M, advance, guest, lobbyRow, newHarness, setupLobby, tx, type Harness, auditAt } from '../fixtures/harness';
+import { completeDraft } from '../fixtures/draft-and-scoring';
+import { joinLobby, leave, chatRows } from '../fixtures/lobby';
+import { liveField } from '../fixtures/tournaments';
+import { byKey, deferredDuel, offlinePastGrace, openMatchLobby } from '../fixtures/tournament-matches';
 
 /** A System ChatMessage row written straight into the datastore at `createdDate`. */
 function insertChat(test: Harness, lobbyId: number, content: string, createdDate: Timestamp = test.clock.now()) {
@@ -100,8 +84,6 @@ describe('lobby audit #6: member-event and start lines stay inside the D-13 wind
     });
 });
 
-const chatRows = (test: Harness, lobbyId: number) => [...test.db.ChatMessage.lobby_id.filter(lobbyId)];
-
 /**
  * Fills the lobby's chat to 50 rows with direct inserts whose createdDate runs against the id: the first row inserted
  * (lowest id of the batch) is the newest, the last one (highest id) the oldest, older than everything already there.
@@ -116,7 +98,7 @@ function fillChatTo50(test: Harness, lobbyId: number): number {
         const ts = new Timestamp(base - BigInt((i + 1) * 1_000_000) - 3_600_000_000n);
         const row = test.db.ChatMessage.insert({
             id: 0, lobbyId, senderUserId: 0, senderType: { tag: 'System' } as any, content: `filler ${i}`,
-            metadata: undefined, anonymousLabel: undefined, ...AUDIT0(ts),
+            metadata: undefined, anonymousLabel: undefined, ...auditAt(ts),
         } as any);
         oldestId = row.id;
     }

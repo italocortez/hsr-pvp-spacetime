@@ -16,12 +16,15 @@ import {
     tx,
     type Harness,
     type Lobby,
-    type SetupOpts,
+    rejection,
+    TWO_V_TWO,
 } from '../fixtures/harness';
-import { captain, insertCharacter, selectAccount } from '../fixtures/draft-and-scoring-builders';
-import { insertHsrAccount, verified } from '../fixtures/tournament-builders';
-import { rejection } from '../fixtures/calendar-roster-rating-builders';
-import { COST_LOCKED, classic } from '../fixtures/live-lobby-lock-helpers';
+import { verified } from '../fixtures/identity';
+import { insertHsrAccount } from '../fixtures/roster';
+import { COST_LOCKED } from '../fixtures/cost-sets';
+import { captain, insertCharacter, selectAccount } from '../fixtures/draft-and-scoring';
+import { nominatorOf, pass } from '../fixtures/auction';
+import { classic } from '../fixtures/lobby';
 
 // ─── Texts ───────────────────────────────────────────────────────────────────
 
@@ -32,9 +35,6 @@ const LOCKED = (joinCode: string) =>
 const DELETE_LOCKED = 'Cannot delete an account that is selected in an active lobby. Leave the lobby first.';
 
 // ─── Builders ────────────────────────────────────────────────────────────────
-
-type Side = 'Blue' | 'Red';
-const TWO_V_TWO: SetupOpts['seats'] = [['b1', 'BluePlayer'], ['b2', 'BluePlayer'], ['r1', 'RedPlayer'], ['r2', 'RedPlayer']];
 
 /** b1's HSR account (inactive, so no join auto-selects it) owning A at E0 and selected for the lobby. */
 function selectedAccount(s: Lobby): number {
@@ -139,12 +139,10 @@ describe('A142: an Admin cannot edit the characters of an account selected in an
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('A142 (S10u review G2): an Admin roster edit between a bid and its sale is refused; the sale completes at the level checked at the bid', () => {
-    const nominatorOf = (s: Lobby) => session(s.test, s.lobbyId).nextNominatorTeam.tag as Side;
     const nominate = (s: Lobby, name: string) => {
         advance(s.test, 300);
         tx(s.test, captain(s, nominatorOf(s)), (ctx) => M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: name }));
     };
-    const pass = (s: Lobby, side: Side) => { advance(s.test, 300); tx(s.test, captain(s, side), (ctx) => M.pass_bid(ctx, { lobbyId: s.lobbyId })); };
 
     /** 2v2 ownership Auction, budgets 10 / 2, minimum raise 1; X costs 10 / 11.5 / 15...; b1 owns X at E0, b2 at E2; Blue nominates X at 10. */
     function bidOnX(verifiedBlue = false) {

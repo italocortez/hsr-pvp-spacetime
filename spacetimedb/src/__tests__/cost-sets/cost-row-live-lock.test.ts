@@ -15,16 +15,13 @@ import {
     tx,
     type Harness,
     type Lobby,
+    rejection,
 } from '../fixtures/harness';
-import {
-    completeDraft,
-    insertCharacter,
-    playToScoring,
-} from '../fixtures/draft-and-scoring-builders';
-import { seedElo } from '../fixtures/tournament-match-builders';
-import { parkedLobby } from '../fixtures/ranked-game-builders';
-import { rejection } from '../fixtures/calendar-roster-rating-builders';
-import { COST_LOCKED, classic } from '../fixtures/live-lobby-lock-helpers';
+import { COST_LOCKED } from '../fixtures/cost-sets';
+import { completeDraft, insertCharacter, playToScoring } from '../fixtures/draft-and-scoring';
+import { classic } from '../fixtures/lobby';
+import { seedElo } from '../fixtures/tournament-matches';
+import { parkedLobby } from '../fixtures/ranked';
 
 /** S10w fix pass (review F1): a costSetId that is not null or a whole number 0..4294967295. */
 const BAD_SET = (tableName: string) => `Invalid costSetId for ${tableName}: must be a whole number from 0 to 4294967295.`;

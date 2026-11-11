@@ -6,12 +6,12 @@
 // Proves spacetimedbModuleTestPlugin + createModuleTestHarness run the real module on this toolchain.
 // No network: the harness is an in-memory datastore (WASM), nothing reaches maincloud.
 import { describe, expect, it } from 'vitest';
-import { ConnectionId, ScheduleAt, TimeDuration, Timestamp } from 'spacetimedb';
+import { ConnectionId, ScheduleAt, TimeDuration } from 'spacetimedb';
 import { createModuleTestHarness, TestAuth, TestClock } from 'spacetimedb/server/test-utils';
 import spacetimedb from '@module/schema';
 import * as moduleExports from '@module/index';
+import { START } from '../fixtures/harness';
 
-const START = Timestamp.fromDate(new Date('2026-01-01T00:00:00Z'));
 const SEVEN_DAYS_MICROS = 7n * 86_400_000_000n;
 
 function freshHarness() {

@@ -7,7 +7,21 @@
 // bids, the total-budget guard, the eidolon extra charged at the sale (both sale paths), the roster cost (amount +
 // extra), and set_eidolon paying / refunding the difference. Cost ladders have distinct e0..e6. TestClock; no maincloud.
 import { describe, expect, it } from 'vitest';
-import { M, advance, expectReject, lobbyRow, newHarness, session, setupLobby, steps, tx, type Harness, type Lobby, priceCharacters } from '../fixtures/harness';
+import {
+    M,
+    advance,
+    expectReject,
+    lobbyRow,
+    newHarness,
+    session,
+    setupLobby,
+    steps,
+    tx,
+    type Harness,
+    type Lobby,
+    priceCharacters,
+    AUCTION,
+} from '../fixtures/harness';
 import {
     H,
     arrange,
@@ -24,9 +38,9 @@ import {
     redNames,
     selectAccount,
     setEidolon,
-} from '../fixtures/draft-and-scoring-builders';
+    blueMate,
+} from '../fixtures/draft-and-scoring';
 
-const AUCTION = { draftMode: { tag: 'Auction' } };
 const NOT_OWNED = 'Your team does not own this character on any selected account.';
 const OVER_TOTAL = 'Not enough total budget: the eidolon extra for this character would exceed it.';
 
@@ -41,8 +55,6 @@ const budgets = (test: Harness, lobbyId: number) => {
 const lastSold = (test: Harness, lobbyId: number) =>
     steps(test, lobbyId).filter((st) => st.action.tag === 'AuctionSold').sort((a, b) => b.sequence - a.sequence)[0].payload.value as
         { characterName: string; winningAmount: number; eidolon: number; eidolonCost: number; winningTeam: { tag: string } };
-/** The non-captain Blue player (ownership is a team property: any player seat's selected accounts count). */
-const blueMate = (s: Lobby) => [s.a.b1, s.a.b2].find((a) => a.userId !== captain(s, 'Blue').userId)!;
 
 describe('A61(1): nominations at the E0 base cost', () => {
     it('nominate_character(lobbyId, characterName) opens at e0; the Nominate payload carries no eidolon', () => {

@@ -30,31 +30,26 @@ import {
     type Harness,
     type Lobby,
     type SetupOpts,
-} from '../fixtures/harness';
-import {
     AUDIT,
-    host as tournamentHost,
-    insertHsrAccount,
-    verified,
-} from '../fixtures/tournament-builders';
-import { seedElo } from '../fixtures/tournament-match-builders';
-import { parkedLobby } from '../fixtures/ranked-game-builders';
-import { seatLabel } from '../fixtures/seat-labels';
+} from '../fixtures/harness';
+import { host as tournamentHost, verified, displayName } from '../fixtures/identity';
+import { seatLabel, leave, PRESET_ARGS } from '../fixtures/lobby';
 import {
     ANON,
     AUDIT_KEYS,
     COLS,
     USER_ID_KEY,
-    displayName,
     expectOnlyColumns,
     keysOf,
-    leave,
     lobbyOf,
     rowFor,
     seatsOf,
     shared,
     view,
-} from '../fixtures/lobby-view-builders';
+    selectRatedAccount,
+} from '../fixtures/views';
+import { seedElo } from '../fixtures/tournament-matches';
+import { parkedLobby } from '../fixtures/ranked';
 
 const createCasual = (test: Harness, who: Actor, over: Record<string, unknown> = {}) =>
     tx(test, who, (ctx) => M.create_lobby(ctx, { ...DEFAULT_LOBBY_ARGS, ...over } as any));
@@ -67,13 +62,6 @@ function patchMember(test: Harness, lobbyId: number, userId: number, patch: Reco
     test.db.LobbyMember.insert({ ...row, ...patch } as any);
 }
 
-/** An HSR account with a fixed rating selected by `who` for the lobby. Returns the account id. */
-function selectRatedAccount(test: Harness, lobbyId: number, who: Actor, uid: string, rating: number): number {
-    const id = insertHsrAccount(test, who.userId, uid);
-    test.db.HsrAccount.id.update({ ...test.db.HsrAccount.id.find(id)!, accountRating: rating });
-    test.db.LobbyMemberAccount.insert({ lobbyId, userId: who.userId, hsrAccountId: id });
-    return id;
-}
 
 const ratingOf = (test: Harness, lobbyId: number, userId: number) =>
     Math.round(tx(test, 'internal', (ctx) => computeLobbyMemberRating(ctx, lobbyId, userId)));
@@ -316,17 +304,6 @@ describe('view_lobby_browser (anonymous shared)', () => {
 // ════════════════════════════════════════════════════════════════════════════
 // view_lobby_presets (S9a-V6; A33a; LobbyPreset private)
 // ════════════════════════════════════════════════════════════════════════════
-
-const PRESET_ARGS = {
-    teamSize: 2, draftMode: { tag: 'Classic' }, banMode: { tag: 'None' }, gameMode: { tag: 'MemoryOfChaos' },
-    matchType: { tag: 'Casual' }, standardTurnSeconds: 30, reserveBankSeconds: 60, characterBudget: 100,
-    lightconeBudget: 50, minimumBidRaise: 1, rosterDiffAdvantage: 0, rosterThreshold: 0, underThresholdAdvantage: 0,
-    aboveThresholdPenalty: 0, deathPenalty: 0, isPublic: true, isAnonymousPlayers: false, isAnonymousSpectators: false,
-    rosterVisibility: { tag: 'OpenRoster' }, requireOwnership: false, costSetId: 0, disconnectPolicy: { tag: 'Standard' },
-    disconnectForfeitSeconds: 60, allowMirrorPicks: false, autoRandomPick: false, refereeCanUndo: true,
-    refereeCanPause: true, refereeCanSetCaptain: true, refereeCanKick: true, allowPlayerPause: true,
-    refereeExclusiveConcede: true,
-};
 
 describe('view_lobby_presets', () => {
     it('the system preset plus the caller\'s own presets, without audit columns; another user\'s preset and a non-system SYSTEM preset are absent', () => {

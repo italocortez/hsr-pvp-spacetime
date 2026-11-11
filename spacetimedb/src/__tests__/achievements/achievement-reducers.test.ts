@@ -10,19 +10,13 @@
 // SYSTEM Admin. The auto-award pipeline stays with s9b-views. Nothing reaches maincloud.
 import { describe, expect, it } from 'vitest';
 import { M, expectReject, guest, newHarness, tx, type Actor, type Harness } from '../fixtures/harness';
-import { host as tournamentHost, moderator, openTournament, register, setUserRole, verified } from '../fixtures/tournament-builders';
-import { addCriteria, award, awardsOf, createAchievement, criteriaOf } from '../fixtures/achievement-auth-cost-builders';
+import { host as tournamentHost, moderator, verified, admin, ADMIN_ONLY } from '../fixtures/identity';
+import { addCriteria, award, awardsOf, createAchievement, criteriaOf } from '../fixtures/achievements';
+import { openTournament, register } from '../fixtures/tournaments';
 
 const MOD_ONLY = 'Forbidden: Requires Moderator or Admin privileges.';
-const ADMIN_ONLY = 'Forbidden: Requires Admin privileges.';
 const AWARD_FORBIDDEN = 'Forbidden: Requires Moderator, Admin, or Tournament Host privileges.';
 const LOCKED = 'Cannot modify criteria: players have already earned this achievement.';
-
-function admin(test: Harness, name = 'boss'): Actor {
-    const a = verified(test, name);
-    setUserRole(test, a.userId, 'Admin');
-    return a;
-}
 
 const displayed = (test: Harness, a: Actor) => test.db.User.id.find(a.userId)!.displayedAchievementId;
 

@@ -2,20 +2,10 @@
 // Contracts: docs/match-results/contract.md
 // From S10f (s10f-draft-results.test.ts).
 import { describe, expect, it } from 'vitest';
-import { M, advance, newHarness, tx, type Harness } from '../fixtures/harness';
-import {
-    H,
-    captain,
-    playToScoring,
-    record,
-    recordScores,
-    setRole,
-    side,
-} from '../fixtures/draft-and-scoring-builders';
-import { moderator } from '../fixtures/tournament-builders';
-import { parkedLobby } from '../fixtures/ranked-game-builders';
-import { rejection } from '../fixtures/calendar-roster-rating-builders';
-import type { Team } from '../fixtures/team-and-turn';
+import { M, advance, newHarness, tx, type Harness, rejection, type Team } from '../fixtures/harness';
+import { moderator } from '../fixtures/identity';
+import { H, captain, playToScoring, record, recordScores, setRole, side } from '../fixtures/draft-and-scoring';
+import { parkedLobby } from '../fixtures/ranked';
 
 const TOO_QUICK = 'You are entering results too quickly. Please wait a moment.';
 

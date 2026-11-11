@@ -13,35 +13,33 @@ import {
     tx,
     type Harness,
     type Lobby,
+    rejection,
+    TWO_V_TWO,
+    other,
+    type Side,
 } from '../fixtures/harness';
-import { captain, completeDraft, selectAccount } from '../fixtures/draft-and-scoring-builders';
-import { rejection } from '../fixtures/calendar-roster-rating-builders';
+import { captain, completeDraft, selectAccount, nominateBody } from '../fixtures/draft-and-scoring';
 import {
     E6,
     NOMINATE_COST,
-    TWO_V_TWO,
     bid,
     bidBody,
     budgets,
     buyAt,
-    canon,
     eid,
     expectNoRound,
     expire,
     f,
     lobby,
     nominate,
-    nominateBody,
     nominatorOf,
-    other,
     pass,
     playAuction,
     price,
     stepsOf,
     undo,
-    world,
-    type Side,
-} from '../fixtures/auction-round-builders';
+} from '../fixtures/auction';
+import { canon, world, undoBody } from '../fixtures/undo';
 
 const TOTAL = 'Not enough total budget: the eidolon extra for this character would exceed it.';
 const CAP = 'This game has reached the limit of 300 undo steps.';
@@ -52,7 +50,6 @@ function f32AtMost(x: number): number {
     if (v[0] > x) new Uint32Array(v.buffer)[0] -= 1;
     return v[0];
 }
-const undoBody = (s: Lobby) => (ctx: any) => M.undo_last_step(ctx, { lobbyId: s.lobbyId });
 const expectNonNegative = (s: Lobby) => {
     for (const side of ['Blue', 'Red'] as const) {
         const b = budgets(s, side);

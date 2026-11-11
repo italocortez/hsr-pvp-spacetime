@@ -39,26 +39,43 @@ import {
     type SetupOpts,
     seatOf,
 } from '../fixtures/harness';
-import { byKey, deferredDuel, duel, playLobbyGame, createTournamentLobby, join, openMatchLobby, recordsOfLobby, sidesOf } from '../fixtures/tournament-match-builders';
-import { parkedLobby } from '../fixtures/ranked-game-builders';
-import { completeDraft } from '../fixtures/draft-and-scoring-builders';
-import { liveField, matchRow, tRow, verified } from '../fixtures/tournament-builders';
+import { verified, displayName } from '../fixtures/identity';
+import { completeDraft, recordOf } from '../fixtures/draft-and-scoring';
+import {
+    join,
+    NO_PLAYER_REMOVAL,
+    leave,
+    lmaRows,
+    members,
+    settingsArgs,
+    PRESET_ARGS,
+    NOT_ELIGIBLE_START,
+} from '../fixtures/lobby';
+import { liveField, matchRow, tRow } from '../fixtures/tournaments';
+import {
+    byKey,
+    deferredDuel,
+    duel,
+    playLobbyGame,
+    createTournamentLobby,
+    openMatchLobby,
+    recordsOfLobby,
+    sidesOf,
+    SEAT,
+} from '../fixtures/tournament-matches';
+import { parkedLobby } from '../fixtures/ranked';
 
 // ─── Messages (the module code is the truth) ─────────────────────────────────
 
-const NOT_ELIGIBLE = /Opposing team is not eligible for forfeit/;
 const ALREADY_IN = 'You are already in a lobby. Leave it before creating or joining another.';
 const PROMPT = (code: string) => `You left lobby ${code} mid-match. Joining here means you cannot return to it.`;
 const GONE = 'You left this match for another lobby and cannot return.';
-const NO_PLAYER_REMOVAL = 'Players cannot be removed once the draft has started; the match ends by result, concede or forfeit.';
 const MAX_SPEC_RANGE = 'maxSpectators must be between 0 and 12.';
 const SPEC_FULL = (n: number) => `Spectator slots are full (max ${n}).`;
 const LEAVE_FIRST = 'Leave your lobby before deleting your account.';
-const SEAT = 'This seat is not available to you in this tournament lobby.';
 
 // ─── Builders ────────────────────────────────────────────────────────────────
 
-const leave = (test: Harness, who: Actor, lobbyId: number) => tx(test, who, (ctx) => M.leave_lobby(ctx, { lobbyId }));
 const rejoin = (test: Harness, who: Actor, lobbyId: number, abandonCurrentMatch?: boolean) =>
     tx(test, who, (ctx) => M.join_lobby(ctx, { lobbyId, joinCode: '', password: '', abandonCurrentMatch }));
 const createCasual = (test: Harness, who: Actor, over: Record<string, unknown> = {}) =>
@@ -72,30 +89,7 @@ const kick = (test: Harness, by: Actor, lobbyId: number, target: Actor) =>
 const ban = (test: Harness, by: Actor, lobbyId: number, target: Actor) =>
     tx(test, by, (ctx) => M.ban_member(ctx, { lobbyId, targetJoinSeq: seatOf(ctx, lobbyId, target.userId) }));
 const gc = (test: Harness) => tx(test, 'internal', (ctx) => M.admin_gc_lobbies(ctx, {}));
-const lmaRows = (test: Harness, lobbyId: number, userId: number) =>
-    [...test.db.LobbyMemberAccount.by_lobby_and_user.filter([lobbyId, userId])];
 const chat = (test: Harness, lobbyId: number) => [...test.db.ChatMessage.lobby_id.filter(lobbyId)].map((c) => c.content);
-const displayName = (test: Harness, who: Actor) => test.db.User.id.find(who.userId)!.displayName;
-const recordOf = (test: Harness, lobbyId: number) => [...test.db.MatchResultRecord.lobby_id.filter(lobbyId)][0];
-const members = (test: Harness, lobbyId: number) => [...test.db.LobbyMember.lobby_id.filter(lobbyId)];
-
-/** update_lobby_settings arguments mirroring the create defaults, with overrides (as s6-series-presets). */
-const settingsArgs = (lobbyId: number, over: Record<string, unknown> = {}) => {
-    const rest = DEFAULT_LOBBY_ARGS; // A114 / A116 (S10n): no joinCode / presetId to strip
-    return { lobbyId, ...rest, refereeExclusiveConcede: true, ...over } as any;
-};
-
-/** create_lobby_preset / update_lobby_preset arguments (as s6-series-presets). */
-const PRESET_ARGS = {
-    teamSize: 2, draftMode: { tag: 'Classic' }, banMode: { tag: 'None' }, gameMode: { tag: 'MemoryOfChaos' },
-    matchType: { tag: 'Casual' }, standardTurnSeconds: 30, reserveBankSeconds: 60, characterBudget: 100,
-    lightconeBudget: 50, minimumBidRaise: 1, rosterDiffAdvantage: 0, rosterThreshold: 0, underThresholdAdvantage: 0,
-    aboveThresholdPenalty: 0, deathPenalty: 0, isPublic: true, isAnonymousPlayers: false, isAnonymousSpectators: false,
-    rosterVisibility: { tag: 'OpenRoster' }, requireOwnership: false, costSetId: 0, disconnectPolicy: { tag: 'Standard' },
-    disconnectForfeitSeconds: 60, allowMirrorPicks: false, autoRandomPick: false, refereeCanUndo: true,
-    refereeCanPause: true, refereeCanSetCaptain: true, refereeCanKick: true, allowPlayerPause: true,
-    refereeExclusiveConcede: true,
-};
 
 /** One HSR account link per named member, written straight into the datastore (guests own no accounts). */
 function giveAccounts(s: Lobby, names: string[]) {
@@ -328,7 +322,7 @@ describe('A68(3): absence runs only through claim_forfeit / defer_match / conced
         leave(test, s.a.b1, s.lobbyId);
         leave(test, s.a.b2, s.lobbyId);
         advance(test, 30_000);
-        expectReject(test, s.a.r1, (ctx) => M.claim_forfeit(ctx, { lobbyId: s.lobbyId, forfeitingTeamSide: 0 }), NOT_ELIGIBLE);
+        expectReject(test, s.a.r1, (ctx) => M.claim_forfeit(ctx, { lobbyId: s.lobbyId, forfeitingTeamSide: 0 }), NOT_ELIGIBLE_START);
         advance(test, 31_000);
         claim(test, s.a.r1, s.lobbyId);
         expect(test.db.Lobby.id.find(s.lobbyId)).toBeFalsy(); // a casual concede finalizes inline
@@ -403,7 +397,7 @@ describe('A68(3): absence runs only through claim_forfeit / defer_match / conced
         const s = setupLobby(test, noReferee());
         leave(test, s.a.b1, s.lobbyId);
         advance(test, 120_000);
-        expectReject(test, s.a.r1, (ctx) => M.claim_forfeit(ctx, { lobbyId: s.lobbyId, forfeitingTeamSide: 0 }), NOT_ELIGIBLE);
+        expectReject(test, s.a.r1, (ctx) => M.claim_forfeit(ctx, { lobbyId: s.lobbyId, forfeitingTeamSide: 0 }), NOT_ELIGIBLE_START);
     });
 });
 
@@ -858,7 +852,7 @@ describe('A68(7): user deletion removes the membership like a leave; a live play
         leave(test, s.a.b2, s.lobbyId);
         adminDelete(test, b1);
         advance(test, 30_000);
-        expectReject(test, s.a.r1, (ctx) => M.claim_forfeit(ctx, { lobbyId: s.lobbyId, forfeitingTeamSide: 0 }), NOT_ELIGIBLE);
+        expectReject(test, s.a.r1, (ctx) => M.claim_forfeit(ctx, { lobbyId: s.lobbyId, forfeitingTeamSide: 0 }), NOT_ELIGIBLE_START);
         advance(test, 31_000);
         claim(test, s.a.r1, s.lobbyId);
         expect(test.db.Lobby.id.find(s.lobbyId)).toBeFalsy();

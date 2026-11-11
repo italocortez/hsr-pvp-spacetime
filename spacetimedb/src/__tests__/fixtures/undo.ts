@@ -1,6 +1,7 @@
-// Shared helpers: Auction and Classic lobbies, undo, nominations, budgets and stages of the undo and
+// Fixtures: undo (calls, the comparable snapshot of a lobby's draft), Classic turns and nominations of the undo and
 //   draft-completion tests.
-// From S10t (s10t-undo-any-step.test.ts); not a test file.
+// From S10t (s10t-undo-any-step.test.ts); not a test file. Auction round helpers (nominatorOf, stepsOf, budgets) live
+// in auction.ts.
 import {
     M,
     lobbyRow,
@@ -12,9 +13,11 @@ import {
     steps,
     tx,
     type Lobby,
-    type SetupOpts,
+    ONE_V_ONE,
+    type Side,
 } from './harness';
-import { captain } from './draft-and-scoring-builders';
+import { captain } from './draft-and-scoring';
+import { nominatorOf } from './auction';
 
 // ─── Texts ───────────────────────────────────────────────────────────────────
 
@@ -22,20 +25,12 @@ export const FINISHED = 'The draft is finished: undo works only while the lobby 
 
 // ─── Builders ────────────────────────────────────────────────────────────────
 
-export type Side = 'Blue' | 'Red';
-export const TURN_MS = 30_000; // DEFAULT_LOBBY_ARGS.standardTurnSeconds
-export const ONE_V_ONE: SetupOpts['seats'] = [['b1', 'BluePlayer'], ['r1', 'RedPlayer']];
-export const AUCTION = { draftMode: { tag: 'Auction' } };
-export const other = (side: Side): Side => (side === 'Blue' ? 'Red' : 'Blue');
-
 export function lobby(lobbyArgs: Record<string, unknown> = {}): Lobby {
     return setupLobby(newHarness(), { seats: ONE_V_ONE, lobby: lobbyArgs });
 }
 
 export const undo = (s: Lobby) => tx(s.test, s.host, (ctx) => M.undo_last_step(ctx, { lobbyId: s.lobbyId }));
 export const undoBody = (s: Lobby) => (ctx: any) => M.undo_last_step(ctx, { lobbyId: s.lobbyId });
-export const nominatorOf = (s: Lobby) => session(s.test, s.lobbyId).nextNominatorTeam.tag as Side;
-export const stepsOf = (s: Lobby, tag: string) => steps(s.test, s.lobbyId).filter((x) => x.action.tag === tag);
 
 /** The nominator's captain nominates `name`, priced in the lobby's set first (`ladder[e]` = cost at E`e`). */
 export function nominate(s: Lobby, name: string, ladder: number | number[] = 0) {
@@ -46,7 +41,7 @@ export const pass = (s: Lobby, side: Side) => tx(s.test, captain(s, side), (ctx)
 
 // ─── The snapshot ────────────────────────────────────────────────────────────
 
-export const AUDIT_KEYS = new Set(['createdById', 'createdDate', 'lastModifiedById', 'lastModifiedDate']);
+const AUDIT_KEYS = new Set(['createdById', 'createdDate', 'lastModifiedById', 'lastModifiedDate']);
 
 /** A comparable copy of a row: timestamps and bigints as strings, a unit enum as `{ tag }`, audit columns dropped. */
 export function canon(v: any): any {
@@ -81,13 +76,6 @@ export function world(s: Lobby) {
         .map(canon);
     return { session: sess, lobby: lob, steps: rows };
 }
-
-export const budgets = (s: Lobby, side: Side) => {
-    const x = session(s.test, s.lobbyId);
-    return side === 'Blue'
-        ? { char: x.teamBlueCharBudget, lc: x.teamBlueLcBudget, won: x.blueCharactersWon }
-        : { char: x.teamRedCharBudget, lc: x.teamRedLcBudget, won: x.redCharactersWon };
-};
 
 export const stage = (s: Lobby) => lobbyRow(s.test, s.lobbyId).stage.tag;
 

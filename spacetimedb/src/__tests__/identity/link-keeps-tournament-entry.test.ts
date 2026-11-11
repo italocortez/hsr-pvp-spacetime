@@ -1,7 +1,8 @@
-// Identity: a guest signing in to an existing account keeps or settles the tournament entry.
+// Identity: a guest signing in to an existing account keeps or settles the tournament entry, at every stage and shape
+//   of the entry.
 // Decisions: A112
 // Contracts: docs/auth/contract.md
-// From S10l (s10l-link-keeps-entry.test.ts).
+// From S10l, S10q (s10l-link-keeps-entry.test.ts, s10q-gap-coverage.test.ts); merged by T-REORG2.
 //
 // T-S10l: in-memory tests for step S10l (DECISIONS.md A112): a guest who signs in with a provider account that already
 // has a user keeps the guest's tournament entries (server_link_provider, the re-point + guest-deletion path). The entry,
@@ -9,17 +10,43 @@
 // game accounts; an entry the existing user cannot hold is settled as a deletion (A94(2)). server_link_provider runs as
 // the owner ('internal', linkDiscord). Roles, HSR accounts and rate rows are read or written through `test.db` outside
 // any transaction. Nothing reaches maincloud.
+//
+// Titles starting "pins current behaviour (row silent)": the decision row says nothing about the case, so the test
+// records today's behaviour rather than a rule; the owner accepted these pins (A145). A later decision on the case
+// replaces the pin with a rule test.
 import { describe, expect, it } from 'vitest';
-import { M, expectReject, guest, linkDiscord, lobbyRow, newHarness, seatOf, tx, type Actor, type Harness } from '../fixtures/harness';
 import {
+    M,
+    expectReject,
+    guest,
+    linkDiscord,
+    lobbyRow,
+    newHarness,
+    seatOf,
+    tx,
+    type Harness,
     AUDIT,
+    member,
+    type Lobby,
+} from '../fixtures/harness';
+import {
+    host,
+    verified,
+    existingUser,
+    signIn,
+    addSecondIdentity,
+    mappedUser,
+    identitiesOf,
+} from '../fixtures/identity';
+import { insertHsrAccount } from '../fixtures/roster';
+import { finishGame } from '../fixtures/draft-and-scoring';
+import { join } from '../fixtures/lobby';
+import {
     advanceStage,
     bracketRows,
     enrolled,
     enrolledAll,
     fullTeams,
-    host,
-    insertHsrAccount,
     locks,
     makeTeam,
     membersOf,
@@ -32,27 +59,21 @@ import {
     teamRow,
     teams,
     updateBody,
-    verified,
-} from '../fixtures/tournament-builders';
-import { createTournamentLobby, join, openMatchLobby, seedElo } from '../fixtures/tournament-match-builders';
+    tRow,
+    soloLive,
+} from '../fixtures/tournaments';
+import {
+    createTournamentLobby,
+    openMatchLobby,
+    seedElo,
+    SEAT,
+    draftGame,
+    drain,
+    recordsOfLobby,
+    validate,
+} from '../fixtures/tournament-matches';
 
 // ─── Builders ────────────────────────────────────────────────────────────────
-
-/** A verified user with a known provider id (the account the guest signs in to) and `accounts` HSR accounts. */
-function existingUser(test: Harness, sub: string, name: string, accounts = 2): { a: Actor; providerId: string; accountIds: number[] } {
-    const a = guest(test, sub);
-    const providerId = `pid-${sub}`;
-    linkDiscord(test, a, providerId, name);
-    const accountIds = Array.from({ length: accounts }, (_, i) => insertHsrAccount(test, a.userId, `${sub}-acc-${i}`));
-    return { a, providerId, accountIds: accountIds.sort((x, y) => x - y) };
-}
-
-/** Signs `g` in to the account that owns `providerId`; returns the guest's former user id. */
-function signIn(test: Harness, g: Actor, providerId: string): number {
-    const guestId = g.userId;
-    linkDiscord(test, g, providerId, 'ignored');
-    return guestId;
-}
 
 const capacity = (test: Harness, id: number) =>
     enrolledAll(test, id).filter((e) => !e.isWaitlisted && e.status.tag !== 'Disqualified').length;
@@ -75,7 +96,7 @@ describe('A112: a guest signing in to an existing account keeps the tournament e
         const g = guest(test, 'g-solo');
         const guestAccount = insertHsrAccount(test, g.userId, 'g-solo-acc');
         register(test, g, id);
-        const e = existingUser(test, 'e-solo', 'Ex');
+        const e = existingUser(test, 'e-solo', { name: 'Ex', accounts: 2 });
 
         const before = enrolled(test, id, g.userId)!;
         const teamId = membership(test, id, g.userId)!.teamId;
@@ -119,8 +140,8 @@ describe('A112: a guest signing in to an existing account keeps the tournament e
         register(test, g, id, { anonymousAlias: 'Shadow' });
         const quiet = guest(test, 'g-quiet'); // a second guest without an alias: "Player <n>"
         register(test, quiet, id);
-        const e = existingUser(test, 'e-anon', 'RealName');
-        const e2 = existingUser(test, 'e-anon2', 'OtherReal');
+        const e = existingUser(test, 'e-anon', { name: 'RealName', accounts: 2 });
+        const e2 = existingUser(test, 'e-anon2', { name: 'OtherReal', accounts: 2 });
         const quietTeamName = teamOf(test, id, quiet.userId).name;
 
         signIn(test, g, e.providerId);
@@ -145,7 +166,7 @@ describe('A112: a guest signing in to an existing account keeps the tournament e
         for (const p of [g, mate, asker]) register(test, p, id);
         const teamId = makeTeam(test, id, g, [mate], 'Guests');
         tx(test, asker, (ctx) => M.request_join_team(ctx, { teamId }));
-        const e = existingUser(test, 'e-cap', 'Captain');
+        const e = existingUser(test, 'e-cap', { name: 'Captain', accounts: 2 });
 
         signIn(test, g, e.providerId);
 
@@ -170,7 +191,7 @@ describe('A112: a guest signing in to an existing account keeps the tournament e
         register(test, g, id);
         const teamId = makeTeam(test, id, cap, [g], 'Cap team');
         const statusBefore = teamRow(test, teamId)!.status.tag;
-        const e = existingUser(test, 'e-member', 'Member');
+        const e = existingUser(test, 'e-member', { name: 'Member', accounts: 2 });
 
         const guestId = signIn(test, g, e.providerId);
 
@@ -191,7 +212,7 @@ describe('A112: a guest signing in to an existing account keeps the tournament e
         tx(test, cap, (ctx) => M.create_tournament_team(ctx, { tournamentId: id, teamName: 'Open' }));
         const teamId = teams(test, id).find((t) => t.name === 'Open')!.id;
         tx(test, g, (ctx) => M.request_join_team(ctx, { teamId }));
-        const e = existingUser(test, 'e-req', 'Requester');
+        const e = existingUser(test, 'e-req', { name: 'Requester', accounts: 2 });
 
         const guestId = signIn(test, g, e.providerId);
 
@@ -214,7 +235,7 @@ describe('A112: a guest signing in to an existing account keeps the tournament e
         advanceStage(test, org, id, 'Seeding');
         seedAndGenerate(test, org, id);
         advanceStage(test, org, id, 'InProgress');
-        const e = existingUser(test, 'e-live', 'Live');
+        const e = existingUser(test, 'e-live', { name: 'Live', accounts: 2 });
         const bracketBefore = bracketRows(test, id);
         const statusBefore = enrolled(test, id, g.userId)!.status.tag;
         const seedBefore = teamRow(test, gTeam)!.seedNumber;
@@ -253,7 +274,7 @@ describe('A112: a guest signing in to an existing account keeps the tournament e
         register(test, g, id);
         advanceStage(test, org, id, 'Seeding');
         seedAndGenerate(test, org, id);
-        const e = existingUser(test, 'e-seed', 'Seeder');
+        const e = existingUser(test, 'e-seed', { name: 'Seeder', accounts: 2 });
         const teamId = membership(test, id, g.userId)!.teamId;
         const bracketBefore = bracketRows(test, id);
 
@@ -279,7 +300,7 @@ describe('A112: a guest signing in to an existing account keeps the tournament e
         register(test, later, id);
         expect(waitlistRows(test, id, g.userId)).toHaveLength(1);
         const before = enrolled(test, id, g.userId)!;
-        const e = existingUser(test, 'e-wait', 'Waiter');
+        const e = existingUser(test, 'e-wait', { name: 'Waiter', accounts: 2 });
 
         const guestId = signIn(test, g, e.providerId);
 
@@ -298,7 +319,6 @@ describe('A112: a guest signing in to an existing account keeps the tournament e
     });
 });
 
-
 // ════════════════════════════════════════════════════════════════════════════
 // A112(3): the entry is not moved and is settled as a deletion (A94(2))
 // ════════════════════════════════════════════════════════════════════════════
@@ -308,7 +328,7 @@ describe('A112(3): entries the existing user cannot hold are settled as a deleti
         const test = newHarness();
         const org = host(test);
         const id = openTournament(test, org, { teamSize: 1 });
-        const e = existingUser(test, 'e-dup', 'Dup');
+        const e = existingUser(test, 'e-dup', { name: 'Dup', accounts: 2 });
         register(test, e.a, id);
         const g = guest(test, 'g-dup');
         register(test, g, id);
@@ -331,7 +351,7 @@ describe('A112(3): entries the existing user cannot hold are settled as a deleti
         const test = newHarness();
         const org = host(test);
         const id = openTournament(test, org, { teamSize: 2, maxParticipants: 8 });
-        const e = existingUser(test, 'e-dup-live', 'DupLive');
+        const e = existingUser(test, 'e-dup-live', { name: 'DupLive', accounts: 2 });
         const eMate = verified(test, 'e-mate');
         const g = guest(test, 'g-dup-live');
         const gMate = verified(test, 'g-mate');
@@ -356,7 +376,7 @@ describe('A112(3): entries the existing user cannot hold are settled as a deleti
         const test = newHarness();
         const org = host(test);
         const id = openTournament(test, org, { teamSize: 1 });
-        const e = existingUser(test, 'e-dq', 'Dq');
+        const e = existingUser(test, 'e-dq', { name: 'Dq', accounts: 2 });
         register(test, e.a, id);
         tx(test, org, (ctx) => M.dq_participant(ctx, { tournamentId: id, userId: e.a.userId, reason: 'test' }));
         const own = enrolled(test, id, e.a.userId)!;
@@ -380,7 +400,7 @@ describe('A112(3): entries the existing user cannot hold are settled as a deleti
         insertHsrAccount(test, g.userId, 'g-roster-acc');
         register(test, g, id);
         test.db.Tournament.id.update({ ...test.db.Tournament.id.find(id)!, requireRoster: true });
-        const e = existingUser(test, 'e-roster', 'NoRoster', 0);
+        const e = existingUser(test, 'e-roster', { name: 'NoRoster', accounts: 0 });
 
         const guestId = signIn(test, g, e.providerId);
 
@@ -398,7 +418,7 @@ describe('A112(3): entries the existing user cannot hold are settled as a deleti
         register(test, g, id);
         advanceStage(test, org, id, 'Cancelled');
         const before = enrolled(test, id, g.userId)!;
-        const e = existingUser(test, 'e-done', 'Done');
+        const e = existingUser(test, 'e-done', { name: 'Done', accounts: 2 });
 
         const guestId = signIn(test, g, e.providerId);
 
@@ -434,7 +454,7 @@ describe('A112: the other link paths and side effects', () => {
         const org = host(test);
         const t1 = openTournament(test, org, { teamSize: 1, name: 'T1' } as any);
         const t2 = openTournament(test, org, { teamSize: 1, name: 'T2' } as any);
-        const e = existingUser(test, 'e-two', 'Two');
+        const e = existingUser(test, 'e-two', { name: 'Two', accounts: 2 });
         register(test, e.a, t2);
         const own = enrolled(test, t2, e.a.userId)!;
         const g = guest(test, 'g-two');
@@ -456,7 +476,7 @@ describe('A112: the other link paths and side effects', () => {
         const org = host(test);
         const t1 = openTournament(test, org, { teamSize: 1, name: 'T1' } as any);
         const t2 = openTournament(test, org, { teamSize: 1, name: 'T2' } as any);
-        const e = existingUser(test, 'e-rate', 'Rate');
+        const e = existingUser(test, 'e-rate', { name: 'Rate', accounts: 2 });
         register(test, e.a, t2); // one counted write
         const g = guest(test, 'g-rate');
         register(test, g, t1);
@@ -477,7 +497,6 @@ describe('A112: the other link paths and side effects', () => {
 // and the Disqualified guest entry (review answer 5)
 // ════════════════════════════════════════════════════════════════════════════
 
-const SEAT = 'This seat is not available to you in this tournament lobby.';
 const standInRows = (test: Harness, bracketMatchId: number, userId: number) =>
     [...test.db.TournamentStandIn.by_match_and_user.filter([bracketMatchId, userId])];
 
@@ -502,9 +521,9 @@ describe('S10l review fixes', () => {
         // directly, as data written before A113 (minimumMmr set, requireVerified off).
         test.db.Tournament.id.update({ ...test.db.Tournament.id.find(id)!, minimumMmr: 1500 });
         expect(enrolled(test, id, gLow.userId)).toBeTruthy(); // existing registrants are not re-checked
-        const low = existingUser(test, 'e-floor-low', 'Low');
+        const low = existingUser(test, 'e-floor-low', { name: 'Low', accounts: 2 });
         rate(test, low.a.userId, 1200);
-        const at = existingUser(test, 'e-floor-at', 'At');
+        const at = existingUser(test, 'e-floor-at', { name: 'At', accounts: 2 });
         rate(test, at.a.userId, 1500);
         const lowTeamId = membership(test, id, gLow.userId)!.teamId;
 
@@ -537,7 +556,7 @@ describe('S10l review fixes', () => {
         advanceStage(test, org, id, 'Seeding');
         seedAndGenerate(test, org, id);
         advanceStage(test, org, id, 'InProgress');
-        const e = existingUser(test, 'e-si', 'Sub');
+        const e = existingUser(test, 'e-si', { name: 'Sub', accounts: 2 });
         const ready = bracketRows(test, id).filter((m) => m.team1Id !== undefined && m.team2Id !== undefined);
         const m = ready.find((r) => r.team1Id === gTeam || r.team2Id === gTeam)!;
         const unrelated = ready.find((r) => r.team1Id !== gTeam && r.team2Id !== gTeam)!;
@@ -572,7 +591,7 @@ describe('S10l review fixes', () => {
         tx(test, org, (ctx) => M.dq_participant(ctx, { tournamentId: id, userId: g.userId, reason: 'test' }));
         expect(membership(test, id, g.userId)).toBeFalsy();
         expect(teamRow(test, teamId)!.captainUserId).toBe(g.userId);
-        const e = existingUser(test, 'e-dq-cap', 'DqCap');
+        const e = existingUser(test, 'e-dq-cap', { name: 'DqCap', accounts: 2 });
 
         const guestId = signIn(test, g, e.providerId);
 
@@ -594,7 +613,7 @@ describe('S10l review fixes', () => {
         tx(test, org, (ctx) => M.dq_participant(ctx, { tournamentId: id, userId: g.userId, reason: 'test' }));
         const before = enrolled(test, id, g.userId)!;
         expect(before.status.tag).toBe('Disqualified');
-        const e = existingUser(test, 'e-dq-member', 'DqMember');
+        const e = existingUser(test, 'e-dq-member', { name: 'DqMember', accounts: 2 });
 
         const guestId = signIn(test, g, e.providerId);
 
@@ -605,5 +624,144 @@ describe('S10l review fixes', () => {
         expect(teamRow(test, teamId)!.captainUserId).toBe(cap.userId);
         expectReject(test, e.a, (ctx) => M.register_for_tournament(ctx, { tournamentId: id }), 'You were disqualified from this tournament.');
         expect(locks(test, id, e.a.userId)).toEqual([]);
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Gap 2. A112 (S10l review answer 7)
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('Gap 2, A112: more stages and shapes of a guest signing in to an existing account (S10l review answer 7)', () => {
+    it('A112(1) (answer 7: CheckIn): a guest entry already checked in moves with its CheckedIn status; at Seeding the moved team is Ready and a team that did not check in is Withdrawn', () => {
+        const test = newHarness();
+        const org = host(test);
+        const id = openTournament(test, org, { teamSize: 1, checkInEnabled: true });
+        const g = guest(test, 'g-ci');
+        const v1 = verified(test, 'ci-v1');
+        const v2 = verified(test, 'ci-v2');
+        for (const p of [g, v1, v2]) register(test, p, id);
+        advanceStage(test, org, id, 'CheckIn');
+        tx(test, g, (ctx) => M.check_in_tournament(ctx, { tournamentId: id }));
+        tx(test, v1, (ctx) => M.check_in_tournament(ctx, { tournamentId: id }));
+        const before = enrolled(test, id, g.userId)!;
+        expect(before.status.tag).toBe('CheckedIn');
+        const teamId = membership(test, id, g.userId)!.teamId;
+        const lateTeam = membership(test, id, v2.userId)!.teamId;
+        const e = existingUser(test, 'e-ci');
+
+        const guestId = signIn(test, g, e.providerId);
+
+        expect(enrolled(test, id, guestId)).toBeFalsy();
+        expect(enrolled(test, id, e.a.userId)).toMatchObject({ status: { tag: 'CheckedIn' }, createdDate: before.createdDate });
+        expect(membership(test, id, e.a.userId)!.teamId).toBe(teamId);
+        expect(teamRow(test, teamId)!.captainUserId).toBe(e.a.userId);
+
+        advanceStage(test, org, id, 'Seeding');
+        expect(teamRow(test, teamId)!.status.tag).toBe('Ready');
+        expect(teamRow(test, lateTeam)!.status.tag).toBe('Withdrawn');
+    });
+
+    it('A112(1) (answer 7: Seeding before generation): the entry moves, the team keeps its status; generate_bracket then places the moved team', () => {
+        const test = newHarness();
+        const org = host(test);
+        const id = openTournament(test, org, { teamSize: 1, maxParticipants: 4 });
+        const g = guest(test, 'g-seed0');
+        const v = verified(test, 'seed0-v');
+        register(test, g, id);
+        register(test, v, id);
+        advanceStage(test, org, id, 'Seeding');
+        expect(tRow(test, id).bracketGeneratedAt).toBeUndefined();
+        const teamId = membership(test, id, g.userId)!.teamId;
+        const statusBefore = teamRow(test, teamId)!.status.tag;
+        const e = existingUser(test, 'e-seed0');
+
+        const guestId = signIn(test, g, e.providerId);
+
+        expect(enrolled(test, id, guestId)).toBeFalsy();
+        expect(enrolled(test, id, e.a.userId)).toBeTruthy();
+        expect(membership(test, id, e.a.userId)!.teamId).toBe(teamId);
+        expect(teamRow(test, teamId)).toMatchObject({ captainUserId: e.a.userId, status: { tag: statusBefore } });
+
+        seedAndGenerate(test, org, id);
+        const placed = new Set(bracketRows(test, id).flatMap((r) => [r.team1Id, r.team2Id]).filter((t) => t !== undefined));
+        expect(placed.has(teamId)).toBe(true);
+    });
+
+    it('pins current behaviour (row silent): A112 (answer 7: second identity): a guest who keeps a second identity is not deleted by the sign-in, so nothing moves: the entry stays with the guest, the signing-in identity maps to the existing user', () => {
+        const test = newHarness();
+        const org = host(test);
+        const id = openTournament(test, org, { teamSize: 1 });
+        const g = guest(test, 'g-two-ids');
+        register(test, g, id);
+        const extra = addSecondIdentity(test, g.userId, 'g-two-ids-2nd');
+        const before = enrolled(test, id, g.userId)!;
+        const e = existingUser(test, 'e-two-ids');
+
+        const guestId = signIn(test, g, e.providerId);
+
+        expect(mappedUser(test, g)).toBe(e.a.userId);
+        expect(test.db.User.id.find(guestId)).toMatchObject({ isGuest: true });
+        expect(identitiesOf(test, guestId).map((r) => r.identity.toHexString())).toEqual([extra.identity.toHexString()]);
+        expect(enrolled(test, id, guestId)).toEqual(before);
+        expect(enrolled(test, id, e.a.userId)).toBeFalsy();
+    });
+
+    it('A112(1), A113(3) (answer 7: games played, review F5): a guest who played a tournament game and then signs in keeps the entry on the existing user; at completion the game\'s history and stats are written for the archived guest id, none for the existing user; the bracket result stays with the team', () => {
+        const test = newHarness();
+        const org = host(test);
+        const g = guest(test, 'g-played');
+        const v = verified(test, 'played-v');
+        const { id, teamId, match } = soloLive(test, org, [g, v], g);
+        const lobbyId = createTournamentLobby(test, org, match.id);
+        for (const p of [g, v]) {
+            join(test, p, lobbyId);
+            tx(test, p, (ctx) => M.confirm_ready(ctx, { lobbyId }));
+        }
+        tx(test, org, (ctx) => M.start_draft(ctx, { lobbyId }));
+        const s: Lobby = { test, lobbyId, host: org, a: { host: org, g, v } };
+        draftGame(s, 'gp');
+        const gSide = member(test, lobbyId, g.userId)!.lobbySlot.tag === 'BluePlayer' ? 'Blue' : 'Red';
+        finishGame(s, gSide);
+        if (recordsOfLobby(test, lobbyId)[0].status.tag !== 'Validated') validate(test, org, lobbyId);
+        expect(test.db.BracketMatch.id.find(match.id)!.winnerTeamId).toBe(teamId);
+        const e = existingUser(test, 'e-played');
+
+        const guestId = signIn(test, g, e.providerId); // AwaitingResult is not a live stage (A113(4))
+
+        expect(enrolled(test, id, e.a.userId)).toBeTruthy();
+        expect(teamRow(test, teamId)!.captainUserId).toBe(e.a.userId);
+        expect(test.db.DeletedUser.id.find(guestId)).toBeTruthy(); // the guest has history: archived
+
+        advanceStage(test, org, id, 'Completed');
+        drain(test, id);
+
+        expect([...test.db.MatchParticipantHistory.by_user.filter(guestId)]).toHaveLength(1);
+        expect([...test.db.MatchParticipantHistory.by_user.filter(e.a.userId)]).toEqual([]);
+        expect([...test.db.PlayerStat.by_user.filter(guestId)].length).toBeGreaterThan(0);
+        expect([...test.db.PlayerStat.by_user.filter(e.a.userId)]).toEqual([]);
+        expect(test.db.BracketMatch.id.find(match.id)!.winnerTeamId).toBe(teamId);
+        expect(teamRow(test, teamId)!.captainUserId).toBe(e.a.userId);
+    });
+
+    it('A112(4) (answer 7: a non-live lobby, review F4): a guest seated in a Waiting tournament lobby: the guest\'s seat is removed with the guest and not moved; the existing user then joins and is seated on that team\'s side', () => {
+        const test = newHarness();
+        const org = host(test);
+        const g = guest(test, 'g-wait-seat');
+        const v = verified(test, 'wait-seat-v');
+        const { match } = soloLive(test, org, [g, v], g);
+        const lobbyId = createTournamentLobby(test, org, match.id);
+        join(test, g, lobbyId);
+        join(test, v, lobbyId);
+        expect(lobbyRow(test, lobbyId).stage.tag).toBe('Waiting');
+        const seatTag = member(test, lobbyId, g.userId)!.lobbySlot.tag;
+        expect(['BluePlayer', 'RedPlayer']).toContain(seatTag);
+        const e = existingUser(test, 'e-wait-seat');
+
+        const guestId = signIn(test, g, e.providerId);
+
+        expect(member(test, lobbyId, guestId)).toBeFalsy();
+        expect(member(test, lobbyId, e.a.userId)).toBeFalsy();
+        join(test, e.a, lobbyId);
+        expect(member(test, lobbyId, e.a.userId)!.lobbySlot.tag).toBe(seatTag);
     });
 });

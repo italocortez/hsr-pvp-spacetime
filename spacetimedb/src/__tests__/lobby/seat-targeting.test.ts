@@ -18,14 +18,13 @@ import {
     type Actor,
     type Harness,
     type SetupOpts,
+    type Ctx,
 } from '../fixtures/harness';
-import { liveField, moderator } from '../fixtures/tournament-builders';
-import { byKey, createTournamentLobby, join } from '../fixtures/tournament-match-builders';
-import { seatLabel } from '../fixtures/seat-labels';
-import { displayName, view } from '../fixtures/seat-view-readers';
-
-const keysOf = (row: object) => Object.keys(row).sort();
-type Ctx = Parameters<Parameters<Harness['withReducerTx']>[1]>[0];
+import { moderator, displayName } from '../fixtures/identity';
+import { join, seatLabel, NO_PLAYER_REMOVAL, members } from '../fixtures/lobby';
+import { view, keysOf } from '../fixtures/views';
+import { liveField } from '../fixtures/tournaments';
+import { byKey, createTournamentLobby } from '../fixtures/tournament-matches';
 
 /** The exact rejection message of a reducer call (fails the test if the call succeeds). */
 function errorOf(test: Harness, who: Actor, body: (ctx: Ctx) => unknown): string {
@@ -47,14 +46,12 @@ const BAN_PERM = 'Only the host, moderators, admins, or an authorized referee ca
 const CAPTAIN_PERM = 'Only the host, an authorized referee, or an admin can assign captains.';
 const UNBAN_PERM = 'Only the host, moderators, admins, or an authorized referee can lift a lobby ban.';
 const NOT_REFEREE = 'You are not the referee of this lobby.';
-const NO_PLAYER_REMOVAL = 'Players cannot be removed once the draft has started; the match ends by result, concede or forfeit.';
 const NO_LOBBY = 999_999;
 const NO_SEAT = 99;
 
 const join_ = (test: Harness, who: Actor, lobbyId: number) =>
     tx(test, who, (ctx) => M.join_lobby(ctx, { lobbyId, joinCode: '', password: '' }));
 const bansOf = (test: Harness, lobbyId: number) => [...test.db.LobbyBan.lobby_id.filter(lobbyId)];
-const members = (test: Harness, lobbyId: number) => [...test.db.LobbyMember.lobby_id.filter(lobbyId)];
 
 /** A casual Waiting lobby: host (seat 1, Spectator, referee), b1 (2), b2 (3) Blue, r1 (4), r2 (5) Red. */
 function waiting(opts: SetupOpts = {}) {

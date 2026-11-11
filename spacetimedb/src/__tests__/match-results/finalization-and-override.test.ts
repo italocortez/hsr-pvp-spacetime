@@ -22,7 +22,11 @@ import {
     tx,
     type Harness,
     type Lobby,
+    rejection,
+    TURN_MS,
+    type Team,
 } from '../fixtures/harness';
+import { moderator } from '../fixtures/identity';
 import {
     H,
     blueNames,
@@ -38,18 +42,13 @@ import {
     recordScores,
     selectAccount,
     setRole,
-} from '../fixtures/draft-and-scoring-builders';
-import { blueCaptain, redCaptain } from '../fixtures/captain-actors';
-import {
-    parkedLobby,
-    playRanked,
-    rankedHook,
-    validateAndFinalize,
-} from '../fixtures/ranked-game-builders';
-import { rejection } from '../fixtures/calendar-roster-rating-builders';
-import { TURN_MS, type Team } from '../fixtures/team-and-turn';
-import { liveField, moderator } from '../fixtures/tournament-builders';
-import { byKey, openMatchLobby, seedElo, sidesOf } from '../fixtures/tournament-match-builders';
+    blueCaptain,
+    redCaptain,
+    recordOf,
+} from '../fixtures/draft-and-scoring';
+import { liveField } from '../fixtures/tournaments';
+import { byKey, openMatchLobby, seedElo, sidesOf } from '../fixtures/tournament-matches';
+import { parkedLobby, playRanked, rankedHook, validateAndFinalize } from '../fixtures/ranked';
 
 describe('F8 / A22(4): result reducers in AwaitingResult', () => {
     // T-S7b: advance_stage no longer reaches AwaitingResult (A60(8)); a game close does. A Ranked series closes into
@@ -290,7 +289,6 @@ describe('Results #8: override_match_result on a standalone record (match-result
 });
 
 const NO_AUTHORITY_TEXT = 'You do not have authority to finalize this match result.';
-const recordOf = (test: Harness, lobbyId: number) => [...test.db.MatchResultRecord.lobby_id.filter(lobbyId)][0];
 
 /** A standalone Ranked Classic lobby in Drafting where any seated player may concede (no referee exclusivity); a concede finalizes inline (D-37). */
 function rankedDrafting(test: Harness): Lobby {

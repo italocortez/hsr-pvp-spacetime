@@ -3,22 +3,21 @@
 // Contracts: docs/tournament/contract.md, docs/brackets/contract.md
 // From S10s, S10t (s10s-triage-fixes.test.ts, s10t-undo-any-step.test.ts).
 import { describe, expect, it } from 'vitest';
-import { M, tx, type Harness } from '../fixtures/harness';
+import { M, tx, type Harness, AUDIT, rejection } from '../fixtures/harness';
+import { verified } from '../fixtures/identity';
+import { insertHsrAccount } from '../fixtures/roster';
+import { join } from '../fixtures/lobby';
+import { viewAs } from '../fixtures/views';
 import {
-    AUDIT,
     advanceStage,
     bracketRows,
-    insertHsrAccount,
     locks,
     resolveMatch,
     seedAndGenerate,
     seedingField,
     teamRow,
-    verified,
-} from '../fixtures/tournament-builders';
-import { byKey, createTournamentLobby, duel, join } from '../fixtures/tournament-match-builders';
-import { rejection } from '../fixtures/calendar-roster-rating-builders';
-import { viewAs } from '../fixtures/tournament-admin-views';
+} from '../fixtures/tournaments';
+import { byKey, createTournamentLobby, duel } from '../fixtures/tournament-matches';
 
 const STANDIN_STAGE = 'Stand-ins can be approved once the bracket is generated, until the tournament ends.'; // T-S10v: A136 text
 const STANDIN_DQ_TEAM = 'A disqualified team cannot get a stand-in.';
@@ -103,9 +102,6 @@ describe('A122(19), L66: stand-in approvals and their locks end with the tournam
 
 describe('A128: approve_stand_in refuses a player disqualified from the tournament', () => {
     const DQ_PLAYER = 'A disqualified player cannot be a stand-in.';
-    const approveBody = (bracketMatchId: number, teamId: number, userId: number) =>
-        (ctx: any) => M.approve_stand_in(ctx, { bracketMatchId, teamId, userId });
-    const standInsOf = (test: Harness, bracketMatchId: number) => [...test.db.TournamentStandIn.bracket_match_id.filter(bracketMatchId)];
     /** An enrolment row for `userId` in the tournament with `status`, written straight into the datastore (no team). */
     function enrol(test: Harness, tournamentId: number, userId: number, status: 'Disqualified' | 'Withdrawn') {
         const ts = test.clock.now();

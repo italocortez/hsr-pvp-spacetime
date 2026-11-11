@@ -1,23 +1,43 @@
-// Tournaments: requireVerified, guest entries, the live-game sign-in guard and invites that follow a moved entry.
+// Tournaments: requireVerified, guest entries and guest counts, the live-game sign-in guard, invites that follow a
+//   moved entry, and minimumMmr 0.
 // Decisions: A113
 // Contracts: docs/tournament/contract.md, docs/brackets/contract.md
-// From S10m (s10m-verified-rules.test.ts).
+// From S10m, S10q (s10m-verified-rules.test.ts, s10q-gap-coverage.test.ts); merged by T-REORG2.
 //
 // T-S10m: in-memory tests for step S10m (DECISIONS.md A113): settings under which a guest cannot play force a
 // tournament's requireVerified on (create and update); turning it on is refused while guests hold an entry; signing in
 // to an existing account (A112) is refused while the guest plays a live game; a moved entry takes the guest's match
 // calendar invites along; a guest cannot be a tournament assistant. server_link_provider runs as the owner ('internal',
 // linkDiscord). Rows set directly through `test.db` are written outside any transaction. Nothing reaches maincloud.
+//
+// Titles starting "pins current behaviour (row silent)": the decision row says nothing about the case, so the test
+// records today's behaviour rather than a rule; the owner accepted these pins (A145). A later decision on the case
+// replaces the pin with a rule test.
 import { describe, expect, it } from 'vitest';
-import { M, expectReject, guest, linkDiscord, lobbyRow, newHarness, now, setupLobby, tx, type Actor, type Harness, type SlotTag } from '../fixtures/harness';
+import {
+    M,
+    expectReject,
+    guest,
+    linkDiscord,
+    lobbyRow,
+    newHarness,
+    now,
+    setupLobby,
+    tx,
+    type Actor,
+    type Harness,
+    type SlotTag,
+    advance,
+    member,
+} from '../fixtures/harness';
+import { host, verified, existingUser, signIn, mappedUser, addSecondIdentity } from '../fixtures/identity';
+import { createEvent, invite } from '../fixtures/calendar';
 import {
     TOURNAMENT_ARGS,
     advanceStage,
     assignAssistant,
     createTournament,
     enrolled,
-    host,
-    insertHsrAccount,
     membership,
     openTournament,
     register,
@@ -25,16 +45,16 @@ import {
     bracketRows,
     tRow,
     updateBody,
-    verified,
     type TournamentArgs,
-} from '../fixtures/tournament-builders';
+    guestsText,
+    soloLive,
+} from '../fixtures/tournaments';
 
 // ─── Builders ────────────────────────────────────────────────────────────────
 
 const VERIFIED_TEXT = 'This tournament requires a verified account. Link your Discord first.';
 const FINISH_TEXT = 'Finish your current game before signing in to an existing account.';
 const ASSISTANT_TEXT = 'A tournament assistant must be a verified user.';
-const guestsText = (n: number) => `These settings require verified accounts, and ${n} guest player(s) are registered.`;
 
 /** The five A113(1) triggers, each as the create_tournament overrides that turn it on (everything else "no gates"). */
 const TRIGGERS: Array<[string, Partial<TournamentArgs>]> = [
@@ -46,15 +66,6 @@ const TRIGGERS: Array<[string, Partial<TournamentArgs>]> = [
     ['rosterVisibility ClosedWithRating', { rosterVisibility: 'ClosedWithRating' }],
 ];
 
-/** A verified user with a known provider id (the account a guest signs in to) and one HSR account. */
-function existingUser(test: Harness, sub: string): { a: Actor; providerId: string } {
-    const a = guest(test, sub);
-    const providerId = `pid-${sub}`;
-    linkDiscord(test, a, providerId, sub);
-    insertHsrAccount(test, a.userId, `${sub}-acc`);
-    return { a, providerId };
-}
-
 /** A guest with an entry in a solo tournament (no gates). */
 function enrolledGuest(test: Harness, org: Actor, sub: string): { g: Actor; id: number } {
     const id = openTournament(test, org, { teamSize: 1 });
@@ -63,16 +74,8 @@ function enrolledGuest(test: Harness, org: Actor, sub: string): { g: Actor; id: 
     return { g, id };
 }
 
-/** Signs `g` in to the account owning `providerId` (server_link_provider as the owner). */
-const signIn = (test: Harness, g: Actor, providerId: string) =>
-    tx(test, 'internal', (ctx) => M.server_link_provider(ctx, {
-        callerIdentityHex: g.identity.toHexString(), provider: 'discord', providerId, providerName: 'ignored',
-    }));
-
 const setLobbyStage = (test: Harness, lobbyId: number, stage: string) =>
     test.db.Lobby.id.update({ ...lobbyRow(test, lobbyId), stage: { tag: stage } as any });
-
-const mappedUser = (test: Harness, a: Actor) => test.db.UserIdentity.identity.find(a.identity)!.userId;
 
 // ════════════════════════════════════════════════════════════════════════════
 // A113(1): the forcing settings
@@ -202,7 +205,7 @@ describe('A113(4): signing in to an existing account is refused while the guest 
             s = setupLobby(test, { seats: [['g', 'BluePlayer'], ['b2', 'BluePlayer'], ['r1', 'RedPlayer'], ['r2', 'RedPlayer']], actors: { g } });
         }
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Drafting');
-        const e = existingUser(test, 'e');
+        const e = existingUser(test, 'e', { uids: ['e-acc'] });
         return { test, org, id, g, guestId: g.userId, lobbyId: s.lobbyId, e };
     }
 
@@ -249,7 +252,7 @@ describe('A113(4): signing in to an existing account is refused while the guest 
         const guestId = g.userId;
         const s = setupLobby(test, { seats: [['g', 'BluePlayer'], ['r1', 'RedPlayer']], actors: { g }, noStart: true });
         expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Waiting');
-        const e = existingUser(test, 'e');
+        const e = existingUser(test, 'e', { uids: ['e-acc'] });
         signIn(test, g, e.providerId);
         expect(mappedUser(test, g)).toBe(e.a.userId);
         expect(test.db.User.id.find(guestId)).toBeFalsy();
@@ -317,7 +320,7 @@ describe('A113(5): the guest\'s match calendar invites follow the moved entry', 
         const before = inviteOf(test, event.id, guestId)!;
         expect(before).toBeTruthy();
         const countBefore = [...test.db.CalendarEventInvite.event_id.filter(event.id)].length;
-        const e = existingUser(test, 'e');
+        const e = existingUser(test, 'e', { uids: ['e-acc'] });
 
         signIn(test, g, e.providerId);
 
@@ -331,7 +334,7 @@ describe('A113(5): the guest\'s match calendar invites follow the moved entry', 
         const test = newHarness();
         const org = host(test);
         const { g, match } = guestMatch(test, org, 'g');
-        const e = existingUser(test, 'e');
+        const e = existingUser(test, 'e', { uids: ['e-acc'] });
         tx(test, org, (ctx) => M.create_calendar_event(ctx, eventArgs(test, match.id, [e.a.userId])));
         const event = eventOf(test, match.id);
         const guestId = g.userId;
@@ -366,7 +369,7 @@ describe('A113(5): the guest\'s match calendar invites follow the moved entry', 
         const guestId = g.userId;
         expect(inviteOf(test, otherEvent.id, guestId)).toBeTruthy();
         expect(inviteOf(test, personal.id, guestId)).toBeTruthy();
-        const e = existingUser(test, 'e');
+        const e = existingUser(test, 'e', { uids: ['e-acc'] });
 
         signIn(test, g, e.providerId);
 
@@ -393,5 +396,165 @@ describe('A113(6): a guest cannot be made a tournament assistant', () => {
         const v = verified(test, 'v');
         assignAssistant(test, org, id, v, { participants: true });
         expect([...test.db.TournamentAssistant.by_tournament_and_user.filter([id, v.userId])]).toHaveLength(1);
+    });
+});
+
+// ─── Texts ───────────────────────────────────────────────────────────────────
+
+const signInBody = (g: Actor, providerId: string) => (ctx: any) => M.server_link_provider(ctx, {
+    callerIdentityHex: g.identity.toHexString(), provider: 'discord', providerId, providerName: 'ignored',
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Gap 3. A113 (S10m review F5)
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('Gap 3, A113: guest counts, the live-game guard, invites, minimumMmr 0 (S10m review F5)', () => {
+    /** An open solo tournament with a verified player and a guest the organizer has disqualified. */
+    function dqGuestCup() {
+        const test = newHarness();
+        const org = host(test);
+        const id = openTournament(test, org, { teamSize: 1, maxParticipants: 8 });
+        const g = guest(test, 'g-dq');
+        const v = verified(test, 'dq-v');
+        register(test, g, id);
+        register(test, v, id);
+        tx(test, org, (ctx) => M.dq_participant(ctx, { tournamentId: id, userId: g.userId, reason: 'test' }));
+        expect(enrolled(test, id, g.userId)!.status.tag).toBe('Disqualified');
+        return { test, org, id, g };
+    }
+    const GUESTS_1_FULL = `${guestsText(1)} Remove them first, or keep the settings that allow guests.`;
+
+    it('A144, A113(2) (F5: the Disqualified exclusion): a tournament whose only guest enrolment is Disqualified accepts the change that turns requireVerified on; the disqualified entry stays, still Disqualified', () => {
+        const { test, org, id, g } = dqGuestCup();
+        const dqBefore = enrolled(test, id, g.userId)!;
+        expect(tRow(test, id)).toMatchObject({ requireRoster: false, requireVerified: false });
+
+        tx(test, org, updateBody(test, id, { requireRoster: true }));
+
+        expect(tRow(test, id)).toMatchObject({ requireRoster: true, requireVerified: true });
+        expect(enrolled(test, id, g.userId)).toEqual(dqBefore);
+        expect(enrolled(test, id, g.userId)!.status.tag).toBe('Disqualified');
+    });
+
+    it('A144, A113(2), A118 (F5: the Disqualified exclusion, neighbour): with a Disqualified guest and one other guest, the change is refused naming 1 guest player; after reject_participant removes the other guest it is accepted', () => {
+        const { test, org, id, g } = dqGuestCup();
+        const o = guest(test, 'g-other');
+        register(test, o, id);
+        expect(enrolled(test, id, o.userId)!.status.tag).not.toBe('Disqualified');
+        const before = tRow(test, id);
+
+        expectReject(test, org, updateBody(test, id, { requireRoster: true }), GUESTS_1_FULL);
+        expect(tRow(test, id)).toEqual(before);
+
+        tx(test, org, (ctx) => M.reject_participant(ctx, { tournamentId: id, userId: o.userId }));
+        expect(enrolled(test, id, o.userId)).toBeUndefined();
+
+        tx(test, org, updateBody(test, id, { requireRoster: true }));
+        expect(tRow(test, id)).toMatchObject({ requireRoster: true, requireVerified: true });
+        expect(enrolled(test, id, g.userId)!.status.tag).toBe('Disqualified');
+    });
+
+    it('A113(2) (F5): a waitlisted guest and a guest awaiting approval are guest enrolments: the change is refused with the count', () => {
+        const test = newHarness();
+        const org = host(test);
+        const waitId = openTournament(test, org, { teamSize: 1, maxParticipants: 2, waitlistEnabled: true });
+        for (const n of ['w1', 'w2']) register(test, verified(test, n), waitId);
+        const gw = guest(test, 'g-waitlisted');
+        register(test, gw, waitId);
+        expect(enrolled(test, waitId, gw.userId)!.isWaitlisted).toBe(true);
+        expectReject(test, org, updateBody(test, waitId, { requireRoster: true }), guestsText(1));
+        expect(tRow(test, waitId).requireRoster).toBe(false);
+
+        const approvalId = openTournament(test, org, { teamSize: 1, requireApproval: true, name: 'Approval cup' } as any);
+        const ga = guest(test, 'g-awaiting');
+        register(test, ga, approvalId);
+        expect(enrolled(test, approvalId, ga.userId)!.approvedByToAt).toBeUndefined();
+        expectReject(test, org, updateBody(test, approvalId, { requireVerified: true }), guestsText(1));
+        expect(tRow(test, approvalId).requireVerified).toBe(false);
+    });
+
+    /** The guest holds an entry and sits as BluePlayer in a started casual 2v2 lobby (Drafting). */
+    function seatedGuest() {
+        const test = newHarness();
+        const org = host(test);
+        const id = openTournament(test, org, { teamSize: 1 });
+        const g = guest(test, 'g');
+        register(test, g, id);
+        const s = setupLobby(test, { seats: [['g', 'BluePlayer'], ['b2', 'BluePlayer'], ['r1', 'RedPlayer'], ['r2', 'RedPlayer']], actors: { g } });
+        expect(lobbyRow(test, s.lobbyId).stage.tag).toBe('Drafting');
+        return { test, id, g, guestId: g.userId, lobbyId: s.lobbyId, e: existingUser(test, 'e') };
+    }
+
+    it('A113(4), A98 (F5: an away seat): a guest who left a live game (row away, leftAt set) still holds the seat: the sign-in is refused and nothing changes', () => {
+        const { test, id, g, guestId, lobbyId, e } = seatedGuest();
+        tx(test, g, (ctx) => M.leave_lobby(ctx, { lobbyId }));
+        expect(member(test, lobbyId, guestId)).toMatchObject({ lobbySlot: { tag: 'BluePlayer' } });
+        expect(member(test, lobbyId, guestId)!.leftAt).toBeDefined();
+        expect(member(test, lobbyId, guestId)!.abandonedAt).toBeUndefined();
+        const entryBefore = enrolled(test, id, guestId);
+
+        expectReject(test, 'internal', signInBody(g, e.providerId), FINISH_TEXT);
+
+        expect(mappedUser(test, g)).toBe(guestId);
+        expect(test.db.User.id.find(guestId)!.isGuest).toBe(true);
+        expect(enrolled(test, id, guestId)).toEqual(entryBefore);
+        expect(enrolled(test, id, e.a.userId)).toBeFalsy();
+    });
+
+    it('pins current behaviour (row silent): A113(4) (F5: a second identity): a seated guest who keeps a second identity is not deleted by the sign-in, so it is accepted; the guest keeps its seat and its entry, the signing-in identity maps to the existing user', () => {
+        const { test, id, g, guestId, lobbyId, e } = seatedGuest();
+        addSecondIdentity(test, guestId, 'g-second-device');
+        const seatBefore = member(test, lobbyId, guestId);
+        const entryBefore = enrolled(test, id, guestId);
+
+        tx(test, 'internal', signInBody(g, e.providerId));
+
+        expect(mappedUser(test, g)).toBe(e.a.userId);
+        expect(test.db.User.id.find(guestId)!.isGuest).toBe(true);
+        expect(member(test, lobbyId, guestId)).toEqual(seatBefore);
+        expect(enrolled(test, id, guestId)).toEqual(entryBefore);
+        expect(enrolled(test, id, e.a.userId)).toBeFalsy();
+    });
+
+    it('A113(5) (F5: an invite already responded to): the re-pointed invite keeps its status and respondedAt (the guest\'s response is written on the row: respond_to_invite refuses guests)', () => {
+        const test = newHarness();
+        const org = host(test);
+        const g = guest(test, 'g-inv');
+        const v = verified(test, 'inv-v');
+        const { id, match } = soloLive(test, org, [g, v], g);
+        const eventId = createEvent(test, org, { bracketMatchId: match.id });
+        const pending = invite(test, eventId, g.userId)!;
+        expect(pending.inviteStatus.tag).toBe('Pending');
+        advance(test, 5_000);
+        const respondedAt = test.clock.now();
+        test.db.CalendarEventInvite.delete(pending);
+        test.db.CalendarEventInvite.insert({ ...pending, inviteStatus: { tag: 'Accepted' } as any, respondedAt } as any);
+        advance(test, 5_000);
+        const e = existingUser(test, 'e-inv');
+
+        const guestId = signIn(test, g, e.providerId);
+
+        expect(enrolled(test, id, e.a.userId)).toBeTruthy();
+        expect(invite(test, eventId, guestId)).toBeFalsy();
+        const moved = invite(test, eventId, e.a.userId)!;
+        expect(moved.inviteStatus.tag).toBe('Accepted');
+        expect(moved.respondedAt).toEqual(respondedAt);
+    });
+
+    it('pins current behaviour (row silent): A113(1) (F5: minimumMmr 0): a floor of 0 is stored as no floor and does not force requireVerified, at create and at an update while a guest is enrolled', () => {
+        const test = newHarness();
+        const org = host(test);
+        const created = createTournament(test, org, { minimumMmr: 0, requireVerified: false });
+        expect(tRow(test, created)).toMatchObject({ requireVerified: false });
+        expect(tRow(test, created).minimumMmr).toBeUndefined();
+
+        const id = openTournament(test, org, { teamSize: 1, name: 'Floor cup' } as any);
+        const g = guest(test, 'g-floor0');
+        register(test, g, id);
+        tx(test, org, updateBody(test, id, { minimumMmr: 0, requireVerified: false }));
+        expect(tRow(test, id).requireVerified).toBe(false);
+        expect(tRow(test, id).minimumMmr).toBeUndefined();
+        expect(enrolled(test, id, g.userId)).toBeTruthy();
     });
 });

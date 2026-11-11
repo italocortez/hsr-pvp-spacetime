@@ -4,7 +4,7 @@
  * data (data/seed/*.json, A18) and asserts the shapes and counts the live test asserted after bootstrap: the D-22
  * 3-mode fan-out, Phase 15.4 D-14 (one row per present sub-block, draftMode in {Classic, Auction}), D-01 / D-02 (the
  * `costs` structs), D-13 / D-25 (synergy Classic + Auction rows), A21 (canonical pair order), A17 (positioning columns,
- * no Spine keys). The write side (admin_bulk_upsert storing these rows) is spacetimedb/src/__tests__/s10-seed.test.ts.
+ * no Spine keys). The write side (admin_bulk_upsert storing these rows) is spacetimedb/src/__tests__/seed/seed-rows.test.ts.
  * Pure: reads files, connects nowhere.
  */
 import { describe, it, expect } from 'vitest';

@@ -12,9 +12,8 @@
 // adopts the code's wording, so an it tagged "(text per A76)" asserts the code's exact text while its name still cites
 // the contract line it replaces. Times are micros strings from the TestClock.
 import { describe, expect, it } from 'vitest';
-import { M, advance, guest, newHarness, tx, type Actor, type Harness } from '../fixtures/harness';
-import { setUserRole, verified } from '../fixtures/tournament-builders';
-import { duel } from '../fixtures/tournament-match-builders';
+import { M, advance, guest, newHarness, tx, type Harness, rejection } from '../fixtures/harness';
+import { verified, admin } from '../fixtures/identity';
 import {
     DAY_MS,
     HOUR_MS,
@@ -26,11 +25,12 @@ import {
     invite,
     invitesOf,
     micros,
-    rejection,
     savedOf,
     slotArgs,
     slotsOf,
-} from '../fixtures/calendar-roster-rating-builders';
+    event,
+} from '../fixtures/calendar';
+import { duel } from '../fixtures/tournament-matches';
 
 const SIX_MONTHS_MS = 180 * DAY_MS;
 
@@ -40,14 +40,7 @@ function world(n = 3) {
     return { test, users };
 }
 
-function admin(test: Harness, name = 'caladmin'): Actor {
-    const a = verified(test, name);
-    setUserRole(test, a.userId, 'Admin');
-    return a;
-}
-
 const slot = (test: Harness, id: number) => test.db.AvailabilitySlot.id.find(id) ?? undefined; // find() returns null when absent
-const event = (test: Harness, id: number) => test.db.CalendarEvent.id.find(id) ?? undefined;
 
 // ─── Availability slots ──────────────────────────────────────────────────────
 
@@ -130,7 +123,7 @@ describe('availability slots (create / update / delete)', () => {
         expect(slot(test, own)).toBeUndefined();
 
         const other = addSlot(test, b);
-        tx(test, admin(test), (ctx) => M.delete_availability_slot(ctx, { slotId: other }));
+        tx(test, admin(test, 'caladmin'), (ctx) => M.delete_availability_slot(ctx, { slotId: other }));
         expect(slot(test, other)).toBeUndefined();
     });
 
@@ -403,7 +396,7 @@ describe('calendar events (organizer rules, caps, cleanup)', () => {
         expect(row.endAt.microsSinceUnixEpoch).toBe(BigInt(args.endAt));
         expect(invitesOf(test, id).map((i) => i.inviteeUserId)).toEqual([b.userId]);
 
-        tx(test, admin(test), (ctx) => M.update_calendar_event(ctx, { ...args, title: 'By admin' }));
+        tx(test, admin(test, 'caladmin'), (ctx) => M.update_calendar_event(ctx, { ...args, title: 'By admin' }));
         expect(event(test, id)!.title).toBe('By admin');
     });
 
@@ -427,7 +420,7 @@ describe('calendar events (organizer rules, caps, cleanup)', () => {
         expect(invitesOf(test, id)).toEqual([]);
 
         const other = createEvent(test, others[5], { invitees: [a] });
-        tx(test, admin(test), (ctx) => M.delete_calendar_event(ctx, { eventId: other }));
+        tx(test, admin(test, 'caladmin'), (ctx) => M.delete_calendar_event(ctx, { eventId: other }));
         expect(event(test, other)).toBeUndefined();
         expect(invitesOf(test, other)).toEqual([]);
     });

@@ -16,20 +16,36 @@
 import { describe, expect, it } from 'vitest';
 import { ScheduleAt } from 'spacetimedb';
 import { resolveUserLabel } from '@module/helpers/identity/userLabel';
-import { M, connect, expectReject, guest, linkDiscord, newHarness, now, setupLobby, tx, type Actor, type Harness } from '../fixtures/harness';
-import { AUDIT, moderator, setUserRole, verified } from '../fixtures/tournament-builders';
-import { createAchievement, fireDeletionJob, freshAuth, identitiesOf, jobsFor, providerOf } from '../fixtures/achievement-auth-cost-builders';
-import { rejection } from '../fixtures/calendar-roster-rating-builders';
+import {
+    M,
+    connect,
+    expectReject,
+    guest,
+    linkDiscord,
+    newHarness,
+    now,
+    setupLobby,
+    tx,
+    type Actor,
+    type Harness,
+    AUDIT,
+    rejection,
+} from '../fixtures/harness';
+import {
+    moderator,
+    verified,
+    fireDeletionJob,
+    freshAuth,
+    identitiesOf,
+    jobsFor,
+    providerOf,
+    admin,
+    ADMIN_ONLY,
+} from '../fixtures/identity';
+import { createAchievement } from '../fixtures/achievements';
 
-const ADMIN_ONLY = 'Forbidden: Requires Admin privileges.';
 const DELETED = 'Unauthorized: This account has been deleted.';
 const FIVE_SECONDS = 5_000_000n;
-
-function admin(test: Harness, name = 'boss'): Actor {
-    const a = verified(test, name);
-    setUserRole(test, a.userId, 'Admin');
-    return a;
-}
 
 const userRow = (test: Harness, a: Actor) => test.db.User.id.find(a.userId);
 const bans = (test: Harness) => [...test.db.BanRecord.iter()];

@@ -10,6 +10,8 @@ import { describe, expect, it } from 'vitest';
 import { TOURNAMENT_PERM_MESSAGES } from '@module/helpers/tournament/tournamentPermissions';
 import { BEST_OF_ERROR } from '@module/helpers/tournament/seriesSettings';
 import { M, advance, expectReject, newHarness, tx, type Actor, type Harness } from '../fixtures/harness';
+import { host, moderator, verified } from '../fixtures/identity';
+import { DAY_MS } from '../fixtures/calendar';
 import {
     advanceStage,
     assignAssistant,
@@ -19,11 +21,9 @@ import {
     enrolledAll,
     fullTeams,
     seedAndGenerate,
-    host,
     makeTeam,
     membersOf,
     membership,
-    moderator,
     openTournament,
     register,
     requestsOf,
@@ -32,16 +32,14 @@ import {
     teamRow,
     teams,
     updateBody,
-    verified,
     TOURNAMENT_ARGS,
     type TournamentArgs,
-} from '../fixtures/tournament-builders';
+    PARTICIPANTS,
+    RESULTS,
+    BRACKET,
+} from '../fixtures/tournaments';
 
 const OWNER = TOURNAMENT_PERM_MESSAGES.owner;
-const PARTICIPANTS = TOURNAMENT_PERM_MESSAGES.participants;
-const BRACKET = TOURNAMENT_PERM_MESSAGES.bracket;
-const RESULTS = TOURNAMENT_PERM_MESSAGES.results;
-const DAY_MS = 86_400_000;
 
 /** A tournament in Seeding with four full Ready teams of two and the bracket generated + stamped. */
 function seeded(over: Partial<TournamentArgs> = {}) {

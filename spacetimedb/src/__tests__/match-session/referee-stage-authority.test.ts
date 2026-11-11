@@ -20,7 +20,7 @@ import {
     type Actor,
     type Lobby,
 } from '../fixtures/harness';
-import { captain, completeDraft, engineerFullDraft, setRole } from '../fixtures/draft-and-scoring-builders';
+import { captain, completeDraft, engineerFullDraft, setRole } from '../fixtures/draft-and-scoring';
 
 const REFEREE_OR_ABOVE = 'Only the referee, moderators, or admins can perform this action.';
 const SEATS: Array<[string, 'BluePlayer' | 'BlueCoach' | 'RedPlayer']> = [

@@ -9,19 +9,22 @@
 // lobby guards, D-24 / D-25 = the Phase 10.4 deletion guards). LobbyMemberAccount rows come from join_lobby's
 // auto-select of the active account; the TournamentPlayerAccount lock from register_for_tournament.
 import { describe, expect, it } from 'vitest';
-import { M, advance, guest, newHarness, setupLobby, tx, type Actor, type Harness } from '../fixtures/harness';
-import { host as tournamentHost, openTournament, register, setUserRole, verified } from '../fixtures/tournament-builders';
 import {
-    HOUR_MS,
-    account,
-    accountsOf,
-    charsOf,
-    createAccount,
+    M,
+    advance,
+    guest,
+    newHarness,
+    setupLobby,
+    tx,
+    type Actor,
+    type Harness,
     rejection,
-    roster,
-    seedCharacters,
-    seedRatingData,
-} from '../fixtures/calendar-roster-rating-builders';
+} from '../fixtures/harness';
+import { host as tournamentHost, setUserRole, verified } from '../fixtures/identity';
+import { HOUR_MS } from '../fixtures/calendar';
+import { account, accountsOf, charsOf, createAccount, roster, seedCharacters } from '../fixtures/roster';
+import { openTournament, register } from '../fixtures/tournaments';
+import { seedRatingData } from '../fixtures/ranked';
 
 const CHARS = ['acheron', 'aglaea', 'kafka'];
 

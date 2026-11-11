@@ -9,12 +9,37 @@
 // test (orchestrator ruling Q5: D-10 / D-11). Every `it` cites docs/match-session/contract.md. In-memory datastore on
 // the TestClock; nothing reaches maincloud.
 import { describe, expect, it } from 'vitest';
-import { M, advance, expectReject, guest, joinAsSpectator, lobbyRow, newHarness, priceCharacters, session, setupLobby, steps, tx, type Lobby } from '../fixtures/harness';
-import { blueNames, captain, draftAuction, draftClassic, engineerFullDraft, equip, insertLightconeCost, insertRoster, redNames, side } from '../fixtures/draft-and-scoring-builders';
-import { rejection } from '../fixtures/calendar-roster-rating-builders';
-import { insertLightconeCostFor } from '../fixtures/preset-and-account-builders';
+import {
+    M,
+    advance,
+    expectReject,
+    guest,
+    joinAsSpectator,
+    lobbyRow,
+    newHarness,
+    priceCharacters,
+    session,
+    setupLobby,
+    steps,
+    tx,
+    type Lobby,
+    rejection,
+} from '../fixtures/harness';
+import {
+    blueNames,
+    captain,
+    draftAuction,
+    draftClassic,
+    engineerFullDraft,
+    equip,
+    insertLightconeCost,
+    insertRoster,
+    redNames,
+    side,
+    insertLightconeCostFor,
+} from '../fixtures/draft-and-scoring';
+import { stageMsg } from '../fixtures/lobby';
 
-const stageMsg = (stage: string) => `This action is not allowed in the current lobby stage (${stage}).`;
 const REFEREE_OR_ABOVE = 'Only the referee, moderators, or admins can perform this action.'; // A80
 const BLUE_ARRANGE = 'Only the Blue captain or a referee can arrange the lineup.';
 const GROUPS_JSON = 'groups must be a JSON array of arrays of character names.';

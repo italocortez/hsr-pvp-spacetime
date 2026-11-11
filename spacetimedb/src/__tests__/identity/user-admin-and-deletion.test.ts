@@ -3,26 +3,10 @@
 // Contracts: docs/auth/contract.md
 // From S6, S10r (s6-rules.test.ts, s10r-triage-fixes.test.ts).
 import { describe, expect, it } from 'vitest';
-import {
-    M,
-    expectReject,
-    guest,
-    linkDiscord,
-    lobbyRow,
-    newHarness,
-    setupLobby,
-    tx,
-} from '../fixtures/harness';
-import {
-    createTournament,
-    host,
-    openTournament,
-    register,
-    verified,
-} from '../fixtures/tournament-builders';
-import { presetArgs, presetNamed } from '../fixtures/preset-and-account-builders';
-import { fireDeletionJob } from '../fixtures/achievement-auth-cost-builders';
-import { admin } from '../fixtures/admin-and-turn-helpers';
+import { M, expectReject, guest, linkDiscord, lobbyRow, newHarness, setupLobby, tx } from '../fixtures/harness';
+import { host, verified, fireDeletionJob, admin } from '../fixtures/identity';
+import { presetArgs, presetNamed } from '../fixtures/lobby';
+import { createTournament, openTournament, register } from '../fixtures/tournaments';
 
 describe('A45(3): delete_my_account', () => {
     it('a verified user outside any lobby is deleted through performUserDeletion', () => {
@@ -121,7 +105,7 @@ describe('A122(6), L22, L89: user deletion removes the user\'s presets and unpub
 
         // S10s re-alignment (A124): a deletion sent as the SYSTEM user now cancels the organizer's tournaments, which would
         // end the reference this test needs; a staff Admin deletes instead (A121 hands the tournament to that Admin).
-        const boss = admin(test);
+        const boss = admin(test, 'adm');
         tx(test, boss, (ctx) => M.admin_delete_row(ctx, { tableName: 'User', primaryKeyJson: String(org.userId) }));
         fireDeletionJob(test, org.userId);
         expect(test.db.User.id.find(org.userId)).toBeFalsy();

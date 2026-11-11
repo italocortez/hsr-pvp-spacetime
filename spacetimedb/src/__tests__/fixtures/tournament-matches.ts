@@ -1,18 +1,25 @@
 // Fixtures: tournament match lobbies, played bracket matches and the finalize job.
-// From S8d (s8d-fixtures.ts).
+// From S8d (s8d-fixtures.ts); the tournament-lobby seat text and slot reader gathered by T-REORG2.
 //
 // T-S8d: builders for the S8d in-memory tests (tournament lobbies, the one record per lobby, the result → bracket
-// hand-off, finalization at Completed / Cancelled; T-S8e: one game per lobby, A67). Not a test file: imported by s8d-*.test.ts.
+// hand-off, finalization at Completed / Cancelled; T-S8e: one game per lobby, A67). Not a test file.
 // Reuses the S4 / S7 / S8 builders. Tournament lobbies are created and played through the module's reducers; HSR
 // accounts, roles and the EloConfig row are written straight into the in-memory datastore (or through the internal
 // owner), like the earlier suites. `test.db` is read only outside `tx` bodies. Nothing reaches maincloud.
 import { expect } from 'vitest';
-import { M, advance, advanceToEquipping, disconnect, draftDone, guest, lobbyRow, priceBanNames, priceCharacters, session, tx, type Actor, type Harness, type Lobby } from './harness';
-import { finishGame } from './draft-and-scoring-builders';
-import { bracketByKey, insertHsrAccount, liveField, matchRow, type TournamentArgs } from './tournament-builders';
+import { M, advance, advanceToEquipping, disconnect, draftDone, guest, lobbyRow, member, priceBanNames, priceCharacters, session, tx, type Actor, type Harness, type Lobby } from './harness';
+import { actorOf, finishGame } from './draft-and-scoring';
+import { join } from './lobby';
+import { insertHsrAccount } from './roster';
+import { bracketByKey, liveField, matchRow, type TournamentArgs } from './tournaments';
 
 export type Field = ReturnType<typeof liveField>;
 export type TeamEntry = Field['ts'][number];
+
+/** The refusal of a seat a tournament lobby does not give the caller. */
+export const SEAT = 'This seat is not available to you in this tournament lobby.';
+/** The member's slot tag in the lobby (undefined when the user holds no row). */
+export const slotOf = (test: Harness, lobbyId: number, who: Actor) => member(test, lobbyId, who.userId)?.lobbySlot.tag;
 
 /** The live lobbies of a bracket match (Lobby.bracket_match_id). */
 export const lobbiesOf = (test: Harness, bracketMatchId: number) => [...test.db.Lobby.bracket_match_id.filter(bracketMatchId)];
@@ -39,9 +46,6 @@ export function createTournamentLobby(test: Harness, who: Actor, bracketMatchId:
     expect(created).toHaveLength(1);
     return created[0].id;
 }
-
-export const join = (test: Harness, who: Actor, lobbyId: number) =>
-    tx(test, who, (ctx) => M.join_lobby(ctx, { lobbyId, joinCode: '', password: '' }));
 
 export interface OpenOpts {
     /** The lobby creator (default: the organizer, a Spectator referee). */
@@ -77,7 +81,6 @@ export function openMatchLobby(f: Field, bracketMatchId: number, opts: OpenOpts 
     return s;
 }
 
-const actorOf = (s: Lobby, userId: number): Actor => Object.values(s.a).find((x) => x.userId === userId)!;
 export function captainActor(s: Lobby, team: 'Blue' | 'Red'): Actor {
     const slot = team === 'Blue' ? 'BluePlayer' : 'RedPlayer';
     const row = [...s.test.db.LobbyMember.lobby_id.filter(s.lobbyId)].find((m) => m.lobbySlot.tag === slot && m.isCaptain)!;

@@ -7,20 +7,62 @@
 // (SI1 to SI16). In-memory only; nothing reaches maincloud. Every `it` cites the decision row and the audit id; each
 // rule is paired with its neighbouring allowed case. Probe sequences follow the audit's probes (P1 to P13).
 import { describe, it, expect } from 'vitest';
-import { M, tx, expectReject, member, lobbyRow, newHarness, seatOf, guest, type Actor, type Harness, type Lobby } from '../fixtures/harness';
 import {
-    AUDIT, verified, host, moderator, openTournament, enrollMany, advanceStage, seedAndGenerate, assignAssistant, resolveMatch,
-    insertHsrAccount, locks, matchRow, bracketRows, liveField, seedingField, makeTeam, tRow, teamRow, fullTeams,
-    register, setUserRole, type TournamentArgs,
-} from '../fixtures/tournament-builders';
-import { linkDiscord, advance, priceCharacters, session, setupLobby, refereeActor } from '../fixtures/harness';
-import { lockAccount, ownedAccount, settingsFrom } from '../fixtures/ranked-game-builders';
-import { fireDeletionJob } from '../fixtures/achievement-auth-cost-builders';
-import { byKey, createTournamentLobby, join, sidesOf, playLobbyGame, validate, drain } from '../fixtures/tournament-match-builders';
+    M,
+    tx,
+    expectReject,
+    member,
+    lobbyRow,
+    newHarness,
+    seatOf,
+    guest,
+    type Actor,
+    type Harness,
+    type Lobby,
+    AUDIT,
+    linkDiscord,
+    advance,
+    priceCharacters,
+    session,
+    setupLobby,
+    refereeActor,
+} from '../fixtures/harness';
+import { verified, host, moderator, setUserRole, fireDeletionJob } from '../fixtures/identity';
+import { insertHsrAccount, ownedAccount } from '../fixtures/roster';
+import { settingsFrom, join } from '../fixtures/lobby';
+import { viewAs } from '../fixtures/views';
+import {
+    openTournament,
+    enrollMany,
+    advanceStage,
+    seedAndGenerate,
+    assignAssistant,
+    resolveMatch,
+    locks,
+    matchRow,
+    bracketRows,
+    liveField,
+    seedingField,
+    makeTeam,
+    tRow,
+    teamRow,
+    fullTeams,
+    register,
+    type TournamentArgs,
+    lockAccount,
+} from '../fixtures/tournaments';
+import {
+    byKey,
+    createTournamentLobby,
+    sidesOf,
+    playLobbyGame,
+    validate,
+    drain,
+    slotOf,
+} from '../fixtures/tournament-matches';
 
 const approve = (m: number, teamId: number, userId: number) => (ctx: any) => M.approve_stand_in(ctx, { bracketMatchId: m, teamId, userId });
 const revoke = (m: number, userId: number) => (ctx: any) => M.revoke_stand_in(ctx, { bracketMatchId: m, userId });
-const slotOf = (test: Harness, lobbyId: number, who: Actor) => member(test, lobbyId, who.userId)?.lobbySlot.tag;
 const setSelf = (lobbyId: number, slot: string) => (ctx: any) => M.set_team_slot(ctx, { lobbyId, lobbySlot: { tag: slot } as any });
 const moveOther = (test: Harness, lobbyId: number, target: Actor, slot: string) => {
     const targetJoinSeq = seatOf(test, lobbyId, target.userId);
@@ -29,7 +71,6 @@ const moveOther = (test: Harness, lobbyId: number, target: Actor, slot: string) 
 const confirm = (lobbyId: number) => (ctx: any) => M.confirm_ready(ctx, { lobbyId });
 const start = (lobbyId: number) => (ctx: any) => M.start_draft(ctx, { lobbyId });
 const rowsOf = (test: Harness) => [...test.db.TournamentStandIn.iter()].map((r) => ({ m: r.bracketMatchId, team: r.teamId, user: r.userId }));
-const viewAs = (test: Harness, name: string, who: Actor, args: Record<string, unknown> = {}): any[] => (M as any)[name](test.viewContext(who.auth), args) as any[];
 const setTournament = (test: Harness, id: number, over: Record<string, unknown>) =>
     test.db.Tournament.id.update({ ...tRow(test, id), ...over } as any);
 const lockAccounts = (tournamentId: number, hsrAccountIds: number[]) => (ctx: any) => M.lock_tournament_accounts(ctx, { tournamentId, hsrAccountIds });

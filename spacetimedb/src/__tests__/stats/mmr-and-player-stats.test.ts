@@ -11,10 +11,11 @@
 // finalize_match_result. Nothing reaches maincloud.
 import { describe, expect, it } from 'vitest';
 import { M, expectReject, newHarness, setupLobby, tx, type Actor, type Harness, type Lobby } from '../fixtures/harness';
-import { blueNames, draftClassic, finishGame, insertCharacter, redNames } from '../fixtures/draft-and-scoring-builders';
-import { insertHsrAccount, moderator, setUserRole, verified } from '../fixtures/tournament-builders';
-import { seedElo } from '../fixtures/tournament-match-builders';
-import { ownedAccount, playRanked, seedRatingChars, seedRatingData, validateAndFinalize } from '../fixtures/ranked-game-builders';
+import { moderator, setUserRole, verified } from '../fixtures/identity';
+import { insertHsrAccount, ownedAccount } from '../fixtures/roster';
+import { blueNames, draftClassic, finishGame, insertCharacter, redNames } from '../fixtures/draft-and-scoring';
+import { seedElo } from '../fixtures/tournament-matches';
+import { playRanked, seedRatingChars, seedRatingData, validateAndFinalize } from '../fixtures/ranked';
 import { computeAccountRating } from '@module/helpers/stats/accountRating';
 
 const ratingOf = (test: Harness, userId: number) => [...test.db.MmrRating.user_id.filter(userId)][0];

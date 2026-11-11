@@ -9,10 +9,22 @@
 // HsrAccount and TournamentPlayerAccount are private: read with `test.db` outside the transactions. Selection is
 // Waiting-only (D-06, A67(1)). Seats by `seatOf` (A74). In-memory datastore; nothing reaches maincloud.
 import { describe, expect, it } from 'vitest';
-import { M, expectReject, lobbyRow, newHarness, seatOf, setupLobby, tx, type Actor, type Harness } from '../fixtures/harness';
-import { insertHsrAccount, liveField, verified } from '../fixtures/tournament-builders';
-import { byKey, createTournamentLobby, join, sidesOf } from '../fixtures/tournament-match-builders';
-import { createLobby, joinLobby, lmaOf, lockAccount, setActive } from '../fixtures/preset-and-account-builders';
+import {
+    M,
+    expectReject,
+    lobbyRow,
+    newHarness,
+    seatOf,
+    setupLobby,
+    tx,
+    type Actor,
+    type Harness,
+} from '../fixtures/harness';
+import { verified } from '../fixtures/identity';
+import { insertHsrAccount, setActive } from '../fixtures/roster';
+import { join, createLobby, joinLobby, lmaOf } from '../fixtures/lobby';
+import { liveField, lockAccount } from '../fixtures/tournaments';
+import { byKey, createTournamentLobby, sidesOf } from '../fixtures/tournament-matches';
 
 const select = (test: Harness, who: Actor, lobbyId: number, hsrAccountId: number) =>
     tx(test, who, (ctx) => M.select_match_account(ctx, { lobbyId, hsrAccountId }));

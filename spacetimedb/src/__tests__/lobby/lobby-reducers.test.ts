@@ -23,8 +23,7 @@ import {
     type Actor,
     type Harness,
 } from '../fixtures/harness';
-import { host as tournamentHost, moderator, setUserRole, verified, liveField } from '../fixtures/tournament-builders';
-import { byKey, createTournamentLobby } from '../fixtures/tournament-match-builders';
+import { host as tournamentHost, moderator, verified, admin } from '../fixtures/identity';
 import {
     createLobby,
     joinLobby,
@@ -35,7 +34,10 @@ import {
     settingsArgs,
     systemPreset,
     updatePresetArgs,
-} from '../fixtures/preset-and-account-builders';
+    stageMsg,
+} from '../fixtures/lobby';
+import { liveField } from '../fixtures/tournaments';
+import { byKey, createTournamentLobby } from '../fixtures/tournament-matches';
 
 // ─── Messages (docs/lobby/contract.md error tables) ──────────────────────────
 
@@ -48,7 +50,6 @@ const HOST_OR_ABOVE = 'Only the host, moderators, or admins can perform this act
 const NOT_MEMBER = 'You are not a member of this lobby.';
 const COACH_PERM = 'Only the lobby host or referee can assign the coach role.';
 const COACH_CAPTAIN = 'A coach cannot be assigned as captain.';
-const stageMsg = (stage: string) => `This action is not allowed in the current lobby stage (${stage}).`;
 const PRESET_ROLE = 'Only Tournament Hosts, Moderators, and Admins can create lobby presets.';
 const PRESET_NAME = 'Preset name must be between 1 and 50 characters.';
 const PRESET_PERM = 'You do not have permission to modify this preset.';
@@ -56,12 +57,6 @@ const PRESET_NOT_FOUND = 'Lobby preset not found.';
 const SYSTEM_ONLY_ADMIN = 'Only admins can modify or delete system presets.';
 const SYSTEM_NO_DELETE = 'The system lobby preset cannot be deleted.';
 const PRESET_LIMIT = 'Preset limit reached: you can own at most 10 lobby presets. Delete one first.';
-
-const admin = (test: Harness, name = 'adm'): Actor => {
-    const a = verified(test, name);
-    setUserRole(test, a.userId, 'Admin');
-    return a;
-};
 
 /** A Waiting lobby hosted by `host` (a guest unless given) with `names` joined as Spectators, in order. */
 function waitingLobby(test: Harness, names: string[], over: Record<string, unknown> = {}, hostActor?: Actor) {
@@ -506,7 +501,7 @@ describe('lobby presets', () => {
     it('System Preset (A33a): an Admin edits it; a Moderator and a TO are rejected; delete is rejected for everyone, Admin included', () => {
         const test = newHarness();
         const presetId = systemPreset(test).id;
-        const adm = admin(test);
+        const adm = admin(test, 'adm');
         const mod = moderator(test);
         const to = tournamentHost(test, 'to');
 

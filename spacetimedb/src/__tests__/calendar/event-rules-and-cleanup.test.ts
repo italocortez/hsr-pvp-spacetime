@@ -5,34 +5,27 @@
 // From S10d, S10f, S10s, S10q (s10d-rulings.test.ts, s10f-draft-results.test.ts, s10s-triage-fixes.test.ts,
 //   s10q-gap-coverage.test.ts).
 import { describe, expect, it } from 'vitest';
-import { M, advance, newHarness, tx, type Harness } from '../fixtures/harness';
-import {
-    advanceStage,
-    assignAssistant,
-    liveField,
-    moderator,
-    setUserRole,
-    verified,
-} from '../fixtures/tournament-builders';
-import { byKey, duel, playMatch } from '../fixtures/tournament-match-builders';
+import { M, advance, newHarness, tx, type Harness, rejection, snap } from '../fixtures/harness';
+import { moderator, setUserRole, verified } from '../fixtures/identity';
 import {
     DAY_MS,
     HOUR_MS,
     addSlot,
     clearMembershipCount,
-    createAccount,
     createEvent,
     eventArgs,
     fromNow,
     invite,
     invitesOf,
     micros,
-    rejection,
     slotArgs,
     slotsOf,
-} from '../fixtures/calendar-roster-rating-builders';
-import { snap } from '../fixtures/seat-and-snapshot-helpers';
-import { viewAs } from '../fixtures/tournament-admin-views';
+    event,
+} from '../fixtures/calendar';
+import { createAccount } from '../fixtures/roster';
+import { viewAs } from '../fixtures/views';
+import { advanceStage, assignAssistant, liveField } from '../fixtures/tournaments';
+import { byKey, duel, playMatch } from '../fixtures/tournament-matches';
 
 const LINKED = (action: string) => `Forbidden: Only the organizer, an Admin or tournament staff with the bracket permission can ${action}.`;
 const PERSONAL = (action: string) => `Forbidden: Only the organizer or an Admin can ${action}.`;
@@ -65,7 +58,6 @@ describe('A89: tournament-linked events accept the tournament organizer and brac
     }
     type World = ReturnType<typeof calendarWorld>;
 
-    const event = (test: Harness, id: number) => test.db.CalendarEvent.id.find(id) ?? undefined;
     const updateBody = (test: Harness, id: number, title: string) => (ctx: any) => {
         const e = ctx.db.CalendarEvent.id.find(id);
         return M.update_calendar_event(ctx, {

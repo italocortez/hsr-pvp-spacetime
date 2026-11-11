@@ -10,7 +10,6 @@ import { describe, expect, it } from 'vitest';
 import {
     DEFAULT_LOBBY_ARGS,
     M,
-    captainOf,
     expectReject,
     guest,
     advanceToEquipping,
@@ -22,48 +21,14 @@ import {
     setupLobby,
     steps,
     tx,
-    type Actor,
     type Harness,
     type Lobby,
     priceCharacters,
 } from '../fixtures/harness';
-import { finishGame as closeCurrentGame } from '../fixtures/draft-and-scoring-builders';
+import { finishGame as closeCurrentGame, captain } from '../fixtures/draft-and-scoring';
+import { PRESET_ARGS, settingsArgs } from '../fixtures/lobby';
 
 const BEST_OF = 'bestOf must be 1 or 3.';
-
-const PRESET_ARGS = {
-    teamSize: 2,
-    draftMode: { tag: 'Classic' },
-    banMode: { tag: 'None' },
-    gameMode: { tag: 'MemoryOfChaos' },
-    matchType: { tag: 'Casual' },
-    standardTurnSeconds: 30,
-    reserveBankSeconds: 60,
-    characterBudget: 100,
-    lightconeBudget: 50,
-    minimumBidRaise: 1,
-    rosterDiffAdvantage: 0,
-    rosterThreshold: 0,
-    underThresholdAdvantage: 0,
-    aboveThresholdPenalty: 0,
-    deathPenalty: 0,
-    isPublic: true,
-    isAnonymousPlayers: false,
-    isAnonymousSpectators: false,
-    rosterVisibility: { tag: 'OpenRoster' },
-    requireOwnership: false,
-    costSetId: 0,
-    disconnectPolicy: { tag: 'Standard' },
-    disconnectForfeitSeconds: 60,
-    allowMirrorPicks: false,
-    autoRandomPick: false,
-    refereeCanUndo: true,
-    refereeCanPause: true,
-    refereeCanSetCaptain: true,
-    refereeCanKick: true,
-    allowPlayerPause: true,
-    refereeExclusiveConcede: true,
-};
 
 const TOURNAMENT_ARGS = {
     name: 'Cup',
@@ -98,12 +63,6 @@ const TOURNAMENT_ARGS = {
     requireResultValidation: false,
     allowMirrorPicks: false,
     lineupFormat: 'Halves',
-};
-
-/** update_lobby_settings arguments mirroring the create defaults, with overrides. */
-const settingsArgs = (lobbyId: number, over: Record<string, unknown> = {}) => {
-    const rest = DEFAULT_LOBBY_ARGS; // A114 / A116 (S10n): no joinCode / presetId to strip
-    return { lobbyId, ...rest, refereeExclusiveConcede: true, ...over } as any;
 };
 
 const createTournament = (test: Harness, over: Record<string, unknown> = {}) =>
@@ -146,10 +105,6 @@ const updateTournamentArgs = (t: any, over: Record<string, unknown> = {}) => ({
 
 const systemPresets = (test: Harness) => [...test.db.LobbyPreset.iter()].filter((p) => p.isSystemPreset);
 const presetNamed = (test: Harness, name: string) => [...test.db.LobbyPreset.iter()].find((p) => p.name === name)!;
-
-const actorOf = (s: Lobby, userId: number): Actor => Object.values(s.a).find((x) => x.userId === userId)!;
-const captain = (s: Lobby, team: 'Blue' | 'Red') =>
-    actorOf(s, captainOf(s.test, s.lobbyId, team === 'Blue' ? 'BluePlayer' : 'RedPlayer')!.userId);
 
 /**
  * T-S7b / T-S8e: the lobby's one game is closed by the full-control host (A67: the close submits it): lineups arranged, Equipping → Scoring, both sides' scores (Blue wins), close_game (A63 staff close).

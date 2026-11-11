@@ -42,6 +42,8 @@ import {
     type Actor,
     type Harness,
 } from '../fixtures/harness';
+import { host as tournamentHost, moderator, verified, displayName } from '../fixtures/identity';
+import { insertHsrAccount } from '../fixtures/roster';
 import {
     H,
     captain,
@@ -52,34 +54,11 @@ import {
     recordScores,
     setRole,
     side,
-} from '../fixtures/draft-and-scoring-builders';
-import {
-    assignAssistant,
-    host as tournamentHost,
-    insertHsrAccount,
-    liveField,
-    makeTeam,
-    matchRow,
-    moderator,
-    openTournament,
-    register,
-    verified,
-    type RegisterOpts,
-} from '../fixtures/tournament-builders';
-import {
-    byKey,
-    deferredDuel,
-    duel,
-    offlinePastGrace,
-    openMatchLobby,
-    playMatch,
-    recordsOfLobby,
-    sidesOf,
-} from '../fixtures/tournament-match-builders';
+    recordOf,
+} from '../fixtures/draft-and-scoring';
 import {
     AUDIT_KEYS,
     COLS,
-    displayName,
     expectOnlyColumns,
     ghost,
     keysOf,
@@ -90,10 +69,28 @@ import {
     shared,
     view,
     type Reader,
-} from '../fixtures/lobby-view-builders';
+    type Cols,
+} from '../fixtures/views';
+import {
+    assignAssistant,
+    liveField,
+    makeTeam,
+    matchRow,
+    openTournament,
+    register,
+    type RegisterOpts,
+} from '../fixtures/tournaments';
+import {
+    byKey,
+    deferredDuel,
+    duel,
+    offlinePastGrace,
+    openMatchLobby,
+    playMatch,
+    recordsOfLobby,
+    sidesOf,
+} from '../fixtures/tournament-matches';
 
-type Cols<K extends keyof typeof COLS> = (typeof COLS)[K][number];
-const recordOf = (test: Harness, lobbyId: number) => [...test.db.MatchResultRecord.lobby_id.filter(lobbyId)][0];
 
 // ════════════════════════════════════════════════════════════════════════════
 // Live match views (S9a-V7; PAGE-MAP D3; A56, A60, A63, A67(3); interpretation 1)

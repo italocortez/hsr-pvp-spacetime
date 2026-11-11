@@ -9,13 +9,13 @@
 import { describe, expect, it } from 'vitest';
 import { TOURNAMENT_PERM_MESSAGES } from '@module/helpers/tournament/tournamentPermissions';
 import { M, advance, expectReject, newHarness, tx, type Harness } from '../fixtures/harness';
+import { host, verified } from '../fixtures/identity';
 import {
     advanceStage,
     assignAssistant,
     enrollMany,
     enrolled,
     fullTeams,
-    host,
     makeTeam,
     membersOf,
     membership,
@@ -25,8 +25,7 @@ import {
     seedAndGenerate,
     tRow,
     teamRow,
-    verified,
-} from '../fixtures/tournament-builders';
+} from '../fixtures/tournaments';
 
 const status = (test: Harness, teamId: number) => teamRow(test, teamId)!.status.tag;
 

@@ -1,15 +1,19 @@
-// Shared helpers: view readers, column lists, ghosts and the lobby and scoring builders of the lobby and match view
-//   tests.
-// From S9a (s9a-views.test.ts); not a test file.
+// Fixtures: view readers, documented column lists (the egress lists), ghosts, and the lobby, scoring and account
+//   builders of the view tests.
+// From S9a (s9a-views.test.ts: lobby, match and tournament views), S9b (s9b-views.test.ts: profile, roster, calendar
+// and admin views), S9c (seat-view readers), S10s (viewAs); gathered by T-REORG2.
+//
+// Not a test file. Views are read through the module's view functions with a TestAuth context; `test.db` is read only
+// outside `tx` bodies. Nothing reaches maincloud.
 import { expect } from 'vitest';
 import { ConnectionId } from 'spacetimedb';
 import {
+    AUDIT,
     M,
     TestAuth,
     guest,
     lobbyRow,
     setupLobby,
-    tx,
     type Actor,
     type Harness,
     type Lobby,
@@ -21,7 +25,8 @@ import {
     playToScoring,
     redNames,
     type ScoringLobbyOpts,
-} from './draft-and-scoring-builders';
+} from './draft-and-scoring';
+import { insertHsrAccount } from './roster';
 
 // ─── Reading views ───────────────────────────────────────────────────────────
 
@@ -41,11 +46,19 @@ export function shared<T = any>(test: Harness, name: string, args: Record<string
     return (M as any)[name](test.anonymousViewContext(), args) as T[];
 }
 
-export let ghostSeq = 9_000n;
-/** A client identity that never logged in: no UserIdentity mapping. */
-export const ghost = () => TestAuth.fromJwtPayload(JSON.stringify({ iss: 'test', sub: `ghost-${ghostSeq}` }), new ConnectionId(ghostSeq++));
+/**
+ * A ghost maker: each call of the returned function is a client identity that never logged in (no UserIdentity
+ * mapping), JWT sub `<prefix><seq>` and connection id `seq`, the sequence counting up from `firstSeq`.
+ */
+export function makeGhost(prefix: string, firstSeq: bigint): () => TestAuth {
+    let seq = firstSeq;
+    return () => TestAuth.fromJwtPayload(JSON.stringify({ iss: 'test', sub: `${prefix}${seq}` }), new ConnectionId(seq++));
+}
+/** The lobby and match view tests' ghosts (sub `ghost-<n>` from 9000). */
+export const ghost = makeGhost('ghost-', 9_000n);
+/** The profile, roster, calendar and admin view tests' ghosts (sub `s9b-ghost-<n>` from 19000). */
+export const profileGhost = makeGhost('s9b-ghost-', 19_000n);
 
-export const displayName = (test: Harness, who: Actor) => test.db.User.id.find(who.userId)!.displayName;
 export const keysOf = (row: object) => Object.keys(row).sort();
 /** Runtime egress check: the emitted object carries no key outside the documented column list. */
 export function expectOnlyColumns(row: object, cols: readonly string[]) {
@@ -53,6 +66,9 @@ export function expectOnlyColumns(row: object, cols: readonly string[]) {
     expect(extra, 'undocumented columns').toEqual([]);
 }
 export const AUDIT_KEYS = ['createdById', 'createdDate', 'lastModifiedById', 'lastModifiedDate'];
+/** A tournament view as `who` reads it, with arguments. */
+export const viewAs = <T = any>(test: Harness, name: string, who: Actor, args: Record<string, unknown> = {}): T[] =>
+    (M as any)[name](test.viewContext(who.auth), args) as T[];
 export const USER_ID_KEY = /userid|byid$|^hostuserid$|^createdbyid$|^lastmodifiedbyid$/i;
 
 // ─── Documented columns (the egress list; type-checked against the generated bindings) ───────────────────────
@@ -98,7 +114,44 @@ export const COLS = {
     matchForMe: ['bracketMatchId', 'tournamentId', 'myTeamId', 'opponentTeamId', 'opponentTeamName', 'blueTeamId',
         'redTeamId', 'state', 'bracketSide', 'roundNumber', 'matchNumber', 'bestOf', 'team1Id', 'team2Id', 'team1Games',
         'team2Games', 'scheduledAt'] as const,
+    // S9b: profile, roster, calendar and admin views
+    identity: ['identity', 'userId'] as const,
+    profile: ['id', 'username', 'displayName', 'avatarCharacterName', 'displayedAchievementId', 'hasDiscordLinked',
+        'isGuest', 'role', 'loginMethod', 'providerId', 'providerUsername'] as const,
+    byUsername: ['userId', 'username', 'displayName', 'avatarCharacterName', 'displayedAchievementId'] as const,
+    userAchievement: ['achievementId', 'awardedAt'] as const,
+    playerStat: ['gameMode', 'draftMode', 'matchType', 'teamSize', 'seasonId', 'matchesPlayed', 'wins', 'losses',
+        'matchesSpectated'] as const,
+    charStat: ['characterName', 'gameMode', 'draftMode', 'matchType', 'teamSize', 'seasonId', 'matchesPlayed', 'wins',
+        'losses', 'timesBannedInMatch', 'timesFaced', 'winsAgainst', 'lossesAgainst'] as const,
+    mmr: ['gameMode', 'seasonId', 'rating', 'matchesPlayed', 'wins', 'lastUpdatedAt'] as const,
+    relationship: ['otherUserId', 'otherDisplayName', 'otherAvatarCharacterName', 'otherDisplayedAchievementId',
+        'otherMmrByMode', 'gameMode', 'draftMode', 'matchType', 'teamSize', 'seasonId', 'matchesAsAlly', 'winsAsAlly',
+        'matchesAsOpponent', 'winsAsOpponent'] as const,
+    rosterVisibility: ['lobbyId', 'joinSeq', 'memberUserId', 'hsrAccountId', 'characterName', 'eidolonLevel',
+        'accountRating'] as const,
+    myRoster: ['accountId', 'uid', 'region', 'displayLabel', 'isActive', 'isRosterPublic', 'isRatingPublic',
+        'isDuplicateUid', 'accountRating', 'characterName', 'eidolonLevel'] as const,
+    publicAccount: ['accountId', 'userId', 'uid', 'region', 'displayLabel', 'accountRating', 'characterName',
+        'eidolonLevel'] as const,
+    calEvent: ['id', 'organizerId', 'organizerLabel', 'title', 'description', 'startAt', 'endAt', 'bracketMatchId'] as const,
+    calInvite: ['inviteKey', 'eventId', 'inviteeUserId', 'inviteeLabel', 'inviteStatus', 'respondedAt', 'inviterLabel'] as const,
+    availability: ['id', 'startAt', 'endAt', 'isRecurring', 'recurrenceRule', 'expiresAt'] as const,
+    savedAvailability: ['id', 'userId', 'userLabel', 'startAt', 'endAt', 'isRecurring', 'recurrenceRule', 'expiresAt'] as const,
+    savedCalendar: ['targetUserId', 'targetLabel', 'targetAvatarCharacterName', 'isVisible'] as const,
+    adminIdentity: ['identity', 'userId', 'lastSeenAt'] as const,
+    adminBan: ['id', 'loginMethod', 'providerId', 'reason', 'bannedByUserId', 'bannedByLabel', 'createdDate'] as const,
+    adminDeleted: ['id', 'displayName', 'isGuest', 'deletedAt'] as const,
+    adminPresence: ['identity', 'userId', 'isOnline', 'lastLoginAt', 'lastSeenAt'] as const,
+    adminLobbyBan: ['lobbyId', 'bannedUserId', 'bannedJoinSeq', 'bannedUserLabel', 'bannedByUserId', 'bannedByLabel', 'createdDate'] as const, // T-S9c: + bannedJoinSeq (A74(2))
+    adminAbuse: ['id', 'cursorMinIntervalMs', 'chatMinIntervalMs', 'chatPerMinute', 'lineupMinIntervalMs',
+        'lobbyCreatesPerHour', 'maxPresetsPerUser', 'maxCostSetsPerUser', 'maintenanceMode', 'guestLobbyCreationEnabled',
+        'guestLobbyBurstThreshold', 'guestLobbyBurstWindowMinutes',
+        'guestCreationEnabled', 'guestCreationBurstThreshold', 'guestCreationBurstWindowMinutes'] as const, // T-S10h: + A95(2)
+    adminUserPrivate: ['userId', 'loginMethod', 'providerId', 'providerUsername'] as const,
 };
+export type Cols<K extends keyof typeof COLS> = (typeof COLS)[K][number];
+export const sorted = <K extends keyof typeof COLS>(k: K) => [...COLS[k]].sort();
 
 // ─── Builders ────────────────────────────────────────────────────────────────
 
@@ -123,10 +176,13 @@ export function scoringOf(test: Harness, p: string, opts: ScoringLobbyOpts = {})
     });
 }
 
-/** beforeStart hook: the lobby becomes Ranked (direct row edit, as s7b) and every player gets an HSR account (D-08). */
-export const makeRanked = (test: Harness) => (l: Lobby) => {
+/**
+ * beforeStart hook: the lobby becomes Ranked (direct row edit, as s7b) and every player gets an HSR account (D-08),
+ * account ids `firstAccountId + lobbyId * 10` upwards (default 800).
+ */
+export const makeRanked = (test: Harness, firstAccountId = 800) => (l: Lobby) => {
     test.db.Lobby.id.update({ ...lobbyRow(test, l.lobbyId), matchType: { tag: 'Ranked' } as any });
-    let accountId = 800 + l.lobbyId * 10;
+    let accountId = firstAccountId + l.lobbyId * 10;
     for (const m of test.db.LobbyMember.lobby_id.filter(l.lobbyId)) {
         if (m.lobbySlot.tag === 'BluePlayer' || m.lobbySlot.tag === 'RedPlayer') {
             test.db.LobbyMemberAccount.insert({ lobbyId: l.lobbyId, userId: m.userId, hsrAccountId: accountId++ });
@@ -135,6 +191,31 @@ export const makeRanked = (test: Harness) => (l: Lobby) => {
 };
 
 export const ANON = { isAnonymousPlayers: true };
-export const leave = (test: Harness, who: Actor, lobbyId: number) => tx(test, who, (ctx) => M.leave_lobby(ctx, { lobbyId }));
 
 export const rowFor = <T extends { userId: number; label: string }>(rows: T[], label: string) => rows.find((r) => r.label === label)!;
+
+/** The empty filters of the match-history views (every game mode, draft mode and match type). */
+export const ANY = { gameMode: '', draftMode: '', matchType: '' };
+
+// ─── Accounts (S9b) ──────────────────────────────────────────────────────────
+
+/** An HSR account owned by `who` with a rating and characters, selected for the lobby (LobbyMemberAccount). Returns its id. */
+export function selectRatedAccount(test: Harness, lobbyId: number, who: Actor, uid: string, rating: number, chars: string[] = []): number {
+    const id = addAccount(test, who.userId, uid, { rating, chars });
+    test.db.LobbyMemberAccount.insert({ lobbyId, userId: who.userId, hsrAccountId: id });
+    return id;
+}
+
+export function addAccount(test: Harness, userId: number, uid: string, o: { rating?: number; chars?: string[]; isRosterPublic?: boolean; isRatingPublic?: boolean } = {}): number {
+    const id = insertHsrAccount(test, userId, uid);
+    test.db.HsrAccount.id.update({
+        ...test.db.HsrAccount.id.find(id)!,
+        accountRating: o.rating ?? 0,
+        isRosterPublic: o.isRosterPublic ?? true,
+        isRatingPublic: o.isRatingPublic ?? true,
+    });
+    for (const [i, characterName] of (o.chars ?? []).entries()) {
+        test.db.HsrAccountCharacter.insert({ hsrAccountId: id, characterName, eidolonLevel: i, ...AUDIT(test) });
+    }
+    return id;
+}

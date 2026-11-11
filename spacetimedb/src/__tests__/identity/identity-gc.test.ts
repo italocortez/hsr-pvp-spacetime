@@ -13,11 +13,25 @@
 // vacuous with one identity). Nothing reaches maincloud.
 import { describe, expect, it } from 'vitest';
 import { ScheduleAt } from 'spacetimedb';
-import { DEFAULT_LOBBY_ARGS, M, advance, connect, disconnect, expectReject, guest, linkDiscord, newHarness, now, tx, type Actor, type Harness } from '../fixtures/harness';
-import { AUDIT, moderator, setUserRole, verified } from '../fixtures/tournament-builders';
-import { freshAuth, identitiesOf } from '../fixtures/achievement-auth-cost-builders';
+import {
+    DEFAULT_LOBBY_ARGS,
+    M,
+    advance,
+    connect,
+    disconnect,
+    expectReject,
+    guest,
+    linkDiscord,
+    newHarness,
+    now,
+    tx,
+    type Actor,
+    type Harness,
+    AUDIT,
+} from '../fixtures/harness';
+import { moderator, setUserRole, verified, freshAuth, identitiesOf } from '../fixtures/identity';
+import { DAY_MS } from '../fixtures/calendar';
 
-const DAY_MS = 86_400_000;
 const SEVEN_DAYS_MICROS = 7n * 86_400_000_000n;
 const MOD_ONLY = 'Forbidden: Requires Moderator or Admin privileges.';
 

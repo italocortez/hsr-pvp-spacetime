@@ -9,7 +9,18 @@
 // gate sits at confirm_game; equips reset the game confirmations.
 import { describe, expect, it } from 'vitest';
 import { hardDeleteLobby } from '@module/reducers/lobby/lobbyGc';
-import { M, advance, expectReject, lobbyRow, newHarness, session, setupLobby, steps, tx, priceCharacters } from '../fixtures/harness';
+import {
+    M,
+    advance,
+    expectReject,
+    lobbyRow,
+    newHarness,
+    session,
+    setupLobby,
+    steps,
+    tx,
+    priceCharacters,
+} from '../fixtures/harness';
 import {
     H,
     arrange,
@@ -32,7 +43,7 @@ import {
     recordScores,
     redNames,
     selectAccount,
-} from '../fixtures/draft-and-scoring-builders';
+} from '../fixtures/draft-and-scoring';
 
 describe('backlog #3: synergy surcharge and who arranges', () => {
     it('The Herta + Argenti + Tribbie in one group = +8 (two pairs)', () => {

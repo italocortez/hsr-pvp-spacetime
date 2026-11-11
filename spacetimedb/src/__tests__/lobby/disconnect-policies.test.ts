@@ -28,17 +28,22 @@ import {
     type Harness,
     type Lobby,
     type SetupOpts,
+    rejection,
+    snap,
+    ONE_V_ONE,
 } from '../fixtures/harness';
-import { rejection } from '../fixtures/calendar-roster-rating-builders';
-import { snap, stepsOf } from '../fixtures/draft-snapshot-helpers';
+import { host as tournamentHost, verified } from '../fixtures/identity';
+import { stepsOf } from '../fixtures/draft-and-scoring';
 import {
-    TOURNAMENT_ARGS,
-    createTournament,
-    host as tournamentHost,
-    tRow,
-    updateArgs,
-    verified,
-} from '../fixtures/tournament-builders';
+    presetArgs,
+    presetNamed,
+    settingsArgs,
+    updatePresetArgs,
+    settingsFrom,
+    NOT_ELIGIBLE,
+    abandon,
+} from '../fixtures/lobby';
+import { TOURNAMENT_ARGS, createTournament, tRow, updateArgs } from '../fixtures/tournaments';
 import {
     byKey,
     deferredDuel,
@@ -47,23 +52,13 @@ import {
     openMatchLobby,
     recordsOfLobby,
     sidesOf,
-} from '../fixtures/tournament-match-builders';
-import {
-    presetArgs,
-    presetNamed,
-    settingsArgs,
-    updatePresetArgs,
-} from '../fixtures/preset-and-account-builders';
-import { settingsFrom } from '../fixtures/ranked-game-builders';
-import { ONE_V_ONE } from '../fixtures/seat-and-snapshot-helpers';
+} from '../fixtures/tournament-matches';
 
 // ════════════════════════════════════════════════════════════════════════════
 // A85: lifting a disconnect auto-pause
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('A85: lifting a disconnect auto-pause', () => {
-    const SEATS: SetupOpts['seats'] = [['b1', 'BluePlayer'], ['b2', 'BluePlayer'], ['bc', 'BlueCoach'], ['r1', 'RedPlayer'], ['r2', 'RedPlayer']];
-    const isPaused = (s: Lobby) => session(s.test, s.lobbyId).timerState.isPaused;
     const rejoin = (s: Lobby, who: Actor) => {
         connect(s.test, who);
         tx(s.test, who, (ctx) => M.join_lobby(ctx, { lobbyId: s.lobbyId, joinCode: '', password: '' }));
@@ -182,7 +177,6 @@ const FORFEIT_RANGE = 'disconnectForfeitSeconds must be between 30 and 600 (0 ke
 const START_ONLINE = 'All Blue and Red players must be online before starting.';
 const AWAY = 'You are away from this match. Return to it first.';
 const ABANDONED = 'You left this match for another lobby and cannot act on it.';
-const NOT_ELIGIBLE = 'Opposing team is not eligible for forfeit. At least one player is still connected or grace period has not expired.';
 
 // ════════════════════════════════════════════════════════════════════════════
 // A91(1): defer_match needs a seated player past the grace or the live pool
@@ -494,12 +488,11 @@ describe('A92(3): the NoAction policy', () => {
 // A92(4): away and abandoned seats cannot concede, claim or defer
 // ════════════════════════════════════════════════════════════════════════════
 
+const claim = (s: Lobby) => (ctx: any) => M.claim_forfeit(ctx, { lobbyId: s.lobbyId, forfeitingTeamSide: 0 });
+
 describe('A92(4): an away or abandoned seat cannot concede, claim a forfeit or defer', () => {
     const concede = (s: Lobby) => (ctx: any) => M.concede_match(ctx, { lobbyId: s.lobbyId, losingTeamSide: 0 });
-    const claim = (s: Lobby) => (ctx: any) => M.claim_forfeit(ctx, { lobbyId: s.lobbyId, forfeitingTeamSide: 0 });
     const leave = (test: Harness, who: Actor, s: Lobby) => tx(test, who, (ctx) => M.leave_lobby(ctx, { lobbyId: s.lobbyId }));
-    const abandon = (test: Harness, who: Actor) =>
-        tx(test, who, (ctx) => M.create_lobby(ctx, { ...DEFAULT_LOBBY_ARGS, abandonCurrentMatch: true } as any));
 
     it('Standard casual lobby (no Spectator referee): concede and claim_forfeit rejected for an away and an abandoned seat; the away player concedes after join_lobby (A92(4))', () => {
         const test = newHarness();
@@ -609,7 +602,6 @@ describe('A92(6): the live pool', () => {
         const s = setupLobby(test, { hostSlot: 'RedPlayer', seats: [['b1', 'BluePlayer']], lobby: { disconnectForfeitSeconds: seconds } });
         return { test, s };
     };
-    const claim = (s: Lobby) => (ctx: any) => M.claim_forfeit(ctx, { lobbyId: s.lobbyId, forfeitingTeamSide: 0 });
 
     it('grace 600, 10 s of pool left: not eligible at 5 s, eligible at 11 s with no reconnect in between (A92(6))', () => {
         const { test, s } = soloBlue(600);

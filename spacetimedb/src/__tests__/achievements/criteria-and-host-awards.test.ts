@@ -4,14 +4,9 @@
 // From S10r (s10r-triage-fixes.test.ts).
 import { describe, expect, it } from 'vitest';
 import { M, ensureCharacterRef, expectReject, newHarness, tx } from '../fixtures/harness';
-import {
-    host,
-    moderator,
-    openTournament,
-    register,
-    verified,
-} from '../fixtures/tournament-builders';
-import { createAchievement } from '../fixtures/achievement-auth-cost-builders';
+import { host, moderator, verified } from '../fixtures/identity';
+import { createAchievement } from '../fixtures/achievements';
+import { openTournament, register } from '../fixtures/tournaments';
 
 const HOST_AWARD_TEXT = 'Tournament hosts can only award manual achievements without an award limit.';
 

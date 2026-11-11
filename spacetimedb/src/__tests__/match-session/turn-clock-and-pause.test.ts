@@ -22,7 +22,11 @@ import {
     type Actor,
     type Lobby,
     type SetupOpts,
+    rejection,
+    TURN_MS,
+    type Team,
 } from '../fixtures/harness';
+import { moderator } from '../fixtures/identity';
 import {
     H,
     blueNames,
@@ -36,10 +40,7 @@ import {
     recordScores,
     redNames,
     side,
-} from '../fixtures/draft-and-scoring-builders';
-import { moderator } from '../fixtures/tournament-builders';
-import { rejection } from '../fixtures/calendar-roster-rating-builders';
-import { TURN_MS, type Team } from '../fixtures/team-and-turn';
+} from '../fixtures/draft-and-scoring';
 
 const NOT_EXPIRED = 'Turn timer has not yet expired.';
 const PAUSED_RECENTLY = 'The draft was paused moments ago. Please wait a few seconds before pausing again.';

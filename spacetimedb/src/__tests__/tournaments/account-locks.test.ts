@@ -3,14 +3,15 @@
 // Contracts: docs/tournament/contract.md, docs/brackets/contract.md
 // From S10g (s10g-tournament.test.ts).
 import { describe, expect, it } from 'vitest';
-import { M, advance, lobbyRow, newHarness, tx } from '../fixtures/harness';
+import { M, advance, lobbyRow, newHarness, tx, rejection } from '../fixtures/harness';
+import { host, verified } from '../fixtures/identity';
+import { insertHsrAccount } from '../fixtures/roster';
+import { join } from '../fixtures/lobby';
 import {
     advanceStage,
     createTournament,
     enrollMany,
     enrolled,
-    host,
-    insertHsrAccount,
     locks,
     openTournament,
     register,
@@ -20,20 +21,19 @@ import {
     tRow,
     teamRow,
     teams,
-    verified,
-} from '../fixtures/tournament-builders';
+    dq,
+    lockBody,
+    waitlistRows,
+} from '../fixtures/tournaments';
 import {
     byKey,
     createTournamentLobby,
     duel,
-    join,
     openMatchLobby,
     recordsOfLobby,
     seedElo,
     sidesOf,
-} from '../fixtures/tournament-match-builders';
-import { rejection } from '../fixtures/calendar-roster-rating-builders';
-import { dq, lockBody, waitlistRows } from '../fixtures/tournament-staff-helpers';
+} from '../fixtures/tournament-matches';
 
 const LOCK_STAGE = 'Accounts can be locked from Registration until the tournament ends.';
 const LOCK_EMPTY = 'Name at least one account to lock.';

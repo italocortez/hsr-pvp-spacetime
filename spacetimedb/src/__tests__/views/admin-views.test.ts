@@ -11,28 +11,10 @@ import type {
     AdminUserIdentityRow,
     AdminUserPrivateRow,
 } from '@bindings/types';
-import {
-    M,
-    connect,
-    disconnect,
-    guest,
-    newHarness,
-    seatOf,
-    setupLobby,
-    tx,
-} from '../fixtures/harness';
-import { setRole } from '../fixtures/draft-and-scoring-builders';
-import { moderator, verified } from '../fixtures/tournament-builders';
-import {
-    ANON,
-    displayName,
-    ghost,
-    keysOf,
-    linked,
-    seatsOf,
-    sorted,
-    view,
-} from '../fixtures/profile-view-builders';
+import { M, connect, disconnect, guest, newHarness, seatOf, setupLobby, tx } from '../fixtures/harness';
+import { moderator, verified, displayName, linked } from '../fixtures/identity';
+import { setRole } from '../fixtures/draft-and-scoring';
+import { ANON, profileGhost as ghost, keysOf, seatsOf, sorted, view } from '../fixtures/views';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Admin views (S9b-AD1..AD3, S9b-V9; §A.4 P4, PAGE-MAP D6, A42, A48)

@@ -1,8 +1,9 @@
-// Fixtures: the in-memory harness, actors and transactions, lobby setup, cost coverage and pricing.
-// From S4 (s4-fixtures.ts).
+// Fixtures: the in-memory harness, actors and transactions, lobby setup, cost coverage and pricing, and the small
+//   constants and helpers every subject shares (audit columns, seats, turn length, snapshots).
+// From S4 (s4-fixtures.ts); shared constants gathered by T-REORG2.
 //
 // T-S4: shared builders for the S4 in-memory tests (lobby lifecycle, A22a referee-transfer check, A48 presence).
-// Not a test file (no `.test.ts`): imported by s4-*.test.ts. Everything runs in the SDK's in-memory datastore;
+// Not a test file (no `.test.ts`). Everything runs in the SDK's in-memory datastore;
 // nothing reaches maincloud. State is built through the module's own reducers; the clock is the TestClock.
 import { expect } from 'vitest';
 import { ConnectionId, TimeDuration, Timestamp } from 'spacetimedb';
@@ -70,7 +71,31 @@ export function dropDefaultCostCoverage(test: Harness) {
         if (r.lightconeName === COVERAGE_LIGHTCONE) test.db.HsrLightconeCost.delete(r);
     }
 }
-type Ctx = Parameters<Parameters<Harness['withReducerTx']>[1]>[0];
+/** The reducer context a `tx` body receives. */
+export type Ctx = Parameters<Parameters<Harness['withReducerTx']>[1]>[0];
+
+// ─── Shared constants and small helpers ──────────────────────────────────────────────────────────────────────────
+
+/** The audit columns of a row written directly at `ts` (SYSTEM user). */
+export const auditAt = (ts: Timestamp) => ({ createdById: 0, createdDate: ts, lastModifiedById: 0, lastModifiedDate: ts });
+/** The audit columns of a row written directly now (the TestClock), SYSTEM user. */
+export const AUDIT = (test: Harness) => {
+    const ts = test.clock.now();
+    return { createdById: 0, createdDate: ts, lastModifiedById: 0, lastModifiedDate: ts };
+};
+
+export type Team = 'Blue' | 'Red';
+export type Side = Team;
+export const other = (side: Side): Side => (side === 'Blue' ? 'Red' : 'Blue');
+export const TURN_MS = 30_000; // DEFAULT_LOBBY_ARGS.standardTurnSeconds
+export const AUCTION = { draftMode: { tag: 'Auction' } };
+export const ONE_V_ONE: SetupOpts['seats'] = [['b1', 'BluePlayer'], ['r1', 'RedPlayer']];
+export const TWO_V_TWO: SetupOpts['seats'] = [['b1', 'BluePlayer'], ['b2', 'BluePlayer'], ['r1', 'RedPlayer'], ['r2', 'RedPlayer']];
+
+/** A JSON snapshot of rows (bigint-safe), to prove "nothing changed" across a rejected call. */
+export const snap = (...rows: unknown[]) => JSON.stringify(rows, (_k, v) => (typeof v === 'bigint' ? v.toString() : v));
+/** Ascending numeric order (for `sort`). */
+export const byId = (x: number, y: number) => x - y;
 
 export interface Actor {
     sub: string;
@@ -97,6 +122,21 @@ export function tx<T>(test: Harness, actor: Actor | 'internal', body: (ctx: Ctx)
 /** Expects the reducer call to throw a message matching `msg` (the transaction is rolled back). */
 export function expectReject(test: Harness, actor: Actor | 'internal', body: (ctx: Ctx) => unknown, msg: string | RegExp) {
     expect(() => tx(test, actor, body)).toThrow(msg);
+}
+
+/**
+ * Runs the call, asserts it throws (the transaction is rolled back) and returns the message, so a test can check the
+ * state first and the contract's exact text last: a text mismatch then reads as a text mismatch, not a behaviour one.
+ */
+export function rejection(test: Harness, actor: Actor | 'internal', body: (ctx: Ctx) => unknown): string {
+    let message: string | undefined;
+    try {
+        tx(test, actor, body);
+    } catch (e) {
+        message = e instanceof Error ? e.message : String(e);
+    }
+    expect(message, 'the call was expected to be rejected').toBeDefined();
+    return message!;
 }
 
 export const advance = (test: Harness, ms: number) => test.clock.advance(TimeDuration.fromMillis(ms));

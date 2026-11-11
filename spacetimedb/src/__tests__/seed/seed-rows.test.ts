@@ -4,9 +4,10 @@
 // From S10, S10f, S10i (s10-seed.test.ts, s10f-draft-results.test.ts, s10i-draft-cost.test.ts).
 import { describe, expect, it } from 'vitest';
 // T-S10i fix pass (review F2): newBareHarness, no set-0 coverage rows; these tests read the rows of set 0.
-import { M, newBareHarness, type Harness } from '../fixtures/harness';
-import { verified } from '../fixtures/tournament-builders';
-import { bulkUpsert, rejection, seedCharacters } from '../fixtures/calendar-roster-rating-builders';
+import { M, newBareHarness, type Harness, rejection } from '../fixtures/harness';
+import { verified } from '../fixtures/identity';
+import { seedCharacters } from '../fixtures/roster';
+import { bulkUpsert } from '../fixtures/cost-sets';
 import characterSeed from '../../../../data/seed/characters.json';
 import lightconeSeed from '../../../../data/seed/lightcones.json';
 

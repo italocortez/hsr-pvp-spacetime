@@ -29,7 +29,10 @@ import {
     type Actor,
     type Harness,
     type Lobby,
+    rejection,
 } from '../fixtures/harness';
+import { moderator, verified } from '../fixtures/identity';
+import { insertHsrAccount, setActive } from '../fixtures/roster';
 import {
     H,
     arrange,
@@ -39,19 +42,9 @@ import {
     recordScores,
     selectAccount,
     side,
-} from '../fixtures/draft-and-scoring-builders';
-import {
-    byKey,
-    draftGame,
-    duel,
-    openMatchLobby,
-    recordsOfLobby,
-    sidesOf,
-} from '../fixtures/tournament-match-builders';
-import { rejection } from '../fixtures/calendar-roster-rating-builders';
-import { insertHsrAccount, moderator, verified } from '../fixtures/tournament-builders';
-import { setActive } from '../fixtures/preset-and-account-builders';
-import { leave, lmaRows, members, moveSlot, selfSlot } from '../fixtures/lobby-member-helpers';
+} from '../fixtures/draft-and-scoring';
+import { leave, lmaRows, members, moveSlot, selfSlot } from '../fixtures/lobby';
+import { byKey, draftGame, duel, openMatchLobby, recordsOfLobby, sidesOf } from '../fixtures/tournament-matches';
 
 // ─── A45(3): shuffle_teams, unban_member, delete_my_account ──────────────────────────────────────────────
 

@@ -20,43 +20,40 @@ import {
     tx,
     type Actor,
     type Lobby,
+    rejection,
+    type Team,
+    AUCTION,
+    ONE_V_ONE,
+    TURN_MS,
+    other,
+    type Side,
 } from '../fixtures/harness';
-import { captain, completeDraft, engineerFullDraft } from '../fixtures/draft-and-scoring-builders';
-import { rejection } from '../fixtures/calendar-roster-rating-builders';
 import {
+    captain,
+    completeDraft,
+    engineerFullDraft,
     lobbyState,
     nominateBody,
     passBody,
     pickBody,
-    type Team,
-} from '../fixtures/cost-set-pricing-builders';
-import { byKey, createTournamentLobby, duel, seedElo } from '../fixtures/tournament-match-builders';
-import { rankedHook } from '../fixtures/ranked-game-builders';
+    advanceBody,
+} from '../fixtures/draft-and-scoring';
+import { budgets, stepsOf } from '../fixtures/auction';
 import {
-    presetArgs,
-    presetNamed,
-    settingsArgs,
-    updatePresetArgs,
-} from '../fixtures/preset-and-account-builders';
-import {
-    AUCTION,
     FINISHED,
-    ONE_V_ONE,
-    TURN_MS,
-    budgets,
     classicTurn,
     lobby,
     nominate,
-    other,
     pass,
     playClassic,
     stage,
-    stepsOf,
     undo,
     undoBody,
     world,
-    type Side,
-} from '../fixtures/undo-and-window-builders';
+} from '../fixtures/undo';
+import { presetArgs, presetNamed, settingsArgs, updatePresetArgs } from '../fixtures/lobby';
+import { byKey, createTournamentLobby, duel, seedElo } from '../fixtures/tournament-matches';
+import { rankedHook } from '../fixtures/ranked';
 
 const held = (s: Lobby, team: Team) => tx(s.test, 'internal', (ctx) => teamDraft(ctx, s.lobbyId, team).characters.length);
 
@@ -144,7 +141,6 @@ const CHAT_LINE = 'Draft complete. Stage: Equipping';
 const chatLines = (s: Lobby) => [...s.test.db.ChatMessage.lobby_id.filter(s.lobbyId)].filter((m) => m.content === CHAT_LINE).length;
 const expireClassic = (s: Lobby, who: Actor) => tx(s.test, who, (ctx) => M.timer_expiry_classic(ctx, { lobbyId: s.lobbyId }));
 const expireAuctionBy = (s: Lobby, who: Actor) => tx(s.test, who, (ctx) => M.timer_expiry_auction(ctx, { lobbyId: s.lobbyId }));
-const advanceBody = (s: Lobby) => (ctx: any) => M.advance_stage(ctx, { lobbyId: s.lobbyId });
 /**
  * Plays the Auction until `sales` sales are made: Blue's nominations cost 5 and Red passes, Red's cost 0 and Blue
  * passes, so the sales alternate (Blue's 8th is sale 15). The 16th sale is always an A81(2) immediate sale: before it

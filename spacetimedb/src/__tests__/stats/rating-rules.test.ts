@@ -10,64 +10,12 @@ import {
     computeMergedAccountRating,
 } from '@module/helpers/stats/accountRating';
 import { rebuildLeaderboard } from '@module/helpers/stats/leaderboardRebuild';
-import {
-    M,
-    expectReject,
-    guest,
-    linkDiscord,
-    lobbyRow,
-    newHarness,
-    setupLobby,
-    tx,
-    type Actor,
-    type Harness,
-} from '../fixtures/harness';
-import { AUDIT, moderator, setUserRole, verified } from '../fixtures/tournament-builders';
-import { seedUserRow } from '../fixtures/user-rows';
-import { seedElo } from '../fixtures/tournament-match-builders';
-import { playRanked, validateAndFinalize } from '../fixtures/ranked-game-builders';
-import { snap } from '../fixtures/cost-set-pricing-builders';
+import { M, expectReject, lobbyRow, newHarness, setupLobby, tx, type Harness, AUDIT, snap } from '../fixtures/harness';
+import { moderator, setUserRole, verified, seedUserRow } from '../fixtures/identity';
+import { seedElo } from '../fixtures/tournament-matches';
+import { playRanked, validateAndFinalize, seedRatingData, twoAccountPlayer } from '../fixtures/ranked';
 
 // ─── Backlog #10: merged account rating ───────────────────────────────────────────────────────────────────
-
-const CHARS = ['c1', 'c2', 'c5', 'c6', 'c9'];
-
-/** Characters (same version, same role: symmetric age weights), one archetype {c1, c5, c9}, then the config. */
-function seedRatingData(test: Harness) {
-    tx(test, 'internal', (ctx) => {
-        for (const name of CHARS) {
-            ctx.db.HsrCharacter.insert({
-                name, displayName: name, aliases: [], rarity: 5, path: { tag: 'Harmony' }, element: { tag: 'Fire' },
-                role: { tag: 'Support' }, imageUrl: '', versionReleased: 2.0, treatAsVersion: 0, posX: 0, posY: 0, width: 0,
-                createdById: 0, createdDate: ctx.timestamp, lastModifiedById: 0, lastModifiedDate: ctx.timestamp,
-            } as any);
-        }
-        const arch = ctx.db.Archetype.insert({
-            id: 0, name: 'hypercarry', description: '',
-            createdById: 0, createdDate: ctx.timestamp, lastModifiedById: 0, lastModifiedDate: ctx.timestamp,
-        });
-        for (const name of ['c1', 'c5', 'c9']) {
-            ctx.db.HsrCharacterArchetype.insert({
-                characterName: name, archetypeId: arch.id,
-                createdById: 0, createdDate: ctx.timestamp, lastModifiedById: 0, lastModifiedDate: ctx.timestamp,
-            });
-        }
-    });
-    tx(test, 'internal', (ctx) => M.admin_seed_rating_config(ctx, {}));
-}
-
-/** A verified player with two accounts holding disjoint rosters of the same shape ({c1, c2} and {c5, c6}). */
-function twoAccountPlayer(test: Harness): { who: Actor; acct1: number; acct2: number } {
-    const who = guest(test, 'multi');
-    linkDiscord(test, who, 'discord-multi', 'Multi');
-    tx(test, who, (ctx) => M.create_hsr_account(ctx, { uid: '600000001', displayLabel: 'main' }));
-    tx(test, who, (ctx) => M.create_hsr_account(ctx, { uid: '600000002', displayLabel: 'alt' }));
-    const [acct1, acct2] = [...test.db.HsrAccount.user_id.filter(who.userId)].map((a) => a.id).sort((a, b) => a - b);
-    const roster = (names: string[]) => JSON.stringify(names.map((characterName) => ({ characterName, eidolonLevel: 0 })));
-    tx(test, who, (ctx) => M.batch_upsert_characters(ctx, { hsrAccountId: acct1, charactersJson: roster(['c1', 'c2']) }));
-    tx(test, who, (ctx) => M.batch_upsert_characters(ctx, { hsrAccountId: acct2, charactersJson: roster(['c5', 'c6']) }));
-    return { who, acct1, acct2 };
-}
 
 const snapshotOf = (test: Harness, lobbyId: number, userId: number) => {
     const record = [...test.db.MatchResultRecord.lobby_id.filter(lobbyId)][0];
@@ -78,7 +26,7 @@ describe('Backlog #10: merged account rating', () => {
     it('two equally rated accounts with disjoint rosters merge to a different (higher) rating; one account is unchanged', () => {
         const test = newHarness();
         seedRatingData(test);
-        const { acct1, acct2 } = twoAccountPlayer(test);
+        const { acct1, acct2 } = twoAccountPlayer(test, 'multi', 'Multi');
         const r1 = test.db.HsrAccount.id.find(acct1)!.accountRating;
         const r2 = test.db.HsrAccount.id.find(acct2)!.accountRating;
         expect(r1).toBeGreaterThan(0);
@@ -96,7 +44,7 @@ describe('Backlog #10: merged account rating', () => {
     it('start_draft snapshots the merged rating; selection is Waiting-only after A67, so the snapshot holds; a single-account snapshot is the stored rating', () => {
         const test = newHarness();
         seedRatingData(test);
-        const { who, acct1, acct2 } = twoAccountPlayer(test);
+        const { who, acct1, acct2 } = twoAccountPlayer(test, 'multi', 'Multi');
         const r1 = test.db.HsrAccount.id.find(acct1)!.accountRating;
         const merged = tx(test, 'internal', (ctx) => computeMergedAccountRating(ctx, [acct1, acct2]));
 
@@ -123,7 +71,7 @@ describe('Backlog #10: merged account rating', () => {
         // A single selected account snapshots exactly its stored rating.
         const t2 = newHarness();
         seedRatingData(t2);
-        const p2 = twoAccountPlayer(t2);
+        const p2 = twoAccountPlayer(t2, 'multi', 'Multi');
         const s2 = setupLobby(t2, {
             actors: { b1: p2.who },
             beforeStart: (l) => tx(t2, p2.who, (ctx) => M.select_match_account(ctx, { lobbyId: l.lobbyId, hsrAccountId: p2.acct1 })),

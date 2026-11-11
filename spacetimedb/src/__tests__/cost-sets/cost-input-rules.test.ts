@@ -2,8 +2,9 @@
 // Contracts: docs/cost-sets/contract.md
 // From S10f, S10c (s10f-draft-results.test.ts, s10c-high-fixes.test.ts).
 import { describe, expect, it } from 'vitest';
-import { M, newBareHarness, newHarness, tx } from '../fixtures/harness';
-import { host as tournamentHost } from '../fixtures/tournament-builders';
+import { M, newBareHarness, newHarness, tx, rejection } from '../fixtures/harness';
+import { host as tournamentHost } from '../fixtures/identity';
+import { seedCharacters, seedReferenceNames } from '../fixtures/roster';
 import {
     E,
     S,
@@ -16,17 +17,12 @@ import {
     liveSyn,
     sCost,
     synergyRow,
-} from '../fixtures/achievement-auth-cost-builders';
-import {
-    rejection,
-    seedCharacters,
-    seedReferenceNames,
-} from '../fixtures/calendar-roster-rating-builders';
+    MOC,
+} from '../fixtures/cost-sets';
 import characterSeed from '../../../../data/seed/characters.json';
 import synergySeed from '../../../../data/seed/synergies.json';
 
 describe('Roster #9: edit_draft_*_cost input rules (cost-sets architecture S10f)', () => {
-    const MOC = 'MemoryOfChaos';
     function draftSet() {
         const test = newBareHarness(); // T-S10i fix pass (review F2): set 0 holds no rows, nothing is cloned
         seedReferenceNames(test, ['kafka', 'pela'], ['patience']);

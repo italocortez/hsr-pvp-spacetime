@@ -16,25 +16,21 @@ import {
     tx,
     type Actor,
     type Harness,
-} from '../fixtures/harness';
-import {
     AUDIT,
-    host as tournamentHost,
-    moderator,
-    openTournament,
-    verified,
-} from '../fixtures/tournament-builders';
-import { setRole } from '../fixtures/draft-and-scoring-builders';
-import { freshAuth, identitiesOf } from '../fixtures/achievement-auth-cost-builders';
-import { rejection } from '../fixtures/calendar-roster-rating-builders';
-import { join, lobbyOfHost, snap, type Ctx } from '../fixtures/lobby-action-helpers';
+    rejection,
+    snap,
+    type Ctx,
+} from '../fixtures/harness';
+import { host as tournamentHost, moderator, verified, freshAuth, identitiesOf, ADMIN_ONLY } from '../fixtures/identity';
+import { DAY_MS } from '../fixtures/calendar';
+import { setRole } from '../fixtures/draft-and-scoring';
+import { join, lobbyOfHost } from '../fixtures/lobby';
+import { openTournament } from '../fixtures/tournaments';
 
 const GUEST_CREATION_OFF = 'New guest accounts are temporarily disabled. Please try again later.'; // A95(2)
-const ADMIN_ONLY = 'Forbidden: Requires Admin privileges.';
 
 // ─── Shared helpers ──────────────────────────────────────────────────────────
 
-const DAY_MS = 86_400_000;
 const MINUTE_MS = 60_000;
 
 /** A caller that is only a client identity (no UserIdentity mapping yet). */
@@ -198,8 +194,9 @@ describe('A95(1): the identity clean-up deletes an idle guest with no match hist
 // 2. A95(2): the guest creation breaker
 // ════════════════════════════════════════════════════════════════════════════
 
+const config = (test: Harness) => test.db.AbuseConfig.id.find(1)!;
+
 describe('A95(2): guest creation counter, threshold, switch and admin alert', () => {
-    const config = (test: Harness) => test.db.AbuseConfig.id.find(1)!;
     const counter = (test: Harness) => test.db.AbuseCounter.key.find('guest_create');
     const alerts = (test: Harness) => [...test.db.AdminAlert.iter()].filter((a) => a.kind === 'guest_create_burst');
     const userCount = (test: Harness) => [...test.db.User.iter()].length;
@@ -301,7 +298,6 @@ describe('A95(2): guest creation counter, threshold, switch and admin alert', ()
 // The server reducers run as 'internal' (the Owner server identity), as the other server_* tests do.
 
 describe('A109: default threshold 300; server_set_guest_creation and server_set_guest_lobby_creation', () => {
-    const config = (test: Harness) => test.db.AbuseConfig.id.find(1)!;
     const counter = (test: Harness, key: string) => test.db.AbuseCounter.key.find(key);
     const NOT_SERVER = 'Forbidden: caller is not a registered server identity.';
     const GUEST_LOBBY_OFF = 'Guest lobby creation is temporarily disabled';

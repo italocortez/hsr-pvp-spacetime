@@ -26,26 +26,15 @@ import {
     type Harness,
     type Lobby,
 } from '../fixtures/harness';
-import {
-    H,
-    captain,
-    closeGame,
-    confirmGame,
-    finishGame,
-    recordScores,
-    side,
-} from '../fixtures/draft-and-scoring-builders';
-import { moderator, openTournament, register, verified } from '../fixtures/tournament-builders';
-import { duel, openMatchLobby, seedElo } from '../fixtures/tournament-match-builders';
-import { seatLabel } from '../fixtures/seat-labels';
+import { moderator, verified, displayName } from '../fixtures/identity';
+import { H, captain, closeGame, confirmGame, finishGame, recordScores, side } from '../fixtures/draft-and-scoring';
+import { seatLabel, leave, chat } from '../fixtures/lobby';
 import {
     ANON,
     COLS,
     USER_ID_KEY,
-    displayName,
     ghost,
     keysOf,
-    leave,
     lobbyOf,
     makeRanked,
     onlyMatchOf,
@@ -55,12 +44,12 @@ import {
     shared,
     view,
     type Reader,
-} from '../fixtures/lobby-view-builders';
+} from '../fixtures/views';
+import { openTournament, register } from '../fixtures/tournaments';
+import { duel, openMatchLobby, seedElo } from '../fixtures/tournament-matches';
 
 /** The audit columns that carry a user id (A37); a shared row may still carry a plain creation date (the browser's createdDate). */
 const AUDIT_ID_KEYS = ['createdById', 'lastModifiedById'];
-const chat = (test: Harness, who: Actor, lobbyId: number, content: string) =>
-    tx(test, who, (ctx) => M.send_chat_message(ctx, { lobbyId, content, metadata: '' }));
 
 // ════════════════════════════════════════════════════════════════════════════
 // Outsider isolation (A37; §A.4 P1): every per-sender view returns [] for an outsider, an unmapped identity and a

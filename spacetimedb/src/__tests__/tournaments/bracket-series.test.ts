@@ -11,9 +11,21 @@
 // (A60(7)), the stage lists of concede / claim_forfeit / defer and the lobby GC (A67(1)). Builders in s4 / s7 / s8 /
 // s8d fixtures. Nothing reaches maincloud.
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { M, advance, disconnect, expectReject, guest, lobbyRow, newHarness, setupLobby, tx, type Harness, type Lobby } from '../fixtures/harness';
-import { finishGame, setRole } from '../fixtures/draft-and-scoring-builders';
-import { advanceStage, bracketRows, liveField, matchRow, resolveMatch, tRow } from '../fixtures/tournament-builders';
+import {
+    M,
+    advance,
+    disconnect,
+    expectReject,
+    guest,
+    lobbyRow,
+    newHarness,
+    setupLobby,
+    tx,
+    type Harness,
+    type Lobby,
+} from '../fixtures/harness';
+import { finishGame, setRole } from '../fixtures/draft-and-scoring';
+import { advanceStage, bracketRows, liveField, matchRow, resolveMatch, tRow } from '../fixtures/tournaments';
 import {
     byKey,
     draftGame,
@@ -32,11 +44,11 @@ import {
     tick,
     validate,
     type Field,
-} from '../fixtures/tournament-match-builders';
+} from '../fixtures/tournament-matches';
+import { parkedLobby } from '../fixtures/ranked';
 import { matchGames } from '@module/helpers/tournament/bracketResults';
 import { tournamentRecordsInBracketOrder } from '@module/helpers/tournament/tournamentResults';
 import { ensureEditableRecord, ensureOpenGame } from '@module/helpers/results/scoringHelpers';
-import { parkedLobby } from '../fixtures/ranked-game-builders';
 
 const BO3 = { defaultBestOf: 3, grandFinalBestOf: 3 };
 const IN_PLAY = 'A lobby for this bracket match is still in play.';

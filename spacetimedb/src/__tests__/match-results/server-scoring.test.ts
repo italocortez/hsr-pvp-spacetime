@@ -24,7 +24,7 @@ import {
     setRole,
     side,
     type ScoringLobbyOpts,
-} from '../fixtures/draft-and-scoring-builders';
+} from '../fixtures/draft-and-scoring';
 
 const TIE_REJECT = /tied after every tie-break: staff closes the game with winnerOverride/;
 

@@ -2,9 +2,9 @@
 // Contracts: docs/roster/contract.md
 // From S10f (s10f-draft-results.test.ts).
 import { describe, expect, it } from 'vitest';
-import { M, newHarness, tx } from '../fixtures/harness';
-import { verified } from '../fixtures/tournament-builders';
-import { account, createAccount, rejection } from '../fixtures/calendar-roster-rating-builders';
+import { M, newHarness, tx, rejection } from '../fixtures/harness';
+import { verified } from '../fixtures/identity';
+import { account, createAccount } from '../fixtures/roster';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Roster #5, #6, #9, #10

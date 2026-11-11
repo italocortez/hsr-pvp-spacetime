@@ -16,46 +16,13 @@
 // game (no MmrHistory). Views are called as `(M as any).view_x(test.viewContext(auth), args)` (s9a method). Nothing
 // reaches maincloud.
 import { describe, expect, it } from 'vitest';
-import { ConnectionId } from 'spacetimedb';
-import { M, TestAuth, guest, lobbyRow, newHarness, tx, type Actor, type Harness, type Lobby, type SlotTag } from '../fixtures/harness';
-import { blueNames, finishGame, playToScoring, redNames, type ScoringLobbyOpts } from '../fixtures/draft-and-scoring-builders';
-import { seedElo } from '../fixtures/tournament-match-builders';
+import { M, guest, lobbyRow, newHarness, tx, type Actor, type Harness } from '../fixtures/harness';
+import { finishGame } from '../fixtures/draft-and-scoring';
+import { makeGhost, makeRanked, view, ANY, scoringOf } from '../fixtures/views';
+import { seedElo } from '../fixtures/tournament-matches';
 
-type Reader = Actor | TestAuth;
-const authOf = (r: Reader): TestAuth => ('auth' in r ? r.auth : r);
-const view = <T = any>(test: Harness, name: string, who: Reader, args: Record<string, unknown>): T[] =>
-    (M as any)[name](test.viewContext(authOf(who)), args) as T[];
-
-let ghostSeq = 9_000n;
 /** An identity that never logged in (no UserIdentity mapping). */
-const ghost = () => TestAuth.fromJwtPayload(JSON.stringify({ iss: 'test', sub: `s10-ghost-${ghostSeq}` }), new ConnectionId(ghostSeq++));
-
-const seatsOf = (p: string): Array<[string, SlotTag]> =>
-    [[`${p}b1`, 'BluePlayer'], [`${p}b2`, 'BluePlayer'], [`${p}r1`, 'RedPlayer'], [`${p}r2`, 'RedPlayer']];
-
-/** playToScoring with prefixed actors and character names (HsrCharacter names are unique per harness). */
-function scoringOf(test: Harness, p: string, opts: ScoringLobbyOpts = {}): Lobby {
-    return playToScoring(test, {
-        seats: seatsOf(p),
-        actors: { host: guest(test, `${p}host`) },
-        blue: blueNames().map((n) => `${p}${n}`),
-        red: redNames().map((n) => `${p}${n}`),
-        ...opts,
-    });
-}
-
-/** beforeStart hook: the lobby becomes Ranked (direct row edit, as s7b / s9a / s9b) and every player gets an HSR account. */
-const makeRanked = (test: Harness) => (l: Lobby) => {
-    test.db.Lobby.id.update({ ...lobbyRow(test, l.lobbyId), matchType: { tag: 'Ranked' } as any });
-    let accountId = 700 + l.lobbyId * 10;
-    for (const m of test.db.LobbyMember.lobby_id.filter(l.lobbyId)) {
-        if (m.lobbySlot.tag === 'BluePlayer' || m.lobbySlot.tag === 'RedPlayer') {
-            test.db.LobbyMemberAccount.insert({ lobbyId: l.lobbyId, userId: m.userId, hsrAccountId: accountId++ });
-        }
-    }
-};
-
-const ANY = { gameMode: '', draftMode: '', matchType: '' };
+const ghost = makeGhost('s10-ghost-', 9_000n);
 
 /** Each probe: the view and its arguments; the per-match views get the id of the match the probe is about. */
 const HISTORY_VIEWS = [
@@ -83,7 +50,7 @@ function expectOwnRows(test: Harness, name: HistoryView, who: Actor, rows: any[]
 function world() {
     const test = newHarness();
     seedElo(test);
-    const ranked = scoringOf(test, 'A', { beforeStart: makeRanked(test) });
+    const ranked = scoringOf(test, 'A', { beforeStart: makeRanked(test, 700) });
     finishGame(ranked, 'Blue');
     expect(lobbyRow(test, ranked.lobbyId).stage.tag).toBe('AwaitingResult');
     tx(test, 'internal', (ctx) => M.admin_force_finalize(ctx, { lobbyId: ranked.lobbyId, winnerTeamId: 1 }));

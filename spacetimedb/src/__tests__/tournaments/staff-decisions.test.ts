@@ -3,13 +3,13 @@
 // Contracts: docs/tournament/contract.md, docs/brackets/contract.md
 // From S10g, S10c (s10g-tournament.test.ts, s10c-high-fixes.test.ts).
 import { describe, expect, it } from 'vitest';
-import { M, lobbyRow, newHarness, tx } from '../fixtures/harness';
+import { M, lobbyRow, newHarness, tx, rejection, snap } from '../fixtures/harness';
+import { host, verified } from '../fixtures/identity';
 import {
     advanceStage,
     bracketRows,
     createTournament,
     enrolled,
-    host,
     liveField,
     matchRow,
     membersOf,
@@ -18,8 +18,9 @@ import {
     resolveMatch,
     stageOf,
     teamRow,
-    verified,
-} from '../fixtures/tournament-builders';
+    dq,
+    BO1,
+} from '../fixtures/tournaments';
 import {
     byKey,
     duel,
@@ -30,10 +31,7 @@ import {
     recordsOfLobby,
     recordsOfMatch,
     validate,
-} from '../fixtures/tournament-match-builders';
-import { rejection } from '../fixtures/calendar-roster-rating-builders';
-import { dq } from '../fixtures/tournament-staff-helpers';
-import { snap } from '../fixtures/draft-snapshot-helpers';
+} from '../fixtures/tournament-matches';
 
 const DECIDED_BY_STAFF = 'This match was decided by staff or a disqualification; roll the match back first (rollback_bracket_match).';
 const GROUP_LOCKED = 'Group results are locked: the elimination bracket already exists.';
@@ -234,7 +232,6 @@ describe('tournament audit #5: group matches lock once the elimination bracket e
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('A84: resolve / rollback / override that would un-place a team from a live downstream match are refused', () => {
-    const BO1 = { defaultBestOf: 1, grandFinalBestOf: 1 };
     type Field = ReturnType<typeof liveField>;
 
     /** 4 teams: semi m1 played (Blue wins, Validated record), semi m2 resolved by staff; the final has both teams. */

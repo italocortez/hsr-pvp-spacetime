@@ -8,13 +8,8 @@
 import { describe, expect, it } from 'vitest';
 import { Timestamp } from 'spacetimedb';
 import { M, expectReject, newHarness, tx, type Actor, type Harness } from '../fixtures/harness';
-import { setUserRole, verified } from '../fixtures/tournament-builders';
+import { setUserRole, verified, admin } from '../fixtures/identity';
 
-function admin(test: Harness): Actor {
-    const a = verified(test, 'admin');
-    setUserRole(test, a.userId, 'Admin');
-    return a;
-}
 const createSeason = (test: Harness, who: Actor, name: string) =>
     tx(test, who, (ctx) => M.create_season(ctx, { name, startDate: Timestamp.fromDate(new Date('2026-02-01T00:00:00Z')), endDate: undefined }));
 const seasons = (test: Harness) => [...test.db.Season.iter()];
@@ -24,7 +19,7 @@ const activeIds = (test: Harness) => seasons(test).filter((s) => s.isActive).map
 describe('Season admin (docs/mmr/contract.md)', () => {
     it('create_season ("Defaults to isActive=false"): an Admin creates an inactive season stamped with their id', () => {
         const test = newHarness();
-        const a = admin(test);
+        const a = admin(test, 'admin');
         const before = seasons(test).length;
         createSeason(test, a, 'Season A');
         expect(seasons(test)).toHaveLength(before + 1);
@@ -46,7 +41,7 @@ describe('Season admin (docs/mmr/contract.md)', () => {
 
     it('"Season Single-Active Guarantee": set_active_season activates the target and deactivates every other season', () => {
         const test = newHarness();
-        const a = admin(test);
+        const a = admin(test, 'admin');
         createSeason(test, a, 'Season A');
         createSeason(test, a, 'Season B');
         const s1 = seasonNamed(test, 'Season A').id;
@@ -66,7 +61,7 @@ describe('Season admin (docs/mmr/contract.md)', () => {
 
     it('set_active_season error "Season not found": "Season #{seasonId} not found."; the active season is unchanged', () => {
         const test = newHarness();
-        const a = admin(test);
+        const a = admin(test, 'admin');
         createSeason(test, a, 'Season A');
         const s1 = seasonNamed(test, 'Season A').id;
         tx(test, a, (ctx) => M.set_active_season(ctx, { seasonId: s1 }));

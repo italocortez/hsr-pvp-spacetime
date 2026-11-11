@@ -165,4 +165,4 @@ describe('transferTournamentCaptain', () => {
 
 // T-S8b: the validateRegistrationToSeeding and removeUncheckedInParticipants blocks were deleted with the helpers
 // (S8b: closeRegistration + canCloseRegistration replace them, team-level check-in replaces the per-member prune).
-// The behaviour is covered in-memory by spacetimedb/src/__tests__/s8b-tournament-lifecycle.test.ts.
+// The behaviour is covered in-memory by spacetimedb/src/__tests__/tournaments/lifecycle.test.ts.

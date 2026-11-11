@@ -1,17 +1,15 @@
-// Fixtures: rating data and Ranked games played to the end.
-// From S10 (s10-a2-fixtures.ts).
+// Fixtures: rating data (characters, archetype, config), a two-account player, and Ranked games played to the end.
+// From S10 (s10-a2-fixtures.ts, s10-c2-fixtures.ts); rating data first copied from s6-rules.test.ts.
 //
-// T-S10 batch A2: builders shared by s10-draft / s10-results / s10-stats (the in-memory port of the live draft,
-// result-lifecycle and MMR / stats suites). Not a test file. Reuses the S4 / S7 / S8 / S8d builders; HSR accounts,
-// account characters, tournament account locks and the ranked flag are written straight into the in-memory datastore
-// (outside any reducer), like the earlier suites. `test.db` is read only outside `tx` bodies. Nothing reaches maincloud.
-// seedRatingData is copied from s6-rules.test.ts (a local helper there, not exported).
+// T-S10 batch A2: builders shared by the draft, results and MMR / stats tests. Not a test file. Reuses the harness and
+// the draft builders; HSR accounts and the ranked flag are written straight into the in-memory datastore (outside any
+// reducer). `test.db` is read only outside `tx` bodies. Nothing reaches maincloud.
 import { expect } from 'vitest';
-import { M, advanceToEquipping, draftDone, lobbyRow, priceBanNames, priceCharacters, session, setupLobby, tx, type Actor, type Harness, type Lobby, type SetupOpts } from './harness';
-import { H, arrange, blueNames, captain, closeGame, halves, redNames, side } from './draft-and-scoring-builders';
-import { AUDIT, insertHsrAccount } from './tournament-builders';
+import { M, linkDiscord, guest, lobbyRow, setupLobby, tx, type Actor, type Harness, type Lobby, type SetupOpts } from './harness';
+import { H, arrange, blueNames, captain, closeGame, draftWithBans, halves, redNames, side } from './draft-and-scoring';
+import { accountsOf, insertHsrAccount, roster } from './roster';
 
-// ─── Rating data (copied from s6-rules.test.ts) ───────────────────────────────
+// ─── Rating data ─────────────────────────────────────────────────────────────
 
 export const RATING_CHARS = ['c1', 'c2', 'c5', 'c6', 'c9'];
 
@@ -44,79 +42,19 @@ export function seedRatingData(test: Harness) {
     tx(test, 'internal', (ctx) => M.admin_seed_rating_config(ctx, {}));
 }
 
-// ─── HSR accounts, ownership, tournament locks ────────────────────────────────
-
 /**
- * An HSR account of `userId` owning `chars` (names at E0, or name → eidolon), inserted directly. `active: false`
- * marks it inactive (join_lobby auto-selects the user's active account, D-04). Returns its id.
+ * A verified player with two accounts holding disjoint rosters of the same shape ({c1, c2} and {c5, c6}). The provider
+ * id is `discord-<name>`; the provider name is `providerName` (default `name`).
  */
-export function ownedAccount(test: Harness, userId: number, uid: string, chars: string[] | Record<string, number>, active = true): number {
-    const id = insertHsrAccount(test, userId, uid);
-    if (!active) test.db.HsrAccount.id.update({ ...test.db.HsrAccount.id.find(id)!, isActive: false });
-    const owned = Array.isArray(chars) ? Object.fromEntries(chars.map((c) => [c, 0])) : chars;
-    for (const [characterName, eidolonLevel] of Object.entries(owned)) {
-        test.db.HsrAccountCharacter.insert({ hsrAccountId: id, characterName, eidolonLevel, ...AUDIT(test) });
-    }
-    return id;
-}
-
-/** A TournamentPlayerAccount lock (what registration writes), inserted directly. */
-export function lockAccount(test: Harness, tournamentId: number, userId: number, hsrAccountId: number) {
-    test.db.TournamentPlayerAccount.insert({ tournamentId, userId, hsrAccountId, ...AUDIT(test) });
-}
-
-export const lmaOf = (test: Harness, lobbyId: number, userId: number) =>
-    [...test.db.LobbyMemberAccount.by_lobby_and_user.filter([lobbyId, userId])].map((r) => r.hsrAccountId).sort((a, b) => a - b);
-
-/** update_lobby_settings arguments built from the lobby row itself (so only the overridden keys change). */
-export function settingsFrom(test: Harness, lobbyId: number, over: Record<string, unknown> = {}) {
-    const l = lobbyRow(test, lobbyId);
-    return {
-        lobbyId,
-        teamSize: l.teamSize, draftMode: l.draftMode, banMode: l.banMode, gameMode: l.gameMode, matchType: l.matchType,
-        standardTurnSeconds: l.standardTurnSeconds, reserveBankSeconds: l.reserveBankSeconds,
-        characterBudget: l.characterBudget, lightconeBudget: l.lightconeBudget, minimumBidRaise: l.minimumBidRaise,
-        rosterDiffAdvantage: l.rosterDiffAdvantage, rosterThreshold: l.rosterThreshold,
-        underThresholdAdvantage: l.underThresholdAdvantage, aboveThresholdPenalty: l.aboveThresholdPenalty,
-        deathPenalty: l.deathPenalty, isAnonymousPlayers: l.isAnonymousPlayers, isAnonymousSpectators: l.isAnonymousSpectators,
-        rosterVisibility: l.rosterVisibility, requireOwnership: l.requireOwnership, costSetId: l.costSetId,
-        disconnectPolicy: l.disconnectPolicy, disconnectForfeitSeconds: l.disconnectForfeitSeconds ?? 0,
-        allowMirrorPicks: l.allowMirrorPicks, autoRandomPick: l.autoRandomPick, refereeCanUndo: l.refereeCanUndo,
-        refereeCanPause: l.refereeCanPause, refereeCanSetCaptain: l.refereeCanSetCaptain, refereeCanKick: l.refereeCanKick,
-        allowPlayerPause: l.allowPlayerPause, refereeExclusiveConcede: l.refereeExclusiveConcede,
-        teamBlueAlias: l.teamBlueAlias, teamRedAlias: l.teamRedAlias, isPublic: l.isPublic, password: '',
-        ...over,
-    } as any;
-}
-
-// ─── Draft drivers ─────────────────────────────────────────────────────────────
-
-/**
- * Plays a Classic draft (any ban mode) to Equipping: each Pick turn's captain picks the next name of its team's list,
- * each Ban turn's captain bans the next name of `bans`.
- */
-export function draftWithBans(s: Lobby, blue: string[], red: string[], bans: string[] = []) {
-    priceCharacters(s.test, s.lobbyId, [...blue, ...red]); // T-S10i (A107(5)): every drafted name has a cost row
-    // T-S10r (A122(7), L32): a ban names a character of the lobby's pool (a cost row), so the ban names are priced too.
-    priceBanNames(s.test, s.lobbyId, bans);
-    const queue = { Blue: [...blue], Red: [...red] };
-    const banQueue = [...bans];
-    let guard = 0;
-    while (lobbyRow(s.test, s.lobbyId).stage.tag === 'Drafting' && !draftDone(s.test, s.lobbyId) && guard++ < 64) {
-        const sess = session(s.test, s.lobbyId);
-        const step = sess.draftSequence[sess.turnIndex];
-        const team = step.teamTurn.tag as 'Blue' | 'Red';
-        const who = captain(s, team);
-        if (step.actionRequired.tag === 'Pick') {
-            const characterName = queue[team].shift()!;
-            tx(s.test, who, (ctx) => M.pick_character(ctx, { lobbyId: s.lobbyId, characterName, eidolon: 0 }));
-        } else {
-            const characterName = banQueue.shift()!;
-            tx(s.test, who, (ctx) => M.ban_character(ctx, { lobbyId: s.lobbyId, characterName }));
-        }
-    }
-    advanceToEquipping(s); // T-S10t (A129): the last step leaves the lobby in Drafting; the referee advances it to Equipping.
-    expect(lobbyRow(s.test, s.lobbyId).stage.tag).toBe('Equipping');
+export function twoAccountPlayer(test: Harness, name = 'multi', providerName = name): { who: Actor; acct1: number; acct2: number } {
+    const who = guest(test, name);
+    linkDiscord(test, who, `discord-${name}`, providerName);
+    tx(test, who, (ctx) => M.create_hsr_account(ctx, { uid: '600000001', displayLabel: 'main' }));
+    tx(test, who, (ctx) => M.create_hsr_account(ctx, { uid: '600000002', displayLabel: 'alt' }));
+    const [acct1, acct2] = accountsOf(test, who.userId).map((a) => a.id).sort((a, b) => a - b);
+    tx(test, who, (ctx) => M.batch_upsert_characters(ctx, { hsrAccountId: acct1, charactersJson: roster(['c1', 'c2']) }));
+    tx(test, who, (ctx) => M.batch_upsert_characters(ctx, { hsrAccountId: acct2, charactersJson: roster(['c5', 'c6']) }));
+    return { who, acct1, acct2 };
 }
 
 // ─── Ranked standalone matches ────────────────────────────────────────────────

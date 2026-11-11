@@ -21,6 +21,7 @@ import {
     type Actor,
     type Harness,
 } from '../fixtures/harness';
+import { PRESET_ARGS, chat, createLobby } from '../fixtures/lobby';
 
 // LobbyCursorEvent is an event table: its rows exist only inside the writing transaction, so each call counts the
 // rows it inserted there and the running total stands for the events delivered to subscribers.
@@ -33,10 +34,6 @@ function cursor(test: Harness, who: Actor, lobbyId: number, x = 0.5, y = 0.5) {
     });
     emitted.set(test, cursorRows(test) + n);
 }
-const chat = (test: Harness, who: Actor, lobbyId: number, content = 'hi') =>
-    tx(test, who, (ctx) => M.send_chat_message(ctx, { lobbyId, content, metadata: '' }));
-const createLobby = (test: Harness, who: Actor) =>
-    tx(test, who, (ctx) => M.create_lobby(ctx, { ...DEFAULT_LOBBY_ARGS } as any));
 const hostedLobbyId = (test: Harness, who: Actor) => [...test.db.Lobby.host_user_id.filter(who.userId)][0]?.id;
 const config = (test: Harness) => test.db.AbuseConfig.id.find(1)!;
 const alerts = (test: Harness) => [...test.db.AdminAlert.iter()];
@@ -46,40 +43,6 @@ const counter = (test: Harness) => test.db.AbuseCounter.key.find('guest_lobby_cr
 function guestLobbies(test: Harness, n: number, prefix = 'burst') {
     for (let i = 0; i < n; i++) createLobby(test, guest(test, `${prefix}${i}`));
 }
-
-const PRESET_ARGS = {
-    teamSize: 2,
-    draftMode: { tag: 'Classic' },
-    banMode: { tag: 'None' },
-    gameMode: { tag: 'MemoryOfChaos' },
-    matchType: { tag: 'Casual' },
-    standardTurnSeconds: 30,
-    reserveBankSeconds: 60,
-    characterBudget: 100,
-    lightconeBudget: 50,
-    minimumBidRaise: 1,
-    rosterDiffAdvantage: 0,
-    rosterThreshold: 0,
-    underThresholdAdvantage: 0,
-    aboveThresholdPenalty: 0,
-    deathPenalty: 0,
-    isPublic: true,
-    isAnonymousPlayers: false,
-    isAnonymousSpectators: false,
-    rosterVisibility: { tag: 'OpenRoster' },
-    requireOwnership: false,
-    costSetId: 0,
-    disconnectPolicy: { tag: 'Standard' },
-    disconnectForfeitSeconds: 60,
-    allowMirrorPicks: false,
-    autoRandomPick: false,
-    refereeCanUndo: true,
-    refereeCanPause: true,
-    refereeCanSetCaptain: true,
-    refereeCanKick: true,
-    allowPlayerPause: true,
-    refereeExclusiveConcede: true,
-};
 
 describe('init seeds the abuse controls', () => {
     it('AbuseConfig holds the D-B5 defaults (SYSTEM actor); no breaker job (A57: the breaker runs inline)', () => {

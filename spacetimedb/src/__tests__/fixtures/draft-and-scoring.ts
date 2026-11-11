@@ -1,7 +1,8 @@
-// Fixtures: rosters, cost rows, Classic and Auction drafts, lineups and scored games.
-// From S7 (s7-fixtures.ts).
+// Fixtures: rosters, cost rows, captains, Classic and Auction drafts, draft step bodies, lineups and scored games.
+// From S7 (s7-fixtures.ts); captains (S4), step lists (S10c), turns (S10r), draftWithBans (S10 A2), draft step bodies
+// and timer turns (S10i) gathered by T-REORG2.
 //
-// T-S7(b): builders for the S7 scoring / lineup in-memory tests. Not a test file: imported by s7-*.test.ts.
+// T-S7(b): builders for the S7 scoring / lineup in-memory tests. Not a test file.
 // Reuses the S4 builders; reference rows (characters, costs, synergies, roster accounts) are inserted straight into
 // the in-memory datastore, outside any reducer, like the S4 tests' direct row edits. Nothing reaches maincloud.
 // T-S7b: confirm_lineup / confirm_match_scores are gone (A60). A63: confirmGame only sets a side's ready flag;
@@ -12,17 +13,12 @@ import { charactersPerTeam, groupCount, type LineupFormatTag } from '@shared/sco
 import { teamDraft } from '@module/helpers/results/scoringHelpers';
 import {
     priceBanNames,
-    M, advance, advanceToEquipping, captainOf, draftDone, lobbyRow, priceLightconeAt as priceLightconeAtKey, priceCharacters, priceLightcones, session, setupLobby, tx,
-    type Actor, type Harness, type Lobby, type SetupOpts,
+    AUDIT, M, TURN_MS, advance, advanceToEquipping, captainOf, draftDone, dropDefaultCostCoverage, lobbyRow, priceLightconeAt as priceLightconeAtKey, priceCharacters, priceLightcones, session, setupLobby, snap, steps, tx,
+    type Actor, type Harness, type Lobby, type SetupOpts, type Team,
 } from './harness';
 
 /** Hundredths of a value (scores, costs and handicaps are fixed-point hundredths). */
 export const H = (n: number) => Math.round(n * 100);
-
-const AUDIT = (test: Harness) => {
-    const ts = test.clock.now();
-    return { createdById: 0, createdDate: ts, lastModifiedById: 0, lastModifiedDate: ts };
-};
 
 export const blueNames = (n = 8) => Array.from({ length: n }, (_, i) => `blue-${i + 1}`);
 export const redNames = (n = 8) => Array.from({ length: n }, (_, i) => `red-${i + 1}`);
@@ -94,10 +90,68 @@ export function selectAccount(test: Harness, lobbyId: number, userId: number, hs
     }
 }
 
-const actorOf = (s: Lobby, userId: number): Actor => Object.values(s.a).find((x) => x.userId === userId)!;
+// ─── Captains and turns ──────────────────────────────────────────────────────
+
+export const actorOf = (s: Lobby, userId: number): Actor => Object.values(s.a).find((x) => x.userId === userId)!;
 export const captain = (s: Lobby, side: 'Blue' | 'Red') =>
     actorOf(s, captainOf(s.test, s.lobbyId, side === 'Blue' ? 'BluePlayer' : 'RedPlayer')!.userId);
+export const blueCaptain = (s: Lobby) => actorOf(s, captainOf(s.test, s.lobbyId, 'BluePlayer')!.userId);
+export const redCaptain = (s: Lobby) => actorOf(s, captainOf(s.test, s.lobbyId, 'RedPlayer')!.userId);
+/** The non-captain Blue player of a 2v2 lobby. */
+export const blueMate = (s: Lobby) => [s.a.b1, s.a.b2].find((a) => a.userId !== captain(s, 'Blue').userId)!;
 export const side = (tag: 'Blue' | 'Red') => ({ tag }) as { tag: 'Blue' | 'Red' };
+
+/** The current turn of the lobby's draft sequence. */
+export const current = (test: Harness, lobbyId: number) => {
+    const sess = session(test, lobbyId);
+    return sess.draftSequence[sess.turnIndex];
+};
+export const turnOf = (s: Lobby) => {
+    const sess = session(s.test, s.lobbyId);
+    return sess.draftSequence[sess.turnIndex];
+};
+
+/** The lobby's steps of one action, in sequence order. */
+export const stepsOf = (test: Harness, lobbyId: number, action: string) =>
+    steps(test, lobbyId).filter((st) => st.action.tag === action).sort((a, b) => a.sequence - b.sequence);
+export const lastStepOf = (test: Harness, lobbyId: number, action: string) =>
+    steps(test, lobbyId).filter((st) => st.action.tag === action).sort((a, b) => b.sequence - a.sequence)[0];
+export const payloadOf = (test: Harness, lobbyId: number, action: string) => lastStepOf(test, lobbyId, action).payload.value as any;
+export const lobbyState = (s: Lobby) =>
+    snap(lobbyRow(s.test, s.lobbyId), session(s.test, s.lobbyId), steps(s.test, s.lobbyId).sort((a, b) => a.sequence - b.sequence));
+
+// ─── Draft calls with no pricing (a missing cost row stays missing) ───────────
+
+export const pickBody = (s: Lobby, characterName: string, eidolon = 0) => (ctx: any) =>
+    M.pick_character(ctx, { lobbyId: s.lobbyId, characterName, eidolon });
+export const nominateBody = (s: Lobby, characterName: string) => (ctx: any) => M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName });
+export const passBody = (s: Lobby) => (ctx: any) => M.pass_bid(ctx, { lobbyId: s.lobbyId });
+export const expireBody = (s: Lobby) => (ctx: any) => M.timer_expiry_classic(ctx, { lobbyId: s.lobbyId });
+export const advanceBody = (s: Lobby) => (ctx: any) => M.advance_stage(ctx, { lobbyId: s.lobbyId });
+export const equipBody = (s: Lobby, team: Team, characterName: string, lightconeName: string, superimposition = 1) => (ctx: any) =>
+    M.equip_lightcone(ctx, { lobbyId: s.lobbyId, teamSide: { tag: team }, characterName, lightconeName, superimposition });
+
+/** The Classic turn timer expires: the clock runs one turn and the host fires timer_expiry_classic. */
+export const expireTurn = (s: Lobby) => {
+    advance(s.test, TURN_MS);
+    tx(s.test, s.host, expireBody(s));
+};
+
+/**
+ * beforeStart for autoRandomPick lobbies: start_draft requires every player to hold a selected account with characters.
+ * Each player seat gets one account owning `owned[name]` (default: one unpriced filler, which no pool ever draws).
+ */
+export const withAccounts = (test: Harness, owned: Record<string, Record<string, number>> = {}) => (l: Lobby) => {
+    dropDefaultCostCoverage(test); // fix pass (review F2): the set-0 coverage rows leave the timer pools once the lobby exists
+    let id = 900;
+    for (const [name, who] of Object.entries(l.a)) {
+        const m = [...test.db.LobbyMember.by_lobby_and_user.filter([l.lobbyId, who.userId])][0];
+        if (!m || (m.lobbySlot.tag !== 'BluePlayer' && m.lobbySlot.tag !== 'RedPlayer')) continue;
+        selectAccount(test, l.lobbyId, who.userId, id++, owned[name] ?? { [`own-${name}`]: 0 });
+    }
+};
+
+// ─── Drafts ──────────────────────────────────────────────────────────────────
 
 /** Plays the Classic draft sequence: each Pick turn's captain picks the next name of its list (eidolon per name). */
 export function draftClassic(s: Lobby, blue: string[], red: string[], eidolons: Record<string, number> = {}) {
@@ -180,6 +234,8 @@ export function lineup(test: Harness, lobbyId: number, team: 'Blue' | 'Red') {
 }
 
 export const record = (test: Harness, lobbyId: number) => [...test.db.MatchResultRecord.lobby_id.filter(lobbyId)][0];
+/** The same reader as `record`, under the name the lobby, results and view tests use. */
+export const recordOf = record;
 /**
  * The game row, re-read (MatchResultGame rows are replaced on every edit: never keep one across reducer calls).
  * T-S8e (A67(3)): one row per record, keyed by matchResultId.
@@ -351,4 +407,44 @@ export function engineerFullDraft(
             } as any);
         }
     }
+}
+
+/** A light-cone cost row of the given draft mode (cost set 0, Memory of Chaos); insertLightconeCost writes both modes. */
+export function insertLightconeCostFor(test: Harness, lightconeName: string, draftMode: 'Classic' | 'Auction', cost: number) {
+    test.db.HsrLightconeCost.insert({
+        lightconeName,
+        gameMode: { tag: 'MemoryOfChaos' },
+        draftMode: { tag: draftMode },
+        costs: { s1: cost, s2: cost, s3: cost, s4: cost, s5: cost },
+        costSetId: 0,
+        ...AUDIT(test),
+    });
+}
+
+/**
+ * Plays a Classic draft (any ban mode) to Equipping: each Pick turn's captain picks the next name of its team's list,
+ * each Ban turn's captain bans the next name of `bans`.
+ */
+export function draftWithBans(s: Lobby, blue: string[], red: string[], bans: string[] = []) {
+    priceCharacters(s.test, s.lobbyId, [...blue, ...red]); // T-S10i (A107(5)): every drafted name has a cost row
+    // T-S10r (A122(7), L32): a ban names a character of the lobby's pool (a cost row), so the ban names are priced too.
+    priceBanNames(s.test, s.lobbyId, bans);
+    const queue = { Blue: [...blue], Red: [...red] };
+    const banQueue = [...bans];
+    let guard = 0;
+    while (lobbyRow(s.test, s.lobbyId).stage.tag === 'Drafting' && !draftDone(s.test, s.lobbyId) && guard++ < 64) {
+        const sess = session(s.test, s.lobbyId);
+        const step = sess.draftSequence[sess.turnIndex];
+        const team = step.teamTurn.tag as 'Blue' | 'Red';
+        const who = captain(s, team);
+        if (step.actionRequired.tag === 'Pick') {
+            const characterName = queue[team].shift()!;
+            tx(s.test, who, (ctx) => M.pick_character(ctx, { lobbyId: s.lobbyId, characterName, eidolon: 0 }));
+        } else {
+            const characterName = banQueue.shift()!;
+            tx(s.test, who, (ctx) => M.ban_character(ctx, { lobbyId: s.lobbyId, characterName }));
+        }
+    }
+    advanceToEquipping(s); // T-S10t (A129): the last step leaves the lobby in Drafting; the referee advances it to Equipping.
+    expect(lobbyRow(s.test, s.lobbyId).stage.tag).toBe('Equipping');
 }

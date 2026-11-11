@@ -25,6 +25,10 @@ import {
     type Harness,
     type Lobby,
     type SetupOpts,
+    rejection,
+    type Team,
+    type Ctx,
+    other,
 } from '../fixtures/harness';
 import {
     blueNames,
@@ -40,14 +44,9 @@ import {
     redNames,
     setRole,
     side,
-} from '../fixtures/draft-and-scoring-builders';
-import { rejection } from '../fixtures/calendar-roster-rating-builders';
-
-type Team = 'Blue' | 'Red';
-type Ctx = Parameters<Parameters<Harness['withReducerTx']>[1]>[0];
+} from '../fixtures/draft-and-scoring';
 
 const THROTTLED = 'Lineup changes are too frequent. Please wait a moment.';
-const other = (t: Team): Team => (t === 'Blue' ? 'Red' : 'Blue');
 const lc = (t: Team) => `${t.toLowerCase()}-1`; // the light-cone target of each team
 const eid = (t: Team) => `${t.toLowerCase()}-2`; // the eidolon target of each team
 const namesOf = (t: Team) => (t === 'Blue' ? blueNames() : redNames());

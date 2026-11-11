@@ -22,27 +22,15 @@ import {
     type Actor,
     type Harness,
     type Lobby,
-} from '../fixtures/harness';
-import { moderator, verified } from '../fixtures/tournament-builders';
-import {
-    H,
-    playToScoring,
-    recordScores,
-    setRole,
-    side,
-} from '../fixtures/draft-and-scoring-builders';
-import { rejection } from '../fixtures/calendar-roster-rating-builders';
-import { parkedLobby, playRanked, settingsFrom } from '../fixtures/ranked-game-builders';
-import { seedElo } from '../fixtures/tournament-match-builders';
-import {
-    abandon,
-    chat,
-    cursorEvents,
-    join,
-    leave,
+    rejection,
     snap,
     type Ctx,
-} from '../fixtures/lobby-action-helpers';
+} from '../fixtures/harness';
+import { moderator, verified } from '../fixtures/identity';
+import { H, playToScoring, recordScores, setRole, side } from '../fixtures/draft-and-scoring';
+import { settingsFrom, abandon, chat, cursorEvents, join, leave } from '../fixtures/lobby';
+import { seedElo } from '../fixtures/tournament-matches';
+import { parkedLobby, playRanked } from '../fixtures/ranked';
 
 // ─── Texts ───────────────────────────────────────────────────────────────────
 

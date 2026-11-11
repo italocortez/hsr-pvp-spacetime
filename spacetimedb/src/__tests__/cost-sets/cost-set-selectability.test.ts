@@ -12,30 +12,8 @@ import {
     seedDefaultCostCoverage,
     setupLobby,
     tx,
-    type Harness,
 } from '../fixtures/harness';
-import { seedReferenceNames } from '../fixtures/calendar-roster-rating-builders';
-
-const E = (n: number) => JSON.stringify({ e0: n, e1: n, e2: n, e3: n, e4: n, e5: n, e6: n });
-const S = (n: number) => JSON.stringify({ s1: n, s2: n, s3: n, s4: n, s5: n });
-
-/** A published cost set (owner SYSTEM) with one character row and one light-cone row for MoC × the draft mode. */
-function publishedCostSet(test: Harness, name: string, draftModeTag: 'Classic' | 'Auction' | null): number {
-    tx(test, 'internal', (ctx) => M.create_cost_set(ctx, { name, sourceSetId: 0, gameModeTag: 'MemoryOfChaos' }));
-    const id = [...test.db.CostSet.iter()].find((c) => c.name === name)!.id;
-    if (draftModeTag) {
-        // T-S10f (roster audit #9): edit_draft_*_cost requires the HsrCharacter / HsrLightcone rows
-        seedReferenceNames(test, ['acheron'], ['along-the-passing-shore']);
-        tx(test, 'internal', (ctx) => M.edit_draft_character_cost(ctx, {
-            costSetId: id, characterName: 'acheron', gameModeTag: 'MemoryOfChaos', draftModeTag, costsJson: E(2),
-        }));
-        tx(test, 'internal', (ctx) => M.edit_draft_lightcone_cost(ctx, {
-            costSetId: id, lightconeName: 'along-the-passing-shore', gameModeTag: 'MemoryOfChaos', draftModeTag, costsJson: S(1),
-        }));
-    }
-    tx(test, 'internal', (ctx) => M.publish_cost_set(ctx, { costSetId: id }));
-    return id;
-}
+import { publishedCostSet } from '../fixtures/cost-sets';
 
 const NO_COSTS = /This cost set has no costs for MemoryOfChaos × (Classic|Auction)\. Pick another set or ask its owner to extend it\./;
 

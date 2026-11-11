@@ -12,20 +12,23 @@
 // group-stage matches, and the public row (A37). Builders in s4 / s7 / s8 / s8d fixtures; the S8e tally suite is the
 // regression baseline. Nothing reaches maincloud.
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { M, advance, expectReject, lobbyRow, member, tx, type Actor, type Harness, type Lobby, seatOf } from '../fixtures/harness';
 import {
-    advanceStage,
-    assignAssistant,
-    bracketRows,
-    liveField,
-    matchRow,
-    resolveMatch,
-    verified,
-} from '../fixtures/tournament-builders';
+    M,
+    advance,
+    expectReject,
+    lobbyRow,
+    tx,
+    type Actor,
+    type Harness,
+    type Lobby,
+    seatOf,
+} from '../fixtures/harness';
+import { verified } from '../fixtures/identity';
+import { join } from '../fixtures/lobby';
+import { advanceStage, assignAssistant, bracketRows, liveField, matchRow, resolveMatch } from '../fixtures/tournaments';
 import {
     byKey,
     createTournamentLobby,
-    join,
     lobbiesOf,
     openMatchLobby,
     playBracketMatch,
@@ -35,7 +38,9 @@ import {
     recordsOfMatch,
     type Field,
     type TeamEntry,
-} from '../fixtures/tournament-match-builders';
+    SEAT,
+    slotOf,
+} from '../fixtures/tournament-matches';
 import { matchGames } from '@module/helpers/tournament/bracketResults';
 import { slotChangeReset } from '@module/helpers/tournament/matchSides';
 import { allowedSlotsFor } from '@module/helpers/tournament/tournamentLobbySides';
@@ -43,7 +48,6 @@ import { groupStandings } from '@module/helpers/tournament/tournamentStandings';
 import { bracketMatchColumns } from '@module/tables/tournament/bracketMatch';
 
 const BO3 = { defaultBestOf: 3, grandFinalBestOf: 3 };
-const SEAT = 'This seat is not available to you in this tournament lobby.';
 const NOT_AUTHORIZED = 'You are not authorized to set the sides of this match.';
 const OPEN_LOBBY = 'Close the open lobby of this match before changing its sides.';
 const STARTED = 'The sides can no longer be changed: a game of this match has started.';
@@ -62,7 +66,6 @@ const derived = (test: Harness, matchId: number) => {
     const g = tx(test, 'internal', (ctx) => matchGames(ctx, r));
     return [g.team1, g.team2];
 };
-const slotOf = (test: Harness, lobbyId: number, who: Actor) => member(test, lobbyId, who.userId)?.lobbySlot.tag;
 const entry = (f: Field, teamId: number | undefined): TeamEntry => f.ts.find((t) => t.teamId === teamId)!;
 const rollback = (f: Field, bracketMatchId: number) =>
     tx(f.test, f.org, (ctx) => M.rollback_bracket_match(ctx, { bracketMatchId, reason: 'replay' }));

@@ -12,8 +12,20 @@
 // lowered. LobbyCursorEvent is an event table: it is read through `ctx.db` inside the writing transaction
 // (s5-abuse pattern). Kick / ban target a seat (A74). Roles through `test.db` (setUserRole). Nothing reaches maincloud.
 import { describe, expect, it } from 'vitest';
-import { M, advance, expectReject, guest, newHarness, seatOf, setupLobby, tx, type Actor, type Harness, type Lobby } from '../fixtures/harness';
-import { moderator, setUserRole, verified } from '../fixtures/tournament-builders';
+import {
+    M,
+    advance,
+    expectReject,
+    guest,
+    newHarness,
+    seatOf,
+    setupLobby,
+    tx,
+    type Actor,
+    type Harness,
+    type Lobby,
+} from '../fixtures/harness';
+import { moderator, setUserRole, verified, displayName } from '../fixtures/identity';
 
 const INVALID_METADATA = 'Invalid metadata JSON. Expected: { type: "text" | "reply" | "emoji_only", replyToMessageId?: number }';
 const DELETE_DENIED = 'Only the host, referees, moderators, or admins can delete chat messages.';
@@ -21,7 +33,6 @@ const DELETE_DENIED = 'Only the host, referees, moderators, or admins can delete
 const rows = (test: Harness, lobbyId: number) => [...test.db.ChatMessage.lobby_id.filter(lobbyId)];
 const sortIds = (xs: number[]) => [...xs].sort((a, b) => a - b);
 const ids = (test: Harness, lobbyId: number) => sortIds(rows(test, lobbyId).map((r) => r.id));
-const displayName = (test: Harness, who: Actor) => test.db.User.id.find(who.userId)!.displayName;
 
 /** Runs `call` and returns the one ChatMessage row it inserted in the lobby (a diff, not id order: ids are not ordered). */
 function inserted(test: Harness, lobbyId: number, call: () => void) {

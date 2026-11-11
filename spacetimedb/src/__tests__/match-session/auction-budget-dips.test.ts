@@ -16,16 +16,18 @@ import {
     steps,
     tx,
     type Lobby,
-} from '../fixtures/harness';
-import { captain, selectAccount } from '../fixtures/draft-and-scoring-builders';
-import { rejection } from '../fixtures/calendar-roster-rating-builders';
-import {
+    rejection,
     AUCTION,
-    E6,
-    NOMINATE_COST,
     ONE_V_ONE,
     TURN_MS,
     TWO_V_TWO,
+    other,
+    type Side,
+} from '../fixtures/harness';
+import { captain, selectAccount, nominateBody } from '../fixtures/draft-and-scoring';
+import {
+    E6,
+    NOMINATE_COST,
     bid,
     bidBody,
     budgets,
@@ -37,17 +39,14 @@ import {
     f,
     lobby,
     nominate,
-    nominateBody,
     nominatorOf,
-    other,
     pass,
     playAuction,
     price,
     stepsOf,
     undo,
-    world,
-    type Side,
-} from '../fixtures/auction-round-builders';
+} from '../fixtures/auction';
+import { world } from '../fixtures/undo';
 
 // ─── Texts ───────────────────────────────────────────────────────────────────
 

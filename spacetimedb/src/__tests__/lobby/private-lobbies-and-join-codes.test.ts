@@ -14,12 +14,12 @@ import {
     tx,
     type Actor,
     type Harness,
+    rejection,
+    snap,
 } from '../fixtures/harness';
-import { rejection } from '../fixtures/calendar-roster-rating-builders';
-import { settingsFrom } from '../fixtures/ranked-game-builders';
-import { join, lobbyOfHost, snap } from '../fixtures/lobby-action-helpers';
-import { byKey, sidesOf } from '../fixtures/tournament-match-builders';
-import { liveField } from '../fixtures/tournament-builders';
+import { settingsFrom, join, lobbyOfHost } from '../fixtures/lobby';
+import { liveField } from '../fixtures/tournaments';
+import { byKey, sidesOf } from '../fixtures/tournament-matches';
 
 const PRIVATE_NEEDS_PASSWORD = 'A private lobby needs a password.'; // A99
 const BAD_PASSWORD = 'Incorrect lobby password.';

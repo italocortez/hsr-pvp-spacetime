@@ -16,10 +16,9 @@ import {
     splitIntoGroups,
     type BracketSpec,
 } from '@shared/bracket';
-import { TOURNAMENT_PERM_MESSAGES } from '@module/helpers/tournament/tournamentPermissions';
-import { M, advance, expectReject, tx, type Harness } from '../fixtures/harness';
+import { M, advance, expectReject, tx, type Harness, AUDIT } from '../fixtures/harness';
+import { host, verified } from '../fixtures/identity';
 import {
-    AUDIT,
     advanceStage,
     assignAssistant,
     bracketByKey,
@@ -30,7 +29,6 @@ import {
     matchRow,
     membersOf,
     openTournament,
-    host,
     resolveMatch,
     seedAndGenerate,
     seedBracket,
@@ -38,11 +36,9 @@ import {
     tRow,
     teamRow,
     teams,
-    verified,
     fullTeams,
-} from '../fixtures/tournament-builders';
-
-const BRACKET = TOURNAMENT_PERM_MESSAGES.bracket;
+    BRACKET,
+} from '../fixtures/tournaments';
 
 const seedOf = (test: Harness, teamId: number) => teamRow(test, teamId)!.seedNumber;
 /** Team ids by seedNumber, over the teams that hold a seed. */

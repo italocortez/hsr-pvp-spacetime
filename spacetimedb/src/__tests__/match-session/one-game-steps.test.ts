@@ -52,9 +52,9 @@ import {
     redNames,
     side,
     unequip,
-} from '../fixtures/draft-and-scoring-builders';
+} from '../fixtures/draft-and-scoring';
+import { draftGame } from '../fixtures/tournament-matches';
 import { teamDraft } from '@module/helpers/results/scoringHelpers';
-import { draftGame } from '../fixtures/tournament-match-builders';
 
 const picksOf = (test: Harness, lobbyId: number) => steps(test, lobbyId).filter((x) => x.action.tag === 'Pick');
 

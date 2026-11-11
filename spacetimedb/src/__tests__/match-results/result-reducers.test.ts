@@ -9,11 +9,21 @@
 // (dispute_match_result, finalize_match_result, admin_force_finalize, admin_void_match, override_match_result,
 // record_group_scores), docs/lobby/contract.md (disconnect policies). Nothing reaches maincloud.
 import { describe, expect, it } from 'vitest';
-import { M, expectReject, guest, lobbyRow, newHarness, setupLobby, tx, type Harness, type Lobby } from '../fixtures/harness';
-import { H, captain, playToScoring, side } from '../fixtures/draft-and-scoring-builders';
-import { moderator, setUserRole, verified } from '../fixtures/tournament-builders';
-import { recordsOfLobby, seedElo } from '../fixtures/tournament-match-builders';
-import { parkedLobby, playRanked, rankedHook } from '../fixtures/ranked-game-builders';
+import {
+    M,
+    expectReject,
+    guest,
+    lobbyRow,
+    newHarness,
+    setupLobby,
+    tx,
+    type Harness,
+    type Lobby,
+} from '../fixtures/harness';
+import { moderator, setUserRole, verified } from '../fixtures/identity';
+import { H, captain, playToScoring, side } from '../fixtures/draft-and-scoring';
+import { recordsOfLobby, seedElo } from '../fixtures/tournament-matches';
+import { parkedLobby, playRanked, rankedHook } from '../fixtures/ranked';
 
 const dispute = (matchResultId: number, reason: string) => (ctx: any) => M.dispute_match_result(ctx, { matchResultId, reason });
 const override = (matchResultId: number, newStatusTag: string, winnerTeamSideTag: string, reason = 'staff') => (ctx: any) =>
