@@ -11,6 +11,7 @@ import { DAY_MS, HOUR_MS, createEvent, eventArgs, eventsOf, fromNow, invitesOf, 
 const ACTIVE_CAP = 'Maximum 40 active calendar events per user.';
 const RETAINED_CAP = 'Maximum 100 calendar events per user.';
 const PAST_END = 'Event end time must not be in the past.';
+const PAST_START = "You can't schedule something in the past."; // T-S10ac (A157(9))
 
 function world(n = 1) {
     const test = newHarness();
@@ -74,7 +75,8 @@ describe('A79(2): at most 100 retained events per organizer', () => {
         advance(test, 2 * HOUR_MS); // round 1 has ended
         createShort(test, a, 40, 'R2-');
         advance(test, 2 * HOUR_MS); // round 2 has ended
-        for (let i = 0; i < 20; i++) createEvent(test, a, { title: `R3-${i}`, startMs: DAY_MS, endMs: 100 * DAY_MS });
+        // T-S10ac (A157(11)): an event lasts at most 7 days, so round 3 starts 95 days out (it runs past the cleanup below)
+        for (let i = 0; i < 20; i++) createEvent(test, a, { title: `R3-${i}`, startMs: 95 * DAY_MS, endMs: 96 * DAY_MS });
         expect(eventsOf(test, a)).toHaveLength(100);
 
         const msg = tryCreate(test, a, 'over');
@@ -93,16 +95,17 @@ describe('A79(2): at most 100 retained events per organizer', () => {
 // ─── A79(3): end-time guards ─────────────────────────────────────────────────────────────────────────────────────
 
 describe('A79(3): no endAt in the past', () => {
-    it('create with endAt in the past is rejected "Event end time must not be in the past.", no row (A79(3))', () => {
+    it('create with endAt in the past is rejected, no row (A79(3); re-aligned T-S10ac, A157(9) supersedes the end-only check: the past start is refused first, and a start in the past with an end ahead is refused too)', () => {
         const { test, users: [a] } = world();
         const msg = rejection(test, a, (ctx) =>
             M.create_calendar_event(ctx, eventArgs(test, { title: 'Past', startMs: -2 * HOUR_MS, endMs: -HOUR_MS })));
         expect(eventsOf(test, a)).toHaveLength(0);
-        expect(msg).toBe(PAST_END);
+        expect(msg).toBe(PAST_START);
 
-        // A start in the past with an end still ahead is accepted (only the end is guarded).
-        createEvent(test, a, { title: 'Running', startMs: -HOUR_MS, endMs: HOUR_MS });
-        expect(eventsOf(test, a).map((e) => e.title)).toEqual(['Running']);
+        const running = rejection(test, a, (ctx) =>
+            M.create_calendar_event(ctx, eventArgs(test, { title: 'Running', startMs: -HOUR_MS, endMs: HOUR_MS })));
+        expect(eventsOf(test, a)).toHaveLength(0);
+        expect(running).toBe(PAST_START);
     });
 
     it('update: a changed endAt in the past is rejected (row unchanged); a finished event keeps its endAt and edits its title; moving endAt to the future succeeds (A79(3))', () => {

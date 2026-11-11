@@ -8,14 +8,32 @@
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
 
 /**
+ * S10ac (A157(12)): writes a match event's start to its bracket match (`BracketMatch.scheduledAt`), or clears it
+ * (`startAt` undefined). With `actorId` (create / update_calendar_event) the audit columns are stamped; the deletion
+ * cascades have no actor and change the column only. A missing match is ignored.
+ */
+export function setBracketMatchSchedule(ctx: any, bracketMatchId: number | undefined, startAt: any | undefined, actorId?: number): void {
+    if (bracketMatchId === undefined) return;
+    const match = ctx.db.BracketMatch.id.find(bracketMatchId);
+    if (!match) return;
+    ctx.db.BracketMatch.id.update(actorId !== undefined
+        ? updateWithAudit(ctx, match, { scheduledAt: startAt }, actorId)
+        : { ...match, scheduledAt: startAt });
+}
+
+/**
  * Deletes all CalendarEventInvite rows for an event, then deletes the CalendarEvent itself.
- * Per D-03: event deletion must cascade to invites.
+ * Per D-03: event deletion must cascade to invites. S10ac (A157(12)): a match event's bracket match loses its
+ * `scheduledAt` (every path that deletes an event comes here: delete_calendar_event, the tournament cascades, user
+ * deletion, the lazy clean-up and the scheduled sweep).
  */
 export function deleteCalendarEventWithInvites(ctx: any, eventId: number): void {
+    const event = ctx.db.CalendarEvent.id.find(eventId);
     for (const invite of [...ctx.db.CalendarEventInvite.event_id.filter(eventId)]) {
         ctx.db.CalendarEventInvite.delete(invite);
     }
     ctx.db.CalendarEvent.id.delete(eventId);
+    if (event) setBracketMatchSchedule(ctx, event.bracketMatchId, undefined);
 }
 
 /**

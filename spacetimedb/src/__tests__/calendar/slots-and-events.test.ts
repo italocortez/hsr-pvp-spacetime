@@ -45,31 +45,15 @@ const slot = (test: Harness, id: number) => test.db.AvailabilitySlot.id.find(id)
 // ─── Availability slots ──────────────────────────────────────────────────────
 
 describe('availability slots (create / update / delete)', () => {
-    it('scenario "Create and Manage Availability Slots": a recurring Weekly slot stores its rule and expires 6 months (180 d) ahead (flow 6, D-28)', () => {
-        const { test, users: [a] } = world(1);
-        const id = addSlot(test, a, { isRecurring: true, recurrenceType: 'Weekly', interval: 2, dayOfWeek: 3 });
-        const row = slot(test, id)!;
-        expect(row.userId).toBe(a.userId);
-        expect(row.isRecurring).toBe(true);
-        expect(row.recurrenceRule.recurrenceType.tag).toBe('Weekly');
-        expect(row.recurrenceRule.interval).toBe(2);
-        expect(row.recurrenceRule.dayOfWeek).toBe(3);
-        expect(row.expiresAt.microsSinceUnixEpoch).toBe(test.clock.now().microsSinceUnixEpoch + micros(SIX_MONTHS_MS));
-    });
-
-    it('create_availability_slot flow 6: a recurring slot with an endDate expires at that endDate', () => {
-        const { test, users: [a] } = world(1);
-        const endDate = fromNow(test, 30 * DAY_MS);
-        const id = addSlot(test, a, { isRecurring: true, recurrenceType: 'Daily', interval: 1, endDate });
-        expect(slot(test, id)!.expiresAt.microsSinceUnixEpoch).toBe(BigInt(endDate));
-    });
-
-    it('create_availability_slot flow 7: a one-time slot expires at its endAt', () => {
+    // T-S10ac (A157(3)): the two recurring-slot tests of flow 6 ("a recurring Weekly slot stores its rule and expires
+    // 6 months ahead", "a recurring slot with an endDate expires at that endDate") are removed with recurrence.
+    it('create_availability_slot flow 7 (re-aligned T-S10ac, A157(1), A157(3)): a slot is one dated interval stored with its start, end and kind', () => {
         const { test, users: [a] } = world(1);
         const id = addSlot(test, a, { startMs: 3 * HOUR_MS, endMs: 5 * HOUR_MS });
         const row = slot(test, id)!;
-        expect(row.isRecurring).toBe(false);
-        expect(row.expiresAt.microsSinceUnixEpoch).toBe(row.endAt.microsSinceUnixEpoch);
+        expect(row.userId).toBe(a.userId);
+        expect(row.kind.tag).toBe('Available');
+        expect(row.startAt.microsSinceUnixEpoch).toBe(BigInt(fromNow(test, 3 * HOUR_MS)));
         expect(row.endAt.microsSinceUnixEpoch).toBe(BigInt(fromNow(test, 5 * HOUR_MS)));
     });
 
@@ -143,12 +127,16 @@ describe('availability slots (create / update / delete)', () => {
 });
 
 describe('availability slots (rules, caps, cleanup)', () => {
-    it('scenario "Availability Slot Cap Enforcement": the 11th slot is rejected with "Maximum of 10 availability slots reached." (D-10) (text per A76)', () => {
+    it('scenario "Availability Slot Cap Enforcement" (re-aligned T-S10ac, A157(2)): 10 slots in one UTC week, the 11th in that week is rejected; a slot in the next week passes', () => {
         const { test, users: [a] } = world(1);
-        for (let i = 0; i < 10; i++) addSlot(test, a, { startMs: (i + 1) * DAY_MS });
-        const msg = rejection(test, a, (ctx) => M.create_availability_slot(ctx, slotArgs(test, { startMs: 20 * DAY_MS })));
+        // START is Thursday 2026-01-01 00:00 UTC: the next week starts Monday 2026-01-05 (+96 h).
+        const nextMonday = 96 * HOUR_MS;
+        for (let i = 0; i < 10; i++) addSlot(test, a, { startMs: nextMonday + i * 3 * HOUR_MS, endMs: nextMonday + i * 3 * HOUR_MS + HOUR_MS });
+        const msg = rejection(test, a, (ctx) => M.create_availability_slot(ctx, slotArgs(test, { startMs: nextMonday + 6 * DAY_MS })));
         expect(slotsOf(test, a)).toHaveLength(10);
-        expect(msg).toBe('Maximum 10 availability slots per user.');
+        expect(msg).toBe('You can set at most 10 availability slots per week.');
+        addSlot(test, a, { startMs: nextMonday + 7 * DAY_MS });
+        expect(slotsOf(test, a)).toHaveLength(11);
     });
 
     it('create_availability_slot error "Guest caller": "Guests cannot create availability slots." (text per A76)', () => {
@@ -173,12 +161,7 @@ describe('availability slots (rules, caps, cleanup)', () => {
         expect(msg).toBe('Availability slots cannot be scheduled more than 6 months in advance.');
     });
 
-    it('create_availability_slot error "isRecurring but no recurrenceType": "Recurrence type is required for recurring slots." (text per A76)', () => {
-        const { test, users: [a] } = world(1);
-        const msg = rejection(test, a, (ctx) => M.create_availability_slot(ctx, slotArgs(test, { isRecurring: true, recurrenceType: '' })));
-        expect(slotsOf(test, a)).toHaveLength(0);
-        expect(msg).toBe('Recurring slots require a recurrence type (Daily, Weekly, or Monthly).');
-    });
+    // T-S10ac (A157(3)): 'create_availability_slot error "isRecurring but no recurrenceType"' is removed with recurrence.
 
     it('scenario "Lazy Cleanup of Expired Slots": a slot expired more than 1 week ago is deleted on the next create; one inside the grace week stays (D-27)', () => {
         const { test, users: [a] } = world(1);
@@ -193,17 +176,7 @@ describe('availability slots (rules, caps, cleanup)', () => {
         expect(slotsOf(test, a)).toHaveLength(2);
     });
 
-    it('recurring expiry at +180 d (flow 6) then the 1-week grace (D-27): the default-expiry recurring slot survives to +186 d and is gone at +188 d', () => {
-        const { test, users: [a] } = world(1);
-        const rec = addSlot(test, a, { isRecurring: true, recurrenceType: 'Weekly', interval: 1, dayOfWeek: 1 });
-        advance(test, SIX_MONTHS_MS + 6 * DAY_MS);
-        addSlot(test, a);
-        expect(slot(test, rec)).toBeDefined();
-
-        advance(test, 2 * DAY_MS);
-        addSlot(test, a);
-        expect(slot(test, rec)).toBeUndefined();
-    });
+    // T-S10ac (A157(3)): 'recurring expiry at +180 d (flow 6) then the 1-week grace' is removed with recurrence.
 });
 
 // ─── Saved calendars ─────────────────────────────────────────────────────────
@@ -348,12 +321,12 @@ describe('calendar events (create / invites / RSVP)', () => {
         expect(msg).toBe('Invite not found.');
     });
 
-    it('invite_to_event / remove_invite by a non-organizer non-Admin: "Only the event organizer or an admin can invite to this event." / "... can remove invites." (text per A76)', () => {
-        const { test, users: [a, b, c] } = world(3);
-        const id = createEvent(test, a, { invitees: [b] });
-        const inv = rejection(test, b, (ctx) => M.invite_to_event(ctx, { eventId: id, inviteeUserId: c.userId }));
-        const rem = rejection(test, b, (ctx) => M.remove_invite(ctx, { eventId: id, inviteeUserId: b.userId }));
-        expect(invitesOf(test, id).map((i) => i.inviteeUserId)).toEqual([b.userId]);
+    it('invite_to_event / remove_invite by a non-organizer non-Admin: "Only the event organizer or an admin can invite to this event." / "... can remove invites." (text per A76; re-aligned T-S10ac, A157(8): the invitee removes another invitee, not themself)', () => {
+        const { test, users: [a, b, c, d] } = world(4);
+        const id = createEvent(test, a, { invitees: [b, c] });
+        const inv = rejection(test, b, (ctx) => M.invite_to_event(ctx, { eventId: id, inviteeUserId: d.userId }));
+        const rem = rejection(test, b, (ctx) => M.remove_invite(ctx, { eventId: id, inviteeUserId: c.userId }));
+        expect(invitesOf(test, id).map((i) => i.inviteeUserId).sort((x, y) => x - y)).toEqual([b.userId, c.userId].sort((x, y) => x - y));
         expect(inv).toBe('Forbidden: Only the organizer or an Admin can invite users to this event.');
         expect(rem).toBe('Forbidden: Only the organizer or an Admin can remove invites from this event.');
     });

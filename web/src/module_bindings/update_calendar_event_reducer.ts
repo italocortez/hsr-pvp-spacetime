@@ -16,4 +16,5 @@ export default {
   description: __t.string(),
   startAt: __t.string(),
   endAt: __t.string(),
+  inviteeUserIds: __t.option(__t.string()),
 };

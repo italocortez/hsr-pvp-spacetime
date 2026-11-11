@@ -17,8 +17,6 @@ import {
     fromNow,
     invite,
     invitesOf,
-    micros,
-    slotArgs,
     slotsOf,
     event,
 } from '../fixtures/calendar';
@@ -142,29 +140,8 @@ describe('Calendar #2: duplicate manual invitee ids (calendar architecture S10f)
     });
 });
 
-describe('Calendar #3: one "no end date" rule for recurring slots (calendar architecture S10f)', () => {
-    const SIX_MONTHS_MS = 180 * DAY_MS;
-    it.each(['', '0'])('endDate %j means no end date in create and update: expiresAt = now + 6 months, recurrenceRule.endDate = epoch (calendar audit #3)', (endDate) => {
-        const test = newHarness();
-        const a = verified(test, 'a');
-        const id = addSlot(test, a, { isRecurring: true, recurrenceType: 'Weekly', interval: 1, dayOfWeek: 2, endDate });
-        const row = test.db.AvailabilitySlot.id.find(id)!;
-        expect(row.expiresAt.microsSinceUnixEpoch).toBe(test.clock.now().microsSinceUnixEpoch + micros(SIX_MONTHS_MS));
-        expect(row.recurrenceRule.endDate!.microsSinceUnixEpoch).toBe(0n);
-
-        advance(test, HOUR_MS);
-        // first a real end date, then back to "none"
-        const end = fromNow(test, 30 * DAY_MS);
-        tx(test, a, (ctx) => M.update_availability_slot(ctx, { slotId: id, ...slotArgs(test, { isRecurring: true, recurrenceType: 'Weekly', interval: 1, dayOfWeek: 2, endDate: end }) }));
-        const withEnd = test.db.AvailabilitySlot.id.find(id)!;
-        expect(withEnd.expiresAt.microsSinceUnixEpoch).toBe(BigInt(end));
-        expect(withEnd.recurrenceRule.endDate!.microsSinceUnixEpoch).toBe(BigInt(end));
-        tx(test, a, (ctx) => M.update_availability_slot(ctx, { slotId: id, ...slotArgs(test, { isRecurring: true, recurrenceType: 'Weekly', interval: 1, dayOfWeek: 2, endDate }) }));
-        const after = test.db.AvailabilitySlot.id.find(id)!;
-        expect(after.expiresAt.microsSinceUnixEpoch).toBe(test.clock.now().microsSinceUnixEpoch + micros(SIX_MONTHS_MS));
-        expect(after.recurrenceRule.endDate!.microsSinceUnixEpoch).toBe(0n);
-    });
-});
+// T-S10ac (A157(3)): 'Calendar #3: one "no end date" rule for recurring slots' (two it.each cases, '' and '0') is
+// removed with recurrence.
 
 describe('Calendar #5: title and description length caps (calendar architecture S10f)', () => {
     const TITLE_LONG = 'Event title cannot exceed 100 characters.';
@@ -372,7 +349,7 @@ describe('Gap 9, A122(22) L86: the clean-up spares the call\'s own old target (S
         const endAt = fromNow(test, DAY_MS + 2 * HOUR_MS);
 
         tx(test, u, (ctx) => M.update_availability_slot(ctx, {
-            slotId: target, startAt, endAt, isRecurring: false, recurrenceType: '', interval: 0, dayOfWeek: 255, dayOfMonth: 0, endDate: '',
+            slotId: target, startAt, endAt, kind: 'Available', // T-S10ac (A157(3)): recurrence arguments removed
         }));
 
         const slots = slotsOf(test, u);

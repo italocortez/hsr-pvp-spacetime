@@ -4,7 +4,6 @@ import {
     BanMode,
     ActionType,
     TeamSide,
-    RecurrenceType,
     LineupFormat,
 } from './enums';
 
@@ -187,13 +186,7 @@ export const StepPayload = t.enum('StepPayload', {
 // GameScore (cycles / points / boss1 / boss2) was dropped in S3: no column used it, and A21 replaced
 // the fixed boss columns with MatchResultGroupScore rows.
 
-export const RecurrenceRule = t.object('RecurrenceRule', {
-    recurrenceType: RecurrenceType,
-    interval: t.u8(),
-    dayOfWeek: t.u8().optional(),
-    dayOfMonth: t.u8().optional(),
-    endDate: t.timestamp().optional(),
-});
+// RecurrenceRule removed in S10ac (A157(3)): every availability slot is one dated interval.
 
 export const EloConfig = t.object('EloConfig', {
     kFactorNew: t.u8(),

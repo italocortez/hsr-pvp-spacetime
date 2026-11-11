@@ -19,9 +19,11 @@ export default __t.row({
   eventId: __t.u32().name("event_id"),
   inviteeUserId: __t.u32().name("invitee_user_id"),
   inviteeLabel: __t.string().name("invitee_label"),
+  inviteeAvatarCharacterName: __t.option(__t.string()).name("invitee_avatar_character_name"),
   get inviteStatus() {
     return InviteStatus.name("invite_status");
   },
   respondedAt: __t.option(__t.timestamp()).name("responded_at"),
   inviterLabel: __t.string().name("inviter_label"),
+  inviterAvatarCharacterName: __t.option(__t.string()).name("inviter_avatar_character_name"),
 });

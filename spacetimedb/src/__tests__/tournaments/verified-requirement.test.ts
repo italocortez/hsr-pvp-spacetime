@@ -31,7 +31,7 @@ import {
     member,
 } from '../fixtures/harness';
 import { host, verified, existingUser, signIn, mappedUser, addSecondIdentity } from '../fixtures/identity';
-import { createEvent, invite } from '../fixtures/calendar';
+import { createEvent, invite, seedInvite } from '../fixtures/calendar';
 import {
     TOURNAMENT_ARGS,
     advanceStage,
@@ -361,11 +361,14 @@ describe('A113(5): the guest\'s match calendar invites follow the moved entry', 
         seedAndGenerate(test, org, other);
         advanceStage(test, org, other, 'InProgress');
         const otherMatch = bracketRows(test, other).find((m) => m.team1Id !== undefined && m.team2Id !== undefined)!;
-        tx(test, org, (ctx) => M.create_calendar_event(ctx, eventArgs(test, otherMatch.id, [g.userId])));
+        // T-S10ac (A157(7)): a guest can no longer be invited by hand; both invites are seeded as pre-A157 rows.
+        tx(test, org, (ctx) => M.create_calendar_event(ctx, eventArgs(test, otherMatch.id)));
         const otherEvent = eventOf(test, otherMatch.id);
+        seedInvite(test, otherEvent.id, g.userId, org.userId);
         // A personal event of the organizer with the guest invited.
-        tx(test, org, (ctx) => M.create_calendar_event(ctx, { ...eventArgs(test, 0, [g.userId]), title: 'Personal' }));
+        tx(test, org, (ctx) => M.create_calendar_event(ctx, { ...eventArgs(test, 0), title: 'Personal' }));
         const personal = [...test.db.CalendarEvent.organizer_id.filter(org.userId)].find((ev) => ev.bracketMatchId === undefined)!;
+        seedInvite(test, personal.id, g.userId, org.userId);
         const guestId = g.userId;
         expect(inviteOf(test, otherEvent.id, guestId)).toBeTruthy();
         expect(inviteOf(test, personal.id, guestId)).toBeTruthy();

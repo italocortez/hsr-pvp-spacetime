@@ -20,44 +20,35 @@ export const at = (test: Harness, hours: number) => (test.clock.now().microsSinc
 
 // ─── Availability slots ──────────────────────────────────────────────────────
 
+// T-S10ac (A157(1), A157(3)): a slot is one dated interval with a kind; the recurrence options are gone.
 export interface SlotOpts {
     startMs?: number;
     endMs?: number;
-    isRecurring?: boolean;
-    recurrenceType?: string;
-    interval?: number;
-    dayOfWeek?: number;
-    dayOfMonth?: number;
-    endDate?: string;
+    kind?: 'Available' | 'Blocked' | string;
 }
 
-/** create_availability_slot arguments; a one-time 2-hour slot one day out unless overridden. */
+/** create_availability_slot arguments; a 2-hour Available slot one day out unless overridden. */
 export function slotArgs(test: Harness, o: SlotOpts = {}) {
     const startMs = o.startMs ?? DAY_MS;
     return {
         startAt: fromNow(test, startMs),
         endAt: fromNow(test, o.endMs ?? startMs + 2 * HOUR_MS),
-        isRecurring: o.isRecurring ?? false,
-        recurrenceType: o.recurrenceType ?? '',
-        interval: o.interval ?? 0,
-        dayOfWeek: o.dayOfWeek ?? 255,
-        dayOfMonth: o.dayOfMonth ?? 0,
-        endDate: o.endDate ?? '',
+        kind: o.kind ?? 'Available',
     };
 }
 
 export function addSlot(test: Harness, who: Actor, o: SlotOpts = {}): number {
+    clearMembershipCount(test, who); // T-S10ac: a seeding helper, like createEvent
     const before = new Set(slotsOf(test, who).map((s) => s.id));
     const args = slotArgs(test, o);
     tx(test, who, (ctx) => M.create_availability_slot(ctx, args));
     return slotsOf(test, who).find((s) => !before.has(s.id))!.id;
 }
 
-/** A one-time 2-hour slot starting `startHours` from now (the view tests' builder; returns nothing). */
-export function addSlotAt(test: Harness, who: Actor, startHours: number) {
+/** A 2-hour Available slot starting `startHours` from now (the view tests' builder; returns nothing). */
+export function addSlotAt(test: Harness, who: Actor, startHours: number, kind: 'Available' | 'Blocked' = 'Available') {
     tx(test, who, (ctx) => M.create_availability_slot(ctx, {
-        startAt: at(test, startHours), endAt: at(test, startHours + 2), isRecurring: false, recurrenceType: '',
-        interval: 0, dayOfWeek: 255, dayOfMonth: 0, endDate: '',
+        startAt: at(test, startHours), endAt: at(test, startHours + 2), kind,
     }));
 }
 
@@ -123,6 +114,17 @@ export const eventsOf = (test: Harness, who: Actor) => [...test.db.CalendarEvent
 export const invitesOf = (test: Harness, eventId: number) => [...test.db.CalendarEventInvite.event_id.filter(eventId)];
 export const invite = (test: Harness, eventId: number, userId: number) =>
     [...test.db.CalendarEventInvite.by_event_and_invitee.filter([eventId, userId])][0];
-export const savedOf = (test: Harness, who: Actor) => [...test.db.SavedCalendar.user_id.filter(who.userId)];
+/**
+ * T-S10ac (A157(7)): writes a Pending invite row directly (no reducer), for states the reducers no longer create: an
+ * invite of a guest or of a user pending deletion that predates A157 (such rows stay until the user's deletion).
+ */
+export function seedInvite(test: Harness, eventId: number, inviteeUserId: number, actorId: number): void {
+    const ts = test.clock.now();
+    test.db.CalendarEventInvite.insert({
+        eventId, inviteeUserId, inviteStatus: { tag: 'Pending' } as any, respondedAt: undefined,
+        createdById: actorId, createdDate: ts, lastModifiedById: actorId, lastModifiedDate: ts,
+    } as any);
+}
+export const savedOf =(test: Harness, who: Actor) => [...test.db.SavedCalendar.user_id.filter(who.userId)];
 export const saveCalendar = (test: Harness, who: Actor, target: Actor) =>
     tx(test, who, (ctx) => M.save_calendar(ctx, { targetUserId: target.userId }));

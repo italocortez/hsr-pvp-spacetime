@@ -1,12 +1,16 @@
 // ─── Calendar Availability Reducers ───────────────────────────────────────────
-// Manages recurring and one-time availability slots for players.
+// Manages dated availability slots: each slot is one interval, Available or Blocked (S10ac, A157(1), A157(3):
+// recurrence removed).
 //
 // Permission model:
 //   - create/update_availability_slot: non-guest users only
 //   - delete_availability_slot: owner OR Admin (D-14)
 //
-// Caps (per D-10): max 10 slots per user; 6-month window (D-12)
-// Lazy cleanup (D-27, D-07): S10s (A122(22), L86): every calendar reducer first deletes the caller's slots expired more
+// Rules (S10ac, A157): times through parseInterval (digits only, 2020..2100, A157(11)); a slot lasts at most 24 h;
+// a start in the past is refused on create and on an update that moves the start (A157(9)); the start lies at most
+// 6 months ahead (D-28); at most 10 slots per UTC week (Monday 00:00 UTC) counted by start, ended slots not counted
+// (A157(2)), the slot under update not counted.
+// Lazy cleanup (D-27, D-07): S10s (A122(22), L86): every calendar reducer first deletes the caller's slots ended more
 // than a week ago and events ended more than 90 days ago (runCalendarCleanup). S10s (A122(4), L93): each counts on the
 // per-user membership allowance (consumeMembershipAllowance). Fix pass (F2, F11): order = authenticate, allowance,
 // clean-up sparing the call's own slot, main operation.
@@ -18,143 +22,88 @@ import { getAuthenticatedUser, isRoleAtLeast } from '@module/helpers/identity/en
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { runCalendarCleanup } from '@module/helpers/calendar/calendarCleanup';
 import { consumeMembershipAllowance, MEMBERSHIP_ACTION_TEXT } from '@module/helpers/lobby/abuseControls';
+import {
+    MAX_SLOT_LENGTH_MICROS,
+    MICROS_PER_DAY,
+    ensureStartNotPast,
+    parseInterval,
+    utcWeekStart,
+} from '@module/helpers/calendar/calendarTime';
 
-const SIX_MONTHS_MICROS = BigInt(180 * 24 * 60 * 60) * BigInt(1_000_000);
-const MAX_AVAILABILITY_SLOTS = 10;
+const SIX_MONTHS_MICROS = 180n * MICROS_PER_DAY;
+export const MAX_SLOTS_PER_WEEK = 10;
+const SLOT_KINDS = ['Available', 'Blocked'];
+
+/** A157(1): the slot kind argument, 'Available' or 'Blocked'. */
+function parseSlotKind(kind: string): any {
+    if (!SLOT_KINDS.includes(kind)) throw new SenderError('Invalid slot kind. Must be Available or Blocked.');
+    return { tag: kind, value: {} };
+}
 
 /**
- * Calendar audit #3 (S10f): the one "no end date" rule of a recurring slot, shared by expiresAt and
- * recurrenceRule.endDate in create and update. '' and '0' both mean "none" (A76(2)); anything else is the end (micros).
+ * The checks shared by create and update after the times are parsed: length (24 h), past start (create: always;
+ * update: only when the start moves), the 6-month window, then the weekly cap on the week of the (new) start:
+ * the user's slots starting in that UTC week that have not ended (endAt > now), the slot under update excluded.
  */
-function hasEndDate(endDate: string): boolean {
-    return !!endDate && endDate !== '0';
+function checkSlotTimes(ctx: any, userId: number, start: bigint, end: bigint, now: bigint, current?: any): void {
+    if (end - start > MAX_SLOT_LENGTH_MICROS) {
+        throw new SenderError('An availability slot can last at most 24 hours.');
+    }
+    ensureStartNotPast(start, now, current?.startAt.microsSinceUnixEpoch);
+    if (start > now + SIX_MONTHS_MICROS) {
+        throw new SenderError('Availability slots cannot be scheduled more than 6 months in advance.');
+    }
+    const week = utcWeekStart(start);
+    let inWeek = 0;
+    for (const slot of ctx.db.AvailabilitySlot.user_id.filter(userId)) {
+        if (current && slot.id === current.id) continue;
+        if (slot.endAt.microsSinceUnixEpoch <= now) continue; // ended slots do not count
+        if (utcWeekStart(slot.startAt.microsSinceUnixEpoch) === week) inWeek++;
+    }
+    if (inWeek >= MAX_SLOTS_PER_WEEK) {
+        throw new SenderError(`You can set at most ${MAX_SLOTS_PER_WEEK} availability slots per week.`);
+    }
 }
 
 // ─── create_availability_slot ────────────────────────────────────────────────
-// Creates an availability slot for the authenticated user.
-// isRecurring=true requires recurrenceType. expiresAt defaults to 6 months from now
-// for recurring slots (or provided endDate), and equals endAt for one-time slots.
 
 export const create_availability_slot = spacetimedb.reducer(
     {
-        startAt: t.string(),         // BigInt micros as string
-        endAt: t.string(),           // BigInt micros as string
-        isRecurring: t.bool(),
-        recurrenceType: t.string(),  // Daily/Weekly/Monthly or empty for non-recurring
-        interval: t.u8(),            // Recurrence interval (1 = every day/week/month)
-        dayOfWeek: t.u8(),           // 0-6 for weekly, 255 = not set
-        dayOfMonth: t.u8(),          // 1-31 for monthly, 0 = not set
-        endDate: t.string(),         // BigInt micros for recurrence end, empty = default 6 months
+        startAt: t.string(), // BigInt micros as string
+        endAt: t.string(),   // BigInt micros as string
+        kind: t.string(),    // 'Available' | 'Blocked' (A157(1))
     },
-    (ctx, { startAt, endAt, isRecurring, recurrenceType, interval, dayOfWeek, dayOfMonth, endDate }: {
-        startAt: string;
-        endAt: string;
-        isRecurring: boolean;
-        recurrenceType: string;
-        interval: number;
-        dayOfWeek: number;
-        dayOfMonth: number;
-        endDate: string;
-    }) => {
+    (ctx, { startAt, endAt, kind }: { startAt: string; endAt: string; kind: string }) => {
         const user = getAuthenticatedUser(ctx);
         if (user.isGuest) throw new SenderError('Guests cannot manage availability slots.');
         consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT); // S10s (A122(4), L93; fix pass F11): allowance first
         runCalendarCleanup(ctx, user.id); // S10s (A122(22), L86): clean-up before the main operation
 
-        const startMicros = BigInt(startAt);
-        const endMicros = BigInt(endAt);
-        if (startMicros >= endMicros) throw new SenderError('Start time must be before end time.');
-
-        const now = ctx.timestamp.microsSinceUnixEpoch;
-        if (startMicros > now + SIX_MONTHS_MICROS) {
-            throw new SenderError('Availability slots cannot be scheduled more than 6 months in advance.');
-        }
-
-        // Cap check (the lazy cleanup of expired slots ran at the top, S10s)
-        const existing = [...ctx.db.AvailabilitySlot.user_id.filter(user.id)];
-        if (existing.length >= MAX_AVAILABILITY_SLOTS) {
-            throw new SenderError(`Maximum ${MAX_AVAILABILITY_SLOTS} availability slots per user.`);
-        }
-
-        if (isRecurring && !recurrenceType) {
-            throw new SenderError('Recurring slots require a recurrence type (Daily, Weekly, or Monthly).');
-        }
-
-        // Calculate expiresAt
-        let expiresAtMicros: bigint;
-        if (isRecurring) {
-            if (hasEndDate(endDate)) {
-                expiresAtMicros = BigInt(endDate);
-            } else {
-                expiresAtMicros = now + SIX_MONTHS_MICROS;
-            }
-        } else {
-            expiresAtMicros = endMicros;
-        }
-
-        // Build recurrenceRule — always pass values for optional fields
-        // SpacetimeDB SDK can't serialize null/undefined/omitted for optional struct fields (BigInt conversion TypeError)
-        // Use sentinel values: dayOfWeek=255 (not weekly), dayOfMonth=0 (not monthly), endDate epoch 0 (not set)
-        let recurrenceRule: any;
-        if (isRecurring) {
-            recurrenceRule = {
-                recurrenceType: { tag: recurrenceType, value: {} } as any,
-                interval: interval || 1,
-                dayOfWeek,
-                dayOfMonth,
-                endDate: hasEndDate(endDate)
-                    ? new Timestamp(BigInt(endDate))
-                    : new Timestamp(0n),
-            };
-        } else {
-            // Zero-value RecurrenceRule for non-recurring slots
-            recurrenceRule = {
-                recurrenceType: { tag: 'Daily', value: {} } as any,
-                interval: 0,
-                dayOfWeek: 255,
-                dayOfMonth: 0,
-                endDate: new Timestamp(0n),
-            };
-        }
+        const slotKind = parseSlotKind(kind);
+        const { start, end } = parseInterval(startAt, endAt);
+        checkSlotTimes(ctx, user.id, start, end, ctx.timestamp.microsSinceUnixEpoch);
 
         ctx.db.AvailabilitySlot.insert(insertWithAudit(ctx, {
             id: 0,
             userId: user.id,
-            startAt: new Timestamp(startMicros),
-            endAt: new Timestamp(endMicros),
-            isRecurring,
-            recurrenceRule,
-            expiresAt: new Timestamp(expiresAtMicros),
+            startAt: new Timestamp(start),
+            endAt: new Timestamp(end),
+            kind: slotKind,
         }, user.id));
     }
 );
 
 // ─── update_availability_slot ────────────────────────────────────────────────
-// Updates an existing availability slot owned by the authenticated user.
+// Updates an existing availability slot owned by the authenticated user (all fields; the id stays).
 
 export const update_availability_slot = spacetimedb.reducer(
     {
         slotId: t.u32(),
         startAt: t.string(),
         endAt: t.string(),
-        isRecurring: t.bool(),
-        recurrenceType: t.string(),
-        interval: t.u8(),
-        dayOfWeek: t.u8(),
-        dayOfMonth: t.u8(),
-        endDate: t.string(),
+        kind: t.string(),
     },
-    (ctx, { slotId, startAt, endAt, isRecurring, recurrenceType, interval, dayOfWeek, dayOfMonth, endDate }: {
-        slotId: number;
-        startAt: string;
-        endAt: string;
-        isRecurring: boolean;
-        recurrenceType: string;
-        interval: number;
-        dayOfWeek: number;
-        dayOfMonth: number;
-        endDate: string;
-    }) => {
+    (ctx, { slotId, startAt, endAt, kind }: { slotId: number; startAt: string; endAt: string; kind: string }) => {
         const user = getAuthenticatedUser(ctx);
         if (user.isGuest) throw new SenderError('Guests cannot manage availability slots.');
         consumeMembershipAllowance(ctx, user.id, MEMBERSHIP_ACTION_TEXT); // S10s (A122(4), L93; fix pass F11): allowance first
@@ -164,59 +113,14 @@ export const update_availability_slot = spacetimedb.reducer(
         if (!slot) throw new SenderError('Availability slot not found.');
         if (slot.userId !== user.id) throw new SenderError('Not your availability slot.');
 
-        const startMicros = BigInt(startAt);
-        const endMicros = BigInt(endAt);
-        if (startMicros >= endMicros) throw new SenderError('Start time must be before end time.');
-
-        const now = ctx.timestamp.microsSinceUnixEpoch;
-        if (startMicros > now + SIX_MONTHS_MICROS) {
-            throw new SenderError('Availability slots cannot be scheduled more than 6 months in advance.');
-        }
-
-        if (isRecurring && !recurrenceType) {
-            throw new SenderError('Recurring slots require a recurrence type (Daily, Weekly, or Monthly).');
-        }
-
-        // Calculate expiresAt
-        let expiresAtMicros: bigint;
-        if (isRecurring) {
-            if (hasEndDate(endDate)) {
-                expiresAtMicros = BigInt(endDate);
-            } else {
-                expiresAtMicros = now + SIX_MONTHS_MICROS;
-            }
-        } else {
-            expiresAtMicros = endMicros;
-        }
-
-        // Build recurrenceRule — always pass values for optional fields (same sentinel pattern as create)
-        let recurrenceRule: any;
-        if (isRecurring) {
-            recurrenceRule = {
-                recurrenceType: { tag: recurrenceType, value: {} } as any,
-                interval: interval || 1,
-                dayOfWeek,
-                dayOfMonth,
-                endDate: hasEndDate(endDate)
-                    ? new Timestamp(BigInt(endDate))
-                    : new Timestamp(0n),
-            };
-        } else {
-            recurrenceRule = {
-                recurrenceType: { tag: 'Daily', value: {} } as any,
-                interval: 0,
-                dayOfWeek: 255,
-                dayOfMonth: 0,
-                endDate: new Timestamp(0n),
-            };
-        }
+        const slotKind = parseSlotKind(kind);
+        const { start, end } = parseInterval(startAt, endAt);
+        checkSlotTimes(ctx, user.id, start, end, ctx.timestamp.microsSinceUnixEpoch, slot);
 
         ctx.db.AvailabilitySlot.id.update(updateWithAudit(ctx, slot, {
-            startAt: new Timestamp(startMicros),
-            endAt: new Timestamp(endMicros),
-            isRecurring,
-            recurrenceRule,
-            expiresAt: new Timestamp(expiresAtMicros),
+            startAt: new Timestamp(start),
+            endAt: new Timestamp(end),
+            kind: slotKind,
         }, user.id));
     }
 );

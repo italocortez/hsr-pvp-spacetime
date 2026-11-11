@@ -10,7 +10,7 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 import {
-  RecurrenceRule,
+  SlotKind,
 } from "./types";
 
 
@@ -20,9 +20,7 @@ export default __t.row({
   userLabel: __t.string().name("user_label"),
   startAt: __t.timestamp().name("start_at"),
   endAt: __t.timestamp().name("end_at"),
-  isRecurring: __t.bool().name("is_recurring"),
-  get recurrenceRule() {
-    return RecurrenceRule.name("recurrence_rule");
+  get kind() {
+    return SlotKind;
   },
-  expiresAt: __t.timestamp().name("expires_at"),
 });

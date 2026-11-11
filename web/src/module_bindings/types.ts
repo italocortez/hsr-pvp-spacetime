@@ -302,11 +302,9 @@ export const AvailabilitySlot = __t.object("AvailabilitySlot", {
   userId: __t.u32(),
   startAt: __t.timestamp(),
   endAt: __t.timestamp(),
-  isRecurring: __t.bool(),
-  get recurrenceRule() {
-    return RecurrenceRule;
+  get kind() {
+    return SlotKind;
   },
-  expiresAt: __t.timestamp(),
   createdById: __t.u32(),
   createdDate: __t.timestamp(),
   lastModifiedById: __t.u32(),
@@ -1904,11 +1902,9 @@ export const MyAvailabilityRow = __t.object("MyAvailabilityRow", {
   id: __t.u32(),
   startAt: __t.timestamp(),
   endAt: __t.timestamp(),
-  isRecurring: __t.bool(),
-  get recurrenceRule() {
-    return RecurrenceRule;
+  get kind() {
+    return SlotKind;
   },
-  expiresAt: __t.timestamp(),
 });
 export type MyAvailabilityRow = __Infer<typeof MyAvailabilityRow>;
 
@@ -1916,11 +1912,13 @@ export const MyCalendarEventRow = __t.object("MyCalendarEventRow", {
   id: __t.u32(),
   organizerId: __t.u32(),
   organizerLabel: __t.string(),
+  organizerAvatarCharacterName: __t.option(__t.string()),
   title: __t.string(),
   description: __t.option(__t.string()),
   startAt: __t.timestamp(),
   endAt: __t.timestamp(),
   bracketMatchId: __t.option(__t.u32()),
+  isBusyBlock: __t.bool(),
 });
 export type MyCalendarEventRow = __Infer<typeof MyCalendarEventRow>;
 
@@ -1929,11 +1927,13 @@ export const MyCalendarInviteRow = __t.object("MyCalendarInviteRow", {
   eventId: __t.u32(),
   inviteeUserId: __t.u32(),
   inviteeLabel: __t.string(),
+  inviteeAvatarCharacterName: __t.option(__t.string()),
   get inviteStatus() {
     return InviteStatus;
   },
   respondedAt: __t.option(__t.timestamp()),
   inviterLabel: __t.string(),
+  inviterAvatarCharacterName: __t.option(__t.string()),
 });
 export type MyCalendarInviteRow = __Infer<typeof MyCalendarInviteRow>;
 
@@ -2204,25 +2204,6 @@ export const PublicHsrAccountRow = __t.object("PublicHsrAccountRow", {
 });
 export type PublicHsrAccountRow = __Infer<typeof PublicHsrAccountRow>;
 
-export const RecurrenceRule = __t.object("RecurrenceRule", {
-  get recurrenceType() {
-    return RecurrenceType;
-  },
-  interval: __t.u8(),
-  dayOfWeek: __t.option(__t.u8()),
-  dayOfMonth: __t.option(__t.u8()),
-  endDate: __t.option(__t.timestamp()),
-});
-export type RecurrenceRule = __Infer<typeof RecurrenceRule>;
-
-// The tagged union or sum type for the algebraic type `RecurrenceType`.
-export const RecurrenceType = __t.enum("RecurrenceType", {
-  Daily: __t.unit(),
-  Weekly: __t.unit(),
-  Monthly: __t.unit(),
-});
-export type RecurrenceType = __Infer<typeof RecurrenceType>;
-
 export const RefereeTransferCheck = __t.object("RefereeTransferCheck", {
   scheduledId: __t.u64(),
   scheduledAt: __t.scheduleAt(),
@@ -2283,11 +2264,9 @@ export const SavedCalendarAvailabilityRow = __t.object("SavedCalendarAvailabilit
   userLabel: __t.string(),
   startAt: __t.timestamp(),
   endAt: __t.timestamp(),
-  isRecurring: __t.bool(),
-  get recurrenceRule() {
-    return RecurrenceRule;
+  get kind() {
+    return SlotKind;
   },
-  expiresAt: __t.timestamp(),
 });
 export type SavedCalendarAvailabilityRow = __Infer<typeof SavedCalendarAvailabilityRow>;
 
@@ -2337,6 +2316,13 @@ export const ShuffleMode = __t.enum("ShuffleMode", {
   TeamSwap: __t.unit(),
 });
 export type ShuffleMode = __Infer<typeof ShuffleMode>;
+
+// The tagged union or sum type for the algebraic type `SlotKind`.
+export const SlotKind = __t.enum("SlotKind", {
+  Available: __t.unit(),
+  Blocked: __t.unit(),
+});
+export type SlotKind = __Infer<typeof SlotKind>;
 
 export const StaffStandInRow = __t.object("StaffStandInRow", {
   id: __t.u32(),

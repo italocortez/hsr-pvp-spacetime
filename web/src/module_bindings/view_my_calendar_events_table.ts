@@ -14,9 +14,11 @@ export default __t.row({
   id: __t.u32().primaryKey(),
   organizerId: __t.u32().name("organizer_id"),
   organizerLabel: __t.string().name("organizer_label"),
+  organizerAvatarCharacterName: __t.option(__t.string()).name("organizer_avatar_character_name"),
   title: __t.string(),
   description: __t.option(__t.string()),
   startAt: __t.timestamp().name("start_at"),
   endAt: __t.timestamp().name("end_at"),
   bracketMatchId: __t.option(__t.u32()).name("bracket_match_id"),
+  isBusyBlock: __t.bool().name("is_busy_block"),
 });

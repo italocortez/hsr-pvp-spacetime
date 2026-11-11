@@ -792,6 +792,18 @@ a finished tournament can remain.
 **Anonymous tournaments.** Unchanged labels: opponents see the stand-in as a seat label ("Blue Player #n"), no name; SI9
 (the stand-in sees its side's real names) stays as A135 states.
 
+## Phase S10ac execution (DECISIONS.md A157(12))
+
+`BracketMatch.scheduledAt` (optional timestamp; the column existed and was never written) now holds the start of the
+match's calendar event: `create_calendar_event` with a `bracketMatchId` writes it, `update_calendar_event` moves it
+when the start changes (an end-only change leaves it), and every deletion of the event clears it through
+`deleteCalendarEventWithInvites` (`delete_calendar_event`, the D-21 / D-22 cascades of cancel, rollback, staff resolve,
+disqualification and bracket regeneration, user deletion, the lazy calendar clean-up and the A157(10) sweep). Helper
+`setBracketMatchSchedule(ctx, bracketMatchId, startAt, actorId?)` in `helpers/calendar/calendarCascade.ts`: the two
+calendar reducers stamp the audit columns with the caller; the deletion paths change the column only. A match whose
+row is already gone is skipped. Readers: `view_tournament_matches_for_me.scheduledAt` (unchanged column) and the public
+`bracket_match` table. Details in [../calendar/architecture.md](../calendar/architecture.md) "Phase S10ac execution".
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -842,10 +854,11 @@ a finished tournament can remain.
 | Second fix pass: no automatic stand-in displacement (A138; the captain's manual move kept); the stand-in snapshot also at `confirm_ready` in a player seat, never after the user has played (A104), first-locked-account fallback; selections deleted with released locks; `canHoldEntry` reads `requireOwnership` | Phase S10v execution (DECISIONS.md A138; S10v review G1-G8) | 2026-11-10 |
 | `start_draft` refuses a tournament lobby with `requireOwnership` while a seated Blue / Red player has no selected match account; known limitations N2 to N4 documented | Phase S10v execution (S10v review 3, N1-N5) | 2026-11-10 |
 | `create_tournament_lobby`: a stand-in approval no longer allows creating the match lobby (members of the two teams and `bracket` staff, Moderator+ as before; a stand-in with such a role creates through it, seated as a Spectator referee) | Phase S10v execution (DECISIONS.md A140) | 2026-11-10 |
+| `BracketMatch.scheduledAt` is written from the match's calendar event (create, start change) and cleared when the event is deleted | Phase S10ac execution (DECISIONS.md A157(12)) | 2026-11-11 |
 
 ---
 
-*Last updated: 2026-11-10 (S10v)*
+*Last updated: 2026-11-11 (S10ac)*
 *Feature owner: Phase 04 / Phase 06 / Phase 08 / Phase 10.1 / Phase 10.4 / Phase 12.3*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

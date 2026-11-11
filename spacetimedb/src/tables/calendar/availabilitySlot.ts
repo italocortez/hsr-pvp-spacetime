@@ -1,14 +1,14 @@
 import { table, t } from 'spacetimedb/server';
-import { RecurrenceRule } from '@module/types/structs';
+import { SlotKind } from '@module/types/enums';
 
+// S10ac (A157(1), A157(3)): one dated interval per slot (recurrence, recurrenceRule and expiresAt removed: a slot ends
+// at endAt), with a kind, Available or Blocked.
 export const availabilitySlotColumns = {
     id: t.u32().primaryKey().autoInc(),
     userId: t.u32(),
     startAt: t.timestamp(),
     endAt: t.timestamp(),
-    isRecurring: t.bool(),
-    recurrenceRule: RecurrenceRule,
-    expiresAt: t.timestamp(),
+    kind: SlotKind,
     createdById: t.u32(),
     createdDate: t.timestamp(),
     lastModifiedById: t.u32(),

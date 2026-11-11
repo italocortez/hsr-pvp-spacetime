@@ -1,10 +1,11 @@
 # Calendar & Scheduling -- Architecture
 
-Last updated: 2026-04-09
+Last updated: 2026-11-11 (S10ac)
 
 ## Overview
 
-The calendar feature lets players set recurring or one-time availability slots, save other players' calendars as bookmarks, and create scheduled events with invites. Tournament organizers can link events to bracket matches, which auto-invites all active team members. Common-availability computation is client-side from subscribed slot data. All cascade deletions (tournament cancel, bracket rollback, user deletion) run in the same transaction as the triggering reducer.
+The calendar feature lets players set dated availability slots (Available or Blocked; S10ac, A157(1), A157(3):
+recurrence removed), save other players' calendars as bookmarks, and create scheduled events with invites. Tournament organizers can link events to bracket matches, which auto-invites all active team members and writes the match's `scheduledAt` (A157(12)). Common-availability computation is client-side from subscribed slot data. All cascade deletions (tournament cancel, bracket rollback, user deletion) run in the same transaction as the triggering reducer; the scheduled identity GC sweeps rows past retention (A157(10)).
 
 ## Table Relationships
 
@@ -12,19 +13,13 @@ The calendar feature lets players set recurring or one-time availability slots, 
 User (id: u32 autoInc PK)
   +-- AvailabilitySlot (id: u32 autoInc PK)
   |     userId -> User.id  [btree: user_id]
-  |     startAt: Timestamp (base window, always UTC)
-  |     endAt: Timestamp
-  |     isRecurring: bool
-  |     recurrenceRule: RecurrenceRule struct
-  |       .recurrenceType: RecurrenceType (Daily | Weekly | Monthly)
-  |       .interval: u8 (1=every period; 0=sentinel for non-recurring)
-  |       .dayOfWeek: u8? (0-6; 255=not set sentinel)
-  |       .dayOfMonth: u8? (1-31; 0=not set sentinel)
-  |       .endDate: Timestamp?
-  |     expiresAt: Timestamp (6mo from creation for recurring; equals endAt for one-time)
+  |     startAt: Timestamp (UTC)
+  |     endAt: Timestamp (startAt < endAt, at most 24 h later; the slot ends here, no expiresAt)
+  |     kind: SlotKind (Available | Blocked)  -- S10ac, A157(1)
   |     audit columns
   |
-  +-- SavedCalendar (PK: [userId, targetUserId])
+  +-- SavedCalendar (logical key [userId, targetUserId]: the `primaryKey` table option is decorative,
+  |     not engine-enforced; save_calendar's duplicate check keeps it unique)
   |     userId -> User.id (subscriber)  [btree: user_id]
   |     targetUserId -> User.id (whose calendar)
   |     isVisible: bool (toggle without deleting, D-16)
@@ -36,11 +31,12 @@ User (id: u32 autoInc PK)
   |     title: string
   |     description: string? (optional, D-26)
   |     startAt: Timestamp
-  |     endAt: Timestamp
+  |     endAt: Timestamp (at most 7 days after startAt, A157(11))
   |     bracketMatchId: u32? -> BracketMatch.id  [btree: bracket_match_id]
   |     audit columns
   |
-  +-- CalendarEventInvite (PK: [eventId, inviteeUserId])
+  +-- CalendarEventInvite (logical key [eventId, inviteeUserId]: decorative `primaryKey` option, not engine-enforced;
+        uniqueness comes from the reducers' duplicate checks)
         eventId -> CalendarEvent.id  [btree: event_id]
         inviteeUserId -> User.id  [btree: invitee_user_id]
         inviteStatus: InviteStatus (Pending | Accepted | Declined | Tentative)
@@ -49,86 +45,126 @@ User (id: u32 autoInc PK)
         Indexes: event_id, invitee_user_id, by_event_and_invitee (btree, [eventId, inviteeUserId])
 ```
 
+Time arguments of every calendar reducer are micros strings parsed by `parseCalendarTime` / `parseInterval`
+(`helpers/calendar/calendarTime.ts`, A157(11)): see "Phase S10ac execution".
+
 ## Reducer Flows
 
-### create_availability_slot(startAt, endAt, isRecurring, recurrenceType, interval, dayOfWeek, dayOfMonth, endDate?)
-1. `getAuthenticatedUser(ctx)` -- reject guests
-2. `runCalendarCleanup(ctx, userId)` (Phase S10s execution: every calendar reducer, see below) -- lazy delete slots where `expiresAt + 1 week < now` (D-27) and events where `endAt + 90 days < now` (D-07)
-3. Validate cap: <=10 slots per user (D-10)
-4. Validate creation window: startAt must be within 6 months from now (D-28)
-5. Build `RecurrenceRule` struct with sentinel values for unset optional u8 params:
-   - `dayOfWeek=255` -> not set; `dayOfMonth=0` -> not set
-6. Set `expiresAt`: 6 months from creation for recurring; equals `endAt` for one-time
-7. Insert `AvailabilitySlot` row
+Every calendar reducer starts with: authenticate (and the guest check where there is one), the membership allowance,
+the caller's lazy clean-up (Phase S10s execution, below). The numbered steps list what follows, in code order.
 
-### update_availability_slot(slotId, startAt, endAt, isRecurring, recurrenceType, interval, dayOfWeek, dayOfMonth, endDate?)
-1. `getAuthenticatedUser(ctx)` -- reject guests
-2. Find slot by `id` -- reject if not found; verify `userId === caller.id` (owner only)
-3. `AvailabilitySlot.id.update()` with new values
+### create_availability_slot(startAt, endAt, kind)
+1. Reject guests (`'Guests cannot manage availability slots.'`)
+2. `kind` must be `Available` or `Blocked` (`'Invalid slot kind. Must be Available or Blocked.'`)
+3. `parseInterval`: `'Invalid start time.'` / `'Invalid end time.'`, then `'Start time must be before end time.'`
+4. Length at most 24 h (`'An availability slot can last at most 24 hours.'`)
+5. Start not in the past (`"You can't schedule something in the past."`)
+6. Start within 6 months from now (D-28, `'Availability slots cannot be scheduled more than 6 months in advance.'`)
+7. Weekly cap: fewer than 10 of the caller's slots that have not ended (`endAt > now`) start in the UTC week (Monday
+   00:00 UTC) of the new start (`'You can set at most 10 availability slots per week.'`)
+8. Insert `AvailabilitySlot`
+
+### update_availability_slot(slotId, startAt, endAt, kind)
+1. Reject guests; find slot (`'Availability slot not found.'`); owner only (`'Not your availability slot.'`)
+2. Steps 2-7 of create, with two differences: the past check applies only when the start moves (a started slot keeps
+   its start and may change its end or kind), and the weekly cap does not count the slot itself (its new week is
+   checked)
+3. `AvailabilitySlot.id.update()` (same id)
 
 ### delete_availability_slot(slotId)
-1. `getAuthenticatedUser(ctx)`
-2. Find slot -- reject if not found
-3. Verify owner OR Admin
-4. Delete slot
+1. Find slot -- reject if not found
+2. Verify owner OR Admin (`'Forbidden: You can only delete your own availability slots.'`)
+3. Delete slot
 
 ### save_calendar(targetUserId)
-1. `getAuthenticatedUser(ctx)` -- reject guests
-2. Validate cap: <=5 saved calendars per user (D-15)
-3. Insert `SavedCalendar` row with `isVisible=true`
+1. Reject guests (`'Guests cannot save calendars.'`)
+2. Not oneself (`'Cannot save your own calendar.'`)
+3. Target exists (`'Target user not found.'`); S10ac (A157(7)): not a guest (`"A guest's calendar cannot be saved."`),
+   not pending deletion (`"This user's account is being deleted; their calendar cannot be saved."`)
+4. Not already saved (`'Already saved.'`)
+5. Cap: fewer than 5 saved calendars (D-15, `'Maximum 5 saved calendars per user.'`)
+6. Insert `SavedCalendar` row with `isVisible=true`
 
 ### unsave_calendar(targetUserId)
-1. `getAuthenticatedUser(ctx)`
-2. Find `SavedCalendar` row by `[userId, targetUserId]` -- reject if not found; verify owner
+1. Reject guests (`'Guests cannot manage saved calendars.'`)
+2. Find the caller's `SavedCalendar` row by `[userId, targetUserId]` (`'Calendar not saved.'`)
 3. Delete the row
 
-### toggle_calendar_visibility(targetUserId)
-1. `getAuthenticatedUser(ctx)`
-2. Find existing `SavedCalendar` row -- reject if not found; verify owner
-3. Delete + re-insert with flipped `isVisible` (composite PK requires delete+insert pattern, D-16)
+### toggle_calendar_visibility(targetUserId, isVisible)
+1. Reject guests (`'Guests cannot manage saved calendars.'`)
+2. Find the caller's row (`'Calendar not saved.'`)
+3. Delete + re-insert with `isVisible` set to the argument (not flipped; the table has no engine primary key, D-16)
 
-### create_calendar_event(title, description?, startAt, endAt, bracketMatchId?, inviteeUserIds?)
-1. `getAuthenticatedUser(ctx)` -- reject guests
-2. `runCalendarCleanup(ctx, userId)` (Phase S10s execution: every calendar reducer) -- lazy delete events where `endAt + 90 days < now` (D-07) and slots where `expiresAt + 1 week < now` (D-27)
-3. If `bracketMatchId > 0` (tournament-linked, D-17):
-   - Verify TO/Admin/Mod/Assistant access for the bracket match's tournament (D-20)
-   - Check no existing event for that `bracketMatchId` via `bracket_match_id` index (D-19)
-4. Validate cap: <=40 active CalendarEvents per user (D-06)
-   - Phase S10b execution (DECISIONS.md A79): `startAt < endAt`, then `endAt >= now` (`'Event end time must not be in the past.'`, now = `ctx.timestamp`). After the cleanup, two caps on the organizer's `CalendarEvent` rows (`organizer_id` index), checked in this order: events with `endAt >= now` < `MAX_ACTIVE_EVENTS_PER_USER` = 40 (`'Maximum 40 active calendar events per user.'`); all retained events < `MAX_RETAINED_EVENTS_PER_USER` = 100 (`'Maximum 100 calendar events per user.'`). Ended events count only against the 100 ceiling.
-5. Insert `CalendarEvent` row
-6. If tournament-linked: resolve `BracketMatch -> TournamentTeam -> TournamentTeamMember` for both teams; auto-insert `CalendarEventInvite` rows for all active participants (D-17, D-18)
-7. Add manual invitees from `inviteeUserIds` (excluding already-auto-invited users); enforce cap of 9 total invitees (D-04)
+### create_calendar_event(title, description, startAt, endAt, bracketMatchId, inviteeUserIds)
+1. Reject guests (`'Guests cannot create calendar events.'`)
+2. Texts (`eventTexts`): title trimmed, 1..100 characters; description trimmed, at most 1000 characters; counted in
+   code points (A157(11))
+3. `parseInterval` (`'Invalid start time.'` / `'Invalid end time.'`, `'Start time must be before end time.'`); length
+   at most 7 days (`'An event can last at most 7 days.'`); start not in the past (`"You can't schedule something in
+   the past."`, A157(9); since the start is not past, neither is the end: A79(3)'s end check is implied); start at
+   most 365 days ahead (`'Events cannot be scheduled more than 12 months in advance.'`)
+4. If `bracketMatchId > 0` (tournament-linked, D-17): the match exists (`'Bracket match not found.'`); the `bracket`
+   permission on its tournament (D-20, A25); no event for that match yet (D-19); collect the two teams' active members
+   and the match's approved stand-ins. Otherwise (personal event): no overlap with one of the caller's Blocked slots
+   (`'This time overlaps one of your blocked slots.'`, A157(1); half-open intervals, touching passes). A match event is
+   exempt from the Blocked check (its organizer is staff scheduling other players).
+5. Caps after the clean-up (A79): events with `endAt >= now` < 40 (`'Maximum 40 active calendar events per user.'`);
+   all retained events < 100 (`'Maximum 100 calendar events per user.'`)
+6. Manual invitees: comma-separated ids parsed strictly by `parseInviteeIds` (S10ac review M1): `''` (or plain spaces
+   only) = nobody; otherwise every token, after trimming plain spaces, is digits only and a whole number from 1 to
+   4294967295, and any other token (letters, `3abc`, `3.9`, `1e3`, `-3`, `0`, an empty token such as a trailing comma,
+   an id above u32 that would wrap to a real user) refuses the whole call with `'Invalid invitee list.'`;
+   then de-duplicated, minus the auto-invitees; members + manual <= 9
+   (`'Maximum 9 invitees per event.'`, D-04); stand-ins fill the room left (S10v review F4); each manual invitee exists
+   (`'User <id> not found.'`), is not a guest (`'Guests cannot be invited to calendar events.'`) and not pending
+   deletion (`"This user's account is being deleted; they cannot be invited."`) (A157(7)); server-written invites
+   (members, stand-ins) are not checked
+7. Insert `CalendarEvent`, then the Pending invites (auto first, then manual)
+8. Match event: `BracketMatch.scheduledAt` = the start (A157(12), `setBracketMatchSchedule`)
 
-### update_calendar_event(eventId, title?, description?, startAt?, endAt?)
-1. `getAuthenticatedUser(ctx)`
-2. Find event -- reject if not found; verify organizer OR Admin
-3. `CalendarEvent.id.update()` -- cannot change `bracketMatchId` (D-08)
-   - Phase S10b execution (DECISIONS.md A79): after `startAt < endAt`, a changed `endAt` must not lie in the past (`'Event end time must not be in the past.'`); an unchanged `endAt` passes (a finished event's title / description stays editable).
-   - Phase S10d execution (DECISIONS.md A90): an update that revives an ended event (stored `endAt < now`, new `endAt >= now`) is rejected with `'Maximum 40 active calendar events per user.'` when the event's organizer (not the caller) already has 40 events with `endAt >= now` (`organizer_id` index, no cleanup: ended events never count as active). An event that stays active or stays ended is not counted again.
-   - Phase S10d execution (DECISIONS.md A89): the caller check of step 2 is `ensureCanManageEvent` (below).
+### update_calendar_event(eventId, title, description, startAt, endAt, inviteeUserIds?)
+1. Find event (`'Calendar event not found.'`); `ensureCanManageEvent` (below)
+2. Texts as in create
+3. `parseInterval`; length at most 7 days; past start refused only when the start moves (A157(9); a started event keeps
+   its start and edits the rest); 12-month lead when the start moves
+4. A79: a changed `endAt` must not lie in the past (`'Event end time must not be in the past.'`)
+5. A90: reviving an ended event (stored `endAt < now`, new `endAt >= now`) is refused with
+   `'Maximum 40 active calendar events per user.'` when the organizer (not the caller) already has 40 active events
+6. A personal event whose start or end changes may not overlap one of the organizer's Blocked slots (`'This time
+   overlaps one of your blocked slots.'` for the organizer, `"This time overlaps one of the organizer's blocked
+   slots."` for an Admin)
+7. `inviteeUserIds` (A157(12), optional): omitted = the set is unchanged; given = the full set, comma-separated ids
+   (`''` = nobody), parsed strictly as in create step 6 (a junk list is refused, it never empties the set). The final
+   set has at most 9 (`'Maximum 9 invitees per event.'`); added ids are validated as in
+   create step 6. All checks run before any write
+8. Update the event row (`bracketMatchId` never changes, D-19); delete the removed invites; when the start or end
+   changed (A157(4)) every kept invite that is not already a fresh Pending goes back to Pending with `respondedAt`
+   cleared (delete + re-insert, creator kept, `lastModified*` = the caller); insert the added invites as Pending
+9. Match event whose start moved: `BracketMatch.scheduledAt` follows (an end-only change leaves it)
 
 ### delete_calendar_event(eventId)
-1. `getAuthenticatedUser(ctx)`
-2. Find event -- reject if not found; verify organizer OR Admin
-3. Cascade-delete all `CalendarEventInvite` rows via `event_id` index
-4. Delete `CalendarEvent` row
+1. Find event; `ensureCanManageEvent`
+2. `deleteCalendarEventWithInvites`: invites via `event_id`, the event row, and the bracket match's `scheduledAt`
+   (cleared, A157(12))
 
 ### invite_to_event(eventId, inviteeUserId)
-1. `getAuthenticatedUser(ctx)`
-2. Find event -- verify organizer OR Admin
-3. Validate total invitee cap: <=9 (D-04)
-4. Insert `CalendarEventInvite` row with `inviteStatus=Pending`
+1. Find event; `ensureCanManageEvent`
+2. Invitee exists (`'Invitee user not found.'`); not a guest / pending deletion (A157(7) texts above)
+3. Not already invited (`'User is already invited to this event.'`); fewer than 9 invites (D-04)
+4. Insert a Pending `CalendarEventInvite`
 
 ### remove_invite(eventId, inviteeUserId)
-1. `getAuthenticatedUser(ctx)`
-2. Find event -- verify organizer OR Admin
-3. Delete `CalendarEventInvite` row by `[eventId, inviteeUserId]`
+1. Find event (`'Calendar event not found.'`)
+2. S10ac (A157(8)): when `inviteeUserId` is the caller, no further permission (an invitee leaves the event);
+   otherwise `ensureCanManageEvent`
+3. Find the invite (`'Invite not found.'`) and delete it
 
 ### respond_to_invite(eventId, status)
-1. `getAuthenticatedUser(ctx)`
-2. Find `CalendarEventInvite` by `[eventId, callerId]` -- reject if not found; verify caller is invitee
-3. Reject if `status=Pending` (invitees cannot set back to Pending, D-01)
-4. Delete + re-insert with new `inviteStatus` and `respondedAt=ctx.timestamp` (composite PK update pattern, D-02)
+1. Reject guests (`'Guests cannot respond to event invites.'`)
+2. `status` must be Accepted, Declined or Tentative (`'Cannot respond with Pending status.'`; otherwise
+   `'Invalid status. Must be one of: Accepted, Declined, Tentative.'`, D-01)
+3. Find the caller's invite (`'You have no invite for this event.'`)
+4. Delete + re-insert with the new `inviteStatus` and `respondedAt=ctx.timestamp` (no engine primary key, D-02)
 
 ### Caller rule of update / delete / invite / remove_invite (Phase S10d execution, DECISIONS.md A89)
 `ensureCanManageEvent(ctx, user, event, action)` (`reducers/calendar/calendarEvents.ts`), used by `update_calendar_event`, `delete_calendar_event`, `invite_to_event` and `remove_invite` (the "verify organizer OR Admin" steps above):
@@ -148,8 +184,12 @@ All cascades run in the same transaction as the triggering reducer:
 | `withdraw_from_tournament` | `deleteUserInvitesForTournament(ctx, userId, tournamentId)` | D-24 |
 | `performUserDeletion` | `deleteAllCalendarDataForUser(ctx, userId)` | D-23 |
 | `server_link_provider` moving a guest's tournament entry (`moveEntry`) | `moveUserInvitesForTournament(ctx, fromUserId, toUserId, tournamentId, actorId)` | A113(5), Phase S10m execution |
+| `resolve_bracket_match` on a Ready match, `deleteBracket` (regeneration) | `deleteCalendarEventForBracketMatch(ctx, bracketMatchId)` | D-22 |
+| `run_identity_gc` (weekly) | `sweepExpiredCalendarRows(ctx)` (`calendarCleanup.ts`) | A157(10), Phase S10ac execution |
 
-Cascade helper functions live in `spacetimedb/src/helpers/calendar/calendarCascade.ts`.
+Cascade helper functions live in `spacetimedb/src/helpers/calendar/calendarCascade.ts`. Every event deletion goes
+through `deleteCalendarEventWithInvites`, which also clears the match's `BracketMatch.scheduledAt` (Phase S10ac
+execution, A157(12)).
 
 ## Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48)
 
@@ -171,6 +211,10 @@ both teams' members whatever the invite rows (rule (c)), so `remove_invite` on a
 RSVP row, not the event from a removed team member's calendar; a stand-in (`TournamentStandIn`) sees it only through an
 invite row. An invitee never sees the other
 invitees of an event (an anonymous tournament's match event would otherwise list the opposing players).
+**Superseded by Phase S10ac execution (A157(1), (3), (5), (6), (12)):** slot rows carry `kind` instead of the
+recurrence columns; invitees read the attendee list (not of an anonymous tournament's match event, staff excepted);
+path (d) sends busy blocks; avatars next to labels ([../views/architecture.md](../views/architecture.md) "Phase S10ac
+execution").
 
 ## Phase S10f execution (calendar audit #2, #3, #5; LOW #11, #13)
 
@@ -178,7 +222,8 @@ invitees of an event (an anonymous tournament's match event would otherwise list
   (`[...new Set(manualInviteeIds)]`) before removing the auto-invite set; the 9-invitee cap counts each user once.
 - **One "no end date" rule (#3).** `calendarAvailability.ts::hasEndDate(endDate)`: `''` and `'0'` both mean none (A76(2)).
   `create_availability_slot` and `update_availability_slot` use it for `expiresAt` (none: now + 6 months) and for
-  `recurrenceRule.endDate` (none: the epoch sentinel), so `'0'` no longer stores a 1970 expiry.
+  `recurrenceRule.endDate` (none: the epoch sentinel), so `'0'` no longer stores a 1970 expiry. **Superseded by Phase
+  S10ac execution (A157(3)):** recurrence, `expiresAt` and `hasEndDate` are removed.
 - **Length caps (#5).** `create_calendar_event` / `update_calendar_event` (`eventTexts`): title trimmed, 1 to 100
   characters ("Event title cannot exceed 100 characters."), description trimmed, at most 1000 characters ("Event
   description cannot exceed 1000 characters."; empty stores none). In line with the tournament name (100) and the
@@ -219,7 +264,9 @@ personal events and to other tournaments' events stay with the guest and go with
   `CalendarEvent.organizer_id` (the caller's retained events, 100 by the create cap; rows moved to a new organizer by
   A121 can add to that), each deleted event with its invites (at most 9). Other users' rows are never read, so an
   inactive organizer's old events still wait for that organizer's next calendar call. A rejected call rolls the
-  clean-up back with it.
+  clean-up back with it. **Phase S10ac execution:** the slot count is no longer capped in total (10 per UTC week that
+  have not ended, A157(2)); slots are deleted one week after `endAt`; the weekly `run_identity_gc` sweep removes the
+  rows of owners who do not come back (A157(10)).
 - **Calendar view (A122(22), L87).** `view_my_calendar_events` skips Completed and Cancelled tournaments on the
   team-match path; [../views/architecture.md](../views/architecture.md) "Phase S10s execution".
 - **New organizer (A121, L70).** When staff delete or ban a tournament's organizer, the tournament's bracket-match
@@ -238,6 +285,62 @@ personal events and to other tournaments' events stay with the guest and go with
   ([../tournament/architecture.md](../tournament/architecture.md) "Phase S10v execution").
 - **Visibility.** `view_my_calendar_events` path (c') shows the events of the caller's approved matches
   ([../views/architecture.md](../views/architecture.md) "Phase S10v execution").
+
+## Phase S10ac execution (DECISIONS.md A157)
+
+The backend follows the calendar mockup (`design/mockups/calendar.html`); review
+`notes/audit-2026-11-09/calendar-review.md`. Reducer steps are in "Reducer Flows" above; views in
+[../views/architecture.md](../views/architecture.md) "Phase S10ac execution".
+
+- **Time validator (A157(11), review B1, B6).** `helpers/calendar/calendarTime.ts`: `parseCalendarTime(value, label)`
+  accepts 1 to 19 digits only, inside [2020-01-01, 2100-01-01) UTC, else `SenderError('Invalid <label>.')` ("start
+  time" / "end time"), so `''`, signs, decimals, spaces, letters, values above i64 and far dates never reach `BigInt`
+  wrap or a stored row. `parseInterval` adds `startAt < endAt`. Bounds: slot at most 24 h, event at most 7 days, event
+  start at most 365 days ahead (only checked when the start is new or moves); the 6-month slot window stays.
+  `charCount` counts code points for the title (100) and description (1000) caps. The invitee id list is parsed
+  strictly by `parseInviteeIds` (S10ac review M1, `create_calendar_event` step 6). Every other argument is typed (user,
+  event, slot and match ids are `u32`) or checked against a list (slot kind, invite status), so no raw `SyntaxError` / `TypeError` leaves a calendar reducer.
+- **Slot kind (A157(1)).** `AvailabilitySlot.kind: SlotKind` (Available | Blocked), in both slot reducers and both
+  availability views. A personal event (create, or an update that changes its time) may not overlap one of its
+  organizer's Blocked slots (`[start, end)` intervals; touching passes). **Exempt:** tournament match events, whose
+  organizer is the staff member scheduling other players' match: their own blocked time must not stop bracket
+  scheduling.
+- **Weekly cap (A157(2)).** At most 10 slots (both kinds) per user per UTC week (Monday 00:00 UTC, `utcWeekStart`),
+  counted by start; slots with `endAt <= now` do not count; update counts the new week without the slot itself. The old
+  total cap (10 rows) and the 7-day count of ended slots are gone (a slot ended less than a week ago still exists until
+  the clean-up but no longer counts).
+- **Recurrence removed (A157(3)).** Columns `isRecurring`, `recurrenceRule`, `expiresAt`; reducer arguments
+  `isRecurring`, `recurrenceType`, `interval`, `dayOfWeek`, `dayOfMonth`, `endDate`; the `RecurrenceRule` struct, the
+  `RecurrenceType` enum and `hasEndDate`; the view columns. A slot is one dated interval; the clean-up reads `endAt`
+  (D-27: deleted one week after its end).
+- **Reschedule (A157(4)).** `update_calendar_event` sets every kept invite to Pending (`respondedAt` cleared) when the
+  start or end changes; a text-only edit keeps the answers. No notification exists beyond the view update.
+- **Targets (A157(7)).** `ensureCalendarTarget` (`helpers/calendar/calendarTargets.ts`): `save_calendar`, the manual
+  invitees of `create_calendar_event`, the added invitees of `update_calendar_event` and `invite_to_event` refuse a
+  guest and a user with `deletedAt` set. Server-written invites (match teams, stand-ins) are not checked. Rows that
+  already point at such a user stay until that user's deletion (`deleteAllCalendarDataForUser`; idle guests without
+  match history are deleted by the identity GC, A95(1); pending deletions run 5 s later).
+- **Leaving (A157(8)).** `remove_invite` accepts the invitee on their own invite. The events view then no longer
+  reaches the event through the invite path (a match team member still sees the match event through the team path
+  (c), as before; a saver still gets a busy block). A Declined invitee keeps the event row without the notes.
+- **Past starts (A157(9)).** Create of a slot or an event refuses `start < now` (`"You can't schedule something in the
+  past."`, the mockup's text); an update refuses it only when the start moves. Supersedes the end-only check of A79(3)
+  on create; the A79(3) update rule on a changed end stays.
+- **Sweep (A157(10), review B4).** The existing weekly scheduled job `run_identity_gc` (`reducers/identity/
+  identityGc.ts`) calls `sweepExpiredCalendarRows` (`helpers/calendar/calendarCleanup.ts`) after its identity pass:
+  the same retention as the lazy clean-up, for every owner (slots ended more than 7 days ago, events ended more than
+  90 days ago with their invites and their match's `scheduledAt`). Batch: at most 500 slots and 500 events per run,
+  oldest `endAt` first (ties by id). Both tables are scanned once per run (`iter()`: there is no `endAt` index; a
+  weekly job). When rows are left over the batch the next run comes after one hour instead of 7 days (the job's
+  existing backlog interval). A `GcResult` row with `gcType: 'calendar'`, `details: {slots, events}` is written only
+  when something was deleted; the identity row and its details are unchanged. `admin_gc_identities` does not sweep.
+- **One-call invitee edit (A157(12)).** `update_calendar_event` takes `inviteeUserIds` (optional string): omitted =
+  unchanged; given = the full set (adds and removals in one call, the 9 cap on the final set, new invitees Pending, kept
+  ones keep their answer unless the time changed). `invite_to_event` / `remove_invite` are unchanged otherwise.
+- **Bracket schedule (A157(12)).** `BracketMatch.scheduledAt` = the match event's start (create, a start change),
+  cleared by every deletion of the event ([../tournament/architecture.md](../tournament/architecture.md) "Phase S10ac
+  execution").
+- **Avatars (A157(12)).** The event and invite views carry the avatar character name next to each label.
 
 ## Phase History
 
@@ -270,10 +373,11 @@ personal events and to other tournaments' events stay with the guest and go with
 | Fix pass: one order in all twelve calendar reducers (authenticate, allowance, clean-up sparing the call's own event or slot, main operation), so an own old event or expired slot can still be edited or deleted | Phase S10s execution (DECISIONS.md A122) | 2026-11-10 |
 | A tournament match event invites the match's approved stand-ins at creation; `approve_stand_in` invites a stand-in to an existing event (within the 9-invite cap), every removal of the approval deletes that invite; `view_my_calendar_events` path (c') for the stand-in's matches | Phase S10v execution (DECISIONS.md A135; audit SI16) | 2026-11-10 |
 | Fix pass: stand-ins are invited at event creation only while room is left under the cap (members and manual invitees first), so approvals never refuse the creation | Phase S10v execution (S10v review F4) | 2026-11-10 |
+| The backend follows the calendar mockup: slot kind Available / Blocked and the blocked-overlap rule for personal events; 10 slots per UTC week; recurrence removed; reschedule resets answers; attendee list for invitees; busy blocks for savers; guests and pending-deletion users refused as targets; invitees may leave; past starts refused; weekly sweep in `run_identity_gc`; one time validator with length and lead bounds; avatars in rows; one-call invitee edit; `BracketMatch.scheduledAt` written. Doc fixes: `toggle_calendar_visibility` sets `isVisible`; the composite keys are not engine-enforced; check orders and `save_calendar` checks listed | Phase S10ac execution (DECISIONS.md A157) | 2026-11-11 |
 
 ---
 
-*Last updated: 2026-11-10 (S10v)*
+*Last updated: 2026-11-11 (S10ac)*
 *Feature owner: Phase 08*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

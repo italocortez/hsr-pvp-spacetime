@@ -2,6 +2,8 @@
 
 76 tables. Updated 2026-11-06 (S3 backend reset: 27 tables public → private per A37 / ACCESS-SECURITY-OPS Appendix A, 10 new, `group_phase_record` dropped per A23). Visibility: **21 public** (reference data, aggregates, `user`, `tournament`, `bracket_match`, `admin_alert`, the `lobby_cursor_event` event table); every other table is PRIVATE and read through views (S9). Paste into [mermaid.live](https://mermaid.live) to preview.
 
+Phase S10ac execution (DECISIONS.md A157): `availability_slot` loses `isRecurring`, `recurrenceRule` and `expiresAt` and gains `kind` (the new enum `SlotKind` = Available | Blocked) after `endAt`; the struct `RecurrenceRule` and the enum `RecurrenceType` are removed. `bracket_match.scheduledAt` (optional timestamp, unchanged column) is now written: the start of the match's calendar event, cleared when the event is deleted. No index change (docs/calendar/architecture.md "Phase S10ac execution"). S11 clear-publish.
+
 Phase S10aa execution (DECISIONS.md A148, A149): the `match_session.timerState` struct `TimerState` gains `reserveUsedMs` (u32), `inReserve` (bool) and `reserveMarks` (array of the new struct `ReserveMark { sequence: u32, teamBlueReserveMs: u32, teamRedReserveMs: u32 }`), appended; `teamBlueReserveMs` / `teamRedReserveMs` now hold each team's reserve at the start of the current turn (docs/match-session/architecture.md "Phase S10aa execution"). No table, column or index change. S11 clear-publish.
 
 Phase S10u execution (DECISIONS.md A134): the `match_session_step.payload` struct `BidPayload` loses `previousAmount` again (no undo restores an earlier bidder; nothing else read it). No table, column or index change. S11 clear-publish.
@@ -217,6 +219,7 @@ erDiagram
         u8 team1Games "A67(4), A69(1): derived tally (head start, stored from generation + Validated games)"
         u8 team2Games "A67(4): derived tally (Validated games)"
         u32 blueTeamId FK "A70(1): team playing Blue; null or stale = team1; reset on a slot change (A71(3))"
+        timestamp scheduledAt "A157(12): start of the match's calendar event; null when none"
     }
     tournament_finalize_job {
         u64 scheduledId PK
@@ -441,6 +444,7 @@ erDiagram
     availability_slot {
         u32 id PK
         u32 userId FK
+        string kind "A157(1): Available|Blocked; one dated interval, no recurrence (A157(3))"
     }
     saved_calendar {
         u32 userId PK_FK

@@ -165,10 +165,10 @@ export const DisconnectPolicy = t.enum('DisconnectPolicy', {
     NoAction: t.unit(),
 });
 
-export const RecurrenceType = t.enum('RecurrenceType', {
-    Daily: t.unit(),
-    Weekly: t.unit(),
-    Monthly: t.unit(),
+// S10ac (A157(1), A157(3)): an availability slot is Available or Blocked; recurrence (RecurrenceType) is removed.
+export const SlotKind = t.enum('SlotKind', {
+    Available: t.unit(),
+    Blocked: t.unit(),
 });
 
 

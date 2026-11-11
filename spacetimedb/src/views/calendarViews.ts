@@ -1,12 +1,14 @@
 // ─── Calendar Views ───────────────────────────────────────────────────────────
 // S9b (A37 calendar contexts, A45(4), PAGE-MAP calendar + D2 / D7): the four calendar tables are private since S3;
 // the calendar page reads them through these per-sender views. Names and avatars are denormalized (labels through
-// resolveUserLabel), so no calendar route subscribes `User` (D2); a player is found by exact username through
-// view_user_by_username (D7). No audit columns in any row.
+// userCard: User.displayName / avatarCharacterName, else the archived label with no avatar), so no calendar route
+// subscribes `User` (D2); a player is found by exact username through view_user_by_username (D7). No audit columns in
+// any row.
 //
 // 1. view_my_calendar_events            — own events, events the caller is invited to, events of the caller's
-//                                         tournament matches, events organized by the visible saved calendars
-// 2. view_my_calendar_invites           — the caller's invites + the invites of the events the caller organizes
+//                                         tournament matches; busy blocks of the visible saved calendars (S10ac)
+// 2. view_my_calendar_invites           — the caller's invites + the invites of the events the caller organizes +
+//                                         the attendee list of the events the caller is invited to (S10ac)
 // 3. view_my_availability               — the caller's AvailabilitySlot rows
 // 4. view_saved_calendar_availability   — the slots of the players whose calendars the caller saved (visible ones)
 // 5. view_my_saved_calendars            — the caller's SavedCalendar rows with the target's label and avatar
@@ -15,10 +17,10 @@
 
 import spacetimedb from '@module/schema';
 import { t } from 'spacetimedb/server';
-import { InviteStatus } from '@module/types/enums';
-import { RecurrenceRule } from '@module/types/structs';
+import { InviteStatus, SlotKind } from '@module/types/enums';
 import { resolveUserLabel } from '@module/helpers/identity/userLabel';
 import { callerUserId } from '@module/helpers/identity/viewAnonymity';
+import { hasTournamentPermission } from '@module/helpers/tournament/tournamentPermissions';
 
 /** The caller's visible saved calendars' target ids (SavedCalendar.user_id; isVisible is the page's show / hide toggle, D-16). */
 function visibleSavedTargets(ctx: any, me: number): number[] {
@@ -29,30 +31,55 @@ function visibleSavedTargets(ctx: any, me: number): number[] {
     return targets;
 }
 
+/**
+ * S10ac (A157(12)): a user's label and avatar character name, cached per view call. A live user: displayName and
+ * avatarCharacterName (User.id); a deleted one: the archived or synthetic label (resolveUserLabel) and no avatar, as
+ * view_my_saved_calendars does.
+ */
+function userCards(ctx: any): (userId: number) => { label: string; avatar: string | undefined } {
+    const cache = new Map<number, { label: string; avatar: string | undefined }>();
+    return (userId: number) => {
+        let card = cache.get(userId);
+        if (card === undefined) {
+            const user = ctx.db.User.id.find(userId);
+            card = user
+                ? { label: user.displayName, avatar: user.avatarCharacterName }
+                : { label: resolveUserLabel(ctx, userId).displayName, avatar: undefined };
+            cache.set(userId, card);
+        }
+        return card;
+    };
+}
+
 // ---------------------------------------------------------------------------
 // 1. view_my_calendar_events — the CalendarEvent rows the caller may see, each once:
 //    (a) events the caller organizes (organizer_id);
-//    (b) events the caller is invited to (CalendarEventInvite.invitee_user_id);
+//    (b) events the caller is invited to (CalendarEventInvite.invitee_user_id); S10ac (A157(8)): when the caller's
+//        invite is Declined the row goes out without the notes (description undefined), so the answer can still
+//        change; an invitee who removed their own invite no longer reaches the event through this path;
 //    (c) tournament-linked events of the bracket matches of the caller's teams (both teams' members see the
 //        match event even without an invite row: TournamentEnrolled.user_id → TournamentTeamMember
 //        .by_tournament_and_user → BracketMatch.tournament_id → CalendarEvent.bracket_match_id); S10s (L87): only
 //        tournaments that are not Completed or Cancelled (Tournament.id lookup per enrolment);
 //    (c') S10v (audit SI16): the events of the bracket matches the caller is an approved stand-in for (same stage rule);
-//    (d) events organized by a player whose calendar the caller saved and shows (A45(4): calendars are public
-//        between players; isVisible = shown).
-//    Row: id, organizerId, organizerLabel, title, description?, startAt, endAt, bracketMatchId?. The organizer is
-//    identified (a personal event's organizer chose the invitees; a tournament event's organizer is staff); no
-//    invitee list here (an anonymous tournament's players stay hidden from each other). PK `id` (edits update it).
+//    (d) S10ac (A157(6)): events organized by a player whose calendar the caller saved and shows, as busy blocks
+//        only: isBusyBlock true, the owner (organizerId, label, avatar), startAt and endAt; title '', no description,
+//        no bracketMatchId. An event the caller also reaches through (a)..(c') goes out once, in full.
+//    Row: id, organizerId, organizerLabel, organizerAvatarCharacterName?, title, description?, startAt, endAt,
+//    bracketMatchId?, isBusyBlock. The organizer is identified (a personal event's organizer chose the invitees; a
+//    tournament event's organizer is staff); the attendees are in view_my_calendar_invites. PK `id` (edits update it).
 // ---------------------------------------------------------------------------
 const MyCalendarEventRow = t.row('MyCalendarEventRow', {
     id: t.u32().primaryKey(),
     organizerId: t.u32(),
     organizerLabel: t.string(),
+    organizerAvatarCharacterName: t.string().optional(),
     title: t.string(),
     description: t.string().optional(),
     startAt: t.timestamp(),
     endAt: t.timestamp(),
     bracketMatchId: t.u32().optional(),
+    isBusyBlock: t.bool(),
 });
 
 export const view_my_calendar_events = spacetimedb.view(
@@ -62,6 +89,7 @@ export const view_my_calendar_events = spacetimedb.view(
         const me = callerUserId(ctx);
         if (me === undefined) return [];
         const events = new Map<number, any>();
+        const declined = new Set<number>();
         const add = (event: any) => {
             if (event && !events.has(event.id)) events.set(event.id, event);
         };
@@ -71,6 +99,7 @@ export const view_my_calendar_events = spacetimedb.view(
         // (b) invited
         for (const invite of ctx.db.CalendarEventInvite.invitee_user_id.filter(me)) {
             add(ctx.db.CalendarEvent.id.find(invite.eventId));
+            if (invite.inviteStatus.tag === 'Declined') declined.add(invite.eventId);
         }
         // (c) the caller's teams' bracket matches
         for (const enrolled of ctx.db.TournamentEnrolled.user_id.filter(me)) {
@@ -93,50 +122,87 @@ export const view_my_calendar_events = spacetimedb.view(
             if (stage === undefined || stage === 'Completed' || stage === 'Cancelled') continue;
             for (const event of ctx.db.CalendarEvent.bracket_match_id.filter(match.id)) add(event);
         }
-        // (d) visible saved calendars
+        // (d) visible saved calendars: busy blocks of the events not already reached above
+        const busy = new Map<number, any>();
         for (const targetUserId of visibleSavedTargets(ctx, me)) {
-            for (const event of ctx.db.CalendarEvent.organizer_id.filter(targetUserId)) add(event);
+            for (const event of ctx.db.CalendarEvent.organizer_id.filter(targetUserId)) {
+                if (!events.has(event.id)) busy.set(event.id, event);
+            }
         }
 
-        const labels = new Map<number, string>();
+        const card = userCards(ctx);
         const rows: any[] = [];
         for (const event of events.values()) {
-            let organizerLabel = labels.get(event.organizerId);
-            if (organizerLabel === undefined) {
-                organizerLabel = resolveUserLabel(ctx, event.organizerId).displayName;
-                labels.set(event.organizerId, organizerLabel);
-            }
+            const organizer = card(event.organizerId);
             rows.push({
                 id: event.id,
                 organizerId: event.organizerId,
-                organizerLabel,
+                organizerLabel: organizer.label,
+                organizerAvatarCharacterName: organizer.avatar,
                 title: event.title,
-                description: event.description,
+                description: event.organizerId !== me && declined.has(event.id) ? undefined : event.description,
                 startAt: event.startAt,
                 endAt: event.endAt,
                 bracketMatchId: event.bracketMatchId,
+                isBusyBlock: false,
+            });
+        }
+        for (const event of busy.values()) {
+            const organizer = card(event.organizerId);
+            rows.push({
+                id: event.id,
+                organizerId: event.organizerId,
+                organizerLabel: organizer.label,
+                organizerAvatarCharacterName: organizer.avatar,
+                title: '',
+                description: undefined,
+                startAt: event.startAt,
+                endAt: event.endAt,
+                bracketMatchId: undefined,
+                isBusyBlock: true,
             });
         }
         return rows;
     }
 );
 
+/**
+ * S10ac (A157(5)): whether an invitee (`me`) receives every invite of `event`. A personal event: yes. A tournament
+ * match event: yes when the tournament is not anonymous (`Tournament.isAnonymousDefault` false), else only for staff
+ * holding the `bracket` permission (hasTournamentPermission: Moderator+, the tournament organizer, an assistant with
+ * canManageBracket), the permission that manages match events. A link whose match or tournament is gone: no.
+ */
+function attendeeListVisible(ctx: any, event: any, me: number): boolean {
+    if (event.bracketMatchId === undefined) return true;
+    const match = ctx.db.BracketMatch.id.find(event.bracketMatchId);
+    const tournament = match ? ctx.db.Tournament.id.find(match.tournamentId) : undefined;
+    if (!tournament) return false;
+    if (!tournament.isAnonymousDefault) return true;
+    const user = ctx.db.User.id.find(me);
+    return !!user && hasTournamentPermission(ctx, user, tournament, 'bracket');
+}
+
 // ---------------------------------------------------------------------------
-// 2. view_my_calendar_invites — CalendarEventInvite rows of (a) the caller (the inbox and RSVP) and (b) the events
-//    the caller organizes (the organizer's invitee list and responses; remove_invite takes the invitee's id).
+// 2. view_my_calendar_invites — CalendarEventInvite rows of (a) the caller (the inbox and RSVP), (b) the events the
+//    caller organizes (the organizer's invitee list and responses; remove_invite takes the invitee's id) and, S10ac
+//    (A157(5)), (c) the events the caller holds an invite to, when attendeeListVisible (the attendee list with
+//    answers: personal events; match events of tournaments that are not anonymous; staff on anonymous ones).
 //    Row: inviteKey (PK = eventId << 32 | inviteeUserId; respond_to_invite updates the row in place), eventId,
-//    inviteeUserId, inviteeLabel, inviteStatus, respondedAt?, inviterLabel (the invite's creator: the organizer,
-//    or the Admin who added it). Another invitee's invite is never listed to an invitee.
-//    Index-only: CalendarEventInvite.invitee_user_id / event_id, CalendarEvent.organizer_id, User.id, DeletedUser.id.
+//    inviteeUserId, inviteeLabel, inviteeAvatarCharacterName?, inviteStatus, respondedAt?, inviterLabel,
+//    inviterAvatarCharacterName? (the invite's creator: the organizer, or the Admin / staff member who added it).
+//    Index-only: CalendarEventInvite.invitee_user_id / event_id, CalendarEvent.organizer_id / id, BracketMatch.id,
+//    Tournament.id, TournamentAssistant.by_tournament_and_user, User.id, DeletedUser.id.
 // ---------------------------------------------------------------------------
 const MyCalendarInviteRow = t.row('MyCalendarInviteRow', {
     inviteKey: t.u64().primaryKey(),
     eventId: t.u32(),
     inviteeUserId: t.u32(),
     inviteeLabel: t.string(),
+    inviteeAvatarCharacterName: t.string().optional(),
     inviteStatus: InviteStatus,
     respondedAt: t.timestamp().optional(),
     inviterLabel: t.string(),
+    inviterAvatarCharacterName: t.string().optional(),
 });
 
 export const view_my_calendar_invites = spacetimedb.view(
@@ -145,34 +211,33 @@ export const view_my_calendar_invites = spacetimedb.view(
     (ctx) => {
         const me = callerUserId(ctx);
         if (me === undefined) return [];
-        const labels = new Map<number, string>();
-        const label = (userId: number): string => {
-            let l = labels.get(userId);
-            if (l === undefined) {
-                l = resolveUserLabel(ctx, userId).displayName;
-                labels.set(userId, l);
-            }
-            return l;
-        };
+        const card = userCards(ctx);
         const rows = new Map<bigint, any>();
         const add = (invite: any, organizerId: number | undefined) => {
             const inviteKey = (BigInt(invite.eventId) << 32n) | BigInt(invite.inviteeUserId);
             if (rows.has(inviteKey)) return;
             const inviterId = invite.createdById !== 0 ? invite.createdById : organizerId;
+            const invitee = card(invite.inviteeUserId);
+            const inviter = inviterId !== undefined ? card(inviterId) : { label: '', avatar: undefined };
             rows.set(inviteKey, {
                 inviteKey,
                 eventId: invite.eventId,
                 inviteeUserId: invite.inviteeUserId,
-                inviteeLabel: label(invite.inviteeUserId),
+                inviteeLabel: invitee.label,
+                inviteeAvatarCharacterName: invitee.avatar,
                 inviteStatus: invite.inviteStatus,
                 respondedAt: invite.respondedAt,
-                inviterLabel: inviterId !== undefined ? label(inviterId) : '',
+                inviterLabel: inviter.label,
+                inviterAvatarCharacterName: inviter.avatar,
             });
         };
 
-        // (a) the caller's own invites
+        // (a) the caller's own invites; (c) the attendee list of those events
         for (const invite of ctx.db.CalendarEventInvite.invitee_user_id.filter(me)) {
-            add(invite, ctx.db.CalendarEvent.id.find(invite.eventId)?.organizerId);
+            const event = ctx.db.CalendarEvent.id.find(invite.eventId);
+            add(invite, event?.organizerId);
+            if (!event || event.organizerId === me || !attendeeListVisible(ctx, event, me)) continue;
+            for (const other of ctx.db.CalendarEventInvite.event_id.filter(event.id)) add(other, event.organizerId);
         }
         // (b) the invites of the caller's events
         for (const event of ctx.db.CalendarEvent.organizer_id.filter(me)) {
@@ -184,15 +249,13 @@ export const view_my_calendar_invites = spacetimedb.view(
 
 // ---------------------------------------------------------------------------
 // 3. view_my_availability — the caller's AvailabilitySlot rows (AvailabilitySlot.user_id): id (PK, updates in
-//    place), startAt, endAt, isRecurring, recurrenceRule, expiresAt.
+//    place), startAt, endAt, kind (S10ac, A157(1): Available | Blocked; recurrence and expiresAt removed, A157(3)).
 // ---------------------------------------------------------------------------
 const MyAvailabilityRow = t.row('MyAvailabilityRow', {
     id: t.u32().primaryKey(),
     startAt: t.timestamp(),
     endAt: t.timestamp(),
-    isRecurring: t.bool(),
-    recurrenceRule: RecurrenceRule,
-    expiresAt: t.timestamp(),
+    kind: SlotKind,
 });
 
 export const view_my_availability = spacetimedb.view(
@@ -203,14 +266,7 @@ export const view_my_availability = spacetimedb.view(
         if (me === undefined) return [];
         const rows: any[] = [];
         for (const slot of ctx.db.AvailabilitySlot.user_id.filter(me)) {
-            rows.push({
-                id: slot.id,
-                startAt: slot.startAt,
-                endAt: slot.endAt,
-                isRecurring: slot.isRecurring,
-                recurrenceRule: slot.recurrenceRule,
-                expiresAt: slot.expiresAt,
-            });
+            rows.push({ id: slot.id, startAt: slot.startAt, endAt: slot.endAt, kind: slot.kind });
         }
         return rows;
     }
@@ -219,7 +275,8 @@ export const view_my_availability = spacetimedb.view(
 // ---------------------------------------------------------------------------
 // 4. view_saved_calendar_availability — the AvailabilitySlot rows of every player whose calendar the caller saved
 //    and shows (A45(4): no consent flag; isVisible = shown, as the Phase 08 slot view filtered), with the owner's
-//    id and label. Index-only: SavedCalendar.user_id, AvailabilitySlot.user_id, User.id, DeletedUser.id.
+//    id and label: id (PK), userId, userLabel, startAt, endAt, kind (S10ac: Blocked slots too, the mockup's "Other's
+//    Blocked"). Index-only: SavedCalendar.user_id, AvailabilitySlot.user_id, User.id, DeletedUser.id.
 // ---------------------------------------------------------------------------
 const SavedCalendarAvailabilityRow = t.row('SavedCalendarAvailabilityRow', {
     id: t.u32().primaryKey(),
@@ -227,9 +284,7 @@ const SavedCalendarAvailabilityRow = t.row('SavedCalendarAvailabilityRow', {
     userLabel: t.string(),
     startAt: t.timestamp(),
     endAt: t.timestamp(),
-    isRecurring: t.bool(),
-    recurrenceRule: RecurrenceRule,
-    expiresAt: t.timestamp(),
+    kind: SlotKind,
 });
 
 export const view_saved_calendar_availability = spacetimedb.view(
@@ -248,9 +303,7 @@ export const view_saved_calendar_availability = spacetimedb.view(
                     userLabel,
                     startAt: slot.startAt,
                     endAt: slot.endAt,
-                    isRecurring: slot.isRecurring,
-                    recurrenceRule: slot.recurrenceRule,
-                    expiresAt: slot.expiresAt,
+                    kind: slot.kind,
                 });
             }
         }

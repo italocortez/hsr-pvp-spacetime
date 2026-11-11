@@ -16,6 +16,7 @@ import { insertWithAudit } from '@module/helpers/admin/auditHelpers';
 import { ensureModerator } from '@module/helpers/identity/ensurePermissions';
 import { hasLivePresence } from '@module/helpers/identity/presenceHelpers';
 import { hasHistoryReferences, performUserDeletion } from '@module/helpers/identity/userDeletionHelper';
+import { sweepExpiredCalendarRows } from '@module/helpers/calendar/calendarCleanup';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -201,8 +202,25 @@ export const run_identity_gc = spacetimedb.reducer(
 
         console.log(`[IDENTITY_GC] Complete: scanned=${result.itemsScanned}, deleted=${result.itemsDeleted} (orphaned=${result.orphanedCount}, stale=${result.staleCount}, guests=${result.guestCount})`);
 
+        // S10ac (A157(10)): the bounded sweep of calendar rows past retention (helpers/calendar/calendarCleanup.ts),
+        // after the identity pass (a guest deleted above took its rows with it). Its own GcResult row (gcType
+        // 'calendar') only when something was deleted; the identity row's details are unchanged.
+        const calendar = sweepExpiredCalendarRows(ctx);
+        if (calendar.slotsDeleted + calendar.eventsDeleted > 0) {
+            ctx.db.GcResult.insert(insertWithAudit(ctx, {
+                id: 0,
+                gcType: 'calendar',
+                ranAt: ctx.timestamp,
+                itemsScanned: calendar.scanned,
+                itemsDeleted: calendar.slotsDeleted + calendar.eventsDeleted,
+                details: JSON.stringify({ slots: calendar.slotsDeleted, events: calendar.eventsDeleted }),
+            }, SYSTEM_USER_ID));
+        }
+        console.log(`[CALENDAR_GC] Complete: scanned=${calendar.scanned}, slots=${calendar.slotsDeleted}, events=${calendar.eventsDeleted}`);
+
         // Self-requeue: next run in 7 days (D-03), or in one hour when the guest deletion cap was reached (review F4)
-        const capReached = result.guestCount >= GUEST_DELETIONS_PER_RUN;
+        // or the calendar sweep left rows over its batch (S10ac, A157(10))
+        const capReached = result.guestCount >= GUEST_DELETIONS_PER_RUN || calendar.batchFull;
         ctx.db.IdentityGcJob.insert({
             scheduledId: 0n,
             scheduledAt: ScheduleAt.time(ctx.timestamp.microsSinceUnixEpoch

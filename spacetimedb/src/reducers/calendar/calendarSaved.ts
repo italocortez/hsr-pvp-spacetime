@@ -11,6 +11,7 @@ import { getAuthenticatedUser } from '@module/helpers/identity/ensurePermissions
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { runCalendarCleanup } from '@module/helpers/calendar/calendarCleanup';
 import { consumeMembershipAllowance, MEMBERSHIP_ACTION_TEXT } from '@module/helpers/lobby/abuseControls';
+import { ensureCalendarTarget } from '@module/helpers/calendar/calendarTargets';
 
 const MAX_SAVED_CALENDARS = 5;
 
@@ -31,6 +32,7 @@ export const save_calendar = spacetimedb.reducer(
 
         const target = ctx.db.User.id.find(targetUserId);
         if (!target) throw new SenderError('Target user not found.');
+        ensureCalendarTarget(target, 'save'); // S10ac (A157(7)): no guest, no user pending deletion
 
         // Duplicate check
         const existing = [...ctx.db.SavedCalendar.by_user_and_target.filter([user.id, targetUserId])][0];

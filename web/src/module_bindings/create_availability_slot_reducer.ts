@@ -13,10 +13,5 @@ import {
 export default {
   startAt: __t.string(),
   endAt: __t.string(),
-  isRecurring: __t.bool(),
-  recurrenceType: __t.string(),
-  interval: __t.u8(),
-  dayOfWeek: __t.u8(),
-  dayOfMonth: __t.u8(),
-  endDate: __t.string(),
+  kind: __t.string(),
 };

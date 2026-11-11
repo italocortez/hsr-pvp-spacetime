@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { M, expectReject, guest, linkDiscord, newHarness, tx, type Actor } from '../fixtures/harness';
 import { host, verified } from '../fixtures/identity';
-import { createEvent, invite } from '../fixtures/calendar';
+import { createEvent, invite, seedInvite } from '../fixtures/calendar';
 import {
     advanceStage,
     assignAssistant,
@@ -302,7 +302,9 @@ describe('Gap 5, A118: the removed guest\'s calendar invites go as on a withdraw
             return teamRow(test, m.team1Id === teamId ? m.team2Id! : m.team1Id!)!.captainUserId;
         };
         const gEvent = createEvent(test, org, { bracketMatchId: matchOf(g).id });
-        const personal = createEvent(test, org, { title: 'Personal', invitees: [g] });
+        // T-S10ac (A157(7)): a guest can no longer be invited by hand; the invite is seeded as a pre-A157 row.
+        const personal = createEvent(test, org, { title: 'Personal' });
+        seedInvite(test, personal, g.userId, org.userId);
         expect(invite(test, gEvent, g.userId)).toBeTruthy();
         const gOpponent = opponentOf(g);
         expect(invite(test, gEvent, gOpponent)).toBeTruthy();

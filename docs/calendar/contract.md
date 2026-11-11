@@ -4,13 +4,13 @@
 
 ## Feature Overview
 
-Players can record recurring availability windows, bookmark other players' calendars to find common free time, and create calendar events with invites. Tournament organizers can schedule matches by creating events linked to bracket matches, with auto-invite of match participants. All calendar data is public. Common availability computation happens client-side from subscription data.
+Players can record recurring availability windows, bookmark other players' calendars to find common free time, and create calendar events with invites. Tournament organizers can schedule matches by creating events linked to bracket matches, with auto-invite of match participants. All calendar data is public. Common availability computation happens client-side from subscription data. _Superseded in Phase S10ac execution (DECISIONS.md A157: recurrence removed; slots are dated intervals of kind Available or Blocked)._
 
 ## Reducers
 
 ### create_availability_slot
 
-**Purpose:** Create a new recurring or one-time availability window
+**Purpose:** Create a new recurring or one-time availability window _Superseded in Phase S10ac execution (DECISIONS.md A157: recurrence removed)._
 
 **Permission:** Any authenticated user
 
@@ -19,7 +19,7 @@ Players can record recurring availability windows, bookmark other players' calen
 |-------|------|----------|-------------|
 | startAt | Timestamp | Yes | Start of the availability window (UTC) |
 | endAt | Timestamp | Yes | End of the availability window (UTC) |
-| isRecurring | bool | Yes | Whether this slot repeats |
+| isRecurring _Superseded in Phase S10ac execution (DECISIONS.md A157: recurrence arguments removed; the arguments are startAt, endAt, kind)._ | bool | Yes | Whether this slot repeats |
 | recurrenceType | RecurrenceType | No | Daily, Weekly, or Monthly (required if isRecurring) |
 | interval | u8 | No | Recurrence interval (e.g., every 2 weeks) |
 | dayOfWeek | u8? | No | 0-6 for Weekly recurrence |
@@ -34,7 +34,7 @@ Players can record recurring availability windows, bookmark other players' calen
 5. Check cap: user has < 10 AvailabilitySlot rows
 6. If endDate not provided and isRecurring, set expiresAt to 6 months from now
 7. If not recurring, set expiresAt to endAt
-8. Lazy cleanup: delete any expired slots for this user (endAt/expiresAt + 1 week past)
+8. Lazy cleanup: delete any expired slots for this user (endAt/expiresAt + 1 week past) _Superseded in Phase S10ac execution (DECISIONS.md A157: clean-up uses endAt plus 1 week; a weekly sweep covers absent users)._
 9. Insert AvailabilitySlot row
 
 **Error Cases:**
@@ -373,7 +373,7 @@ When a user account is deleted, cascade-delete all calendar data:
 ### Create and Manage Availability Slots
 
 **Given:** Authenticated user exists
-**When:** User calls `create_availability_slot` with startAt/endAt and isRecurring=true, Weekly
+**When:** User calls `create_availability_slot` with startAt/endAt and isRecurring=true, Weekly _Superseded in Phase S10ac execution (DECISIONS.md A157: recurrence removed)._
 **Then:** AvailabilitySlot row created with recurrenceRule populated, expiresAt set to 6 months ahead
 
 ### Availability Slot Cap Enforcement
@@ -478,7 +478,7 @@ When a user account is deleted, cascade-delete all calendar data:
 
 **Given:** User A organized event 1
 **When:** User A calls `update_calendar_event` with new title and times
-**Then:** CalendarEvent updated, invites unaffected
+**Then:** CalendarEvent updated, invites unaffected _Superseded in Phase S10ac execution (DECISIONS.md A157: a time change sets every invite to Pending)._
 
 ### Non-Organizer Cannot Edit Event
 
@@ -536,7 +536,7 @@ When a user account is deleted, cascade-delete all calendar data:
 | Invitee responds with Pending status | Rejected | Pending is initial state, not a valid response |
 | Organizer invites self | Allowed but unusual | No explicit guard — organizer may want to track their own RSVP |
 | bracketMatchId points to deleted match | Rejected: match not found | Validated at creation time |
-| Monthly recurrence on day 31 | Client clamps to last day of month (e.g., Feb 28/29) | Server stores original dayOfMonth=31 |
+| Monthly recurrence on day 31 _Superseded in Phase S10ac execution (DECISIONS.md A157: recurrence removed)._ | Client clamps to last day of month (e.g., Feb 28/29) | Server stores original dayOfMonth=31 |
 | Overlapping availability slots | Allowed | Slots are advisory, no server-side overlap validation |
 | Event with 0 invitees | Allowed — treated as blocked/personal time | No invites required |
 | Update event with bracketMatchId | bracketMatchId is immutable after creation | Delete and recreate to change link |
@@ -569,7 +569,7 @@ The calendar tables are private (A37 calendar contexts; supersedes the Phase 08 
 
 ### S9b-C2 Invites and RSVPs
 **When** Dave reads `view_my_calendar_invites`
-**Then** his invite to E1 arrives with `inviterLabel` = Carol's name, its status and `respondedAt`; the other invitees of E1 do not. **When** Carol reads it, every invite of E1 arrives with the invitee's id, name and response. Responding updates the row in place.
+**Then** his invite to E1 arrives with `inviterLabel` = Carol's name, its status and `respondedAt`; the other invitees of E1 do not. **When** Carol reads it, every invite of E1 arrives with the invitee's id, name and response. Responding updates the row in place. _Superseded in Phase S10ac execution (DECISIONS.md A157: an invitee of a personal event receives all invite rows of that event)._
 
 ### S9b-C3 Availability and saved calendars
 **When** Dave reads `view_my_availability`, `view_saved_calendar_availability` and `view_my_saved_calendars`
@@ -592,8 +592,8 @@ The calendar tables are private (A37 calendar contexts; supersedes the Phase 08 
 | 90-day auto-cleanup for events (lazy) | Phase 08 CONTEXT.md (D-07) | 2026-03-28 |
 | Organizer + Admin edit permissions only | Phase 08 CONTEXT.md (D-08) | 2026-03-28 |
 | Client-side availability computation | Phase 08 CONTEXT.md (D-09) | 2026-03-28 |
-| 10-slot cap per user (configuration rows) | Phase 08 CONTEXT.md (D-10) | 2026-03-28 |
-| Monthly recurrence clamps to last day | Phase 08 CONTEXT.md (D-11) | 2026-03-28 |
+| 10-slot cap per user (configuration rows) _Superseded in Phase S10ac execution (DECISIONS.md A157: 10 slots per UTC week)._ | Phase 08 CONTEXT.md (D-10) | 2026-03-28 |
+| Monthly recurrence clamps to last day _Superseded in Phase S10ac execution (DECISIONS.md A157: recurrence removed)._ | Phase 08 CONTEXT.md (D-11) | 2026-03-28 |
 | Full CRUD on availability slots | Phase 08 CONTEXT.md (D-12) | 2026-03-28 |
 | All timestamps UTC | Phase 08 CONTEXT.md (D-13) | 2026-03-28 |
 | Overlapping slots allowed | Phase 08 CONTEXT.md (D-14) | 2026-03-28 |
@@ -618,16 +618,29 @@ The calendar tables are private (A37 calendar contexts; supersedes the Phase 08 
 | Full hydration from codebase | Phase 13 normalization | 2026-04-09 |
 | Scenarios S9b-C1..C4: the calendar tables are private (supersedes D-05) and read through five per-sender views; events visible to organizer, invitees, both teams of a linked match and visible savers; invite lists for organizers; availability and bookmarks with labels; exact username search | Phase S9b execution (DECISIONS.md A37, A40, A43, A44, A48) | 2026-11-08 |
 | A tournament-linked event stays visible to both teams' members whatever the invite rows: `remove_invite` on a match event deletes the RSVP row only and cannot hide the event from a removed team member; stand-ins see it only through an invite row | Phase S9b execution (DECISIONS.md A37, A40) | 2026-11-08 |
-| Rejection texts as implemented (tests `s10-calendar`). Availability: "Guests cannot manage availability slots.", "Availability slots cannot be scheduled more than 6 months in advance.", "Recurring slots require a recurrence type (Daily, Weekly, or Monthly).", "Maximum 10 availability slots per user.", "Availability slot not found.", "Not your availability slot." (update by a non-owner), "Forbidden: You can only delete your own availability slots.". Saved calendars: "Target user not found.", "Maximum 5 saved calendars per user.", "Already saved.". Events: "Bracket match not found.", "This action needs the bracket permission." (A25: an Assistant needs the bracket permission), "A calendar event already exists for this bracket match. Delete it first to reschedule.", "Maximum 40 calendar events per user." (counts every event the caller organizes after the 90-day cleanup), "Maximum 9 invitees per event.", "User <id> not found." (`create_calendar_event`), "Invitee user not found." (`invite_to_event`), "User is already invited to this event.", "Calendar event not found.", "Forbidden: Only the organizer or an Admin can update this event." / "… can delete this event." / "… can invite users to this event." / "… can remove invites from this event.", "Invite not found.". RSVP: "You have no invite for this event." | Phase S10 execution (DECISIONS.md A76) | 2026-11-09 |
+| Rejection texts as implemented (tests `s10-calendar`). Availability: "Guests cannot manage availability slots.", "Availability slots cannot be scheduled more than 6 months in advance.", "Recurring slots require a recurrence type (Daily, Weekly, or Monthly).", "Maximum 10 availability slots per user.", "Availability slot not found.", "Not your availability slot." (update by a non-owner), "Forbidden: You can only delete your own availability slots.". Saved calendars: "Target user not found.", "Maximum 5 saved calendars per user.", "Already saved.". Events: "Bracket match not found.", "This action needs the bracket permission." (A25: an Assistant needs the bracket permission), "A calendar event already exists for this bracket match. Delete it first to reschedule.", "Maximum 40 calendar events per user." (counts every event the caller organizes after the 90-day cleanup), "Maximum 9 invitees per event.", "User <id> not found." (`create_calendar_event`), "Invitee user not found." (`invite_to_event`), "User is already invited to this event.", "Calendar event not found.", "Forbidden: Only the organizer or an Admin can update this event." / "… can delete this event." / "… can invite users to this event." / "… can remove invites from this event.", "Invite not found.". RSVP: "You have no invite for this event." _Superseded in Phase S10ac execution (DECISIONS.md A157: recurrence and total-cap texts are gone; new texts in the S10ac rows)._ | Phase S10 execution (DECISIONS.md A76) | 2026-11-09 |
 | Parameter shapes as implemented: `invite_to_event(eventId, inviteeUserId)` invites one user per call; `create_calendar_event(title, description, startAt, endAt, bracketMatchId, inviteeUserIds)` takes every field (`''` = no description, `0` = no bracket link, `inviteeUserIds` a comma-separated string whose non-numeric parts are ignored); `update_availability_slot` and `update_calendar_event` take every field and replace the row (no partial update) | Phase S10 execution (DECISIONS.md A76) | 2026-11-09 |
 | Event caps: `create_calendar_event` rejects when the caller organizes 40 events that have not ended (`endAt >= now`, after the lazy cleanup): "Maximum 40 active calendar events per user."; then when the caller organizes 100 events in total, ended or not: "Maximum 100 calendar events per user.". Finished events no longer count against the 40. This replaces the text "Maximum 40 calendar events per user." of the Phase S10 row above | Phase S10b execution (DECISIONS.md A79) | 2026-11-09 |
-| Past-date guards: `create_calendar_event` rejects an `endAt` in the past and `update_calendar_event` rejects a changed `endAt` in the past, both with "Event end time must not be in the past."; an update that keeps `endAt` (title or description of a finished event) is accepted. The 90-day event cleanup (D-07) and the one-week slot cleanup (D-27) are unchanged | Phase S10b execution (DECISIONS.md A79) | 2026-11-09 |
+| Past-date guards: `create_calendar_event` rejects an `endAt` in the past and `update_calendar_event` rejects a changed `endAt` in the past, both with "Event end time must not be in the past."; an update that keeps `endAt` (title or description of a finished event) is accepted. The 90-day event cleanup (D-07) and the one-week slot cleanup (D-27) are unchanged _Superseded in Phase S10ac execution (DECISIONS.md A157: a start in the past is refused on create and when the start moves)._ | Phase S10b execution (DECISIONS.md A79) | 2026-11-09 |
 | Tournament-linked events (`bracketMatchId` set): `update_calendar_event`, `delete_calendar_event`, `invite_to_event` and `remove_invite` also accept anyone holding the tournament's `bracket` permission (the tournament organizer, an assistant with the bracket flag, a Moderator, an Admin); others get "Forbidden: Only the organizer, an Admin or tournament staff with the bracket permission can <action>.". Personal events keep "Organizer or Admin" | Phase S10d execution (DECISIONS.md A89) | 2026-11-09 |
 | `update_calendar_event` rejects moving an ended event's `endAt` to now or later when the event's organizer already has 40 not-yet-ended events: "Maximum 40 active calendar events per user." | Phase S10d execution (DECISIONS.md A90) | 2026-11-09 |
-| Event texts: title 1 to 100 characters after trimming, description at most 1000. Duplicate manual invitee ids produce one invite. An `endDate` of '' or '0' means no end date for both `expiresAt` and the recurrence rule | Phase S10f execution (backend audit 2026-11-09, calendar findings 2, 3, 5) | 2026-11-09 |
+| Event texts: title 1 to 100 characters after trimming, description at most 1000. Duplicate manual invitee ids produce one invite. An `endDate` of '' or '0' means no end date for both `expiresAt` and the recurrence rule _Superseded in Phase S10ac execution (DECISIONS.md A157: limits count characters; the invitee list is parsed strictly; no endDate)._ | Phase S10f execution (backend audit 2026-11-09, calendar findings 2, 3, 5) | 2026-11-09 |
 | When a guest's tournament entry moves to an existing user at sign-in (A112), the guest's invites for events linked to that tournament's bracket matches are re-pointed to that user with their status kept; if the user already holds an invite for the event the guest's is only removed. Invites of other tournaments and personal events are deleted with the guest as before | Phase S10m execution (DECISIONS.md A113) | 2026-11-10 |
 | Every calendar reducer runs, in order: authentication, the per-user allowance (20 per 10 s, "You are doing that too quickly. Please wait a moment."), the clean-up of the caller's own old events and expired slots (sparing the call's own target), then the operation. `view_my_calendar_events` skips Completed and Cancelled tournaments | Phase S10s execution (DECISIONS.md A122(4), (22)) | 2026-11-10 |
 | A match event invites the team members first and approved stand-ins while room is left under the 9-invite cap; a stand-in approved later is invited if room is left; the invite goes with the approval; a stand-in sees the event of their match in `view_my_calendar_events` either way | Phase S10v execution (DECISIONS.md A135) | 2026-11-10 |
+| Slot kind: `create_availability_slot(startAt, endAt, kind)` and `update_availability_slot(slotId, startAt, endAt, kind)` take `Available` or `Blocked` ("Invalid slot kind. Must be Available or Blocked."); both availability views carry the kind. A personal event may not overlap the organizer's own Blocked slot on create or on a time change ("This time overlaps one of your blocked slots."; for an Admin edit "This time overlaps one of the organizer's blocked slots."); touching intervals pass; tournament match events are exempt | Phase S10ac execution (DECISIONS.md A157) | 2026-11-11 |
+| Slot cap: at most 10 slots per UTC week (Monday 00:00 UTC), counted by start, both kinds, slots that have ended not counted; an update checks the new week without counting itself ("You can set at most 10 availability slots per week."). The 6-month window stays | Phase S10ac execution (DECISIONS.md A157) | 2026-11-11 |
+| Recurrence is removed: no recurrence columns, arguments, rules or view fields; every slot is one dated interval | Phase S10ac execution (DECISIONS.md A157) | 2026-11-11 |
+| A change of an event's start or end sets every kept invite to Pending and clears `respondedAt`, whoever makes the change; a title or notes edit keeps the answers | Phase S10ac execution (DECISIONS.md A157) | 2026-11-11 |
+| `view_my_calendar_invites`: an invitee of a personal event receives all invite rows of that event. For a match event the full list goes to every invitee unless the tournament is anonymous; then only to an invitee holding the bracket permission, and to the event's organizer | Phase S10ac execution (DECISIONS.md A157) | 2026-11-11 |
+| `view_my_calendar_events`: a saver receives a saved player's events as busy blocks (`isBusyBlock`, organizer id, label and avatar, start, end; empty title, no notes, no match id); an event the saver also reaches another way arrives once, in full | Phase S10ac execution (DECISIONS.md A157) | 2026-11-11 |
+| Targets: a guest or a user pending deletion cannot be saved ("A guest's calendar cannot be saved.", "This user's account is being deleted; their calendar cannot be saved.") or invited ("Guests cannot be invited to calendar events.", "This user's account is being deleted; they cannot be invited."). Invites written by the server for team members and stand-ins are not checked | Phase S10ac execution (DECISIONS.md A157) | 2026-11-11 |
+| `remove_invite` accepts the invitee on their own invite; the personal event then stops arriving. A Declined invitee still receives the event, without notes. A team member or stand-in of a match event keeps seeing it through the team path | Phase S10ac execution (DECISIONS.md A157) | 2026-11-11 |
+| A start in the past is refused on create and when an update moves the start, for slots and events ("You can't schedule something in the past.") | Phase S10ac execution (DECISIONS.md A157) | 2026-11-11 |
+| The weekly `run_identity_gc` also removes slots ended more than 7 days ago and events ended more than 90 days ago with their invites, for every owner, at most 500 of each per run, oldest first; leftovers bring the next run forward to 1 hour | Phase S10ac execution (DECISIONS.md A157) | 2026-11-11 |
+| Time arguments: 1 to 19 digits within 2020-01-01 to 2100-01-01 ("Invalid start time." / "Invalid end time."); a slot lasts at most 24 hours ("An availability slot can last at most 24 hours."), an event at most 7 days ("An event can last at most 7 days.") and starts at most 365 days ahead ("Events cannot be scheduled more than 12 months in advance."); title and notes limits count characters | Phase S10ac execution (DECISIONS.md A157) | 2026-11-11 |
+| Event and invite rows carry avatar character names (organizer, invitee, inviter). `update_calendar_event` takes an optional `inviteeUserIds`: omitted leaves the set, an empty string removes everyone, otherwise it is the full set with the cap of 9 on the final set. The list is parsed strictly: comma-separated whole numbers from 1 to 4294967295, anything else refuses the call ("Invalid invitee list."), duplicates collapse. A match event writes its start to `BracketMatch.scheduledAt`, moves it on a time change and clears it when the event is deleted | Phase S10ac execution (DECISIONS.md A157) | 2026-11-11 |
+| Corrections of older statements: `toggle_calendar_visibility(targetUserId, isVisible)` sets the flag given; calendar data is not public (views scope every row); the caller's own slots arrive through `view_my_availability`; further texts: "Guests cannot manage saved calendars.", "Guests cannot respond to event invites.", "Invalid status. Must be one of: Accepted, Declined, Tentative." | Phase S10ac execution (DECISIONS.md A157) | 2026-11-11 |
 
 ---
 

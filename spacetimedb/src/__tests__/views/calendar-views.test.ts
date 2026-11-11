@@ -9,11 +9,12 @@ import type {
     MySavedCalendarRow,
     SavedCalendarAvailabilityRow,
 } from '@bindings/types';
-import { M, tx, type Actor, type Harness } from '../fixtures/harness';
+import { M, newHarness, tx, type Actor, type Harness } from '../fixtures/harness';
 import { verified, displayName } from '../fixtures/identity';
 import { addSlotAt, createTitledEvent, saveCalendar } from '../fixtures/calendar';
 import { AUDIT_KEYS, keysOf, sorted, view, type Reader } from '../fixtures/views';
 import { duel } from '../fixtures/tournament-matches';
+import { assignAssistant } from '../fixtures/tournaments';
 
 const noAudit = (row: object) => AUDIT_KEYS.filter((k) => k in row);
 const showCalendar = (test: Harness, who: Actor, target: Actor, isVisible: boolean) =>
@@ -86,17 +87,20 @@ describe('calendar views (S9b-C1..C3, S9b-V8)', () => {
         expect(view<SavedCalendarAvailabilityRow>(w.test, 'view_saved_calendar_availability', w.dave).some((r) => r.userId === w.frank.userId)).toBe(true);
     });
 
-    it('S9b-C2: Dave reads his own invites with the inviter\'s name, never another invitee\'s; Carol reads every invite of E1; a response updates the row in place', () => {
+    it('S9b-C2 (re-aligned T-S10ac, A157(5)): Dave reads his own invites with the inviter\'s name, and the other invites only of the events he is invited to; Carol reads every invite of E1; a response updates the row in place', () => {
         const w = world();
         const mine = w.invites(w.dave);
         for (const r of mine) expect(keysOf(r)).toEqual(sorted('calInvite'));
-        expect(mine.every((r) => r.inviteeUserId === w.dave.userId)).toBe(true); // no other invitee id (Gina, the opponent team)
-        const e1 = mine.find((r) => r.eventId === w.e1)!;
+        const daveEvents = new Set(mine.filter((r) => r.inviteeUserId === w.dave.userId).map((r) => r.eventId));
+        expect(mine.every((r) => daveEvents.has(r.eventId))).toBe(true); // other invitees only of Dave's own events
+        expect(mine.filter((r) => r.eventId === w.e1).map((r) => r.inviteeUserId).sort((a, b) => a - b))
+            .toEqual([w.dave.userId, w.gina.userId].sort((a, b) => a - b));
+        const e1 = mine.find((r) => r.eventId === w.e1 && r.inviteeUserId === w.dave.userId)!;
         expect(e1).toMatchObject({
             inviteKey: key(w.e1, w.dave.userId), inviteeLabel: displayName(w.test, w.dave), inviteStatus: { tag: 'Pending' },
             respondedAt: undefined, inviterLabel: displayName(w.test, w.carol),
         });
-        expect(mine.find((r) => r.eventId === w.e3)!.inviterLabel).toBe(displayName(w.test, w.org));
+        expect(mine.find((r) => r.eventId === w.e3 && r.inviteeUserId === w.dave.userId)!.inviterLabel).toBe(displayName(w.test, w.org));
 
         const carols = w.invites(w.carol).filter((r) => r.eventId === w.e1);
         expect(carols.map((r) => [r.inviteeUserId, r.inviteeLabel]).sort()).toEqual(
@@ -108,7 +112,8 @@ describe('calendar views (S9b-C1..C3, S9b-V8)', () => {
         expect(after.inviteStatus.tag).toBe('Accepted');
         expect(after.respondedAt).toBeDefined();
         expect(w.invites(w.carol).find((r) => r.inviteKey === key(w.e1, w.dave.userId))!.inviteStatus.tag).toBe('Accepted');
-        expect(w.invites(w.gina).map((r) => r.inviteeUserId)).toEqual([w.gina.userId]);
+        expect(w.invites(w.gina).map((r) => r.inviteeUserId).sort((a, b) => a - b)).toEqual([w.dave.userId, w.gina.userId].sort((a, b) => a - b));
+        expect(w.invites(w.gina).find((r) => r.inviteeUserId === w.dave.userId)!.inviteStatus.tag).toBe('Accepted');
         expect(w.invites(w.outsider)).toEqual([]);
     });
 
@@ -136,7 +141,7 @@ describe('calendar views (S9b-C1..C3, S9b-V8)', () => {
         expect(view(w.test, 'view_saved_calendar_availability', w.erin)).toEqual([]);
     });
 
-    it('no calendar row carries an audit column, and the only user ids are the ones the contract names (organizer, own invitee id / organizer\'s invitees, saved target)', () => {
+    it('no calendar row carries an audit column, and the only user ids are the ones the contract names (organizer, invitees of the events the caller is invited to or organizes, saved target) (re-aligned T-S10ac, A157(5))', () => {
         const w = world();
         const names = ['view_my_calendar_events', 'view_my_calendar_invites', 'view_my_availability', 'view_saved_calendar_availability', 'view_my_saved_calendars'];
         for (const name of names) {
@@ -144,8 +149,133 @@ describe('calendar views (S9b-C1..C3, S9b-V8)', () => {
         }
         const allowed = new Set([w.dave, w.carol, w.org, w.erin, w.frank].map((a) => a.userId));
         for (const r of w.events(w.dave)) expect(allowed.has(r.organizerId)).toBe(true);
-        expect(w.invites(w.dave).map((r) => r.inviteeUserId).every((id) => id === w.dave.userId)).toBe(true);
+        const daveInvited = new Set([...w.test.db.CalendarEventInvite.invitee_user_id.filter(w.dave.userId)].map((i) => i.eventId));
+        for (const r of w.invites(w.dave)) {
+            expect(daveInvited.has(r.eventId)).toBe(true);
+            expect([...w.test.db.CalendarEventInvite.by_event_and_invitee.filter([r.eventId, r.inviteeUserId])]).toHaveLength(1);
+        }
     });
 });
 
 const test_avatar = (test: Harness, who: Actor) => test.db.User.id.find(who.userId)!.avatarCharacterName;
+
+// ════════════════════════════════════════════════════════════════════════════
+// T-S10ac (A157(5), (6), (8), (12)): attendee list per viewer, busy blocks, leaving, avatars
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('A157: the calendar views per viewer (S10ac)', () => {
+    /**
+     * Carol organizes P (personal, notes "P notes") inviting Bob, Dora (declines) and Leo (leaves); Sam saved and shows
+     * Carol's calendar; Otto is an outsider. Avatars are set on Carol and Bob.
+     */
+    function personal() {
+        const test = newHarness();
+        const [carol, bob, dora, leo, sam, otto] = ['carol', 'bob', 'dora', 'leo', 'sam', 'otto'].map((n) => verified(test, n));
+        test.db.User.id.update({ ...test.db.User.id.find(carol.userId)!, avatarCharacterName: 'Kafka' });
+        test.db.User.id.update({ ...test.db.User.id.find(bob.userId)!, avatarCharacterName: 'Bronya' });
+        const p = createTitledEvent(test, carol, 'P', [bob, dora, leo]);
+        tx(test, dora, (ctx) => M.respond_to_invite(ctx, { eventId: p, status: 'Declined' }));
+        tx(test, leo, (ctx) => M.remove_invite(ctx, { eventId: p, inviteeUserId: leo.userId }));
+        saveCalendar(test, sam, carol);
+        const events = (who: Actor) => view<MyCalendarEventRow>(test, 'view_my_calendar_events', who);
+        const invites = (who: Actor) => view<MyCalendarInviteRow>(test, 'view_my_calendar_invites', who);
+        return { test, carol, bob, dora, leo, sam, otto, p, events, invites };
+    }
+    const ids = (rows: Array<{ inviteeUserId: number }>) => rows.map((r) => r.inviteeUserId).sort((a, b) => a - b);
+
+    it('A157(5): the organizer and every remaining invitee (the decliner too) read all invites of the personal event with their answers; the leaver, the saver and an outsider read none', () => {
+        const w = personal();
+        const all = ids([w.bob, w.dora].map((u) => ({ inviteeUserId: u.userId })));
+        for (const reader of [w.carol, w.bob, w.dora]) {
+            const rows = w.invites(reader).filter((r) => r.eventId === w.p);
+            expect(ids(rows), displayName(w.test, reader)).toEqual(all);
+            expect(rows.find((r) => r.inviteeUserId === w.dora.userId)!.inviteStatus.tag).toBe('Declined');
+            expect(rows.find((r) => r.inviteeUserId === w.bob.userId)!.inviteStatus.tag).toBe('Pending');
+        }
+        for (const reader of [w.leo, w.sam, w.otto]) expect(w.invites(reader)).toEqual([]);
+    });
+
+    it('A157(8): the decliner still reads the event row, without the notes; the invitee reads it with the notes; the leaver and the outsider read nothing of it', () => {
+        const w = personal();
+        expect(w.events(w.bob).find((r) => r.id === w.p)).toMatchObject({ title: 'P', description: 'P notes', isBusyBlock: false });
+        const declined = w.events(w.dora).find((r) => r.id === w.p)!;
+        expect(declined).toMatchObject({ title: 'P', isBusyBlock: false });
+        expect(declined.description).toBeUndefined();
+        expect(w.events(w.carol).find((r) => r.id === w.p)!.description).toBe('P notes');
+        expect(w.events(w.leo)).toEqual([]);
+        expect(w.events(w.otto)).toEqual([]);
+        // the answer can still change: Dora accepts and the notes come back
+        tx(w.test, w.dora, (ctx) => M.respond_to_invite(ctx, { eventId: w.p, status: 'Accepted' }));
+        expect(w.events(w.dora).find((r) => r.id === w.p)!.description).toBe('P notes');
+    });
+
+    it('A157(6): the saver receives the saved player\'s events as busy blocks only: owner, start, end; no title, notes, match link or invitees', () => {
+        const w = personal();
+        const rows = w.events(w.sam);
+        expect(rows).toHaveLength(1);
+        const p = w.test.db.CalendarEvent.id.find(w.p)!;
+        expect(rows[0]).toEqual({
+            id: w.p, organizerId: w.carol.userId, organizerLabel: displayName(w.test, w.carol), organizerAvatarCharacterName: 'Kafka',
+            title: '', description: undefined, startAt: p.startAt, endAt: p.endAt, bracketMatchId: undefined, isBusyBlock: true,
+        });
+        expect(w.invites(w.sam)).toEqual([]);
+        // a saver who is also invited reads the full row once
+        tx(w.test, w.carol, (ctx) => M.invite_to_event(ctx, { eventId: w.p, inviteeUserId: w.sam.userId }));
+        const both = w.events(w.sam).filter((r) => r.id === w.p);
+        expect(both).toHaveLength(1);
+        expect(both[0]).toMatchObject({ title: 'P', description: 'P notes', isBusyBlock: false });
+    });
+
+    it('A157(6): a saved staff member\'s match event reaches the saver as a busy block without the match link', () => {
+        const f = duel();
+        const { test, org } = f;
+        const m = [...test.db.BracketMatch.tournament_id.filter(f.id)][0];
+        const id = createTitledEvent(test, org, 'Final', [], m.id);
+        const saver = verified(test, 'saver');
+        saveCalendar(test, saver, org);
+        expect(view<MyCalendarEventRow>(test, 'view_my_calendar_events', saver)).toEqual([
+            expect.objectContaining({ id, title: '', bracketMatchId: undefined, isBusyBlock: true }),
+        ]);
+    });
+
+    it('A157(12): avatars next to the labels: organizer in the event row, invitee and inviter in the invite row; a deleted invitee\'s row goes with the account', () => {
+        const w = personal();
+        expect(w.events(w.bob).find((r) => r.id === w.p)!.organizerAvatarCharacterName).toBe('Kafka');
+        const bobsRow = w.invites(w.dora).find((r) => r.inviteeUserId === w.bob.userId)!;
+        expect(bobsRow).toMatchObject({
+            inviteeLabel: displayName(w.test, w.bob), inviteeAvatarCharacterName: 'Bronya',
+            inviterLabel: displayName(w.test, w.carol), inviterAvatarCharacterName: 'Kafka',
+        });
+        const dorasRow = w.invites(w.carol).find((r) => r.inviteeUserId === w.dora.userId)!;
+        expect(dorasRow.inviteeAvatarCharacterName).toBe(test_avatar(w.test, w.dora));
+        const username = w.test.db.User.id.find(w.bob.userId)!.username;
+        tx(w.test, 'internal', (ctx) => M.server_delete_user(ctx, { username }));
+        expect(w.invites(w.dora).map((r) => r.inviteeUserId)).toEqual([w.dora.userId]);
+    });
+
+    it('A157(5): a match event of a tournament that is not anonymous: an invited player reads all invites; of an anonymous tournament (isAnonymousDefault): only their own, while the organizer and an invited bracket assistant read all', () => {
+        const f = duel();
+        const { test, org } = f;
+        const m = [...test.db.BracketMatch.tournament_id.filter(f.id)][0];
+        const id = createTitledEvent(test, org, 'Final', [], m.id);
+        const player = f.ts[0].captain;
+        const allInvites = [...test.db.CalendarEventInvite.event_id.filter(id)].map((i) => i.inviteeUserId).sort((a, b) => a - b);
+        expect(allInvites.length).toBeGreaterThan(1);
+        const readIds = (who: Actor) => view<MyCalendarInviteRow>(test, 'view_my_calendar_invites', who)
+            .filter((r) => r.eventId === id).map((r) => r.inviteeUserId).sort((a, b) => a - b);
+        expect(readIds(player)).toEqual(allInvites);
+
+        // engineered: the anonymity flag set on the row (update_tournament changes it only in Draft)
+        test.db.Tournament.id.update({ ...test.db.Tournament.id.find(f.id)!, isAnonymousDefault: true });
+        expect(readIds(player)).toEqual([player.userId]);
+        expect(readIds(org)).toEqual(allInvites);
+        const asst = verified(test, 'bracketasst');
+        assignAssistant(test, org, f.id, asst, { bracket: true });
+        tx(test, org, (ctx) => M.invite_to_event(ctx, { eventId: id, inviteeUserId: asst.userId }));
+        expect(readIds(asst)).toEqual([...allInvites, asst.userId].sort((a, b) => a - b));
+        const plain = verified(test, 'plainasst');
+        assignAssistant(test, org, f.id, plain, { participants: true });
+        tx(test, org, (ctx) => M.invite_to_event(ctx, { eventId: id, inviteeUserId: plain.userId }));
+        expect(readIds(plain)).toEqual([plain.userId]);
+    });
+});

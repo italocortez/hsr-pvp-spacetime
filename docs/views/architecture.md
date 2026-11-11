@@ -111,15 +111,12 @@ Views 10-20 apply anonymous enforcement (D-92): when `lobby.isAnonymousPlayers=t
 - **Returns:** `MatchSessionStepHistory[]` for a target matchResultId
 - **Purpose:** Replay draft actions for a historical match
 
-#### view_my_calendar_events
-- **Auth:** Authenticated
-- **Returns:** `CalendarEvent[]` organized by the caller + `CalendarEventInvite[]` where caller is invitee
-- **Purpose:** Caller's full calendar view
-
-#### view_saved_calendar_slots
-- **Auth:** Authenticated
-- **Returns:** `AvailabilitySlot[]` for all users the caller has saved in `SavedCalendar` (where `isVisible=true`)
-- **Purpose:** Common availability computation across saved calendars
+#### Calendar views
+- **Auth:** Authenticated (per-sender)
+- **Views:** `view_my_calendar_events`, `view_my_calendar_invites`, `view_my_availability`,
+  `view_saved_calendar_availability`, `view_my_saved_calendars` (`views/calendarViews.ts`). Events and invites are two
+  separate views; the saved players' slots are `view_saved_calendar_availability` (no `view_saved_calendar_slots`
+  exists). Rows and paths: "Phase S9b execution" below, as changed by "Phase S10ac execution".
 
 #### view_admin_ban_records
 - **Auth:** Admin only
@@ -398,6 +395,39 @@ has no winner.
   Completed / Cancelled). At most one event per approval.
 - `view_my_stand_ins` is unchanged (the stand-in and the members of the team stood in for; no approver).
 
+## Phase S10ac execution (DECISIONS.md A157)
+
+The calendar views follow the calendar mockup. The S9b table rows above for the four views below are superseded by
+this list. Labels and avatars come from one per-call cache (`userCards`: `User.displayName` / `avatarCharacterName`;
+a deleted user gets the archived label and no avatar). Still index-only.
+
+- **`view_my_calendar_events`** (`MyCalendarEventRow`, PK `id`): + `organizerAvatarCharacterName?` (A157(12)),
+  + `isBusyBlock` (bool). Paths (a) own, (b) invited, (c) team match, (c') stand-in match as before, in full; (b) for an
+  invite the caller Declined: the row without `description` (A157(8)); a caller who removed their own invite no longer
+  reaches the event through (b). Path (d) (visible saved calendars) now sends **busy blocks** only (A157(6)): `id`,
+  organizer id / label / avatar, `startAt`, `endAt`, `isBusyBlock: true`, `title: ''`, no `description`, no
+  `bracketMatchId`; an event also reached through (a)..(c') is sent once, in full.
+- **`view_my_calendar_invites`** (`MyCalendarInviteRow`, PK `inviteKey`): + `inviteeAvatarCharacterName?`,
+  + `inviterAvatarCharacterName?` (A157(12)). New path (c) (A157(5)): for each invite the caller holds, every invite
+  of that event when the attendee list is visible to the caller: a personal event always; a match event when its
+  tournament's `isAnonymousDefault` is false, or the caller holds the `bracket` permission there
+  (`hasTournamentPermission`: Moderator+, the tournament organizer, a `canManageBracket` assistant); a match event
+  whose bracket match or tournament is gone: own row only. Extra indexes read: `BracketMatch.id`, `Tournament.id`,
+  `TournamentAssistant.by_tournament_and_user`, `User.id`. The organizer path (b) is unchanged.
+- **`view_my_availability`** (`MyAvailabilityRow`): `id`, `startAt`, `endAt`, `kind` (`SlotKind`); `isRecurring`,
+  `recurrenceRule`, `expiresAt` removed (A157(1), A157(3)).
+- **`view_saved_calendar_availability`** (`SavedCalendarAvailabilityRow`): `id`, `userId`, `userLabel`, `startAt`,
+  `endAt`, `kind`; the same three columns removed. Blocked slots are sent too (the mockup's "Other's Blocked").
+- `view_my_saved_calendars` unchanged.
+
+Size effect (BSATN, per row): a slot row loses 23 bytes (`isRecurring` 1, `RecurrenceRule` 14, `expiresAt` 8) and
+gains 1 (`kind`): own slot about 44 → 22 B, saved slot about 62 → 40 B. An event row gains the avatar (1 + 4 + name,
+about 10 to 20 B) and 1 B for `isBusyBlock`; a busy block drops the title and notes (up to 1.1 KB of ASCII, 3.4 KB of
+CJK per event, with the caps). An invite row gains two avatars (about 20 to 40 B). Row counts: the invite view grows
+for invitees only: up to 8 more rows per personal event the caller is invited to (9 invitees at most), the same for a
+match event of a non-anonymous tournament; the organizer's own rows are unchanged; saved and outsider readers get no
+invite rows. The event and slot views keep their row counts.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -435,9 +465,10 @@ has no winner.
 | Staff views: an assistant row with no permission grants nothing (A122(21)); `view_my_calendar_events` skips Completed / Cancelled tournaments on the team-match path (A122(22)) | Phase S10s execution (DECISIONS.md A121, A122) | 2026-11-10 |
 | `view_my_tournament_stand_ins` (staff, no arguments: approvals with approver and time); `view_tournament_matches_for_me` adds the stand-in's open matches; `view_my_calendar_events` adds the events of the stand-in's matches | Phase S10v execution (DECISIONS.md A135(6); audit SI15, SI16) | 2026-11-10 |
 
+| Calendar views follow the mockup: avatars next to labels; busy blocks for savers; Declined invitees without notes; invitees read the attendee list (not on anonymous tournaments' match events, staff excepted); slot rows carry `kind`, recurrence columns removed | Phase S10ac execution (DECISIONS.md A157) | 2026-11-11 |
 ---
 
-*Last updated: 2026-11-10 (S10v)*
+*Last updated: 2026-11-11 (S10ac)*
 *Feature owner: Phase 03 / Phase 06 / Phase 08 / Phase 09 / Phase 10.4 / Phase 15*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)
