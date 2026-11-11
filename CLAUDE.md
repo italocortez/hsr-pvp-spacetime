@@ -107,7 +107,7 @@ Skip it for backend-only edits, pure refactors with no visual delta, and utility
 
 ## 9. Skills
 
-Load the relevant skill before writing code: **`spacetimedb`** for anything touching tables, reducers, views, schema, publishing or bindings. UI work has no design skill: pages are ported from the frozen mockups in `design/mockups/` (made in the Open Design project); a state or component the mockup does not show goes back to Open Design, it is not invented here.
+Load the relevant skill before writing code: **`spacetimedb`** for anything touching tables, reducers, views, schema, publishing or bindings.
 
 | Skill | Purpose |
 |---|---|
