@@ -31,7 +31,7 @@ test/
 └── frontend/                         # screenshots per page (CLAUDE.md §4)
 
 spacetimedb/vitest.config.mts         # in-memory config (single '@module' alias, real spacetimedb/server)
-spacetimedb/src/__tests__/            # harness.smoke, s4…s9c suites, s10-* suites; fixtures: s4-, s7-, s8-, s8d-, s10-{a1,a2,c1,c2}-fixtures.ts
+spacetimedb/src/__tests__/            # one folder per subject (lobby, match-session, tournaments, views, ...), harness/smoke, shared builders in fixtures/; old step-named files: docs/log/2026-11-10-t-reorg.md
 ```
 
 ## Commands
@@ -47,11 +47,11 @@ spacetimedb/src/__tests__/            # harness.smoke, s4…s9c suites, s10-* su
 
 ## In-memory harness (how the s*-suites work)
 
-`createModuleTestHarness()` loads the module in-process. Facts that bite (full list: `docs/log/2026-11-06-s4.md`, helpers: `spacetimedb/src/__tests__/s4-fixtures.ts`):
+`createModuleTestHarness()` loads the module in-process. Facts that bite (full list: `docs/log/2026-11-06-s4.md`, helpers: `spacetimedb/src/__tests__/fixtures/harness.ts`):
 
 - Call reducers inside `withReducerTx(auth, ctx => M.reducer(ctx, args))`; read `test.db` only **outside** a transaction (reading inside crashes the datastore).
 - Views are functions: `(M as any).view_x(test.viewContext(auth), {})`.
-- `ctx.env` throws (`env_get` stub), so `server_set_datetime` / `_online` / `_mmr` / `_nuke_test_data` (gated by `requireTestDatabase`) cannot run in memory; that is the one skipped test in `harness.smoke`. `server_link_provider`, `server_delete_user`, `server_set_role` and `seed_identity_gc_job` run as `'internal'`.
+- `ctx.env` throws (`env_get` stub), so `server_set_datetime` / `_online` / `_mmr` / `_nuke_test_data` (gated by `requireTestDatabase`) cannot run in memory; that is the one skipped test in `harness/smoke`. `server_link_provider`, `server_delete_user`, `server_set_role` and `seed_identity_gc_job` run as `'internal'`.
 - Roles are set through `test.db` (`setUserRole` / `setRole`), never `server_set_role`; `'internal'` is Owner and passes the admin gates.
 - Scheduled reducers are fired by hand; the clock moves with `advance(test, ms)` (timers validate elapsed time; chat throttle = 2.1 s per send).
 - Seats, not user ids: `seatOf(src, lobbyId, userId)` for every `targetJoinSeq` / `bannedJoinSeq` (A74).

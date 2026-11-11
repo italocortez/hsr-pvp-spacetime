@@ -592,7 +592,7 @@ Triage batch 2 (`notes/audit-2026-11-09/low-findings-triage.md` L63 to L71), the
 
 Stand-in rules and the stand-in bugs of `notes/audit-2026-11-09/standin-audit.md` (SI1 to SI16), plus the S10v review
 fix passes (first review F1 to F16 with A137; second review G1 to G8 with A138). The lifecycle around a `TournamentStandIn` row lives in
-`helpers/tournament/standIns.ts`; the scenarios are in `spacetimedb/src/__tests__/s10v-stand-ins.test.ts`. No schema
+`helpers/tournament/standIns.ts`; the scenarios are in `spacetimedb/src/__tests__/tournaments/stand-ins.test.ts`. No schema
 change (no table, column or index); one new staff view. `lockPlayerAccounts` and `hasPlayedTournamentGame` moved
 unchanged to the leaf module `helpers/tournament/accountLocks.ts` (re-exported by `tournamentHelpers.ts`) so the
 stand-in helpers, called by the bracket writers, close no import cycle.

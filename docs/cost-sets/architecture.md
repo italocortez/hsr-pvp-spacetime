@@ -283,7 +283,7 @@ whole `HsrCharacter` / `HsrLightcone` reference tables (iter) after the permissi
   guard, so it can no longer slip a row into a live set.
 - **Unchanged:** the owner's draft-row edits (`edit_draft_*_cost`, private draft rows only), `publish_cost_set` and its
   A107(4) refusal, `lock_cost_set`, `unpublish_cost_set`, `delete_cost_set` (`isCostSetInUse`, any lobby). No schema
-  change. Tests: `spacetimedb/src/__tests__/s10w-account-edit-lock.test.ts`.
+  change. Tests: `spacetimedb/src/__tests__/cost-sets/cost-row-live-lock.test.ts`.
 
 ## Phase History
 

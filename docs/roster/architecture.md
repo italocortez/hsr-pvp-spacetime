@@ -205,7 +205,7 @@ for their roster while the rows stay for the match (`docs/lobby/architecture.md`
   deletes the user's accounts and their characters: the deletion or ban of a seated user) and `server_nuke_test_data`
   (test database only).
   The first is the remaining route the S10u sale fallback covers ([../match-session/architecture.md](../match-session/architecture.md)).
-- No schema change. Tests: `spacetimedb/src/__tests__/s10w-account-edit-lock.test.ts`.
+- No schema change. Tests: `spacetimedb/src/__tests__/roster/account-edit-lock.test.ts`.
 
 ## Phase History
 
