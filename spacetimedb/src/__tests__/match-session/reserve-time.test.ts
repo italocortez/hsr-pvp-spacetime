@@ -1,9 +1,10 @@
 // Match session: reserve time in the draft clock, undo giving back reserve, late turn actions, the automatic pause
 //   lifted by hand, the client formula for every viewer role, and a seeded model-based random walk.
-// Decisions: A148, A149, A150, A151, A153, A154
+// Decisions: A148, A149, A150, A151, A153, A154, A155
 // Contracts: docs/match-session/contract.md (superseded lines listed in the S10aa hand-back)
 // T-S10aa; the fix pass adds A153 (who resumes an automatic pause), A154 (a pause on a spent turn, pinned) and the
 // review F4 cases (reserve above 0 under the system preset and in a tournament lobby, more walk configurations).
+// T-S10ab adds A155 (a referee seated on the other team counts as a player) and Red as the paused team for A153.
 import { describe, expect, it } from 'vitest';
 import {
     DEFAULT_LOBBY_ARGS,
@@ -22,6 +23,7 @@ import {
     priceBanNames,
     priceCharacters,
     rejection,
+    seatOf,
     session,
     setupLobby,
     snap,
@@ -593,6 +595,140 @@ describe('A153: an automatic pause is resumed by the dropped player\'s team or a
         connect(s.test, s.a.r2);
         for (const who of [s.a.r1, s.a.r2]) expect(tryResume(s, who)).toBe(PAUSED_TEAM_ONLY);
         resume(s, s.a.b1);
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// A155: a referee seated on the other team counts as a player (T-S10ab; also Red as the paused team for A153)
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('A155: on an automatic pause, a referee seated on the other team counts as a player', () => {
+    const tryResume = (s: Lobby, who: Actor) => rejection(s.test, who, (ctx) => M.resume_draft(ctx, { lobbyId: s.lobbyId }));
+    const SEAT_ONLY = 'Only the referee or a seated player can resume an auto-paused draft.';
+
+    /** `who` drops; the 15 s check runs (moving a referee flag the dropped member held) and pauses for their team. */
+    function dropAndCheck(s: Lobby, who: Actor, team: Side) {
+        disconnect(s.test, who);
+        const row = pendingCheck(s.test, s.lobbyId, who.userId);
+        advance(s.test, 15_000);
+        fireCheck(s.test, row);
+        expect(timer(s).isPaused).toBe(true);
+        const p = steps(s.test, s.lobbyId).filter((x) => x.action.tag === 'Pause').sort((a, b) => b.sequence - a.sequence)[0];
+        expect(p).toMatchObject({ actorSlot: { tag: team }, payload: { value: { isAutoPause: true } } });
+    }
+    const refIds = (s: Lobby) => [...s.test.db.LobbyMember.lobby_id.filter(s.lobbyId)].filter((m) => m.isReferee).map((m) => m.userId);
+
+    describe('1v1, the host plays Blue and holds the flag, then drops', () => {
+        const hostBlue1v1 = () => {
+            const s = reserveLobby({}, { hostSlot: 'BluePlayer', seats: [['r1', 'RedPlayer']] });
+            expect(refIds(s)).toEqual([s.host.userId]);
+            dropAndCheck(s, s.host, 'Blue');
+            expect(refIds(s)).toEqual([s.a.r1.userId]); // the 15 s check moved the flag to the opponent
+            return s;
+        };
+
+        it('r1 now holds the flag and is refused with nothing changed; after the forfeit grace r1 claims the forfeit', () => {
+            const s = hostBlue1v1();
+            const before = snap(session(s.test, s.lobbyId));
+            expect(tryResume(s, s.a.r1)).toBe(PAUSED_TEAM_ONLY);
+            expect(snap(session(s.test, s.lobbyId))).toBe(before);
+            advance(s.test, 46_000); // 61 s since the drop, past disconnectForfeitSeconds 60
+            tx(s.test, s.a.r1, (ctx) => M.claim_forfeit(ctx, { lobbyId: s.lobbyId, forfeitingTeamSide: 0 }));
+            expect(s.test.db.Lobby.id.find(s.lobbyId)).toBeFalsy(); // a casual forfeit finalizes inline
+        });
+
+        it('the host returns and resumes (a player of the paused team, without the flag)', () => {
+            const s = hostBlue1v1();
+            connect(s.test, s.host);
+            expect(tryResume(s, s.a.r1)).toBe(PAUSED_TEAM_ONLY);
+            resume(s, s.host);
+            expect(timer(s).isPaused).toBe(false);
+        });
+    });
+
+    it('2v2, the host plays Red and holds the flag, drops: the flag goes to a Blue player, who is refused; the Red teammate resumes', () => {
+        const s = reserveLobby({}, { hostSlot: 'RedPlayer', seats: [['b1', 'BluePlayer'], ['b2', 'BluePlayer'], ['r1', 'RedPlayer']] });
+        dropAndCheck(s, s.host, 'Red');
+        expect(refIds(s)).toEqual([s.a.b1.userId]);
+        const before = snap(session(s.test, s.lobbyId));
+        for (const who of [s.a.b1, s.a.b2]) expect(tryResume(s, who)).toBe(PAUSED_TEAM_ONLY);
+        expect(snap(session(s.test, s.lobbyId))).toBe(before);
+        resume(s, s.a.r1);
+        expect(timer(s).isPaused).toBe(false);
+    });
+
+    it('2v2, the host plays Blue, drops: the flag goes to the Blue teammate, who resumes; the Red players are refused', () => {
+        const s = reserveLobby({}, { hostSlot: 'BluePlayer', seats: [['b1', 'BluePlayer'], ['r1', 'RedPlayer'], ['r2', 'RedPlayer']] });
+        dropAndCheck(s, s.host, 'Blue');
+        expect(refIds(s)).toEqual([s.a.b1.userId]);
+        for (const who of [s.a.r1, s.a.r2]) expect(tryResume(s, who)).toBe(PAUSED_TEAM_ONLY);
+        resume(s, s.a.b1);
+        expect(timer(s).isPaused).toBe(false);
+    });
+
+    for (const team of ['Blue', 'Red'] as const) {
+        it(`a spectator referee resumes a pause of ${team}`, () => {
+            const s = reserveLobby({}, { seats: SEATS });
+            dropAndCheck(s, team === 'Blue' ? s.a.b2 : s.a.r2, team);
+            expect(refIds(s)).toEqual([s.host.userId]);
+            resume(s, s.host);
+            expect(timer(s).isPaused).toBe(false);
+        });
+
+        it(`a referee in the Blue coach seat resumes a pause of ${team}`, () => {
+            const s = reserveLobby({}, {
+                seats: SEATS,
+                beforeStart: (l) => tx(l.test, l.host, (ctx) =>
+                    M.transfer_referee(ctx, { lobbyId: l.lobbyId, targetJoinSeq: seatOf(ctx, l.lobbyId, l.a.bc.userId) })),
+            });
+            expect(refIds(s)).toEqual([s.a.bc.userId]);
+            dropAndCheck(s, team === 'Blue' ? s.a.b2 : s.a.r2, team);
+            resume(s, s.a.bc);
+            expect(timer(s).isPaused).toBe(false);
+        });
+    }
+
+    describe('A153 with Red as the paused team', () => {
+        const redPaused = () => {
+            const s = reserveLobby({}, { seats: SEATS });
+            dropAndCheck(s, s.a.r2, 'Red');
+            return s;
+        };
+
+        it('both Blue players are refused with nothing changed, while r2 is away and after the return; the coach keeps the old text', () => {
+            const s = redPaused();
+            const before = snap(session(s.test, s.lobbyId));
+            for (const who of [s.a.b1, s.a.b2]) expect(tryResume(s, who)).toBe(PAUSED_TEAM_ONLY);
+            expect(tryResume(s, s.a.bc)).toBe(SEAT_ONLY);
+            connect(s.test, s.a.r2);
+            for (const who of [s.a.b1, s.a.b2]) expect(tryResume(s, who)).toBe(PAUSED_TEAM_ONLY);
+            expect(snap(session(s.test, s.lobbyId))).toBe(before);
+        });
+
+        it('the Red teammate resumes while r2 is away', () => {
+            const s = redPaused();
+            resume(s, s.a.r1);
+            expect(timer(s).isPaused).toBe(false);
+        });
+
+        it('the returned r2 resumes', () => {
+            const s = redPaused();
+            connect(s.test, s.a.r2);
+            resume(s, s.a.r2);
+            expect(timer(s).isPaused).toBe(false);
+        });
+    });
+
+    it('a manual pause is unchanged for a seated referee: the host (Blue, flag) resumes r1\'s pause; r1 cannot resume the host\'s', () => {
+        const s = reserveLobby({}, { hostSlot: 'BluePlayer', seats: [['r1', 'RedPlayer']] });
+        pause(s, s.a.r1);
+        resume(s, s.host);
+        expect(timer(s).isPaused).toBe(false);
+        advance(s.test, 11_000);
+        pause(s, s.host);
+        expect(tryResume(s, s.a.r1)).toBe('Only the referee or the player who paused can resume the draft.');
+        resume(s, s.host);
+        expect(timer(s).isPaused).toBe(false);
     });
 });
 

@@ -347,9 +347,9 @@ export const pause_draft = spacetimedb.reducer(
 // ─── resume_draft ─────────────────────────────────────────────────────────────
 // Resumes a paused draft.
 // Per D-62: referee OR the original pausing player can resume a manual pause.
-// A85(2), narrowed by A153: an auto-pause (disconnect) is resumed by the referee or a present seated player of the team
-// whose player's absence caused it (the Pause step's actorSlot); the other team's players, coaches and spectators
-// without the referee flag are rejected. S10aa (A151): this is the only way an auto-pause ends; a returning player's
+// A85(2), narrowed by A153 and A155: an auto-pause (disconnect) is resumed by the referee or a present seated player of
+// the team whose player's absence caused it (the Pause step's actorSlot); the other team's players (A155: even when
+// holding the referee flag), and coaches and spectators without the referee flag, are rejected. S10aa (A151): this is the only way an auto-pause ends; a returning player's
 // reconnect no longer lifts it (the returned player sits on the paused team, so may resume it).
 // S10f (F10): the pause froze the time left in accumulatedPauseMs (equal to the Pause step's timeRemainingMs) and,
 // S10aa (A148), the reserve used in reserveUsedMs / inReserve; the resume sets turnStartAt = now and keeps them, so both
@@ -398,7 +398,9 @@ export const resume_draft = spacetimedb.reducer(
             if (!isReferee && !isSeatedPlayer(member)) {
                 throw new SenderError('Only the referee or a seated player can resume an auto-paused draft.');
             }
-            if (!isReferee && slotToTeamSide(member.lobbySlot).tag !== lastPauseStep.actorSlot.tag) {
+            // A155: a seated player of the other team is refused even with the referee flag (the 15 s check can move
+            // the flag to them); a flag holder who is a spectator, a coach or a player of the paused team resumes.
+            if (isSeatedPlayer(member) && slotToTeamSide(member.lobbySlot).tag !== lastPauseStep.actorSlot.tag) {
                 throw new SenderError('Only the paused team or a referee can resume this pause.');
             }
         } else {

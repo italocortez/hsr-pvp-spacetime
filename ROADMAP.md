@@ -59,6 +59,7 @@ Each executed step writes its log to `docs/log/<date>-<step>.md` (goal, decision
 | S10y | One wording for the away and abandoned refusals; "abandoned" when the player left the match (A146) | T-REORG | done 2026-11-10 |
 | S10z | The rejoin refusal of an abandoned member also says "abandoned" (A147) | S10y | done 2026-11-11 |
 | S10aa | Reserve time works (A148); undo returns reserve (A149); turn actions refused 1 s after all time is gone (A150); the automatic pause is lifted by hand (A151) and only by the paused team or a referee (A153); A152 and A154 recorded | S10z | done 2026-11-11 |
+| S10ab | On an automatic pause a referee seated on the other team counts as a player (A155); the pause nobody online can lift is accepted (A156) | S10aa | done 2026-11-11 |
 | M3 | Vite shell: tokens, base and media CSS, fonts, standby/404 | S10 | pending |
 | M4 | Router and guards (TanStack Router, typed links) | M3 | pending |
 | M9 | Test strategy wiring and CI workflow | M4 | pending |

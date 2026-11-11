@@ -962,6 +962,24 @@ after such a resume. Cases:
 - No present seated player of the paused team (a 1v1 drop, or the whole team away): only a referee resumes (the 15 s
   check moves the flag to an online member when the referee drops).
 
+**A seated referee on the other team** (A155, S10ab, `resume_draft`): on an auto-pause the team check runs for every
+seated player, the flag holder included (`isSeatedPlayer(member) && slotToTeamSide(member.lobbySlot).tag !==
+actorSlot.tag` refuses with "Only the paused team or a referee can resume this pause."). A flag holder in a spectator or
+coach seat (either team's coach) or seated on the paused team resumes as before; a coach or spectator without the flag
+keeps the earlier text, and the A98 away / abandoned texts still come first. Manual pauses (D-62), the flag transfer and
+`claim_forfeit` are unchanged.
+
+- The 15 s check can move the flag to an opponent: it takes the first online member in the A22(5) order (host, Blue
+  players, Red players, spectators, coaches), so when a seated host referee drops, the flag can land on the other team
+  (always in a 1v1 where the host plays; in a 2v2 when the host plays Red and a Blue player is online). That opponent
+  holds the flag but still cannot resume this pause. Under Standard, the opponent claims the forfeit after the grace
+  (`claim_forfeit` with side 0) as before; the returned host resumes as a player of the paused team (the flag does not
+  come back by itself, `reclaim_referee` does that).
+- Accepted dead end (A156): when every member was offline when the referee's own check fired (so the flag found no online
+  candidate and stayed put), the paused team stays absent, and a separate referee with exclusive concede rights stays
+  offline, a returning opponent can neither resume, claim nor close. It ends when the referee or a player of the paused
+  team returns, through staff, or through the lobby clean-up once everyone has been offline for 30 min.
+
 ## Phase History
 
 | Decision | Source | Date |

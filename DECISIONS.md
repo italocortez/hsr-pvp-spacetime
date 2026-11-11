@@ -1537,3 +1537,15 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Decision:** a pause on a turn whose turn time and reserve are both spent is accepted and freezes 1 ms; after the resume the 1 second tolerance of A150 counts again. Accepted as is: the gain is about 1 second per pause (3 pauses per team, 10 seconds apart), it exists only until any client calls the expiry, and a pause taken with 1 second left gives the same result. Pauses in general are unchanged: a team may pause on its own turn.
 - **Why:** user, 2026-11-11: "on point 2, just keep it tbh" (S10aa review F1 describes the case).
 - **Where implemented:** no change (pinned by a test in S10aa)
+
+### A155 — On an automatic pause, a referee seated on the other team counts as a player
+
+- **Decision:** `resume_draft` on an automatic pause is refused for a caller seated as a player on the team that does not own the pause, even when that caller holds the referee flag (for example after the 15 s check moved the flag to them). A referee who is not seated on the other team (spectator, coach seat, or a player of the paused team) resumes as before. The flag holder's other powers and the forfeit rules are unchanged: in a lobby without a separate referee the waiting player still claims the forfeit after the grace. Completes A153.
+- **Why:** user, 2026-11-11. The second S10aa review showed that in a 1v1 hosted by a player the opponent received the referee flag and could resume. The orchestrator recommended option (b); the user asked "for option 1 B, what if the opponent never comes back? will the other person still be able to call a forfeit in their favor?", was shown that the forfeit claim is untouched, and answered the proposed rulings 1(b) and 2(a) with "yeah lets just keep 2 with option A".
+- **Where implemented:** S10ab
+
+### A156 — The pause nobody online can lift is accepted
+
+- **Decision:** when every member was offline at the moment of the referee's own check, the paused team is absent and a separate referee with exclusive concede rights stays offline, a returning opponent cannot resume, claim or close. Accepted: the match was left by everyone; the referee, a player of the paused team, staff or the lobby clean-up ends it.
+- **Why:** user, 2026-11-11: "well for the option 2, isnt that everyone drops? because if they are offline... that means they disconnected from the match" and "yeah lets just keep 2 with option A".
+- **Where implemented:** no change
