@@ -556,7 +556,8 @@ describe('timer_expiry_classic auto-pick pool with requireOwnership (Acceptance:
         // A settings change resets every confirmation (Backlog #9): set autoRandomPick before the players confirm.
         // T-S10i: banMode None: the auto-ban pool now draws the priced characters (A107(1)), which would ban the owned ones
         // this test draws its picks from; before S10i nothing was priced and every timer ban was a SKIP.
-        const args = settingsFrom(test, lobbyId, { autoRandomPick: true, banMode: { tag: 'None' } });
+        // T-S10aa (A148): reserveBankSeconds 0 (the system preset has 120 s), so each turn expires at the turn length.
+        const args = settingsFrom(test, lobbyId, { autoRandomPick: true, banMode: { tag: 'None' }, reserveBankSeconds: 0 });
         tx(test, f.org, (ctx) => M.update_lobby_settings(ctx, args));
         for (const who of [blue.captain, blue.mate, red.captain, red.mate]) {
             join(test, who, lobbyId);
@@ -594,7 +595,8 @@ describe('timer_expiry_classic auto-pick pool with requireOwnership (Acceptance:
         priceCharacters(test, lobbyId, ['cx', 'ox', 'sx', 'rx', 'ry']); // T-S10i (A107(5)): every owned character is priced
         // T-S10i: banMode None: the auto-ban pool now draws the priced characters (A107(1)), which would ban the owned ones
         // this test draws its picks from; before S10i nothing was priced and every timer ban was a SKIP.
-        const args = settingsFrom(test, lobbyId, { autoRandomPick: true, banMode: { tag: 'None' } }); // before the confirmations (Backlog #9)
+        // T-S10aa (A148): reserveBankSeconds 0 (the system preset has 120 s), so each turn expires at the turn length.
+        const args = settingsFrom(test, lobbyId, { autoRandomPick: true, banMode: { tag: 'None' }, reserveBankSeconds: 0 }); // before the confirmations (Backlog #9)
         tx(test, f.org, (ctx) => M.update_lobby_settings(ctx, args));
         for (const who of [blue.captain, sub, red.captain, red.mate]) {
             join(test, who, lobbyId);

@@ -83,17 +83,23 @@ describe('A85: lifting a disconnect auto-pause', () => {
         return s;
     }
 
-    it('join_lobby by a spectator, the coach and a Red player does not resume; the away Blue player\'s return does (A85(1))', () => {
+    // T-S10aa (A151, re-aligned): a return no longer lifts the auto-pause (before: the away Blue player's return resumed).
+    it('join_lobby by a spectator, the coach, a Red player and the away Blue player does not resume; the returned player resumes by hand (A85(1), A151)', () => {
         const s = autoPaused();
         for (const who of [s.a.spec, s.a.bc, s.a.r1]) {
             tx(s.test, who, (ctx) => M.join_lobby(ctx, { lobbyId: s.lobbyId, joinCode: '', password: '' }));
             expect(isPaused(s)).toBe(true);
         }
         rejoin(s, s.a.b2);
+        expect(isPaused(s)).toBe(true);
+        tx(s.test, s.a.b2, (ctx) => M.resume_draft(ctx, { lobbyId: s.lobbyId }));
         expect(isPaused(s)).toBe(false);
     });
 
-    it('two seated players away: the first return does not resume, the second does (A85(1))', () => {
+    // T-S10aa (A151, re-aligned): before, the second return resumed; now neither does, and a seated player resumes.
+    // T-S10aa fix pass (A153, re-aligned): before, the returned Red player r2 resumed; now the pause belongs to Blue (b2's
+    // drop caused it), so r2 is refused and the returned Blue player b2 resumes.
+    it('two seated players away: neither return resumes; the returned player of the paused team resumes by hand, the other team\'s returned player is refused (A85(1), A151, A153)', () => {
         const test = newHarness();
         const s = setupLobby(test, { seats: SEATS });
         drop(s, s.a.b2);
@@ -103,13 +109,29 @@ describe('A85: lifting a disconnect auto-pause', () => {
         rejoin(s, s.a.b2);
         expect(isPaused(s)).toBe(true);
         rejoin(s, s.a.r2);
+        expect(isPaused(s)).toBe(true);
+        expect(rejection(test, s.a.r2, (ctx) => M.resume_draft(ctx, { lobbyId: s.lobbyId })))
+            .toBe('Only the paused team or a referee can resume this pause.');
+        expect(isPaused(s)).toBe(true);
+        tx(test, s.a.b2, (ctx) => M.resume_draft(ctx, { lobbyId: s.lobbyId }));
         expect(isPaused(s)).toBe(false);
     });
 
-    it.each(['host', 'r1', 'b1'])('resume_draft on the auto-pause by %s (referee / seated Red / seated Blue) is accepted (A85(2))', (name) => {
+    // T-S10aa fix pass (A153, re-aligned): before, 'r1' (seated Red, the opponent) was in this list and accepted.
+    it.each(['host', 'b1'])('resume_draft on the auto-pause by %s (referee / seated Blue teammate of the dropped player, still away) is accepted (A85(2), A153)', (name) => {
         const s = autoPaused();
         tx(s.test, s.a[name], (ctx) => M.resume_draft(ctx, { lobbyId: s.lobbyId }));
         expect(isPaused(s)).toBe(false);
+    });
+
+    // T-S10aa fix pass (A153): the opponent (either seated Red player) is refused and nothing changes.
+    it.each(['r1', 'r2'])('resume_draft on the auto-pause by %s (seated Red, the other team) is refused, the draft stays paused (A153)', (name) => {
+        const s = autoPaused();
+        const before = snap(session(s.test, s.lobbyId).timerState);
+        const msg = rejection(s.test, s.a[name], (ctx) => M.resume_draft(ctx, { lobbyId: s.lobbyId }));
+        expect(msg).toBe('Only the paused team or a referee can resume this pause.');
+        expect(snap(session(s.test, s.lobbyId).timerState)).toBe(before);
+        expect(isPaused(s)).toBe(true);
     });
 
     it.each(['bc', 'spec'])('resume_draft on the auto-pause by %s (coach / non-referee spectator) is rejected, the draft stays paused (A85(2))', (name) => {
@@ -151,7 +173,11 @@ describe('A85: lifting a disconnect auto-pause', () => {
         expect(msg).toBe(state === 'abandoned'
             ? 'You abandoned this match and can no longer act in it.'
             : 'You are away from this match. Return to it before acting.');
-        tx(s.test, s.a.r1, (ctx) => M.resume_draft(ctx, { lobbyId: s.lobbyId }));
+        // T-S10aa fix pass (A153, re-aligned): before, the Red player r1 resumed; now r1 is refused and the dropped
+        // player's present teammate b1 resumes (the dropped player is away or abandoned, the pause still belongs to Blue).
+        expect(rejection(s.test, s.a.r1, (ctx) => M.resume_draft(ctx, { lobbyId: s.lobbyId })))
+            .toBe('Only the paused team or a referee can resume this pause.');
+        tx(s.test, s.a.b1, (ctx) => M.resume_draft(ctx, { lobbyId: s.lobbyId }));
         expect(isPaused(s)).toBe(false);
     });
 
@@ -646,8 +672,10 @@ function drop(s: Lobby, who: Actor) {
     fireCheck(s.test, row);
 }
 
-describe('A92(7): client_connected lifts an auto-pause under the A85(1) test', () => {
-    it('the away player\'s client_connected (no join_lobby) lifts it; a spectator\'s and an opponent\'s do not while the player is away (A92(7))', () => {
+// T-S10aa (A151, re-aligned): client_connected no longer lifts an auto-pause (before: the away player's reconnect
+// lifted it, and the second of two reconnects lifted it).
+describe('A151: client_connected never lifts an auto-pause (A92(7) superseded)', () => {
+    it('neither a spectator\'s, an opponent\'s nor the away player\'s client_connected lifts it; the returned player resumes by hand (A151)', () => {
         const test = newHarness();
         const s = setupLobby(test, { seats: SEATS });
         const spec = joinAsSpectator(s, 'spec');
@@ -664,10 +692,12 @@ describe('A92(7): client_connected lifts an auto-pause under the A85(1) test', (
 
         connect(test, s.a.b2);
         expect(member(test, s.lobbyId, s.a.b2.userId).isOnline).toBe(true);
+        expect(isPaused(s)).toBe(true);
+        tx(test, s.a.b2, (ctx) => M.resume_draft(ctx, { lobbyId: s.lobbyId }));
         expect(isPaused(s)).toBe(false);
     });
 
-    it('two seated players away: the first client_connected does not lift it, the second does (A92(7))', () => {
+    it('two seated players away: neither client_connected lifts it (A151)', () => {
         const test = newHarness();
         const s = setupLobby(test, { seats: SEATS });
         drop(s, s.a.b2);
@@ -676,7 +706,7 @@ describe('A92(7): client_connected lifts an auto-pause under the A85(1) test', (
         connect(test, s.a.b2);
         expect(isPaused(s)).toBe(true);
         connect(test, s.a.r2);
-        expect(isPaused(s)).toBe(false);
+        expect(isPaused(s)).toBe(true);
     });
 });
 

@@ -9,7 +9,7 @@ import { computeLobbyMemberRating } from '@module/helpers/stats/accountRating';
 import { banRestrictionError, isBanLegal } from '@module/helpers/lobby/banRestriction';
 import { ensureMatchAlive, scheduleChecksForOfflineStaff } from '@module/helpers/lobby/disconnectHelpers';
 import { lobbySteps, getNextSequence } from '@module/helpers/draft/stepSequence';
-import { turnFullMs, turnRemainingMs } from '@module/helpers/draft/turnClock';
+import { ensureTurnTimeLeft, readClock, turnEndTimerState } from '@module/helpers/draft/turnClock';
 import { confirmWindowOpenText, draftCompleteText, finishDraft, finishDraftWithoutWindow, isDraftComplete } from '@module/helpers/draft/draftComplete';
 import { characterCostAt, characterCostRow, costMissingText, pricedCharacterNames } from '@module/helpers/draft/costSetGuards';
 import { trimChatForInsert } from '@module/helpers/lobby/chatWindow';
@@ -219,6 +219,9 @@ export const start_draft = spacetimedb.reducer(
                 teamRedReserveMs: lobby.reserveBankSeconds * 1000,
                 isPaused: false,
                 accumulatedPauseMs: 0,
+                reserveUsedMs: 0, // S10aa (A148)
+                inReserve: false,
+                reserveMarks: [],
             },
             // Auction with no bans opens the auction phase immediately (D-48).
             isAuctionPhase: lobby.draftMode.tag === 'Auction' && sequence.length === 0,
@@ -389,6 +392,9 @@ export const pick_character = spacetimedb.reducer(
             }
         }
 
+        // S10aa (A150): no pick more than 1 s after the turn time and the team's reserve ran out.
+        ensureTurnTimeLeft(ctx, lobby, session);
+
         // Character availability: check not already picked or banned. A87: with allowMirrorPicks the other team's
         // picks stay available, but a team never picks the same character twice.
         const existingSteps = lobbySteps(ctx, lobbyId); // A67(3): the lobby's one game
@@ -430,10 +436,11 @@ export const pick_character = spacetimedb.reducer(
         const cost = classicPickCost(ctx, lobby, characterName, eidolon);
 
         // Record the step
+        const stepSequence = getNextSequence(ctx, lobbyId); // F9: never collides with Pause/Undo audit rows
         ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
             id: 0,
             lobbyId,
-            sequence: getNextSequence(ctx, lobbyId), // F9: never collides with Pause/Undo audit rows
+            sequence: stepSequence,
             actorUserId: user.id,
             anonymousLabel: undefined,
             actorSlot: slotToTeamSide(member.lobbySlot),
@@ -459,11 +466,7 @@ export const pick_character = spacetimedb.reducer(
             ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
                 turnIndex: newTurnIndex,
                 isAuctionPhase: true,
-                timerState: {
-                    ...session.timerState,
-                    turnStartAt: ctx.timestamp,
-                    accumulatedPauseMs: 0,
-                },
+                timerState: turnEndTimerState(ctx, lobby, session, stepSequence), // S10aa (A148)
             }, user.id));
 
             ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
@@ -472,11 +475,7 @@ export const pick_character = spacetimedb.reducer(
         } else {
             ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
                 turnIndex: newTurnIndex,
-                timerState: {
-                    ...session.timerState,
-                    turnStartAt: ctx.timestamp,
-                    accumulatedPauseMs: 0,
-                },
+                timerState: turnEndTimerState(ctx, lobby, session, stepSequence), // S10aa (A148)
             }, user.id));
 
             ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
@@ -555,6 +554,9 @@ export const ban_character = spacetimedb.reducer(
             }
         }
 
+        // S10aa (A150): no ban more than 1 s after the turn time and the team's reserve ran out.
+        ensureTurnTimeLeft(ctx, lobby, session);
+
         // S10r (A122(7), L32): a ban names a real character of the lobby's pool, the check picks make (the lobby's
         // cost row: cost set, game mode, draft mode; the pool the timer draws from). EMPTY is the no-pick placeholder,
         // never a manual ban. The timer's empty ban is the SKIP sentinel (timer_expiry_classic), not EMPTY.
@@ -593,10 +595,11 @@ export const ban_character = spacetimedb.reducer(
         }
 
         // Record the step
+        const stepSequence = getNextSequence(ctx, lobbyId); // F9: never collides with Pause/Undo audit rows
         ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
             id: 0,
             lobbyId,
-            sequence: getNextSequence(ctx, lobbyId), // F9: never collides with Pause/Undo audit rows
+            sequence: stepSequence,
             actorUserId: user.id,
             anonymousLabel: undefined,
             actorSlot: slotToTeamSide(member.lobbySlot),
@@ -618,20 +621,12 @@ export const ban_character = spacetimedb.reducer(
             ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
                 turnIndex: newTurnIndex,
                 isAuctionPhase: true,
-                timerState: {
-                    ...session.timerState,
-                    turnStartAt: ctx.timestamp,
-                    accumulatedPauseMs: 0,
-                },
+                timerState: turnEndTimerState(ctx, lobby, session, stepSequence), // S10aa (A148)
             }, user.id));
         } else {
             ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
                 turnIndex: newTurnIndex,
-                timerState: {
-                    ...session.timerState,
-                    turnStartAt: ctx.timestamp,
-                    accumulatedPauseMs: 0,
-                },
+                timerState: turnEndTimerState(ctx, lobby, session, stepSequence), // S10aa (A148)
             }, user.id));
         }
 
@@ -682,16 +677,19 @@ export const timer_expiry_classic = spacetimedb.reducer(
         // S10t (A129, A130, A131): a complete draft runs no turn but the lobby's confirm window, on the same clock fields
         // (turnFullMs). Before it has elapsed the call is refused; once it has, the lobby moves to Equipping (finishDraft,
         // the same write as advance_stage). Never an auto-pick, auto-ban, nomination or sale.
+        // S10aa: the window has no reserve (readClock: no team on the clock), so expiryDue is the window's own end.
+        const clock = readClock(lobby, session, ctx.timestamp.microsSinceUnixEpoch);
         if (isDraftComplete(lobby, session)) {
-            if (turnRemainingMs(lobby, session.timerState, ctx.timestamp.microsSinceUnixEpoch, turnFullMs(lobby, session)) > 0) {
+            if (!clock.expiryDue) {
                 throw new SenderError(confirmWindowOpenText);
             }
             finishDraft(ctx, lobby, session, 0);
             return;
         }
 
-        // Server-side timer validation (S10f, F10): the turn's remaining time (helpers/draft/turnClock.ts) must be 0
-        if (turnRemainingMs(lobby, session.timerState, ctx.timestamp.microsSinceUnixEpoch) > 0) {
+        // Server-side timer validation (S10f, F10; S10aa, A148): the turn time and the on-clock team's reserve
+        // (helpers/draft/turnClock.ts) must both be 0; the write below then sets that reserve to 0.
+        if (!clock.expiryDue) {
             throw new SenderError('Turn timer has not yet expired.');
         }
 
@@ -843,11 +841,7 @@ export const timer_expiry_classic = spacetimedb.reducer(
             ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
                 turnIndex: newTurnIndex,
                 isAuctionPhase: true,
-                timerState: {
-                    ...session.timerState,
-                    turnStartAt: ctx.timestamp,
-                    accumulatedPauseMs: 0,
-                },
+                timerState: turnEndTimerState(ctx, lobby, session, stepSequence), // S10aa (A148)
             }, 0));
 
             ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
@@ -856,11 +850,7 @@ export const timer_expiry_classic = spacetimedb.reducer(
         } else {
             ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
                 turnIndex: newTurnIndex,
-                timerState: {
-                    ...session.timerState,
-                    turnStartAt: ctx.timestamp,
-                    accumulatedPauseMs: 0,
-                },
+                timerState: turnEndTimerState(ctx, lobby, session, stepSequence), // S10aa (A148)
             }, 0));
 
             ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {

@@ -371,8 +371,7 @@ export const set_eidolon = spacetimedb.reducer(
             ensureLineupThrottle(ctx, member);
             ensureEditStepRoom(ctx, lobbyId, side, 'edit');
             // A22(3): no edit while the draft is paused. Drafting only (S10t review F3: the move to Equipping clears the
-            // pause, so the stage test is a guard, not a carried pause); client_connected's auto-resume looks at the
-            // last step for an auto-pause, so a SetEidolon step logged during a pause would block it.
+            // pause, so the stage test is a guard, not a carried pause); resume_draft looks at the last Pause step.
             if (lobby.stage.tag === 'Drafting' && session.timerState.isPaused) throw new SenderError('Draft is paused.');
         }
 

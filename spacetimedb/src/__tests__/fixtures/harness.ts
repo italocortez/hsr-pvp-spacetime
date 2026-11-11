@@ -207,7 +207,8 @@ export const DEFAULT_LOBBY_ARGS = {
     isPublic: true,
     password: '',
     standardTurnSeconds: 30,
-    reserveBankSeconds: 60,
+    // T-S10aa (A148): 0 = no reserve, the turn-only clock these suites were written against; reserve-time tests set it.
+    reserveBankSeconds: 0,
     characterBudget: 100,
     lightconeBudget: 50,
     minimumBidRaise: 1,

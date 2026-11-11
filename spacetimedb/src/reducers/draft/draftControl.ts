@@ -5,7 +5,7 @@ import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHel
 import { ensurePresentMember, ensureStageIs, slotToTeamSide, isSeatedPlayer, slotIsCoach } from '@module/helpers/lobby/lobbyHelpers';
 import { ensureMatchAlive } from '@module/helpers/lobby/disconnectHelpers';
 import { lobbySteps, getNextSequence, ensurePauseInterval, ensureUndoStepRoom } from '@module/helpers/draft/stepSequence';
-import { pausedTimerState, resumedTimerState, turnBudgetMs, turnFullMs } from '@module/helpers/draft/turnClock';
+import { pausedTimerState, resumedTimerState, undoneTimerState } from '@module/helpers/draft/turnClock';
 
 // ─── undo_last_step ───────────────────────────────────────────────────────────
 // S10t (A127, A132), S10u (A134): removes the last character step of the lobby's game (A67(3)) and restores the state
@@ -41,6 +41,9 @@ import { pausedTimerState, resumedTimerState, turnBudgetMs, turnFullMs } from '@
 //   S10t (A129): the last sale (and the last Classic pick) leaves the lobby in Drafting with the draft complete and no
 //   roll-over, so it is undone like any other: the turn it ended reopens with a fresh clock (a standard turn: the draft
 //   is no longer complete). The D-50 roll-over happens only at finishDraft, after which undo is refused.
+// S10aa (A149): every undo returns both teams' reserves to their values at the start of the turn the draft returns to
+// (the undone ban or pick; in the auction phase the round's nomination) and starts that turn with a full turn clock
+// (undoneTimerState, helpers/draft/turnClock.ts); the reserve used by the turn in progress is returned too.
 // Every undo inserts exactly one Undo row (originalSequenceId = the last character step removed: the ban, the pick,
 // the round's last Nominate / Bid step, or the sale), counted
 // by the 300-row cap (A122(10), ensureUndoStepRoom), and stamps Lobby.lastActivityAt; removed SetEidolon steps add no
@@ -51,12 +54,6 @@ import { pausedTimerState, resumedTimerState, turnBudgetMs, turnFullMs } from '@
 const UNDOABLE_TAGS = new Set(['Ban', 'Pick', 'Nominate', 'Bid', 'AuctionSold']);
 
 export const undoFinishedText = 'The draft is finished: undo works only while the lobby is in the draft stage.';
-
-const freshTurn = (ctx: any, session: any) => ({
-    ...session.timerState,
-    turnStartAt: ctx.timestamp,
-    accumulatedPauseMs: 0,
-});
 
 const noNomination = {
     currentNomination: undefined,
@@ -159,7 +156,7 @@ export const undo_last_step = spacetimedb.reducer(
             changes = {
                 turnIndex: session.turnIndex - 1,
                 ...(session.isAuctionPhase ? { isAuctionPhase: false } : {}),
-                timerState: freshTurn(ctx, session),
+                timerState: undoneTimerState(ctx, session, lastStep.sequence),
             };
         } else if (tag === 'Nominate' || tag === 'Bid') {
             // S10u (A134): an open round: its nomination and all its bids go; nobody holds a bid; the nominator again.
@@ -168,7 +165,7 @@ export const undo_last_step = spacetimedb.reducer(
             if (session.currentNomination === undefined || !round) throw new SenderError(mismatch);
             removed.length = 0;
             removed.push(round.nominateStep, ...round.bids);
-            changes = { ...noNomination, nextNominatorTeam: round.nominateStep.actorSlot, timerState: freshTurn(ctx, session) };
+            changes = { ...noNomination, nextNominatorTeam: round.nominateStep.actorSlot, timerState: undoneTimerState(ctx, session, round.nominateStep.sequence) };
         } else {
             // AuctionSold. S10u (A134): the whole round goes with the sale, by pass, by the timer or the A81(2) immediate
             // sale alike; the draft returns to the moment before that nomination.
@@ -193,7 +190,7 @@ export const undo_last_step = spacetimedb.reducer(
                 blueCharactersWon: session.blueCharactersWon - (winner === 'Blue' ? 1 : 0),
                 redCharactersWon: session.redCharactersWon - (winner === 'Red' ? 1 : 0),
                 nextNominatorTeam: round.nominateStep.actorSlot,
-                timerState: freshTurn(ctx, session),
+                timerState: undoneTimerState(ctx, session, round.nominateStep.sequence),
             };
         }
 
@@ -302,8 +299,9 @@ export const pause_draft = spacetimedb.reducer(
         // a referee with the pause power against the referees' last manual pause, a player against their team's.
         ensurePauseInterval(ctx, lobby, isRefereeWithPower ? 'Referee' : member.lobbySlot.tag.startsWith('Blue') ? 'Blue' : 'Red');
 
-        // S10f (F10): freeze the clock at the time left in the turn (helpers/draft/turnClock.ts).
-        const paused = pausedTimerState(ctx, lobby, session.timerState, turnFullMs(lobby, session)); // A130: holds the confirm window too
+        // S10f (F10), S10aa (A148): freeze the turn clock and the reserve where they are (helpers/draft/turnClock.ts);
+        // A130: holds the confirm window too.
+        const paused = pausedTimerState(ctx, lobby, session);
         const timeRemainingMs = paused.remainingMs;
 
         // Insert Pause step (F9: its own sequence, so it never collides with a draft step)
@@ -349,10 +347,13 @@ export const pause_draft = spacetimedb.reducer(
 // ─── resume_draft ─────────────────────────────────────────────────────────────
 // Resumes a paused draft.
 // Per D-62: referee OR the original pausing player can resume a manual pause.
-// A85(2): an auto-pause (disconnect) is resumed by the referee or any seated player of either team; coaches and
-// spectators without the referee flag are rejected.
-// S10f (F10): the pause froze the time left in accumulatedPauseMs (equal to the Pause step's timeRemainingMs);
-// the resume sets turnStartAt = now and keeps it, so the clock continues from where it was paused (turnClock.ts).
+// A85(2), narrowed by A153: an auto-pause (disconnect) is resumed by the referee or a present seated player of the team
+// whose player's absence caused it (the Pause step's actorSlot); the other team's players, coaches and spectators
+// without the referee flag are rejected. S10aa (A151): this is the only way an auto-pause ends; a returning player's
+// reconnect no longer lifts it (the returned player sits on the paused team, so may resume it).
+// S10f (F10): the pause froze the time left in accumulatedPauseMs (equal to the Pause step's timeRemainingMs) and,
+// S10aa (A148), the reserve used in reserveUsedMs / inReserve; the resume sets turnStartAt = now and keeps them, so both
+// clocks continue from where they were paused (turnClock.ts).
 
 export const resume_draft = spacetimedb.reducer(
     {
@@ -391,10 +392,14 @@ export const resume_draft = spacetimedb.reducer(
         const isReferee = member.isReferee;
         const isAutoPause = lastPauseStep?.payload?.tag === 'Pause' && lastPauseStep.payload.value?.isAutoPause === true;
         if (isAutoPause) {
-            // A85(2): the referee or any seated player of either team (an away or abandoned row was already rejected by
-            // ensurePresentMember, A98)
+            // A85(2): the referee or a seated player (an away or abandoned row was already rejected by
+            // ensurePresentMember, A98). A153 narrows the players to the team whose player's absence caused the pause:
+            // the 15 s check records the dropped player's team in the Pause step's actorSlot (refereeTransfer.ts).
             if (!isReferee && !isSeatedPlayer(member)) {
                 throw new SenderError('Only the referee or a seated player can resume an auto-paused draft.');
+            }
+            if (!isReferee && slotToTeamSide(member.lobbySlot).tag !== lastPauseStep.actorSlot.tag) {
+                throw new SenderError('Only the paused team or a referee can resume this pause.');
             }
         } else {
             // D-62: referee OR the original pausing player can resume
@@ -406,9 +411,8 @@ export const resume_draft = spacetimedb.reducer(
             }
         }
 
-        // S10f (F10): the pause froze the remaining time in accumulatedPauseMs; it runs again from now
-        // (helpers/draft/turnClock.ts, the same write as liftAutoPauseOnReturn).
-        const timeRemainingMs = turnBudgetMs(lobby, session.timerState, turnFullMs(lobby, session));
+        // S10f (F10): the frozen turn time and reserve run again from now (helpers/draft/turnClock.ts).
+        const timeRemainingMs = lastPauseStep?.payload?.value?.timeRemainingMs;
         ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
             timerState: resumedTimerState(ctx, session.timerState),
         }, user.id));

@@ -380,6 +380,8 @@ A81, a full team sits out of the Auction (`reducers/draft/draftAuction.ts`):
 - A team that cannot afford any base cost nominates `EMPTY` (cost 0, never exclusive) as before; while the other team
   is full each such nomination is an immediate 0-cost sale, so the team fills its remaining slots with `EMPTY`.
 
+_The "either team" part is narrowed in Phase S10aa execution (fix pass, DECISIONS.md A153): only the paused team's
+seated players or a referee; see "Phase S10aa execution"._
 A85(2), `resume_draft` (`reducers/draft/draftControl.ts`): when the latest Pause step is an auto-pause
 (`isAutoPause`), the referee or any seated player of either team (`isSeatedPlayer`: a Blue / Red player seat, not a
 coach, not a spectator) whose row is not away or abandoned (`memberHasLeft`: `leftAt` / `abandonedAt` unset) may
@@ -448,6 +450,9 @@ All in `reducers/draft/draftClassic.ts`:
     time from the Pause step (it still reads the step for the D-62 / A85(2) caller rule);
   - `timer_expiry_classic` / `timer_expiry_auction` accept the call only when `remainingMs` is 0
     ("Turn timer has not yet expired." otherwise). Clients compute the same `remainingMs` from `view_my_match_session`.
+  _The clock model and the client formula are superseded in Phase S10aa execution (DECISIONS.md A148 to A151): reserve
+  time, the `reserveUsedMs` / `inReserve` / `reserveMarks` fields, and no automatic lift on return; see "Phase S10aa
+  execution" below._
 - **Edit-step cap (draft audit #8; per side since review F1).** `helpers/draft/stepSequence.ts::ensureEditStepRoom(ctx,
   lobbyId, side, kind)`: counted per team side, so one team can only exhaust its own allowance. Each side has two
   counters of `MAX_EDIT_STEPS_PER_LOBBY = 300`: edits (`SetEidolon`, `EquipLightcone`, `UnequipLightcone` steps whose
@@ -585,7 +590,8 @@ execution").
   sale, `resolveSale` in `completeSale`), `currentBidTeam` = the nominator, a fresh turn clock (`turnStartAt` = now,
   `accumulatedPauseMs` 0); `Lobby.lastActivityAt`. It does not move `turnIndex`, `nextNominatorTeam`, either character
   or light-cone budget, the won counts or the reserve banks (no reducer writes `teamBlue/RedReserveMs` after
-  `start_draft`).
+  `start_draft`). _Superseded in Phase S10aa execution (DECISIONS.md A148): every turn end charges the on-clock team's
+  overtime to its reserve, the nomination included._
 - **The timer's nomination.** `timer_expiry_auction` with no open nomination writes the same: a `Nominate` step with
   `actorUserId` 0, the nominator's slot and `EMPTY`; `currentNomination` 'EMPTY', `currentBidAmount` 0,
   `currentBidTeam` the nominator, a fresh clock. It does not pass the nomination turn: the other team now bids or
@@ -846,6 +852,116 @@ restarts after an undo in 24 games).
   (current bid <bid> + minimum raise <raise>)." prints each f32 value as its shortest round-trip decimal (3.1, not
   3.100000001490116).
 
+## Phase S10aa execution (DECISIONS.md A148, A149, A150, A151; fix pass A153, A154)
+
+Reserve time works, undo gives it back, late turn actions are refused, and a disconnect auto-pause is resumed by hand.
+The model lives in `helpers/draft/turnClock.ts`; behaviour: [contract.md](contract.md).
+
+**TimerState** (`types/structs.ts`; three fields new, S11 clear publish):
+
+| Field | Meaning |
+|---|---|
+| `turnStartAt` | the anchor: the start of the turn, or of its running part after a pause or resume |
+| `teamBlueReserveMs`, `teamRedReserveMs` | each team's reserve at the **start of the current turn** (`Lobby.reserveBankSeconds * 1000` at `start_draft`); written only when a turn ends or by an undo |
+| `isPaused` | as before |
+| `accumulatedPauseMs` | turn time left at `turnStartAt`; 0 = a full turn (name kept) |
+| `reserveUsedMs` (new) | the on-clock team's reserve already used in this turn before `turnStartAt` (written by a pause) |
+| `inReserve` (new) | the turn time was used up before `turnStartAt` (a pause during reserve time): the turn budget is 0, not "full" |
+| `reserveMarks: ReserveMark[]` (new) | `{ sequence, teamBlueReserveMs, teamRedReserveMs }`: both reserves at the start of a turn that consumed reserve, keyed by the sequence of the step that ended it; empty unless a team went into overtime |
+
+**On the clock** (`onClockTeam`): Classic and the Auction ban phase, `draftSequence[turnIndex].teamTurn`; the auction
+phase with no open nomination, `nextNominatorTeam` (the other team when it is full, as `timer_expiry_auction` resolves
+it); an open nomination, the team that must answer the bid (the other team than `currentBidTeam`). None in the confirm
+window (A129): the window has no reserve, and outside Drafting there is no clock.
+
+**The formula** (`readClock(lobby, session, now)`; the same for the server and every client):
+
+```
+complete    = the draft is complete (Classic: turnIndex >= draftSequence.length; Auction: auction phase and both teams
+              at charactersPerTeam)
+full        = (complete ? confirmWindowSeconds : standardTurnSeconds) * 1000
+team        = onClockTeam (null when complete)
+budget      = inReserve ? 0 : (accumulatedPauseMs > 0 ? accumulatedPauseMs : full)
+reserveAt   = team ? max(0, team's reserve - reserveUsedMs) : 0
+elapsed     = isPaused ? 0 : serverNow - turnStartAt
+turnLeft    = max(0, budget - elapsed)                         -- the turn countdown
+reserveLeft = max(0, reserveAt - max(0, elapsed - budget))     -- the on-clock team's reserve countdown
+overdue     = max(0, elapsed - budget - reserveAt)
+expiryDue   = !isPaused && turnLeft == 0 && reserveLeft == 0
+```
+
+The other team's reserve is its stored value (frozen while it is not on the clock). Every field comes from
+`view_my_match_session` (the whole session row minus audit columns: `timerState`, `turnIndex`, `draftSequence`,
+`isAuctionPhase`, `nextNominatorTeam`, `currentNomination`, `currentBidTeam`, the won counts) and `view_my_lobby`
+(`stage`, `draftMode`, `lineupFormat`, `standardTurnSeconds`, `confirmWindowSeconds`). No view field was added: both
+views already deliver them to every viewer with a present or away row (players, coaches, the referee, spectators, late
+spectators). `serverNow` is the client's clock corrected by its server-time offset (timer review F3, a frontend task).
+Show the clock only while `stage` is Drafting.
+
+**Writes:**
+
+- **Turn end** (`turnEndTimerState(ctx, lobby, session, endingSequence)`): `pick_character`, `ban_character`,
+  `nominate_character` (also its A81(2) immediate sale), `place_bid`, the sale in `completeSale` (`pass_bid`, the timer
+  sale, the immediate sale) and both expiry reducers' auto steps. The on-clock team pays
+  `min(reserve, reserveUsedMs + overtime)` (overtime = time used past the turn time; time left on the turn clock is not
+  banked); when it paid anything, a `ReserveMark` with both reserves at the turn's start and the ending step's sequence
+  is appended; then a fresh turn (`turnStartAt` = now, `accumulatedPauseMs` 0, `reserveUsedMs` 0, `inReserve` false).
+  The reserve is never refilled.
+- **Pause** (`pausedTimerState`, `pause_draft` and the 15 s auto-pause): with turn time left, `accumulatedPauseMs` =
+  that time (at least 1 ms); during reserve time, `accumulatedPauseMs` 0, `inReserve` true, `reserveUsedMs` = the reserve
+  used so far (at least 1 ms of reserve kept); with both spent, 1 ms of turn time is frozen and `reserveUsedMs` = the
+  whole reserve (the S10f rule, so the turn never comes back full). The Pause step's `timeRemainingMs` is the frozen
+  **turn** time (0 during reserve time).
+- **Resume** (`resumedTimerState`, `resume_draft` only): `turnStartAt` = now, everything else kept.
+- **Undo** (A149, `undoneTimerState(ctx, session, restoreSequence)`): `restoreSequence` is the undone ban or pick, or in
+  the auction phase the round's `Nominate` step (A134: the whole round goes). Both reserves become those of the earliest
+  `ReserveMark` with `sequence >= restoreSequence` (none: the current turn-start values), marks from that sequence on are
+  dropped, and the turn restarts with a full turn clock. The reserve used by the turn in progress is returned with it
+  (it was never charged). The marks cost nothing in the common case (no overtime) and at most one entry per turn-ending
+  step; the cap of Undo rows (A122(10)) is unchanged.
+- `finishDraft` and `start_draft` unchanged apart from the new fields' initial values (0, false, empty).
+
+**Expiry** (`timer_expiry_classic`, `timer_expiry_auction`): accepted only when `expiryDue` (turn time and the on-clock
+team's reserve both 0, not paused); refused 1 ms before ("Turn timer has not yet expired."), never late-bounded. The
+turn end above then sets that team's reserve to 0 and the auto-play is unchanged (random character or EMPTY pick, SKIP
+or a drawn ban, EMPTY nomination, sale to the holder). The window branch uses the same reading (no reserve).
+
+**Late turn actions** (A150, `ensureTurnTimeLeft`): `pick_character`, `ban_character`, `nominate_character`,
+`place_bid`, `pass_bid` throw "Time is up for this turn." when not paused and `overdue > LATE_ACTION_TOLERANCE_MS`
+(1000). At exactly 1000 ms the action is accepted and the reserve ends at 0. A paused clock never refuses (the pause
+itself refuses with "Draft is paused."); a pause taken after the end freezes 1 ms, so after the resume the tolerance
+counts again from 1 ms later (A154: accepted as is, about 1 s per pause and only until a client calls the expiry; the
+expiry is due 1 ms after the resume). The check runs after the turn, team and captain checks. Other reducers that change the
+turn were checked and are not turn actions: `undo_last_step` and `advance_stage` (referee tools), `timer_expiry_*`
+(strict rule above), `set_eidolon` (no turn change), `pause_draft` / `resume_draft`, concede / forfeit / defer (end the
+match, not a turn).
+
+**Automatic pause** (A151): `liftAutoPauseOnReturn` is removed; neither `client_connected` nor `join_lobby` lifts an
+auto-pause. `resume_draft` is the only way out: on an auto-pause the referee or any present seated player of either team
+(A85(2), unchanged; the returned player is one of them). See `docs/lobby/architecture.md`. _Narrowed in Phase S10aa
+execution (fix pass, DECISIONS.md A153): see "Who resumes an automatic pause" below._
+
+**Who resumes an automatic pause** (A153, fix pass, `resume_draft`): the cause of an auto-pause is the Pause step's
+`actorSlot`, which the 15 s check (`run_referee_transfer_check`) has always written as the dropped player's team
+(`slotToTeamSide` of that member's seat; `actorUserId` is the system actor 0). No schema change. On an auto-pause (latest
+Pause step `isAutoPause`) the caller passes when it holds the referee flag, or when it is a present seated player
+(`ensurePresentMember`, `isSeatedPlayer`) whose seat's team equals that `actorSlot`. Refusals, in order: an away or
+abandoned caller (A98 texts), a coach or a spectator without the flag ("Only the referee or a seated player can resume an
+auto-paused draft.", as before), a seated player of the other team ("Only the paused team or a referee can resume this
+pause."). The manual-pause rule (D-62: pauser or referee) and the clock math are unchanged; no second auto-pause is armed
+after such a resume. Cases:
+
+- The dropped player's teammates may resume while the dropped player is still away; the returned player may resume too.
+- Players of both teams away: the first 15 s check that fires pauses and names its player's team; later checks find the
+  draft paused and write nothing (A92(8)), so the pause stays that first team's. The other team's players stay refused
+  even after returning; a referee can always resume.
+- The dropped player abandons (joins another lobby): the row is refused (A98), the pause still names the team, so a
+  present teammate or a referee resumes.
+- A stand-in sits in a team seat like any player: the step names that seat's team, and the stand-in's teammates or a
+  referee resume. Seats cannot move in Drafting, so the team named by the step stays the member's team.
+- No present seated player of the paused team (a 1v1 drop, or the whole team away): only a referee resumes (the 15 s
+  check moves the flag to an online member when the referee drops).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -905,10 +1021,12 @@ restarts after an undo in 24 games).
 | Fix pass: a holder's raise must fit its free character budget (no spill while holding: one dip per team per stretch without a character-budget-restoring undo); "0" for A133 is `charBudgetIsZero` (2^-20 of the starting character budget, floor 1); a sale whose default extra no longer fits sells at the highest affordable level down to E0 (never refused for its extra); `place_bid`'s minimum raise compared as f32 | Phase S10u execution (DECISIONS.md A133; S10u review F1, F2, F3, F6) | 2026-11-10 |
 | Final pass: the A133 zero tolerance refuses only a charge that needs the light-cone budget (raise, guard, held-bid-of-0 check; the sale already excluded light cones); with a minimum raise above 0 a bid must be above the current bid in f32, and the refusal prints f32 values in their shortest form; the step-down limitation documented | Phase S10u execution (DECISIONS.md A133; S10u review 2 G1, G2, G3, G4) | 2026-11-10 |
 | The step-down limitation: the Admin route is closed (roster edits of a selected account and cost-row changes of a set with a live game are refused); `resolveSale` unchanged, its fallback left for the deletion or ban of a seated user and an abandoned member's roster | Phase S10w execution (DECISIONS.md A142; S10u review 2 G2) | 2026-11-10 |
+| Reserve time: the on-clock team's reserve drains after its turn time and pays the overtime at each turn end; expiry needs turn time and reserve at 0; pause freezes both (`TimerState.reserveUsedMs`, `inReserve`); undo restores the reserves of the turn it returns to (`TimerState.reserveMarks`); turn actions refused more than 1 s after the end ("Time is up for this turn."); no automatic lift of an auto-pause on return | Phase S10aa execution (DECISIONS.md A148, A149, A150, A151) | 2026-11-11 |
+| Fix pass: `resume_draft` on an auto-pause accepts a referee or a present seated player of the team named by the Pause step's `actorSlot` (the dropped player's team); the other team gets "Only the paused team or a referee can resume this pause."; a pause on a spent turn stays allowed (1 ms frozen, the tolerance counts again after the resume) | Phase S10aa execution (DECISIONS.md A153, A154) | 2026-11-11 |
 
 ---
 
-*Last updated: 2026-11-10 (S10w)*
+*Last updated: 2026-11-11 (S10aa)*
 *Feature owner: Phase 07 / Phase 09 / Phase 12.3 / Phase 15.4 / Phase 15.3*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

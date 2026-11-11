@@ -2231,6 +2231,13 @@ export const RefereeTransferCheck = __t.object("RefereeTransferCheck", {
 });
 export type RefereeTransferCheck = __Infer<typeof RefereeTransferCheck>;
 
+export const ReserveMark = __t.object("ReserveMark", {
+  sequence: __t.u32(),
+  teamBlueReserveMs: __t.u32(),
+  teamRedReserveMs: __t.u32(),
+});
+export type ReserveMark = __Infer<typeof ReserveMark>;
+
 // The tagged union or sum type for the algebraic type `Role`.
 export const Role = __t.enum("Role", {
   Admin: __t.unit(),
@@ -2452,6 +2459,11 @@ export const TimerState = __t.object("TimerState", {
   teamRedReserveMs: __t.u32(),
   isPaused: __t.bool(),
   accumulatedPauseMs: __t.u32(),
+  reserveUsedMs: __t.u32(),
+  inReserve: __t.bool(),
+  get reserveMarks() {
+    return __t.array(ReserveMark);
+  },
 });
 export type TimerState = __Infer<typeof TimerState>;
 

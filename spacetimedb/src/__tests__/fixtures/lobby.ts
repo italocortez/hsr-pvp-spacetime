@@ -27,7 +27,8 @@ export const PRESET_ARGS = {
     gameMode: { tag: 'MemoryOfChaos' },
     matchType: { tag: 'Casual' },
     standardTurnSeconds: 30,
-    reserveBankSeconds: 60,
+    // T-S10aa (A148): 0 = no reserve (the turn-only clock the tournament-lobby timer tests expect), as DEFAULT_LOBBY_ARGS.
+    reserveBankSeconds: 0,
     characterBudget: 100,
     lightconeBudget: 50,
     minimumBidRaise: 1,

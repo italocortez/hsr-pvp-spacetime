@@ -31,7 +31,6 @@ import {
     ensureForfeitSecondsInRange,
     ensureNoActionAllowed,
     ensureNotDeferredOutsideTournament,
-    liftAutoPauseOnReturn,
     markMemberOffline,
 } from '@module/helpers/lobby/disconnectHelpers';
 import { consumeLobbyCreateAllowance, consumeMembershipAllowance, readAbuseConfig, recordGuestLobbyCreation } from '@module/helpers/lobby/abuseControls';
@@ -315,10 +314,8 @@ export const join_lobby = spacetimedb.reducer(
             if (isReturn) {
                 postMemberEventChat(ctx, lobby, 'back', user.id, user.displayName, user.id); // S9a fix (A37)
             }
-            // Auto-resume if draft was auto-paused (D-11, D-39), as narrowed by A85(1): only a seated player's return
-            // lifts it, and only when no seated player of either team is still offline, away or abandoned.
-            // A92(7): the same function as client_connected.
-            liftAutoPauseOnReturn(ctx, lobby, existingMember, user.id);
+            // S10aa (A151): a return no longer lifts a disconnect auto-pause (A92(7) superseded); the draft stays paused
+            // until a referee or a seated player calls resume_draft (A85(2)).
             // Update activity
             ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
                 lastActivityAt: ctx.timestamp,

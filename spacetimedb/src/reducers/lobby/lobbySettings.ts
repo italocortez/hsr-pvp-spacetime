@@ -453,8 +453,7 @@ export const unconfirm_ready = spacetimedb.reducer(
             throw new SenderError('Lobby not found.');
         }
 
-        // D-28: unconfirm blocked during the 3-second countdown after start_draft is called
-        // If the stage is still Waiting, start_draft hasn't fired yet — stage check suffices.
+        // D-28: unconfirm only while the lobby is in Waiting (start_draft starts the first turn in the same call).
         ensureStageIs(lobby, 'Waiting');
 
         const member = ensurePresentMember(ctx, lobbyId, user.id); // A98

@@ -1495,3 +1495,45 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Decision:** `join_lobby` refuses a member whose row is abandoned with "You abandoned this match and cannot return." (before: "You left this match for another lobby and cannot return."). Extends A146 to the one text it left.
 - **Why:** user, 2026-11-11, on the orchestrator's proposal of that text: "lets do that small change in wording you said".
 - **Where implemented:** S10z
+
+### A148 — Reserve time works: after the turn time, the acting team's turn is kept alive by its reserve
+
+- **Decision:** each team has a reserve bank per game, starting at the lobby's `reserveBankSeconds`. Whenever a team is on the clock (ban, pick, nomination, and the team that must answer a bid, in Classic and Auction alike) and its turn time reaches 0, its reserve drains instead and the turn stays with that team. A turn ended by an action charges only the overtime (time used beyond the turn time) to the acting team's reserve; time left on the turn clock is not banked. The reserve is never refilled during a game. When the turn time and the acting team's reserve are both at 0, the expiry is accepted and the turn is auto-played as the lobby setting says (random character or EMPTY). A team with reserve 0 has only the turn time on each turn. A pause freezes both clocks. `reserveBankSeconds` 0 means no reserve (the behaviour before this row). The confirm window (A129) has no reserve. Reference for the behaviour: the beta draft at `D:\GitsWork\hsr_draft_nath` (`DraftingInterface.tsx`, `DraftTimer.tsx`).
+- **Why:** user, 2026-11-11: "Reserve time is a feature that should work. ... If the reserve time reaches 0, it just means that for each turn, a team can only use the existing turn's timer to decide what to do. On a normal match, if the normal turn timer runs out, it will eat the reserve time to keep the current team's turn. If the reserve time is gone and the timer reachers 0 - and depending if we have pick random character or the empty character on - we will just auto play the turn for the team." On Auction the user chose "Everywhere a team is on the clock".
+- **Where implemented:** S10aa
+
+### A149 — An undo gives back the reserve the undone steps consumed
+
+- **Decision:** after an undo, each team's reserve is what it was at the start of the turn the draft returns to, and that turn restarts with a full turn clock (as the beta draft does). Reserve consumed by the turn in progress when the undo was called is returned as well.
+- **Why:** user, 2026-11-11, chose "Give it back" over "Spent stays spent".
+- **Where implemented:** S10aa (payload fields go to maincloud with the S11 clear publish)
+
+### A150 — A turn action is refused once no time is left, with 1 second of tolerance
+
+- **Decision:** `pick_character`, `ban_character`, `nominate_character`, `place_bid` and `pass_bid` are refused when the turn time and the acting team's reserve are both exhausted and more than 1 second has passed since that moment. Within the 1 second the action is accepted and the reserve ends at 0. The expiry reducers keep their strict rule (refused before 0). A paused clock never refuses.
+- **Why:** user, 2026-11-11, chose "Refuse with 1 s tolerance" (timer review F2: a pick 45 s after 0 was accepted).
+- **Where implemented:** S10aa
+
+### A151 — An automatic pause is lifted by hand, never by the reconnect itself
+
+- **Decision:** when a dropped player returns, the automatic pause stays. The returned player or a referee resumes it with `resume_draft`. Supersedes the automatic lift of A92(7).
+- **Why:** user, 2026-11-11, chose "Stay paused until resumed by hand" (timer review F5: a player returned with 1 second left and the clock ran at once).
+- **Where implemented:** S10aa
+
+### A152 — A manual pause has no time limit
+
+- **Decision:** unchanged behaviour, now ruled: a manual pause ends only when the pauser or a referee resumes it.
+- **Why:** user, 2026-11-11: "a manual pause never ends byu itself that's fine i think, there is no global pause timer anyway".
+- **Where implemented:** no change
+
+### A153 — An automatic pause is resumed by the dropped player's own team or a referee, not by the opponent
+
+- **Decision:** `resume_draft` on an automatic pause is accepted from a referee and from a present seated player of the team whose player's absence caused the pause (the returned player included). A seated player of the other team is refused. Narrows A85(2); the manual-pause rule (pauser or referee) is unchanged. No second automatic pause is armed after such a resume (unchanged).
+- **Why:** user, 2026-11-11, on the orchestrator's recommendation to restrict it to "the returned player, their team and the referee" because an opponent could restart the clock while the dropped player was still away and drain that team's turn and reserve: "on point 1 i agree on your recommendation".
+- **Where implemented:** S10aa (fix pass)
+
+### A154 — A pause taken after all time is gone stays allowed
+
+- **Decision:** a pause on a turn whose turn time and reserve are both spent is accepted and freezes 1 ms; after the resume the 1 second tolerance of A150 counts again. Accepted as is: the gain is about 1 second per pause (3 pauses per team, 10 seconds apart), it exists only until any client calls the expiry, and a pause taken with 1 second left gives the same result. Pauses in general are unchanged: a team may pause on its own turn.
+- **Why:** user, 2026-11-11: "on point 2, just keep it tbh" (S10aa review F1 describes the case).
+- **Where implemented:** no change (pinned by a test in S10aa)

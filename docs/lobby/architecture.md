@@ -160,7 +160,7 @@ Abuse guards (Phase S5 execution; DECISIONS.md A42, A43; ACCESS-SECURITY-OPS B-7
 ### join_lobby(lobbyId, joinCode, password, abandonCurrentMatch?)
 1. `getAuthenticatedUser(ctx)`.
 2. D-03: resolve lobby by `id` (if `lobbyId>0`) else by `joinCode`; throw "Lobby not found." if neither resolves.
-3. **Reconnect / return path** (existing LobbyMember row; F1 / Phase S4 execution: evaluated BEFORE the one-lobby check, which counts the row being rejoined and used to reject every reconnect; `abandonCurrentMatch` is ignored here): require a reconnect stage (Waiting, Drafting, Equipping, Scoring, AwaitingResult; A67(1)); A68(4) reject an abandoned row ("You abandoned this match and cannot return."); D-39 recompute `disconnectPoolRemainingMs`; delete+reinsert member `isOnline=true`, clear `disconnectedAt` and `leftAt` (A68(2): the only path that clears `leftAt`); auto-resume the MatchSession timer if it was auto-paused (A85(1): only when the caller is a seated player and no seated player is still away, see "Phase S10c execution"); bump activity; a returning away player (the row had `leftAt`) gets the System chat line "{name} is back."; return (no count change).
+3. **Reconnect / return path** (existing LobbyMember row; F1 / Phase S4 execution: evaluated BEFORE the one-lobby check, which counts the row being rejoined and used to reject every reconnect; `abandonCurrentMatch` is ignored here): require a reconnect stage (Waiting, Drafting, Equipping, Scoring, AwaitingResult; A67(1)); A68(4) reject an abandoned row ("You abandoned this match and cannot return."); D-39 recompute `disconnectPoolRemainingMs`; delete+reinsert member `isOnline=true`, clear `disconnectedAt` and `leftAt` (A68(2): the only path that clears `leftAt`); auto-resume the MatchSession timer if it was auto-paused (A85(1): only when the caller is a seated player and no seated player is still away, see "Phase S10c execution"; _superseded in Phase S10aa execution, DECISIONS.md A151: the return leaves the auto-pause in place_); bump activity; a returning away player (the row had `leftAt`) gets the System chat line "{name} is back."; return (no count change).
 4. **New-join path** only: D-22 / A68(4) `ensureNotInLobby(ctx, userId, abandonCurrentMatch ?? false)`; D-23 guest restrictions; D-21 `ensureNotBanned` (reject if a `LobbyBan` row exists).
 5. D-04 / A68(8): require stage Waiting, Drafting, Equipping or Scoring (AwaitingResult: "Cannot join a lobby in stage: AwaitingResult"); D-02 verify password against `LobbyPassword` if `!isPublic`.
 6. Cap enforcement: reject if total members >= 20 ("Lobby is full (max 20 members)."); a join that can only be watching is rejected when the lobby already has `maxSpectators` spectators ("Spectator slots are full (max N)." with N = `Lobby.maxSpectators`, A68(8)): every live-stage join, and a Waiting join of a tournament lobby that auto-seated to Spectator. A casual Waiting joiner lands on Spectator as a seat candidate (D-27) and is not counted against `maxSpectators` (Phase S8f fix pass: the setting caps watchers, not seat candidates; the 20-member cap still applies). Only new joins are tested: members already in the Spectator slot are unaffected by a later lower setting.
@@ -297,7 +297,7 @@ B-4 (Phase S5 execution; ACCESS-SECURITY-OPS §B.5, D-B5), between steps 2 and 3
 4. D-16: `isForfeitEligible(targetTeam)` stays the gate (every non-coach player of that team offline with `disconnectedAt` set and pool depleted or `disconnectForfeitSeconds` elapsed; A68(3): away and abandoned rows count as offline players, with the stamp of their Leave; a team with no player rows is never eligible); then `performConcede` (trigger RefereeDecision for a referee, Disconnect otherwise). `concede_match` is unchanged; `defer_match`'s summary lists away / abandoned players with the other offline players (A68(3)). No reducer concedes automatically (A68(3)): `performConcede`'s callers are `concede_match`, `claim_forfeit` and `dq_participant`'s whole-team settlement.
 
 ### client_connected / client_disconnected (index.ts; lobby side, Phase S4 execution)
-- `client_connected`: after the presence upsert (`docs/auth/architecture.md`), for every `LobbyMember` of the user **without `leftAt` / `abandonedAt`** (A68(2): an away row stays offline and keeps its pending check; the user may be browsing the site): delete pending `RefereeTransferCheck` rows (`by_lobby_and_user`); if the row is offline, delete+reinsert with `isOnline=true`, `disconnectedAt` cleared and `disconnectPoolRemainingMs` decremented by the offline time (`handleDisconnectPoolUpdate`, D-10/D-11). Idempotent (F1). `join_lobby`'s reconnect branch does the same explicitly, clears `leftAt` and additionally auto-resumes an auto-paused draft.
+- `client_connected`: after the presence upsert (`docs/auth/architecture.md`), for every `LobbyMember` of the user **without `leftAt` / `abandonedAt`** (A68(2): an away row stays offline and keeps its pending check; the user may be browsing the site): delete pending `RefereeTransferCheck` rows (`by_lobby_and_user`); if the row is offline, delete+reinsert with `isOnline=true`, `disconnectedAt` cleared and `disconnectPoolRemainingMs` decremented by the offline time (`handleDisconnectPoolUpdate`, D-10/D-11). Idempotent (F1). `join_lobby`'s reconnect branch does the same explicitly, clears `leftAt` and additionally auto-resumes an auto-paused draft. _Superseded in Phase S10aa execution (DECISIONS.md A151): neither path resumes a draft; see "Phase S10aa execution"._
 - `client_disconnected`: marks the identity's presence row offline; if the user still has another live `UserPresence` row, stops (A48). Otherwise for every membership without `leftAt` / `abandonedAt` (those are already offline): `markMemberOffline` (helpers/lobby/disconnectHelpers.ts): `isOnline=false`; in an active stage (Drafting, Equipping, Scoring; A67(1) `ACTIVE_STAGES`) one `RefereeTransferCheck { lobbyId, userId, scheduledAt: now + 15 s }` (a stale pending row for the pair is replaced); `disconnectedAt=now` in every live stage (Drafting, Equipping, Scoring: the D-08 forfeit clock; never under NoAction). No flag transfer, no pause (A22a, F5).
 
 ### run_referee_transfer_check(arg: RefereeTransferCheck) (refereeTransfer.ts; scheduled, A22a)
@@ -486,6 +486,8 @@ Membership lifecycle after A68 (details in the reducer flows above):
   `resumedTimerState` (`helpers/draft/turnClock.ts`), the same write as `resume_draft`; the auto-pause froze the
   remaining time in `accumulatedPauseMs`, so the turn resumes with the time it had (docs/match-session/architecture.md,
   "Phase S10f execution").
+  _Superseded in Phase S10aa execution (DECISIONS.md A151): `liftAutoPauseOnReturn` is removed; no return lifts an
+  auto-pause._
 - **Manual pause (A92(8)).** No code: a comment at the auto-pause decision in `run_referee_transfer_check` records the
   accepted behaviour.
 - **`view_my_lobby_members.disconnectActionAt` (A92(9)).** Optional timestamp, last column: for a seated player whose
@@ -723,6 +725,33 @@ Stand-ins in tournament lobbies; the full rule set is in [../tournament/architec
   the code's refusal is the A25 permission text "This action needs the participants permission.", and the stand-in
   scenarios there predate `teamId`, `revoke_stand_in` and the S10v rules.
 
+## Phase S10aa execution (DECISIONS.md A151; fix pass A153, A154)
+
+- **The return path no longer lifts an auto-pause.** `liftAutoPauseOnReturn` (`helpers/lobby/disconnectHelpers.ts`) is
+  removed with its two calls: the `join_lobby` reconnect / return branch and `client_connected` (per restored
+  membership). Both still restore the row (online, `disconnectedAt` cleared, pool decremented; `join_lobby` also clears
+  `leftAt` and posts "{name} is back." for a return) and cancel pending checks, and leave `MatchSession.timerState`
+  untouched: the draft stays paused with exactly the turn time and reserve it froze.
+- **Who lifts it.** `resume_draft` only (`reducers/draft/draftControl.ts`, rules unchanged): on an auto-pause (latest
+  Pause step `isAutoPause`) the referee or any present seated player of either team (A85(2)), so the returned player
+  may resume it, and so may a teammate or an opponent; coaches and non-referee spectators are refused ("Only the
+  referee or a seated player can resume an auto-paused draft."), away and abandoned callers get the A98 texts. A manual
+  pause keeps D-62 (the pauser or the referee). The A85(1) "every seated player back" condition no longer applies to
+  anything: a seated player may resume while another seated player is still away (the existing A85(2) rule, kept).
+  _Narrowed in the S10aa fix pass (DECISIONS.md A153): the opponent may no longer resume; see the next bullet._
+- **Who lifts it, fix pass (A153).** On an auto-pause `resume_draft` accepts the referee flag holder or a present seated
+  player of the team whose player's absence caused the pause; that team is the Pause step's `actorSlot`, which the 15 s
+  check writes from the dropped member's seat (no schema change). The returned player and their teammates (also while
+  the dropped player is still away or has abandoned) may resume; a seated player of the other team is refused with "Only
+  the paused team or a referee can resume this pause."; coaches, spectators and away / abandoned callers keep their
+  texts. With players of both teams away the pause belongs to the team whose check fired first (a later check finds the
+  draft paused and adds nothing). A stand-in counts as a player of the seat's team. The manual-pause rule is unchanged.
+  Details and cases: docs/match-session/architecture.md "Who resumes an automatic pause".
+- **A pause on a spent turn (A154, no change).** An auto-pause or a manual pause taken after turn time and reserve are
+  both gone freezes 1 ms; after the resume the A150 tolerance counts again (accepted by the owner, pinned by a test).
+- The 15 s check (`run_referee_transfer_check`) and the clock freeze are unchanged apart from the reserve
+  (`pausedTimerState(ctx, lobby, session)`, docs/match-session/architecture.md "Phase S10aa execution").
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -781,10 +810,12 @@ Stand-ins in tournament lobbies; the full rule set is in [../tournament/architec
 | `create_tournament_lobby` refuses a plain stand-in (members of the two teams and staff create the match lobby) | Phase S10v execution (DECISIONS.md A140) | 2026-11-10 |
 | Second fix pass: no automatic stand-in displacement at all (A138); `confirm_ready` in a player seat is a stand-in snapshot entry point; selections go with released stand-in locks | Phase S10v execution (DECISIONS.md A138; S10v review G1) | 2026-11-10 |
 | Fix pass: only the member's own join or seat request displaces a stand-in (A137(3), replaced by A138); the captain's stand-in move skips the spectator cap; a disqualified member is unseated in Waiting; stand-in locks at the stand-in's own participation (create, join, self seat move); start-gate text "seated as a player" | Phase S10v execution (DECISIONS.md A137; S10v review F6, F7, F9, F11, F12, F13) | 2026-11-10 |
+| A151: no return (`join_lobby`, `client_connected`) lifts a disconnect auto-pause; `liftAutoPauseOnReturn` removed; `resume_draft` (referee or a present seated player, A85(2)) is the only lift | Phase S10aa execution (DECISIONS.md A151) | 2026-11-11 |
+| Fix pass: an auto-pause is resumed by a referee or a present seated player of the paused team (the Pause step's `actorSlot`), not by the opponent; a pause on a spent turn stays allowed | Phase S10aa execution (DECISIONS.md A153, A154) | 2026-11-11 |
 
 ---
 
-*Last updated: 2026-11-10 (S10v)*
+*Last updated: 2026-11-11 (S10aa)*
 *Feature owner: Phase 05 / Phase 09 / Phase 10.1 / Phase 10.4 / Phase 12.1 / Phase 16*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

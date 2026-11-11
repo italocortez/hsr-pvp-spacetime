@@ -3,7 +3,7 @@ import { ScheduleAt } from 'spacetimedb';
 import { SYSTEM_USER_ID } from '@module/helpers/admin/auditColumns';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { checkProviderBan } from '@module/helpers/lobby/banHelper';
-import { handleDisconnectPoolUpdate, liftAutoPauseOnReturn, markMemberOffline } from '@module/helpers/lobby/disconnectHelpers';
+import { handleDisconnectPoolUpdate, markMemberOffline } from '@module/helpers/lobby/disconnectHelpers';
 import { hasLivePresence, markPresenceOnline } from '@module/helpers/identity/presenceHelpers';
 import { seedAbuseConfigDefaults } from '@module/helpers/lobby/abuseControls';
 import { seedSystemLobbyPreset } from '@module/helpers/lobby/systemPreset';
@@ -260,9 +260,7 @@ export const client_connected = spacetimedb.clientConnected((ctx) => {
       disconnectedAt: undefined,
       disconnectPoolRemainingMs: handleDisconnectPoolUpdate(ctx, member, lobby, ctx.timestamp),
     }, user.id));
-    // A92(7): a seated player's return lifts a disconnect auto-pause under the A85(1) test, through the function the
-    // join_lobby reconnect branch uses (one clock write for both paths).
-    liftAutoPauseOnReturn(ctx, lobby, member, user.id);
+    // S10aa (A151): the reconnect no longer lifts a disconnect auto-pause (A92(7) superseded); resume_draft does.
   }
 
   // D-08 enforcement point 2: Check if the user's provider is banned on reconnect (A46: loginMethod + providerId)

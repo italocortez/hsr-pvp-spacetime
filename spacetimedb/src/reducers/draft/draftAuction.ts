@@ -5,7 +5,7 @@ import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHel
 import { ensurePresentMember, ensureStageIs, slotTeam, slotIsCoach, slotToTeamSide } from '@module/helpers/lobby/lobbyHelpers';
 import { ensureMatchAlive } from '@module/helpers/lobby/disconnectHelpers';
 import { lobbySteps, getNextSequence } from '@module/helpers/draft/stepSequence';
-import { turnFullMs, turnRemainingMs } from '@module/helpers/draft/turnClock';
+import { ensureTurnTimeLeft, readClock, turnEndTimerState } from '@module/helpers/draft/turnClock';
 import { confirmWindowOpenText, draftCompleteText, finishDraft, finishDraftWithoutWindow, isDraftComplete } from '@module/helpers/draft/draftComplete';
 import { teamOwnedEidolons } from '@module/helpers/draft/ownershipValidation';
 import { characterCostAt } from '@module/helpers/draft/costSetGuards';
@@ -273,10 +273,11 @@ function completeSale(
     // A61(3)(5), A64: the winning team's default (lowest owned) eidolon and extra, charged now (character budget first).
     const budgets = resolveSale(ctx, lobby, session, winningTeam.tag, characterName, winningAmount);
 
+    const saleSequence = getNextSequence(ctx, lobbyId);
     ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
         id: 0,
         lobbyId,
-        sequence: getNextSequence(ctx, lobbyId),
+        sequence: saleSequence,
         actorUserId,
         anonymousLabel: undefined,
         actorSlot,
@@ -325,11 +326,9 @@ function completeSale(
         blueCharactersWon,
         redCharactersWon,
         nextNominatorTeam,
-        timerState: {
-            ...session.timerState,
-            turnStartAt: ctx.timestamp,
-            accumulatedPauseMs: 0,
-        },
+        // S10aa (A148): the turn the sale ends (the nomination of an immediate sale, the bid answer of a pass or timer
+        // sale) charges the on-clock team's overtime to its reserve.
+        timerState: turnEndTimerState(ctx, lobby, session, saleSequence),
     }, auditUserId));
 
     ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, { lastActivityAt: ctx.timestamp }, auditUserId));
@@ -437,6 +436,9 @@ export const nominate_character = spacetimedb.reducer(
             }
         }
 
+        // S10aa (A150): no nomination more than 1 s after the turn time and the team's reserve ran out.
+        ensureTurnTimeLeft(ctx, lobby, session);
+
         // Character availability: not already won in auction, not banned
         if (characterName !== 'EMPTY') {
             const wonChars = getAuctionWonCharacters(ctx, lobbyId);
@@ -511,11 +513,7 @@ export const nominate_character = spacetimedb.reducer(
             currentNomination: characterName,
             currentBidAmount: baseCost,
             currentBidTeam: slotToTeamSide(member.lobbySlot),
-            timerState: {
-                ...session.timerState,
-                turnStartAt: ctx.timestamp,
-                accumulatedPauseMs: 0,
-            },
+            timerState: turnEndTimerState(ctx, lobby, session, nextSeq), // S10aa (A148)
         }, user.id));
 
         ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
@@ -607,6 +605,9 @@ export const place_bid = spacetimedb.reducer(
             }
         }
 
+        // S10aa (A150): no bid more than 1 s after the turn time and the team's reserve ran out.
+        ensureTurnTimeLeft(ctx, lobby, session);
+
         // Per D-53: Minimum raise check
         const currentBid = session.currentBidAmount ?? 0;
         const minimumBid = currentBid + lobby.minimumBidRaise;
@@ -664,11 +665,7 @@ export const place_bid = spacetimedb.reducer(
         ctx.db.MatchSession.lobbyId.update(updateWithAudit(ctx, session, {
             currentBidAmount: bidAmount,
             currentBidTeam: slotToTeamSide(member.lobbySlot),
-            timerState: {
-                ...session.timerState,
-                turnStartAt: ctx.timestamp,
-                accumulatedPauseMs: 0,
-            },
+            timerState: turnEndTimerState(ctx, lobby, session, nextSeq), // S10aa (A148)
         }, user.id));
 
         ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
@@ -751,6 +748,9 @@ export const pass_bid = spacetimedb.reducer(
             }
         }
 
+        // S10aa (A150): no pass more than 1 s after the turn time and the team's reserve ran out.
+        ensureTurnTimeLeft(ctx, lobby, session);
+
         // Resolution: currentBidTeam wins the character at currentBidAmount
         const winningTeam = session.currentBidTeam;
         const winningAmount = session.currentBidAmount ?? 0;
@@ -826,16 +826,19 @@ export const timer_expiry_auction = spacetimedb.reducer(
         // S10t (A129, A130, A131): a complete draft runs no turn but the lobby's confirm window, on the same clock fields
         // (turnFullMs). Before it has elapsed the call is refused; once it has, the lobby moves to Equipping (finishDraft,
         // the same write as advance_stage). Never an auto-pick, auto-ban, nomination or sale.
+        // S10aa: the window has no reserve (readClock: no team on the clock), so expiryDue is the window's own end.
+        const clock = readClock(lobby, session, ctx.timestamp.microsSinceUnixEpoch);
         if (isDraftComplete(lobby, session)) {
-            if (turnRemainingMs(lobby, session.timerState, ctx.timestamp.microsSinceUnixEpoch, turnFullMs(lobby, session)) > 0) {
+            if (!clock.expiryDue) {
                 throw new SenderError(confirmWindowOpenText);
             }
             finishDraft(ctx, lobby, session, 0);
             return;
         }
 
-        // Server-side timer validation (S10f, F10): the turn's remaining time (helpers/draft/turnClock.ts) must be 0
-        if (turnRemainingMs(lobby, session.timerState, ctx.timestamp.microsSinceUnixEpoch) > 0) {
+        // Server-side timer validation (S10f, F10; S10aa, A148): the turn time and the on-clock team's reserve
+        // (helpers/draft/turnClock.ts) must both be 0; the write below then sets that reserve to 0.
+        if (!clock.expiryDue) {
             throw new SenderError('Turn timer has not yet expired.');
         }
 
@@ -888,11 +891,7 @@ export const timer_expiry_auction = spacetimedb.reducer(
                 currentNomination: 'EMPTY',
                 currentBidAmount: baseCost,
                 currentBidTeam: nominatingTeam,
-                timerState: {
-                    ...session.timerState,
-                    turnStartAt: ctx.timestamp,
-                    accumulatedPauseMs: 0,
-                },
+                timerState: turnEndTimerState(ctx, lobby, session, nextSeq), // S10aa (A148)
             }, 0));
 
             ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {

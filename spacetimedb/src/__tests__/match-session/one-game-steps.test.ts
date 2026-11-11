@@ -132,7 +132,9 @@ describe('A67(3): one game per lobby, steps without game numbers', () => {
         expectReject(test, captain(s, 'Blue'), (ctx) => (priceBanNames(ctx, s.lobbyId, ['dps3']), M.ban_character(ctx, { lobbyId: s.lobbyId, characterName: 'dps3' })), /at most one DPS/); // T-S10r (A122(7), L32): a ban names a priced character
     });
 
-    it('auto-resume on reconnect (join_lobby) reads the latest Pause of the lobby; a manual pause is not resumed', () => {
+    // T-S10aa (A151, re-aligned): before, join_lobby lifted the auto-pause; now the return leaves it and resume_draft
+    // reads the latest Pause step (auto: a seated player may resume; manual: only the pauser or a referee).
+    it('resume_draft reads the latest Pause of the lobby: the returned player resumes the auto-pause, not the later manual one', () => {
         const test = newHarness();
         const s = setupLobby(test);
         tx(test, captain(s, 'Blue'), (ctx) => (priceCharacters(ctx, s.lobbyId, ['p']), M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'p', eidolon: 0 })));
@@ -147,10 +149,16 @@ describe('A67(3): one game per lobby, steps without game numbers', () => {
         expect(session(test, s.lobbyId).timerState.isPaused).toBe(true);
         connect(test, quiet);
         tx(test, quiet, (ctx) => M.join_lobby(ctx, { lobbyId: s.lobbyId, joinCode: '', password: '' }));
+        expect(session(test, s.lobbyId).timerState.isPaused).toBe(true);
+        tx(test, quiet, (ctx) => M.resume_draft(ctx, { lobbyId: s.lobbyId }));
         expect(session(test, s.lobbyId).timerState.isPaused).toBe(false);
 
+        advance(test, 10_000); // the manual pause throttle
         tx(test, s.host, (ctx) => M.pause_draft(ctx, { lobbyId: s.lobbyId }));
         tx(test, quiet, (ctx) => M.join_lobby(ctx, { lobbyId: s.lobbyId, joinCode: '', password: '' }));
+        expect(session(test, s.lobbyId).timerState.isPaused).toBe(true);
+        expect(() => tx(test, quiet, (ctx) => M.resume_draft(ctx, { lobbyId: s.lobbyId })))
+            .toThrow('Only the referee or the player who paused can resume the draft.');
         expect(session(test, s.lobbyId).timerState.isPaused).toBe(true);
     });
 

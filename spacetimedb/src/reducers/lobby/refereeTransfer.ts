@@ -13,7 +13,7 @@ import { moveRefereeFlag, toMemberLite, transferCaptain, transferHost } from '@m
 import { memberHasLeft, slotToTeamSide } from '@module/helpers/lobby/lobbyHelpers';
 import { hasLivePresence } from '@module/helpers/identity/presenceHelpers';
 import { getNextSequence } from '@module/helpers/draft/stepSequence';
-import { pausedTimerState, turnFullMs } from '@module/helpers/draft/turnClock';
+import { pausedTimerState } from '@module/helpers/draft/turnClock';
 
 // ─── run_referee_transfer_check ───────────────────────────────────────────────
 // A22a scheduled check (ACCESS-SECURITY-OPS D.8.2), bound to RefereeTransferCheck through `onSchedule`
@@ -98,7 +98,7 @@ export const run_referee_transfer_check = spacetimedb.reducer(
         if (!shouldPause) return;
 
         // S10f (F10): the same clock freeze as pause_draft (helpers/draft/turnClock.ts).
-        const paused = pausedTimerState(ctx, lobby, session.timerState, turnFullMs(lobby, session)); // A130: holds the confirm window too
+        const paused = pausedTimerState(ctx, lobby, session); // A130: holds the confirm window too; S10aa: and the reserve
 
         ctx.db.MatchSessionStep.insert(insertWithAudit(ctx, {
             id: 0,

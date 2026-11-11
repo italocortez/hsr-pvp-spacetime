@@ -30,12 +30,26 @@ export const LobbyConfigSnapshot = t.object('LobbyConfigSnapshot', {
     deathPenalty: t.i32(),
 });
 
+// S10aa (A149): both teams' reserves at the start of a turn that consumed reserve, keyed by the sequence of the step
+// that ended that turn; undo_last_step restores the reserves from it (helpers/draft/turnClock.ts).
+export const ReserveMark = t.object('ReserveMark', {
+    sequence: t.u32(),
+    teamBlueReserveMs: t.u32(),
+    teamRedReserveMs: t.u32(),
+});
+
+// S10aa (A148): the clock model is in helpers/draft/turnClock.ts. teamBlue/RedReserveMs = each team's reserve at the
+// start of the current turn; accumulatedPauseMs = the turn time left at turnStartAt (0 = a full turn); reserveUsedMs,
+// inReserve and reserveMarks are new in S10aa (S11 clear publish).
 export const TimerState = t.object('TimerState', {
     turnStartAt: t.timestamp(),
     teamBlueReserveMs: t.u32(),
     teamRedReserveMs: t.u32(),
     isPaused: t.bool(),
     accumulatedPauseMs: t.u32(),
+    reserveUsedMs: t.u32(),
+    inReserve: t.bool(),
+    reserveMarks: t.array(ReserveMark),
 });
 
 export const DraftStep = t.object('DraftStep', {

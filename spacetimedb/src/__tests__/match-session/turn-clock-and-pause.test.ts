@@ -194,13 +194,18 @@ describe.each(CLOCK_MODES)('Draft #5 / F10: the turn clock, $name (match-session
         return s;
     }
 
-    it('auto-pause then the away player\'s return through client_connected: the turn continues with the time it had (F10, policy review G10)', () => {
+    // T-S10aa (A151, re-aligned): the reconnect leaves the pause (before: it lifted it); the returned player resumes.
+    it('auto-pause then the away player\'s return through client_connected: still paused; after the returned player\'s resume the turn continues with the time it had (F10, G10, A151)', () => {
         const s = autoPausedByDrop();
         connect(s.test, s.a.b2);
+        expect(timer(s).isPaused).toBe(true);
+        expect(clientRemaining(s)).toBe(12_000);
+        advance(s.test, 4_000);
+        resume(s, s.a.b2);
         expectExpiresIn(s, mode, 12_000);
     });
 
-    it('auto-pause after a Leave then the away player\'s join_lobby: the same remaining time (F10, G10)', () => {
+    it('auto-pause after a Leave then the away player\'s join_lobby and resume: the same remaining time (F10, G10, A151)', () => {
         const s = clockLobby(mode);
         advance(s.test, 3_000);
         tx(s.test, s.a.b2, (ctx) => M.leave_lobby(ctx, { lobbyId: s.lobbyId }));
@@ -210,12 +215,17 @@ describe.each(CLOCK_MODES)('Draft #5 / F10: the turn clock, $name (match-session
         expect(pauseValue(s)).toEqual({ timeRemainingMs: 12_000, isAutoPause: true });
         advance(s.test, 2_000);
         tx(s.test, s.a.b2, (ctx) => M.join_lobby(ctx, { lobbyId: s.lobbyId, joinCode: '', password: '' }));
+        // T-S10aa (A151, re-aligned): the return leaves the pause (before: join_lobby lifted it); the player resumes.
+        expect(timer(s).isPaused).toBe(true);
+        resume(s, s.a.b2);
         expectExpiresIn(s, mode, 12_000);
     });
 
-    it('auto-pause then a manual resume_draft by a seated player: the same remaining time (F10, A85(2))', () => {
+    // T-S10aa fix pass (A153, re-aligned): before, the Red player r1 resumed; now a seated player of the dropped
+    // player's team does (b1, b2's teammate), the opponent may not.
+    it('auto-pause then a manual resume_draft by a seated teammate of the dropped player: the same remaining time (F10, A85(2), A153)', () => {
         const s = autoPausedByDrop();
-        resume(s, s.a.r1);
+        resume(s, s.a.b1);
         expectExpiresIn(s, mode, 12_000);
     });
 });
@@ -342,7 +352,10 @@ describe('Draft #8: the manual pause throttle (10 s) (match-session architecture
         expect(pauseValue(s).isAutoPause).toBe(true);
         expect(timer(s).isPaused).toBe(true);
         expect(session(test, s.lobbyId).pausesUsedBlue).toBe(1);
-        connect(test, s.a.b2); // lifts the auto-pause
+        connect(test, s.a.b2);
+        // T-S10aa (A151, re-aligned): the reconnect no longer lifts the auto-pause (before: isPaused false); b2 resumes it.
+        expect(timer(s).isPaused).toBe(true);
+        resume(s, s.a.b2);
         expect(timer(s).isPaused).toBe(false);
         advance(test, 5_000); // t = 20 s: 10 s after the manual pause, 5 s after the auto-pause
         pause(s, s.a.b1);

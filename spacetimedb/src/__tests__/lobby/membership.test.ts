@@ -223,7 +223,8 @@ describe('A68(1)(2): a player\'s Leave in a live stage is a disconnect', () => {
         expect(chat(test, s.lobbyId)).toContain(`${displayName(test, s.a.b1)} is back.`);
     });
 
-    it('client_connected does not restore an away row; the 15 s check still treats it offline (pause, captain moves); join_lobby returns and auto-resumes', () => {
+    // T-S10aa (A151, re-aligned): the return through join_lobby no longer resumes (before: isPaused false after it).
+    it('client_connected does not restore an away row; the 15 s check still treats it offline (pause, captain moves); join_lobby returns, the draft stays paused until resumed by hand', () => {
         const test = newHarness();
         const s = setupLobby(test);
         const cap = captainOf(test, s.lobbyId, 'BluePlayer')!;
@@ -246,6 +247,8 @@ describe('A68(1)(2): a player\'s Leave in a live stage is a disconnect', () => {
         rejoin(test, leaver, s.lobbyId);
         expect(member(test, s.lobbyId, leaver.userId).isOnline).toBe(true);
         expect(member(test, s.lobbyId, leaver.userId).leftAt).toBeUndefined();
+        expect(session(test, s.lobbyId).timerState.isPaused).toBe(true);
+        tx(test, leaver, (ctx) => M.resume_draft(ctx, { lobbyId: s.lobbyId }));
         expect(session(test, s.lobbyId).timerState.isPaused).toBe(false);
         // Flags never return automatically to the original holder.
         expect(captainOf(test, s.lobbyId, 'BluePlayer')?.userId).toBe(mate.userId);
