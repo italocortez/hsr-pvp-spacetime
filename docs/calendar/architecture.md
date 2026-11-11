@@ -360,6 +360,8 @@ The backend follows the calendar mockup (`design/mockups/calendar.html`); review
 
 ## Phase S10ad execution (DECISIONS.md A160)
 
+Note from the second S10ad review: up to and including end + 7 days an ended event that is moved to the future keeps every invitee. After day 7 the result depends on which clean-up ran first: with none, the move keeps all (the update spares its own target); after an invitee's calendar call that invitee is gone; after the organizer's call or the sweep every Pending invitee is gone. For a match event the members still see the event through the team path but hold no invite. The cascade on a staff resolve applies to a Ready match; resolving an already Decided match to the other team keeps the event and the time.
+
 Rulings on the S10ac review (`notes/audit-2026-11-09/s10ac-review.md`, M2, M3, L2, L5, L6, L9, L10). Reducer steps are
 in "Reducer Flows" above. "Ended" means `endAt <= now` for slots and events alike.
 
