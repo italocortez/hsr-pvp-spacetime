@@ -1,0 +1,47 @@
+/* Champagne module pill: shows the `?module=` name (design/mockups/standby.html). */
+.modulePill {
+    align-self: flex-start;
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    max-inline-size: 100%;
+    padding: 8px 16px 8px 14px;
+    background: rgba(201, 169, 97, 0.06);
+    border: 1px solid rgba(201, 169, 97, 0.4);
+    font-family: var(--font-primary);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--color-prestige);
+
+    &::before {
+        content: "";
+        flex: none;
+        inline-size: 6px;
+        block-size: 6px;
+        background: currentColor;
+        transform: rotate(45deg);
+    }
+}
+
+.moduleName {
+    min-inline-size: 0;
+    overflow-wrap: break-word;
+    color: var(--text-heading);
+    letter-spacing: 1.6px;
+}
+
+/* ": " between label and name, for screen readers only; the look stays label + gap + name. */
+.separator:where(:not(:focus-within, :active)) {
+    position: absolute;
+    clip-path: inset(50%);
+    overflow: hidden;
+    inline-size: 1px;
+    block-size: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    white-space: nowrap;
+}

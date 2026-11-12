@@ -10,7 +10,9 @@
         "spacetimedb"
     ],
     "scripts": {
-        "typecheck": "tsc -p spacetimedb --noEmit && tsc -p test && tsc -p tsconfig.json",
+        "typecheck": "tsc -p spacetimedb --noEmit && tsc -p test && tsc -p tsconfig.json && tsc -p web --noEmit",
+        "dev": "npm run dev -w web",
+        "build": "npm run build -w web",
         "lint": "biome check .",
         "test": "vitest run --config test/vitest.config.ts && vitest run --config spacetimedb/vitest.config.mts",
         "test:watch": "vitest --config test/vitest.config.ts",

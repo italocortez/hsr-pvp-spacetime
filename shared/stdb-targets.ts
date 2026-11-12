@@ -228,7 +228,7 @@ export const ALLOWED_PROD_FLAGS: Readonly<Record<string, boolean>> = {
 export function assertNoForbiddenProdFlags(args: readonly string[]): void {
     for (let i = 0; i < args.length; i++) {
         const a = args[i];
-        if (!a.startsWith('-')) continue;
+        if (a === undefined || !a.startsWith('-')) continue;
         if (!Object.prototype.hasOwnProperty.call(ALLOWED_PROD_FLAGS, a)) {
             throw new EnvConfigError(`argument "${a}" is forbidden against prod.`);
         }

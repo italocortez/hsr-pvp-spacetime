@@ -1,0 +1,89 @@
+@import "@/styles/media.css";
+
+.cta {
+    position: relative;
+    isolation: isolate;
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    min-block-size: 52px;
+    padding: 0 28px 0 22px;
+    color: var(--cta-text);
+    font-family: var(--font-secondary);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: letter-spacing var(--duration-base) var(--ease-out);
+
+    /* Fill: the angled iris body. */
+    &::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -2;
+        background: var(--cta-fill);
+        clip-path: polygon(14px 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
+        transition: background var(--duration-fast) var(--ease-out);
+    }
+
+    /* The IPC seal: champagne inner ring. */
+    &::after {
+        content: "";
+        position: absolute;
+        inset: 4px 6px;
+        z-index: -1;
+        border: 1px solid rgba(201, 169, 97, 0.55);
+        clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+        pointer-events: none;
+        transition: border-color var(--duration-fast) var(--ease-out);
+    }
+
+    &:hover {
+        letter-spacing: 0.36em;
+
+        &::before {
+            background: var(--cta-fill-hover);
+        }
+
+        &::after {
+            border-color: rgba(213, 187, 123, 0.85);
+        }
+    }
+
+    @media (--bp-sm) {
+        min-block-size: 46px;
+        font-size: 0.71875rem;
+        letter-spacing: 0.28em;
+
+        &:hover {
+            letter-spacing: 0.32em;
+        }
+    }
+}
+
+.arrow {
+    position: relative;
+    display: inline-block;
+    inline-size: 22px;
+    block-size: 1.5px;
+    background: currentColor;
+    transition: inline-size var(--duration-base) var(--ease-out);
+
+    &::before {
+        content: "";
+        position: absolute;
+        inset-inline-start: 0;
+        top: 50%;
+        inline-size: 8px;
+        block-size: 8px;
+        border-left: 1.5px solid currentColor;
+        border-bottom: 1.5px solid currentColor;
+        transform: translateY(-50%) rotate(45deg);
+    }
+
+    .cta:hover & {
+        inline-size: 30px;
+    }
+}

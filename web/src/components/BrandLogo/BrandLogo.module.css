@@ -1,0 +1,12 @@
+/* Logo gradient stops, read from the tokens (the CSS property accepts var(); the attribute does not). */
+.stopIris {
+    stop-color: var(--color-iris);
+}
+
+.stopAmethyst {
+    stop-color: var(--color-amethyst);
+}
+
+.stopPeriwinkle {
+    stop-color: var(--color-periwinkle);
+}

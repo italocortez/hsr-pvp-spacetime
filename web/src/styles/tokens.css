@@ -1,0 +1,131 @@
+/*
+ * Design tokens. Values are lifted from the `:root` blocks of the frozen mockups in
+ * `design/mockups/*.html`; `design/DESIGN.md` §2 is the canonical subset (it lifts from index.html).
+ * Grouped by source. Do not add a token here that no mockup or DESIGN.md section defines.
+ */
+
+:root {
+    color-scheme: dark;
+
+    /* ── DESIGN.md §2.1 Surfaces (4 cool near-blacks) ── */
+    --color-void: #08090e;
+    --color-space: #11131c;
+    --color-charcoal: #1a1d2a;
+    --color-graphite: #232739;
+
+    /* ── DESIGN.md §2.2 Brand (iris) ── */
+    --color-iris: #7e70e0;
+    --color-iris-hover: #9484eb;
+    --color-iris-pressed: #6256d2;
+    --color-periwinkle: #6b7fe8;
+    --color-amethyst: #9d7ee8;
+
+    /* ── DESIGN.md §2.3 Prestige (champagne gold) ── */
+    --color-prestige: #c9a961;
+    --color-prestige-hover: #d5bb7b;
+    --color-prestige-pressed: #a88d45;
+
+    /* ── DESIGN.md §2.4 Text palette + semantic text ── */
+    --color-snow: #eeeef6;
+    --color-mist: #b9bcd0;
+    --color-ash: #7c7f94;
+    --color-pewter: #4d4f60;
+
+    --text-heading: var(--color-snow);
+    --text-body: var(--color-mist);
+    --text-muted: var(--color-ash);
+    --text-disabled: var(--color-pewter);
+
+    /* ── DESIGN.md §2.5 Borders ── */
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(124, 127, 148, 0.4);
+    --border-focus: var(--color-iris);
+    --border-prestige: var(--color-prestige);
+
+    /* ── DESIGN.md §2.6 Glows ── */
+    --glow-brand-sm: 0 0 12px rgba(126, 112, 224, 0.35);
+    --glow-brand-lg: 0 0 32px rgba(126, 112, 224, 0.5);
+    --glow-prestige: 0 0 16px rgba(201, 169, 97, 0.35);
+
+    /* ── DESIGN.md §2.7 Motion ── */
+    --duration-instant: 100ms;
+    --duration-fast: 200ms;
+    --duration-base: 300ms;
+    --duration-slow: 500ms;
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+    /* ── DESIGN.md §2.8 Shape ── */
+    --diagonal-angle: 19.7deg;
+    --diagonal-tan: 0.358;
+
+    /* ── DESIGN.md §2.9 Type stacks ──
+       The "… Fallback" faces are metric-matched local fonts declared in `fonts.css`; they sit
+       right after the web font so text keeps its size while the web font loads. The rest of
+       each stack is the mockups' value unchanged. */
+    --font-primary:
+        "JetBrains Mono", "JetBrains Mono Fallback", ui-monospace, "IBM Plex Mono", Menlo, monospace;
+    --font-secondary:
+        "Inter", "Inter Fallback", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
+        sans-serif;
+
+    /* ── index.html :root (all app mockups repeat it): status, semantic roles, CTA, gradients ── */
+    --color-success: #5bb58a;
+    --color-warning: #e0a040;
+    --color-error: #d85a5a;
+    --color-info: var(--color-periwinkle);
+    --glow-error: 0 0 12px rgba(216, 90, 90, 0.3);
+
+    --bg-page: var(--color-void);
+    --bg-nav: var(--color-space);
+    --bg-card: var(--color-charcoal);
+    --bg-elevated: var(--color-graphite);
+
+    --accent-brand: var(--color-iris);
+    --accent-prestige: var(--color-prestige);
+
+    --cta-fill: var(--color-iris);
+    --cta-fill-hover: var(--color-iris-hover);
+    --cta-fill-pressed: var(--color-iris-pressed);
+    --cta-text: var(--color-snow);
+
+    --gradient-cosmic-bg: linear-gradient(180deg, #08090e 0%, #11131c 100%);
+    --gradient-iris-glow: linear-gradient(
+        135deg,
+        var(--color-iris) 0%,
+        var(--color-periwinkle) 100%
+    );
+    --gradient-prestige: radial-gradient(circle, var(--color-prestige) 0%, transparent 70%);
+
+    /* ── DESIGN.md §11.3 Corner radius (app surfaces); the doc names no tokens, values only ── */
+    --radius-panel: 12px; /* content panels + popovers */
+    --radius-modal: 16px; /* modals / dialogs */
+
+    /* ── lobbyroom.html, match-classic.html: team colours ── */
+    --team-blue: #5b84ec;
+    --team-red: #db5c5c;
+
+    /* ── costs.html, teambuilder.html: element tints ── */
+    --el-fire: #e04e2d;
+    --el-ice: #6fb7e8;
+    --el-imaginary: #e5c265;
+    --el-lightning: #b07ae5;
+    --el-physical: #d6d6e0;
+    --el-quantum: #5763d8;
+    --el-wind: #6cd09f;
+
+    /* ── costs.html: light-cone rarity (MIGRATION-PLAN §4.5 picks costs.html; teambuilder.html has
+       5★ var(--color-prestige), same value, and 4★ var(--color-iris-hover) #9484EB) ── */
+    --lc-5star: #c9a961;
+    --lc-4star: #7e70e0;
+
+    /* ── teambuilder.html: signature light-cone accent ── */
+    --color-signature: #6fb7e8;
+
+    /* ── calendar.html: calendar semantics ── */
+    --cal-avail: var(--color-periwinkle); /* own available */
+    --cal-block: var(--color-error); /* own blocked */
+    --cal-oavail: var(--color-success); /* other available */
+    --cal-oblock: var(--color-warning); /* other blocked */
+    --cal-match: var(--color-iris); /* coordinated match */
+}
