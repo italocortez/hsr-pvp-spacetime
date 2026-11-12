@@ -201,7 +201,7 @@ conn.subscriptionBuilder()
     .onApplied(() => { const chars = [...conn.db.hsrCharacter.iter()]; /* may be 0! */ })
     .subscribe(['SELECT * FROM view_my_profile', 'SELECT * FROM hsr_character']);
 ```
-(No page subscribes the `user` table: it becomes private at S11, A77; CLAUDE.md §4.)
+(No page subscribes the `user` table: it is private since S11a, A77; CLAUDE.md §4.)
 
 **Overlapping queries hurt performance:** Subscribing to datasets that overlap (e.g. `tables.user` AND `tables.user.where(r => r.id.ne(5))`) forces the server to serialize nearly all rows twice. Keep subscription queries disjoint. Subscribing to the *same* query more than once is fine — it's zero-copy with no additional processing overhead.
 
@@ -233,7 +233,7 @@ export const onConnect = spacetimedb.clientConnected((ctx) => { /* ... */ });
 
 The frontend is planned, not built: `web/src/` holds only `module_bindings/` and `lib/legacy/` (reference copies from the old Next.js app, not imported). The Vite shell is M3, the router M4, the provider + subscription layer + dev egress meter M6 (ROADMAP). Whatever code lands there follows these rules:
 - Subscribe only to **views and the public reference set**. `subscribeToAllTables` is banned in `web/` (CI grep). The live test harness under `test/` may use it; `web/` may not.
-- No page subscribes the `User` table: it becomes private at S11 (A77). Names and avatars come denormalized in the views that need them (PAGE-MAP D2); the admin Users tab reads `view_admin_users` (A77, lands at S11).
+- No page subscribes the `User` table: it is private since S11a (A77). Names and avatars come denormalized in the views that need them (PAGE-MAP D2); the admin Users tab reads `view_admin_users` (A77, S11a).
 - One subscription per table per route. Keep the handles and unsubscribe on route leave. The reference set is subscribed by the first route that needs it and kept for the session; `/` and `/profile` never trigger it (reference tables: `docs/frontend/subscriptions.md` Decision 1).
 - Match views and cursor events subscribe only once the lobby stage is past Waiting. Cursor events (`LobbyCursorEvent`, an event table) are consumed via `onInsert`.
 - Views with arguments: one argument set per view at a time (see "Subscription swap best practice").
@@ -457,11 +457,11 @@ The guards were removed in a hotfix right after that diagnostic: with them in pl
 The SpacetimeDB v2.2.0 engine itself rejects external WebSocket calls to scheduled-reducer names with `"no such reducer"` BEFORE any application code runs. Verified:
 
 - The scheduled reducers are intentionally absent from the generated client bindings (`web/src/module_bindings/index.ts`). This repo has five: `run_user_deletion`, `run_lobby_gc`, `run_identity_gc`, `run_referee_transfer_check`, `run_tournament_finalize`.
-- The live residue test `test/live/isinternal-rejection.test.ts` constructs a low-level `connection.callReducer(name, argsBuffer)` call — exactly what an attacker would do — and checks that the engine rejects all five names (`test/README.md`). Like the whole residue, it runs on test1 only, once per release.
+- The live residue test `test/live/isinternal-rejection.test.ts` constructs a low-level `connection.callReducer(name, argsBuffer)` call — exactly what an attacker would do — and checks that all five names are refused: with an empty argument buffer (the engine) and, since S11a, with a correctly encoded job row (the engine or the module guard, see below) (`test/README.md`). Like the whole residue, it runs on test1 only, once per release.
 
 **Therefore: do NOT add application-level guards to scheduled reducers in v2.2.0.** The engine is the correct defense layer. If a future SDK version exposes scheduled-reducer names to external callers, revisit this rule and find a working internal-dispatch signal before re-adding any guard.
 
-**On this repo's SDK (2.14.1, since M1) the above is history.** v2.14.0 (PR #5892, breaking) made `isInternal` mean `ctx.sender === ctx.databaseIdentity` in every module language (`AuthCtxImpl.forSender` in the SDK): it is **true for scheduled reducers and procedures**, `init` is **not** internal (its sender is the database owner), and `senderAuth.jwt` is null whenever `isInternal` is true. A deployed module keeps the old behavior until it is rebuilt and republished against the new library. An `isInternal` guard on scheduled reducers is now a working defense-in-depth option, but the guards are **not re-added yet** (deferred, upgrade report §10 Q8, see `docs/log/2026-11-06-m1.md`); re-verify with `test/live/isinternal-rejection.test.ts` before adding one. The project gates in the table below don't change.
+**On this repo's SDK (2.14.1, since M1) the above is history.** v2.14.0 (PR #5892, breaking) made `isInternal` mean `ctx.sender === ctx.databaseIdentity` in every module language (`AuthCtxImpl.forSender` in the SDK): it is **true for scheduled reducers and procedures**, `init` is **not** internal (its sender is the database owner), and `senderAuth.jwt` is null whenever `isInternal` is true. A deployed module keeps the old behavior until it is rebuilt and republished against the new library. Since S11a (triage L11) every scheduled reducer calls `ensureScheduler(ctx, name)` (`helpers/admin/schedulerGuard.ts`) as its first statement: a sender that is not the database is refused with "Forbidden: <name> is a scheduled reducer and runs only from the scheduler.". The guard landed before the live check: the first run on test1 must confirm that the live scheduler's calls pass it (S11a review H1, fallback in `notes/audit-2026-11-09/s11a-review.md`), and `test/live/isinternal-rejection.test.ts` records which layer refuses an outside caller. The project gates in the table below don't change.
 
 #### `AuthCtx` is still NOT a substitute for project auth gates
 
@@ -471,7 +471,7 @@ The SpacetimeDB v2.2.0 engine itself rejects external WebSocket calls to schedul
 | `getAuthenticatedUser(ctx)` | "Resolve `ctx.sender → UserIdentity → User → role.tag`" | NO — project auth model is not JWT-claims-based; `AuthCtx.jwt` is for native OIDC, which the project does not use: auth is the Vercel function, SpacetimeAuth is deferred (A46). |
 | `ensureModerator/Admin(ctx)` (`helpers/identity/ensurePermissions.ts`) | Role-tag-based admin gates | NO — same reason as above. |
 
-Use `requireServer` / `getAuthenticatedUser` / `ensureXxx` for ALL application-level gating. The unreachable-factory bug is fixed on 2.14.1 (see the paragraph above), but `isInternal` guards on scheduled reducers stay deferred; the engine's "no such reducer" rejection remains the operational defense until they are re-added.
+Use `requireServer` / `getAuthenticatedUser` / `ensureXxx` for ALL application-level gating. The unreachable-factory bug is fixed on 2.14.1 (see the paragraph above); `isInternal` is used only by `ensureScheduler` on the five scheduled reducers (S11a), alongside whatever the engine refuses before the module runs.
 
 Reference: the guards were added during the old repo's v2.2.0 refactor pass and reverted by the 2026-05-03 diagnostic described above, because `isInternal` was never `true` on that SDK; regression sensor now at `test/live/isinternal-rejection.test.ts`.
 
@@ -638,7 +638,7 @@ spacetime call <name> <reducer_name> [args...] --server maincloud --no-config  #
 
 **CLI is 2.14.1** (`spacetime --version` → `spacetimedb tool version 2.14.1`, commit `a0bf6be`). Commands added after 2.6.1, all present in this CLI's `--help`: `spacetime sql --format`, `spacetime lock` / `unlock` (v2.7.0, guards against accidental `delete`), `spacetime mcp` (v2.8.1), human-readable `spacetime describe` (v2.11.0), `spacetime env` + `publish --env-only/--unset-env/--replace-env` (v2.12.0), `spacetime auth` for SpacetimeAuth management (v2.13.0), `generate --import-extension` (v2.14.0). From v2.11.0 failed publishes print the full error chain, and from v2.12.0 local schema-validation errors are spelled out. (History: the 2.6.1 CLI gave terse failures.)
 
-**SQL parser — no constant projections (verified live on 2.6.1, 2026-07-04; not re-verified on 2.14.1):** the `spacetime sql` parser rejects literal/constant SELECT projections — `SELECT 1 AS ok` fails with `Error: Unsupported projection expression: 1` (HTTP 400). A connectivity smoke-test must project a real column from a real table, e.g. `spacetime sql <name> "SELECT COUNT(*) AS n FROM hsr_character"` (a public table; `user` turns private at S11, A77), not `SELECT 1`. (Behavior change in the 2.3–2.6 line; caught during the old repo's 2.6 upgrade.)
+**SQL parser — no constant projections (verified live on 2.6.1, 2026-07-04; not re-verified on 2.14.1):** the `spacetime sql` parser rejects literal/constant SELECT projections — `SELECT 1 AS ok` fails with `Error: Unsupported projection expression: 1` (HTTP 400). A connectivity smoke-test must project a real column from a real table, e.g. `spacetime sql <name> "SELECT COUNT(*) AS n FROM hsr_character"` (a public table; `user` is private since S11a, A77), not `SELECT 1`. (Behavior change in the 2.3–2.6 line; caught during the old repo's 2.6 upgrade.)
 
 ### Publishing: `--yes=migrate` only for reviewed schema deltas
 
@@ -819,7 +819,7 @@ const row = ctx.db.UserIdentity.identity.find(identity);  // O(1) PK lookup
 
 - Presence is **not** on `User`: `isOnline` / `lastLoginAt` / `lastSeenAt` live on the private `UserPresence` table (one row per identity, A48), written by `client_connected` / `client_disconnected`; a user is online when any of their rows is. `LobbyMember.isOnline` follows the user.
 - `deletedAt: t.timestamp().optional()` — soft-delete pattern; an admin deletion or a ban sets it and the scheduled `run_user_deletion` hard-deletes after 5 s (`delete_my_account` and `server_delete_user` delete at once).
-- Planned at S11 (A77): `User` becomes `public: false` and absorbs `UserPrivate` (`loginMethod`, `providerId`, `providerUsername`, `linkedAt`); `hasDiscordLinked` is dropped and derived in the views. Read the current `tables/identity/user.ts` before relying on its columns.
+- Since S11a (A77): `User` is `public: false` and has absorbed `UserPrivate` (`loginMethod`, `providerId`, `providerUsername`, `linkedAt`); `hasDiscordLinked` is dropped and derived in the views. Read the current `tables/identity/user.ts` before relying on its columns.
 
 ## Private tables — keeping sensitive data off the wire
 

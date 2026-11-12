@@ -163,3 +163,80 @@ describe('L6: a manual GC run restarts a stopped chain and leaves a running one 
         expect(snap([...test.db.LobbyGcJob.iter()])).toBe(lobbyJobs);
     });
 });
+
+// T-S11a (review M4): the host may keep the row of a failed one-shot run, so a row long past its time counts as missing.
+// "Long" is more than one full interval of the job and at least 1 hour: 7 days for IdentityGcJob, 1 hour for
+// LobbyGcJob (its interval is 15 minutes). The manual tools and the seed reducers share the rule; never two rows.
+describe('M4: a long-overdue job row is replaced; a future or slightly late row is left alone', () => {
+    const ONE_HOUR_MICROS = 3_600_000_000n;
+    const jobs = (test: Harness) => ({
+        identity: [...test.db.IdentityGcJob.iter()].map((j) => j.scheduledAt),
+        lobby: [...test.db.LobbyGcJob.iter()].map((j) => j.scheduledAt),
+    });
+    /** One row in each job table at `identityAt` / `lobbyAt` (absolute micros). */
+    function plant(test: Harness, identityAt: bigint, lobbyAt: bigint) {
+        test.db.IdentityGcJob.insert({ scheduledId: 0n, scheduledAt: ScheduleAt.time(identityAt) });
+        test.db.LobbyGcJob.insert({ scheduledId: 0n, scheduledAt: ScheduleAt.time(lobbyAt) });
+    }
+    const runManual = (test: Harness, mod: Actor) => {
+        tx(test, mod, (ctx) => M.admin_gc_identities(ctx, {}));
+        tx(test, mod, (ctx) => M.admin_gc_lobbies(ctx, {}));
+    };
+    const runSeeds = (test: Harness) => {
+        tx(test, 'internal', (ctx) => M.seed_identity_gc_job(ctx, {}));
+        tx(test, 'internal', (ctx) => M.seed_lobby_gc_job(ctx, {}));
+    };
+
+    it('empty tables: the manual tools insert one row each (7 days, 15 minutes out)', () => {
+        const test = newHarness();
+        runManual(test, moderator(test));
+        expect(jobs(test)).toEqual({
+            identity: [ScheduleAt.time(now(test) + SEVEN_DAYS_MICROS)],
+            lobby: [ScheduleAt.time(now(test) + FIFTEEN_MINUTES_MICROS)],
+        });
+    });
+
+    it('a row due in the future: kept by the manual tools and the seeds', () => {
+        const test = newHarness();
+        const mod = moderator(test);
+        plant(test, now(test) + 1_000_000n, now(test) + 1_000_000n);
+        const before = jobs(test);
+        runManual(test, mod);
+        runSeeds(test);
+        expect(jobs(test)).toEqual(before);
+    });
+
+    it('a slightly late row (one interval late exactly, and lobby 1 hour late exactly): kept', () => {
+        const test = newHarness();
+        const mod = moderator(test);
+        plant(test, now(test) - SEVEN_DAYS_MICROS, now(test) - ONE_HOUR_MICROS);
+        const before = jobs(test);
+        runManual(test, mod);
+        runSeeds(test);
+        expect(jobs(test)).toEqual(before);
+        // the lobby threshold is 1 hour, not its 15-minute interval: 30 minutes late is still kept
+        const late = newHarness();
+        plant(late, now(late) + 1_000_000n, now(late) - 2n * FIFTEEN_MINUTES_MICROS);
+        const lateBefore = jobs(late);
+        runManual(late, moderator(late));
+        expect(jobs(late)).toEqual(lateBefore);
+    });
+
+    it('a long-overdue row: the manual tools replace it with one fresh row; the seeds do the same', () => {
+        const test = newHarness();
+        plant(test, now(test) - SEVEN_DAYS_MICROS - 1n, now(test) - ONE_HOUR_MICROS - 1n);
+        runManual(test, moderator(test));
+        expect(jobs(test)).toEqual({
+            identity: [ScheduleAt.time(now(test) + SEVEN_DAYS_MICROS)],
+            lobby: [ScheduleAt.time(now(test) + FIFTEEN_MINUTES_MICROS)],
+        });
+
+        const seeded = newHarness();
+        plant(seeded, now(seeded) - 2n * SEVEN_DAYS_MICROS, now(seeded) - 2n * ONE_HOUR_MICROS);
+        runSeeds(seeded);
+        expect(jobs(seeded)).toEqual({
+            identity: [ScheduleAt.time(now(seeded) + SEVEN_DAYS_MICROS)],
+            lobby: [ScheduleAt.time(now(seeded) + FIFTEEN_MINUTES_MICROS)],
+        });
+    });
+});

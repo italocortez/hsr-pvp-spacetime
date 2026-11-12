@@ -6,7 +6,7 @@ Three layers (CLAUDE.md §6). Counts as of S10 (2026-11-09):
 |---|---|---|---|
 | Unit | `test/backend/**/*.unit.test.ts`, `shared/**/*.test.ts` | nothing (pure functions; `spacetimedb/server` mocked) | 18 / 395 |
 | In-memory module tests (the default verification layer) | `spacetimedb/src/__tests__/*.test.ts` | the module in-process, no network | 44 / 1041 (1024 pass, 1 skipped placeholder, 16 todo) |
-| Live residue | `test/live/*.test.ts` | `hsr-spacetimedb-test1` only, once per release | 7 / 25 (+ 12 todo, incl. the S11 outsider-isolation placeholder) |
+| Live residue | `test/live/*.test.ts` | `hsr-spacetimedb-test1` only, once per release | 7 / 40 (+ 3 todo) |
 
 `npm test` runs the first two and never touches maincloud. The old live suite (61 integration files under `test/backend/`) was ported to the in-memory harness in S10 and deleted; see `docs/log/2026-11-09-s10.md` for the file-by-file map.
 
@@ -64,13 +64,13 @@ What the in-memory harness cannot drive (ACCESS-SECURITY-OPS §D.5): subscriptio
 
 | File | Covers |
 |---|---|
-| `isinternal-rejection` | the five `run_*` scheduled reducers reject an external low-level `callReducer` (guest harness) |
-| `auth-subscriptions` | anonymous `view_my_profile` = 0 rows, own row after `login_as_guest`; SEC-01b (private tables have no client accessor, raw subscriptions refused); own `User` row public today (PAGE-MAP D2) |
+| `isinternal-rejection` | the five `run_*` scheduled reducers reject an external low-level `callReducer` (guest harness): an empty argument buffer (engine "no such reducer") and a correctly encoded job row (engine or the module's `ensureScheduler` "Forbidden"; the log names the layer; S11a M2) |
+| `auth-subscriptions` | anonymous `view_my_profile` = 0 rows, own row after `login_as_guest`; SEC-01b (private tables have no client accessor, raw subscriptions refused, the refusal about the table, not a syntax error); own `User` row refused (A77, S11a) |
 | `lifecycle-grace` | A22a / A68: refresh inside the 15 s grace moves nothing; a drop past it moves referee and host; `leave_lobby` in Drafting = away |
 | `scheduler-chains` | `admin_delete_row('User')` → `run_user_deletion` fires on its own (D-17); one `identity_gc_job` and one `lobby_gc_job` row after bootstrap; finalize chain todo |
 | `server-reducers` | the four env-gated `server_*` reducers accepted with the server token, rejected for a plain client; nuke and prod-side rejection as todo |
-| `smoke` | bootstrap invariants (cost set 0, characters, achievements), a two-identity lobby with seats [1, 2], a cursor broadcast reaching the other member |
-| `outsider-isolation` | S11 placeholder (T-S11): per-sender views empty for an outsider over a real subscription, unmapped identity sees nothing, anonymized seats carry `userId 0` |
+| `smoke` | bootstrap invariants (cost set 0, characters, achievements), a two-identity lobby with seats [1, 2], a cursor broadcast in a started 1v1 draft reaching the other member (a cursor in Waiting is dropped, S11a L19) |
+| `outsider-isolation` | one Ranked anonymous 1v1 with a spectator, conceded in Drafting (triage L110): per-sender lobby, match and history views empty for an outsider over a real subscription, views with arguments subscribed by name, an unmapped identity sees nothing, anonymized seats carry `userId 0` on the wire |
 
 Prerequisites: `spacetime login` as the owner of test1; `.env.test.local` with `STDB_SERVER_TOKEN` (written by `npm run stdb:bootstrap:test`, which globalSetup runs). Key names only: never read or commit `.env*.local`. `it.skipIf(!hasServerToken())` guards the token-dependent tests.
 

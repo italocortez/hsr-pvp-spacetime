@@ -577,7 +577,6 @@ erDiagram
     match_result_adjustment }o--|| match_result_record : "matchResultId (many-to-one)"
     match_result_adjustment }o--|| user : "setById (many-to-one)"
     match_result_game }o--|| match_result_record : "matchResultId (many-to-one)"
-    match_result_game }o--o| user : "validatedByUserId (many-to-one, optional)"
     match_result_game }o--o| user : "closedById (many-to-one, optional; A60 S7b)"
     match_result_participant }o--|| match_result_record : "matchResultId (many-to-many junction)"
     match_result_participant }o--|| user : "userId (many-to-many junction)"

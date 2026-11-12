@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_LOBBY_ARGS, M, guest, newHarness, rejection, snap, tx, type Harness } from '../fixtures/harness';
 import { createLobby, join, members, settingsArgs } from '../fixtures/lobby';
-import { hashLobbyPassword, LOBBY_PASSWORD_MAX_LENGTH, sha256HexOfUtf8 } from '@module/helpers/lobby/lobbyPassword';
+import { hashLobbyPassword, LOBBY_PASSWORD_MAX_LENGTH, LOBBY_PASSWORD_MAX_UTF16_UNITS, sha256HexOfUtf8 } from '@module/helpers/lobby/lobbyPassword';
 
 const CAP_TEXT = `The lobby password can be at most ${LOBBY_PASSWORD_MAX_LENGTH} characters.`;
 const storedOf = (test: Harness, lobbyId: number) => test.db.LobbyPassword.lobbyId.find(lobbyId)?.passwordHash;
@@ -87,5 +87,37 @@ describe(`L24: the length cap (${LOBBY_PASSWORD_MAX_LENGTH} characters)`, () => 
         const L = createLobby(test, guest(test, 'host'), { isPublic: false, password: 'pw' });
         expect(rejection(test, guest(test, 'guesser'), (ctx) =>
             M.join_lobby(ctx, { lobbyId: L, joinCode: '', password: 'p'.repeat(1000) }))).toBe('Incorrect lobby password.');
+    });
+});
+
+// T-S11a (review L3): a string over LOBBY_PASSWORD_MAX_UTF16_UNITS is refused on its raw length, before it is expanded
+// into code points. The string iterator is wrapped to count expansions of any string over that length.
+describe('L3: a 1 MB password is refused without expanding it', () => {
+    it('join_lobby, create_lobby and update_lobby_settings refuse it with their usual text; no string over the limit is iterated', () => {
+        const test = newHarness();
+        const host = guest(test, 'host');
+        const L = createLobby(test, host, { isPublic: false, password: 'pw' });
+        const huge = 'p'.repeat(1_000_000);
+        const proto = String.prototype as any;
+        const original = proto[Symbol.iterator];
+        let expanded = 0;
+        proto[Symbol.iterator] = function (this: string) {
+            if (this.length > LOBBY_PASSWORD_MAX_UTF16_UNITS) expanded++;
+            return original.call(this);
+        };
+        try {
+            expect([...'p'.repeat(LOBBY_PASSWORD_MAX_UTF16_UNITS + 1)]).toHaveLength(LOBBY_PASSWORD_MAX_UTF16_UNITS + 1);
+            expect(expanded).toBe(1); // the counter works
+            expanded = 0;
+            const joinText = rejection(test, guest(test, 'guesser'), (ctx) => M.join_lobby(ctx, { lobbyId: L, joinCode: '', password: huge }));
+            const createText = rejection(test, host, (ctx) => M.create_lobby(ctx, { ...DEFAULT_LOBBY_ARGS, isPublic: false, password: huge } as any));
+            const updateText = rejection(test, host, (ctx) => M.update_lobby_settings(ctx, settingsArgs(L, { isPublic: false, password: huge })));
+            expect(expanded).toBe(0);
+            expect(joinText).toBe('Incorrect lobby password.');
+            expect(createText).toBe(CAP_TEXT);
+            expect(updateText).toBe(CAP_TEXT);
+        } finally {
+            proto[Symbol.iterator] = original;
+        }
     });
 });

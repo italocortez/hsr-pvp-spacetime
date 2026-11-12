@@ -29,6 +29,21 @@ import {
 
 const PRIVATE_TABLES = ['user', 'user_identity', 'hsr_account', 'lobby_member'] as const; // A77: user (user_private merged)
 
+/**
+ * S11a (review L10): `applied === false` alone would also pass on a malformed query. The server's refusal text (the part
+ * after the echoed query in `trySubscribe`'s error) must name the table or say it is unknown or not public, and must
+ * not read as a parse error. Tolerant of the exact wording, which the engine may change.
+ */
+function expectPrivateTableRefusal(outcome: Awaited<ReturnType<typeof trySubscribe>>, table: string, query: string): void {
+    expect(outcome.applied, `${query} must be refused`).toBe(false);
+    if (outcome.applied) return;
+    const marker = outcome.error.indexOf(']: ');
+    const serverText = marker >= 0 ? outcome.error.slice(marker + 3) : outcome.error;
+    expect(serverText, `${query}: the refusal must not be a syntax error`).not.toMatch(/\b(parse|syntax|unexpected token)\b/i);
+    const namesTable = new RegExp(`\\b${table}\\b|no such table|not found|unknown table|does not exist|not public|private`, 'i');
+    expect(serverText, `${query}: the refusal must be about the table (unknown or not public)`).toMatch(namesTable);
+}
+
 describe('Auth subscriptions over the wire (§D.5)', () => {
     const open: LiveConn[] = [];
 
@@ -91,8 +106,8 @@ describe('Auth subscriptions over the wire (§D.5)', () => {
 
         // Runtime: a raw subscription to each private table is refused by the server.
         for (const table of PRIVATE_TABLES) {
-            const outcome = await trySubscribe(c.conn, `SELECT * FROM ${table}`);
-            expect(outcome.applied, `SELECT * FROM ${table} must be refused`).toBe(false);
+            const query = `SELECT * FROM ${table}`;
+            expectPrivateTableRefusal(await trySubscribe(c.conn, query), table, query);
         }
     }, 90_000);
 
@@ -100,7 +115,9 @@ describe('Auth subscriptions over the wire (§D.5)', () => {
         const guest = await connectGuest();
         open.push(guest);
 
-        const outcome = await trySubscribe(guest.conn, `SELECT * FROM user WHERE id = ${guest.userId}`);
-        expect(outcome.applied, 'SELECT * FROM user must be refused').toBe(false);
+        // The same query was accepted before A77 (S10 residue), so its syntax is known good; the refusal must be about
+        // the table (L10), not the query.
+        const query = `SELECT * FROM user WHERE id = ${guest.userId}`;
+        expectPrivateTableRefusal(await trySubscribe(guest.conn, query), 'user', query);
     }, 30_000);
 });

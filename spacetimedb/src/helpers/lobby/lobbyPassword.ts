@@ -12,9 +12,20 @@ import { SenderError } from 'spacetimedb/server';
  */
 export const LOBBY_PASSWORD_MAX_LENGTH = 64;
 
+/**
+ * S11a (review L3): a string longer than this many UTF-16 units is refused on its raw `.length`, before it is expanded
+ * into code points (a code point is at most 2 units, so anything over 128 units already exceeds the cap).
+ */
+export const LOBBY_PASSWORD_MAX_UTF16_UNITS = 256;
+
+/** True when the password has more than LOBBY_PASSWORD_MAX_LENGTH code points; the raw length is tested first (L3). */
+export function lobbyPasswordTooLong(password: string): boolean {
+    return password.length > LOBBY_PASSWORD_MAX_UTF16_UNITS || [...password].length > LOBBY_PASSWORD_MAX_LENGTH;
+}
+
 /** Refuses a password longer than LOBBY_PASSWORD_MAX_LENGTH characters (code points). */
 export function ensureLobbyPasswordLength(password: string): void {
-    if ([...password].length > LOBBY_PASSWORD_MAX_LENGTH) {
+    if (lobbyPasswordTooLong(password)) {
         throw new SenderError(`The lobby password can be at most ${LOBBY_PASSWORD_MAX_LENGTH} characters.`);
     }
 }

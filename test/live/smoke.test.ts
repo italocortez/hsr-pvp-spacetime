@@ -7,8 +7,9 @@
  *   2. HsrCharacter rows exist and the starter achievements are seeded.
  *   3. Lobby round trip: a host creates a lobby, a second identity joins, both read the same lobby through
  *      view_my_lobby and both members, with seat numbers 1 and 2 (A74(3)), through view_my_lobby_members.
- *   4. Cursor events: a player's broadcast_cursor reaches the other member through onInsert on the
- *      lobby_cursor_event event table (frontend rule §4: cursor events are consumed via onInsert).
+ *   4. Cursor events: in a started 1v1 draft (S11a L19: no cursor events in Waiting), a player's broadcast_cursor
+ *      reaches the other member through onInsert on the lobby_cursor_event event table (frontend rule §4: cursor
+ *      events are consumed via onInsert).
  *
  * Estimated runtime: ~30 s (the cost subscriptions pull the default cost set once, a few thousand rows).
  */
@@ -24,6 +25,7 @@ import {
     lobbyMembers,
     memberAs,
     openConnection,
+    setupOneVsOne,
     subscribe,
     waitFor,
 } from './_helpers';
@@ -87,16 +89,18 @@ describe('Smoke: bootstrap invariants and a lobby round trip (§D.5)', () => {
         await host.conn.reducers.closeLobby({ lobbyId });
     }, 60_000);
 
-    it('broadcast_cursor from a player reaches the other member through onInsert on lobby_cursor_event (frontend rule §4)', async () => {
+    it('broadcast_cursor from a player in Drafting reaches the other member through onInsert on lobby_cursor_event (frontend rule §4)', async () => {
         const host = await connectGuest(LOBBY_QUERIES);
         const watcher = await connectGuest(LOBBY_QUERIES);
         open.push(host, watcher);
 
-        await host.conn.reducers.createLobby(casualLobbyArgs());
-        const lobbyId = await waitFor(() => [...host.conn.db.viewMyLobby.iter()][0]?.id, 'host sees its lobby');
-        // D-34: spectators do not broadcast; the host takes a player seat.
-        await host.conn.reducers.setTeamSlot({ lobbyId, lobbySlot: { tag: 'BluePlayer' } });
-        await watcher.conn.reducers.joinLobby({ lobbyId, joinCode: '', password: '' });
+        // S11a (triage L19, review M1): broadcast_cursor is dropped outside Drafting / Equipping / Scoring, so the pair
+        // starts a casual 1v1 draft first (D-34: spectators do not broadcast; the host sits Blue, the watcher Red).
+        const lobbyId = await setupOneVsOne(host.conn, watcher.conn, { start: true });
+        await waitFor(
+            () => [...watcher.conn.db.viewMyLobby.iter()].find((l) => l.id === lobbyId && l.stage.tag === 'Drafting'),
+            'watcher sees the lobby in Drafting',
+        );
 
         // A96: the event row names its sender by seat number (senderJoinSeq), not by user id.
         const hostSeat = await waitFor(
@@ -114,7 +118,6 @@ describe('Smoke: bootstrap invariants and a lobby round trip (§D.5)', () => {
         expect(event.senderJoinSeq).toBe(hostSeat);
         expect(event.x).toBeCloseTo(0.25);
         expect(event.y).toBeCloseTo(0.75);
-
-        await host.conn.reducers.closeLobby({ lobbyId });
+        // close_lobby works only in Waiting (A67(1)); the drafting lobby is left to the lobby GC once both disconnect.
     }, 60_000);
 });

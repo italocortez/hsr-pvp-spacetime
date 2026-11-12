@@ -39,7 +39,7 @@ import { normalizeLobbyName } from '@module/helpers/tournament/seriesSettings';
 import { ensureCostSetUsable } from '@module/helpers/draft/costSetGuards';
 import { autoSeatSlot } from '@module/helpers/tournament/tournamentLobbySides';
 import { participateAsStandIn } from '@module/helpers/tournament/standIns';
-import { ensureLobbyPasswordLength, hashLobbyPassword, LOBBY_PASSWORD_MAX_LENGTH } from '@module/helpers/lobby/lobbyPassword';
+import { ensureLobbyPasswordLength, hashLobbyPassword, lobbyPasswordTooLong } from '@module/helpers/lobby/lobbyPassword';
 
 // ─── create_lobby ─────────────────────────────────────────────────────────────
 // Creates a new lobby and inserts the creator as the host/referee.
@@ -345,8 +345,9 @@ export const join_lobby = spacetimedb.reducer(
         // D-02: password check for private lobbies
         if (!lobby.isPublic) {
             const passwordRow = ctx.db.LobbyPassword.lobbyId.find(lobbyId);
-            // S11a (L24): compared as the hash; an over-long attempt cannot match a stored password
-            if (!passwordRow || [...args.password].length > LOBBY_PASSWORD_MAX_LENGTH
+            // S11a (L24): compared as the hash; an over-long attempt cannot match a stored password (review L3: the raw
+            // length is tested before the string is expanded)
+            if (!passwordRow || lobbyPasswordTooLong(args.password)
                 || passwordRow.passwordHash !== hashLobbyPassword(lobbyId, args.password)) {
                 throw new SenderError('Incorrect lobby password.');
             }

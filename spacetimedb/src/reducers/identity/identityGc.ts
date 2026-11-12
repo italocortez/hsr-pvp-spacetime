@@ -6,6 +6,7 @@ import { SenderError } from 'spacetimedb/server';
 // `admin_gc_identities` keep their project-level gates (`ServerIdentity` check and `ensureModerator` respectively).
 import { SYSTEM_USER_ID } from '@module/helpers/admin/auditColumns';
 import { ensureScheduler } from '@module/helpers/admin/schedulerGuard';
+import { rearmScheduledJob } from '@module/helpers/admin/scheduledJobRearm';
 import { insertWithAudit } from '@module/helpers/admin/auditHelpers';
 import { ensureModerator } from '@module/helpers/identity/ensurePermissions';
 import { hasLivePresence } from '@module/helpers/identity/presenceHelpers';
@@ -259,18 +260,21 @@ export const admin_gc_identities = spacetimedb.reducer((ctx) => {
     console.log(`[IDENTITY_GC] Admin run complete: scanned=${result.itemsScanned}, deleted=${result.itemsDeleted}`);
     // NOTE: No self-requeue -- admin trigger is one-shot (Pitfall 6)
     // S11a (L6): but a chain that has stopped (no IdentityGcJob row: a failed scheduled run rolled back its own re-arm,
-    // or the seed never ran) is restarted here, so a manual run is the way back without a server identity.
+    // or the seed never ran; or, review M4, only a row long past its time) is restarted here, so a manual run is the
+    // way back without a server identity.
     armIdentityGcJobIfMissing(ctx);
 });
 
-/** S11a (L6): inserts the next scheduled run (7 days out) when the table holds no row; returns whether it did. */
+/**
+ * S11a (L6, review M4): inserts the next scheduled run (7 days out) when the table holds no row, or when its only row is
+ * more than 7 days past its time (a dead chain whose row the host kept); returns whether it inserted.
+ */
 function armIdentityGcJobIfMissing(ctx: any): boolean {
-    for (const _ of ctx.db.IdentityGcJob.iter()) return false; // at most a row or two: the chain's next run
-    ctx.db.IdentityGcJob.insert({
-        scheduledId: 0n,
-        scheduledAt: ScheduleAt.time(ctx.timestamp.microsSinceUnixEpoch + GC_INTERVAL_MICROS),
-    });
-    console.log('[IDENTITY_GC] IdentityGcJob was empty: next run scheduled in 7 days.');
+    const outcome = rearmScheduledJob(ctx, ctx.db.IdentityGcJob, GC_INTERVAL_MICROS);
+    if (outcome === 'kept') return false;
+    console.log(outcome === 'armed'
+        ? '[IDENTITY_GC] IdentityGcJob was empty: next run scheduled in 7 days.'
+        : '[IDENTITY_GC] IdentityGcJob held a long-overdue row: replaced, next run scheduled in 7 days.');
     return true;
 }
 
@@ -287,7 +291,8 @@ export const seed_identity_gc_job = spacetimedb.reducer((ctx) => {
         throw new SenderError('Forbidden: caller is not the registered server identity.');
     }
 
-    // Idempotent: skip if table already has a row; else schedule the first run 7 days from now
+    // Idempotent: skip if table already has a live row; else schedule the first run 7 days from now (S11a M4: a row
+    // more than 7 days overdue counts as missing)
     if (!armIdentityGcJobIfMissing(ctx)) {
         console.log('[IDENTITY_GC] Seed skipped -- IdentityGcJob already has a row.');
         return;

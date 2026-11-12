@@ -519,7 +519,9 @@ a client could read from the public table before, and what delivers it now:
   the public `Leaderboard` table gains `displayName` and `avatarCharacterName` (after `userId`), written by
   `rebuildLeaderboard` and rewritten by `syncLeaderboardCard` after `update_display_name`, `update_avatar` and
   `admin_update_user` (`helpers/stats/leaderboardRebuild.ts`; `Leaderboard.by_user`, SYSTEM actor). A view was not
-  chosen: the table has no season index, so a view would scan it, and a table subscription costs nothing to evaluate.
+  chosen: a table subscription costs nothing to evaluate. (When this was decided the table had no season index; part 2
+  of S11a added `Leaderboard.season_id`, so a per-season view would no longer scan the table, but the table stays the
+  read path.)
 - Not added: `view_user_by_id(userId)` (A77(1): only if a page needs one; no planned page needs it, see below).
 
 **Exposure review.** Every public table and view was checked for what A77 hides (provider id and name, role, guest
@@ -533,7 +535,7 @@ reads every exported view as a verified outsider, a lobby member and invitee, a 
 | `view_admin_*` (provider link, ban records, deletion archive, presence, role) | Moderator+ only (A37), unchanged |
 | `view_user_by_username` returns `[]` for a soft-deleted user | deletion state inferable during the 5 s soft-delete window only; kept (A77(1) keeps the view as built) |
 | archived labels (`resolveUserLabel`) of deleted users in history and label columns | a deleted account is recognizable by its label; inherent to D-09, not covered by A77 |
-| `Leaderboard` rows of a user deleted after the last rebuild keep the name until the next rebuild | the rebuild skips deleted users (results audit #9); no decision covers removing rows at deletion; reported |
+| `Leaderboard` rows of a deleted (or banned and then deleted) user keep the name and avatar: in the active season until its next rebuild, in a past season for good, since past seasons are never rebuilt (S11a review M3) | the rebuild skips deleted users (results audit #9); `userDeletionHelper` does not touch the rows; no decision covers removing or blanking them at deletion; owner question (S11a review Q2) |
 | `UserAchievement` public table: `userId`, `awardedById` and audit ids (who awarded a title) | A43 keeps it public; not covered by A77; reported |
 | `Tournament.organizerId` and the audit ids of public tables (`createdById`, `lastModifiedById`) | user ids, no private data; not covered by A77 |
 | MMR in `view_my_lobby_members.mmrByMode` / `view_my_relationships` / `Leaderboard` | A40 / A44(2) rules (rating visibility), not A77; unchanged |

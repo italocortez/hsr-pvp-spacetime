@@ -76,7 +76,7 @@ IdentityGcJob (scheduledId: u64 autoInc PK)  [PRIVATE]
 
 ### admin_gc_identities()
 1. `ensureAdmin(ctx)` -- Admin only
-2. Runs same logic as `run_identity_gc` but on-demand (no reschedule); S11a (triage L6): when `IdentityGcJob` holds no row (the chain stopped), it inserts the next run 7 days out
+2. Runs same logic as `run_identity_gc` but on-demand (no reschedule); S11a (triage L6): when `IdentityGcJob` holds no row (the chain stopped), it inserts the next run 7 days out; S11a review M4: a lone row more than 7 days past its time counts as missing and is replaced (`rearmScheduledJob`, `helpers/admin/scheduledJobRearm.ts`; the seed reducer shares it)
 3. Returns result via `GcResult` insert
 
 ### admin_gc_lobbies()
@@ -85,7 +85,7 @@ IdentityGcJob (scheduledId: u64 autoInc PK)  [PRIVATE]
 3. For each: check if host identity is disconnected and GC timeout has elapsed
 4. Trigger `hardDeleteLobby` for eligible stale lobbies
 5. Insert `GcResult` row: `gcType=Lobby`, counts
-6. S11a (triage L6): when `LobbyGcJob` holds no row (the chain stopped), insert the next `run_lobby_gc` 15 min out
+6. S11a (triage L6): when `LobbyGcJob` holds no row (the chain stopped), insert the next `run_lobby_gc` 15 min out; S11a review M4: a lone row more than 1 hour past its time counts as missing and is replaced
 
 ## Phase S10s execution (DECISIONS.md A122(23); triage L99 to L102)
 

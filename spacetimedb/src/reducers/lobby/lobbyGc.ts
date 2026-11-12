@@ -8,6 +8,7 @@ import { memberHasLeft } from '@module/helpers/lobby/lobbyHelpers';
 import { ScheduleAt } from 'spacetimedb';
 import { SenderError } from 'spacetimedb/server';
 import { ensureScheduler } from '@module/helpers/admin/schedulerGuard';
+import { rearmScheduledJob } from '@module/helpers/admin/scheduledJobRearm';
 import { deleteCursorStamps } from '@module/helpers/lobby/cursorStamps';
 // S11a (L11): `run_lobby_gc` is refused unless the scheduler calls it (ensureScheduler). `seed_lobby_gc_job` and
 // `admin_gc_lobbies` keep their project-level gates (`ServerIdentity` check and `ensureModerator` respectively).
@@ -197,18 +198,21 @@ export const admin_gc_lobbies = spacetimedb.reducer((ctx) => {
     console.log(`[LOBBY_GC] Admin run complete: scanned=${result.lobbiesScanned}, deleted=${result.lobbiesDeleted}`);
     // NOTE: No self-requeue -- admin trigger is one-shot (Pitfall 6)
     // S11a (L6): but a chain that has stopped (no LobbyGcJob row: a failed scheduled run rolled back its own re-arm, or
-    // the seed never ran) is restarted here, so a manual run is the way back without a server identity.
+    // the seed never ran; or, review M4, only a row long past its time) is restarted here, so a manual run is the way
+    // back without a server identity.
     armLobbyGcJobIfMissing(ctx);
 });
 
-/** S11a (L6): inserts the next scheduled run (15 minutes out) when the table holds no row; returns whether it did. */
+/**
+ * S11a (L6, review M4): inserts the next scheduled run (15 minutes out) when the table holds no row, or when its only row
+ * is more than 1 hour past its time (a dead chain whose row the host kept); returns whether it inserted.
+ */
 function armLobbyGcJobIfMissing(ctx: any): boolean {
-    for (const _ of ctx.db.LobbyGcJob.iter()) return false; // at most one row: the chain's next run
-    ctx.db.LobbyGcJob.insert({
-        scheduledId: 0n,
-        scheduledAt: ScheduleAt.time(ctx.timestamp.microsSinceUnixEpoch + BigInt(15 * 60 * 1_000_000)),
-    });
-    console.log('[LOBBY_GC] LobbyGcJob was empty: next run scheduled in 15 minutes.');
+    const outcome = rearmScheduledJob(ctx, ctx.db.LobbyGcJob, BigInt(15 * 60 * 1_000_000));
+    if (outcome === 'kept') return false;
+    console.log(outcome === 'armed'
+        ? '[LOBBY_GC] LobbyGcJob was empty: next run scheduled in 15 minutes.'
+        : '[LOBBY_GC] LobbyGcJob held a long-overdue row: replaced, next run scheduled in 15 minutes.');
     return true;
 }
 
