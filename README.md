@@ -5,7 +5,7 @@ A drafting and match interface for the PvP modes of Honkai: Star Rail: lobbies, 
 ## Stack
 
 - **Web:** Vite + React 18 + TypeScript 7.1 beta, TanStack Router, CSS Modules
-- **Backend:** a SpacetimeDB 2.14.1 module written in TypeScript (maincloud)
+- **Backend:** a SpacetimeDB 2.15.0 module written in TypeScript (maincloud)
 - **Hosting:** Vercel Hobby, a static site plus one auth function (Discord link)
 
 ## Status
@@ -15,7 +15,7 @@ Migration in progress from the previous repo. `ROADMAP.md` tracks which steps ha
 ## Prerequisites
 
 - Node 26 LTS (`.nvmrc`) and npm
-- SpacetimeDB CLI 2.14.1 (`spacetime version use 2.14.1`)
+- SpacetimeDB CLI 2.15.0 (`spacetime version use 2.15.0`)
 
 ## Setup
 

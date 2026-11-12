@@ -69,7 +69,7 @@ async function seedGameData(conn: DbConnection): Promise<void> {
     const lightcones = loadJson<RawLightcone>('lightcones.json');
     const pairings = loadJson<RawPairing>('synergies.json');
     // S10f (roster audit #10): only new archetypes are sent (newArchetypeRows, seed-normalizers.ts; S11a L109).
-    const existingArchetypes = [...conn.db.Archetype.iter()].map((r) => r.name);
+    const existingArchetypes = [...conn.db.archetype.iter()].map((r) => r.name);
 
     const payloads = [
         { tableName: 'HsrCharacter', rows: normalizeCharacters(characters) },
@@ -93,10 +93,10 @@ async function seedGameData(conn: DbConnection): Promise<void> {
     if (assignments.length === 0) return;
     const wanted = new Set(assignments.flatMap((a) => a.archetypeNames));
     await waitFor(() => {
-        const have = new Set([...conn.db.Archetype.iter()].map((r) => r.name));
+        const have = new Set([...conn.db.archetype.iter()].map((r) => r.name));
         return [...wanted].every((n) => have.has(n)) ? true : undefined;
     }, 'archetype ids');
-    const idByName = new Map([...conn.db.Archetype.iter()].map((r) => [r.name, r.id] as const));
+    const idByName = new Map([...conn.db.archetype.iter()].map((r) => [r.name, r.id] as const));
     for (const { characterName, archetypeNames } of assignments) {
         const ids = archetypeNames
             .map((n) => idByName.get(n))
@@ -113,7 +113,7 @@ async function seedGameData(conn: DbConnection): Promise<void> {
 
 async function seedAchievements(conn: DbConnection): Promise<void> {
     for (const a of loadJson<SeedAchievement>('achievements.json')) {
-        if ([...conn.db.Achievement.iter()].some((r) => r.name === a.name)) {
+        if ([...conn.db.achievement.iter()].some((r) => r.name === a.name)) {
             console.log(`[seed] achievement "${a.name}": exists, skipped (criteria untouched)`);
             continue;
         }
@@ -125,7 +125,7 @@ async function seedAchievements(conn: DbConnection): Promise<void> {
             maxAwards: a.maxAwards ?? undefined,
         });
         const id = await waitFor(
-            () => [...conn.db.Achievement.iter()].find((r) => r.name === a.name)?.id,
+            () => [...conn.db.achievement.iter()].find((r) => r.name === a.name)?.id,
             `achievement "${a.name}" id`,
         );
         for (const c of a.criteria) {

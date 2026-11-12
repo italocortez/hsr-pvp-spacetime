@@ -10,7 +10,7 @@
 
 Base URL: `https://maincloud.spacetimedb.com` (maincloud) or `http://localhost:3000` (local)
 
-**This API is server-side:** what works is decided by maincloud's server version, not the project's SDK (2.14.1). Endpoints marked with a version below exist on current servers; a module still needs the matching SDK to *use* features like environment declarations. Upstream describes these endpoints as intended for management, debugging, and developer use — they are not optimized like the WebSocket protocol the SDKs use.
+**This API is server-side:** what works is decided by maincloud's server version, not the project's SDK (2.15.0). Endpoints marked with a version below exist on current servers; a module still needs the matching SDK to *use* features like environment declarations. Upstream describes these endpoints as intended for management, debugging, and developer use — they are not optimized like the WebSocket protocol the SDKs use.
 
 ## Authorization
 

@@ -1,6 +1,6 @@
 # hsr-pvp-spacetime
 
-Honkai: Star Rail PvP drafting and match site. Vite + React SPA in `web/`, SpacetimeDB 2.14.1 TypeScript module in `spacetimedb/`, static hosting on Vercel Hobby plus one auth function. Decisions: `DECISIONS.md` (append-only). Step status: `ROADMAP.md`.
+Honkai: Star Rail PvP drafting and match site. Vite + React SPA in `web/`, SpacetimeDB 2.15.0 TypeScript module in `spacetimedb/`, static hosting on Vercel Hobby plus one auth function. Decisions: `DECISIONS.md` (append-only). Step status: `ROADMAP.md`.
 
 Migration in progress: `ROADMAP.md` lists which steps have landed; a path or script tagged (Mx)/(Sx) exists only after that step.
 
@@ -72,7 +72,7 @@ Skip it for backend-only edits, pure refactors with no visual delta, and utility
 | Server token | `STDB_SERVER_TOKEN` | same key name, **different file per target** |
 | Secret files | `.env.test.local`, `.env.prod.local` | gitignored by `.env*.local`; nothing reads `.env.local` |
 | Auth function secrets | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `AUTH_SECRET`, `STDB_SERVER_TOKEN` | Vercel env per environment; never in the repo |
-| Module env (D-C1) | `STDB_TARGET` declared in `schema({...}, { env: { STDB_TARGET: t.enum('StdbTarget', ['test','prod']) } })` | the publish script spawns `spacetime publish …` with `STDB_TARGET=<target>` in the **process environment** (`publishArgs(...).env`). Note: the CLI's `--env <name>` flag selects a `spacetime.<name>.json` config file, it does not set a value (2.14.1 `publish --help`) |
+| Module env (D-C1) | `STDB_TARGET` declared in `schema({...}, { env: { STDB_TARGET: t.enum('StdbTarget', ['test','prod']) } })` | the publish script spawns `spacetime publish …` with `STDB_TARGET=<target>` in the **process environment** (`publishArgs(...).env`). Note: the CLI's `--env <name>` flag selects a `spacetime.<name>.json` config file, it does not set a value (2.15.0 `publish --help`) |
 | npm scripts | `stdb:publish:test`, `stdb:publish:test:clear`, `stdb:publish:prod`, `stdb:bootstrap:<t>`, `stdb:seed:<t>`, `stdb:describe:<t>`, `stdb:generate`, `test:integration` (test only) | all call `scripts/stdb/*.ts --target …` |
 
 **Never read `.env*.local` values; key names only.** Never delete or commit `.env` / `.env*.local`.

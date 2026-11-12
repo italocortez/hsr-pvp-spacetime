@@ -165,8 +165,8 @@ export interface PublishCommand {
 }
 
 /**
- * `spacetime publish …` for CLI 2.14.1: `-c, --delete-data[=always|on-conflict|never]` is the wipe
- * (`--clear-database` is only the placeholder name in 2.14.1 `--help`), `--yes=<list>` skips named prompts
+ * `spacetime publish …` for CLI 2.15.0 (`--help` unchanged since 2.14.1): `-c, --delete-data[=always|on-conflict|never]`
+ * is the wipe (`--clear-database` is only the placeholder name in `--help`), `--yes=<list>` skips named prompts
  * (repeated `--yes=<value>` flags are accepted).
  * Test publishes always carry `--yes=remote` (skips only the "publish to a non-local server?" prompt, so the
  * script and the live suite's globalSetup run without a terminal); migration and break-clients prompts stay.

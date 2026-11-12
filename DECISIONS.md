@@ -1635,3 +1635,9 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   3. Target browsers: current Chromium browsers and current Firefox first. Safari is not a focus now and is handled later. The browser support policy in the `web-guidance` skill follows this; no polyfill or new dependency without approval.
 - **Why:** user, 2026-11-12: "old tournament events can also be dropped manually by the creator or whoever is in there to free up slots so that's fine. for choise 2, i agree, for choise 3, I want it to work on Chromium, Firefox first and we worry about safari later but that's not my main focus."
 - **Where implemented:** no code change; `.claude/skills/web-guidance/SKILL.md`
+
+### A165 — SpacetimeDB upgraded to 2.15.0
+
+- **Decision:** the module package `spacetimedb` and the CLI move from 2.14.1 to 2.15.0 (exact pin). None of the new optional module packages of 2.15 (Agents, Auth, Files, PostHog) is adopted; the Auth package would reopen A46 and is not taken.
+- **Why:** user, 2026-11-12, before the frontend work: "spacetime db 2.15 is out i would like to upgrate to it".
+- **Where implemented:** `docs/log/2026-11-12-sdk-2-15.md`

@@ -26,7 +26,7 @@
 | 9 | [Procedures](#9-procedures) | HTTP/side effects, ctx.withTx(), timeouts |
 | 10 | [Project Structure & Commands](#10-project-structure--commands) | Defers to SKILL.md (always in context) |
 | 11 | [Hard Requirements](#11-hard-requirements) | 13 TypeScript-specific rules |
-| 12 | [Post-2.6.1 features (version-gated)](#12-post-261-features-version-gated) | Env vars, views with args, submodules, async IDC, unit tests — all present in this repo's SDK 2.14.1 |
+| 12 | [Post-2.6.1 features (version-gated)](#12-post-261-features-version-gated) | Env vars, views with args, submodules, async IDC, unit tests — all present in this repo's SDK 2.15.0 |
 
 ---
 
@@ -286,7 +286,7 @@ t.u64().index('btree')          // Inline single-column index; accessor = column
                                 // but this repo's convention is explicit `indexes: [...]` with snake_case accessors
 
 // Result type — values are { ok: T } | { err: E }. The TS builder/serializer shapes were inconsistent
-// before v2.13.0 (PR #6148) — it was unsafe on 2.6.1; fixed in this repo's 2.14.1 (repo currently has none)
+// before v2.13.0 (PR #6148) — it was unsafe on 2.6.1; fixed in this repo's 2.15.0 (repo currently has none)
 t.result(t.unit(), t.string())
 ```
 
@@ -392,7 +392,7 @@ indexes: [{ name: 'message_room_id_idx_btree', accessor: 'room_id', ... }]
 **Client-side table names:**
 - Check generated `module_bindings/index.ts` (`tablesSchema` keys) for exact handle names
 - **2.6.1 (history):** handles were the server accessor verbatim — tables PascalCase (`conn.db.User`, `tables.HsrCharacter`), views snake_case (`conn.db.view_my_profile`)
-- **v2.7.0+ (PR #5286), current on 2.14.1:** codegen camelCases handles (`conn.db.user`, `tables.hsrCharacter`, `conn.db.viewMyProfile`) and keeps the old spellings as **deprecated aliases** (`web/src/module_bindings/index.ts` has both), so existing call sites keep compiling. Code that enumerates `conn.db` / `tables` (`Object.keys`, `for...in`) will see both names. Canonical SQL names (`'view_my_profile'`) are unchanged.
+- **v2.7.0+ (PR #5286), current on 2.15.0:** codegen camelCases handles (`conn.db.user`, `tables.hsrCharacter`, `conn.db.viewMyProfile`) and keeps the old spellings as **deprecated aliases** (`web/src/module_bindings/index.ts` has both), so existing call sites keep compiling. Code that enumerates `conn.db` / `tables` (`Object.keys`, `for...in`) will see both names. Canonical SQL names (`'view_my_profile'`) are unchanged.
 
 ### Filter vs Find
 ```typescript
@@ -429,8 +429,8 @@ const participant = [...ctx.db.TournamentParticipant.by_tournament_and_user.filt
 ctx.db.TournamentParticipant.by_tournament_and_user.filter({ tournamentId: tid, userId: uid }); // WRONG
 
 // History: single value on multi-column index — PANIC on 2.6.1 ("serializeTerm is not a function")
-ctx.db.TournamentParticipant.by_tournament_and_user.filter(tid); // fine on 2.14.1, WRONG on 2.6.1
-// v2.7.0+ (PR #5428), so on this repo's 2.14.1: a bare leading value
+ctx.db.TournamentParticipant.by_tournament_and_user.filter(tid); // fine on 2.15.0, WRONG on 2.6.1
+// v2.7.0+ (PR #5428), so on this repo's 2.15.0: a bare leading value
 // is a valid one-column PREFIX scan — returns all rows for `tid`. Composite range scans
 // (prefix + trailing Range) were also broken until v2.8.0 (PR #5479).
 
@@ -455,7 +455,7 @@ const rows = [...ctx.db.leaderboard.by_score.filter(
 const atLeast18 = new Range({ tag: 'included', value: 18 }, { tag: 'unbounded' });
 ```
 
-Single-column ranges were already safe on 2.6.1. Prefix-plus-Range on **multi-column** indexes needs v2.8.0+ (see above), so it works on this repo's 2.14.1.
+Single-column ranges were already safe on 2.6.1. Prefix-plus-Range on **multi-column** indexes needs v2.8.0+ (see above), so it works on this repo's 2.15.0.
 
 ---
 
@@ -530,7 +530,7 @@ spacetimedb.clientConnected((ctx) => { /* ... */ });
 
 **Repo status (fixed in source 2026-11-05):** `spacetimedb/src/index.ts` used to declare both hooks as bare calls, and the live maincloud schema (`GET /v1/database/<db>/schema?version=9`) listed 0 lifecycle reducers out of 156. Until then the `isOnline`, disconnect-tracking, and ban-on-reconnect logic never ran. They are now `export const client_connected` / `client_disconnected`, named in snake_case per the reducer convention. Codegen leaves lifecycle reducers out of the client bindings, so the regenerated bindings are unchanged. A database only picks up the hooks once a build containing the fix is published to it (a non-destructive publish). Until then that database still has no lifecycle reducers, so check its schema before debugging presence or disconnect behavior there.
 
-### Reducer context (`ctx`) — 2.6.1 surface (all still present in 2.14.1)
+### Reducer context (`ctx`) — 2.6.1 surface (all still present in 2.15.0)
 | Member | Notes |
 |---|---|
 | `ctx.sender` | Caller `Identity` — the only trustworthy identity |
@@ -539,10 +539,10 @@ spacetimedb.clientConnected((ctx) => { /* ... */ });
 | `ctx.databaseIdentity` | The module's identity (`ctx.identity` is the deprecated alias) |
 | `ctx.random()` / `.integerInRange(min, max)` / `.bigintInRange(min, max)` / `.uint32()` / `.fill(typedArray)` | Deterministic RNG seeded from `ctx.timestamp`. Its first outputs are skewed (S10o F1), so this repo draws with `shared/lobby-rules/timerDraw.ts` instead |
 | `ctx.newUuidV4()` / `ctx.newUuidV7()` | Deterministic UUIDs |
-| `ctx.senderAuth` | `AuthCtx` — see SKILL.md "AuthCtx applicability" (`isInternal` was always `false` on 2.6.1; on 2.14.1 it means `sender === databaseIdentity`) |
+| `ctx.senderAuth` | `AuthCtx` — see SKILL.md "AuthCtx applicability" (`isInternal` was always `false` on 2.6.1; since 2.14.0, unchanged in 2.15.0, it means `sender === databaseIdentity`) |
 | `ctx.env` | Typed module env (v2.12.0+), e.g. `ctx.env.STDB_TARGET` in this repo |
 
-`ctx.random.shuffle(array)` (in-place) is **v2.13.0+** and present in 2.14.1; the repo replaces it with `fairShuffle` (A120).
+`ctx.random.shuffle(array)` (in-place) is **v2.13.0+** and present in 2.15.0; the repo replaces it with `fairShuffle` (A120).
 
 ### Snake_case to camelCase conversion
 - Server: `export const do_something = spacetimedb.reducer(...)` — name from export
@@ -593,7 +593,7 @@ ctx.db.cleanupJob.scheduledId.delete(jobId);
 
 Upstream writes the forward reference as `scheduled: (): any => run_cleanup` — the cast is needed because the forward reference defeats type inference. When the table and reducer live in different files, this repo uses the `export let _reducer: any` + setter pattern (see SKILL.md "TypeScript patterns") to avoid a circular import.
 
-**`onSchedule` (v2.7.0+, PR #5435):** the binding moves onto the reducer (or a `t.unit()`-returning procedure), so the table no longer references it and table/reducer can sit in separate files without a cycle. It exists in this repo's SDK 2.14.1, whose `TableOpts.scheduled` JSDoc is `@deprecated` in its favor; adopting it would retire the `export let` workaround (a user decision):
+**`onSchedule` (v2.7.0+, PR #5435):** the binding moves onto the reducer (or a `t.unit()`-returning procedure), so the table no longer references it and table/reducer can sit in separate files without a cycle. It exists in this repo's SDK 2.15.0, whose `TableOpts.scheduled` JSDoc is `@deprecated` in its favor; adopting it would retire the `export let` workaround (a user decision):
 ```typescript
 const cleanupJob = table({ name: 'cleanup_job' }, {
   scheduledId: t.u64().primaryKey().autoInc(),
@@ -765,7 +765,7 @@ The same trick covers filters SQL can't express: compute the flag in the reducer
 - Real-time updates when underlying data changes
 - Full control over what data clients can access
 
-> ⚠️ **Do NOT use Row Level Security (RLS) for access control** — `spacetimedb.clientVisibilityFilter.sql(...)` exists in SDK 2.14.1, but upstream labels it experimental and unstable ("Use Views Instead"); it is not marked deprecated. The only planned use is A111's S11 test on `LobbyCursorEvent`. See `references/how-to-guides.md` § Row Level Security.
+> ⚠️ **Do NOT use Row Level Security (RLS) for access control** — `spacetimedb.clientVisibilityFilter.sql(...)` exists in SDK 2.15.0, but upstream labels it experimental and unstable ("Use Views Instead"); it is not marked deprecated. The only planned use is A111's S11 test on `LobbyCursorEvent`. See `references/how-to-guides.md` § Row Level Security.
 
 > ⚠️ **CRITICAL:** Procedural views (views that compute results in code) can ONLY access data via index lookups, NOT `.iter()`.
 > If you need a view that scans/filters across many rows (including the entire table), return a **query** built with the query builder (`ctx.from...`).
@@ -874,7 +874,7 @@ export const my_player = spacetimedb.view(
 ```
 Name the row type something other than the view handle's generated PascalCase name (e.g. not `ViewMyProfileRow` for `view_my_profile`) to avoid a binding-name collision.
 
-Per the v2.14.1 views doc, a view that returns `t.array(SomeTable.rowType)` for a table whose column is `.primaryKey()` also gets PK semantics. In this repo's **2.14.1** bindings, `viewMyLobbies` (`view_my_lobbies`) and `viewMyCostSets` (`view_my_cost_sets`) still show `constraints: []` in `web/src/module_bindings/index.ts` — don't assume `onUpdate` fires for them.
+Per the v2.14.1 views doc, a view that returns `t.array(SomeTable.rowType)` for a table whose column is `.primaryKey()` also gets PK semantics. In this repo's **2.15.0** bindings, `viewMyLobbies` (`view_my_lobbies`) and `viewMyCostSets` (`view_my_cost_sets`) still show `constraints: []` in `web/src/module_bindings/index.ts` — don't assume `onUpdate` fires for them.
 Before this, views only ever fired `onInsert`/`onDelete` on the client — every change looked like a delete-then-insert. With a declared `.primaryKey()`, the client can now fire **`onUpdate`** for views, same shape as regular tables:
 ```typescript
 conn.db.my_player.onUpdate((ctx, oldRow, newRow) => {
@@ -913,7 +913,7 @@ const memoized = useMemo(() => builder, []);
 </SpacetimeDBProvider>
 ```
 
-On this repo's 2.14.1 the provider reconnects on its own (v2.12.0+ `withAutomaticReconnect()`, enabled automatically by the React provider). On 2.6.1 it did not, and the key-remount workaround is obsolete — see `references/how-to-guides.md` § Reconnection.
+On this repo's 2.15.0 the provider reconnects on its own (v2.12.0+ `withAutomaticReconnect()`, enabled automatically by the React provider). On 2.6.1 it did not, and the key-remount workaround is obsolete — see `references/how-to-guides.md` § Reconnection.
 
 ### useTable — subscribe and read rows
 ```typescript
@@ -1133,7 +1133,7 @@ spacetimedb.procedure({ url: t.string() }, t.unit(), (ctx, { url }) => {
 ### Procedure timeouts (HTTP calls)
 Default timeout: **30s**. Maximum ceiling: **180s** (3 minutes). These limits apply to `ctx.http.fetch()` calls within procedures. Sufficient for LLM API calls and most external services.
 
-**Server-side outbound-HTTP changes (apply on maincloud regardless of SDK):** v2.10.2 (#5698) transparently advertises/decodes gzip + Brotli — don't hand-roll `Accept-Encoding` + decompression; v2.12.0 (#6012) negotiates HTTP/2 when the remote supports it. **v2.13.0 SDK fix (#6140):** before 2.13, TS request/response header values were split at commas (breaking webhook signatures, HTTP dates, cookies with `Expires`) and nonstandard status codes threw. Fixed on this repo's 2.14.1.
+**Server-side outbound-HTTP changes (apply on maincloud regardless of SDK):** v2.10.2 (#5698) transparently advertises/decodes gzip + Brotli — don't hand-roll `Accept-Encoding` + decompression; v2.12.0 (#6012) negotiates HTTP/2 when the remote supports it. **v2.13.0 SDK fix (#6140):** before 2.13, TS request/response header values were split at commas (breaking webhook signatures, HTTP dates, cookies with `Expires`) and nonstandard status codes threw. Fixed on this repo's 2.15.0.
 
 ### Key differences from reducers
 | Reducers | Procedures |
@@ -1182,16 +1182,16 @@ Never import `spacetimedb` from `index.ts` in a module file (see § 1, "Cannot a
 
 ## 12) Post-2.6.1 features (version-gated)
 
-**All of this exists in this repo's SDK and CLI 2.14.1** (each row checked 2026-11-10 against `node_modules/spacetimedb@2.14.1` types or `spacetime --help`). On the old 2.6.1 baseline none of it worked. In use here: module env (`ctx.env.STDB_TARGET`), views with arguments (e.g. in `views/costSetViews.ts`, `identityViews.ts`, `matchHistoryViews.ts`, `tournamentViews.ts`) and in-memory module tests. Source: release notes + v2.14.1 docs + official `typescript-server` skill (see header).
+**All of this exists in this repo's SDK and CLI 2.15.0** (each row checked 2026-11-10 against `node_modules/spacetimedb@2.14.1` types or `spacetime --help`; the 2026-11-12 upgrade found the module-side types and the CLI `--help` unchanged in 2.15.0). On the old 2.6.1 baseline none of it worked. In use here: module env (`ctx.env.STDB_TARGET`), views with arguments (e.g. in `views/costSetViews.ts`, `identityViews.ts`, `matchHistoryViews.ts`, `tournamentViews.ts`) and in-memory module tests. Source: release notes + v2.14.1 docs + official `typescript-server` skill (see header).
 
 | Feature | Since | Shape (TS) | Notes for this repo |
 |---|---|---|---|
 | Typed database environment variables | v2.12.0 | `schema({ ...tables }, { env: { API_KEY: t.string(), MODE: t.enum('Mode', ['dev','prod']), LOG_LEVEL: t.string().optional() } })` → `ctx.env.API_KEY` (string), optional → `string \| undefined`; `ctx.env.get('KEY')` → `string \| null` | Values are read-only strings supplied at publish time (process env → config `env` map → stored value), preserved across publishes, cleared by `--delete-data`. Never return or log them. CLI: `--env-only`, `--unset-env`, `--replace-env`, `spacetime env list/get`; HTTP: see `references/http-api.md` |
 | Views with arguments | v2.13.0 (per official skill; not called out in the 2.13 release notes) | `spacetimedb.view(opts, { level: t.u64() }, t.array(Row), (ctx, { level }) => ...)` | Subscribe via raw SQL only: `SELECT * FROM view_name(42)` (no WHERE/joins); TS query builder can't express them; `subscribeToAllTables` skips them; they cannot have a primary key. Each argument set must be unsubscribed when obsolete. All argument sets of one view share one client table, so this repo keeps one set per view subscribed at a time (unsubscribe, then subscribe the next; S10n review F5) |
-| Module unit tests (in-memory datastore) | v2.12.0 | `spacetimedb/server/test-utils` + `spacetimedb/server/test-utils/vitest` plugin (both in the 2.14.1 package `exports`) | In use: `spacetimedb/src/__tests__/` (S10). See `references/how-to-guides.md` § Module Unit Testing. Does NOT simulate subscriptions, RLS, lifecycle hooks, or the scheduler; on 2.14.1 the harness cannot set the module env, so `ctx.env` reads throw there (`harness/smoke.test.ts` (f)) |
+| Module unit tests (in-memory datastore) | v2.12.0 | `spacetimedb/server/test-utils` + `spacetimedb/server/test-utils/vitest` plugin (both in the 2.15.0 package `exports`) | In use: `spacetimedb/src/__tests__/` (S10). See `references/how-to-guides.md` § Module Unit Testing. Does NOT simulate subscriptions, RLS, lifecycle hooks, or the scheduler; on 2.14.1 and 2.15.0 the harness cannot set the module env, so `ctx.env` reads throw there (`harness/smoke.test.ts` (f)) |
 | Submodules (mount another TS module under a namespace) | v2.8.0 (reusable `@spacetimedb/*` packages need 2.12+) | `schema({ ...tables, myAuth: { name: 'auth_data', module: authLib } })` → `ctx.db.myAuth.<table>`, client `conn.db.myAuth.<table>` | Official packages: `@spacetimedb/cron`, `@spacetimedb/retry`, `@spacetimedb/rate-limit`, `@spacetimedb/crypto`, `@spacetimedb/resend` (v2.13.0). Changing a namespace's canonical `name` drops its tables + data |
 | Async inter-database calls (outbox tables) | v2.14.0 | `table({ outbox: { receiver: gw.reducers.admitPlayer } }, { msgId: t.u64().primaryKey().autoInc(), world: gw.identity().target(), ...params })`; optional `spacetimedb.reducer({ onResult: outbox }, ...)` | Requires `dependencies` in `spacetime.json` + generated `src/remote_bindings/`; both DBs on the same server. Not relevant until the project splits databases |
-| `isInternal` = `sender === databaseIdentity` | v2.14.0 (breaking) | `ctx.senderAuth.isInternal` is **true** for scheduled reducers/procedures; `init` is no longer internal; `jwt` is none when internal | Present in 2.14.1 (`AuthCtx.isInternal` JSDoc in `dist/lib/reducers.d.ts`). See SKILL.md "AuthCtx applicability": the five scheduled reducers are guarded by `ensureScheduler` since S11a (live check pending on test1), and a database keeps the old behavior until a 2.14.1 build is published to it |
+| `isInternal` = `sender === databaseIdentity` | v2.14.0 (breaking) | `ctx.senderAuth.isInternal` is **true** for scheduled reducers/procedures; `init` is no longer internal; `jwt` is none when internal | Present in 2.14.1 and 2.15.0 (`AuthCtx.isInternal` JSDoc in `dist/lib/reducers.d.ts`). See SKILL.md "AuthCtx applicability": the five scheduled reducers are guarded by `ensureScheduler` since S11a (live check pending on test1), and a database keeps the old behavior until a 2.14.1 build is published to it |
 | HTTP handlers get a real sender | v2.14.0 | `ctx.sender` inside `spacetimedb.httpHandler(...)` (HTTP handlers are still unstable) | Repo defines no HTTP handlers |
 | `ctx.random.shuffle(array)` | v2.13.0 | In-place; copy first | Present, but not used for draws here: `fairShuffle` in `shared/lobby-rules/timerDraw.ts` replaces it (A120; skewed `ctx.random` seed) |
 | Generated TS bindings `--import-extension none\|js\|ts` | v2.14.0 (CLI) | `spacetime generate --import-extension js` or per-entry in `spacetime.json` | Only needed for `moduleResolution: "nodenext"` / Node-Bun-Deno direct TS execution; a bundler such as Vite (`web/`, M3) doesn't need it, and `scripts/stdb/*.ts` run through `tsx` |

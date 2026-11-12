@@ -112,7 +112,7 @@ conn.subscriptionBuilder().subscribe(
 conn.db.LobbyCursorEvent.onInsert((ctx, ev) => { /* move the cursor */ });
 ```
 
-**A filter is not access control.** It cuts egress, but any SDK client can subscribe without it, and views can't wrap event tables. The row filter (`clientVisibilityFilter`, § Row Level Security) exists in SDK 2.14.1 but is experimental, and whether it restricts event-table rows is not verified (A111 tests it on `LobbyCursorEvent` at S11). Never put data meant only for specific recipients in a public event table; anything in it is readable by every connected client that asks.
+**A filter is not access control.** It cuts egress, but any SDK client can subscribe without it, and views can't wrap event tables. The row filter (`clientVisibilityFilter`, § Row Level Security) exists in SDK 2.15.0 but is experimental, and whether it restricts event-table rows is not verified (A111 tests it on `LobbyCursorEvent` at S11). Never put data meant only for specific recipients in a public event table; anything in it is readable by every connected client that asks.
 
 This project uses `LobbyCursorEvent` as an event table (rows carry the lobby id, the sender's seat, x, y and a timestamp; no user id, A96). The client subscribes it filtered to its own lobby, only once the lobby stage is past Waiting, and reads it via `onInsert` (CLAUDE.md §4). A111: it stays public for now.
 
@@ -172,7 +172,7 @@ spacetime login show --token
 
 ### Transport: v3 protocol (v2.3.0)
 
-The WebSocket client transport uses the **v3 protocol**, which **batches and pipelines** responses — significantly reducing per-message overhead under high load compared to sending one message per update. This project's SDK (2.14.1) uses it with no project code involved; it's the reason egress dominates the energy budget less per-message than a naive one-frame-per-update transport would, and it matters directly for the maincloud energy/egress budget (see SKILL.md "Energy budget & bandwidth rules").
+The WebSocket client transport uses the **v3 protocol**, which **batches and pipelines** responses — significantly reducing per-message overhead under high load compared to sending one message per update. This project's SDK (2.15.0) uses it with no project code involved; it's the reason egress dominates the energy budget less per-message than a naive one-frame-per-update transport would, and it matters directly for the maincloud energy/egress budget (see SKILL.md "Energy budget & bandwidth rules").
 
 ### Publishing
 ```bash
@@ -182,7 +182,7 @@ spacetime publish <db-name> --server maincloud
 - `spacetime login` authenticates with GitHub or Google; databases then appear on the dashboard
 - Compiles module, uploads, runs `init` reducer
 - Subsequent deploys **hot-swap code without disconnecting clients** (some migrations, e.g. removing a table, do disconnect clients so they reconnect against the new schema)
-- Reset data: `spacetime publish <db-name> --server maincloud --delete-data` (2.6.1 and 2.14.1 CLI: `--delete-data[=always|on-conflict|never]`; `on-conflict` wipes only when the schema change is breaking; short form `-c`)
+- Reset data: `spacetime publish <db-name> --server maincloud --delete-data` (2.6.1, 2.14.1 and 2.15.0 CLI: `--delete-data[=always|on-conflict|never]`; `on-conflict` wipes only when the schema change is breaking; short form `-c`)
 
 ### Dashboard
 - URL: `https://spacetimedb.com/<db-name>` or `https://spacetimedb.com/@<username>/<db-name>`
@@ -201,7 +201,7 @@ spacetime delete <db-name> --server maincloud --yes
 
 ## Reconnection
 
-**History (SDK 2.6.1; obsolete on this repo's 2.14.1):** there was no built-in reconnect; the only reliable way is to unmount and remount the `SpacetimeDBProvider` by toggling a key prop:
+**History (SDK 2.6.1; obsolete on this repo's 2.15.0):** there was no built-in reconnect; the only reliable way is to unmount and remount the `SpacetimeDBProvider` by toggling a key prop:
 
 ```typescript
 const [connectionKey, setConnectionKey] = useState(0);
@@ -240,7 +240,7 @@ const builder = DbConnection.builder()
 
 **Experimental and unstable; use Views instead.** The v2.14.1 upstream RLS page is headed "Experimental Feature - Use Views Instead" and says the API may change or be removed. It does not call RLS deprecated, and the installed SDK types carry no `@deprecated` marker on it. See `api-guide.md` section 7 for the recommended view pattern.
 
-Rust/C# need an explicit opt-in; TypeScript needs none. The API exists in the installed SDK 2.14.1 (it was present in 2.6.1 too) as a member of the schema object, `clientVisibilityFilter: { sql: (filter: string) => ModuleExport }` (`dist/server/schema.d.ts`); the export it returns adds the SQL to the module's `rowLevelSecurity` list, so it must be a named export of the module entry:
+Rust/C# need an explicit opt-in; TypeScript needs none. The API exists in the installed SDK 2.15.0 (it was present in 2.6.1 and 2.14.1 too) as a member of the schema object, `clientVisibilityFilter: { sql: (filter: string) => ModuleExport }` (`dist/server/schema.d.ts`); the export it returns adds the SQL to the module's `rowLevelSecurity` list, so it must be a named export of the module entry:
 ```typescript
 export const accountFilter = spacetimedb.clientVisibilityFilter.sql(
   'SELECT * FROM account WHERE account.identity = :sender'
@@ -297,7 +297,7 @@ SpacetimeDB speaks the Model Context Protocol. Status for this repo:
 | Path | Requires | Available here? |
 |---|---|---|
 | `POST /v1/mcp` (host-wide) and `POST /v1/database/<name>/mcp` (scoped) over HTTP | Server v2.10.0+ on maincloud (server-side) | Yes on the maincloud side — MCP is **unstable** |
-| `spacetime mcp` stdio bridge (what the official Claude Code plugin registers) | CLI v2.8.1+ | **Available** — the active CLI is 2.14.1 and lists `mcp` (marked unstable in `--help`); it acts as the CLI identity on maincloud, so CLAUDE.md's energy rules (§2) and maincloud-write pause rule (§8) apply |
+| `spacetime mcp` stdio bridge (what the official Claude Code plugin registers) | CLI v2.8.1+ | **Available** — the active CLI is 2.15.0 and lists `mcp` (marked unstable in `--help`); it acts as the CLI identity on maincloud, so CLAUDE.md's energy rules (§2) and maincloud-write pause rule (§8) apply |
 
 Tools: `list_databases` (host-wide only; databases owned by your identity), `get_schema`, `sql` (optional `confirmed`), `call` (`reducer`, `args` as a positional JSON array), `ping`. Errors come back in-band (`isError: true`) — read the text before retrying.
 - Host-wide servers need a `database` argument on every data tool; scoped servers reject it. Check `tools/list` first.
