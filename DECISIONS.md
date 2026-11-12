@@ -1648,3 +1648,11 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Decision:** Frontend packages are installed at the newest version that does not break the project, still as exact pins. For M3 this gave `vite` 8.3.8 and `@vitejs/plugin-react` 6.3.0 in place of the plan's 8.3.6 and 6.2.1. React stays on 18.3.1 (A49 D-M7 stands). Orchestrator's own choices in M3, told to the user: the two React type packages (`@types/react` 18.3.31, `@types/react-dom` 18.3.7) were added because TypeScript needs them; M3 opens no database connection (the roadmap puts the connection at M6, the old plan's "logs the identity hex" check moves there); a build without `VITE_STDB_TARGET` fails instead of shipping a page that throws; mockup defects found by the review (overlaps on narrow and short screens, a doubled separator, a mid-word break) are fixed in this repo; the 404 page shows its placeholder image at 10% over the void colour until real artwork exists; token names `--radius-panel` and `--radius-modal` for the 12px and 16px radii of `DESIGN.md` 11.3.
 - **Why:** user, 2026-11-12: "just use the latest versions of anything that is not going to break us".
 - **Where implemented:** M3, `docs/log/2026-11-12-m3.md`
+
+### A167 — 404 pages use the standby artwork; the wording names what is missing
+
+- **Date:** 2026-11-12 · **Status:** decided
+- **Decision:** Every not-found page shows the standby artwork, presented as on the standby page. Only the wording changes with what is missing ("Page not found.", later a lobby, a tournament and so on). The dimmed placeholder treatment of A166 is removed; `web/public/not-found-image.webp` is no longer referenced. Orchestrator's choice: one optional `what` prop on `NotFoundPage` (default "Page"), no list of kinds ahead of the pages that need them.
+- **Why:** user, 2026-11-12: "the stand by image should be used for the 404 pages, we just change the wording depending on what is missing".
+- **Supersedes:** the 404 placeholder treatment in A166.
+- **Where implemented:** M3 follow-up, `web/src/pages/not-found/NotFoundPage.tsx`, `docs/frontend/pages.md`
