@@ -1614,3 +1614,15 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   4. Unchanged: a team member without an invite row does not read their match event's attendee list.
 - **Why:** user, 2026-11-11, on the orchestrator's recommendations (1(b), 2(a), 3(b), 4(a)): "I agree with your recomendations".
 - **Where implemented:** S11a
+
+### A163 — S11a rulings before the first publish
+
+- **Decision:** on the open questions of `notes/audit-2026-11-09/s11a-review.md`:
+  1. **Leaderboard and deleted users.** When a user is deleted (own request, ban, staff or server deletion), the leaderboard of the active season is rebuilt without them and their rows of past seasons are deleted. No name or avatar of a deleted account stays on the public leaderboard.
+  2. **Match events of former staff.** When a user loses the bracket permission of a tournament (assistant removed, the bracket flag turned off, a Moderator demoted), the match events of that tournament they organize are handed to the tournament organizer.
+  3. **Maintenance mode.** While it is on, an Admin can connect and work; every other user is refused, and a non-Admin who is still connected cannot change anything.
+  4. **Lobby passwords.** No limit on guesses. A password holds only the characters A to Z, a to z and 0 to 9 and is at most 20 characters long. Replaces the 64-character cap of S11a part 2; the stored value stays a salted hash.
+  5. The unused generated file `web/src/module_bindings/cost_set_table.ts` is deleted.
+  6. The module is published to test1 with the scheduler guard in place; the first live check is one scheduled run. If the live scheduler is refused, the guard is emptied and the module republished without a wipe.
+- **Why:** user, 2026-11-12: "I agree on your 6 recomendations but one thing to add, we dont need a limit on lobby password guess. Password should have a character limit that only accepts alphanumerical characters and the limit should be 20 characters".
+- **Where implemented:** S11a
