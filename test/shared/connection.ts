@@ -100,7 +100,7 @@ function createHarnessInternal(opts: { verify: boolean }): Promise<TestHarness> 
             // Read from view_my_identity — returns caller's UserIdentity row, for guests and verified users alike.
             // No spacetime sql CLI roundtrip — the view is subscribed via subscribeToAllTables() and cached in the
             // client. A77(3) (S11a): the guest path no longer scans the User table, which is private.
-            const idRows = [...connInner.db.view_my_identity.iter()];
+            const idRows = [...connInner.db.viewMyIdentity.iter()];
             const userId: number = idRows.length > 0 ? (idRows[0] as any).userId : 0;
 
             const harness: TestHarness = {
