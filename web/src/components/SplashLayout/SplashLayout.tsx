@@ -12,11 +12,6 @@ type Props = {
     eyebrow: string;
     title: ReactNode;
     lede: ReactNode;
-    /**
-     * 'art' (default): the illustration at full strength. 'placeholder': stand-in art, dimmed over
-     * the void colour so every text element keeps its contrast (404 until real artwork exists).
-     */
-    imageTone?: 'art' | 'placeholder';
     /** Optional block between the title and the lede (the standby module pill). */
     children?: ReactNode;
 };
@@ -26,18 +21,9 @@ type Props = {
  * brand mark, HUD chip, text column with one IPC CTA back to base, bottom HUD line.
  * Used by the standby and 404 pages.
  */
-export function SplashLayout({
-    image,
-    imageTone = 'art',
-    hudLabel,
-    hudCoord,
-    eyebrow,
-    title,
-    lede,
-    children,
-}: Props) {
+export function SplashLayout({ image, hudLabel, hudCoord, eyebrow, title, lede, children }: Props) {
     return (
-        <main className={styles.splash} data-image-tone={imageTone}>
+        <main className={styles.splash}>
             <img
                 className={styles.image}
                 src={image.src}

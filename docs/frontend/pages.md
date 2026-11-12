@@ -20,10 +20,12 @@ One entry per ported page: route, files, mockup, breakpoint snaps, guides used, 
 
 ## Not found (M3)
 
-- **Route:** any path other than `/` and `/standby`. Title `Not found — IPC Battlegrounds`.
-- **Files:** `web/src/pages/not-found/NotFoundPage.tsx` (no CSS of its own: it renders `SplashLayout`). Art: `web/public/not-found-image.webp`.
-- **Mockup:** none; same pattern as standby with an `Error // 404` eyebrow, the headline "Page *not found.*", one CTA back to `/`.
-- **Note:** `not-found-image.webp` is a 281 x 262 grey "No image available" placeholder. Until real 404 artwork exists the page passes `imageTone="placeholder"` to `SplashLayout`: the void colour sits under the image and the image is at 10% opacity. Measured worst-case contrast (text pixels against the brightest background pixel behind each element, text shadows off), 1440 / 390 / 320: brand word 4.58 / hidden / hidden, HUD chip 9.24 / 8.65 / 8.84, eyebrow 4.67 / 4.70 / 4.70, lede 9.88 / 10.25 / 10.20, bottom HUD at least 9.56, headline 16.07 and its italic word 6.02 (large text).
+- **Route:** any path other than `/` and `/standby`. Title `<What> not found — IPC Battlegrounds`.
+- **Files:** `web/src/pages/not-found/NotFoundPage.tsx` (no CSS of its own: it renders `SplashLayout`). Art: `web/public/standby.webp`, shown exactly as on standby (user ruling, M3): the 404 screens share the standby art and only the wording changes.
+- **Wording prop:** `what?: string`, default `"Page"`, names the missing thing. It fills the headline ("<What> *not found.*"), the title, and the lede ("The IPC has no record of this <what in lower case>. Check the link, or head back to base."). The default page case keeps "this route" in the lede. Eyebrow `Error // 404`, chip `SYS://NO SIGNAL`, bottom HUD and the CTA back to `/` do not change.
+- **Mockup:** none; same pattern as standby.
+- **Unused asset:** `web/public/not-found-image.webp` (a grey "No image available" placeholder) is no longer referenced; removing it is left to the user.
+- **Contrast** equals standby's, since art and scrims are the same. Worst case (text colour against the brightest art pixel behind each element, text shadows not counted), 404 / standby: at 1440, brand word 3.22 / 3.22, HUD chip 2.89 / 2.89, eyebrow 2.37 / 2.34, lede 3.69 / 3.54; at 390, HUD chip 1.39 / 1.44, eyebrow 4.17 / 3.68, lede 9.28 / 8.99. These small-text values are below 4.5:1 on both pages; the mockup's multi-layer text shadows carry the legibility. This is a property of the standby design, not of the 404 page, and is open for a later design pass.
 
 ## Fonts (M3)
 

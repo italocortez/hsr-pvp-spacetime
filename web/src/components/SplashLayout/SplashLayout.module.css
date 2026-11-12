@@ -34,11 +34,6 @@
     @media (--bp-lg) {
         object-position: 60% 30%;
     }
-
-    /* Stand-in art (404): dimmed over the void colour so all text keeps >= 4.5:1. */
-    [data-image-tone="placeholder"] > & {
-        opacity: 0.1;
-    }
 }
 
 /* Layered scrims protect the text column without dimming the illustration. */

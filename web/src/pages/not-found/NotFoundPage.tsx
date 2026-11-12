@@ -1,25 +1,31 @@
 import { SplashLayout } from '@/components/SplashLayout/SplashLayout';
 import { useDocumentTitle } from '@/lib/useDocumentTitle';
 
-const IMAGE = { src: '/not-found-image.webp', width: 281, height: 262 };
+const IMAGE = { src: '/standby.webp', width: 1920, height: 1080 };
 
-/** Any path the app does not know. Same editorial pattern as standby. */
-export function NotFoundPage() {
-    useDocumentTitle('Not found — IPC Battlegrounds');
+/**
+ * Something the app cannot find. Same screen as standby; only the wording changes with `what`
+ * is missing (default: the page itself, for an unknown route).
+ */
+export function NotFoundPage({ what = 'Page' }: { what?: string }) {
+    useDocumentTitle(`${what} not found — IPC Battlegrounds`);
+    const lede =
+        what === 'Page'
+            ? 'The IPC has no record of this route. Check the link, or head back to base.'
+            : `The IPC has no record of this ${what.toLowerCase()}. Check the link, or head back to base.`;
 
     return (
         <SplashLayout
             image={IMAGE}
-            imageTone="placeholder"
             hudLabel="SYS://NO SIGNAL"
             hudCoord="Sector ?? · Uncharted"
             eyebrow="Error // 404"
             title={
                 <>
-                    Page <em>not found.</em>
+                    {what} <em>not found.</em>
                 </>
             }
-            lede="The IPC has no record of this route. Check the link, or head back to base."
+            lede={lede}
         />
     );
 }
