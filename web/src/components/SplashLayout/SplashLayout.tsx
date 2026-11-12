@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { BrandLogo } from '@/components/BrandLogo/BrandLogo';
 import { HudChip } from '@/components/HudChip/HudChip';
@@ -37,10 +38,10 @@ export function SplashLayout({ image, hudLabel, hudCoord, eyebrow, title, lede, 
             <div className={styles.scrimEdges} aria-hidden="true" />
 
             {/* The word is hidden on narrow screens; the label keeps the link's name (= the visible text). */}
-            <a className={styles.brand} href="/" aria-label="IPC Battlegrounds">
+            <Link className={styles.brand} to="/" aria-label="IPC Battlegrounds">
                 <BrandLogo className={styles.brandLogo} />
                 <span className={styles.brandWord}>IPC Battlegrounds</span>
-            </a>
+            </Link>
 
             <div className={styles.hud}>
                 <HudChip label={hudLabel} />
@@ -52,7 +53,7 @@ export function SplashLayout({ image, hudLabel, hudCoord, eyebrow, title, lede, 
                 {children}
                 <p className={styles.lede}>{lede}</p>
                 <div className={styles.cta}>
-                    <IpcButton href="/">Return to Base</IpcButton>
+                    <IpcButton to="/">Return to Base</IpcButton>
                 </div>
             </div>
 

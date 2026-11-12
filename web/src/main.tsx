@@ -11,6 +11,8 @@ import { App } from '@/App';
 const env = resolveBrowserEnv(import.meta.env);
 if (import.meta.env.DEV) {
     console.info(`[stdb] target=${env.target} database=${env.dbName}`);
+    // window.__devAuth('member') etc. for checking the route guards; dropped from production builds.
+    void import('@/auth/devAuth').then((m) => m.installDevAuth());
 }
 
 const root = document.getElementById('root');

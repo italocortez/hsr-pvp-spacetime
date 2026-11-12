@@ -12,10 +12,13 @@
     "dependencies": {
         "@fontsource-variable/inter": "5.3.0",
         "@fontsource-variable/jetbrains-mono": "5.3.0",
+        "@tanstack/react-router": "1.170.46",
         "react": "18.3.1",
         "react-dom": "18.3.1"
     },
     "devDependencies": {
+        "@tanstack/react-router-devtools": "1.167.3",
+        "@tanstack/router-plugin": "1.169.0",
         "@types/react": "18.3.31",
         "@types/react-dom": "18.3.7",
         "@vitejs/plugin-react": "6.3.0",
