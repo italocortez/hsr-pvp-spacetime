@@ -9,6 +9,19 @@ One entry per ported page: route, files, mockup, breakpoint snaps, guides used, 
 - **Mockup:** `design/mockups/standby.html`.
 - **Breakpoint snaps:** 960px to `--bp-lg` (1040), 540px to `--bp-sm` (560). Neither breaks at the snapped width; no page-local media.
 - **Deviations from the mockup:** font sizes in `rem` (same px at the default root size); `min-block-size` instead of a fixed CTA height; the CTA fill and ring are clipped pseudo-elements so the element's focus ring is not clipped; `100dvh` instead of `100vh`; the brand link's accessible name is `aria-label="IPC Battlegrounds"` (its visible text) instead of "Return home"; the HUD dot pulse runs only under `prefers-reduced-motion: no-preference`; body `line-height: 1.5` (the mockup leaves the browser default); `text-wrap: balance` on the headline and `text-wrap: pretty` on the lede; body `overflow-x: clip` instead of `hidden`.
+- **Top-bar legibility** (user decision 2026-11-12, A168; applies to standby and 404 through `SplashLayout`):
+  - A top-bar scrim, `--scrim-top` on `.scrimEdges`: void at 58% from 0 to 48px, fading out by 120px, so the art below the top bar is unchanged.
+  - The brand word is one step brighter (`--text-body`) and carries the HUD text shadow.
+  - Worst-case contrast (text against the brightest art pixel behind it, shadows not counted), before and after:
+
+    | Element | Width | Before | After |
+    |---|---|---|---|
+    | HUD chip | 1440 | 2.89 | 6.80 |
+    | HUD chip | 390 | 1.39 to 1.44 | 4.78 to 4.93 |
+    | Brand word | 1440 | 3.22 | 8.76 to 8.80 |
+    | Brand word | 390 | hidden | hidden |
+
+  - **Open:** the eyebrow is not changed and stays below 4.5:1 (1.40 to 2.56; 4.17 on the 404 page at 390).
 - **Mockup defects fixed here** (M3 review):
   - Brand word and HUD chip touched or overlapped below about 390px (1px gap at 375, overlap at 360 and 320; the longer 404 chip touched at 390). At `--bp-xs` (480) and below the brand word is hidden; the logo mark stays and the link keeps its name. Measured brand-to-chip gap, standby / 404: 320: 111 / 95px, 360: 151 / 135px, 375: 166 / 150px, 390: 181 / 165px.
   - At `--bp-lg` on short screens (844 x 390 landscape) the text column slid under the brand. `.overlay` now has 88px top padding there; short screens scroll.
@@ -25,7 +38,7 @@ One entry per ported page: route, files, mockup, breakpoint snaps, guides used, 
 - **Wording prop:** `what?: string`, default `"Page"`, names the missing thing. It fills the headline ("<What> *not found.*"), the title, and the lede ("The IPC has no record of this <what in lower case>. Check the link, or head back to base."). The default page case keeps "this route" in the lede. Eyebrow `Error // 404`, chip `SYS://NO SIGNAL`, bottom HUD and the CTA back to `/` do not change.
 - **Mockup:** none; same pattern as standby.
 - **Unused asset:** `web/public/not-found-image.webp` (a grey "No image available" placeholder) is no longer referenced; removing it is left to the user.
-- **Contrast** equals standby's, since art and scrims are the same. Worst case (text colour against the brightest art pixel behind each element, text shadows not counted), 404 / standby: at 1440, brand word 3.22 / 3.22, HUD chip 2.89 / 2.89, eyebrow 2.37 / 2.34, lede 3.69 / 3.54; at 390, HUD chip 1.39 / 1.44, eyebrow 4.17 / 3.68, lede 9.28 / 8.99. These small-text values are below 4.5:1 on both pages; the mockup's multi-layer text shadows carry the legibility. This is a property of the standby design, not of the 404 page, and is open for a later design pass.
+- **Contrast** equals standby's, since art and scrims are the same. Worst case (text colour against the brightest art pixel behind each element, text shadows not counted), 404 / standby, after the A168 top-bar scrim: at 1440, brand word 8.76 / 8.80, HUD chip 6.80 / 6.80, eyebrow 2.37 / 2.34, lede 3.69 / 3.54; at 390, HUD chip 4.78 / 4.93, eyebrow 4.17 / 3.68, lede 9.28 / 8.99. The eyebrow and the 1440 lede stay below 4.5:1 on both pages, where the mockup's multi-layer text shadows carry the legibility; open for a later design pass.
 
 ## Fonts (M3)
 

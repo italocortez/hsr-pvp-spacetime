@@ -1656,3 +1656,10 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** user, 2026-11-12: "the stand by image should be used for the 404 pages, we just change the wording depending on what is missing".
 - **Supersedes:** the 404 placeholder treatment in A166.
 - **Where implemented:** M3 follow-up, `web/src/pages/not-found/NotFoundPage.tsx`, `docs/frontend/pages.md`
+
+### A168 — Splash pages: darker top band and brighter site name
+
+- **Date:** 2026-11-12 · **Status:** decided
+- **Decision:** On the splash pages (standby, not found) the artwork gets a dark band at the top edge (58% void colour over the top 48px, gone by 120px) and the site name in the top bar uses the body text colour with the label text shadow. Chosen from A/B screenshots. The art below the top bar is unchanged. The eyebrow line over the art stays as the mockup has it (below 4.5:1 in the worst case) and is open.
+- **Why:** user, 2026-11-12, on the orchestrator's recommendation of option B: "I like your recommendation, lets keep that".
+- **Where implemented:** `web/src/components/SplashLayout/SplashLayout.module.css`, `docs/frontend/pages.md`
