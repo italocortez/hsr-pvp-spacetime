@@ -101,9 +101,24 @@ describe('publishArgs', () => {
         const cmd = publishArgs('test', { modulePath, clearDatabase: true });
         expect(cmd.args).toEqual([
             'publish', 'hsr-spacetimedb-test1', '--server', 'maincloud', '--no-config', '--module-path', 'spacetimedb',
-            '--delete-data=always', '--yes=delete-data',
+            '--yes=remote', '--delete-data=always', '--yes=delete-data',
         ]);
         expect(cmd.args).not.toContain('--clear-database');
+    });
+    it('test: every publish skips the non-local prompt with --yes=remote (no terminal needed)', () => {
+        expect(publishArgs('test', { modulePath }).args).toEqual([
+            'publish', 'hsr-spacetimedb-test1', '--server', 'maincloud', '--no-config', '--module-path', 'spacetimedb', '--yes=remote',
+        ]);
+        expect(publishArgs('test', { modulePath, clearDatabase: true }).args).toContain('--yes=remote');
+        expect(publishArgs('test', { modulePath, yesMigrate: true }).args).toEqual([
+            'publish', 'hsr-spacetimedb-test1', '--server', 'maincloud', '--no-config', '--module-path', 'spacetimedb', '--yes=remote', '--yes=migrate',
+        ]);
+    });
+    it('prod: never --yes=remote, and the allow-list refuses it if added', () => {
+        const { args } = publishArgs('prod', { modulePath, yesMigrate: true });
+        expect(args.some(a => a.includes('remote'))).toBe(false);
+        expect(() => assertNoForbiddenProdFlags([...args, '--yes=remote'])).toThrow(/forbidden against prod/);
+        expect(() => assertNoForbiddenProdFlags([...args.slice(0, -1), '--yes=migrate,remote'])).toThrow(/forbidden against prod/);
     });
     it('every publish carries the module env value for the target (shell env, not --env)', () => {
         expect(publishArgs('test', { modulePath }).env).toEqual({ STDB_TARGET: 'test' });
@@ -138,7 +153,7 @@ describe('publishArgs', () => {
         expect(() => assertNoForbiddenProdFlags(readArgs('prod', 'describe'))).not.toThrow();
         expect(() => assertNoForbiddenProdFlags(readArgs('prod', 'sql', ['SELECT COUNT(*) AS n FROM hsr_character']))).not.toThrow();
     });
-    it('plain test publish is interactive (no --yes) unless asked', () => {
+    it('plain test publish keeps the migration prompt (no --yes=migrate) unless asked', () => {
         expect(publishArgs('test', { modulePath }).args).not.toContain('--yes=migrate');
         expect(publishArgs('test', { modulePath, yesMigrate: true }).args).toContain('--yes=migrate');
     });

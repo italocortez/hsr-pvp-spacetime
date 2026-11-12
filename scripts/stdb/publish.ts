@@ -7,8 +7,11 @@
  * - Arguments come only from publishArgs() in shared/stdb-targets.ts: explicit database name,
  *   --server maincloud --no-config, and STDB_TARGET=<target> in the child environment (the module's
  *   declared env value, read by requireTestDatabase).
+ * - test always adds `--yes=remote` (skips the "publish to a non-local server?" prompt, so it runs without
+ *   a terminal, e.g. from test/global-setup.ts); migration prompts still ask.
  * - --clear wipes all data (`--delete-data=always --yes=delete-data`) and is refused for prod.
- * - prod = `--yes=migrate` only; forbidden flags are re-checked before spawning; refuses a dirty tree.
+ * - prod = `--yes=migrate` only (no `--yes=remote`: the non-local prompt still asks); forbidden flags are
+ *   re-checked before spawning; refuses a dirty tree.
  * - Runs `npm run typecheck` first and aborts on errors: `spacetime build` cannot find tsc in this
  *   workspace layout, so it bundles without type-checking (M1 finding).
  * - --dry-run prints the command and the child environment keys, runs nothing, contacts nothing.

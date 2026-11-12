@@ -12,7 +12,8 @@
 //      otherwise insists on the spacetime.json database; see skill references/spacetime-json.md).
 //   5. `--clear-database` / `--delete-data` are refused for prod at the resolver, before any
 //      shell command is built. Prod publishes always carry `--yes=migrate` and nothing more; every prod command is
-//      checked against an allow-list of exact flags (S10s, assertNoForbiddenProdFlags).
+//      checked against an allow-list of exact flags (S10s, assertNoForbiddenProdFlags), which refuses `--yes=remote`.
+//      Test publishes always carry `--yes=remote` so they run without a terminal.
 
 export type Target = 'test' | 'prod';
 
@@ -165,13 +166,18 @@ export interface PublishCommand {
 
 /**
  * `spacetime publish …` for CLI 2.14.1: `-c, --delete-data[=always|on-conflict|never]` is the wipe
- * (`--clear-database` is only the placeholder name in 2.14.1 `--help`), `--yes=<list>` skips named prompts.
+ * (`--clear-database` is only the placeholder name in 2.14.1 `--help`), `--yes=<list>` skips named prompts
+ * (repeated `--yes=<value>` flags are accepted).
+ * Test publishes always carry `--yes=remote` (skips only the "publish to a non-local server?" prompt, so the
+ * script and the live suite's globalSetup run without a terminal); migration and break-clients prompts stay.
+ * Prod never gets `--yes=remote`: it keeps `--yes=migrate` only and its interactive non-local confirmation.
  */
 export function publishArgs(target: Target, opts: PublishOptions): PublishCommand {
     const dbName = STDB_DATABASES[target];
     assertNameMatchesTarget(target, dbName);
     const args = ['publish', dbName, '--server', STDB_SERVER_NICKNAME, '--no-config', '--module-path', opts.modulePath];
     const env = { [ENV_KEYS.target]: target };
+    if (target === 'test') args.push('--yes=remote');
 
     if (opts.clearDatabase) {
         assertWipeAllowed(target);
