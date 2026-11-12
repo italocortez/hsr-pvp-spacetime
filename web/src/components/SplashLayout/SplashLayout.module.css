@@ -66,8 +66,16 @@
 }
 
 .scrimEdges {
+    /* Top-bar scrim: keeps the brand and HUD labels legible over bright art; gone by 120px. */
+    --scrim-top: linear-gradient(
+        180deg,
+        rgba(8, 9, 14, 0.58) 0,
+        rgba(8, 9, 14, 0.58) 48px,
+        transparent 120px
+    );
+
     background:
-        linear-gradient(90deg, rgba(8, 9, 14, 0.55) 0%, transparent 28%),
+        var(--scrim-top), linear-gradient(90deg, rgba(8, 9, 14, 0.55) 0%, transparent 28%),
         linear-gradient(
             180deg,
             rgba(8, 9, 14, 0.4) 0%,
@@ -77,12 +85,9 @@
         );
 
     @media (--bp-lg) {
-        background: linear-gradient(
-            180deg,
-            transparent 0%,
-            transparent 50%,
-            rgba(8, 9, 14, 0.65) 100%
-        );
+        background:
+            var(--scrim-top),
+            linear-gradient(180deg, transparent 0%, transparent 50%, rgba(8, 9, 14, 0.65) 100%);
     }
 }
 
@@ -123,7 +128,10 @@
     font-weight: 600;
     letter-spacing: 2.4px;
     text-transform: uppercase;
-    color: var(--text-muted);
+    color: var(--text-body);
+    text-shadow:
+        0 0 12px rgba(8, 9, 14, 0.95),
+        0 1px 2px rgba(8, 9, 14, 0.95);
     transition: color var(--duration-fast) var(--ease-out);
 
     .brand:hover & {
