@@ -1626,3 +1626,12 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   6. The module is published to test1 with the scheduler guard in place; the first live check is one scheduled run. If the live scheduler is refused, the guard is emptied and the module republished without a wipe.
 - **Why:** user, 2026-11-12: "I agree on your 6 recomendations but one thing to add, we dont need a limit on lobby password guess. Password should have a character limit that only accepts alphanumerical characters and the limit should be 20 characters".
 - **Where implemented:** S11a
+
+### A164 — Confirmations after S11a; target browsers
+
+- **Decision:**
+  1. The hand-over of match events (A163(2)) also applies to Completed and Cancelled tournaments, as built.
+  2. During maintenance `broadcast_cursor` from a non-Admin is dropped silently, as built; every other reducer answers with the maintenance text.
+  3. Target browsers: current Chromium browsers and current Firefox first. Safari is not a focus now and is handled later. The browser support policy in the `web-guidance` skill follows this; no polyfill or new dependency without approval.
+- **Why:** user, 2026-11-12: "old tournament events can also be dropped manually by the creator or whoever is in there to free up slots so that's fine. for choise 2, i agree, for choise 3, I want it to work on Chromium, Firefox first and we worry about safari later but that's not my main focus."
+- **Where implemented:** no code change; `.claude/skills/web-guidance/SKILL.md`

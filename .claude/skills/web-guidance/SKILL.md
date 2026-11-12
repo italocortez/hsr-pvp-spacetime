@@ -20,8 +20,11 @@ Source: `https://github.com/GoogleChrome/modern-web-guidance`, commit in `SOURCE
 
 ## Browser support policy
 
-- A feature the guide marks Baseline Widely available: use it freely.
-- A newer feature: use it only when the page still works without it (the guide's graceful fallback), and keep fallback code small.
+Target browsers (user, 2026-11-12, DECISIONS.md A164): current Chromium browsers (Chrome, Edge and other Chromium-based ones) and current Firefox come first. Safari is not a focus for now and is handled later.
+
+- A feature that works in current Chromium and current Firefox: use it freely, also when the guide lists it as newer than Baseline Widely available or as missing in Safari.
+- A feature that works in Chromium only: use it only when the page still works in Firefox without it (the guide's graceful fallback), and keep fallback code small.
+- Do not write fallback code only for Safari. Where a guide offers a Safari-safe form at no extra cost, prefer it; name in the hand-back anything that is known to break in Safari, so it can be collected for the later Safari pass.
 - No polyfill and no new dependency without the user's approval (`CLAUDE.md` section 8).
 
 ## Adapting to React
