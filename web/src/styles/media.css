@@ -1,0 +1,21 @@
+/*
+ * Shared breakpoint scale (DECISIONS.md A49a): 480 / 560 / 768 / 1040 / 1120 / 1320.
+ *
+ * Convention: lightningcss resolves @custom-media per file, so every CSS file that uses a
+ * --bp-* query starts with
+ *
+ *     @import '@/styles/media.css';
+ *
+ * The import is bundled away at build and dev time: these rules emit no CSS of their own, and
+ * every `(--bp-*)` query is replaced by its media condition. A file without the import fails
+ * to resolve the query (the media query never matches), so add it whenever a --bp-* is used.
+ * A page-local custom media for a mockup width that breaks at its snapped step lives in that
+ * page's module, next to this import.
+ */
+
+@custom-media --bp-xs (max-width: 480px);
+@custom-media --bp-sm (max-width: 560px);
+@custom-media --bp-md (max-width: 768px);
+@custom-media --bp-lg (max-width: 1040px);
+@custom-media --bp-xl (max-width: 1120px);
+@custom-media --bp-2xl (min-width: 1320px);

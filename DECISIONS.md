@@ -1641,3 +1641,10 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Decision:** the module package `spacetimedb` and the CLI move from 2.14.1 to 2.15.0 (exact pin). None of the new optional module packages of 2.15 (Agents, Auth, Files, PostHog) is adopted; the Auth package would reopen A46 and is not taken.
 - **Why:** user, 2026-11-12, before the frontend work: "spacetime db 2.15 is out i would like to upgrate to it".
 - **Where implemented:** `docs/log/2026-11-12-sdk-2-15.md`
+
+### A166 — Frontend package versions: newest that does not break us
+
+- **Date:** 2026-11-12 · **Status:** decided
+- **Decision:** Frontend packages are installed at the newest version that does not break the project, still as exact pins. For M3 this gave `vite` 8.3.8 and `@vitejs/plugin-react` 6.3.0 in place of the plan's 8.3.6 and 6.2.1. React stays on 18.3.1 (A49 D-M7 stands). Orchestrator's own choices in M3, told to the user: the two React type packages (`@types/react` 18.3.31, `@types/react-dom` 18.3.7) were added because TypeScript needs them; M3 opens no database connection (the roadmap puts the connection at M6, the old plan's "logs the identity hex" check moves there); a build without `VITE_STDB_TARGET` fails instead of shipping a page that throws; mockup defects found by the review (overlaps on narrow and short screens, a doubled separator, a mid-word break) are fixed in this repo; the 404 page shows its placeholder image at 10% over the void colour until real artwork exists; token names `--radius-panel` and `--radius-modal` for the 12px and 16px radii of `DESIGN.md` 11.3.
+- **Why:** user, 2026-11-12: "just use the latest versions of anything that is not going to break us".
+- **Where implemented:** M3, `docs/log/2026-11-12-m3.md`
