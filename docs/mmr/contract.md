@@ -531,6 +531,7 @@ _Superseded in Phase S8e execution (DECISIONS.md A69(3))._ The ratchet is remove
 | The leaderboard rebuild skips rating rows of users with no `User` row or with `deletedAt` set | Phase S10f execution (backend audit 2026-11-09, results finding 9) | 2026-11-09 |
 | `globalCompositeRating` is the average of the user's mode ratings of the season being written, and is written to that season's `MmrRating` rows only; rows of earlier seasons keep their stored value | Phase S10i execution (DECISIONS.md A102) | 2026-11-10 |
 | `admin_update_elo_config` rejects a `spreadDivisor` of 0 and a `newThreshold` above `midThreshold` | Phase S10r execution (DECISIONS.md A122(12)) | 2026-11-10 |
+| `Leaderboard` rows carry `displayName` and `avatarCharacterName`, rewritten when the player renames or changes avatar. When a user is deleted, their rows of every season are deleted and the active season is rebuilt; past seasons keep the gap in their ranks. `Leaderboard` and `MmrRating` have a season index | Phase S11a execution (DECISIONS.md A77(1), A163(1)) | 2026-11-12 |
 
 ---
 

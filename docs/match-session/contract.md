@@ -1208,6 +1208,7 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 | A pause on a turn whose turn time and reserve are both used up is accepted and freezes 1 ms; after the resume the 1000 ms tolerance counts again and the expiry is due 1 ms later | Phase S10aa execution (DECISIONS.md A154) | 2026-11-11 |
 | `resume_draft` on an automatic pause: a caller seated as a player on the team that does not own the pause is refused ("Only the paused team or a referee can resume this pause.") also when the caller holds the referee flag, for example after the 15 s check moved the flag to them. A flag holder in a spectator or coach seat, or playing on the paused team, resumes. `claim_forfeit` is unchanged: in a lobby without a separate referee the waiting player claims the forfeit after the grace | Phase S10ab execution (DECISIONS.md A155) | 2026-11-11 |
 | Accepted dead end: every member was offline at the referee's own check, the paused team stays absent and a separate referee with exclusive concede rights stays offline; a returning opponent cannot resume, claim or close. It ends when the referee or a player of the paused team returns, through staff, or through the lobby clean-up once everyone is offline | Phase S10ab execution (DECISIONS.md A156) | 2026-11-11 |
+| The `ArrangeLineup` step variant and `MatchSessionStep.anonymousLabel` are removed; the step view computes the label | Phase S11a execution (DECISIONS.md triage L39) | 2026-11-12 |
 
 ---
 

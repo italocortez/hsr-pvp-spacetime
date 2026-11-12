@@ -463,8 +463,10 @@ describe('A162: a match event\'s creator needs the bracket permission to read th
         tx(w.test, w.org, (ctx) => M.remove_tournament_assistant(ctx, { tournamentId: w.f.id, userId: w.creator.userId }));
         expect(read(w.test, w.creator, w.id)).toEqual([]);
         expect(ownInviteRows(w.test, w.creator, w.id)).toEqual([]);
-        // the event itself stays in their calendar (path (a) of view_my_calendar_events, unchanged)
-        expect(view<MyCalendarEventRow>(w.test, 'view_my_calendar_events', w.creator).map((e) => e.id)).toContain(w.id);
+        // S11a rulings pass (A163(2)): the event is handed to the tournament organizer, so it leaves their calendar
+        // (A162's "the event stays in their calendar" is superseded)
+        expect(view<MyCalendarEventRow>(w.test, 'view_my_calendar_events', w.creator).map((e) => e.id)).not.toContain(w.id);
+        expect(w.test.db.CalendarEvent.id.find(w.id)?.organizerId).toBe(w.org.userId);
         // the tournament organizer still reads the list
         expect(read(w.test, w.org, w.id)).toEqual(w.all);
     });

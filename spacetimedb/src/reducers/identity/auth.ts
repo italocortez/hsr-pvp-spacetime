@@ -4,6 +4,7 @@ import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHel
 import { markPresenceOnline } from '@module/helpers/identity/presenceHelpers';
 import { recordGuestCreation } from '@module/helpers/lobby/abuseControls';
 import { guestUsernameBase, uniqueUsername } from '@module/helpers/identity/usernames';
+import { ensureNotInMaintenance } from '@module/helpers/identity/ensurePermissions';
 
 /**
  * Login as a guest user.
@@ -20,6 +21,8 @@ import { guestUsernameBase, uniqueUsername } from '@module/helpers/identity/user
  */
 export const login_as_guest = spacetimedb.reducer((ctx) => {
     const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
+    // A163(3) (S11a): while maintenance mode is on only an Admin acts; no guest is created or refreshed.
+    ensureNotInMaintenance(ctx, mapping ? ctx.db.User.id.find(mapping.userId) : undefined);
     if (mapping) {
         const user = ctx.db.User.id.find(mapping.userId);
         if (user) {

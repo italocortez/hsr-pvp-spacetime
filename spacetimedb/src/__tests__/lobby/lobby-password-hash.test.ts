@@ -1,20 +1,49 @@
-// Lobby: a private lobby's password is stored as a salted SHA-256, compared as one, and capped in length.
-// Decisions: D-02, A99
+// Lobby: a private lobby's password is stored as a salted SHA-256, compared as one, and limited to 20 letters and digits.
+// Decisions: D-02, A99, A163(4)
 // Contracts: docs/lobby/contract.md (Private Lobby with Password)
 // From S11a.
 //
 // T-S11a (triage L24): LobbyPassword.passwordHash held the typed text. It now holds
 // hashLobbyPassword(lobbyId, password) = SHA-256 hex of "hsr-lobby-password:<lobbyId>:<password>" (helpers/lobby/
 // lobbyPassword.ts, hand-written: a reducer has no crypto API). The SHA-256 is checked against the FIPS 180-4 vectors
-// and against values computed with Node's crypto (UTF-8 text). The guess limit of the row is not built (a failed join
-// rolls back; S11a log).
+// and against values computed with Node's crypto (UTF-8 text). A163(4): there is no guess limit.
+//
+// T-S11a rulings pass (A163(4)): a password holds only A to Z, a to z and 0 to 9, at most 20 characters; this replaces
+// the 64-character cap and the 256-unit pre-check. create_lobby and update_lobby_settings refuse a password that breaks
+// the rule with one text per cause; join_lobby refuses such an attempt as an incorrect password without hashing it.
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_LOBBY_ARGS, M, guest, newHarness, rejection, snap, tx, type Harness } from '../fixtures/harness';
 import { createLobby, join, members, settingsArgs } from '../fixtures/lobby';
-import { hashLobbyPassword, LOBBY_PASSWORD_MAX_LENGTH, LOBBY_PASSWORD_MAX_UTF16_UNITS, sha256HexOfUtf8 } from '@module/helpers/lobby/lobbyPassword';
+import {
+    hashLobbyPassword,
+    LOBBY_PASSWORD_CHARSET_TEXT,
+    LOBBY_PASSWORD_MAX_LENGTH,
+    LOBBY_PASSWORD_TOO_LONG_TEXT,
+    sha256HexOfUtf8,
+} from '@module/helpers/lobby/lobbyPassword';
 
-const CAP_TEXT = `The lobby password can be at most ${LOBBY_PASSWORD_MAX_LENGTH} characters.`;
+const CAP_TEXT = LOBBY_PASSWORD_TOO_LONG_TEXT;
 const storedOf = (test: Harness, lobbyId: number) => test.db.LobbyPassword.lobbyId.find(lobbyId)?.passwordHash;
+
+/**
+ * Runs `body` while counting iterations of strings: `long` counts any string over `limit` units, `hashed` counts the
+ * salted input of hashLobbyPassword (its UTF-8 encoder iterates the string; the rule check does not iterate).
+ */
+function countIterations(limit: number, body: (counts: { long: number; hashed: number }) => void): void {
+    const proto = String.prototype as any;
+    const original = proto[Symbol.iterator];
+    const counts = { long: 0, hashed: 0 };
+    proto[Symbol.iterator] = function (this: string) {
+        if (this.length > limit) counts.long++;
+        if (this.startsWith('hsr-lobby-password:')) counts.hashed++;
+        return original.call(this);
+    };
+    try {
+        body(counts);
+    } finally {
+        proto[Symbol.iterator] = original;
+    }
+}
 
 describe('L24: the hash', () => {
     it('SHA-256 matches the FIPS 180-4 vectors and reference values on multi-block and non-ASCII text', () => {
@@ -65,7 +94,11 @@ describe('L24: create, join and update with a hashed password', () => {
     });
 });
 
-describe(`L24: the length cap (${LOBBY_PASSWORD_MAX_LENGTH} characters)`, () => {
+describe(`A163(4): the length cap (${LOBBY_PASSWORD_MAX_LENGTH} characters)`, () => {
+    it('the cap is 20', () => {
+        expect(LOBBY_PASSWORD_MAX_LENGTH).toBe(20);
+    });
+
     it('create_lobby and update_lobby_settings refuse a longer password and write nothing; the cap itself passes', () => {
         const test = newHarness();
         const host = guest(test, 'host');
@@ -74,7 +107,7 @@ describe(`L24: the length cap (${LOBBY_PASSWORD_MAX_LENGTH} characters)`, () => 
         expect(rejection(test, host, (ctx) => M.create_lobby(ctx, { ...DEFAULT_LOBBY_ARGS, isPublic: false, password: long } as any))).toBe(CAP_TEXT);
         expect([...test.db.Lobby.iter()]).toHaveLength(lobbies);
 
-        const atCap = '密'.repeat(LOBBY_PASSWORD_MAX_LENGTH); // counted in characters, not UTF-16 units or bytes
+        const atCap = 'Az09'.repeat(LOBBY_PASSWORD_MAX_LENGTH / 4); // 20 letters and digits of every class
         const L = createLobby(test, host, { isPublic: false, password: atCap });
         const before = snap(test.db.LobbyPassword.lobbyId.find(L), test.db.Lobby.id.find(L));
         expect(rejection(test, host, (ctx) => M.update_lobby_settings(ctx, settingsArgs(L, { isPublic: false, password: long })))).toBe(CAP_TEXT);
@@ -82,42 +115,92 @@ describe(`L24: the length cap (${LOBBY_PASSWORD_MAX_LENGTH} characters)`, () => 
         join(test, guest(test, 'friend'), L, atCap);
     });
 
-    it('join_lobby with an over-long attempt is the wrong-password refusal', () => {
+    it('join_lobby with an over-long attempt is the wrong-password refusal, without hashing it', () => {
         const test = newHarness();
         const L = createLobby(test, guest(test, 'host'), { isPublic: false, password: 'pw' });
-        expect(rejection(test, guest(test, 'guesser'), (ctx) =>
-            M.join_lobby(ctx, { lobbyId: L, joinCode: '', password: 'p'.repeat(1000) }))).toBe('Incorrect lobby password.');
+        const guesser = guest(test, 'guesser');
+        countIterations(LOBBY_PASSWORD_MAX_LENGTH, (counts) => {
+            expect(rejection(test, guesser, (ctx) =>
+                M.join_lobby(ctx, { lobbyId: L, joinCode: '', password: 'p'.repeat(LOBBY_PASSWORD_MAX_LENGTH + 1) }))).toBe('Incorrect lobby password.');
+            expect(counts.hashed).toBe(0);
+        });
     });
 });
 
-// T-S11a (review L3): a string over LOBBY_PASSWORD_MAX_UTF16_UNITS is refused on its raw length, before it is expanded
-// into code points. The string iterator is wrapped to count expansions of any string over that length.
+describe('A163(4): only A to Z, a to z and 0 to 9', () => {
+    const BAD = ['pass word', 'pw!', 'pässwort', '密码', 'pw🔒', 'pw-1', 'pw_1', 'tab\tpw'];
+
+    it('create_lobby and update_lobby_settings refuse any other character with the charset text and write nothing', () => {
+        const test = newHarness();
+        const host = guest(test, 'host');
+        const lobbies = [...test.db.Lobby.iter()].length;
+        for (const bad of BAD) {
+            expect(rejection(test, host, (ctx) => M.create_lobby(ctx, { ...DEFAULT_LOBBY_ARGS, isPublic: false, password: bad } as any)))
+                .toBe(LOBBY_PASSWORD_CHARSET_TEXT);
+        }
+        expect([...test.db.Lobby.iter()]).toHaveLength(lobbies);
+
+        const L = createLobby(test, host, { isPublic: false, password: 'Good123' });
+        const before = snap(test.db.LobbyPassword.lobbyId.find(L), test.db.Lobby.id.find(L));
+        for (const bad of BAD) {
+            expect(rejection(test, host, (ctx) => M.update_lobby_settings(ctx, settingsArgs(L, { isPublic: false, password: bad }))))
+                .toBe(LOBBY_PASSWORD_CHARSET_TEXT);
+        }
+        expect(snap(test.db.LobbyPassword.lobbyId.find(L), test.db.Lobby.id.find(L))).toBe(before);
+        join(test, guest(test, 'friend'), L, 'Good123');
+    });
+
+    it('the empty string is not a password: a public lobby without one, and an update that keeps the stored one, pass', () => {
+        const test = newHarness();
+        const P = createLobby(test, guest(test, 'host'), { isPublic: true, password: '' });
+        expect(storedOf(test, P)).toBeUndefined();
+
+        const host = guest(test, 'host2');
+        const L = createLobby(test, host, { isPublic: false, password: 'keep1' });
+        tx(test, host, (ctx) => M.update_lobby_settings(ctx, settingsArgs(L, { isPublic: false, password: '' })));
+        expect(storedOf(test, L)).toBe(hashLobbyPassword(L, 'keep1'));
+    });
+
+    it('join_lobby with an attempt holding another character is the wrong-password refusal, without hashing it', () => {
+        const test = newHarness();
+        const L = createLobby(test, guest(test, 'host'), { isPublic: false, password: 'pw' });
+        const guesser = guest(test, 'guesser');
+        const before = snap(members(test, L));
+        countIterations(LOBBY_PASSWORD_MAX_LENGTH, (counts) => {
+            for (const bad of BAD) {
+                expect(rejection(test, guesser, (ctx) => M.join_lobby(ctx, { lobbyId: L, joinCode: '', password: bad })))
+                    .toBe('Incorrect lobby password.');
+            }
+            expect(counts.hashed).toBe(0);
+            // the counter works: a valid wrong attempt is hashed
+            expect(rejection(test, guesser, (ctx) => M.join_lobby(ctx, { lobbyId: L, joinCode: '', password: 'pw2' }))).toBe('Incorrect lobby password.');
+            expect(counts.hashed).toBeGreaterThan(0);
+        });
+        expect(snap(members(test, L))).toBe(before);
+    });
+});
+
+// T-S11a (review L3): a huge string is refused on its raw length, before any per-character work. The string iterator is
+// wrapped to count expansions of any string over the cap and hashes of the salted input.
 describe('L3: a 1 MB password is refused without expanding it', () => {
     it('join_lobby, create_lobby and update_lobby_settings refuse it with their usual text; no string over the limit is iterated', () => {
         const test = newHarness();
         const host = guest(test, 'host');
         const L = createLobby(test, host, { isPublic: false, password: 'pw' });
         const huge = 'p'.repeat(1_000_000);
-        const proto = String.prototype as any;
-        const original = proto[Symbol.iterator];
-        let expanded = 0;
-        proto[Symbol.iterator] = function (this: string) {
-            if (this.length > LOBBY_PASSWORD_MAX_UTF16_UNITS) expanded++;
-            return original.call(this);
-        };
-        try {
-            expect([...'p'.repeat(LOBBY_PASSWORD_MAX_UTF16_UNITS + 1)]).toHaveLength(LOBBY_PASSWORD_MAX_UTF16_UNITS + 1);
-            expect(expanded).toBe(1); // the counter works
-            expanded = 0;
-            const joinText = rejection(test, guest(test, 'guesser'), (ctx) => M.join_lobby(ctx, { lobbyId: L, joinCode: '', password: huge }));
+        const guesser = guest(test, 'guesser');
+        countIterations(LOBBY_PASSWORD_MAX_LENGTH, (counts) => {
+            expect([...'p'.repeat(LOBBY_PASSWORD_MAX_LENGTH + 1)]).toHaveLength(LOBBY_PASSWORD_MAX_LENGTH + 1);
+            expect(counts.long).toBe(1); // the counter works
+            counts.long = 0;
+            const joinText = rejection(test, guesser, (ctx) => M.join_lobby(ctx, { lobbyId: L, joinCode: '', password: huge }));
             const createText = rejection(test, host, (ctx) => M.create_lobby(ctx, { ...DEFAULT_LOBBY_ARGS, isPublic: false, password: huge } as any));
             const updateText = rejection(test, host, (ctx) => M.update_lobby_settings(ctx, settingsArgs(L, { isPublic: false, password: huge })));
-            expect(expanded).toBe(0);
+            expect(counts.long).toBe(0);
+            expect(counts.hashed).toBe(0);
             expect(joinText).toBe('Incorrect lobby password.');
             expect(createText).toBe(CAP_TEXT);
             expect(updateText).toBe(CAP_TEXT);
-        } finally {
-            proto[Symbol.iterator] = original;
-        }
+        });
     });
 });

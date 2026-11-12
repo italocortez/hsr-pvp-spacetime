@@ -2,6 +2,7 @@ import spacetimedb from '@module/schema';
 import { t } from 'spacetimedb/server';
 import { LIVE_STAGES, memberHasLeft } from '@module/helpers/lobby/lobbyHelpers';
 import { readAbuseConfig } from '@module/helpers/lobby/abuseControls';
+import { isMaintenanceOn, isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 
 export const broadcast_cursor = spacetimedb.reducer({
     lobbyId: t.u32(),
@@ -11,6 +12,10 @@ export const broadcast_cursor = spacetimedb.reducer({
     // Resolve identity → userId
     const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
     if (!mapping) return; // Not registered, ignore
+
+    // A163(3) (S11a): while maintenance mode is on only an Admin acts. The cursor stream is fire-and-forget at up to
+    // 20 Hz, so a non-Admin's call is dropped silently (the A98 rule for calls that cannot act), not thrown.
+    if (isMaintenanceOn(ctx) && !isRoleAtLeast(ctx.db.User.id.find(mapping.userId)?.role, 'Admin')) return;
 
     // Validate membership via index filter
     const membership = [...ctx.db.LobbyMember.by_lobby_and_user.filter([lobbyId, mapping.userId])][0];

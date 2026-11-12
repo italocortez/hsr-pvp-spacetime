@@ -6,6 +6,7 @@
  */
 
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
+import { hasTournamentPermission } from '@module/helpers/tournament/tournamentPermissions';
 
 /**
  * S10ac (A157(12)): writes a match event's start to its bracket match (`BracketMatch.scheduledAt`), or clears it
@@ -141,5 +142,44 @@ export function deleteAllCalendarDataForUser(ctx: any, userId: number): void {
     // 5. CalendarEventInvite rows where user is an invitee
     for (const invite of [...ctx.db.CalendarEventInvite.invitee_user_id.filter(userId)]) {
         ctx.db.CalendarEventInvite.delete(invite);
+    }
+}
+
+/**
+ * Hands one calendar event to `newOrganizerId` (CalendarEvent.organizerId; audit columns stamped with `actorId`). An
+ * organizer is never an invitee of their own event, so the new organizer's invite row to it, if any, is deleted. No cap
+ * is checked: a hand-over is never refused, so the new organizer may end above the per-user event caps. Used by the
+ * organizer hand-over of a user deletion (S10s, A121) and by handOverMatchEventsOfFormerStaff (A163(2)).
+ */
+export function handCalendarEventTo(ctx: any, event: any, newOrganizerId: number, actorId: number): void {
+    for (const invite of [...ctx.db.CalendarEventInvite.by_event_and_invitee.filter([event.id, newOrganizerId])]) {
+        ctx.db.CalendarEventInvite.delete(invite);
+    }
+    ctx.db.CalendarEvent.id.update(updateWithAudit(ctx, event, { organizerId: newOrganizerId }, actorId));
+}
+
+/**
+ * A163(2) (S11a): when a user loses the bracket permission of a tournament (assistant removed, the assistant's bracket
+ * flag turned off, a Moderator or Admin demoted below Moderator), every tournament match event they organize whose
+ * tournament they no longer hold the bracket permission of goes to that tournament's organizer (handCalendarEventTo).
+ * Runs after the change, so hasTournamentPermission reads the new state. `tournamentId` limits the pass to one
+ * tournament (the assistant paths); without it every match event the user organizes is checked (a role change).
+ * Every tournament stage is handled the same way, Completed and Cancelled included: an ended event no longer counts
+ * toward the former staff member's caps. Index reads: the user's events by organizer (bounded by the per-user caps),
+ * then per match event its bracket match and tournament by id.
+ */
+export function handOverMatchEventsOfFormerStaff(ctx: any, userId: number, actorId: number, tournamentId?: number): void {
+    const user = ctx.db.User.id.find(userId);
+    if (!user) return;
+    for (const event of [...ctx.db.CalendarEvent.organizer_id.filter(userId)]) {
+        if (event.bracketMatchId === undefined) continue;
+        const match = ctx.db.BracketMatch.id.find(event.bracketMatchId);
+        if (!match) continue;
+        if (tournamentId !== undefined && match.tournamentId !== tournamentId) continue;
+        const tournament = ctx.db.Tournament.id.find(match.tournamentId);
+        if (!tournament || tournament.organizerId === userId) continue;
+        if (hasTournamentPermission(ctx, user, tournament, 'bracket')) continue;
+        handCalendarEventTo(ctx, event, tournament.organizerId, actorId);
+        console.log(`[CALENDAR] Match event #${event.id} handed from #${userId} to tournament #${tournament.id}'s organizer #${tournament.organizerId} (bracket permission lost).`);
     }
 }

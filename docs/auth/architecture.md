@@ -101,7 +101,7 @@ Phase S10e execution (identity audit #3): the actual arguments are `(callerIdent
 ### clientConnected() -- lifecycle hook (exported as `client_connected`)
 > Both lifecycle hooks register only because `index.ts` exports them. Before 2026-11-05 they were bare `spacetimedb.clientConnected(...)` calls, which the SDK silently drops, so neither hook ever ran on a published database. Behavior below is the spec; it takes effect on the first publish that includes the fix.
 
-1. B-8 (Phase S4 execution, ACCESS-SECURITY-OPS §B.5): if `AbuseConfig` row 1 has `maintenanceMode=true` and `ctx.sender` has no `ServerIdentity` row, `throw` -- the socket is rejected. `AbuseConfig` is seeded in S5; until then this check is inert.
+1. B-8 (Phase S4 execution, ACCESS-SECURITY-OPS §B.5): if `AbuseConfig` row 1 has `maintenanceMode=true` and `ctx.sender` has no `ServerIdentity` row, `throw` -- the socket is rejected. `AbuseConfig` is seeded in S5; until then this check is inert. S11a rulings pass (A163(3), triage L9): an identity mapped to a live Admin user (`UserIdentity` → `User`, role Admin, `deletedAt` unset) is also admitted; text unchanged (`Maintenance mode: connections are not accepted right now.`). A non-Admin who is still connected is refused on every action: see `docs/admin/architecture.md` "Maintenance mode".
 2. Find `UserIdentity.identity.find(ctx.sender)`; return if none (a fresh guest: see `login_as_guest`)
 3. A48 (Phase S4 execution): upsert `UserPresence` for this identity (`userId`, `isOnline=true`, `lastLoginAt=now`, `lastSeenAt=now`); update `UserIdentity.lastSeenAt`
 4. F1 (Phase S4 execution): for every `LobbyMember` of the user: delete pending `RefereeTransferCheck` rows (`by_lobby_and_user`); if the row is offline, delete+reinsert with `isOnline=true`, `disconnectedAt` cleared and `disconnectPoolRemainingMs` decremented by the offline time (`handleDisconnectPoolUpdate`). Idempotent.
@@ -187,7 +187,12 @@ performUserDeletion
         → insert DeletedUser { id, displayName, isGuest, deletedAt }
         → hard-delete User row
         (Ghost accumulation eliminated — User table contains only live users)
+        → S11a rulings pass (A163(1)): removeDeletedUserFromLeaderboard (helpers/stats/leaderboardRebuild.ts)
+          deletes the user's Leaderboard rows of every season; when one was in the active season (0 when none is
+          active) that season is rebuilt. Details and cost: docs/mmr/architecture.md "Phase S11a execution (A163(1))"
 ```
+
+Every deletion path reaches this one function: `delete_my_account`, `run_user_deletion` (ban, `admin_delete_row('User')`, ban on reconnect), `server_delete_user`, `admin_delete_row('UserIdentity')` of a guest's last identity, `server_link_provider` (the old guest) and the identity GC (guests). The guest fast path holds no `Leaderboard` row (`hasHistoryReferences` checks it).
 
 **Two-phase soft-delete pattern (uniform across all three writers, Phase 15.2 D-10):**
 
@@ -434,6 +439,7 @@ method or provider id changes; a refresh of the same link keeps it.
 | A server deletion or ban of an organizer (`server_delete_user`, or a ban / delete sent as the SYSTEM user) cancels the unfinished tournaments through `cancelTournament` (explicit `serverDeletion` option); the reconnect-ban path documented as no hand-over | Phase S10s execution (DECISIONS.md A124) | 2026-11-10 |
 | `User` private; `UserPrivate` merged into it (provider columns + `linkedAt`, two indexes); `hasDiscordLinked` derived; `view_admin_users` for the Users tab | Phase S11a execution (DECISIONS.md A77) | 2026-11-11 |
 | The scheduled `run_user_deletion` and `run_identity_gc` refuse any caller but the scheduler (`ensureScheduler`, `ctx.senderAuth.isInternal`; L11); `admin_gc_identities` restarts a stopped `IdentityGcJob` chain (L6); a user deletion also removes the user's `LobbyCursorStamp` rows (L19) | Phase S11a execution (part 2, closing-triage items) | 2026-11-11 |
+| `performUserDeletion` ends with `removeDeletedUserFromLeaderboard` (the user's `Leaderboard` rows of every season go; the active season is rebuilt when it held one); `client_connected` admits a live Admin under maintenance mode; `login_as_guest` and the profile reducers (`resolveUser`) refuse a non-Admin under maintenance mode | Phase S11a execution (DECISIONS.md A163(1), A163(3)) | 2026-11-12 |
 
 ---
 

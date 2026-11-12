@@ -7,27 +7,35 @@ import { SenderError } from 'spacetimedb/server';
  * `"hsr-lobby-password:<lobbyId>:<password>"`. A reducer is deterministic and has no crypto API, so SHA-256 is written
  * out here (FIPS 180-4, over the UTF-8 bytes). The lobby id salts the hash, so one password gives a different value in
  * each lobby. This keeps the typed text out of `spacetime sql` reads by the database owner; it is not a defence against
- * guessing (a lobby password is short, and a failed `join_lobby` rolls back, so attempts cannot be counted in the
- * module: the guess limit is left open, S11a log).
+ * guessing. A163(4): there is no guess limit.
  */
-export const LOBBY_PASSWORD_MAX_LENGTH = 64;
 
 /**
- * S11a (review L3): a string longer than this many UTF-16 units is refused on its raw `.length`, before it is expanded
- * into code points (a code point is at most 2 units, so anything over 128 units already exceeds the cap).
+ * A163(4) (S11a): a lobby password holds only A to Z, a to z and 0 to 9, at most 20 characters. Replaces the 64-character
+ * cap and the 256-unit pre-check of S11a part 2. The empty string is not a password (a public lobby, or "keep the
+ * current password" in update_lobby_settings) and passes; a private lobby still needs one (PRIVATE_LOBBY_PASSWORD_TEXT),
+ * so the minimum for a private lobby stays 1 character.
  */
-export const LOBBY_PASSWORD_MAX_UTF16_UNITS = 256;
+export const LOBBY_PASSWORD_MAX_LENGTH = 20;
+export const LOBBY_PASSWORD_TOO_LONG_TEXT = `The lobby password can have at most ${LOBBY_PASSWORD_MAX_LENGTH} characters.`;
+export const LOBBY_PASSWORD_CHARSET_TEXT = 'The lobby password can contain only letters A to Z and a to z and digits 0 to 9.';
+const LOBBY_PASSWORD_PATTERN = /^[A-Za-z0-9]*$/;
 
-/** True when the password has more than LOBBY_PASSWORD_MAX_LENGTH code points; the raw length is tested first (L3). */
-export function lobbyPasswordTooLong(password: string): boolean {
-    return password.length > LOBBY_PASSWORD_MAX_UTF16_UNITS || [...password].length > LOBBY_PASSWORD_MAX_LENGTH;
+/**
+ * The refusal text for a password that breaks the A163(4) rule, or undefined when it follows it. The raw length
+ * (UTF-16 units) is tested first, so an over-long string costs no per-character work; every allowed character is one
+ * unit, so this length is the character count of a valid password.
+ */
+export function lobbyPasswordRuleError(password: string): string | undefined {
+    if (password.length > LOBBY_PASSWORD_MAX_LENGTH) return LOBBY_PASSWORD_TOO_LONG_TEXT;
+    if (!LOBBY_PASSWORD_PATTERN.test(password)) return LOBBY_PASSWORD_CHARSET_TEXT;
+    return undefined;
 }
 
-/** Refuses a password longer than LOBBY_PASSWORD_MAX_LENGTH characters (code points). */
-export function ensureLobbyPasswordLength(password: string): void {
-    if (lobbyPasswordTooLong(password)) {
-        throw new SenderError(`The lobby password can be at most ${LOBBY_PASSWORD_MAX_LENGTH} characters.`);
-    }
+/** create_lobby / update_lobby_settings: refuses a password that breaks the A163(4) rule. */
+export function ensureLobbyPasswordRule(password: string): void {
+    const error = lobbyPasswordRuleError(password);
+    if (error) throw new SenderError(error);
 }
 
 export function hashLobbyPassword(lobbyId: number, password: string): string {

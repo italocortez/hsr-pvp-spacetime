@@ -12,7 +12,7 @@ import { ensureForfeitSecondsInRange, ensureNoActionAllowed, ensureNotDeferredOu
 import { ensureLobbyConfigInRange, ensureTeamAliases, resolveConfirmWindowSeconds } from '@module/helpers/lobby/lobbyConfigBounds';
 import { MEMBERSHIP_ACTION_TEXT, consumeMembershipAllowance } from '@module/helpers/lobby/abuseControls';
 import { fairShuffle, SHUFFLE_DOMAIN, shuffleKeyAt } from '@shared/lobby-rules';
-import { ensureLobbyPasswordLength, hashLobbyPassword } from '@module/helpers/lobby/lobbyPassword';
+import { ensureLobbyPasswordRule, hashLobbyPassword } from '@module/helpers/lobby/lobbyPassword';
 
 // ─── update_lobby_settings ────────────────────────────────────────────────────
 // Updates all mutable lobby configuration fields.
@@ -98,7 +98,7 @@ export const update_lobby_settings = spacetimedb.reducer(
         if (!args.isPublic && args.password.length === 0 && !ctx.db.LobbyPassword.lobbyId.find(lobbyId)) {
             throw new SenderError(PRIVATE_LOBBY_PASSWORD_TEXT);
         }
-        ensureLobbyPasswordLength(args.password); // S11a (L24)
+        ensureLobbyPasswordRule(args.password); // S11a (L24, A163(4))
 
         // D-65: tournament-controlled lobbies lock integrity fields,
         // but allow referee/match QoL fields to change

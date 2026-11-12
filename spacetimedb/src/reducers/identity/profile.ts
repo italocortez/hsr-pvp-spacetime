@@ -6,6 +6,7 @@ import { membershipHold } from '@module/helpers/lobby/lobbyHelpers';
 import { syncSoloTeamNames } from '@module/helpers/tournament/tournamentHelpers';
 import { checkDisplayName, checkUsername } from '@module/helpers/identity/usernames';
 import { syncLeaderboardCard } from '@module/helpers/stats/leaderboardRebuild';
+import { ensureNotInMaintenance } from '@module/helpers/identity/ensurePermissions';
 
 /**
  * Helper: resolve ctx.sender → UserIdentity → User.
@@ -13,9 +14,9 @@ import { syncLeaderboardCard } from '@module/helpers/stats/leaderboardRebuild';
  */
 function resolveUser(ctx: any) {
     const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
-    if (!mapping) return null;
-    const user = ctx.db.User.id.find(mapping.userId);
-    if (!user) return null;
+    const user = mapping ? ctx.db.User.id.find(mapping.userId) : undefined;
+    ensureNotInMaintenance(ctx, user); // A163(3) (S11a): only an Admin acts while maintenance mode is on
+    if (!mapping || !user) return null;
     return { mapping, user };
 }
 

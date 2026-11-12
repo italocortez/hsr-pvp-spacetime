@@ -39,7 +39,7 @@ import { normalizeLobbyName } from '@module/helpers/tournament/seriesSettings';
 import { ensureCostSetUsable } from '@module/helpers/draft/costSetGuards';
 import { autoSeatSlot } from '@module/helpers/tournament/tournamentLobbySides';
 import { participateAsStandIn } from '@module/helpers/tournament/standIns';
-import { ensureLobbyPasswordLength, hashLobbyPassword, lobbyPasswordTooLong } from '@module/helpers/lobby/lobbyPassword';
+import { ensureLobbyPasswordRule, hashLobbyPassword, lobbyPasswordRuleError } from '@module/helpers/lobby/lobbyPassword';
 
 // ─── create_lobby ─────────────────────────────────────────────────────────────
 // Creates a new lobby and inserts the creator as the host/referee.
@@ -105,7 +105,7 @@ export const create_lobby = spacetimedb.reducer(
         if (!args.isPublic && args.password.length === 0) {
             throw new SenderError(PRIVATE_LOBBY_PASSWORD_TEXT);
         }
-        ensureLobbyPasswordLength(args.password); // S11a (L24)
+        ensureLobbyPasswordRule(args.password); // S11a (L24, A163(4))
 
         // D-22 / A68(4): one lobby at a time
         ensureNotInLobby(ctx, user.id, args.abandonCurrentMatch ?? false);
@@ -345,9 +345,9 @@ export const join_lobby = spacetimedb.reducer(
         // D-02: password check for private lobbies
         if (!lobby.isPublic) {
             const passwordRow = ctx.db.LobbyPassword.lobbyId.find(lobbyId);
-            // S11a (L24): compared as the hash; an over-long attempt cannot match a stored password (review L3: the raw
-            // length is tested before the string is expanded)
-            if (!passwordRow || lobbyPasswordTooLong(args.password)
+            // S11a (L24): compared as the hash. A163(4): an attempt that breaks the password rule cannot match a stored
+            // password, so it is refused as incorrect without hashing (the raw length is tested first)
+            if (!passwordRow || lobbyPasswordRuleError(args.password) !== undefined
                 || passwordRow.passwordHash !== hashLobbyPassword(lobbyId, args.password)) {
                 throw new SenderError('Incorrect lobby password.');
             }

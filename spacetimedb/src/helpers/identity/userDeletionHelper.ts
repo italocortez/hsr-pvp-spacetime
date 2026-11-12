@@ -1,4 +1,4 @@
-import { deleteAllCalendarDataForUser } from '@module/helpers/calendar/calendarCascade';
+import { deleteAllCalendarDataForUser, handCalendarEventTo } from '@module/helpers/calendar/calendarCascade';
 import { transferFlagsOnRemoval } from '@module/helpers/lobby/flagTransferHelpers';
 import { removeMemberRow } from '@module/helpers/lobby/memberRemoval';
 import { deleteCursorStamps } from '@module/helpers/lobby/cursorStamps';
@@ -11,6 +11,7 @@ import { SYSTEM_USER_ID } from '@module/helpers/admin/auditColumns';
 import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { cancelTournament } from '@module/helpers/tournament/tournamentHelpers';
 import { removeUserStandIns } from '@module/helpers/tournament/standIns';
+import { removeDeletedUserFromLeaderboard } from '@module/helpers/stats/leaderboardRebuild';
 
 /**
  * Returns true if the iterator yields at least one element.
@@ -101,7 +102,8 @@ function longestServingFullAssistant(ctx: any, tournamentId: number, deletedUser
  * signalled by `serverDeletion` and cancels the tournaments (cancelOrganizedTournaments).
  * The new organizer loses any assistant row of their own in the tournament (the organizer holds every permission). The
  * calendar events of the tournament's bracket matches that the old organizer organized move to the new organizer
- * (CalendarEvent.organizerId), so deleteAllCalendarDataForUser does not delete them; invites are unchanged. Everything
+ * (CalendarEvent.organizerId), so deleteAllCalendarDataForUser does not delete them; the new organizer's own invite to
+ * such an event is deleted (S11a, A163(2), handCalendarEventTo), the other invites are unchanged. Everything
  * else reads Tournament.organizerId at call time and follows the new organizer. The ban and admin_delete_row paths run
  * this from the scheduled run_user_deletion, whose actor is the job row's createdById (the Admin who asked).
  */
@@ -123,7 +125,7 @@ function handOverOrganizedTournaments(ctx: any, userId: number, actorId: number)
         for (const match of [...ctx.db.BracketMatch.tournament_id.filter(tournament.id)]) {
             for (const event of [...ctx.db.CalendarEvent.bracket_match_id.filter(match.id)]) {
                 if (event.organizerId !== userId) continue;
-                ctx.db.CalendarEvent.id.update(updateWithAudit(ctx, event, { organizerId: newOrganizerId }, actorId));
+                handCalendarEventTo(ctx, event, newOrganizerId, actorId); // S11a (A163(2)): drops the heir's own invite
             }
         }
         console.log(`[DELETE] Tournament #${tournament.id} handed from organizer #${userId} to #${newOrganizerId} (${heir ? 'assistant' : 'acting staff'}).`);
@@ -250,7 +252,8 @@ export function performUserDeletion(ctx: any, userId: number, actorId: number, o
     // S10r (A122(6), L22, L89): the user's lobby presets and unpublished cost sets go with them.
     deleteOwnedPresetsAndCostSets(ctx, userId);
 
-    // Guest users with no history → hard-delete (no references to preserve)
+    // Guest users with no history → hard-delete (no references to preserve; no Leaderboard row either, as
+    // hasHistoryReferences checks it)
     if (user.isGuest && !hasHistoryReferences(ctx, userId)) {
         ctx.db.User.id.delete(userId);
         console.log(`[DELETE] Guest user #${userId} hard-deleted (no history references).`);
@@ -268,4 +271,8 @@ export function performUserDeletion(ctx: any, userId: number, actorId: number, o
     });
     ctx.db.User.id.delete(user.id);
     console.log(`[DELETE] User #${userId} evicted to DeletedUser archive. Display name preserved: "${user.displayName}".`);
+
+    // A163(1) (S11a): no card of a deleted account stays on the public leaderboard. After the User row is gone, so the
+    // active-season rebuild no longer ranks them.
+    removeDeletedUserFromLeaderboard(ctx, userId);
 }

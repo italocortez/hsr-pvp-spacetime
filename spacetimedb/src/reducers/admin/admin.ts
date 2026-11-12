@@ -8,7 +8,8 @@ import { markMemberOffline } from '@module/helpers/lobby/disconnectHelpers';
 import { hasLivePresence } from '@module/helpers/identity/presenceHelpers';
 import { findLobbyResult } from '@module/helpers/results/scoringHelpers';
 import { performUserDeletion } from '@module/helpers/identity/userDeletionHelper';
-import { ensureAdmin } from '@module/helpers/identity/ensurePermissions';
+import { ensureAdmin, isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
+import { handOverMatchEventsOfFormerStaff } from '@module/helpers/calendar/calendarCascade';
 import { checkDisplayName, checkUsername } from '@module/helpers/identity/usernames';
 import { syncLeaderboardCard } from '@module/helpers/stats/leaderboardRebuild';
 import { syncSoloTeamNames } from '@module/helpers/tournament/tournamentHelpers';
@@ -857,5 +858,10 @@ export const admin_update_user = spacetimedb.reducer(
         // S10r (A122(1), L1): the solo team names follow the display name, as on the player's own rename.
         syncSoloTeamNames(ctx, userId, newDisplayName, admin.id);
         syncLeaderboardCard(ctx, userId); // A77 (S11a): the public leaderboard carries the name
+        // A163(2) (S11a): demoted below Moderator → match events of tournaments where they hold no bracket permission
+        // go to each tournament's organizer.
+        if (isRoleAtLeast(user.role, 'Moderator') && !isRoleAtLeast({ tag: roleTag }, 'Moderator')) {
+            handOverMatchEventsOfFormerStaff(ctx, userId, admin.id);
+        }
     }
 );

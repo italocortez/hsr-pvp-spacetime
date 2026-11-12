@@ -4,6 +4,8 @@ import { Identity, Timestamp } from 'spacetimedb';
 import { auditUpdate, SYSTEM_USER_ID } from '@module/helpers/admin/auditColumns';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { performUserDeletion } from '@module/helpers/identity/userDeletionHelper';
+import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
+import { handOverMatchEventsOfFormerStaff } from '@module/helpers/calendar/calendarCascade';
 import { moveTournamentTiesToUser } from '@module/helpers/tournament/entryTransfer';
 import { rejectIfBanned, DISCORD_LOGIN_METHOD } from '@module/helpers/lobby/banHelper';
 import { seedSystemLobbyPreset } from '@module/helpers/lobby/systemPreset';
@@ -304,6 +306,11 @@ export const server_set_role = spacetimedb.reducer({
     ctx.db.User.id.update(updateWithAudit(ctx, targetUser, {
         role: { tag: roleTag, value: {} } as any,
     }, systemUserId));
+    // A163(2) (S11a): demoted below Moderator → match events of tournaments where they hold no bracket permission go to
+    // each tournament's organizer.
+    if (isRoleAtLeast(targetUser.role, 'Moderator') && !isRoleAtLeast({ tag: roleTag }, 'Moderator')) {
+        handOverMatchEventsOfFormerStaff(ctx, targetUser.id, systemUserId);
+    }
 });
 
 /**

@@ -243,6 +243,7 @@ Lobby chat provides ephemeral, per-lobby messaging for all lobby members. Messag
 | Scenarios "System Message on Kick" / "System Message on Ban": `kick_member(lobbyId, targetJoinSeq)` / `ban_member(lobbyId, targetJoinSeq)` name the seat, not the user (A74); the System line text is unchanged (tests `s10-chat`) | Phase S10 execution (DECISIONS.md A74, A76) | 2026-11-09 |
 | Chat `metadata` is capped at 200 characters ("Message metadata exceeds 200 character limit."). Member-event system lines and the "Draft has started!" line respect the 50-message rolling window; the row removed is the oldest by creation time | Phase S10e execution (backend audit 2026-11-09, lobby findings 5, 6) | 2026-11-09 |
 | `send_chat_message` stores the sender's seat label on every message, in identified lobbies too; member-event system lines store the subject's seat label. `view_my_lobby_chat` shows the stored label first, the live seat label only when none was stored, then "A player". An away or abandoned member cannot send or delete messages | Phase S10h execution (DECISIONS.md A97, DECISIONS.md A98) | 2026-11-10 |
+| `send_chat_message` updates `Lobby.lastActivityAt` only when the stored value is at least 60 s old | Phase S11a execution (DECISIONS.md triage L18) | 2026-11-12 |
 
 ---
 

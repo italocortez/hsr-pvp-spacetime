@@ -91,6 +91,26 @@ export function syncLeaderboardCard(ctx: any, userId: number): void {
 }
 
 /**
+ * A163(1) (S11a): the leaderboard part of a user deletion, called by performUserDeletion after the User row is gone.
+ * Deletes the user's Leaderboard rows of every season (Leaderboard.by_user: at most 4 per season). When one of them
+ * belonged to the active season (or pre-season 0 when none is active), that season is rebuilt so the next-ranked
+ * players fill the freed places (rebuildLeaderboard skips the deleted user: no live User row). Past seasons are not
+ * rebuilt: their remaining rows keep their ranks, so a rank number can be missing there. A user with no Leaderboard
+ * row costs one index read and nothing else.
+ */
+export function removeDeletedUserFromLeaderboard(ctx: any, userId: number): void {
+    const rows = [...ctx.db.Leaderboard.by_user.filter(userId)];
+    if (rows.length === 0) return;
+    const activeSeasonId = getActiveSeasonId(ctx);
+    let rankedInActiveSeason = false;
+    for (const row of rows) {
+        if (row.seasonId === activeSeasonId) rankedInActiveSeason = true;
+        ctx.db.Leaderboard.delete(row);
+    }
+    if (rankedInActiveSeason) rebuildLeaderboard(ctx, activeSeasonId);
+}
+
+/**
  * Deletes the season's Leaderboard rows (every category) and writes the top 20 per category from MmrRating +
  * PlayerStat data. If seasonId is not provided, uses the active season (or 0 for pre-season). The audit actor is
  * always SYSTEM_USER_ID (S9b, A37): callers no longer pass one.

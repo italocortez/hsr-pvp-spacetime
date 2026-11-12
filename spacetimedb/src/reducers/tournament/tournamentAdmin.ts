@@ -7,6 +7,7 @@ import { recordWinnerTeamId, voidTournamentLobby } from '@module/helpers/tournam
 import { disqualifyParticipant } from '@module/helpers/tournament/disqualification';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { removeUserStandIns } from '@module/helpers/tournament/standIns';
+import { handOverMatchEventsOfFormerStaff } from '@module/helpers/calendar/calendarCascade';
 
 // Valid override status tags
 const VALID_OVERRIDE_STATUSES = ['Validated', 'Rejected'];
@@ -252,6 +253,10 @@ export const assign_tournament_assistant = spacetimedb.reducer(
         }
         // S10v review F3 (A135(2)): staff never stand in; the new assistant's approvals in the tournament go.
         removeUserStandIns(ctx, tournamentId, userId, callerUser.id);
+        // A163(2) (S11a): the bracket flag turned off → the match events they organize go to the tournament organizer.
+        if (existing?.canManageBracket && !canManageBracket) {
+            handOverMatchEventsOfFormerStaff(ctx, userId, callerUser.id, tournamentId);
+        }
     }
 );
 
@@ -274,6 +279,8 @@ export const remove_tournament_assistant = spacetimedb.reducer(
 
         // Delete the assistant row
         ctx.db.TournamentAssistant.delete(assistant);
+        // A163(2) (S11a): without the bracket permission, the match events they organize go to the tournament organizer.
+        handOverMatchEventsOfFormerStaff(ctx, userId, callerUser.id, tournamentId);
 
         console.log(`[TOURNAMENT] Removed assistant #${userId} from tournament #${tournamentId} by user #${callerUser.id}`);
     }

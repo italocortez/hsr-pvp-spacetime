@@ -60,6 +60,7 @@ BanRecord (id: u32 autoInc PK)  [PRIVATE -- public: false]
 3. Validate roleTag against Role enum variants
 4. `User.id.update()` with new role
 Phase S10e execution (identity audit #9): the SYSTEM user is rejected after the lookup ("The SYSTEM user cannot be changed."); the server identities' admin rights come from its role.
+S11a rulings pass (A163(2)): a change from Moderator or Admin to a role below Moderator then runs `handOverMatchEventsOfFormerStaff` (audit actor SYSTEM); see `docs/calendar/architecture.md` "Phase S11a execution".
 
 ### server_delete_user(username)
 1. `requireServer(ctx)` -- validate caller has a ServerIdentity row (Owner or Delegate)
@@ -118,6 +119,7 @@ Phase S10e execution (identity audit #9): rejects the SYSTEM user ("The SYSTEM u
 4. If username changing: check uniqueness via `User.username.find()`
 5. `User.id.update()` with new display name, username, role
 6. Phase S10r execution (A122(1)): before step 3 a user pending deletion is refused and both names go through the rename rules; after step 5 the solo team names are synced. Details in "Phase S10r execution" below
+7. S11a rulings pass (A163(2)): a change from Moderator or Admin to a role below Moderator runs `handOverMatchEventsOfFormerStaff` (audit actor the Admin); see `docs/calendar/architecture.md` "Phase S11a execution"
 
 ### admin_ban_user(banTypeTag, providerId, reason)
 1. `ensureAdmin(ctx)` -- requires Admin role
@@ -160,6 +162,11 @@ Phase S10e execution (identity audit #9): rejects the SYSTEM user ("The SYSTEM u
 ### Abuse controls (reducers/admin/abuse.ts, helpers/lobby/abuseControls.ts; Phase S5 execution, DECISIONS.md A42, A43)
 Tables: `AbuseConfig` (private singleton id 1, tunables + `maintenanceMode` + `guestLobbyCreationEnabled`), `UserRateState` (private, one row per user: chat and lobby-create windows), `AdminAlert` (**public**, counts only, no user ids, audit columns always SYSTEM), `AbuseCounter` (private, Phase S6 execution / A57: `key: string` PK, `windowStart`, `count: u32`, audit columns always SYSTEM; one row `'guest_lobby_create'`).
 Defaults (D-B5): cursor 50 ms, chat 700 ms / 30 per minute, lineup 250 ms (no decided value; applied by `arrange_lineup` in S7), 10 lobby creates per hour, 10 presets, 5 cost sets, maintenance off, guest creation on, breaker 50 guest creations in 10 minutes (A58; was 20).
+- **Maintenance mode (S11a rulings pass, A163(3), triage L9).** While `maintenanceMode` is on:
+  - `client_connected` admits server identities and identities of a live Admin user; every other identity is refused as before (`docs/auth/architecture.md`).
+  - A non-Admin who is still connected is refused on every state-changing reducer with `The site is in maintenance. Please try again later.` (`MAINTENANCE_TEXT`). The check is `ensureNotInMaintenance(ctx, user)` (`helpers/identity/ensurePermissions.ts`, one primary-key read of `AbuseConfig` row 1). It runs inside `getAuthenticatedUser`, so every reducer that resolves its caller through it, or through `ensureAdmin` / `ensureModerator` / `ensureTournamentHost` / `ensureVerifiedUser` / `ensureTournamentPermission`, is covered. The client reducers that resolve the caller themselves call it too: `login_as_guest` (`auth.ts`) and the four profile reducers through `resolveUser` (`profile.ts`: `delete_my_account`, `update_display_name`, `update_username`, `update_avatar`). `broadcast_cursor` drops a non-Admin's call silently (the A98 rule of the cursor stream).
+  - Not checked, and kept running: the server-identity reducers (`requireServer` / `requireOwner`, `seed_identity_gc_job`, `seed_lobby_gc_job`; the server identities also map to the SYSTEM user, an Admin), the five scheduled reducers, `init` and `client_disconnected`.
+  - An Admin connects and acts as usual, and turns the mode off with `admin_update_abuse_config({ maintenanceMode: false })`.
 - `admin_update_abuse_config(...every column optional)`: `ensureAdmin`; omitted fields keep their value; at least one field required; `cursorMinIntervalMs`, `chatMinIntervalMs`, `lineupMinIntervalMs`, `guestLobbyBurstWindowMinutes` must be > 0 (a 0 would switch the guard off); `updateWithAudit` with the admin's id. Readers pick the change up on their next call.
 - `admin_set_guest_lobby_creation(enabled)`: `ensureAdmin`; flips `guestLobbyCreationEnabled` (the admin-panel button; also re-enables after a breaker trip). Phase S10e execution (identity audit #6): a false -> true change (here or through `admin_update_abuse_config`) deletes `AbuseCounter['guest_lobby_create']` (`resetGuestLobbyCounter`), so the next guest creation opens a new window instead of re-tripping the breaker on the old count.
 - Phase S10e execution (lobby audit #6): `UserRateState` gains `membershipWindowStart` / `membershipCount` (the per-user membership-change window, 20 changes per 10 s; joins, returns and seat moves; a leave is not counted since the fix pass, review N8; `docs/lobby/architecture.md`).
@@ -352,6 +359,7 @@ execution (A77):** `User` is private; the Users tab reads `view_admin_users`.
 | Fix pass: `costSetId` of the cost rows (upsert) and cost keys (delete) must be null (set 0) or a whole number 0..4294967295, refused before any lookup or guard; the seed behaviour under a live game documented per call | Phase S10w execution (DECISIONS.md A142; S10w review F1, F2) | 2026-11-10 |
 | Users tab on `view_admin_users` (`User` private); `admin_ban_user` finds the user through `User.provider_id`; `admin_update_user` rewrites the leaderboard card | Phase S11a execution (DECISIONS.md A77) | 2026-11-11 |
 | S11a part 2 (closing-triage items): the five scheduled reducers refuse any caller but the scheduler (`ensureScheduler`, `helpers/admin/schedulerGuard.ts`: `ctx.senderAuth.isInternal`, SDK 2.14 `AuthCtx`; "Forbidden: <name> is a scheduled reducer and runs only from the scheduler."; L11); `admin_gc_identities` / `admin_gc_lobbies` restart a stopped job chain (L6); `admin_bulk_upsert` and `admin_delete_row` find character, light-cone and synergy cost rows through `by_character_mode_and_set`, `by_lightcone_mode_and_set` and `by_tuple` (both pair orders) instead of scanning every set (L92; a key with an unknown enum tag or a non-string name matches nothing, "Row not found" on delete); `server_set_mmr` writes the active season (L5); `stdb:guest-switch` wraps the two server guest switches (L12) | Phase S11a execution | 2026-11-11 |
+| Maintenance mode: a live Admin connects and acts; a connected non-Admin is refused on every state-changing reducer (`ensureNotInMaintenance` in `getAuthenticatedUser`, `login_as_guest`, the profile reducers; the cursor is dropped); server and scheduled reducers keep running (triage L9). `admin_update_user` and `server_set_role` hand a demoted Moderator's match events to the tournament organizers | Phase S11a execution (DECISIONS.md A163(2), A163(3)) | 2026-11-12 |
 
 ---
 

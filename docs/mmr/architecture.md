@@ -153,6 +153,27 @@ MMR reaches a client only where the UI names that player: the lobby member row (
 account could hold a public top-20 slot for the rest of the season; it now drops out at the next rebuild. The check is
 cached per user within one rebuild.
 
+## Phase S11a execution (DECISIONS.md A163(1))
+
+**A deleted user leaves the leaderboard at once.** `performUserDeletion` ends, after the `User` row is gone, with
+`removeDeletedUserFromLeaderboard(ctx, userId)` (`helpers/stats/leaderboardRebuild.ts`): it deletes the user's
+`Leaderboard` rows of every season (`by_user`) and, when one of them was in the active season (`Season.is_active`, or 0
+when no season is active), runs `rebuildLeaderboard` for that season, which no longer ranks them, so the next-ranked
+players fill the places. Past seasons are not rebuilt: their other rows keep their ranks, so a rank number can be
+missing there. No name or avatar of a deleted account stays in the table. Every deletion path goes through it (own
+request, ban, staff deletion, server deletion, the old guest of `server_link_provider`, identity GC; the GC never
+deletes a guest that holds a `Leaderboard` row).
+
+Cost per deletion:
+- A user with no `Leaderboard` row: one `by_user` index read returning nothing; no write.
+- A user ranked only in past seasons: that read, plus one delete per row (at most 4 per season).
+- A user ranked in the active season: the above, plus one `Season.is_active` read and the full rebuild of that season.
+  The rebuild deletes the season's rows (at most 80) and inserts at most 80. It reads every `MmrRating` row of the
+  season (`season_id`; R rows, up to 3 per rated user), one `User` row per rated user (cached), and per candidate
+  (R mode entries with at least 2 matches, plus one Global entry per such user) the user's `PlayerStat` rows
+  (`by_user`), and per Global candidate the user's `MmrRating` rows (`user_id`). So reads grow with the season's rated
+  users; writes are bounded at 160 plus the deleted rows. It is the same rebuild a Ranked finalization already runs.
+
 ## Phase S10i execution (DECISIONS.md A102)
 
 **`globalCompositeRating` is per season.** `processMatchMmr` (`helpers/results/finalizationHelpers.ts`) averages only
@@ -201,6 +222,7 @@ per row, at most 80 rows per season (implementer's choice of A77(1): columns, no
 | `admin_update_elo_config` rejects `spreadDivisor` 0 and `newThreshold` above `midThreshold` (merged row) | Phase S10r execution (DECISIONS.md A122) | 2026-11-10 |
 | `Leaderboard` carries `displayName` / `avatarCharacterName` (written by the rebuild, rewritten by `syncLeaderboardCard` on a rename or new avatar) because `User` is private | Phase S11a execution (DECISIONS.md A77) | 2026-11-11 |
 | `server_set_mmr` writes the active season's row (L5); `Leaderboard` and `MmrRating` gain a `season_id` btree index read by `rebuildLeaderboard` (S10j review F3) | Phase S11a execution (part 2) | 2026-11-11 |
+| A user deletion deletes the user's `Leaderboard` rows of every season and rebuilds the active season when it held one (`removeDeletedUserFromLeaderboard`); past seasons are not rebuilt | Phase S11a execution (DECISIONS.md A163(1)) | 2026-11-12 |
 
 ---
 

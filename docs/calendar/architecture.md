@@ -467,6 +467,23 @@ in "Reducer Flows" above. "Ended" means `endAt <= now` for slots and events alik
   [../views/architecture.md](../views/architecture.md) "Phase S11a execution".
 - A162(2) (moving an event more than 7 days after its end stays allowed; unanswered invitees may already be gone) and
   A162(4) (a team member without an invite row does not read the list) need no change.
+- **Match events of former staff (S11a rulings pass, A163(2), review L2).** `handOverMatchEventsOfFormerStaff(ctx,
+  userId, actorId, tournamentId?)` (`helpers/calendar/calendarCascade.ts`) runs after a user loses the bracket
+  permission: `remove_tournament_assistant`; `assign_tournament_assistant` when the existing row had `canManageBracket`
+  and the new flags do not (both with the tournament's id; actor the caller); `admin_update_user` and `server_set_role`
+  when the role goes from Moderator or Admin to below Moderator (every tournament; actor the Admin, or SYSTEM for the
+  server). It reads the user's events (`organizer_id`), keeps those with a `bracketMatchId`, resolves the bracket match
+  and tournament by id, and for each tournament whose organizer is not the user and whose `bracket` permission the user
+  no longer holds (`hasTournamentPermission`, read after the change), hands the event to the tournament organizer
+  through `handCalendarEventTo`: `organizerId` changes (audit actor as above), the new organizer's own invite row to the
+  event is deleted (an organizer is never their own invitee), the other invites, answers and the match's `scheduledAt`
+  stay. No cap is checked: the new organizer may end above 40 active or 100 retained events, which then refuses their
+  next creation as usual. Every tournament stage is handled the same way, Completed and Cancelled included (a Cancelled
+  tournament's match events are normally gone already with the cancel cascade), so an ended event no longer counts
+  toward the former staff member's caps. The user-deletion hand-over (A121, `handOverOrganizedTournaments`) now moves
+  its events through `handCalendarEventTo` too, so the heir's own invite to a moved event is deleted. Cost: one index
+  read of the user's events (bounded by the per-user caps) and three primary-key reads per match event.
+  Supersedes A162's note that a former-staff creator keeps the event in their calendar.
 
 ## Phase History
 
@@ -503,6 +520,7 @@ in "Reducer Flows" above. "Ended" means `endAt <= now` for slots and events alik
 | Rulings on the S10ac review: 10 Available + 10 Blocked slots per UTC week, ended slots counted; a Blocked slot may not overlap an own personal event that has not ended; Pending invites of ended events removed by the lazy clean-up and the sweep (500 per run); retention keeps `BracketMatch.scheduledAt`; organizer and SYSTEM refused as targets; titles need a visible character. Attendee-list cut-off not built (views have no clock) | Phase S10ad execution (DECISIONS.md A160) | 2026-11-11 |
 | Fix pass: attendee list per opened event (`view_event_attendees(eventId)`; `view_my_calendar_invites` sends an invitee their own row only); Pending invites removed 7 days after the end (worst case end + 14 days); bracket cascades clear `scheduledAt` also after retention | Phase S10ad execution (DECISIONS.md A161) | 2026-11-11 |
 | A match event's organizer edits it, reads its attendee list and its invite rows only with the tournament's bracket permission (linked rejection text without "the organizer"); an Admin reads every attendee list | Phase S11a execution (DECISIONS.md A162) | 2026-11-11 |
+| A user who loses a tournament's bracket permission (assistant removed, bracket flag off, demoted below Moderator) hands the match events of that tournament they organize to the tournament organizer (`handOverMatchEventsOfFormerStaff`; the organizer's own invite to the event deleted; no cap check; every stage); the deletion hand-over drops the heir's own invite the same way | Phase S11a execution (DECISIONS.md A163(2)) | 2026-11-12 |
 
 ---
 

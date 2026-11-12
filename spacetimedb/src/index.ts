@@ -8,6 +8,7 @@ import { hasLivePresence, markPresenceOnline } from '@module/helpers/identity/pr
 import { seedAbuseConfigDefaults } from '@module/helpers/lobby/abuseControls';
 import { seedSystemLobbyPreset } from '@module/helpers/lobby/systemPreset';
 import { memberHasLeft } from '@module/helpers/lobby/lobbyHelpers';
+import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 
 // Private auth tables — imported for schema registration (UserPrivate was merged into User, A77)
 import '@module/tables/admin/banRecord';
@@ -222,12 +223,17 @@ export const init = spacetimedb.init((ctx) => {
 export const client_connected = spacetimedb.clientConnected((ctx) => {
   console.log(`Client connected: ${ctx.sender.toHexString()}`);
 
-  // B-8 (ACCESS-SECURITY-OPS §B.3 / §B.5): under maintenance mode only registered server identities may connect.
-  // Throwing in this hook rejects the socket (skill how-to "Rejecting Client Connections"). The AbuseConfig
-  // singleton (id 1) is seeded by init; while the row is absent this check is inert.
+  // B-8 (ACCESS-SECURITY-OPS §B.3 / §B.5): under maintenance mode only registered server identities and, since S11a
+  // (A163(3), triage L9), identities of a live Admin user may connect. Throwing in this hook rejects the socket (skill
+  // how-to "Rejecting Client Connections"). The AbuseConfig singleton (id 1) is seeded by init; while the row is
+  // absent this check is inert. A connected non-Admin is refused on every action by ensureNotInMaintenance.
   const abuseConfig = ctx.db.AbuseConfig.id.find(1);
   if (abuseConfig?.maintenanceMode && !ctx.db.ServerIdentity.identity.find(ctx.sender)) {
-    throw new Error('Maintenance mode: connections are not accepted right now.');
+    const adminMapping = ctx.db.UserIdentity.identity.find(ctx.sender);
+    const adminUser = adminMapping ? ctx.db.User.id.find(adminMapping.userId) : undefined;
+    if (!adminUser || adminUser.deletedAt || !isRoleAtLeast(adminUser.role, 'Admin')) {
+      throw new Error('Maintenance mode: connections are not accepted right now.');
+    }
   }
 
   // A fresh guest has no mapping yet: login_as_guest creates it and upserts the presence row itself.
