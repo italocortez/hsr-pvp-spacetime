@@ -186,22 +186,19 @@ Two admin-side tools of the game package; the full reference is `docs/match-resu
 
 ## Phase 15 -- Backend pre-work
 
-<!-- Phase 15 D-05, D-05a: Spine + positioning columns on hsr_character -->
+<!-- Phase 15 D-05a: positioning columns on hsr_character (Spine columns of D-05 dropped by A17, S3) -->
 
-### HsrCharacter schema additions (D-05, D-05a)
+### HsrCharacter positioning columns (D-05a)
 
-Six new columns on `hsr_character` support Spine rigs (Phase 31 Pedestal) and card positioning (image_url rendering):
+Three columns on `hsr_character` support card positioning (image_url rendering):
 
 | Column | Type | Semantics |
 |--------|------|-----------|
-| `skelUrl` | `string optional` | Spine skeleton URL; `null` = no Spine for this character |
-| `atlasUrl` | `string optional` | Spine atlas URL; `null` = no Spine |
-| `atlasImgUrls` | `array<string>` | Atlas page image URLs; `[]` = no Spine (arrays cannot be optional in SpacetimeDB) |
 | `posX` | `i32` | Card positioning X offset (required, default `0`) |
 | `posY` | `i32` | Card positioning Y offset (required, default `0`) |
 | `width` | `i32` | Card positioning width (required, default `0`) |
 
-Bindings expose all six columns in `src/module_bindings/hsr_character_type.ts` after `spacetime generate`. `HsrLightcone` already had `posX`/`posY`/`width` — no schema change there; router partial-update fix applies.
+Phase 15 (D-05) also added three Spine columns (`skelUrl`, `atlasUrl`, `atlasImgUrls`); DECISIONS.md A17 dropped them in S3 (static images only), so they are absent from the table, the bindings and `admin_bulk_upsert`'s expected keys. `HsrLightcone` already had `posX`/`posY`/`width`; no schema change there; router partial-update fix applies.
 
 ### admin_bulk_upsert -- partial-update wire convention (D-08, D-10, D-12)
 
@@ -211,7 +208,7 @@ The router reducer `admin_bulk_upsert` reworked for **true partial updates** acr
 
 - Every `EXPECTED_KEYS` entry must appear in the incoming JSON row (strict `validateKeys` contract -- preserved).
 - **`null` on an EXISTING row** = "preserve this field" (do not overwrite).
-- **`null` on an INSERT row** = "apply schema default" (required columns) OR "stay null" (optional columns like `skelUrl`, `atlasUrl`).
+- **`null` on an INSERT row** = "apply schema default" (required columns) OR "stay null" (optional columns).
 - **Non-null value** = "set to this value".
 
 Implementation: `mergeForUpdate<T>()` (in `admin.ts`) returns a new row with existing values preserved where incoming is `null` or `undefined`, and asserts every expected key is present (validateKeys defensive guard). `validateEnumIfPresent()` (in `admin.ts`) skips enum validation for null-valued fields on update (preserve-existing path). The insert branch retains its default-injection logic (per D-12) so schema-required fields still get sensible defaults on new rows.
@@ -236,7 +233,7 @@ Previous behavior matched on `(characterName, gameMode)` only, silently overwrit
 
 - `test/backend/reducers/admin/partial-update.test.ts` -- asserts unsent null fields on `HsrCharacter` / `HsrLightcone` partial updates preserve originally-seeded values.
 - `test/backend/reducers/admin/cost-set-pk.test.ts` -- asserts distinct `costSetId` rows coexist for all three cost tables; specific regression for the "default-set-overwrites-custom-set" live bug.
-- `test/backend/seed/round-trip.test.ts` -- D-21a clean-DB reseed round-trip; asserts Spine + positioning columns populate on `hsr_character` and all three cost tables contain all 3 game modes.
+- `test/backend/seed/round-trip.test.ts` -- D-21a clean-DB reseed round-trip; asserts positioning columns populate on `hsr_character` and all three cost tables contain all 3 game modes.
 
 ## Phase S8d execution (ACCESS-SECURITY-OPS §D.8.3, DECISIONS.md A24)
 
@@ -337,6 +334,7 @@ execution (A77):** `User` is private; the Users tab reads `view_admin_users`.
 | HsrCharacter bulk upsert auto-triggers account rating recalc if maxPossible changes (D-33) | Phase 11 execution | 2026-04-01 |
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
 | hsr_character: added 6 columns (skelUrl, atlasUrl, atlasImgUrls, posX, posY, width) for Spine + card positioning (D-05, D-05a) | Phase 15 execution | 2026-04-13 |
+| hsr_character: Spine columns (skelUrl, atlasUrl, atlasImgUrls) dropped; posX, posY, width remain; character template and its README cleaned | A17 / T-SPINE | 2026-11-12 |
 | admin_bulk_upsert: null-preserve partial-update wire convention across 5 cases; mergeForUpdate + validateEnumIfPresent helpers (D-08, D-10, D-12) | Phase 15 execution | 2026-04-13 |
 | Cost-table existence checks match on full composite tuple including costSetId; fixes silent default-set overwrite (D-09) | Phase 15 execution | 2026-04-13 |
 | `init` registers the Owner + SYSTEM user; owner-only `server_register_delegate` / `server_revoke_delegate`; `server_set_*` test utilities and `server_nuke_test_data` gated by `requireTestDatabase` | Phase M2 execution | 2026-11-06 |

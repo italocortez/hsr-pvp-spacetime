@@ -13,9 +13,8 @@ for the full decision context.
 wrapping object with `cost_set_id` (int, `0` = default sentinel) + one block per
 game mode (`memory_of_chaos`, `apocalyptic_shadow`, `anomaly_arbitration`);
 `positioning` is optional in JSON (convention: include with `{0,0,0}` when no
-tweak) but DB columns are required `i32` with `0` defaults; Spine fields
-(`skel_url`, `atlas_url`, `atlas_img_url`) live only on characters and are
-optional (empty string / empty array = absent).
+tweak) but DB columns are required `i32` with `0` defaults. Characters carry
+no Spine fields (dropped by DECISIONS.md A17).
 
 **Sibling-block shape (Phase 15.1 D-01 + Phase 15.4 D-12):** Every mode block on
 all three cost domains (characters, lightcones, pairings) has the same
@@ -128,6 +127,5 @@ synergy auction rows, values to be tuned in a later phase).
 - `costSetId: 0` is the sentinel for the default cost set — seeds always use it. Non-zero values denote custom (per-tournament / per-lobby) cost sets and round-trip through `admin_bulk_upsert` using the composite tuple match `(name, gameMode, draftMode, costSetId)` / `(sourceName, targetName, gameMode, draftMode, costSetId)` introduced in Phase 15.4.
 - Characters with no `cost` entry in the JSON get no HsrCharacterCost rows.
 - Lightcone `positioning` is optional — omitting the block defaults `posX`/`posY`/`width` to `0`. Characters follow the same rule.
-- Spine fields (`skel_url`, `atlas_url`, `atlas_img_url`) are all optional on characters; empty-string -> `null`, missing array -> `[]`. Lightcones have no Spine fields.
 - Sub-block absence = "not configured for that draftMode". There is no silent classic -> auction copy at the seed layer, and no zero-padding for absent sub-blocks (Phase 15.4 D-14 replaces Phase 15.1 D-07/D-08).
 - Unknown mode keys (anything other than the three snake_case modes above) are logged as warnings and skipped at the seed layer. The router's `validateEnum` is a second defensive gate.
