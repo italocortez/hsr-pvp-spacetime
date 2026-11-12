@@ -1,8 +1,18 @@
-import { NotFoundPage } from '@/pages/not-found/NotFoundPage';
-import { StandbyPage } from '@/pages/standby/StandbyPage';
+import { RouterProvider } from '@tanstack/react-router';
+import { useEffect, useRef } from 'react';
+import { useAuth } from '@/auth/authStore';
+import { router } from '@/router';
 
-// Temporary path switch: M4 replaces it with the TanStack Router route tree.
+/** The router with the auth snapshot as context; a snapshot change re-runs the route guards. */
 export function App() {
-    const path = window.location.pathname;
-    return path === '/' || path === '/standby' ? <StandbyPage /> : <NotFoundPage />;
+    const auth = useAuth();
+    const seen = useRef(auth);
+
+    useEffect(() => {
+        if (seen.current === auth) return;
+        seen.current = auth;
+        void router.invalidate();
+    }, [auth]);
+
+    return <RouterProvider router={router} context={{ auth }} />;
 }

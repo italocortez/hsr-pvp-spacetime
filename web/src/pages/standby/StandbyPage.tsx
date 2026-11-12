@@ -5,9 +5,12 @@ import { useRequestedModule } from './useRequestedModule';
 
 const IMAGE = { src: '/standby.webp', width: 1920, height: 1080 };
 
-/** Placeholder for not-yet-built sections; `?module=<name>` names the requested one. */
-export function StandbyPage() {
-    const moduleName = useRequestedModule(window.location.search);
+/**
+ * Placeholder for not-yet-built sections. `module` names the requested one: a route placeholder
+ * passes it, `/standby` passes its validated `?module=` search.
+ */
+export function StandbyPage({ module }: { module?: string }) {
+    const moduleName = useRequestedModule(module);
     useDocumentTitle(
         moduleName ? `${moduleName} — Standby — IPC Battlegrounds` : 'Standby — IPC Battlegrounds',
     );

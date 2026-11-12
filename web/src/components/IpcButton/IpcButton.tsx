@@ -1,16 +1,22 @@
+import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
+import type { FileRouteTypes } from '@/routeTree.gen';
 import styles from './IpcButton.module.css';
+
+/** An in-app path without route params (the CTA's fixed destinations). */
+type FixedPath = Exclude<FileRouteTypes['to'], `${string}$${string}`>;
 
 /**
  * The angled IPC CTA (DESIGN.md §5.1): iris fill, champagne inner ring, trailing arrow that
- * extends on hover. Rendered as a link: it navigates. The fill and ring are clipped
- * pseudo-elements, so the element itself is not clipped and its focus ring stays visible.
+ * extends on hover. Rendered as a router link: it navigates without a page load. The fill and
+ * ring are clipped pseudo-elements, so the element itself is not clipped and its focus ring stays
+ * visible.
  */
-export function IpcButton({ href, children }: { href: string; children: ReactNode }) {
+export function IpcButton({ to, children }: { to: FixedPath; children: ReactNode }) {
     return (
-        <a className={styles.cta} href={href}>
+        <Link className={styles.cta} to={to}>
             <span className={styles.arrow} aria-hidden="true" />
             <span>{children}</span>
-        </a>
+        </Link>
     );
 }

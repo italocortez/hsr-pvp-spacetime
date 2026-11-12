@@ -10,6 +10,7 @@
             "**",
             "!web/src/module_bindings/**",
             "!web/src/lib/legacy/**",
+            "!web/src/routeTree.gen.ts",
             "!docs/**",
             "!design/**",
             "!notes/**",
