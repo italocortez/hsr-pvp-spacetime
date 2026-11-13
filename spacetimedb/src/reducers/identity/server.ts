@@ -6,29 +6,17 @@ import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHel
 import { performUserDeletion } from '@module/helpers/identity/userDeletionHelper';
 import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { handOverMatchEventsOfFormerStaff } from '@module/helpers/calendar/calendarCascade';
-import { moveTournamentTiesToUser } from '@module/helpers/tournament/entryTransfer';
-import { rejectIfBanned, DISCORD_LOGIN_METHOD } from '@module/helpers/lobby/banHelper';
 import { seedSystemLobbyPreset } from '@module/helpers/lobby/systemPreset';
-import { uniqueUsername, USERNAME_MAX_LENGTH } from '@module/helpers/identity/usernames';
 import { setGuestCreationEnabled, setGuestLobbyCreationEnabled } from '@module/helpers/lobby/abuseControls';
-import { LIVE_STAGES, slotIsCoach, slotIsSpectator } from '@module/helpers/lobby/lobbyHelpers';
+import { applyProviderLink, planProviderLink } from '@module/helpers/identity/providerLink';
+import { LINK_CODE_REFUSED_TEXT } from '@module/helpers/identity/linkCode';
+import { DISCORD_LOGIN_METHOD } from '@module/helpers/lobby/banHelper';
 
-/** A113(4) (S10m): the refusal of a sign-in to an existing account while the guest plays a live game. */
-const FINISH_GAME_BEFORE_SIGN_IN_TEXT = 'Finish your current game before signing in to an existing account.';
-
-/**
- * A113(4): the user holds a player seat (BluePlayer / RedPlayer; coach and spectator seats do not count) that is not
- * abandoned (A68(4): an away seat still counts, its holder may return) in a lobby whose stage is Drafting, Equipping or
- * Scoring (LIVE_STAGES). Waiting and AwaitingResult lobbies do not count.
- */
-function isSeatedInLiveGame(ctx: any, userId: number): boolean {
-    for (const m of ctx.db.LobbyMember.user_id.filter(userId)) {
-        if (slotIsSpectator(m.lobbySlot) || slotIsCoach(m.lobbySlot) || m.abandonedAt !== undefined) continue;
-        const lobby = ctx.db.Lobby.id.find(m.lobbyId);
-        if (lobby && LIVE_STAGES.includes(lobby.stage.tag)) return true;
-    }
-    return false;
-}
+/** M5a: server_link_by_code for a live code whose identity no longer maps to the live guest that asked for it. */
+export const ACCOUNT_CHANGED_TEXT = 'This account changed since the sign-in started. Please start again.';
+/** M5a: server_link_by_code with provider discord and a providerId that is not a snowflake (digits, 17 to 20). */
+export const NOT_A_DISCORD_ID_TEXT = 'providerId is not a Discord id.';
+const DISCORD_ID_SHAPE = /^[0-9]{17,20}$/;
 
 /**
  * Guard: the caller is a registered server identity (Owner or Delegate, §C.4).
@@ -150,11 +138,11 @@ export const server_revoke_delegate = spacetimedb.reducer({
  * Replaces server_link_discord with a unified, extensible approach.
  * Currently supports: discord (only provider in scope).
  *
- * Called by a registered server identity (Owner or Delegate): the auth function (Vercel, M5)
- * uses the delegate token from bootstrap after verifying the OAuth session.
+ * Called by a registered server identity (Owner or Delegate). Since M5a the auth function calls server_link_by_code
+ * (below) instead; this identity-hex form stays for the live test harness and the in-memory fixtures.
  *
- * The callerIdentityHex is the verified SpacetimeDB identity hex of the
- * end-user (verified via ephemeral connection in the API route).
+ * The merge itself (checks and the three cases) is planProviderLink / applyProviderLink
+ * (helpers/identity/providerLink.ts), shared with server_link_by_code.
  */
 export const server_link_provider = spacetimedb.reducer({
     callerIdentityHex: t.string(),
@@ -162,115 +150,61 @@ export const server_link_provider = spacetimedb.reducer({
     providerId: t.string(),
     providerName: t.string(),
 }, (ctx, { callerIdentityHex, provider, providerId, providerName }) => {
-    // 1. Verify caller is the trusted server
     requireServer(ctx);
-    const systemUserId = SYSTEM_USER_ID;
-
-    // 2. Validate inputs. S10e (identity audit #3): the provider name is trimmed and capped like a username
-    // (USERNAME_MAX_LENGTH, update_username / update_display_name).
-    if (!providerId || providerId.length === 0) {
-        throw new SenderError('providerId is required');
-    }
-    const name = (providerName ?? '').trim().slice(0, USERNAME_MAX_LENGTH);
-    if (name.length === 0) {
-        throw new SenderError('providerName is required');
-    }
-    if (!callerIdentityHex || callerIdentityHex.length === 0) {
-        throw new SenderError('callerIdentityHex is required');
-    }
-
-    // 3. Validate provider (A46: the token's login_method; Discord-only policy at launch)
-    const validProviders = [DISCORD_LOGIN_METHOD];
-    if (!validProviders.includes(provider)) {
-        throw new SenderError(`Invalid provider "${provider}". Must be one of: ${validProviders.join(', ')}`);
-    }
-    const loginMethod = provider;
-
-    // 4. Ban check (D-08 enforcement point 1: link-time)
-    rejectIfBanned(ctx, loginMethod, providerId);
-
-    // 5. Resolve the end-user's identity -> UserIdentity -> User
-    const callerIdentity = parseIdentityHex(callerIdentityHex, 'callerIdentityHex');
-    const userMapping: any = ctx.db.UserIdentity.identity.find(callerIdentity);
-
-    let currentUser: any = null;
-    if (userMapping) {
-        currentUser = ctx.db.User.id.find(userMapping.userId);
-    }
-
-    // 6. Check if a user already holds this provider identity (A77: the provider columns are on User)
-    // M5: switch to by_method_and_provider.filter([loginMethod, providerId]) with the link-code flow.
-    const existingByProvider = [...ctx.db.User.provider_id.filter(providerId)]
-        .filter((u: any) => u.loginMethod === loginMethod);
-    const providerOwner = existingByProvider.length > 0 ? existingByProvider[0] : null;
-
-    if (currentUser) {
-        if (providerOwner && providerOwner.id !== currentUser.id) {
-            // Case 1b: Identity currently points to a different user (guest),
-            // but the provider account belongs to an existing verified user.
-            // Re-point identity to the provider owner, clean up orphaned guest.
-            const oldGuestId = currentUser.id;
-            const wasGuest = currentUser.isGuest;
-
-            // A113(4) (S10m): the guest is deleted below when this identity is its only link (the mapping is re-pointed
-            // first). On that path, refuse before any change while the guest holds a player seat (not coach, not
-            // spectator, not abandoned) in a lobby that is Drafting, Equipping or Scoring: its game would lose a player.
-            if (wasGuest && [...ctx.db.UserIdentity.user_id.filter(oldGuestId)].length <= 1 && isSeatedInLiveGame(ctx, oldGuestId)) {
-                throw new SenderError(FINISH_GAME_BEFORE_SIGN_IN_TEXT);
-            }
-
-            ctx.db.UserIdentity.identity.update(updateWithAudit(ctx, userMapping, {
-                userId: providerOwner.id,
-                lastSeenAt: ctx.timestamp,
-            }, systemUserId));
-
-            // A48 (S3 review M3): client_connected does not re-run after a mid-connection re-point, so the
-            // identity's UserPresence row follows the mapping here (userId + lastLoginAt), before the guest's
-            // own presence rows go with performUserDeletion below. M5 owns the rest of the link flow.
-            const presence = ctx.db.UserPresence.identity.find(callerIdentity);
-            if (presence) {
-                ctx.db.UserPresence.identity.update(updateWithAudit(ctx, presence, {
-                    userId: providerOwner.id,
-                    lastLoginAt: ctx.timestamp,
-                }, systemUserId));
-            }
-
-            if (wasGuest) {
-                const remainingLinks = [...ctx.db.UserIdentity.user_id.filter(oldGuestId)];
-                if (remainingLinks.length === 0) {
-                    // A112 (S10l): the guest's entries in unfinished tournaments move to the existing user first; the
-                    // ones it cannot hold are settled by the deletion (A94(2)).
-                    moveTournamentTiesToUser(ctx, oldGuestId, providerOwner.id, systemUserId);
-                    performUserDeletion(ctx, oldGuestId, systemUserId);
-                }
-            }
-            return;
+    const plan = planProviderLink(ctx, { provider, providerId, providerName }, () => {
+        if (!callerIdentityHex || callerIdentityHex.length === 0) {
+            throw new SenderError('callerIdentityHex is required');
         }
+        return parseIdentityHex(callerIdentityHex, 'callerIdentityHex');
+    });
+    applyProviderLink(ctx, plan);
+});
 
-        // Case 1a / 1c: Upgrade guest or refresh provider info
-        // S10e (identity audit #3): a guest upgrade takes the provider name, or a derived free one on a collision.
-        // A77 (S11a): the provider columns are written on the User row (formerly the UserPrivate upsert). linkedAt is
-        // the time the current provider account was linked: set on the first link and when the provider id or login
-        // method changes; a refresh of the same link (Case 1c) keeps it and updates the provider name only.
-        const sameLink = currentUser.loginMethod === loginMethod && currentUser.providerId === providerId;
-        ctx.db.User.id.update(updateWithAudit(ctx, currentUser, {
-            username: currentUser.isGuest ? uniqueUsername(ctx, name, currentUser.id) : currentUser.username,
-            displayName: currentUser.isGuest ? name : currentUser.displayName,
-            isGuest: false,
-            loginMethod,
-            providerId,
-            providerUsername: name,
-            linkedAt: sameLink && currentUser.linkedAt !== undefined ? currentUser.linkedAt : ctx.timestamp,
-        }, systemUserId));
-        ctx.db.UserIdentity.identity.update(updateWithAudit(ctx, userMapping, {
-            lastSeenAt: ctx.timestamp,
-        }, systemUserId));
-        return;
+/**
+ * M5a (A44(3), A46): server-only reducer, the auth function's one call. The browser asked for a one-time code with
+ * request_link_code and sent only that code to the function; after Discord confirms the user, the function (delegate
+ * token) names the code and the Discord account here. The code resolves to the identity that asked, and the merge of
+ * server_link_provider runs for that identity (planProviderLink / applyProviderLink, no copy).
+ *
+ * - A missing, used or expired code is refused with one text (LINK_CODE_REFUSED_TEXT), so the function cannot be used
+ *   to tell the three apart; the precise reason goes to the module log (never the code itself). Nothing changes.
+ * - For a live code the merge runs. A refusal (ban, input validation, the A113(4) live-game rule, an identity with no
+ *   user, or ACCOUNT_CHANGED_TEXT when the identity no longer maps to the live guest that asked) throws that SenderError
+ *   so the auth function can show the reason; the transaction rolls back and the code stays live until it expires or
+ *   the guest asks for a new one.
+ * - On success the row is deleted in the same transaction (single use).
+ */
+export const server_link_by_code = spacetimedb.reducer({
+    linkCode: t.string(),
+    provider: t.string(),
+    providerId: t.string(),
+    providerName: t.string(),
+}, (ctx, { linkCode, provider, providerId, providerName }) => {
+    requireServer(ctx);
+    // A Discord user id is a snowflake: digits only, 17 to 20 long. Checked before the code is looked at.
+    if (provider === DISCORD_LOGIN_METHOD && !DISCORD_ID_SHAPE.test(providerId)) {
+        throw new SenderError(NOT_A_DISCORD_ID_TEXT);
     }
 
-    // No UserIdentity mapping exists for this identity yet (Case 2, cross-device login with a known provider, and
-    // Case 3, a fresh identity, alike): the client must call login_as_guest first.
-    throw new SenderError('Identity not registered. Call login_as_guest first.');
+    const refuse = (reason: string) => {
+        console.log(`[LINK] server_link_by_code refused: ${reason}`);
+        return new SenderError(LINK_CODE_REFUSED_TEXT);
+    };
+    const row = linkCode ? ctx.db.LinkRequest.code.find(linkCode) : undefined;
+    if (!row) throw refuse('unknown code');
+    if (row.usedAt !== undefined) throw refuse('code already used');
+    if (row.expiresAt.microsSinceUnixEpoch <= ctx.timestamp.microsSinceUnixEpoch) throw refuse('code expired');
+
+    const mapping = ctx.db.UserIdentity.identity.find(row.identity);
+    const user = mapping ? ctx.db.User.id.find(mapping.userId) : undefined;
+    if (mapping && (mapping.userId !== row.userId || !user || !user.isGuest || user.loginMethod !== undefined || user.deletedAt !== undefined)) {
+        throw new SenderError(ACCOUNT_CHANGED_TEXT);
+    }
+    const plan = planProviderLink(ctx, { provider, providerId, providerName }, () => row.identity);
+
+    // Single use: the row goes with the successful link.
+    ctx.db.LinkRequest.code.delete(row.code);
+    applyProviderLink(ctx, plan);
 });
 
 /**
@@ -554,7 +488,7 @@ export const server_set_mmr = spacetimedb.reducer({
  *
  * Deletes everything else: users (except SYSTEM), rosters, lobbies, tournaments,
  * match sessions + history, chat, stats, cost sets, calendar events, leaderboards,
- * pending user deletion jobs, bans, gc audit logs.
+ * pending user deletion jobs, bans, gc audit logs, link codes.
  *
  * Safety:
  *   - Gated by requireTestDatabase() (STDB_TARGET must be 'test') and requireServer()
@@ -620,9 +554,10 @@ export const server_nuke_test_data = spacetimedb.reducer({
     ctx.db.MatchResultAdjustment.clear();
     ctx.db.MatchLineup.clear();
     ctx.db.MatchLineupHistory.clear();
-    // ── Tournament finalize job (A24(7), S8d): pending ticks of a tournament wiped below. LinkRequest is cleared once
-    // its writer lands with the auth function.
+    // ── Tournament finalize job (A24(7), S8d): pending ticks of a tournament wiped below.
     ctx.db.TournamentFinalizeJob.clear();
+    // ── Link codes (M5a): every pending code goes with the users below.
+    ctx.db.LinkRequest.clear();
 
     // ── Abuse controls (A42, B-7, A57): rate windows, the inline breaker's counters and alerts. AbuseConfig is
     // seeded by init and survives the nuke.

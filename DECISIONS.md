@@ -1729,3 +1729,20 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Why:** user, 2026-11-13: "right now vercel free tier has no previews, so everything will go to prod, our preview will have to be a localhost server of the app"; then "okay lets go with m8 now then".
 - **Supersedes:** the "Vercel Preview = test" part of the env scheme (M2) and the preview deploy of M8 in the migration plan.
 - **Where implemented:** `scripts/preview/`, `web/vite.config.ts`, `docs/frontend/hosting.md`, `CLAUDE.md` section 5, `docs/log/2026-11-13-m8.md`
+
+### A175 — M5: login on localhost, one Discord application, link-code rules
+
+- **Date:** 2026-11-13 · **Status:** items 1 to 3 decided; items 4 to 7 implemented as the orchestrator's choices; items 8 to 10 open
+- **Decision:**
+  1. The login functions run locally through the repo's own dev and preview servers; no `vercel dev`, no Vercel account for testing.
+  2. One Discord application serves test and prod; a localhost redirect address is added to it. Consequence noted to the user: the Discord client secret in `.env.test.local` is also the live one; the signing secret and the server token still differ per environment.
+  3. `.env.example` is reworked inside M5 (Vercel is prod only; test login values live in `.env.test.local`; which keys bootstrap writes and which the user pastes).
+  4. Orchestrator: the link code's secrecy comes from a browser nonce (`request_link_code({ clientNonce })`, 32 CSPRNG bytes), because the host seeds `ctx.random` from the transaction time.
+  5. Orchestrator: a refused merge for a live code throws its own text (ban, game in progress, account changed) and the code stays valid until it expires; unknown, used and expired codes share one text.
+  6. Orchestrator: `server_link_provider` (identity argument) stays for tests and the live harness; the auth function only calls `server_link_by_code`.
+  7. Orchestrator: on the by-code path a Discord id must be 17 to 20 digits; provider names lose control characters and are cut on a code point boundary.
+  8. Open: an optional second lock (the browser that finished Discord holds a one-time token the requesting identity must present; two more columns on `link_request`). Orchestrator recommends it, before the first prod publish.
+  9. Open: a code requested before maintenance still links during it. Orchestrator recommends leaving it.
+  10. Open: with guest creation switched off, a new browser cannot sign in (A109 accepted this for the old flow). Orchestrator recommends leaving it for now and revisiting before launch.
+- **Why:** user, 2026-11-13: "i agree with #1 and #2, but what about #3? you mean create a new discord application for test? i would prefer not"; "okay add the .env.example rework there". Items 4 to 7 came out of the build and its review and were reported to the user.
+- **Where implemented:** `spacetimedb/src/helpers/identity/{linkCode,providerLink}.ts`, `spacetimedb/src/reducers/identity/{auth,server}.ts`, `spacetimedb/src/views/identityViews.ts`, `docs/auth/architecture.md`, `docs/log/2026-11-13-m5a.md`; items 1 to 3 at M5b

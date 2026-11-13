@@ -12,6 +12,7 @@ import { ensureModerator } from '@module/helpers/identity/ensurePermissions';
 import { hasLivePresence } from '@module/helpers/identity/presenceHelpers';
 import { hasHistoryReferences, performUserDeletion } from '@module/helpers/identity/userDeletionHelper';
 import { sweepExpiredCalendarRows } from '@module/helpers/calendar/calendarCleanup';
+import { LINK_SWEEP_GC_SCAN_LIMIT, sweepStaleLinkRequests } from '@module/helpers/identity/linkCode';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -220,6 +221,11 @@ export const run_identity_gc = spacetimedb.reducer(
             }, SYSTEM_USER_ID));
         }
         console.log(`[CALENDAR_GC] Complete: scanned=${calendar.scanned}, slots=${calendar.slotsDeleted}, events=${calendar.eventsDeleted}, pendingInvites=${calendar.pendingInvitesDeleted}`);
+
+        // M5a: the backstop for request_link_code's inline sweep (which examines at most LINK_SWEEP_SCAN_LIMIT rows):
+        // expired or used LinkRequest rows among the first LINK_SWEEP_GC_SCAN_LIMIT rows. Log only, no GcResult row.
+        const linkCodesDeleted = sweepStaleLinkRequests(ctx, LINK_SWEEP_GC_SCAN_LIMIT);
+        if (linkCodesDeleted > 0) console.log(`[LINK_GC] Deleted ${linkCodesDeleted} stale link code(s)`);
 
         // Self-requeue: next run in 7 days (D-03), or in one hour when the guest deletion cap was reached (review F4)
         // or the calendar sweep left rows over its batch (S10ac, A157(10))

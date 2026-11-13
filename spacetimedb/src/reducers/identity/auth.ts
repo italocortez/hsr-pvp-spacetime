@@ -1,4 +1,7 @@
 import spacetimedb from '@module/schema';
+import { SenderError, t } from 'spacetimedb/server';
+import { Timestamp } from 'spacetimedb';
+import { checkClientNonce, generateLinkCode, LINK_CODE_TTL_MICROS, LINK_SWEEP_SCAN_LIMIT, sweepStaleLinkRequests } from '@module/helpers/identity/linkCode';
 import { SYSTEM_USER_ID } from '@module/helpers/admin/auditColumns';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { markPresenceOnline } from '@module/helpers/identity/presenceHelpers';
@@ -73,4 +76,49 @@ export const login_as_guest = spacetimedb.reducer((ctx) => {
 
     // A48: this identity's presence row; its connect preceded the mapping
     markPresenceOnline(ctx, ctx.sender, newUser.id);
+});
+
+/** M5a: the refusal of request_link_code for an identity with no live user. */
+export const NO_ACCOUNT_FOR_LINK_TEXT = 'No account for this identity. Call login_as_guest first.';
+/** M5a: the refusal of request_link_code for a user that already has a provider linked (or is not a guest). */
+export const ALREADY_LINKED_TEXT = 'This account is already linked.';
+/** The text getAuthenticatedUser uses for a soft-deleted (deleted or banned, pending the cascade) account. */
+const DELETED_ACCOUNT_TEXT = 'Unauthorized: This account has been deleted.';
+
+/**
+ * M5a (A44(3), A46): a connected guest asks for a one-time link code for the Discord sign-in. The caller is ctx.sender;
+ * the one argument, clientNonce, is 32 bytes from the browser's crypto.getRandomValues in base64url (43 characters),
+ * checked by checkClientNonce, mixed into the code and never stored or logged. The code is read back through view_my_link_request and handed to the auth function, which names it in
+ * server_link_by_code; the browser's SpacetimeDB token never leaves the browser.
+ * - Refused: maintenance mode for a non-Admin (A163(3), as login_as_guest and the profile reducers); an identity with
+ *   no live user; a soft-deleted user (deleted, or banned pending the cascade); a user that is not a guest or already
+ *   has a provider linked.
+ * - One live request per identity (LinkRequest.identity unique): the caller's previous row is deleted first, so its
+ *   code stops working.
+ * - Clean-up: up to LINK_SWEEP_SCAN_LIMIT rows of the table are examined and the expired or used ones deleted.
+ * - The code: generateLinkCode (32 base64url characters from a SHA-256 digest that includes the client nonce); expiresAt = now + 5 minutes.
+ * No per-user rate window: like the other identity reducers, the one-row-per-identity rule is the limit.
+ */
+export const request_link_code = spacetimedb.reducer({
+    clientNonce: t.string(),
+}, (ctx, { clientNonce }) => {
+    checkClientNonce(clientNonce);
+    const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
+    const user = mapping ? ctx.db.User.id.find(mapping.userId) : undefined;
+    ensureNotInMaintenance(ctx, user);
+    if (!mapping || !user) throw new SenderError(NO_ACCOUNT_FOR_LINK_TEXT);
+    if (user.deletedAt !== undefined) throw new SenderError(DELETED_ACCOUNT_TEXT);
+    if (!user.isGuest || user.loginMethod !== undefined) throw new SenderError(ALREADY_LINKED_TEXT);
+
+    const previous = ctx.db.LinkRequest.identity.find(ctx.sender);
+    if (previous) ctx.db.LinkRequest.code.delete(previous.code);
+    sweepStaleLinkRequests(ctx, LINK_SWEEP_SCAN_LIMIT);
+
+    ctx.db.LinkRequest.insert(insertWithAudit(ctx, {
+        code: generateLinkCode(ctx, previous?.code, clientNonce),
+        identity: ctx.sender,
+        userId: user.id,
+        expiresAt: new Timestamp(ctx.timestamp.microsSinceUnixEpoch + LINK_CODE_TTL_MICROS),
+        usedAt: undefined,
+    }, user.id));
 });

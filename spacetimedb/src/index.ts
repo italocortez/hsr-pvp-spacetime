@@ -34,6 +34,7 @@ export {
     view_user_by_username,                  // S9b: arg view (username)
     view_user_achievements,                 // S9b: arg view (userId)
     view_admin_users,                       // S11a (A77): Moderator+, the admin Users tab
+    view_my_link_request,                   // M5a: the caller's one-time link code
 } from '@module/views/identityViews';
 export {
     view_my_cost_sets,
@@ -119,9 +120,9 @@ export {
     view_tournament_matches_for_me,
 } from '@module/views/tournamentViews';
 export { broadcast_cursor } from '@module/reducers/lobby/cursor';
-export { login_as_guest } from '@module/reducers/identity/auth';
+export { login_as_guest, request_link_code } from '@module/reducers/identity/auth';
 export { delete_my_account, update_display_name, update_username, update_avatar } from '@module/reducers/identity/profile';
-export { server_register_delegate, server_revoke_delegate, server_link_provider, server_set_role, server_delete_user, server_set_guest_creation, server_set_guest_lobby_creation, server_set_datetime, server_set_online, server_set_mmr, server_nuke_test_data } from '@module/reducers/identity/server';
+export { server_register_delegate, server_revoke_delegate, server_link_provider, server_link_by_code, server_set_role, server_delete_user, server_set_guest_creation, server_set_guest_lobby_creation, server_set_datetime, server_set_online, server_set_mmr, server_nuke_test_data } from '@module/reducers/identity/server';
 export { admin_ban_user, admin_unban_user } from '@module/reducers/admin/banAdmin';
 export { admin_delete_row, admin_bulk_upsert, admin_update_user } from '@module/reducers/admin/admin';
 export { admin_update_elo_config, admin_seed_elo_config } from '@module/reducers/stats/eloAdmin';

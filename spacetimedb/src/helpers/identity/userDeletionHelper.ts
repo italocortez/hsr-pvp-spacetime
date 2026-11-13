@@ -12,6 +12,7 @@ import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { cancelTournament } from '@module/helpers/tournament/tournamentHelpers';
 import { removeUserStandIns } from '@module/helpers/tournament/standIns';
 import { removeDeletedUserFromLeaderboard } from '@module/helpers/stats/leaderboardRebuild';
+import { deleteLinkRequestsOfUser } from './linkCode';
 
 /**
  * Returns true if the iterator yields at least one element.
@@ -229,6 +230,8 @@ export function performUserDeletion(ctx: any, userId: number, actorId: number, o
     }
     // B-7: the per-user abuse rate windows (UserRateState)
     if (ctx.db.UserRateState.userId.find(userId)) ctx.db.UserRateState.userId.delete(userId);
+    // M5a: the user's pending one-time link codes (LinkRequest.user_id)
+    deleteLinkRequestsOfUser(ctx, userId);
     const identities = [...ctx.db.UserIdentity.user_id.filter(userId)];
     for (const ui of identities) {
         ctx.db.UserIdentity.identity.delete(ui.identity);

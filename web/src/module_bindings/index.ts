@@ -148,6 +148,7 @@ import RemoveInviteReducer from "./remove_invite_reducer";
 import RemoveTournamentAssistantReducer from "./remove_tournament_assistant_reducer";
 import RenameTournamentTeamReducer from "./rename_tournament_team_reducer";
 import RequestJoinTeamReducer from "./request_join_team_reducer";
+import RequestLinkCodeReducer from "./request_link_code_reducer";
 import ResolveBracketMatchReducer from "./resolve_bracket_match_reducer";
 import RespondToInviteReducer from "./respond_to_invite_reducer";
 import ResumeDraftReducer from "./resume_draft_reducer";
@@ -160,6 +161,7 @@ import SeedLobbyGcJobReducer from "./seed_lobby_gc_job_reducer";
 import SelectMatchAccountReducer from "./select_match_account_reducer";
 import SendChatMessageReducer from "./send_chat_message_reducer";
 import ServerDeleteUserReducer from "./server_delete_user_reducer";
+import ServerLinkByCodeReducer from "./server_link_by_code_reducer";
 import ServerLinkProviderReducer from "./server_link_provider_reducer";
 import ServerNukeTestDataReducer from "./server_nuke_test_data_reducer";
 import ServerRegisterDelegateReducer from "./server_register_delegate_reducer";
@@ -260,6 +262,7 @@ import ViewMyDraftLightconeCostsRow from "./view_my_draft_lightcone_costs_table"
 import ViewMyDraftSynergyCostsRow from "./view_my_draft_synergy_costs_table";
 import ViewMyIdentityRow from "./view_my_identity_table";
 import ViewMyLineupsRow from "./view_my_lineups_table";
+import ViewMyLinkRequestRow from "./view_my_link_request_table";
 import ViewMyLobbiesRow from "./view_my_lobbies_table";
 import ViewMyLobbyRow from "./view_my_lobby_table";
 import ViewMyLobbyBansRow from "./view_my_lobby_bans_table";
@@ -785,6 +788,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, ViewMyLineupsRow),
+  viewMyLinkRequest: __table({
+    name: 'view_my_link_request',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, ViewMyLinkRequestRow),
   viewMyLobbies: __table({
     name: 'view_my_lobbies',
     indexes: [
@@ -1225,6 +1235,7 @@ const reducersSchema = __reducers(
   __reducerSchema("remove_tournament_assistant", RemoveTournamentAssistantReducer),
   __reducerSchema("rename_tournament_team", RenameTournamentTeamReducer),
   __reducerSchema("request_join_team", RequestJoinTeamReducer),
+  __reducerSchema("request_link_code", RequestLinkCodeReducer),
   __reducerSchema("resolve_bracket_match", ResolveBracketMatchReducer),
   __reducerSchema("respond_to_invite", RespondToInviteReducer),
   __reducerSchema("resume_draft", ResumeDraftReducer),
@@ -1237,6 +1248,7 @@ const reducersSchema = __reducers(
   __reducerSchema("select_match_account", SelectMatchAccountReducer),
   __reducerSchema("send_chat_message", SendChatMessageReducer),
   __reducerSchema("server_delete_user", ServerDeleteUserReducer),
+  __reducerSchema("server_link_by_code", ServerLinkByCodeReducer),
   __reducerSchema("server_link_provider", ServerLinkProviderReducer),
   __reducerSchema("server_nuke_test_data", ServerNukeTestDataReducer),
   __reducerSchema("server_register_delegate", ServerRegisterDelegateReducer),
@@ -1390,6 +1402,8 @@ type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "ta
     readonly "view_my_identity": Omit<typeof tablesSchema.schemaType.tables["viewMyIdentity"], "accessorName"> & { readonly accessorName: "view_my_identity" };
     /** @deprecated Use `viewMyLineups` instead. This alias will be removed in the next major version. */
     readonly "view_my_lineups": Omit<typeof tablesSchema.schemaType.tables["viewMyLineups"], "accessorName"> & { readonly accessorName: "view_my_lineups" };
+    /** @deprecated Use `viewMyLinkRequest` instead. This alias will be removed in the next major version. */
+    readonly "view_my_link_request": Omit<typeof tablesSchema.schemaType.tables["viewMyLinkRequest"], "accessorName"> & { readonly accessorName: "view_my_link_request" };
     /** @deprecated Use `viewMyLobbies` instead. This alias will be removed in the next major version. */
     readonly "view_my_lobbies": Omit<typeof tablesSchema.schemaType.tables["viewMyLobbies"], "accessorName"> & { readonly accessorName: "view_my_lobbies" };
     /** @deprecated Use `viewMyLobby` instead. This alias will be removed in the next major version. */
@@ -1550,6 +1564,7 @@ const tableAccessorAliases = {
   "view_my_draft_synergy_costs": "viewMyDraftSynergyCosts",
   "view_my_identity": "viewMyIdentity",
   "view_my_lineups": "viewMyLineups",
+  "view_my_link_request": "viewMyLinkRequest",
   "view_my_lobbies": "viewMyLobbies",
   "view_my_lobby": "viewMyLobby",
   "view_my_lobby_bans": "viewMyLobbyBans",
@@ -1716,6 +1731,8 @@ export type Tables = __TablesBase & {
   readonly "view_my_identity": __TablesBase["viewMyIdentity"];
   /** @deprecated Use `viewMyLineups` instead. This alias will be removed in the next major version. */
   readonly "view_my_lineups": __TablesBase["viewMyLineups"];
+  /** @deprecated Use `viewMyLinkRequest` instead. This alias will be removed in the next major version. */
+  readonly "view_my_link_request": __TablesBase["viewMyLinkRequest"];
   /** @deprecated Use `viewMyLobbies` instead. This alias will be removed in the next major version. */
   readonly "view_my_lobbies": __TablesBase["viewMyLobbies"];
   /** @deprecated Use `viewMyLobby` instead. This alias will be removed in the next major version. */

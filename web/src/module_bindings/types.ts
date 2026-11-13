@@ -2002,6 +2002,12 @@ export const MyIdentityRow = __t.object("MyIdentityRow", {
 });
 export type MyIdentityRow = __Infer<typeof MyIdentityRow>;
 
+export const MyLinkRequestRow = __t.object("MyLinkRequestRow", {
+  code: __t.string(),
+  expiresAt: __t.timestamp(),
+});
+export type MyLinkRequestRow = __Infer<typeof MyLinkRequestRow>;
+
 export const MyLobbyListRow = __t.object("MyLobbyListRow", {
   id: __t.u32(),
   joinCode: __t.string(),
@@ -3043,6 +3049,9 @@ export type ViewMyIdentity = __Infer<typeof ViewMyIdentity>;
 
 export const ViewMyLineups = __t.object("ViewMyLineups", {});
 export type ViewMyLineups = __Infer<typeof ViewMyLineups>;
+
+export const ViewMyLinkRequest = __t.object("ViewMyLinkRequest", {});
+export type ViewMyLinkRequest = __Infer<typeof ViewMyLinkRequest>;
 
 export const ViewMyLobbies = __t.object("ViewMyLobbies", {});
 export type ViewMyLobbies = __Infer<typeof ViewMyLobbies>;
