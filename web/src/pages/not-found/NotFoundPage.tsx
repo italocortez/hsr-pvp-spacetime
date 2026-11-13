@@ -1,7 +1,5 @@
-import { SplashLayout } from '@/components/SplashLayout/SplashLayout';
+import { ErrorSplash } from '@/components/ErrorSplash/ErrorSplash';
 import { useDocumentTitle } from '@/lib/useDocumentTitle';
-
-const IMAGE = { src: '/standby.webp', width: 1920, height: 1080 };
 
 /**
  * Something the app cannot find. Same screen as standby; only the wording changes with `what`
@@ -15,11 +13,10 @@ export function NotFoundPage({ what = 'Page' }: { what?: string }) {
             : `The IPC has no record of this ${what.toLowerCase()}. Check the link, or head back to base.`;
 
     return (
-        <SplashLayout
-            image={IMAGE}
+        <ErrorSplash
+            code="404"
             hudLabel="SYS://NO SIGNAL"
             hudCoord="Sector ?? · Uncharted"
-            eyebrow="Error // 404"
             title={
                 <>
                     {what} <em>not found.</em>

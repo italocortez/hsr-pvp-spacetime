@@ -34,6 +34,8 @@ function StandbyRoute() {
 
 In-app navigation uses the router's typed `Link` (`to`, `params`, `search` checked by `tsc`), never a string `href` on a plain `<a>`, so a typo or a missing param fails the typecheck and a click does not reload the page.
 
+Search params are plain text (A169, `web/src/lib/searchParams.ts`): a validator receives strings (arrays for a repeated key), converts them itself, accepts its own output again (the router re-validates), and returns every key it owns, `undefined` when rejected.
+
 ## Rule 1: thin page files
 
 A page file composes; it does not implement. It reads its hooks, picks its data and renders components. Business rules, derived data and effects live in hooks or components, so the same feature can appear in a second page or a dialog without surgery.

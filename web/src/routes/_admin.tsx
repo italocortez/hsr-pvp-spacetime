@@ -1,9 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { GuardedOutlet } from '@/auth/GuardedOutlet';
-import { requireStaff } from '@/auth/guards';
+import { requireUser } from '@/auth/guards';
+import { StaffOutlet } from '@/auth/StaffOutlet';
 
-/** Staff area: Moderator and above. */
+/** Staff area: a visitor is sent to sign in; a user below Moderator sees the no-access page. */
 export const Route = createFileRoute('/_admin')({
-    beforeLoad: ({ context, location }) => requireStaff(context.auth, location.href),
-    component: GuardedOutlet,
+    beforeLoad: ({ context, location }) => requireUser(context.auth, location.href),
+    component: StaffOutlet,
 });

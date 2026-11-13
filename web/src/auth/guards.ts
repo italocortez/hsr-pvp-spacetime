@@ -8,14 +8,13 @@ import { isRoleAtLeast } from './roles';
  * nothing; the snapshot change that sets `ready` re-runs them (router.invalidate in App).
  */
 
-/** A visitor goes to `/?login=1&next=<href>`. */
+/** A visitor goes to `/?login=1&next=<href>`. Used by both `_authed` and `_admin`. */
 export function requireUser(auth: AuthSnapshot, href: string): void {
     if (!auth.ready) return;
     if (!auth.user) throw redirect({ to: '/', search: { login: 1, next: href } });
 }
 
-/** As `requireUser`, and a user below Moderator goes to `/` with no search. */
-export function requireStaff(auth: AuthSnapshot, href: string): void {
-    requireUser(auth, href);
-    if (auth.user && !isRoleAtLeast(auth.user.role, 'Moderator')) throw redirect({ to: '/' });
+/** True for Moderator and above: the `_admin` layout shows the no-access page to anyone else. */
+export function isStaff(auth: AuthSnapshot): boolean {
+    return auth.user !== undefined && isRoleAtLeast(auth.user.role, 'Moderator');
 }
