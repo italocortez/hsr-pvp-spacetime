@@ -1,10 +1,10 @@
 # Auth & Users -- Architecture
 
-Last updated: 2026-11-11
+Last updated: 2026-11-13
 
 ## Overview
 
-Authentication is built on SpacetimeDB identities with optional Discord OAuth linking. Every client gets a SpacetimeDB identity on first connection. `login_as_guest` creates a User row and UserIdentity mapping. A trusted server identity (the auth function, M5) calls `server_link_provider` to upgrade guests to verified accounts after Discord OAuth completes. Since Phase S11a (A77) the `User` table is private and holds the provider link (formerly `UserPrivate`); no client subscribes it. The user reads their own row through `view_my_profile`, staff read users through `view_admin_users` and `view_admin_user_private`, and every other page gets names and avatars denormalized into the views that need them (PAGE-MAP D2).
+Authentication is built on SpacetimeDB identities with optional Discord OAuth linking. Every client gets a SpacetimeDB identity on first connection. `login_as_guest` creates a User row and UserIdentity mapping. A trusted server identity (the auth function, M5) upgrades guests to verified accounts after Discord OAuth completes: since M5a through a one-time link code (`request_link_code` by the guest, `server_link_by_code` by the function), so the browser's SpacetimeDB token never leaves the browser; `server_link_provider` (identity hex argument) stays for the test harness. Both run one shared merge (`helpers/identity/providerLink.ts`). Since Phase S11a (A77) the `User` table is private and holds the provider link (formerly `UserPrivate`); no client subscribes it. The user reads their own row through `view_my_profile`, staff read users through `view_admin_users` and `view_admin_user_private`, and every other page gets names and avatars denormalized into the views that need them (PAGE-MAP D2).
 
 Ban enforcement runs at three points: at link-time, at reconnect, and when a ban is created.
 
@@ -67,6 +67,17 @@ UserPresence (identity: Identity PK)  [PRIVATE -- public: false]  (S3 table; beh
   heartbeat (energy, A16); until one of those runs the user reads as online on that device and the A22a
   check does not fire.
 
+LinkRequest (code: string PK)  [PRIVATE -- public: false]  (S3 table, written since Phase M5a execution)
+  +-- code: string (32 base64url characters; the bearer secret)
+  +-- identity: Identity (unique: one live request per identity)
+  +-- userId -> User.id  [btree: user_id]
+  +-- expiresAt: Timestamp (request time + 5 minutes)
+  +-- usedAt: Timestamp? (no writer: a spent code's row is deleted; read as "used" if ever set)
+  +-- audit columns (actor: the requesting user)
+  Writer: request_link_code. Deleters: request_link_code (the caller's previous row; the inline sweep),
+  server_link_by_code (the row of a successful link), run_identity_gc (backstop sweep), performUserDeletion (user_id),
+  server_nuke_test_data (clear). Reader: view_my_link_request (the caller's own row).
+
 BanRecord (id: u32 autoInc PK)  [PRIVATE -- public: false]
   +-- banType: BanType (DiscordId)
   +-- providerId: string (Discord snowflake)
@@ -97,6 +108,24 @@ BanRecord (id: u32 autoInc PK)  [PRIVATE -- public: false]
 5. Phase S11a (A77): the provider columns are written on the `User` row (`loginMethod`, `providerId`, `providerUsername`, `linkedAt`); the provider owner of step 4 is found through `User.provider_id`
 
 Phase S10e execution (identity audit #3): the actual arguments are `(callerIdentityHex, provider, providerId, providerName)`. `providerName` is trimmed and cut to 32 characters (the username length; empty after trim: "providerName is required"); the trimmed name is stored as `displayName` and `providerUsername`. Case 1a takes it as the username through `uniqueUsername`: the name itself when no other user holds it, else the first free `name_2`, `name_3`, ... (the base shortened to stay within 32), so a username taken by another account no longer aborts the link on the unique index. `callerIdentityHex` goes through the file's `parseIdentityHex` (same texts as before); Cases 2 and 3 share one terminal "Identity not registered. Call login_as_guest first."
+
+### request_link_code(clientNonce) -- client (Phase M5a execution)
+0. `checkClientNonce`: exactly 43 characters of `A-Z a-z 0-9 - _` (32 bytes from the browser's `crypto.getRandomValues` in base64url), else "clientNonce must be 43 base64url characters (32 random bytes)." The nonce is mixed into the code and never stored or logged
+1. Resolve `UserIdentity` → `User` for `ctx.sender`; `ensureNotInMaintenance(ctx, user)` (A163(3), as `login_as_guest` and the profile reducers)
+2. Refuse: no live user ("No account for this identity. Call login_as_guest first."); `deletedAt` set, i.e. deleted or banned pending the cascade ("Unauthorized: This account has been deleted."); not a guest, or a provider already linked ("This account is already linked.")
+3. Delete the caller's previous `LinkRequest` row (unique `identity`): its code stops working
+4. Inline sweep: examine at most `LINK_SWEEP_SCAN_LIMIT` (64) rows of the table, delete the expired or used ones
+5. Insert `{ code: generateLinkCode(...), identity: ctx.sender, userId, expiresAt: now + 5 min }` (audit actor: the user)
+
+### server_link_by_code(linkCode, provider, providerId, providerName) -- server-only (Phase M5a execution)
+1. `requireServer(ctx)`; then, for provider `discord`, `providerId` must be a Discord snowflake (digits only, 17 to 20 long), else "providerId is not a Discord id." (before the code is looked at; `server_link_provider` has no such rule, its fixtures use ids like `pid-x`)
+2. Find the row by `code`. Missing, `usedAt` set, or `expiresAt <= now`: throw "This link code is invalid or has expired." (one text for all three; the precise reason goes to the module log as `[LINK] server_link_by_code refused: ...`, never the code). Nothing changes
+3. Refuse with "This account changed since the sign-in started. Please start again." when the row's identity maps to another user than the row's `userId`, or that user is gone, not a guest, has a provider or has `deletedAt`
+4. `planProviderLink`: its own refusal is thrown unchanged (input validation, provider, the ban text, the A113(4) live-game text, no mapping), so the auth function can show the reason. Any refusal in 3 or 4 rolls the transaction back: the code stays live until it expires or the guest asks for a new one
+5. Delete the row (single use), then `applyProviderLink`: the merge of `server_link_provider` below (Case 1a upgrade, or Case 1b re-point) for the row's identity, in the same transaction
+
+### Shared merge: planProviderLink / applyProviderLink (Phase M5a execution)
+`helpers/identity/providerLink.ts` holds the merge both link reducers run, moved out of `server_link_provider` without a behaviour change, except the provider name clean-up added in the M5a review pass ("Provider name clean-up" below): `planProviderLink(ctx, { provider, providerId, providerName }, resolveIdentity)` runs every check in the old order and writes nothing; `applyProviderLink(ctx, plan)` performs the writes of Case 1b (re-point) or Case 1a / 1c (upgrade / refresh). `server_link_provider` passes its identity-hex parse as `resolveIdentity`, called after the ban check where the parse ran before; the "callerIdentityHex is required" check moved into that callback, so a call with several invalid inputs at once now reports it after the provider and ban checks (single-input refusals are unchanged).
 
 ### clientConnected() -- lifecycle hook (exported as `client_connected`)
 > Both lifecycle hooks register only because `index.ts` exports them. Before 2026-11-05 they were bare `spacetimedb.clientConnected(...)` calls, which the SDK silently drops, so neither hook ever ran on a published database. Behavior below is the spec; it takes effect on the first publish that includes the fix.
@@ -141,6 +170,7 @@ A95(1) guest retention (Phase S10h execution): the weekly identity clean-up (`pe
 | View | Scope | Returns |
 |------|-------|---------|
 | `view_my_profile` | ctx.sender only | The caller's User row incl. the provider fields (MyProfileRow; an array of at most one row, PK `id`, since Phase S9b execution; row shape kept by A77) |
+| `view_my_link_request` | ctx.sender only | The caller's unused link code: `code` (PK), `expiresAt`; at most one row. A view has no clock (`ViewCtx` carries no timestamp), so an expired row is still returned and the client compares `expiresAt` (Phase M5a execution) |
 | `view_my_identity` | ctx.sender only | Caller's identity mapping: `{ identity, userId }` (Phase S9b execution) |
 | `view_admin_user_private` | Moderator+ only | One row per linked user: userId, loginMethod, providerId, providerUsername (Phase S9b execution: staff-only full read after the role check, no audit columns; since S11a read from `User`, A77) |
 | `view_admin_users` | Moderator+ only | Every User row without the provider columns: id (PK), username, displayName, isGuest, role, hasDiscordLinked (derived), avatarCharacterName, displayedAchievementId?, deletedAt?, the four audit columns (Phase S11a execution, A77(1)) |
@@ -231,6 +261,8 @@ Do NOT use at sites where the user is the caller (`ctx.sender` is always live by
 
 ## API Route: /api/auth/link-discord (D-09, D-10)
 
+> Old-repo design, replaced by the M5 auth function and the link-code flow ("Phase M5a execution" below).
+
 The Next.js API route performs ephemeral identity verification before calling `server_link_provider`:
 
 1. Read NextAuth session JWT directly from cookies (bypasses `getServerSession` -- known next-auth 4.x bug in App Router POST handlers)
@@ -245,7 +277,7 @@ Key details: supports chunked cookies; cookie name derived from `NEXTAUTH_URL` p
 
 | Point | Where | Trigger |
 |-------|-------|---------|
-| Point 1 (link-time) | `server_link_provider` | `rejectIfBanned` before any user mutation |
+| Point 1 (link-time) | `server_link_provider`, `server_link_by_code` (M5a; `planProviderLink`) | `rejectIfBanned` before any user mutation |
 | Point 2 (reconnect) | `clientConnected` | Ban check on every reconnect; soft-delete if banned |
 | Point 3 (ban-time) | `admin_ban_user` | Soft-deletes the currently linked user on ban creation |
 
@@ -399,6 +431,26 @@ method or provider id changes; a refresh of the same link keeps it.
   `spacetime sql` as the database owner still reads the table (`queryPrivateTable`, `getTestDiscordId`).
 - Where the data a page needs comes from now: [../views/architecture.md](../views/architecture.md) "Phase S11a execution".
 
+## Phase M5a execution (DECISIONS.md A44(3), A46)
+
+**Flow.** (1) A connected guest calls `request_link_code(clientNonce)` with 32 bytes from `crypto.getRandomValues` in base64url, and reads its code from `view_my_link_request`. (2) The browser opens the auth function with that code only. (3) After Discord confirms the user, the function calls `server_link_by_code({ linkCode, provider: 'discord', providerId, providerName })` with the delegate token. (4) The module resolves the code to the identity that asked and runs the merge; the browser's `view_my_profile` row changes on the same connection. No identity hex and no SpacetimeDB token leaves the browser.
+
+**The code.** `generateLinkCode` (`helpers/identity/linkCode.ts`): SHA-256 (in-module; FIPS 180-4 vectors, and a recomputation with the runtime's Web Crypto, in the tests) over, in this order: the domain tag `hsr-link-code/v1` (16 ASCII bytes), the client nonce (43 ASCII bytes), the caller's identity (32 bytes, `Identity.toUint8Array`), the connection id (16 bytes, `ConnectionId.toUint8Array`; zeros without a connection), the transaction timestamp (microseconds, 8 bytes little-endian), the caller's previous code (32 ASCII bytes, or nothing) and the attempt counter (1 byte): 116 bytes, or 148 with a previous code. The code is the first 24 bytes of the digest in base64url without padding: 32 characters of `A-Z a-z 0-9 - _`. **The secrecy of the code rests on the client nonce**: 32 bytes from the browser's `crypto.getRandomValues` (a CSPRNG), sent as the reducer argument, checked for shape, never stored or logged. The connection id is a second secret input (the caller's SDK picks it at connect; the 2.15.0 browser SDK draws it with `Math.random`; no table or view exposes it). `ctx.random` is not used: on the host it is seeded from the transaction timestamp (SDK 2.15.0 `dist/server/index.mjs`, `get random() { return this.#random ??= makeRandom(this.timestamp); }`), so it would add only a function of the timestamp, which is already hashed. A primary-key clash re-draws with the next attempt (at most four).
+
+**Provider name clean-up (shared merge).** `planProviderLink` removes C0 control characters, DEL and C1 control characters (U+0000-U+001F, U+007F-U+009F) from `providerName`, then trims it, then cuts it to 32 UTF-16 units (`capOnCodePoint`: one unit fewer when the cut would leave a lone high surrogate), then refuses an empty result ("providerName is required"). This applies to both link reducers.
+
+**Argument visibility.** The nonce travels only from the caller to the host. In SDK 2.15.0 (`dist/sdk/index.mjs`) the client sends `CallReducer { requestId, flags, reducer, args }`; only the caller gets a `ReducerResult` (request id, timestamp, outcome), and the client rebuilds the reducer event from its own stored call (`#reducerCallInfo`); every other subscriber gets a `TransactionUpdate { querySets }`, row changes only, no reducer name, caller or arguments. The module does not store the nonce, no view returns it, and no `console.log` in the link code path prints it.
+
+**Single use.** The row of a successful link is deleted in the same transaction, not marked `usedAt`: missing and used are then the same state with the same refusal, and no used row is left to clean up. A refused link (step 3 or 4 of `server_link_by_code`) throws, so the row stays and the code can be used again once the cause is gone, until it expires.
+
+**Clean-up.** Stale rows are deleted (a) by `request_link_code`: the caller's own previous row, plus the expired or used rows among at most 64 rows of the table examined per call (`LINK_SWEEP_SCAN_LIMIT`; the scan stops after 64 rows whatever it finds); (b) by the scheduled `run_identity_gc`: the same among at most 10,000 rows per run (`LINK_SWEEP_GC_SCAN_LIMIT`, log line `[LINK_GC]`, no `GcResult` row); (c) by `performUserDeletion` (every row of the user, `user_id` index) and `server_nuke_test_data` (clear). `LinkRequest` has no `expiresAt` index, so (a) cannot pick stale rows first; (b) is the backstop.
+
+**Known behaviour, open for a ruling.**
+- A code requested before maintenance mode was switched on still links during it: `server_link_by_code` is server-only and runs no maintenance check (server identities map to the SYSTEM user, an Admin). The browser cannot request a new code while maintenance is on (`request_link_code` refuses a non-Admin).
+- The guest creation switch (`AbuseConfig.guestCreationEnabled`, A95(2)) also blocks sign-ins from a new browser: a fresh identity must call `login_as_guest` before `request_link_code`, and `login_as_guest` refuses a new identity while the switch is off, so a verified user on a new device cannot sign in until the switch is back on. A returning browser (its identity already mapped) is not affected.
+
+**Abuse.** No per-user rate window: the identity reducers have none (the `UserRateState` windows cover chat, lobby membership, results, tournaments and lobby creation), and the unique `identity` caps each identity at one row. An attacker with many identities needs one guest per identity, which `login_as_guest` counts in the guest creation breaker (default 300 per 10 minutes, then the switch trips; A95(2), A109). Cost per call: one row of about 150 bytes for at most 5 minutes, one SHA-256 over 116 bytes, up to 64 rows read by the sweep; only the caller receives the row (the view is per caller).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -438,12 +490,13 @@ method or provider id changes; a refresh of the same link keeps it.
 | `performUserDeletion` first hands the unfinished tournaments of an organizer deleted or banned by staff to the longest-serving full assistant, else the acting Moderator+ (organizerId and the tournament's match calendar events); server-identity and self deletions unchanged | Phase S10s execution (DECISIONS.md A121) | 2026-11-10 |
 | A server deletion or ban of an organizer (`server_delete_user`, or a ban / delete sent as the SYSTEM user) cancels the unfinished tournaments through `cancelTournament` (explicit `serverDeletion` option); the reconnect-ban path documented as no hand-over | Phase S10s execution (DECISIONS.md A124) | 2026-11-10 |
 | `User` private; `UserPrivate` merged into it (provider columns + `linkedAt`, two indexes); `hasDiscordLinked` derived; `view_admin_users` for the Users tab | Phase S11a execution (DECISIONS.md A77) | 2026-11-11 |
+| One-time link codes: `request_link_code` (guest only, one row per identity, 5-minute code, inline sweep of 64 rows), `view_my_link_request`, `server_link_by_code` (one refusal text for unknown / used / expired; a refused merge throws its own text and leaves the code live; a successful link deletes the row); `request_link_code(clientNonce)`: the browser's 32-byte CSPRNG nonce is the secret input of the code (no `ctx.random`); `server_link_by_code` requires a Discord snowflake id; the shared merge strips control characters from the provider name and cuts it on a code point boundary; the merge moved to `planProviderLink` / `applyProviderLink`, shared with `server_link_provider`; link rows cleaned by `run_identity_gc`, `performUserDeletion`, `server_nuke_test_data` | Phase M5a execution (DECISIONS.md A44(3), A46) | 2026-11-13 |
 | The scheduled `run_user_deletion` and `run_identity_gc` refuse any caller but the scheduler (`ensureScheduler`, `ctx.senderAuth.isInternal`; L11); `admin_gc_identities` restarts a stopped `IdentityGcJob` chain (L6); a user deletion also removes the user's `LobbyCursorStamp` rows (L19) | Phase S11a execution (part 2, closing-triage items) | 2026-11-11 |
 | `performUserDeletion` ends with `removeDeletedUserFromLeaderboard` (the user's `Leaderboard` rows of every season go; the active season is rebuilt when it held one); `client_connected` admits a live Admin under maintenance mode; `login_as_guest` and the profile reducers (`resolveUser`) refuse a non-Admin under maintenance mode | Phase S11a execution (DECISIONS.md A163(1), A163(3)) | 2026-11-12 |
 
 ---
 
-*Last updated: 2026-11-11 (S11a part 2)*
+*Last updated: 2026-11-13 (M5a)*
 *Feature owner: Phase 01 / Phase 12 / Phase 16*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)
