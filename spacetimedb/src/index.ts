@@ -120,7 +120,7 @@ export {
     view_tournament_matches_for_me,
 } from '@module/views/tournamentViews';
 export { broadcast_cursor } from '@module/reducers/lobby/cursor';
-export { login_as_guest, request_link_code } from '@module/reducers/identity/auth';
+export { login_as_guest, request_link_code, confirm_link } from '@module/reducers/identity/auth';
 export { delete_my_account, update_display_name, update_username, update_avatar } from '@module/reducers/identity/profile';
 export { server_register_delegate, server_revoke_delegate, server_link_provider, server_link_by_code, server_set_role, server_delete_user, server_set_guest_creation, server_set_guest_lobby_creation, server_set_datetime, server_set_online, server_set_mmr, server_nuke_test_data } from '@module/reducers/identity/server';
 export { admin_ban_user, admin_unban_user } from '@module/reducers/admin/banAdmin';

@@ -962,6 +962,10 @@ export const LinkRequest = __t.object("LinkRequest", {
   createdDate: __t.timestamp(),
   lastModifiedById: __t.u32(),
   lastModifiedDate: __t.timestamp(),
+  pendingProvider: __t.option(__t.string()),
+  pendingProviderId: __t.option(__t.string()),
+  pendingProviderName: __t.option(__t.string()),
+  confirmHash: __t.option(__t.string()),
 });
 export type LinkRequest = __Infer<typeof LinkRequest>;
 
@@ -2003,8 +2007,10 @@ export const MyIdentityRow = __t.object("MyIdentityRow", {
 export type MyIdentityRow = __Infer<typeof MyIdentityRow>;
 
 export const MyLinkRequestRow = __t.object("MyLinkRequestRow", {
-  code: __t.string(),
+  code: __t.option(__t.string()),
   expiresAt: __t.timestamp(),
+  awaitingConfirm: __t.bool(),
+  pendingProviderName: __t.option(__t.string()),
 });
 export type MyLinkRequestRow = __Infer<typeof MyLinkRequestRow>;
 

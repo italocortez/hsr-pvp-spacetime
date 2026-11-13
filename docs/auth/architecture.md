@@ -4,7 +4,7 @@ Last updated: 2026-11-13
 
 ## Overview
 
-Authentication is built on SpacetimeDB identities with optional Discord OAuth linking. Every client gets a SpacetimeDB identity on first connection. `login_as_guest` creates a User row and UserIdentity mapping. A trusted server identity (the auth function, M5) upgrades guests to verified accounts after Discord OAuth completes: since M5a through a one-time link code (`request_link_code` by the guest, `server_link_by_code` by the function), so the browser's SpacetimeDB token never leaves the browser; `server_link_provider` (identity hex argument) stays for the test harness. Both run one shared merge (`helpers/identity/providerLink.ts`). Since Phase S11a (A77) the `User` table is private and holds the provider link (formerly `UserPrivate`); no client subscribes it. The user reads their own row through `view_my_profile`, staff read users through `view_admin_users` and `view_admin_user_private`, and every other page gets names and avatars denormalized into the views that need them (PAGE-MAP D2).
+Authentication is built on SpacetimeDB identities with optional Discord OAuth linking. Every client gets a SpacetimeDB identity on first connection. `login_as_guest` creates a User row and UserIdentity mapping. A trusted server identity (the auth function, M5) upgrades guests to verified accounts after Discord OAuth completes: since M5a through a one-time link code (`request_link_code` by the guest, `server_link_by_code` by the function), and since M5a2 only when the requesting browser confirms with `confirm_link` and the one-time token the function gave it, so the browser's SpacetimeDB token never leaves the browser; `server_link_provider` (identity hex argument) stays for the test harness. Both run one shared merge (`helpers/identity/providerLink.ts`). Since Phase S11a (A77) the `User` table is private and holds the provider link (formerly `UserPrivate`); no client subscribes it. The user reads their own row through `view_my_profile`, staff read users through `view_admin_users` and `view_admin_user_private`, and every other page gets names and avatars denormalized into the views that need them (PAGE-MAP D2).
 
 Ban enforcement runs at three points: at link-time, at reconnect, and when a ban is created.
 
@@ -71,12 +71,17 @@ LinkRequest (code: string PK)  [PRIVATE -- public: false]  (S3 table, written si
   +-- code: string (32 base64url characters; the bearer secret)
   +-- identity: Identity (unique: one live request per identity)
   +-- userId -> User.id  [btree: user_id]
-  +-- expiresAt: Timestamp (request time + 5 minutes)
-  +-- usedAt: Timestamp? (no writer: a spent code's row is deleted; read as "used" if ever set)
-  +-- audit columns (actor: the requesting user)
-  Writer: request_link_code. Deleters: request_link_code (the caller's previous row; the inline sweep),
-  server_link_by_code (the row of a successful link), run_identity_gc (backstop sweep), performUserDeletion (user_id),
-  server_nuke_test_data (clear). Reader: view_my_link_request (the caller's own row).
+  +-- expiresAt: Timestamp (request time + 5 minutes; presentation time + 2 minutes once presented, M5a2)
+  +-- usedAt: Timestamp? (M5a2: the time server_link_by_code presented the code; one presentation per code)
+  +-- audit columns (actor: the requesting user; SYSTEM for the presentation)
+  +-- pendingProvider: string? / pendingProviderId: string? / pendingProviderName: string? (M5a2: the Discord account
+      presented, the name cleaned as the merge stores it)
+  +-- confirmHash: string? (M5a2: base64url SHA-256 of the confirm token's 32 bytes, 43 characters)
+  The four M5a2 columns are appended last with a default (None): see "Phase M5a2 execution", publish note.
+  Writers: request_link_code (insert), server_link_by_code (the pending stage). Deleters: request_link_code (the
+  caller's previous row, pending or not; the inline sweep), confirm_link (the row of a successful link),
+  run_identity_gc (backstop sweep), performUserDeletion (user_id), server_nuke_test_data (clear).
+  Reader: view_my_link_request (the caller's own row, without confirmHash or pendingProviderId).
 
 BanRecord (id: u32 autoInc PK)  [PRIVATE -- public: false]
   +-- banType: BanType (DiscordId)
@@ -114,15 +119,22 @@ Phase S10e execution (identity audit #3): the actual arguments are `(callerIdent
 1. Resolve `UserIdentity` → `User` for `ctx.sender`; `ensureNotInMaintenance(ctx, user)` (A163(3), as `login_as_guest` and the profile reducers)
 2. Refuse: no live user ("No account for this identity. Call login_as_guest first."); `deletedAt` set, i.e. deleted or banned pending the cascade ("Unauthorized: This account has been deleted."); not a guest, or a provider already linked ("This account is already linked.")
 3. Delete the caller's previous `LinkRequest` row (unique `identity`): its code stops working
-4. Inline sweep: examine at most `LINK_SWEEP_SCAN_LIMIT` (64) rows of the table, delete the expired or used ones
+4. Inline sweep: examine at most `LINK_SWEEP_SCAN_LIMIT` (64) rows of the table, delete those whose `expiresAt` has passed (a code before presentation, or a pending row after its 2-minute window; M5a2)
 5. Insert `{ code: generateLinkCode(...), identity: ctx.sender, userId, expiresAt: now + 5 min }` (audit actor: the user)
 
-### server_link_by_code(linkCode, provider, providerId, providerName) -- server-only (Phase M5a execution)
-1. `requireServer(ctx)`; then, for provider `discord`, `providerId` must be a Discord snowflake (digits only, 17 to 20 long), else "providerId is not a Discord id." (before the code is looked at; `server_link_provider` has no such rule, its fixtures use ids like `pid-x`)
-2. Find the row by `code`. Missing, `usedAt` set, or `expiresAt <= now`: throw "This link code is invalid or has expired." (one text for all three; the precise reason goes to the module log as `[LINK] server_link_by_code refused: ...`, never the code). Nothing changes
-3. Refuse with "This account changed since the sign-in started. Please start again." when the row's identity maps to another user than the row's `userId`, or that user is gone, not a guest, has a provider or has `deletedAt`
-4. `planProviderLink`: its own refusal is thrown unchanged (input validation, provider, the ban text, the A113(4) live-game text, no mapping), so the auth function can show the reason. Any refusal in 3 or 4 rolls the transaction back: the code stays live until it expires or the guest asks for a new one
-5. Delete the row (single use), then `applyProviderLink`: the merge of `server_link_provider` below (Case 1a upgrade, or Case 1b re-point) for the row's identity, in the same transaction
+### server_link_by_code(linkCode, provider, providerId, providerName, confirmHash) -- server-only (Phase M5a execution; presentation only since M5a2)
+1. `requireServer(ctx)`; then, for provider `discord`, `providerId` must be a Discord snowflake (digits only, 17 to 20 long), else "providerId is not a Discord id."; `confirmHash` must be the canonical base64url of 32 bytes (43 characters), else "confirmHash must be 43 base64url characters (a SHA-256 digest)." Both before the code is looked at (`server_link_provider` has neither rule; its fixtures use ids like `pid-x`)
+2. Find the row by `code`. Missing, already presented (`usedAt` set) or `expiresAt <= now`: throw "This link code is invalid or has expired." (one text for all of them; the reason goes to the module log as `[LINK] server_link_by_code refused: ...`, never the code, token or hash). Nothing changes
+3. Pre-check, as the link would run now: "This account changed since the sign-in started. Please start again." when the row's identity maps to another user than the row's `userId`, or that user is gone, not a guest, has a provider or has `deletedAt` (`ensureStillTheRequestingGuest`); then `planProviderLink`, whose own refusal is thrown unchanged (input validation, provider, the ban text, the A113(4) live-game text, no mapping). A refusal rolls back: the code stays live
+4. Record the pending stage: `pendingProvider`, `pendingProviderId`, `pendingProviderName` (cleaned: `cleanProviderName`), `confirmHash`, `usedAt = now`, `expiresAt = now + 2 min` (audit actor SYSTEM). Nothing is written to `User`
+
+### confirm_link(confirmToken) -- client (Phase M5a2 execution)
+1. `confirmToken` must be the canonical base64url of 32 bytes (43 characters), else "confirmToken must be 43 base64url characters (32 bytes)."
+2. Resolve `UserIdentity` → `User` for `ctx.sender`; `ensureNotInMaintenance` (a non-Admin is refused while maintenance is on); no live user: "No account for this identity. Call login_as_guest first."; `deletedAt` set (deleted or banned): "Unauthorized: This account has been deleted."
+3. The caller's own row by the unique `identity` index. None, not presented, or its window has passed: "No sign-in is waiting for confirmation. Please start again."
+4. `confirmHashOf(confirmToken)` compared with `confirmHash` (no early exit): a mismatch is "This sign-in could not be confirmed." No attempt counter: the token carries 256 bits, and an error rolls back, so a wrong token burns nothing
+5. The account-changed check and `planProviderLink` again (state may have changed since the presentation: a ban, a live game, a link made another way); a refusal throws its own text to the caller
+6. Delete the row, then `applyProviderLink` (Case 1a upgrade, or Case 1b re-point when the Discord user already exists), one transaction
 
 ### Shared merge: planProviderLink / applyProviderLink (Phase M5a execution)
 `helpers/identity/providerLink.ts` holds the merge both link reducers run, moved out of `server_link_provider` without a behaviour change, except the provider name clean-up added in the M5a review pass ("Provider name clean-up" below): `planProviderLink(ctx, { provider, providerId, providerName }, resolveIdentity)` runs every check in the old order and writes nothing; `applyProviderLink(ctx, plan)` performs the writes of Case 1b (re-point) or Case 1a / 1c (upgrade / refresh). `server_link_provider` passes its identity-hex parse as `resolveIdentity`, called after the ban check where the parse ran before; the "callerIdentityHex is required" check moved into that callback, so a call with several invalid inputs at once now reports it after the provider and ban checks (single-input refusals are unchanged).
@@ -170,7 +182,7 @@ A95(1) guest retention (Phase S10h execution): the weekly identity clean-up (`pe
 | View | Scope | Returns |
 |------|-------|---------|
 | `view_my_profile` | ctx.sender only | The caller's User row incl. the provider fields (MyProfileRow; an array of at most one row, PK `id`, since Phase S9b execution; row shape kept by A77) |
-| `view_my_link_request` | ctx.sender only | The caller's unused link code: `code` (PK), `expiresAt`; at most one row. A view has no clock (`ViewCtx` carries no timestamp), so an expired row is still returned and the client compares `expiresAt` (Phase M5a execution) |
+| `view_my_link_request` | ctx.sender only | The caller's link request, at most one row, no primary key: `code?` (the live code; unset once presented), `expiresAt` (the 5-minute code expiry, or the 2-minute confirm window once presented), `awaitingConfirm` (presented, `confirm_link` is next), `pendingProviderName?` (the Discord name about to be linked, only while awaiting). Never `confirmHash` or `pendingProviderId`. A view has no clock (`ViewCtx` carries no timestamp), so an expired row is still returned until swept and the client compares `expiresAt` (Phase M5a execution; shape Phase M5a2 execution) |
 | `view_my_identity` | ctx.sender only | Caller's identity mapping: `{ identity, userId }` (Phase S9b execution) |
 | `view_admin_user_private` | Moderator+ only | One row per linked user: userId, loginMethod, providerId, providerUsername (Phase S9b execution: staff-only full read after the role check, no audit columns; since S11a read from `User`, A77) |
 | `view_admin_users` | Moderator+ only | Every User row without the provider columns: id (PK), username, displayName, isGuest, role, hasDiscordLinked (derived), avatarCharacterName, displayedAchievementId?, deletedAt?, the four audit columns (Phase S11a execution, A77(1)) |
@@ -433,7 +445,7 @@ method or provider id changes; a refresh of the same link keeps it.
 
 ## Phase M5a execution (DECISIONS.md A44(3), A46)
 
-**Flow.** (1) A connected guest calls `request_link_code(clientNonce)` with 32 bytes from `crypto.getRandomValues` in base64url, and reads its code from `view_my_link_request`. (2) The browser opens the auth function with that code only. (3) After Discord confirms the user, the function calls `server_link_by_code({ linkCode, provider: 'discord', providerId, providerName })` with the delegate token. (4) The module resolves the code to the identity that asked and runs the merge; the browser's `view_my_profile` row changes on the same connection. No identity hex and no SpacetimeDB token leaves the browser.
+**Flow (M5a; the last step changed by M5a2 below).** (1) A connected guest calls `request_link_code(clientNonce)` with 32 bytes from `crypto.getRandomValues` in base64url, and reads its code from `view_my_link_request`. (2) The browser opens the auth function with that code only. (3) After Discord confirms the user, the function calls `server_link_by_code({ linkCode, provider: 'discord', providerId, providerName })` with the delegate token. (4) The module resolves the code to the identity that asked and runs the merge; the browser's `view_my_profile` row changes on the same connection. No identity hex and no SpacetimeDB token leaves the browser.
 
 **The code.** `generateLinkCode` (`helpers/identity/linkCode.ts`): SHA-256 (in-module; FIPS 180-4 vectors, and a recomputation with the runtime's Web Crypto, in the tests) over, in this order: the domain tag `hsr-link-code/v1` (16 ASCII bytes), the client nonce (43 ASCII bytes), the caller's identity (32 bytes, `Identity.toUint8Array`), the connection id (16 bytes, `ConnectionId.toUint8Array`; zeros without a connection), the transaction timestamp (microseconds, 8 bytes little-endian), the caller's previous code (32 ASCII bytes, or nothing) and the attempt counter (1 byte): 116 bytes, or 148 with a previous code. The code is the first 24 bytes of the digest in base64url without padding: 32 characters of `A-Z a-z 0-9 - _`. **The secrecy of the code rests on the client nonce**: 32 bytes from the browser's `crypto.getRandomValues` (a CSPRNG), sent as the reducer argument, checked for shape, never stored or logged. The connection id is a second secret input (the caller's SDK picks it at connect; the 2.15.0 browser SDK draws it with `Math.random`; no table or view exposes it). `ctx.random` is not used: on the host it is seeded from the transaction timestamp (SDK 2.15.0 `dist/server/index.mjs`, `get random() { return this.#random ??= makeRandom(this.timestamp); }`), so it would add only a function of the timestamp, which is already hashed. A primary-key clash re-draws with the next attempt (at most four).
 
@@ -441,15 +453,59 @@ method or provider id changes; a refresh of the same link keeps it.
 
 **Argument visibility.** The nonce travels only from the caller to the host. In SDK 2.15.0 (`dist/sdk/index.mjs`) the client sends `CallReducer { requestId, flags, reducer, args }`; only the caller gets a `ReducerResult` (request id, timestamp, outcome), and the client rebuilds the reducer event from its own stored call (`#reducerCallInfo`); every other subscriber gets a `TransactionUpdate { querySets }`, row changes only, no reducer name, caller or arguments. The module does not store the nonce, no view returns it, and no `console.log` in the link code path prints it.
 
-**Single use.** The row of a successful link is deleted in the same transaction, not marked `usedAt`: missing and used are then the same state with the same refusal, and no used row is left to clean up. A refused link (step 3 or 4 of `server_link_by_code`) throws, so the row stays and the code can be used again once the cause is gone, until it expires.
+**Single use.** (M5a; since M5a2 `usedAt` marks the presentation and the row is deleted by `confirm_link`.) The row of a successful link is deleted in the same transaction, not marked `usedAt`: missing and used are then the same state with the same refusal, and no used row is left to clean up. A refused link (step 3 or 4 of `server_link_by_code`) throws, so the row stays and the code can be used again once the cause is gone, until it expires.
 
-**Clean-up.** Stale rows are deleted (a) by `request_link_code`: the caller's own previous row, plus the expired or used rows among at most 64 rows of the table examined per call (`LINK_SWEEP_SCAN_LIMIT`; the scan stops after 64 rows whatever it finds); (b) by the scheduled `run_identity_gc`: the same among at most 10,000 rows per run (`LINK_SWEEP_GC_SCAN_LIMIT`, log line `[LINK_GC]`, no `GcResult` row); (c) by `performUserDeletion` (every row of the user, `user_id` index) and `server_nuke_test_data` (clear). `LinkRequest` has no `expiresAt` index, so (a) cannot pick stale rows first; (b) is the backstop.
+**Clean-up.** Stale rows are deleted (a) by `request_link_code`: the caller's own previous row, plus the rows whose `expiresAt` has passed (M5a read "expired or used"; since M5a2 `usedAt` marks a live pending row, so only `expiresAt` counts) among at most 64 rows of the table examined per call (`LINK_SWEEP_SCAN_LIMIT`; the scan stops after 64 rows whatever it finds); (b) by the scheduled `run_identity_gc`: the same among at most 10,000 rows per run (`LINK_SWEEP_GC_SCAN_LIMIT`, log line `[LINK_GC]`, no `GcResult` row); (c) by `performUserDeletion` (every row of the user, `user_id` index) and `server_nuke_test_data` (clear). `LinkRequest` has no `expiresAt` index, so (a) cannot pick stale rows first; (b) is the backstop.
 
 **Known behaviour, open for a ruling.**
-- A code requested before maintenance mode was switched on still links during it: `server_link_by_code` is server-only and runs no maintenance check (server identities map to the SYSTEM user, an Admin). The browser cannot request a new code while maintenance is on (`request_link_code` refuses a non-Admin).
+- Signing in to an account whose deletion is pending (soft-deleted, not banned) succeeds when the Discord account belongs to it (Case 1b re-points to it), unchanged from before M5a.
+- `view_my_link_request` returns no row when the caller's user is gone, no longer a guest, linked or soft-deleted (M5a2 review): such a row can be neither used nor replaced, and it is left to the sweep (no deletion on read).
+- A code requested before maintenance mode was switched on can still be presented during it: `server_link_by_code` is server-only and runs no maintenance check (server identities map to the SYSTEM user, an Admin). Since M5a2 it cannot link during maintenance: `confirm_link` refuses a non-Admin, and the pending row expires after 2 minutes. The browser cannot request a new code while maintenance is on (`request_link_code` refuses a non-Admin).
 - The guest creation switch (`AbuseConfig.guestCreationEnabled`, A95(2)) also blocks sign-ins from a new browser: a fresh identity must call `login_as_guest` before `request_link_code`, and `login_as_guest` refuses a new identity while the switch is off, so a verified user on a new device cannot sign in until the switch is back on. A returning browser (its identity already mapped) is not affected.
 
 **Abuse.** No per-user rate window: the identity reducers have none (the `UserRateState` windows cover chat, lobby membership, results, tournaments and lobby creation), and the unique `identity` caps each identity at one row. An attacker with many identities needs one guest per identity, which `login_as_guest` counts in the guest creation breaker (default 300 per 10 minutes, then the switch trips; A95(2), A109). Cost per call: one row of about 150 bytes for at most 5 minutes, one SHA-256 over 116 bytes, up to 64 rows read by the sweep; only the caller receives the row (the view is per caller).
+
+## Phase M5a2 execution (the second lock)
+
+**Goal.** The database links only when one browser holds both the requesting identity's connection and a one-time token given to the browser that finished Discord. The auth function alone can no longer complete a link.
+
+**Flow.** (1) The guest calls `request_link_code(clientNonce)` and reads its code from `view_my_link_request`. (2) The browser opens the auth function with the code. (3) After Discord confirms the user, the function draws a confirm token (32 random bytes), calls `server_link_by_code({ linkCode, provider: 'discord', providerId, providerName, confirmHash })` with the delegate token and `confirmHash` = the hash below, and redirects the browser with the token (the function keeps nothing). (4) The view now shows `awaitingConfirm` and `pendingProviderName` ("about to link Discord account X"). (5) The browser calls `confirm_link({ confirmToken })` on its own connection within 2 minutes; the module links.
+
+**What each party holds.**
+
+| Party | Holds | What the module enforces about it |
+|---|---|---|
+| Requesting browser | its SpacetimeDB identity (connection), the code (until presented), the confirm token (after the redirect) | `confirm_link` acts only on the caller's own row (found by `ctx.sender`) and only with the token whose hash was presented. Which Discord account that is depends on the function: the module trusts the presentation |
+| Auth function | the server (delegate) token; the code and the Discord account during the request; the token only while redirecting | `server_link_by_code` writes no `User` row. Nothing in the link-code path lets it confirm as another identity; the server token's other powers are below |
+| Module | the code, the pending account, `confirmHash` (never the token) | |
+
+**What the lock guarantees.** Against a correct auth function, a link by code completes only on the connection that requested the code, with the token whose hash was presented: `server_link_by_code` no longer writes `User`; only `confirm_link` does, it reads the row of `ctx.sender`, and it needs the token. A token taken from the redirect is useless on any connection but the requesting one. It does not limit the server token itself: a holder of the server (delegate or owner) token can still link any identity directly through `server_link_provider` (identity argument), can link through a guest of its own, and holds an Admin-level credential (`server_set_role`, the SYSTEM user mapping). **Open, with the user (A175/A176).**
+
+**Requirements for M5b (the auth function and the page; from the M5a2 security review).**
+1. The confirm token comes from a CSPRNG (32 bytes), is fresh for every presentation, and is never logged or stored by the function.
+2. The token reaches the page only through a short-lived `Secure` `SameSite` cookie set on the callback response, or a same-origin fetch; never in a URL query or fragment.
+3. The OAuth `state` is bound to a cookie set at start.
+4. Start is reachable only by a same-origin POST with an exact `Origin` check.
+5. The Discord authorize request uses `prompt=consent`.
+6. The code travels only inside sealed, short-lived state.
+7. The page confirms only after an explicit user action that shows the pending name, only for a flow this browser started, only while the row is unexpired by the page's own clock and the profile is still a guest, and clears the token after one attempt.
+8. The page treats the view change as an insert plus a delete (the view row has no primary key) and tolerates two rows inside one callback.
+9. The function sends the Discord handle (`username`) as `providerName`.
+10. A slow first Discord login can exceed the 5-minute code window; the UI must handle the refusal and offer to start again.
+
+**The confirm hash.** `confirmHash = base64url_nopad(SHA-256(token_bytes))` where `token_bytes` are the 32 bytes the token encodes (the token is their canonical base64url without padding, 43 characters; the hash is computed over the decoded bytes, not over the 43 characters). Node, for the function: `createHash('sha256').update(Buffer.from(token, 'base64url')).digest('base64url')`. Vector: token `AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA` (32 zero bytes) → hash `Zmh6rfhivXdsj8GLjp-OIAiXFIVu4jOzkCpZHQ1fKSU` (hex 66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925). Both fields must be canonical: the last of the 43 characters encodes 2 unused bits, which must be 0 (`AEIMQUYcgkosw048`); a non-canonical value is refused (`isBase64Url32`).
+
+**Windows.** The code: 5 minutes from the request until its presentation. The confirm window: 2 minutes from the presentation. A new `request_link_code` replaces the row, pending or not, so starting again abandons a pending link and its token stops working.
+
+**Clean-up.** A row is stale once `expiresAt` passes, before or after presentation (the sweep no longer reads `usedAt`); the inline sweep, the `run_identity_gc` backstop, `performUserDeletion` and `server_nuke_test_data` cover pending rows as before.
+
+**Logs.** No log line carries the code, the nonce, the token or the hash: `server_link_by_code` logs only the refusal reason, `confirm_link` logs nothing.
+
+**Publish note (schema change).** The four columns are appended at the end of `link_request` as `t.string().optional().default(undefined)`. Evidence it migrates in place:
+- The repo skill (`.claude/skills/spacetimedb/SKILL.md`, "Dangerous schema changes", from the 2.14.1 automatic-migrations doc) lists adding a column at the end of a table as safe when it has a default value, and adding one in the middle as the data-destroying case.
+- SDK 2.15.0 writes a column's default into the module definition when the column metadata has a `defaultValue` key (`node_modules/spacetimedb/dist/server/index.mjs`, the `Object.prototype.hasOwnProperty.call(meta, "defaultValue")` branch that fills `defaultValues`), and `.default(undefined)` on an option column sets that key (None).
+- Not verified locally: migration rules are enforced by the server (maincloud's version), and there is no local server here. A plain publish should migrate in place; if the server refuses, the table holds only short-lived rows, so a wipe is not needed for data, but the publish would need the server's answer first.
+- Also unverified: an add-column publish may disconnect connected clients (the skill notes that some migrations do; whether this one does is the server's behaviour).
 
 ## Phase History
 
@@ -491,12 +547,13 @@ method or provider id changes; a refresh of the same link keeps it.
 | A server deletion or ban of an organizer (`server_delete_user`, or a ban / delete sent as the SYSTEM user) cancels the unfinished tournaments through `cancelTournament` (explicit `serverDeletion` option); the reconnect-ban path documented as no hand-over | Phase S10s execution (DECISIONS.md A124) | 2026-11-10 |
 | `User` private; `UserPrivate` merged into it (provider columns + `linkedAt`, two indexes); `hasDiscordLinked` derived; `view_admin_users` for the Users tab | Phase S11a execution (DECISIONS.md A77) | 2026-11-11 |
 | One-time link codes: `request_link_code` (guest only, one row per identity, 5-minute code, inline sweep of 64 rows), `view_my_link_request`, `server_link_by_code` (one refusal text for unknown / used / expired; a refused merge throws its own text and leaves the code live; a successful link deletes the row); `request_link_code(clientNonce)`: the browser's 32-byte CSPRNG nonce is the secret input of the code (no `ctx.random`); `server_link_by_code` requires a Discord snowflake id; the shared merge strips control characters from the provider name and cuts it on a code point boundary; the merge moved to `planProviderLink` / `applyProviderLink`, shared with `server_link_provider`; link rows cleaned by `run_identity_gc`, `performUserDeletion`, `server_nuke_test_data` | Phase M5a execution (DECISIONS.md A44(3), A46) | 2026-11-13 |
+| The second lock: `server_link_by_code` presents only (pending account, `confirmHash`, `usedAt`, 2-minute window; a ban, the live-game rule or an account change refused with their own text); new `confirm_link(confirmToken)` by the requesting identity links and deletes the row; `link_request` gains `pendingProvider`, `pendingProviderId`, `pendingProviderName`, `confirmHash` (appended, default None); `view_my_link_request` adds `awaitingConfirm` and `pendingProviderName`, hides the code once presented, never shows the hash or the provider id; the sweep keys on `expiresAt` only | Phase M5a2 execution | 2026-11-13 |
 | The scheduled `run_user_deletion` and `run_identity_gc` refuse any caller but the scheduler (`ensureScheduler`, `ctx.senderAuth.isInternal`; L11); `admin_gc_identities` restarts a stopped `IdentityGcJob` chain (L6); a user deletion also removes the user's `LobbyCursorStamp` rows (L19) | Phase S11a execution (part 2, closing-triage items) | 2026-11-11 |
 | `performUserDeletion` ends with `removeDeletedUserFromLeaderboard` (the user's `Leaderboard` rows of every season go; the active season is rebuilt when it held one); `client_connected` admits a live Admin under maintenance mode; `login_as_guest` and the profile reducers (`resolveUser`) refuse a non-Admin under maintenance mode | Phase S11a execution (DECISIONS.md A163(1), A163(3)) | 2026-11-12 |
 
 ---
 
-*Last updated: 2026-11-13 (M5a)*
+*Last updated: 2026-11-13 (M5a2)*
 *Feature owner: Phase 01 / Phase 12 / Phase 16*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

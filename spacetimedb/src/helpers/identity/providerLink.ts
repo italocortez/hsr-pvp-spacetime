@@ -34,14 +34,22 @@ function isSeatedInLiveGame(ctx: any, userId: number): boolean {
     return false;
 }
 
-/** C0 controls, DEL and C1 controls. */
-const CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F]/g;
+/**
+ * C0 controls, DEL and C1 controls; and (M5a2 review) the Unicode bidi controls and zero-width format characters:
+ * U+061C, U+180E, U+200B-U+200F, U+202A-U+202E, U+2060-U+2064, U+2066-U+2069, U+FEFF.
+ */
+const CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F؜᠎​-‏‪-‮⁠-⁤⁦-⁩﻿]/g;
 
 /** The first `max` UTF-16 units of `s`, one fewer when the cut would leave a lone high surrogate. */
 export function capOnCodePoint(s: string, max: number): string {
     if (s.length <= max) return s;
     const code = s.charCodeAt(max - 1);
     return s.slice(0, code >= 0xd800 && code <= 0xdbff ? max - 1 : max);
+}
+
+/** The provider name as the merge stores it: control characters stripped, trimmed, capped on a code point boundary. */
+export function cleanProviderName(providerName: string | undefined): string {
+    return capOnCodePoint((providerName ?? '').replace(CONTROL_CHARS, '').trim(), USERNAME_MAX_LENGTH);
 }
 
 export interface ProviderLinkInput {
@@ -68,7 +76,7 @@ export function planProviderLink(ctx: any, input: ProviderLinkInput, resolveIden
     if (!providerId || providerId.length === 0) {
         throw new SenderError('providerId is required');
     }
-    const name = capOnCodePoint((providerName ?? '').replace(CONTROL_CHARS, '').trim(), USERNAME_MAX_LENGTH);
+    const name = cleanProviderName(providerName);
     if (name.length === 0) {
         throw new SenderError('providerName is required');
     }

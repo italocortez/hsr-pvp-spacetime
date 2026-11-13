@@ -155,8 +155,9 @@ export function generateLinkCode(ctx: any, previousCode: string | undefined, cli
 }
 
 /**
- * Deletes stale LinkRequest rows (expired, or with usedAt set) among the first `scanLimit` rows the table yields.
- * Returns how many went. Rows are collected first and deleted after the scan.
+ * Deletes stale LinkRequest rows among the first `scanLimit` rows the table yields.
+ * A row is stale once its expiresAt has passed: the 5-minute code window before presentation, the 2-minute confirm
+ * window after it (M5a2). Returns how many went. Rows are collected first and deleted after the scan.
  */
 export function sweepStaleLinkRequests(ctx: any, scanLimit: number): number {
     const nowMicros: bigint = ctx.timestamp.microsSinceUnixEpoch;
@@ -166,7 +167,7 @@ export function sweepStaleLinkRequests(ctx: any, scanLimit: number): number {
     for (const r of ctx.db.LinkRequest.iter()) {
         if (scanned >= scanLimit) break;
         scanned++;
-        if (r.usedAt !== undefined || r.expiresAt.microsSinceUnixEpoch <= nowMicros) stale.push(r.code);
+        if (r.expiresAt.microsSinceUnixEpoch <= nowMicros) stale.push(r.code);
     }
     for (const code of stale) ctx.db.LinkRequest.code.delete(code);
     return stale.length;
@@ -175,4 +176,111 @@ export function sweepStaleLinkRequests(ctx: any, scanLimit: number): number {
 /** performUserDeletion: every LinkRequest row of the user (user_id index). */
 export function deleteLinkRequestsOfUser(ctx: any, userId: number): void {
     for (const r of [...ctx.db.LinkRequest.user_id.filter(userId)]) ctx.db.LinkRequest.code.delete(r.code);
+}
+
+// ─── M5a2: the second lock (presentation, then confirmation by the requesting browser) ──────────────────────────────
+// server_link_by_code no longer merges: it records the Discord account as pending, with the SHA-256 of a one-time
+// confirm token that the auth function gave to the browser that finished Discord. confirm_link, called by the
+// requesting identity itself with that token, performs the merge. The function alone holds the hash, never the token
+// after the redirect, and cannot call confirm_link as the requesting identity.
+
+/** The confirm window after a presentation: two minutes, in microseconds. */
+export const CONFIRM_WINDOW_MICROS = 2n * 60n * 1_000_000n;
+
+/** Length of the confirm token and of the confirm hash: 32 bytes in base64url without padding. */
+export const CONFIRM_FIELD_LENGTH = 43;
+export const CONFIRM_HASH_INVALID_TEXT = 'confirmHash must be 43 base64url characters (a SHA-256 digest).';
+export const CONFIRM_TOKEN_INVALID_TEXT = 'confirmToken must be 43 base64url characters (32 bytes).';
+/** confirm_link: no row, not presented yet, or the confirm window has passed. */
+export const NO_PENDING_LINK_TEXT = 'No sign-in is waiting for confirmation. Please start again.';
+/** confirm_link: the token does not match the stored hash. */
+export const CONFIRM_REFUSED_TEXT = 'This sign-in could not be confirmed.';
+/** server_link_by_code / confirm_link: the identity no longer maps to the live guest that asked for the code. */
+export const ACCOUNT_CHANGED_TEXT = 'This account changed since the sign-in started. Please start again.';
+/** server_link_by_code with provider discord and a providerId that is not a snowflake (digits, 17 to 20). */
+export const NOT_A_DISCORD_ID_TEXT = 'providerId is not a Discord id.';
+export const DISCORD_ID_SHAPE = /^[0-9]{17,20}$/;
+
+// 43 base64url characters carry 258 bits; 32 bytes use 256 of them, so the last character's two low bits must be 0
+// (the canonical encoding Node's Buffer.toString('base64url') and any RFC 4648 encoder produce).
+const CANONICAL_43 = /^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/;
+
+/** True when `value` is the canonical base64url encoding (no padding) of exactly 32 bytes. */
+export function isBase64Url32(value: string): boolean {
+    return typeof value === 'string' && CANONICAL_43.test(value);
+}
+
+/** Decodes the canonical base64url encoding of 32 bytes (callers check isBase64Url32 first). */
+export function decodeBase64Url32(value: string): Uint8Array {
+    const out = new Uint8Array(32);
+    let acc = 0;
+    let bits = 0;
+    let j = 0;
+    for (let i = 0; i < value.length; i++) {
+        acc = (acc << 6) | B64URL.indexOf(value[i]);
+        bits += 6;
+        if (bits >= 8) {
+            bits -= 8;
+            if (j < 32) out[j++] = (acc >>> bits) & 0xff;
+        }
+        acc &= (1 << bits) - 1;
+    }
+    return out;
+}
+
+/** base64url without padding of any byte string (a 32-byte digest gives 43 characters). */
+export function encodeBase64Url(bytes: Uint8Array): string {
+    let out = '';
+    let i = 0;
+    for (; i + 3 <= bytes.length; i += 3) {
+        const n = (bytes[i] << 16) | (bytes[i + 1] << 8) | bytes[i + 2];
+        out += B64URL[(n >>> 18) & 63] + B64URL[(n >>> 12) & 63] + B64URL[(n >>> 6) & 63] + B64URL[n & 63];
+    }
+    const rest = bytes.length - i;
+    if (rest === 1) {
+        const n = bytes[i] << 16;
+        out += B64URL[(n >>> 18) & 63] + B64URL[(n >>> 12) & 63];
+    } else if (rest === 2) {
+        const n = (bytes[i] << 16) | (bytes[i + 1] << 8);
+        out += B64URL[(n >>> 18) & 63] + B64URL[(n >>> 12) & 63] + B64URL[(n >>> 6) & 63];
+    }
+    return out;
+}
+
+/**
+ * The confirm hash of a confirm token: SHA-256 over the token's 32 DECODED bytes (not over its 43 characters), written
+ * as base64url without padding (43 characters). The auth function computes the same with
+ * `createHash('sha256').update(Buffer.from(token, 'base64url')).digest('base64url')`.
+ * Vector: the token of 32 zero bytes, 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', hashes to
+ * 'Zmh6rfhivXdsj8GLjp-OIAiXFIVu4jOzkCpZHQ1fKSU'.
+ */
+export function confirmHashOf(token: string): string {
+    return encodeBase64Url(sha256(decodeBase64Url32(token)));
+}
+
+/** Compares two equal-length strings without an early exit. */
+export function sameText(a: string, b: string): boolean {
+    if (a.length !== b.length) return false;
+    let diff = 0;
+    for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    return diff === 0;
+}
+
+/** The row has been presented by the server and waits for confirm_link. */
+export function isAwaitingConfirm(row: any): boolean {
+    return row.usedAt !== undefined && row.pendingProviderId !== undefined && row.confirmHash !== undefined;
+}
+
+/**
+ * server_link_by_code and confirm_link: the row's identity must still map to the live guest that asked for the code
+ * (same user id, still a guest, no provider, not soft-deleted). An identity with no mapping is left to planProviderLink
+ * ("Identity not registered").
+ */
+export function ensureStillTheRequestingGuest(ctx: any, row: any): void {
+    const mapping = ctx.db.UserIdentity.identity.find(row.identity);
+    if (!mapping) return;
+    const user = ctx.db.User.id.find(mapping.userId);
+    if (mapping.userId !== row.userId || !user || !user.isGuest || user.loginMethod !== undefined || user.deletedAt !== undefined) {
+        throw new SenderError(ACCOUNT_CHANGED_TEXT);
+    }
 }

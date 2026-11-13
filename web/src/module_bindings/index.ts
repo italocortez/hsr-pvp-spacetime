@@ -88,6 +88,7 @@ import CloseGameReducer from "./close_game_reducer";
 import CloseLobbyReducer from "./close_lobby_reducer";
 import ConcedeMatchReducer from "./concede_match_reducer";
 import ConfirmGameReducer from "./confirm_game_reducer";
+import ConfirmLinkReducer from "./confirm_link_reducer";
 import ConfirmReadyReducer from "./confirm_ready_reducer";
 import CreateAchievementReducer from "./create_achievement_reducer";
 import CreateAvailabilitySlotReducer from "./create_availability_slot_reducer";
@@ -1175,6 +1176,7 @@ const reducersSchema = __reducers(
   __reducerSchema("close_lobby", CloseLobbyReducer),
   __reducerSchema("concede_match", ConcedeMatchReducer),
   __reducerSchema("confirm_game", ConfirmGameReducer),
+  __reducerSchema("confirm_link", ConfirmLinkReducer),
   __reducerSchema("confirm_ready", ConfirmReadyReducer),
   __reducerSchema("create_achievement", CreateAchievementReducer),
   __reducerSchema("create_availability_slot", CreateAvailabilitySlotReducer),

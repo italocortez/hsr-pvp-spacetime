@@ -8,15 +8,17 @@ import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { handOverMatchEventsOfFormerStaff } from '@module/helpers/calendar/calendarCascade';
 import { seedSystemLobbyPreset } from '@module/helpers/lobby/systemPreset';
 import { setGuestCreationEnabled, setGuestLobbyCreationEnabled } from '@module/helpers/lobby/abuseControls';
-import { applyProviderLink, planProviderLink } from '@module/helpers/identity/providerLink';
-import { LINK_CODE_REFUSED_TEXT } from '@module/helpers/identity/linkCode';
+import { applyProviderLink, cleanProviderName, planProviderLink } from '@module/helpers/identity/providerLink';
+import {
+    CONFIRM_HASH_INVALID_TEXT,
+    CONFIRM_WINDOW_MICROS,
+    DISCORD_ID_SHAPE,
+    LINK_CODE_REFUSED_TEXT,
+    NOT_A_DISCORD_ID_TEXT,
+    ensureStillTheRequestingGuest,
+    isBase64Url32,
+} from '@module/helpers/identity/linkCode';
 import { DISCORD_LOGIN_METHOD } from '@module/helpers/lobby/banHelper';
-
-/** M5a: server_link_by_code for a live code whose identity no longer maps to the live guest that asked for it. */
-export const ACCOUNT_CHANGED_TEXT = 'This account changed since the sign-in started. Please start again.';
-/** M5a: server_link_by_code with provider discord and a providerId that is not a snowflake (digits, 17 to 20). */
-export const NOT_A_DISCORD_ID_TEXT = 'providerId is not a Discord id.';
-const DISCORD_ID_SHAPE = /^[0-9]{17,20}$/;
 
 /**
  * Guard: the caller is a registered server identity (Owner or Delegate, §C.4).
@@ -161,30 +163,33 @@ export const server_link_provider = spacetimedb.reducer({
 });
 
 /**
- * M5a (A44(3), A46): server-only reducer, the auth function's one call. The browser asked for a one-time code with
- * request_link_code and sent only that code to the function; after Discord confirms the user, the function (delegate
- * token) names the code and the Discord account here. The code resolves to the identity that asked, and the merge of
- * server_link_provider runs for that identity (planProviderLink / applyProviderLink, no copy).
+ * M5a (A44(3), A46), M5a2 (the second lock): server-only reducer, the auth function's one call. The browser asked for a
+ * one-time code with request_link_code and sent only that code to the function; after Discord confirms the user, the
+ * function (delegate token) presents the code here with the Discord account and the hash of a one-time confirm token it
+ * hands to the browser that finished Discord. Nothing is linked here: the requesting identity links with confirm_link.
  *
- * - A missing, used or expired code is refused with one text (LINK_CODE_REFUSED_TEXT), so the function cannot be used
- *   to tell the three apart; the precise reason goes to the module log (never the code itself). Nothing changes.
- * - For a live code the merge runs. A refusal (ban, input validation, the A113(4) live-game rule, an identity with no
- *   user, or ACCOUNT_CHANGED_TEXT when the identity no longer maps to the live guest that asked) throws that SenderError
- *   so the auth function can show the reason; the transaction rolls back and the code stays live until it expires or
- *   the guest asks for a new one.
- * - On success the row is deleted in the same transaction (single use).
+ * - Input checks first (before the code is looked at): a Discord providerId is a snowflake (NOT_A_DISCORD_ID_TEXT);
+ *   confirmHash is the canonical base64url of 32 bytes (CONFIRM_HASH_INVALID_TEXT).
+ * - A missing, already presented (usedAt set) or expired code is refused with one text (LINK_CODE_REFUSED_TEXT), so
+ *   the function cannot tell them apart; the reason goes to the module log (never the code, token or hash).
+ * - Pre-check of the link as it would run now: the account-changed check and planProviderLink. A refusal (ban, input,
+ *   the A113(4) live-game rule, no mapping, account changed) throws its own text; the code stays live.
+ * - Otherwise the row records the pending account (provider, id, cleaned name), confirmHash, usedAt = now and
+ *   expiresAt = now + 2 minutes (the confirm window). One presentation per code. Nothing is written to User.
  */
 export const server_link_by_code = spacetimedb.reducer({
     linkCode: t.string(),
     provider: t.string(),
     providerId: t.string(),
     providerName: t.string(),
-}, (ctx, { linkCode, provider, providerId, providerName }) => {
+    confirmHash: t.string(),
+}, (ctx, { linkCode, provider, providerId, providerName, confirmHash }) => {
     requireServer(ctx);
     // A Discord user id is a snowflake: digits only, 17 to 20 long. Checked before the code is looked at.
     if (provider === DISCORD_LOGIN_METHOD && !DISCORD_ID_SHAPE.test(providerId)) {
         throw new SenderError(NOT_A_DISCORD_ID_TEXT);
     }
+    if (!isBase64Url32(confirmHash)) throw new SenderError(CONFIRM_HASH_INVALID_TEXT);
 
     const refuse = (reason: string) => {
         console.log(`[LINK] server_link_by_code refused: ${reason}`);
@@ -192,19 +197,20 @@ export const server_link_by_code = spacetimedb.reducer({
     };
     const row = linkCode ? ctx.db.LinkRequest.code.find(linkCode) : undefined;
     if (!row) throw refuse('unknown code');
-    if (row.usedAt !== undefined) throw refuse('code already used');
+    if (row.usedAt !== undefined) throw refuse('code already presented');
     if (row.expiresAt.microsSinceUnixEpoch <= ctx.timestamp.microsSinceUnixEpoch) throw refuse('code expired');
 
-    const mapping = ctx.db.UserIdentity.identity.find(row.identity);
-    const user = mapping ? ctx.db.User.id.find(mapping.userId) : undefined;
-    if (mapping && (mapping.userId !== row.userId || !user || !user.isGuest || user.loginMethod !== undefined || user.deletedAt !== undefined)) {
-        throw new SenderError(ACCOUNT_CHANGED_TEXT);
-    }
-    const plan = planProviderLink(ctx, { provider, providerId, providerName }, () => row.identity);
+    ensureStillTheRequestingGuest(ctx, row);
+    planProviderLink(ctx, { provider, providerId, providerName }, () => row.identity);
 
-    // Single use: the row goes with the successful link.
-    ctx.db.LinkRequest.code.delete(row.code);
-    applyProviderLink(ctx, plan);
+    ctx.db.LinkRequest.code.update(updateWithAudit(ctx, row, {
+        usedAt: ctx.timestamp,
+        expiresAt: new Timestamp(ctx.timestamp.microsSinceUnixEpoch + CONFIRM_WINDOW_MICROS),
+        pendingProvider: provider,
+        pendingProviderId: providerId,
+        pendingProviderName: cleanProviderName(providerName),
+        confirmHash,
+    }, SYSTEM_USER_ID));
 });
 
 /**

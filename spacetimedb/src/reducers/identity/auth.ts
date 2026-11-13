@@ -1,7 +1,22 @@
 import spacetimedb from '@module/schema';
 import { SenderError, t } from 'spacetimedb/server';
 import { Timestamp } from 'spacetimedb';
-import { checkClientNonce, generateLinkCode, LINK_CODE_TTL_MICROS, LINK_SWEEP_SCAN_LIMIT, sweepStaleLinkRequests } from '@module/helpers/identity/linkCode';
+import {
+    CONFIRM_REFUSED_TEXT,
+    CONFIRM_TOKEN_INVALID_TEXT,
+    NO_PENDING_LINK_TEXT,
+    checkClientNonce,
+    confirmHashOf,
+    ensureStillTheRequestingGuest,
+    generateLinkCode,
+    isAwaitingConfirm,
+    isBase64Url32,
+    LINK_CODE_TTL_MICROS,
+    LINK_SWEEP_SCAN_LIMIT,
+    sameText,
+    sweepStaleLinkRequests,
+} from '@module/helpers/identity/linkCode';
+import { applyProviderLink, planProviderLink } from '@module/helpers/identity/providerLink';
 import { SYSTEM_USER_ID } from '@module/helpers/admin/auditColumns';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { markPresenceOnline } from '@module/helpers/identity/presenceHelpers';
@@ -95,7 +110,9 @@ const DELETED_ACCOUNT_TEXT = 'Unauthorized: This account has been deleted.';
  *   has a provider linked.
  * - One live request per identity (LinkRequest.identity unique): the caller's previous row is deleted first, so its
  *   code stops working.
- * - Clean-up: up to LINK_SWEEP_SCAN_LIMIT rows of the table are examined and the expired or used ones deleted.
+ * - One live request per identity also means a pending (presented) row is dropped: starting again abandons it, and its
+ *   confirm token stops working (M5a2).
+ * - Clean-up: up to LINK_SWEEP_SCAN_LIMIT rows of the table are examined and the expired ones deleted.
  * - The code: generateLinkCode (32 base64url characters from a SHA-256 digest that includes the client nonce); expiresAt = now + 5 minutes.
  * No per-user rate window: like the other identity reducers, the one-row-per-identity rule is the limit.
  */
@@ -120,5 +137,50 @@ export const request_link_code = spacetimedb.reducer({
         userId: user.id,
         expiresAt: new Timestamp(ctx.timestamp.microsSinceUnixEpoch + LINK_CODE_TTL_MICROS),
         usedAt: undefined,
+        pendingProvider: undefined,
+        pendingProviderId: undefined,
+        pendingProviderName: undefined,
+        confirmHash: undefined,
     }, user.id));
+});
+
+/**
+ * M5a2 (the second lock): the requesting browser confirms the Discord account the auth function presented. The caller
+ * is ctx.sender and must be the identity that asked for the code: its own row is found by the unique identity index,
+ * so a token is useless on any other connection. confirmToken is the one-time token the function gave to the browser
+ * that finished Discord (32 bytes, canonical base64url, 43 characters); its hash is confirmHashOf (SHA-256 over the 32
+ * decoded bytes, base64url).
+ * - Refused, in order: a malformed token (CONFIRM_TOKEN_INVALID_TEXT); maintenance mode for a non-Admin; no live user;
+ *   a soft-deleted (deleted or banned) user; no presented row for this identity or its 2-minute window has passed
+ *   (NO_PENDING_LINK_TEXT); a token whose hash does not match (CONFIRM_REFUSED_TEXT, no attempt counter: 256 bits);
+ *   the account changed since the request (ACCOUNT_CHANGED_TEXT); the merge's own refusal (planProviderLink, run again
+ *   because state may have changed: a ban, the A113(4) live-game rule). Every refusal rolls back; the row is unchanged.
+ * - Otherwise, in one transaction: the row is deleted and applyProviderLink links this identity (Case 1a upgrade, or
+ *   Case 1b re-point when the Discord user already exists).
+ */
+export const confirm_link = spacetimedb.reducer({
+    confirmToken: t.string(),
+}, (ctx, { confirmToken }) => {
+    if (!isBase64Url32(confirmToken)) throw new SenderError(CONFIRM_TOKEN_INVALID_TEXT);
+    const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
+    const user = mapping ? ctx.db.User.id.find(mapping.userId) : undefined;
+    ensureNotInMaintenance(ctx, user);
+    if (!mapping || !user) throw new SenderError(NO_ACCOUNT_FOR_LINK_TEXT);
+    if (user.deletedAt !== undefined) throw new SenderError(DELETED_ACCOUNT_TEXT);
+
+    const row = ctx.db.LinkRequest.identity.find(ctx.sender);
+    if (!row || !isAwaitingConfirm(row) || row.expiresAt.microsSinceUnixEpoch <= ctx.timestamp.microsSinceUnixEpoch) {
+        throw new SenderError(NO_PENDING_LINK_TEXT);
+    }
+    if (!sameText(confirmHashOf(confirmToken), row.confirmHash ?? '')) throw new SenderError(CONFIRM_REFUSED_TEXT);
+
+    ensureStillTheRequestingGuest(ctx, row);
+    const plan = planProviderLink(ctx, {
+        provider: row.pendingProvider ?? '',
+        providerId: row.pendingProviderId ?? '',
+        providerName: row.pendingProviderName ?? '',
+    }, () => ctx.sender);
+
+    ctx.db.LinkRequest.code.delete(row.code);
+    applyProviderLink(ctx, plan);
 });
