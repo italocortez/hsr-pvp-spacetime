@@ -1,6 +1,7 @@
 import { createRootRouteWithContext, Outlet } from '@tanstack/react-router';
 import { lazy, Suspense } from 'react';
 import type { AuthSnapshot } from '@/auth/authStore';
+import { ConnectionGate } from '@/stdb/ConnectionGate';
 
 export type RouterContext = { auth: AuthSnapshot };
 
@@ -20,7 +21,9 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 function RootLayout() {
     return (
         <>
-            <Outlet />
+            <ConnectionGate>
+                <Outlet />
+            </ConnectionGate>
             <Suspense>
                 <RouterDevtools />
             </Suspense>

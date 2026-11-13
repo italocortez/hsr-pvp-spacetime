@@ -15,14 +15,26 @@ type Props = {
     lede: ReactNode;
     /** Optional block between the title and the lede (the standby module pill). */
     children?: ReactNode;
+    /** The CTA; default: the "Return to Base" link to `/` (the connection splashes pass Retry). */
+    action?: ReactNode;
 };
 
 /**
  * Full-bleed editorial screen from design/mockups/standby.html (DESIGN.md §4.5): art + scrims,
  * brand mark, HUD chip, text column with one IPC CTA back to base, bottom HUD line.
- * Used by the standby page and, through `ErrorSplash`, the 404 and no-access pages.
+ * Used by the standby page and, through `ErrorSplash`, the 404 and no-access pages, and through
+ * `ConnectionSplash` the offline and maintenance screens.
  */
-export function SplashLayout({ image, hudLabel, hudCoord, eyebrow, title, lede, children }: Props) {
+export function SplashLayout({
+    image,
+    hudLabel,
+    hudCoord,
+    eyebrow,
+    title,
+    lede,
+    children,
+    action = <IpcButton to="/">Return to Base</IpcButton>,
+}: Props) {
     return (
         <main className={styles.splash}>
             <img
@@ -52,9 +64,7 @@ export function SplashLayout({ image, hudLabel, hudCoord, eyebrow, title, lede, 
                 <h1 className={styles.title}>{title}</h1>
                 {children}
                 <p className={styles.lede}>{lede}</p>
-                <div className={styles.cta}>
-                    <IpcButton to="/">Return to Base</IpcButton>
-                </div>
+                <div className={styles.cta}>{action}</div>
             </div>
 
             <div className={styles.bottomHud} aria-hidden="true">

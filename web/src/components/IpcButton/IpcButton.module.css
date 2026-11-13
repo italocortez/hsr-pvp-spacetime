@@ -87,3 +87,13 @@
         inline-size: 30px;
     }
 }
+
+/*
+ * The button form of the CTA: no native border or background (the fill is the pseudo-element),
+ * and even padding since it has no leading arrow.
+ */
+.button {
+    padding-inline: 28px;
+    border: 0;
+    background: none;
+}

@@ -20,3 +20,21 @@ export function IpcButton({ to, children }: { to: FixedPath; children: ReactNode
         </Link>
     );
 }
+
+/**
+ * The same CTA as a button, for an in-place action (Retry on the connection splashes). No arrow:
+ * the arrow means "go somewhere"; an action stays on the page.
+ */
+export function IpcActionButton({
+    onClick,
+    children,
+}: {
+    onClick: () => void;
+    children: ReactNode;
+}) {
+    return (
+        <button type="button" className={`${styles.cta} ${styles.button}`} onClick={onClick}>
+            <span>{children}</span>
+        </button>
+    );
+}

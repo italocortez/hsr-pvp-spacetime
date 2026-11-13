@@ -65,7 +65,12 @@ if (!existsSync(DIST)) {
         // 2. A module that forgot `@import '@/styles/media.css'` leaves custom media unresolved.
         if (path.endsWith('.css')) scan('custom-media', file, ['(--bp-', '@custom-media']);
         // 3. Dev-only helpers stay out of the production build.
-        scan('dev-only', file, ['__devAuth', 'TanStackRouterDevtools']);
+        scan('dev-only', file, [
+            '__devAuth',
+            '__devConnection',
+            '__wireStats',
+            'TanStackRouterDevtools',
+        ]);
         // 4. Fonts are self-hosted (no Google Fonts requests).
         scan('google-fonts', file, ['fonts.googleapis.com', 'fonts.gstatic.com']);
         // 6. No test code in the built site: test libraries, or a test file.

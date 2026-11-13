@@ -1,16 +1,16 @@
-import type { Role } from '@bindings/types';
+import type { MyProfileRow, Role } from '@bindings/types';
 import { useSyncExternalStore } from 'react';
 
-/** What the router guards need to know about the viewer. M6 feeds it from the connection. */
+/** What the router guards need to know about the viewer, fed from `view_my_profile` (stdb/layer0.ts). */
 export type AuthSnapshot = {
     /** False until the connection has said who the viewer is; guards wait instead of redirecting. */
     ready: boolean;
     /** Absent for a visitor (not signed in). */
-    user?: { id: bigint; role: Role; isGuest: boolean };
+    user?: { id: MyProfileRow['id']; role: Role; isGuest: boolean };
 };
 
-// Until M6 there is no connection: everyone is a ready visitor.
-let snapshot: AuthSnapshot = { ready: true };
+// Not ready until the first `view_my_profile` result arrives (stdb/layer0.ts); tests set snapshots.
+let snapshot: AuthSnapshot = { ready: false };
 const listeners = new Set<() => void>();
 
 /** A tiny external store for `useSyncExternalStore`. Snapshots are replaced, never mutated. */
