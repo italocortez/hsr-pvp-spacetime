@@ -10,7 +10,6 @@ type Micros = { microsSinceUnixEpoch: bigint };
 const OK: GuardResult = { ok: true };
 const no = (reason: string): GuardResult => ({ ok: false, reason });
 
-
 /** The `TournamentEnrolled` row of a team member; `undefined` = the member is not enrolled. */
 export interface EligibilityMember {
     status: Tag<string>;
@@ -33,13 +32,17 @@ export function isEligibleTeam(
     members: readonly (EligibilityMember | undefined)[],
     settings: EligibilitySettings,
 ): GuardResult {
-    if (team.status.tag !== 'Forming' && team.status.tag !== 'Ready') return no(`Team is ${team.status.tag}.`);
-    if (members.length !== settings.teamSize) return no(`Team has ${members.length} of ${settings.teamSize} members.`);
+    if (team.status.tag !== 'Forming' && team.status.tag !== 'Ready')
+        return no(`Team is ${team.status.tag}.`);
+    if (members.length !== settings.teamSize)
+        return no(`Team has ${members.length} of ${settings.teamSize} members.`);
     for (const m of members) {
         if (!m) return no('A member is not enrolled.');
         if (m.isWaitlisted) return no('A member is waitlisted.');
-        if (settings.requireApproval && m.approvedByToAt === undefined) return no('A member awaits approval.');
-        if (m.status.tag !== 'Registered' && m.status.tag !== 'CheckedIn') return no(`A member is ${m.status.tag}.`);
+        if (settings.requireApproval && m.approvedByToAt === undefined)
+            return no('A member awaits approval.');
+        if (m.status.tag !== 'Registered' && m.status.tag !== 'CheckedIn')
+            return no(`A member is ${m.status.tag}.`);
     }
     return OK;
 }
@@ -52,8 +55,13 @@ export const allowsThirdPlace = (format: Tag<string>): boolean =>
  * Draft → Registration, pure part: stage Draft and A29. The rules / selectable cost set checks need ctx and stay
  * in the reducer.
  */
-export function canOpenRegistration(tournament: { stage: Tag<string>; format: Tag<string>; has3rdPlaceMatch: boolean }): GuardResult {
-    if (tournament.stage.tag !== 'Draft') return no(`Tournament is in ${tournament.stage.tag}, not Draft.`);
+export function canOpenRegistration(tournament: {
+    stage: Tag<string>;
+    format: Tag<string>;
+    has3rdPlaceMatch: boolean;
+}): GuardResult {
+    if (tournament.stage.tag !== 'Draft')
+        return no(`Tournament is in ${tournament.stage.tag}, not Draft.`);
     if (tournament.has3rdPlaceMatch && !allowsThirdPlace(tournament.format)) {
         return no('A third-place match exists only in single elimination.');
     }
@@ -69,9 +77,11 @@ export function canCloseRegistration(
     eligibleTeamCount: number,
 ): GuardResult {
     const stage = tournament.stage.tag;
-    if (stage === 'Registration' && tournament.checkInEnabled) return no('Check-in is enabled: move to CheckIn first.');
+    if (stage === 'Registration' && tournament.checkInEnabled)
+        return no('Check-in is enabled: move to CheckIn first.');
     if (stage !== 'Registration' && stage !== 'CheckIn') return no(`Tournament is in ${stage}.`);
-    if (eligibleTeamCount < 2) return no(`At least 2 eligible teams are needed (${eligibleTeamCount}).`);
+    if (eligibleTeamCount < 2)
+        return no(`At least 2 eligible teams are needed (${eligibleTeamCount}).`);
     return OK;
 }
 
@@ -91,14 +101,21 @@ export function canStartInProgress(
     tournament: { stage: Tag<string>; bracketGeneratedAt?: Micros; lastSeedChangeAt?: Micros },
     bracketRows: readonly GuardBracketRow[],
 ): GuardResult {
-    if (tournament.stage.tag !== 'Seeding') return no(`Tournament is in ${tournament.stage.tag}, not Seeding.`);
+    if (tournament.stage.tag !== 'Seeding')
+        return no(`Tournament is in ${tournament.stage.tag}, not Seeding.`);
     const generated = tournament.bracketGeneratedAt;
     if (!generated || bracketRows.length === 0) return no('Generate the bracket first.');
-    if (tournament.lastSeedChangeAt && generated.microsSinceUnixEpoch < tournament.lastSeedChangeAt.microsSinceUnixEpoch) {
+    if (
+        tournament.lastSeedChangeAt &&
+        generated.microsSinceUnixEpoch < tournament.lastSeedChangeAt.microsSinceUnixEpoch
+    ) {
         return no('Seeding changed after the bracket was generated; regenerate it.');
     }
-    const firstRound = bracketRows.filter((r) =>
-        r.roundNumber === 1 && (r.bracketSide.tag === 'Winners' || r.bracketSide.tag === 'Group'));
+    const firstRound = bracketRows.filter(
+        (r) =>
+            r.roundNumber === 1 &&
+            (r.bracketSide.tag === 'Winners' || r.bracketSide.tag === 'Group'),
+    );
     if (firstRound.some((r) => r.team1Id === undefined && r.team2Id === undefined)) {
         return no('A first-round match has no team.');
     }
@@ -108,10 +125,16 @@ export function canStartInProgress(
 /** InProgress → Completed (review §5.1): every match Decided / Walkover / Void and no tournament lobby left.
  * Gap: for the GroupInto* formats this passes once every group row is settled even before the elimination rows
  * exist; S8d must check `format` / the presence of elimination rows before calling it. */
-export function canComplete(bracketRows: readonly GuardBracketRow[], liveTournamentLobbyCount: number): GuardResult {
+export function canComplete(
+    bracketRows: readonly GuardBracketRow[],
+    liveTournamentLobbyCount: number,
+): GuardResult {
     if (bracketRows.length === 0) return no('The tournament has no bracket.');
-    const open = bracketRows.filter((r) => r.state.tag !== 'Decided' && r.state.tag !== 'Walkover' && r.state.tag !== 'Void');
+    const open = bracketRows.filter(
+        (r) => r.state.tag !== 'Decided' && r.state.tag !== 'Walkover' && r.state.tag !== 'Void',
+    );
     if (open.length > 0) return no(`${open.length} bracket match(es) are not settled.`);
-    if (liveTournamentLobbyCount > 0) return no(`${liveTournamentLobbyCount} tournament lobby(ies) still open.`);
+    if (liveTournamentLobbyCount > 0)
+        return no(`${liveTournamentLobbyCount} tournament lobby(ies) still open.`);
     return OK;
 }

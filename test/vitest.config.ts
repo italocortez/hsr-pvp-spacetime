@@ -10,8 +10,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@/src/module_bindings': path.resolve(__dirname, '../web/src/module_bindings'),
-      '@/': path.resolve(__dirname, '../') + '/',
+      '@bindings': path.resolve(__dirname, '../web/src/module_bindings'),
       // tsconfig.base.json paths: module helpers reached by the unit suites import the shared barrels (S7).
       '@shared': path.resolve(__dirname, '../shared'),
       // spacetimedb/tsconfig.json @module/*: module helpers import each other through the alias (S8h).

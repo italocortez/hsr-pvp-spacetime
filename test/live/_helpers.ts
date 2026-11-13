@@ -9,7 +9,7 @@
  * Errors propagate: no helper swallows a reducer rejection.
  */
 
-import { DbConnection, type SubscriptionHandle } from '@/src/module_bindings';
+import { DbConnection, type SubscriptionHandle } from '@bindings/index';
 import { backendEnv, serverToken } from '../shared/env';
 
 export type Reducers = DbConnection['reducers'];

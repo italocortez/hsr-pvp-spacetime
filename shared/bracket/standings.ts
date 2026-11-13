@@ -13,12 +13,12 @@ export interface DecidedGroupMatch {
 
 export interface GroupTeam {
     teamId: number;
-    seedNumber: number;   // lower = better; the glue passes +Infinity-like values for unseeded teams
+    seedNumber: number; // lower = better; the glue passes +Infinity-like values for unseeded teams
 }
 
 export interface RankedTeam {
     teamId: number;
-    rank: number;         // 1-based, unique (the A30 order is total)
+    rank: number; // 1-based, unique (the A30 order is total)
     wins: number;
     gameDiff: number;
 }
@@ -28,12 +28,20 @@ export interface GroupTeamStats {
     teamId: number;
     seedNumber: number;
     wins: number;
-    gameDiff: number;     // own games minus opponents' games over the group's decided matches
+    gameDiff: number; // own games minus opponents' games over the group's decided matches
 }
 
 /** Wins and game differential per team (matches with a team outside `teams` are ignored). */
-export function groupTeamStats(matches: readonly DecidedGroupMatch[], teams: readonly GroupTeam[]): GroupTeamStats[] {
-    const stats = new Map<number, GroupTeamStats>(teams.map((t) => [t.teamId, { teamId: t.teamId, seedNumber: t.seedNumber, wins: 0, gameDiff: 0 }]));
+export function groupTeamStats(
+    matches: readonly DecidedGroupMatch[],
+    teams: readonly GroupTeam[],
+): GroupTeamStats[] {
+    const stats = new Map<number, GroupTeamStats>(
+        teams.map((t) => [
+            t.teamId,
+            { teamId: t.teamId, seedNumber: t.seedNumber, wins: 0, gameDiff: 0 },
+        ]),
+    );
     for (const m of matches) {
         const a = stats.get(m.team1Id);
         const b = stats.get(m.team2Id);
@@ -47,8 +55,14 @@ export function groupTeamStats(matches: readonly DecidedGroupMatch[], teams: rea
 }
 
 /** The winner of the decided match between two teams, if they have played. */
-function headToHeadWinner(matches: readonly DecidedGroupMatch[], x: number, y: number): number | undefined {
-    const m = matches.find((r) => (r.team1Id === x && r.team2Id === y) || (r.team1Id === y && r.team2Id === x));
+function headToHeadWinner(
+    matches: readonly DecidedGroupMatch[],
+    x: number,
+    y: number,
+): number | undefined {
+    const m = matches.find(
+        (r) => (r.team1Id === x && r.team2Id === y) || (r.team1Id === y && r.team2Id === x),
+    );
     return m?.winnerTeamId;
 }
 
@@ -75,7 +89,10 @@ export function compareGroupTeams(
 }
 
 /** A30: ranks one group from its decided matches. */
-export function rankGroup(matches: readonly DecidedGroupMatch[], teams: readonly GroupTeam[]): RankedTeam[] {
+export function rankGroup(
+    matches: readonly DecidedGroupMatch[],
+    teams: readonly GroupTeam[],
+): RankedTeam[] {
     const stats = groupTeamStats(matches, teams);
     return [...stats]
         .sort((a, b) => compareGroupTeams(a, b, matches, stats))

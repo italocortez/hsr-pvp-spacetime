@@ -27,7 +27,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import type { DbConnection } from '@/src/module_bindings';
+import type { DbConnection } from '@bindings/index';
 import { hasServerToken } from '../shared/connection';
 import {
     type LiveConn,

@@ -28,7 +28,7 @@ export type BracketSide = 'Winners' | 'Losers' | 'GrandFinals' | 'ThirdPlace' | 
 export type Slot = 1 | 2;
 
 export type SlotSource =
-    | { kind: 'seed'; seed: number }          // 1-based; seed > teamCount means BYE
+    | { kind: 'seed'; seed: number } // 1-based; seed > teamCount means BYE
     | { kind: 'winner'; from: string }
     | { kind: 'loser'; from: string };
 
@@ -38,21 +38,21 @@ export interface Route {
 }
 
 export interface MatchSpec {
-    key: string;                 // 'W-R1-M1', 'L-R2-M1', 'GF', 'TP'
+    key: string; // 'W-R1-M1', 'L-R2-M1', 'GF', 'TP'
     side: BracketSide;
-    round: number;               // per side, 1-based
-    number: number;              // per side+round, 1-based
+    round: number; // per side, 1-based
+    number: number; // per side+round, 1-based
     sources: [SlotSource, SlotSource];
     winnerTo?: Route;
-    loserTo?: Route;             // undefined = the loser is eliminated
-    winnerAdvantage: number;     // games slot 1 starts with (GF only)
+    loserTo?: Route; // undefined = the loser is eliminated
+    winnerAdvantage: number; // games slot 1 starts with (GF only)
 }
 
 export interface BracketSpec {
     format: 'single' | 'double';
     teamCount: number;
     bracketSize: number;
-    matches: MatchSpec[];        // topological order: every source refers to an earlier match
+    matches: MatchSpec[]; // topological order: every source refers to an earlier match
 }
 
 // ─── Seeding ────────────────────────────────────────────────────────────────
@@ -96,8 +96,14 @@ function buildWinnersBracket(bracketSize: number): MatchSpec[] {
     const out: MatchSpec[] = [];
     foldSeeding(bracketSize).forEach(([s1, s2], i) => {
         out.push({
-            key: wbKey(1, i + 1), side: 'Winners', round: 1, number: i + 1,
-            sources: [{ kind: 'seed', seed: s1 }, { kind: 'seed', seed: s2 }],
+            key: wbKey(1, i + 1),
+            side: 'Winners',
+            round: 1,
+            number: i + 1,
+            sources: [
+                { kind: 'seed', seed: s1 },
+                { kind: 'seed', seed: s2 },
+            ],
             winnerAdvantage: 0,
         });
     });
@@ -105,7 +111,10 @@ function buildWinnersBracket(bracketSize: number): MatchSpec[] {
         const count = bracketSize / 2 ** r;
         for (let m = 1; m <= count; m++) {
             out.push({
-                key: wbKey(r, m), side: 'Winners', round: r, number: m,
+                key: wbKey(r, m),
+                side: 'Winners',
+                round: r,
+                number: m,
                 sources: [
                     { kind: 'winner', from: wbKey(r - 1, 2 * m - 1) },
                     { kind: 'winner', from: wbKey(r - 1, 2 * m) },
@@ -119,7 +128,7 @@ function buildWinnersBracket(bracketSize: number): MatchSpec[] {
 
 /** Fill winnerTo / loserTo from the sources (single source of truth = sources). */
 function wireRoutes(matches: MatchSpec[]): void {
-    const byKey = new Map(matches.map(m => [m.key, m]));
+    const byKey = new Map(matches.map((m) => [m.key, m]));
     for (const m of matches) {
         m.sources.forEach((src, idx) => {
             if (src.kind === 'seed') return;
@@ -137,14 +146,21 @@ function wireRoutes(matches: MatchSpec[]): void {
     }
 }
 
-export function generateSingleElim(teamCount: number, opts: { thirdPlace?: boolean } = {}): BracketSpec {
-    if (!Number.isInteger(teamCount) || teamCount < 2) throw new Error('Single elimination needs at least 2 teams.');
+export function generateSingleElim(
+    teamCount: number,
+    opts: { thirdPlace?: boolean } = {},
+): BracketSpec {
+    if (!Number.isInteger(teamCount) || teamCount < 2)
+        throw new Error('Single elimination needs at least 2 teams.');
     const bracketSize = nextPowerOf2(teamCount);
     const rounds = Math.log2(bracketSize);
     const matches = buildWinnersBracket(bracketSize);
     if (opts.thirdPlace && rounds >= 2) {
         matches.push({
-            key: TP_KEY, side: 'ThirdPlace', round: rounds, number: 1,
+            key: TP_KEY,
+            side: 'ThirdPlace',
+            round: rounds,
+            number: 1,
             sources: [
                 { kind: 'loser', from: wbKey(rounds - 1, 1) },
                 { kind: 'loser', from: wbKey(rounds - 1, 2) },
@@ -168,11 +184,15 @@ export function dropSource(j: number, i: number, count: number): number {
     return i <= half ? i + half : i - half;
 }
 
-export function generateDoubleElim(teamCount: number, opts: { winnerAdvantage?: number } = {}): BracketSpec {
-    if (!Number.isInteger(teamCount) || teamCount < 2) throw new Error('Double elimination needs at least 2 teams.');
+export function generateDoubleElim(
+    teamCount: number,
+    opts: { winnerAdvantage?: number } = {},
+): BracketSpec {
+    if (!Number.isInteger(teamCount) || teamCount < 2)
+        throw new Error('Double elimination needs at least 2 teams.');
     const winnerAdvantage = opts.winnerAdvantage ?? 0;
     const bracketSize = nextPowerOf2(teamCount);
-    const k = Math.log2(bracketSize);               // WB rounds
+    const k = Math.log2(bracketSize); // WB rounds
     const lbRounds = 2 * (k - 1);
     const matches = buildWinnersBracket(bracketSize);
 
@@ -182,7 +202,10 @@ export function generateDoubleElim(teamCount: number, opts: { winnerAdvantage?: 
             const count = bracketSize / 4;
             for (let i = 1; i <= count; i++) {
                 matches.push({
-                    key: lbKey(1, i), side: 'Losers', round: 1, number: i,
+                    key: lbKey(1, i),
+                    side: 'Losers',
+                    round: 1,
+                    number: i,
                     sources: [
                         { kind: 'loser', from: wbKey(1, 2 * i - 1) },
                         { kind: 'loser', from: wbKey(1, 2 * i) },
@@ -196,7 +219,10 @@ export function generateDoubleElim(teamCount: number, opts: { winnerAdvantage?: 
             const count = bracketSize / 2 ** (j + 1);
             for (let i = 1; i <= count; i++) {
                 matches.push({
-                    key: lbKey(r, i), side: 'Losers', round: r, number: i,
+                    key: lbKey(r, i),
+                    side: 'Losers',
+                    round: r,
+                    number: i,
                     sources: [
                         { kind: 'winner', from: lbKey(r - 1, i) },
                         { kind: 'loser', from: wbKey(j + 1, dropSource(j, i, count)) },
@@ -210,7 +236,10 @@ export function generateDoubleElim(teamCount: number, opts: { winnerAdvantage?: 
             const count = bracketSize / 2 ** (j + 2);
             for (let i = 1; i <= count; i++) {
                 matches.push({
-                    key: lbKey(r, i), side: 'Losers', round: r, number: i,
+                    key: lbKey(r, i),
+                    side: 'Losers',
+                    round: r,
+                    number: i,
                     sources: [
                         { kind: 'winner', from: lbKey(r - 1, 2 * i - 1) },
                         { kind: 'winner', from: lbKey(r - 1, 2 * i) },
@@ -222,11 +251,16 @@ export function generateDoubleElim(teamCount: number, opts: { winnerAdvantage?: 
     }
 
     matches.push({
-        key: GF_KEY, side: 'GrandFinals', round: 1, number: 1,
+        key: GF_KEY,
+        side: 'GrandFinals',
+        round: 1,
+        number: 1,
         sources: [
             { kind: 'winner', from: wbKey(k, 1) },
             // 2 teams: no LB; the WB final loser goes straight to the grand final
-            lbRounds === 0 ? { kind: 'loser', from: wbKey(1, 1) } : { kind: 'winner', from: lbKey(lbRounds, 1) },
+            lbRounds === 0
+                ? { kind: 'loser', from: wbKey(1, 1) }
+                : { kind: 'winner', from: lbKey(lbRounds, 1) },
         ],
         winnerAdvantage,
     });
@@ -247,7 +281,7 @@ export function classifyMatches(spec: BracketSpec): Map<string, MatchKind> {
         const k = kind.get(src.from);
         if (k === undefined) throw new Error(`source ${src.from} not classified yet (order)`);
         if (src.kind === 'winner') return k === 'void';
-        return k === 'void' || k === 'walkover';          // loser of a walkover is a BYE
+        return k === 'void' || k === 'walkover'; // loser of a walkover is a BYE
     };
     for (const m of spec.matches) {
         const byes = m.sources.filter(isBye).length;
@@ -258,7 +292,7 @@ export function classifyMatches(spec: BracketSpec): Map<string, MatchKind> {
 
 // ─── Runtime engine (what the reducer helper would do against rows) ─────────
 
-export type Entrant = number | 'BYE';             // team id, or a structural BYE
+export type Entrant = number | 'BYE'; // team id, or a structural BYE
 
 export interface MatchState {
     spec: MatchSpec;
@@ -273,12 +307,18 @@ export class BracketEngine {
     readonly eliminated = new Set<number>();
     played = 0;
 
-    constructor(readonly spec: BracketSpec, teamIdsBySeed: number[]) {
-        if (teamIdsBySeed.length !== spec.teamCount) throw new Error('teamIdsBySeed length != teamCount');
+    constructor(
+        readonly spec: BracketSpec,
+        teamIdsBySeed: number[],
+    ) {
+        if (teamIdsBySeed.length !== spec.teamCount)
+            throw new Error('teamIdsBySeed length != teamCount');
         for (const m of spec.matches) {
             const st: MatchState = { spec: m, slots: [undefined, undefined] };
             m.sources.forEach((src, idx) => {
-                if (src.kind === 'seed') st.slots[idx] = src.seed <= spec.teamCount ? teamIdsBySeed[src.seed - 1] : 'BYE';
+                if (src.kind === 'seed')
+                    st.slots[idx] =
+                        src.seed <= spec.teamCount ? teamIdsBySeed[src.seed - 1] : 'BYE';
             });
             this.matches.set(m.key, st);
         }
@@ -288,18 +328,23 @@ export class BracketEngine {
 
     /** Matches ready to be played: both slots hold real teams, no result yet. */
     ready(): MatchState[] {
-        return [...this.matches.values()].filter(s =>
-            s.winner === undefined && typeof s.slots[0] === 'number' && typeof s.slots[1] === 'number');
+        return [...this.matches.values()].filter(
+            (s) =>
+                s.winner === undefined &&
+                typeof s.slots[0] === 'number' &&
+                typeof s.slots[1] === 'number',
+        );
     }
 
     isComplete(): boolean {
-        return [...this.matches.values()].every(s => s.winner !== undefined);
+        return [...this.matches.values()].every((s) => s.winner !== undefined);
     }
 
     champion(): number | undefined {
-        const last = this.spec.format === 'double'
-            ? this.matches.get(GF_KEY)
-            : this.matches.get(wbKey(Math.log2(this.spec.bracketSize), 1));
+        const last =
+            this.spec.format === 'double'
+                ? this.matches.get(GF_KEY)
+                : this.matches.get(wbKey(Math.log2(this.spec.bracketSize), 1));
         return typeof last?.winner === 'number' ? last.winner : undefined;
     }
 
@@ -311,7 +356,8 @@ export class BracketEngine {
         const st = this.matches.get(key);
         if (!st) throw new Error(`unknown match ${key}`);
         const [a, b] = st.slots;
-        if (typeof a !== 'number' || typeof b !== 'number') throw new Error(`${key} is not playable`);
+        if (typeof a !== 'number' || typeof b !== 'number')
+            throw new Error(`${key} is not playable`);
         const winner = winnerSlot === 1 ? a : b;
         if (st.winner !== undefined) {
             if (st.winner === winner) return;
@@ -352,9 +398,16 @@ export class BracketEngine {
                 if (st.winner !== undefined) continue;
                 const [a, b] = st.slots;
                 if (a === undefined || b === undefined) continue;
-                if (a === 'BYE' && b === 'BYE') { this.decide(st, 'BYE', 'BYE'); changed = true; }
-                else if (a === 'BYE') { this.decide(st, b, 'BYE'); changed = true; }
-                else if (b === 'BYE') { this.decide(st, a, 'BYE'); changed = true; }
+                if (a === 'BYE' && b === 'BYE') {
+                    this.decide(st, 'BYE', 'BYE');
+                    changed = true;
+                } else if (a === 'BYE') {
+                    this.decide(st, b, 'BYE');
+                    changed = true;
+                } else if (b === 'BYE') {
+                    this.decide(st, a, 'BYE');
+                    changed = true;
+                }
             }
         }
     }
@@ -379,8 +432,10 @@ export function checkStructure(spec: BracketSpec): InvariantReport {
     const inbound = new Map<string, { slot: number; ref: string }[]>();
     for (const m of spec.matches) inbound.set(m.key, []);
     for (const m of spec.matches) {
-        if (m.winnerTo) inbound.get(m.winnerTo.key)?.push({ slot: m.winnerTo.slot, ref: `W:${m.key}` });
-        if (m.loserTo) inbound.get(m.loserTo.key)?.push({ slot: m.loserTo.slot, ref: `L:${m.key}` });
+        if (m.winnerTo)
+            inbound.get(m.winnerTo.key)?.push({ slot: m.winnerTo.slot, ref: `W:${m.key}` });
+        if (m.loserTo)
+            inbound.get(m.loserTo.key)?.push({ slot: m.loserTo.slot, ref: `L:${m.key}` });
     }
     const wbRounds = Math.log2(spec.bracketSize);
     for (const m of spec.matches) {
@@ -388,30 +443,41 @@ export function checkStructure(spec: BracketSpec): InvariantReport {
         const isR1 = m.side === 'Winners' && m.round === 1;
         if (isR1) {
             if (refs.length !== 0) errors.push(`${m.key}: R1 match has inbound refs`);
-            if (!m.sources.every(s => s.kind === 'seed')) errors.push(`${m.key}: R1 sources must be seeds`);
+            if (!m.sources.every((s) => s.kind === 'seed'))
+                errors.push(`${m.key}: R1 sources must be seeds`);
         } else {
-            const slots = refs.map(r => r.slot).sort().join(',');
-            if (refs.length !== 2 || slots !== '1,2') errors.push(`${m.key}: inbound ${JSON.stringify(refs)}`);
+            const slots = refs
+                .map((r) => r.slot)
+                .sort()
+                .join(',');
+            if (refs.length !== 2 || slots !== '1,2')
+                errors.push(`${m.key}: inbound ${JSON.stringify(refs)}`);
         }
-        const isFinal = spec.format === 'double' ? m.side === 'GrandFinals'
-            : (m.side === 'ThirdPlace' || (m.side === 'Winners' && m.round === wbRounds));
+        const isFinal =
+            spec.format === 'double'
+                ? m.side === 'GrandFinals'
+                : m.side === 'ThirdPlace' || (m.side === 'Winners' && m.round === wbRounds);
         if (!isFinal && !m.winnerTo) errors.push(`${m.key}: winner not routed`);
         if (spec.format === 'double') {
             if (m.side === 'Winners' && !m.loserTo) errors.push(`${m.key}: WB loser not routed`);
-            if (m.side === 'Losers' && m.loserTo) errors.push(`${m.key}: LB loser must be eliminated`);
-            if (m.side === 'ThirdPlace') errors.push('double elimination must not have a third-place match');
+            if (m.side === 'Losers' && m.loserTo)
+                errors.push(`${m.key}: LB loser must be eliminated`);
+            if (m.side === 'ThirdPlace')
+                errors.push('double elimination must not have a third-place match');
         }
     }
     if (spec.format === 'double') {
-        const gf = spec.matches.find(m => m.side === 'GrandFinals');
+        const gf = spec.matches.find((m) => m.side === 'GrandFinals');
         if (!gf) errors.push('missing grand final');
         else {
             const lbRounds = 2 * (wbRounds - 1);
             const [s1, s2] = gf.sources;
-            if (!(s1.kind === 'winner' && s1.from === wbKey(wbRounds, 1))) errors.push('GF slot 1 is not the WB final winner');
-            const s2ok = lbRounds === 0
-                ? s2.kind === 'loser' && s2.from === wbKey(1, 1)
-                : s2.kind === 'winner' && s2.from === lbKey(lbRounds, 1);
+            if (!(s1.kind === 'winner' && s1.from === wbKey(wbRounds, 1)))
+                errors.push('GF slot 1 is not the WB final winner');
+            const s2ok =
+                lbRounds === 0
+                    ? s2.kind === 'loser' && s2.from === wbKey(1, 1)
+                    : s2.kind === 'winner' && s2.from === lbKey(lbRounds, 1);
             if (!s2ok) errors.push('GF slot 2 is not the LB final winner');
         }
     }
@@ -425,25 +491,31 @@ export interface BracketRowDraft {
     bracketSide: BracketSide;
     roundNumber: number;
     matchNumber: number;
-    team1Seed?: number;            // resolved to TournamentTeam.id by the reducer
+    team1Seed?: number; // resolved to TournamentTeam.id by the reducer
     team2Seed?: number;
     nextWinnerKey?: string;
-    nextWinnerSlot: number;        // 0 = none
+    nextWinnerSlot: number; // 0 = none
     nextLoserKey?: string;
-    nextLoserSlot: number;         // 0 = eliminated
+    nextLoserSlot: number; // 0 = eliminated
     kind: MatchKind;
     winnerAdvantage: number;
 }
 
 export function toRowDrafts(spec: BracketSpec): BracketRowDraft[] {
     const kinds = classifyMatches(spec);
-    return spec.matches.map(m => ({
+    return spec.matches.map((m) => ({
         positionKey: m.key,
         bracketSide: m.side,
         roundNumber: m.round,
         matchNumber: m.number,
-        team1Seed: m.sources[0].kind === 'seed' && m.sources[0].seed <= spec.teamCount ? m.sources[0].seed : undefined,
-        team2Seed: m.sources[1].kind === 'seed' && m.sources[1].seed <= spec.teamCount ? m.sources[1].seed : undefined,
+        team1Seed:
+            m.sources[0].kind === 'seed' && m.sources[0].seed <= spec.teamCount
+                ? m.sources[0].seed
+                : undefined,
+        team2Seed:
+            m.sources[1].kind === 'seed' && m.sources[1].seed <= spec.teamCount
+                ? m.sources[1].seed
+                : undefined,
         nextWinnerKey: m.winnerTo?.key,
         nextWinnerSlot: m.winnerTo?.slot ?? 0,
         nextLoserKey: m.loserTo?.key,

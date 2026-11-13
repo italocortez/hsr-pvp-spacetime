@@ -63,7 +63,13 @@ function reduceHash(h: number, n: number): number {
 
 /** The pool index in [0, poolLength) for a timer draw (poolLength >= 1; a pool of one always gives 0). */
 export function timerDrawIndex(input: TimerDrawInput, poolLength: number): number {
-    const h = murmur3Words([input.timestampLo, input.timestampHi, input.lobbyId, input.turnIndex, input.nextSequence]);
+    const h = murmur3Words([
+        input.timestampLo,
+        input.timestampHi,
+        input.lobbyId,
+        input.turnIndex,
+        input.nextSequence,
+    ]);
     return reduceHash(h, poolLength);
 }
 
@@ -107,7 +113,10 @@ export function shuffleKeyAt(micros: bigint, words: readonly number[]): ShuffleK
 export function fairShuffle<T>(items: readonly T[], key: ShuffleKey): T[] {
     const out = [...items];
     for (let i = out.length - 1; i > 0; i--) {
-        const j = reduceHash(murmur3Words([key.timestampLo, key.timestampHi, ...key.words, i]), i + 1);
+        const j = reduceHash(
+            murmur3Words([key.timestampLo, key.timestampHi, ...key.words, i]),
+            i + 1,
+        );
         if (j !== i) {
             const tmp = out[i];
             out[i] = out[j];

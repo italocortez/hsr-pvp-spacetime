@@ -1,0 +1,52 @@
+# M9: signal-only CI (no branch protection, no required checks). No secrets, no environment,
+# no deploy, no publish, no database access: every step runs on the runner alone.
+name: CI
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+    workflow_dispatch:
+
+# A newer push cancels an older run on the same branch or PR. On main the group is the commit, so
+# every commit gets its own result (a shared group would still drop a queued run).
+concurrency:
+    group: ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+    cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+    contents: read
+
+jobs:
+    check:
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            # Major version tags: the commit SHAs could not be verified offline (M9 hand-back).
+            - uses: actions/checkout@v5
+              with:
+                  persist-credentials: false
+
+            - uses: actions/setup-node@v5
+              with:
+                  node-version-file: .nvmrc # 26, same major as package.json engines (26.x)
+                  cache: npm
+
+            - run: npm ci
+
+            - name: Typecheck
+              run: npm run typecheck
+
+            - name: Lint (web, shared, scripts/ci)
+              run: npm run lint:ci
+
+            - name: Tests (unit, in-memory module, web; no network)
+              run: npm test
+
+            - name: Build web
+              run: npm run build -w web
+              env:
+                  VITE_STDB_TARGET: test
+
+            - name: Pattern gates
+              run: npm run check:patterns

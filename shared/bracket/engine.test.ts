@@ -1,19 +1,19 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-    generateDoubleElim,
-    generateSingleElim,
+    BracketEngine,
+    type BracketSpec,
     checkStructure,
     classifyMatches,
-    BracketEngine,
-    toRowDrafts,
-    foldSeeding,
     dropSource,
-    wbKey,
-    lbKey,
+    foldSeeding,
     GF_KEY,
-    TP_KEY,
-    type BracketSpec,
+    generateDoubleElim,
+    generateSingleElim,
+    lbKey,
     type Slot,
+    TP_KEY,
+    toRowDrafts,
+    wbKey,
 } from './engine';
 
 // Deterministic PRNG (mulberry32) so simulations are reproducible.
@@ -56,7 +56,12 @@ const POLICIES: Policy[] = ['random', 'higherSeedWins', 'lowerSeedWins'];
 
 describe('foldSeeding', () => {
     it('matches the standard 8-team layout', () => {
-        expect(foldSeeding(8)).toEqual([[1, 8], [4, 5], [2, 7], [3, 6]]);
+        expect(foldSeeding(8)).toEqual([
+            [1, 8],
+            [4, 5],
+            [2, 7],
+            [3, 6],
+        ]);
     });
 });
 
@@ -72,16 +77,16 @@ describe('double elimination: structure (3-16 teams)', () => {
         for (const n of SIZES) {
             const spec = generateDoubleElim(n);
             const B = spec.bracketSize;
-            expect(spec.matches.filter(m => m.side === 'Winners')).toHaveLength(B - 1);
-            expect(spec.matches.filter(m => m.side === 'Losers')).toHaveLength(B - 2);
-            expect(spec.matches.filter(m => m.side === 'GrandFinals')).toHaveLength(1);
-            expect(spec.matches.filter(m => m.side === 'ThirdPlace')).toHaveLength(0);
+            expect(spec.matches.filter((m) => m.side === 'Winners')).toHaveLength(B - 1);
+            expect(spec.matches.filter((m) => m.side === 'Losers')).toHaveLength(B - 2);
+            expect(spec.matches.filter((m) => m.side === 'GrandFinals')).toHaveLength(1);
+            expect(spec.matches.filter((m) => m.side === 'ThirdPlace')).toHaveLength(0);
         }
     });
 
     it('4 teams: the WB final loser drops into the LB final (T1 core)', () => {
         const spec = generateDoubleElim(4);
-        const wbFinal = spec.matches.find(m => m.key === wbKey(2, 1))!;
+        const wbFinal = spec.matches.find((m) => m.key === wbKey(2, 1))!;
         expect(wbFinal.loserTo).toEqual({ key: lbKey(2, 1), slot: 2 });
         expect(wbFinal.winnerTo).toEqual({ key: GF_KEY, slot: 1 });
     });
@@ -96,7 +101,7 @@ describe('double elimination: structure (3-16 teams)', () => {
     it('GF carries winnerAdvantage and the WB finalist always sits in slot 1', () => {
         for (const n of SIZES) {
             const spec = generateDoubleElim(n, { winnerAdvantage: 2 });
-            const gf = spec.matches.find(m => m.side === 'GrandFinals')!;
+            const gf = spec.matches.find((m) => m.side === 'GrandFinals')!;
             expect(gf.winnerAdvantage).toBe(2);
             for (const policy of POLICIES) {
                 const engine = simulate(spec, policy, n * 7);
@@ -150,7 +155,8 @@ describe('single elimination', () => {
                 for (const policy of POLICIES) {
                     const engine = simulate(spec, policy, n);
                     expect(engine.isComplete()).toBe(true);
-                    const tpPlayed = thirdPlace && classifyMatches(spec).get(TP_KEY) === 'playable' ? 1 : 0;
+                    const tpPlayed =
+                        thirdPlace && classifyMatches(spec).get(TP_KEY) === 'playable' ? 1 : 0;
                     expect(engine.played).toBe(n - 1 + tpPlayed);
                     expect(engine.champion()).toBeDefined();
                 }
@@ -162,10 +168,10 @@ describe('single elimination', () => {
         const spec = generateSingleElim(5);
         expect(spec.matches).toHaveLength(7);
         const kinds = classifyMatches(spec);
-        expect([...kinds.values()].filter(k => k === 'walkover')).toHaveLength(3);
+        expect([...kinds.values()].filter((k) => k === 'walkover')).toHaveLength(3);
         const engine = new BracketEngine(spec, [11, 12, 13, 14, 15]);
         // 4v5 is playable; seeds 2 and 3 both had BYEs, so their R2 match is ready at once
-        expect(engine.ready().map(s => s.spec.key)).toEqual([wbKey(1, 2), wbKey(2, 2)]);
+        expect(engine.ready().map((s) => s.spec.key)).toEqual([wbKey(1, 2), wbKey(2, 2)]);
     });
 
     it('3 teams with a third-place match: TP becomes a walkover (one semifinal is a BYE)', () => {
@@ -179,7 +185,7 @@ describe('BYE handling in the losers bracket', () => {
         const spec = generateDoubleElim(5);
         const kinds = classifyMatches(spec);
         expect(kinds.get(lbKey(1, 1))).toBe('walkover'); // loser(1 v BYE)=BYE vs loser(4 v 5)
-        expect(kinds.get(lbKey(1, 2))).toBe('void');     // BYE vs BYE
+        expect(kinds.get(lbKey(1, 2))).toBe('void'); // BYE vs BYE
         expect(kinds.get(lbKey(2, 1))).toBe('playable');
         expect(kinds.get(lbKey(2, 2))).toBe('walkover');
     });
@@ -190,7 +196,7 @@ describe('BYE handling in the losers bracket', () => {
             if (r.nextWinnerKey) expect([1, 2]).toContain(r.nextWinnerSlot);
             if (r.nextLoserKey) expect([1, 2]).toContain(r.nextLoserSlot);
         }
-        expect(rows.find(r => r.positionKey === GF_KEY)!.nextWinnerSlot).toBe(0);
+        expect(rows.find((r) => r.positionKey === GF_KEY)!.nextWinnerSlot).toBe(0);
     });
 });
 

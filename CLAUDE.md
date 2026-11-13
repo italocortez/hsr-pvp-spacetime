@@ -14,7 +14,8 @@ Migration in progress: `ROADMAP.md` lists which steps have landed; a path or scr
 | `api/auth/discord/` | the one Vercel function pair (M5) |
 | `scripts/stdb/` | publish, bootstrap, seed, generate, describe, manage-user (M2); backup, restore (S13); all take `--target test\|prod` |
 | `data/seed/` | public reference data: characters, light cones, synergies, achievements (A18) |
-| `test/` | live residue + harness, `frontend/screenshots/<page>/` |
+| `test/` | live residue + harness, `frontend/screenshots/<page>/`; frontend tests live next to the code as `web/src/**/*.test.ts(x)` (M9) |
+| `.github/workflows/ci.yml`, `scripts/ci/` | signal-only CI (typecheck, `lint:ci`, `npm test`, web build, `check:patterns`); no secrets, no database, no deploy (M9) |
 | `docs/` | `<feature>/{contract,architecture}.md`, `ERD.md`, `frontend/`, `research/`, `log/<date>-<step>.md` |
 | `design/` | local only, gitignored (A53): `DESIGN.md`, `UI-DECISIONS.md`, frozen `mockups/*.html`, `assets/`; mirror of the Open Design project |
 | `tools/` | `energy-model.js`, `capture-ws-frames.ts` |
@@ -43,7 +44,8 @@ Two databases: `hsr-spacetimedb-test1` and `hsr-spacetimedb-prod`. The names liv
 
 ## 4. Frontend rules
 
-- Subscribe only to **views and the public reference set**. `subscribeToAllTables` is banned in `web/` (CI grep).
+- Imports (A170): `./file` inside a folder; across folders the section's alias (`@/` in `web/` only, `@module/` in the module); `@shared/` and `@bindings/` from anywhere. No `../../` chains across folders. `web/src/module_bindings/` is generated: never edited by hand.
+- Subscribe only to **views and the public reference set**. `subscribeToAllTables` is banned in `web/` (`npm run check:patterns`, run in CI with the other build gates).
 - No page subscribes the `User` table: it is private (A77, lands at S11). The admin Users tab reads `view_admin_users`; names and avatars are denormalized into the views that need them (PAGE-MAP D2).
 - One subscription per table per route; keep the handles and unsubscribe on route leave. The reference set is subscribed by the first route that needs it and kept for the session; `/` and `/profile` never trigger it.
 - Match views and cursor events subscribe only once the lobby stage is past Waiting; cursor events are consumed via `onInsert`.
@@ -73,7 +75,7 @@ Skip it for backend-only edits, pure refactors with no visual delta, and utility
 | Secret files | `.env.test.local`, `.env.prod.local` | gitignored by `.env*.local`; nothing reads `.env.local` |
 | Auth function secrets | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `AUTH_SECRET`, `STDB_SERVER_TOKEN` | Vercel env per environment; never in the repo |
 | Module env (D-C1) | `STDB_TARGET` declared in `schema({...}, { env: { STDB_TARGET: t.enum('StdbTarget', ['test','prod']) } })` | the publish script spawns `spacetime publish …` with `STDB_TARGET=<target>` in the **process environment** (`publishArgs(...).env`). Note: the CLI's `--env <name>` flag selects a `spacetime.<name>.json` config file, it does not set a value (2.15.0 `publish --help`) |
-| npm scripts | `stdb:publish:test`, `stdb:publish:test:clear`, `stdb:publish:prod`, `stdb:bootstrap:<t>`, `stdb:seed:<t>`, `stdb:describe:<t>`, `stdb:generate`, `test:integration` (test only) | all call `scripts/stdb/*.ts --target …` |
+| npm scripts | `stdb:publish:test`, `stdb:publish:test:clear`, `stdb:publish:prod`, `stdb:bootstrap:<t>`, `stdb:seed:<t>`, `stdb:describe:<t>`, `stdb:generate`, `test:integration` (test only), `test:web`, `lint:ci` (`web/`, `shared/`, `scripts/ci/`; no SVG files), `check:patterns` | all call `scripts/stdb/*.ts --target …` |
 
 **Never read `.env*.local` values; key names only.** Never delete or commit `.env` / `.env*.local`.
 
@@ -81,6 +83,7 @@ Skip it for backend-only edits, pure refactors with no visual delta, and utility
 
 - Test files (`test/`, module and web test files) are the verification layer: do not create, edit, delete or rename them without an explicit task (a named T-task of a step). Reading them and proposing changes is fine.
 - Failures are diagnostic: report them, never auto-fix. The user triages each one as an architecture bug (fix the code) or a direction change (update the contract).
+- `npm test` runs three suites in order: unit, in-memory module, web. None touches the network.
 - In-memory module tests are the default; the live residue (subscriptions, lifecycle hooks, scheduler, outsider isolation) runs on test1 only, once per release.
 - If verification needs gitignored data, the verification is wrong: use a fixture under `test/data-templates/`.
 
