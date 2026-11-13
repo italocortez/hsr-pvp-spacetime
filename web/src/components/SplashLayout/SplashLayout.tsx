@@ -20,7 +20,7 @@ type Props = {
 /**
  * Full-bleed editorial screen from design/mockups/standby.html (DESIGN.md §4.5): art + scrims,
  * brand mark, HUD chip, text column with one IPC CTA back to base, bottom HUD line.
- * Used by the standby and 404 pages.
+ * Used by the standby page and, through `ErrorSplash`, the 404 and no-access pages.
  */
 export function SplashLayout({ image, hudLabel, hudCoord, eyebrow, title, lede, children }: Props) {
     return (

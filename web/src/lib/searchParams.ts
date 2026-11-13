@@ -21,8 +21,8 @@ export function parseSearch(searchStr: string): RawSearch {
 
 /**
  * `stringifySearch`: keys sorted; `undefined`, `null`, empty strings and non-text values are left
- * out; an array is written as a repeated key (`?el=fire&el=ice`). Numbers and booleans are
- * written as their text.
+ * out; an array is written as a repeated key (`?el=fire&el=ice`). Finite numbers and booleans are
+ * written as their text; `NaN` and `Infinity` are left out.
  */
 export function stringifySearch(search: Record<string, unknown>): string {
     const params = new URLSearchParams();
@@ -39,6 +39,7 @@ export function stringifySearch(search: Record<string, unknown>): string {
 
 function toText(value: unknown): string | undefined {
     if (typeof value === 'string') return value === '' ? undefined : value;
-    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    if (typeof value === 'number') return Number.isFinite(value) ? String(value) : undefined;
+    if (typeof value === 'boolean') return String(value);
     return undefined;
 }
