@@ -8,7 +8,7 @@
 // 5. view_user_by_username     — anonymous arg view (username): exact lookup on the unique User.username (S9b, D7)
 // 6. view_user_achievements    — anonymous arg view (userId): a user's UserAchievement rows (S9b, A43, A40)
 // 7. view_admin_users          — Moderator+, every User row without the provider columns (A77(1), S11a)
-// 8. view_my_link_request      — per-user, the caller's unused one-time link code and its expiry (M5a)
+// 8. view_my_link_request      — per-user, the caller's link request: code, expiry, awaiting confirmation, pending name (M5a, M5a2)
 //
 // `User` is private since S11a (A77): these views and the denormalized names / avatars of the other views are the only
 // way user data reaches a client. No full scan in any view a non-staff client can read (S9b). The Moderator+ listings
@@ -19,6 +19,7 @@ import { t } from 'spacetimedb/server';
 import { Role } from '@module/types/enums';
 import { staffCaller } from '@module/helpers/identity/viewAnonymity';
 import { DISCORD_LOGIN_METHOD } from '@module/helpers/lobby/banHelper';
+import { isAwaitingConfirm } from '@module/helpers/identity/linkCode';
 
 /** A77(2) (S11a): `hasDiscordLinked` is no longer stored; a user is Discord-linked when its login method is Discord. */
 const hasDiscordLinked = (user: any): boolean => user.loginMethod === DISCORD_LOGIN_METHOD;
@@ -93,15 +94,23 @@ export const view_my_profile = spacetimedb.view(
 );
 
 // ---------------------------------------------------------------------------
-// 8. view_my_link_request (per-user) — M5a (A44(3), A46): the caller's own one-time link code (LinkRequest is
-//    private), the one the browser hands to the auth function. `code` (PK) and `expiresAt` only. A view has no clock
-//    (ViewCtx carries no timestamp in SDK 2.15.0), so it returns the caller's unused row (`usedAt` unset) and the
-//    client compares `expiresAt` with its own clock; server_link_by_code refuses an expired code anyway. At most one
-//    row (LinkRequest.identity is unique); nothing for another caller.
+// 8. view_my_link_request (per-user) — M5a (A44(3), A46), M5a2: the caller's own link request (LinkRequest is
+//    private). At most one row (LinkRequest.identity is unique); nothing for another caller. Columns:
+//      code                 the live code to hand to the auth function; unset once the code was presented (it is spent
+//                           for presentation, so the view stops carrying it)
+//      expiresAt            the code's 5-minute expiry, or the 2-minute confirm window once presented
+//      awaitingConfirm      true once the auth function presented the code (confirm_link is the next step)
+//      pendingProviderName  the Discord name about to be linked (only while awaiting confirmation)
+//    Never confirmHash, never pendingProviderId. No primary key: one row per caller, and `code` is optional. A view has
+//    no clock (ViewCtx carries no timestamp in SDK 2.15.0), so an expired row is still returned until the sweep removes
+//    it; the client compares expiresAt with its own clock, and the reducers refuse an expired row anyway. No row at all
+//    when the caller's user is gone, not a guest, linked or soft-deleted (M5a2 review).
 // ---------------------------------------------------------------------------
 const MyLinkRequestRow = t.row('MyLinkRequestRow', {
-    code: t.string().primaryKey(),
+    code: t.string().optional(),
     expiresAt: t.timestamp(),
+    awaitingConfirm: t.bool(),
+    pendingProviderName: t.string().optional(),
 });
 
 export const view_my_link_request = spacetimedb.view(
@@ -109,8 +118,20 @@ export const view_my_link_request = spacetimedb.view(
     t.array(MyLinkRequestRow),
     (ctx) => {
         const row = ctx.db.LinkRequest.identity.find(ctx.sender);
-        if (!row || row.usedAt !== undefined) return [];
-        return [{ code: row.code, expiresAt: row.expiresAt }];
+        if (!row) return [];
+        // M5a2 review: a row the caller can never use or replace (request_link_code refuses a linked or soft-deleted
+        // user) is not shown: no row when the caller's user is gone, no longer a guest, linked, or soft-deleted. Two
+        // primary-key reads; the row itself is left to the sweep (no deletion on read).
+        const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
+        const user = mapping ? ctx.db.User.id.find(mapping.userId) : undefined;
+        if (!user || !user.isGuest || user.loginMethod !== undefined || user.deletedAt !== undefined) return [];
+        const awaiting = isAwaitingConfirm(row);
+        return [{
+            code: row.usedAt === undefined ? row.code : undefined,
+            expiresAt: row.expiresAt,
+            awaitingConfirm: awaiting,
+            pendingProviderName: awaiting ? row.pendingProviderName : undefined,
+        }];
     }
 );
 

@@ -1746,3 +1746,14 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   10. Open: with guest creation switched off, a new browser cannot sign in (A109 accepted this for the old flow). Orchestrator recommends leaving it for now and revisiting before launch.
 - **Why:** user, 2026-11-13: "i agree with #1 and #2, but what about #3? you mean create a new discord application for test? i would prefer not"; "okay add the .env.example rework there". Items 4 to 7 came out of the build and its review and were reported to the user.
 - **Where implemented:** `spacetimedb/src/helpers/identity/{linkCode,providerLink}.ts`, `spacetimedb/src/reducers/identity/{auth,server}.ts`, `spacetimedb/src/views/identityViews.ts`, `docs/auth/architecture.md`, `docs/log/2026-11-13-m5a.md`; items 1 to 3 at M5b
+
+### A176 — The second lock on sign-in (two-step link)
+
+- **Date:** 2026-11-13 · **Status:** item 1 decided and implemented; items 2 to 4 open
+- **Decision:**
+  1. Sign-in by code takes two steps in the module. The auth function presents the code after Discord confirmed the user (`server_link_by_code`, which now only stores a pending link and the hash of a one-time token, with a 2-minute window). The requesting identity then confirms with the token (`confirm_link`); only then is the merge applied. Four optional columns were appended to `link_request` (A175 item 8 spoke of two). A link can no longer complete during maintenance, which settles A175 item 9. Orchestrator's choices: the 2-minute window, no attempt counter, a new request drops a pending one, the view shows the pending Discord name but never the id or the hash and hides rows the caller can no longer use.
+  2. Open (review finding, older than this step): the server token the auth function would hold is an Admin-level credential (direct link through `server_link_provider`, `server_set_role`, the SYSTEM mapping). Orchestrator recommends a narrow server identity for the function that can only present a code, and switching `server_link_provider` off outside the test database.
+  3. Open: signing in to an account whose deletion is pending succeeds (unchanged old behaviour; a ban is refused).
+  4. Open: A175 item 10 (guest-creation switch blocks new-browser sign-ins).
+- **Why:** user, 2026-11-13, after the explanation of the attack and the two locks: "alright lets do it".
+- **Where implemented:** `spacetimedb/src/tables/identity/linkRequest.ts`, `spacetimedb/src/helpers/identity/{linkCode,providerLink}.ts`, `spacetimedb/src/reducers/identity/{auth,server}.ts`, `spacetimedb/src/views/identityViews.ts`, `docs/auth/architecture.md` ("Phase M5a2 execution", "Requirements for M5b")

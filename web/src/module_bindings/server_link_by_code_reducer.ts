@@ -15,4 +15,5 @@ export default {
   provider: __t.string(),
   providerId: __t.string(),
   providerName: __t.string(),
+  confirmHash: __t.string(),
 };

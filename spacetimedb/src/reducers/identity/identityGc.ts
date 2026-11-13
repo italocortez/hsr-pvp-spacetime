@@ -223,7 +223,8 @@ export const run_identity_gc = spacetimedb.reducer(
         console.log(`[CALENDAR_GC] Complete: scanned=${calendar.scanned}, slots=${calendar.slotsDeleted}, events=${calendar.eventsDeleted}, pendingInvites=${calendar.pendingInvitesDeleted}`);
 
         // M5a: the backstop for request_link_code's inline sweep (which examines at most LINK_SWEEP_SCAN_LIMIT rows):
-        // expired or used LinkRequest rows among the first LINK_SWEEP_GC_SCAN_LIMIT rows. Log only, no GcResult row.
+        // LinkRequest rows whose expiresAt has passed (a code before presentation, or a pending row after its 2-minute
+        // confirm window, M5a2) among the first LINK_SWEEP_GC_SCAN_LIMIT rows. Log only, no GcResult row.
         const linkCodesDeleted = sweepStaleLinkRequests(ctx, LINK_SWEEP_GC_SCAN_LIMIT);
         if (linkCodesDeleted > 0) console.log(`[LINK_GC] Deleted ${linkCodesDeleted} stale link code(s)`);
 

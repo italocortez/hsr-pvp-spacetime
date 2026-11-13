@@ -11,6 +11,8 @@ import {
 } from "spacetimedb";
 
 export default __t.row({
-  code: __t.string().primaryKey(),
+  code: __t.option(__t.string()),
   expiresAt: __t.timestamp().name("expires_at"),
+  awaitingConfirm: __t.bool().name("awaiting_confirm"),
+  pendingProviderName: __t.option(__t.string()).name("pending_provider_name"),
 });
