@@ -6,7 +6,8 @@ export const DEV_PROD_REFUSAL =
 
 /**
  * Throws when the dev server would connect to the prod database (user decision 2026-11-13).
- * A production build with target `prod`, and `vite preview` of it, is not dev and passes.
+ * A production build with target `prod` is not dev and passes. (`vite preview` is refused by
+ * web/vite.config.ts since M8; the local preview is `npm run preview`, test only.)
  */
 export function assertDevTarget(isDev: boolean, target: Target): void {
     if (isDev && target === 'prod') throw new Error(DEV_PROD_REFUSAL);

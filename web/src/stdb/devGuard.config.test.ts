@@ -43,8 +43,9 @@ describe('vite.config.ts dev guard', () => {
         await expect(load(SERVE, 'test')).resolves.toBeTruthy();
     });
 
-    it('preview of a prod build loads (not dev)', async () => {
-        await expect(load(PREVIEW, 'prod')).resolves.toBeTruthy();
+    it('M8: vite preview is refused for every target and points to npm run preview', async () => {
+        await expect(load(PREVIEW, 'prod')).rejects.toThrow(/Run `npm run preview`/);
+        await expect(load(PREVIEW, 'test')).rejects.toThrow(/Run `npm run preview`/);
     });
 
     it('a build with the prod target loads', async () => {

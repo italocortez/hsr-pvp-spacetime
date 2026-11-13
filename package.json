@@ -13,6 +13,7 @@
         "typecheck": "tsc -p spacetimedb --noEmit && tsc -p test && tsc -p tsconfig.json && tsc -p web --noEmit",
         "dev": "npm run dev -w web",
         "build": "npm run build -w web",
+        "preview": "node scripts/preview/preview.mjs",
         "lint": "biome check .",
         "lint:ci": "node scripts/ci/lint.mjs",
         "check:patterns": "node scripts/ci/check-patterns.mjs",

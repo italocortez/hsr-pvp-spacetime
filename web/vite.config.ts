@@ -9,9 +9,14 @@ const r = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 const DEV_PROD_REFUSAL =
     'Dev mode cannot run against the prod database. Set VITE_STDB_TARGET=test.';
 
+/** M8: `vite preview` reads no vercel.json and serves any target; the repo's preview is test-only. */
+const VITE_PREVIEW_REFUSAL =
+    '`vite preview` is not used in this repo: it would serve any build, prod included, on localhost. Run `npm run preview` (test database only, vercel.json rules).';
+
 export default defineConfig(({ command, mode, isPreview }) => {
+    if (command === 'serve' && isPreview) throw new Error(VITE_PREVIEW_REFUSAL);
     if (command === 'serve' && !isPreview) {
-        // The dev server never serves the prod target (preview of a prod build is not dev).
+        // The dev server never serves the prod target (`vite preview` is refused above).
         const target =
             process.env.VITE_STDB_TARGET ?? loadEnv(mode, r('.'), 'VITE_').VITE_STDB_TARGET;
         if (target === 'prod') throw new Error(DEV_PROD_REFUSAL);
