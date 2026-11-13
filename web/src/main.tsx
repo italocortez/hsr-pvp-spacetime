@@ -6,10 +6,13 @@ import { resolveBrowserEnv } from '@shared/stdb-targets';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from '@/App';
+import { assertDevTarget } from '@/stdb/assertDevTarget';
 import { StdbProvider } from '@/stdb/StdbProvider';
 
 // Fails fast on a missing or unknown VITE_STDB_TARGET, before any connection is built.
 const env = resolveBrowserEnv(import.meta.env);
+// The dev server never talks to prod; checked before any connection or dev helper exists.
+assertDevTarget(import.meta.env.DEV, env.target);
 
 const root = document.getElementById('root');
 if (!root) throw new Error('#root is missing from index.html');
