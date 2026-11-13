@@ -77,11 +77,16 @@ export function setConnectionStatus(status: ConnectionStatus): void {
  * The connection is unusable: status `failed` (offline or maintenance, from the error) and auth
  * not ready, so the guards wait and the root shows the splash. Auth is only replaced when it is
  * not already `{ ready: false }`, so a rebuild that fails again does not re-run the guards.
+ * `kind` is given only by the status file reader (`MaintenanceGate`), which knows it is maintenance.
  */
-export function failConnection(error: unknown, recovery: Recovery = 'retry'): void {
+export function failConnection(
+    error: unknown,
+    recovery: Recovery = 'retry',
+    kind: FailureKind = classifyFailure(error),
+): void {
     setConnectionStatus({
         state: 'failed',
-        kind: classifyFailure(error),
+        kind,
         reason: describeError(error, 'Connection failed'),
         recovery,
     });

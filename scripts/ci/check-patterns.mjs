@@ -145,9 +145,225 @@ const DEV_REFUSAL = 'Dev mode cannot run against the prod database. Set VITE_STD
     }
 }
 
+// 8. No inline script in the built page (M7): the CSP's script-src has no 'unsafe-inline'. Checks
+//    <script> tags only (not inline event handlers or javascript: URLs). HTML comments are dropped
+//    first; each tag's attributes are parsed (quoted values may hold "src=" or ">"); a script
+//    counts as external only with a non-empty src. JSON-LD data blocks are not scripts.
+{
+    const page = join(DIST, 'index.html');
+    if (existsSync(page)) {
+        const html = readFileSync(page, 'utf8').replace(/<!--[\s\S]*?-->/g, '');
+        const TAG = /<script\b((?:[^>"']|"[^"]*"|'[^']*')*)>/gi;
+        const ATTR = /([^\s"'>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
+        for (const [tag, rawAttrs] of html.matchAll(TAG)) {
+            const attrs = new Map();
+            for (const [, name, dq, sq, bare] of rawAttrs.matchAll(ATTR)) {
+                const key = name.toLowerCase();
+                if (!attrs.has(key)) attrs.set(key, dq ?? sq ?? bare ?? '');
+            }
+            const type = (attrs.get('type') ?? '').split(';')[0].trim().toLowerCase();
+            if (type === 'application/ld+json') continue;
+            if ((attrs.get('src') ?? '').trim() === '') {
+                hits.push(`[inline-script] web/dist/index.html: script without src: ${tag}`);
+            }
+        }
+    }
+}
+
+// 9. Hosting config (M7): vercel.json is an object; exactly one header rule, the unconditional
+//    catch-all `/(.*)`, carries the CSP, with no directive twice, 'unsafe-eval' in script-src (the
+//    SDK's codecs) and both maincloud origins in connect-src (socket and token exchange);
+//    /status.json is served `no-store`; the rewrite to /index.html behaves as documented (a table
+//    of paths below); the built status file ships with maintenance off. Turning maintenance on is
+//    therefore a deliberate deploy from a commit this gate marks red (docs/frontend/hosting.md).
+{
+    const hosting = (message) => hits.push(`[hosting] vercel.json: ${message}`);
+    const isObject = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
+    let vercel;
+    try {
+        vercel = JSON.parse(readFileSync(join(ROOT, 'vercel.json'), 'utf8'));
+        if (!isObject(vercel)) {
+            hosting('not a JSON object');
+            vercel = undefined;
+        }
+    } catch (error) {
+        hosting(`missing or not JSON (${error.message})`);
+    }
+    if (vercel) {
+        // Header rules: each an object with a string source and an array of {key, value} strings.
+        const rules = [];
+        if (vercel.headers !== undefined && !Array.isArray(vercel.headers)) {
+            hosting('"headers" is not an array');
+        }
+        for (const [i, rule] of (Array.isArray(vercel.headers) ? vercel.headers : []).entries()) {
+            const ok =
+                isObject(rule) &&
+                typeof rule.source === 'string' &&
+                Array.isArray(rule.headers) &&
+                rule.headers.every(
+                    (h) => isObject(h) && typeof h.key === 'string' && typeof h.value === 'string',
+                );
+            if (ok) rules.push(rule);
+            else hosting(`headers[${i}] is malformed`);
+        }
+        const headerValues = (rule, key) =>
+            rule.headers.filter((h) => h.key.toLowerCase() === key).map((h) => h.value);
+
+        const cspRules = rules.filter(
+            (rule) => headerValues(rule, 'content-security-policy').length > 0,
+        );
+        if (cspRules.length === 0) {
+            hosting('no header rule sets a Content-Security-Policy');
+        } else if (cspRules.length > 1) {
+            hosting(`${cspRules.length} header rules set a CSP (one only)`);
+        } else {
+            const [rule] = cspRules;
+            if (rule.source !== '/(.*)') {
+                hosting(`the CSP rule's source is "${rule.source}", not "/(.*)"`);
+            }
+            if (rule.has !== undefined || rule.missing !== undefined) {
+                hosting('the CSP rule has a "has" or "missing" condition');
+            }
+            const values = headerValues(rule, 'content-security-policy');
+            if (values.length > 1) hosting('the CSP rule sets the CSP more than once');
+            const directives = new Map();
+            for (const part of values[0].split(';')) {
+                const [name, ...sources] = part.trim().split(/\s+/);
+                if (!name) continue;
+                const key = name.toLowerCase();
+                if (directives.has(key)) hosting(`the CSP has "${key}" twice`);
+                else
+                    directives.set(
+                        key,
+                        sources.map((s) => s.toLowerCase()),
+                    );
+            }
+            if (!(directives.get('script-src') ?? []).includes("'unsafe-eval'")) {
+                hosting("script-src lacks 'unsafe-eval' (the SDK needs it)");
+            }
+            const connectSrc = directives.get('connect-src');
+            if (!connectSrc) hosting('the CSP has no connect-src');
+            for (const origin of [
+                'wss://maincloud.spacetimedb.com',
+                'https://maincloud.spacetimedb.com',
+            ]) {
+                if (connectSrc && !connectSrc.includes(origin)) {
+                    hosting(`connect-src lacks ${origin}`);
+                }
+            }
+        }
+
+        const statusRule = rules.find((rule) => rule.source === '/status.json');
+        const statusCache = statusRule ? headerValues(statusRule, 'cache-control') : [];
+        if (
+            !statusCache.some((v) =>
+                v
+                    .toLowerCase()
+                    .split(/\s*,\s*/)
+                    .includes('no-store'),
+            )
+        ) {
+            hosting('no rule serves /status.json with Cache-Control: no-store');
+        }
+        if (statusRule && (statusRule.has !== undefined || statusRule.missing !== undefined)) {
+            hosting('the /status.json rule has a "has" or "missing" condition');
+        }
+        // Legacy `routes` replaces the rewrite and header handling checked here.
+        if (vercel.routes !== undefined) hosting('a top-level "routes" key is not allowed');
+
+        // Rewrites: the ones to /index.html must send client routes to the app and leave files,
+        // the status file and dot-paths alone. A source is read like path-to-regexp: groups are
+        // regex, everything else literal.
+        const sourceToRegExp = (source) => {
+            let out = '';
+            for (let i = 0; i < source.length; i++) {
+                if (source[i] !== '(') {
+                    out += source[i].replace(/[.*+?^${}|[\]\\]/g, '\\$&');
+                    continue;
+                }
+                let depth = 0;
+                let j = i;
+                for (; j < source.length; j++) {
+                    if (source[j] === '\\') j++;
+                    else if (source[j] === '(') depth++;
+                    else if (source[j] === ')' && --depth === 0) break;
+                }
+                out += source.slice(i, j + 1);
+                i = j;
+            }
+            return new RegExp(`^${out}$`);
+        };
+        if (vercel.rewrites !== undefined && !Array.isArray(vercel.rewrites)) {
+            hosting('"rewrites" is not an array');
+        }
+        const toIndex = [];
+        // Rewrites before the first one to /index.html: none may take a client route away.
+        const before = [];
+        for (const [i, r] of (Array.isArray(vercel.rewrites) ? vercel.rewrites : []).entries()) {
+            if (!isObject(r) || typeof r.source !== 'string' || typeof r.destination !== 'string') {
+                hosting(`rewrites[${i}] is malformed`);
+                continue;
+            }
+            if (
+                r.destination === '/index.html' &&
+                (r.has !== undefined || r.missing !== undefined)
+            ) {
+                hosting(`rewrites[${i}] to /index.html has a "has" or "missing" condition`);
+            }
+            try {
+                const re = sourceToRegExp(r.source);
+                if (r.destination === '/index.html') toIndex.push(re);
+                else if (toIndex.length === 0) before.push({ i, re });
+            } catch (error) {
+                hosting(`rewrites[${i}].source is not a valid pattern (${error.message})`);
+            }
+        }
+        if (toIndex.length === 0) {
+            hosting('no rewrite to /index.html (deep links would 404)');
+        } else {
+            for (const path of ['/', '/lobby/123']) {
+                if (!toIndex.some((re) => re.test(path))) {
+                    hosting(`the rewrite does not send ${path} to /index.html`);
+                }
+            }
+            for (const { i, re } of before) {
+                if (re.test('/lobby/123')) {
+                    hosting(`rewrites[${i}] comes before the index rewrite and takes /lobby/123`);
+                }
+            }
+            for (const path of [
+                '/assets/x.js',
+                '/status.json',
+                '/foo.png',
+                '/.env',
+                '/api/x',
+                '/sw.js',
+                '/favicon.svg',
+                '/a/.b/c',
+            ]) {
+                if (toIndex.some((re) => re.test(path))) {
+                    hosting(`the rewrite sends ${path} to /index.html (must stay a file or a 404)`);
+                }
+            }
+        }
+    }
+    const statusPath = join(DIST, 'status.json');
+    if (existsSync(DIST)) {
+        let status;
+        try {
+            status = JSON.parse(readFileSync(statusPath, 'utf8'));
+        } catch (error) {
+            hits.push(`[hosting] web/dist/status.json: missing or not JSON (${error.message})`);
+        }
+        if (status !== undefined && status?.maintenance !== false) {
+            hits.push('[hosting] web/dist/status.json: "maintenance" is not false');
+        }
+    }
+}
+
 if (hits.length > 0) {
     console.error(`check:patterns: ${hits.length} hit(s)`);
     for (const hit of hits) console.error(`  ${hit}`);
     process.exit(1);
 }
-console.log('check:patterns: all seven gates pass');
+console.log('check:patterns: all nine gates pass');

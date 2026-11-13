@@ -1695,3 +1695,17 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   4. Cost tables in the reference set: the default cost set plus a lobby's own set; the final decision is taken when the costs page is ported. No code now.
 - **Why:** user, 2026-11-13, on the orchestrator's four recommendations after the M6 review: "i agree with your recommendation".
 - **Where implemented:** `web/src/stdb/assertDevTarget.ts`, `web/vite.config.ts`, `docs/frontend/pages.md`; items 1, 2 and 4 at M7, the app shell step and the costs page
+
+### A172 — M7: hosting config and the maintenance status file
+
+- **Date:** 2026-11-13 · **Status:** implemented; the items marked "orchestrator" await the user's ruling
+- **Decision:**
+  1. M7 goes ahead as proposed (hosting config, security headers, robots file, maintenance status file, deploy ignore list). Nothing is deployed.
+  2. Orchestrator: `robots.txt` disallows `/lobby/`, `/admin`, `/api/` (plan Appendix A) and also `/profile`, `/calendar`, `/tournaments`; the rest is indexable.
+  3. Orchestrator: `web/public/status.json` ships as `{ "maintenance": false }`; CI (`check:patterns` gate 9) is red while it says `true`, so switching maintenance on is a deliberate deploy. Order: deploy the file, check the splash, then switch the module; the reverse when ending.
+  4. Orchestrator: `?maintenance=skip` makes a tab ignore the status file so an Admin can get in; the module still refuses everyone else (B-8).
+  5. Orchestrator: status re-reads never closer than 30 s without a click, every 60 s during an outage, 30 s after a drop for a reconnecting tab, none while the tab is hidden; Retry reads at once on both splashes.
+  6. Orchestrator: the SDK provider sits beside the app (so the status answer never remounts it). Pages use `useStdbConnection` and the hooks in `web/src/stdb/`, not the SDK's own React hooks. To be ruled on before the first page calls a reducer.
+  7. The `functions` block of `vercel.json` waits for M5; `'unsafe-eval'` stays in `script-src` (required by the SDK, proven).
+- **Why:** user, 2026-11-13, on the orchestrator's M7 outline: "lets go with it then". Items 2 to 6 were chosen by the orchestrator during the step and reported to the user.
+- **Where implemented:** `vercel.json`, `.vercelignore`, `web/public/{robots.txt,status.json}`, `web/src/stdb/{statusFile.ts,MaintenanceGate.tsx,StdbProvider.tsx}`, `scripts/ci/check-patterns.mjs`, `docs/frontend/hosting.md`, `docs/log/2026-11-13-m7.md`
