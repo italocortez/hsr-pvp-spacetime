@@ -68,16 +68,22 @@ export function startLayer0(conn: StdbConnectionLike): () => void {
     const { viewMyProfile, viewMyLobbies } = conn.db;
     let profileApplied = false;
     let stopped = false;
+    // Set by the first subscription error: from then on this connection says nothing about the
+    // viewer. The SDK delivers a failed replay's error first and the deletes of that subscription's
+    // cached rows after it (`db_connection_impl.ts` `#applyReplayBatch`); without this flag the
+    // profile delete would turn a signed-in user into a visitor under the splash and the guards
+    // would send them to sign in.
+    let dead = false;
 
     // Callbacks run after the whole transaction is in the cache, so reading the cache here sees
     // the final state of a role change (delete + insert) at once, never a gap.
     const syncProfile = () => {
-        if (stopped || !profileApplied) return;
+        if (stopped || dead || !profileApplied) return;
         const next = profileToAuth([...viewMyProfile.iter()]);
         if (!sameAuth(authStore.getSnapshot(), next)) setAuthSnapshot(next);
     };
     const syncLobbies = () => {
-        if (stopped) return;
+        if (stopped || dead) return;
         setLobbies([...viewMyLobbies.iter()]);
     };
 
@@ -93,7 +99,9 @@ export function startLayer0(conn: StdbConnectionLike): () => void {
     // failure: the splash with Retry, auth not ready, and the connection closed so that Retry
     // builds a new one and subscribes again.
     const failed = (view: string) => (_ctx: unknown, error?: Error) => {
-        if (stopped) return;
+        // A second error (the other view, same frame) keeps the first reason and closes nothing more.
+        if (stopped || dead) return;
+        dead = true;
         console.error(`[stdb] ${view} subscription failed`, error);
         failConnection(error ?? new Error(`${view} subscription failed`));
         // Not from inside the SDK's message handling.

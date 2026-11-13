@@ -104,9 +104,15 @@ export class MockSubscription implements SubscriptionHandleLike {
     apply() {
         this.applied?.();
     }
-    fail(message: string) {
+    /**
+     * Fires the error. `thenDrop` models the SDK's order for a failed replay
+     * (`#applyReplayBatch`): the error callback first, then the deletes of the rows this
+     * subscription had brought into the cache.
+     */
+    fail(message: string, thenDrop?: () => void) {
         this.ended = true;
         this.errored?.(CTX, new Error(message));
+        thenDrop?.();
     }
 }
 
@@ -196,7 +202,14 @@ export class MockBuilder implements ConnectionEventsLike {
     }
 
     /** The connection the events come from; `isDisconnectRequested` as on the SDK connection. */
-    readonly conn = { isDisconnectRequested: false };
+    readonly conn = {
+        isDisconnectRequested: false,
+        disconnects: 0,
+        disconnect() {
+            this.isDisconnectRequested = true;
+            this.disconnects += 1;
+        },
+    };
 
     connect(token: string) {
         this.emit('connect', this.conn, {}, token);

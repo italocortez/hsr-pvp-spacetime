@@ -38,13 +38,16 @@ type Rows = {
 };
 type Key = keyof Rows;
 /**
- * `ready`: every source has had a first result (on some connection). `error`: the first failed
+ * `ready`: every source has had a first result (on some connection). `stale`: the connection was
+ * replaced and the rows shown are the previous connection's until every source has applied on the
+ * new one. `error`: the first failed
  * subscription on the current connection, if any.
  */
-type Snapshot = Rows & { ready: boolean; error?: string };
+type Snapshot = Rows & { ready: boolean; stale: boolean; error?: string };
 
 const EMPTY: Snapshot = {
     ready: false,
+    stale: false,
     characters: [],
     lightcones: [],
     archetypes: [],
@@ -68,8 +71,13 @@ function startOn(conn: StdbConnectionLike): void {
     // The provider's manager replaced the connection object: the old one is closed for good.
     // Its rows stay published until the new subscriptions have applied (no empty flash).
     stopCurrent?.();
+    const swapped = startedOn !== null;
     startedOn = conn;
-    if (snapshot.error !== undefined) publish({ ...snapshot, error: undefined });
+    // A new connection: the old error no longer applies; rows of the old one are stale until the
+    // new subscriptions apply (a first start has no rows to be stale).
+    if (snapshot.error !== undefined || swapped) {
+        publish({ ...snapshot, error: undefined, stale: swapped });
+    }
 
     const sources: { [K in Key]: KeylessTableLike<Rows[K][number]> } = {
         characters: conn.db.hsrCharacter,
@@ -95,6 +103,7 @@ function startOn(conn: StdbConnectionLike): void {
         }
         dirty.clear();
         next.ready = snapshot.ready || applied.size === keys.length;
+        if (applied.size === keys.length) next.stale = false;
         publish(next);
     };
     const markDirty = (key: Key) => {

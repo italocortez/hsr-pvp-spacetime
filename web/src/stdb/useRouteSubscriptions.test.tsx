@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { type ReactNode, StrictMode } from 'react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MockConnection } from '@/test/mockConnection';
 import { StdbConnectionContext } from './connectionContext';
 import { useRouteSubscriptions } from './useRouteSubscriptions';
@@ -75,9 +75,14 @@ describe('useRouteSubscriptions', () => {
         expect(conn.subscriptions).toHaveLength(2);
     });
 
-    it('drops a duplicate query: one subscription per query', () => {
-        renderHook(() => useRouteSubscriptions([A, A, B]), { wrapper });
+    it('drops a duplicate query: one subscription per query, one warning per mount', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const { rerender } = renderHook(() => useRouteSubscriptions([A, A, B]), { wrapper });
+        rerender();
+        rerender();
         expect(conn.liveQueries()).toEqual([A, B]);
+        expect(warn).toHaveBeenCalledTimes(1);
+        warn.mockRestore();
     });
 
     it('StrictMode double mount: the first handles are unsubscribed, one live set remains, none after unmount', () => {

@@ -56,6 +56,12 @@ export function isRefusedToken(error: unknown): boolean {
     return status === 401 || status === 403;
 }
 
+/** Closes the SDK connection behind an event context (the context is the connection itself). */
+function closeConnection(ctx: unknown): void {
+    const disconnect = (ctx as { disconnect?: unknown } | null)?.disconnect;
+    if (typeof disconnect === 'function') disconnect.call(ctx);
+}
+
 /** The builder callbacks the app uses; the generated builder and the test double both have them. */
 export interface ConnectionEventsLike {
     onConnect(cb: (conn: unknown, identity: unknown, token: string) => void): unknown;
@@ -99,6 +105,9 @@ export function wireConnectionEvents<B extends ConnectionEventsLike>(
     builder.onConnect(connected);
     builder.onAutomaticReconnect(connected);
     builder.onConnectError((ctx, error, nextAttempt) => {
+        // Defensive only: in SDK 2.15.0 `connectError` is never emitted for a connection the app
+        // closed (`disconnect()` ends it first, and every later attempt path returns early on
+        // `#connectionEnded`), so this branch is unreachable today and is not tested.
         if (closedByApp(ctx)) return;
         if (nextAttempt !== undefined) {
             setConnectionStatus({
@@ -110,6 +119,12 @@ export function wireConnectionEvents<B extends ConnectionEventsLike>(
             // a reload (which reads the now empty key) gets a fresh anonymous identity.
             deleteStoredToken(tokenStorageKey);
             failConnection(error, 'reload');
+            // Stop the provider's manager from rebuilding with the dead token every 1 to 30 s
+            // while the tab sits on the splash: this callback runs before the manager's, and a
+            // connection the app asked to close is dropped without a rebuild
+            // (`connection_manager.ts` `#scheduleRebuild`). The manager's own connectError
+            // handler then finds no current connection and does nothing.
+            closeConnection(ctx);
         } else failConnection(error);
     });
     builder.onDisconnect((ctx, error, nextAttempt) => {
