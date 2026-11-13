@@ -9,18 +9,19 @@ import { router as appRouter } from '@/router';
 export const AUTH = {
     notReady: { ready: false },
     visitor: { ready: true },
-    guest: { ready: true, user: { id: 1n, role: { tag: 'User' }, isGuest: true } },
-    member: { ready: true, user: { id: 2n, role: { tag: 'User' }, isGuest: false } },
+    guest: { ready: true, user: { id: 1, role: { tag: 'User' }, isGuest: true } },
+    member: { ready: true, user: { id: 2, role: { tag: 'User' }, isGuest: false } },
     tournamentHost: {
         ready: true,
-        user: { id: 5n, role: { tag: 'TournamentHost' }, isGuest: false },
+        user: { id: 5, role: { tag: 'TournamentHost' }, isGuest: false },
     },
-    moderator: { ready: true, user: { id: 3n, role: { tag: 'Moderator' }, isGuest: false } },
-    admin: { ready: true, user: { id: 4n, role: { tag: 'Admin' }, isGuest: false } },
+    moderator: { ready: true, user: { id: 3, role: { tag: 'Moderator' }, isGuest: false } },
+    admin: { ready: true, user: { id: 4, role: { tag: 'Admin' }, isGuest: false } },
 } satisfies Record<string, AuthSnapshot>;
 
 // Unmount first (hooks run in reverse order, so the setup file's cleanup would come after the
-// reset), then start the next test as a ready visitor (authStore.ts) with a blank title.
+// reset), then start the next test as a ready visitor with a blank title. (The app itself starts
+// not ready, authStore.ts; tests always set the snapshot they need.)
 afterEach(() => {
     cleanup();
     setAuthSnapshot(AUTH.visitor);

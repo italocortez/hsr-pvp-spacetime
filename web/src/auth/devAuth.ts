@@ -7,10 +7,10 @@ import { type AuthSnapshot, setAuthSnapshot } from './authStore';
 
 const PRESETS = {
     visitor: { ready: true },
-    guest: { ready: true, user: { id: 1n, role: { tag: 'User' }, isGuest: true } },
-    member: { ready: true, user: { id: 2n, role: { tag: 'User' }, isGuest: false } },
-    moderator: { ready: true, user: { id: 3n, role: { tag: 'Moderator' }, isGuest: false } },
-    admin: { ready: true, user: { id: 4n, role: { tag: 'Admin' }, isGuest: false } },
+    guest: { ready: true, user: { id: 1, role: { tag: 'User' }, isGuest: true } },
+    member: { ready: true, user: { id: 2, role: { tag: 'User' }, isGuest: false } },
+    moderator: { ready: true, user: { id: 3, role: { tag: 'Moderator' }, isGuest: false } },
+    admin: { ready: true, user: { id: 4, role: { tag: 'Admin' }, isGuest: false } },
 } satisfies Record<string, AuthSnapshot>;
 
 type DevAuthArg = AuthSnapshot | keyof typeof PRESETS;

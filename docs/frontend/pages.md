@@ -72,8 +72,8 @@ Profile sub-routes (achievements, roster, stats, replays) come with the profile 
 
 **Guards** (`web/src/auth/guards.ts`; UX only, the module is the authority):
 
-- Auth comes from `web/src/auth/authStore.ts`: `{ ready, user?: { id, role, isGuest } }`. Until M6 it is a ready visitor (no user). `App.tsx` passes it as router context and calls `router.invalidate()` when it changes, so the guards re-run (a member signed out on `/profile` lands on `/?login=1&next=%2Fprofile`).
-- Not ready: the guard lets the route through and the layout renders nothing (the void background) until ready.
+- Auth comes from `web/src/auth/authStore.ts`: `{ ready, user?: { id, role, isGuest } }` (`id` is the `u32` of `view_my_profile`, a number). Since M6 it starts not ready and Layer 0 feeds it (`web/src/stdb/layer0.ts`): `view_my_profile` applied with no row is a visitor, with a row a user, and later row changes follow; a failed connection sets it back to not ready. `App.tsx` passes it as router context and calls `router.invalidate()` when it changes, so the guards re-run (a member signed out on `/profile` lands on `/?login=1&next=%2Fprofile`).
+- Not ready: the guard lets the route through and the layout renders nothing (the void background) under the neutral title `IPC Battlegrounds` until ready (`web/src/auth/NotReady.tsx`). Both guarded layouts also render nothing while ready without a user (the one render between a sign-out and its redirect), so pages under them always have a user (M6).
 - `_authed` (`beforeLoad`): no user goes to `/?login=1&next=<path>`. Guests count as signed in.
 - `_admin`: the same `beforeLoad` for visitors. The role check is in the layout component (`StaffOutlet`), not the guard: a user below Moderator sees the no-access page at `/admin`, no redirect. Because the check is only in the render, the route chain still runs for any signed-in user: child `beforeLoad`s, loaders and code chunks under `_admin` load for guests and members too. **Loaders and `beforeLoad` under `_admin` must check `isStaff(context.auth)` themselves; admin chunks are public code.**
 - Why not a guard: a role check thrown from `_admin`'s `beforeLoad` and shown by its `errorComponent` does stop the chain (tested in the M4 fix pass: as guest no `admin.tsx` request, no child `beforeLoad` or loader; preload quiet; live role flips work both ways). But the installed router renders a route in error status by throwing the error inside React, so every 403 render logs a page error, React's "The above error occurred" and the router's "Error in route match". That fails the clean-console rule, so it was not kept.
@@ -95,10 +95,30 @@ Profile sub-routes (achievements, roster, stats, replays) come with the profile 
 - Navigate to `next` only through the router (`router.navigate` / `redirect`), or resolve it with `new URL(next, location.origin)`; never `window.location` with a raw value, a raw href, or hand-normalised text.
 - Every route with search params needs a validator: numbers written to the URL come back as text.
 - Validate `next` again after the Discord round trip, and in the auth function before it writes any `Location` header.
-- Pages under a guard must tolerate one render without a user after sign-out (the redirect follows the invalidate).
-- Loaders under `_authed` must not assume a user while auth is not ready (the guard lets them through then).
-- Set a neutral document title while auth is not ready (the layout renders nothing, so the previous page's title stays).
+- Pages under a guard must tolerate one render without a user after sign-out (the redirect follows the invalidate). **Done (M6):** both guarded layouts render nothing without a user.
+- Loaders under `_authed` must not assume a user while auth is not ready (the guard lets them through then). **M6:** no loader exists yet; the rule stands for the first one.
+- Set a neutral document title while auth is not ready (the layout renders nothing, so the previous page's title stays). **Done (M6):** `NotReady`.
 - The lobby route should validate `$lobbyId` and show `NotFoundPage` with `what="Lobby"` for a bad one.
+
+## Connection splashes (M6)
+
+- **When:** the root layout (`web/src/stdb/ConnectionGate.tsx`) renders one of them in place of every route once the connection status is `failed`. `connecting` and `reconnecting` block nothing. The URL stays. `failed` (with auth back to not ready) comes from:
+  - the SDK reporting it will not retry a connection (a failed first connection, a terminal reconnect error);
+  - a Layer 0 subscription error (`view_my_profile` or `view_my_lobbies`, first result or a replay): the app closes that connection, so Retry builds a new one and subscribes again;
+  - the SDK closing the connection itself (it calls its own `disconnect()` on an error for an already applied subscription). A close counts as the app's own only when the connection is no longer the current one (`ConnectionScope` clears it before the provider's manager closes it 0 ms later);
+  - a stored token the server refuses at the token exchange (401 or 403): the token is deleted and Retry reloads the page, because the provider's manager keeps the old token for its rebuilds.
+  - The auth store is only replaced when it was not already not ready, so a rebuild that fails again does not re-run the guards.
+- **Files:** `web/src/pages/connection/OfflinePage.tsx`, `MaintenancePage.tsx` on `web/src/components/ConnectionSplash/` (`SplashLayout` with the standby art and a Retry button, `IpcActionButton`, in place of the link back to base; `SplashLayout` gained an `action` prop).
+- **Wording** (orchestrator proposal, for the user to rule on): offline: eyebrow `Error // Offline`, headline "Connection *lost.*", lede "The link to the IPC servers is down. Check your connection and try again.", chip `SYS://OFFLINE`, bottom HUD `Sector 00 · Offline`, title `Connection lost — IPC Battlegrounds`. Maintenance: eyebrow `Status // Maintenance`, headline "Under *maintenance.*", lede "The site is in maintenance. Please try again later.", chip `SYS://MAINTENANCE`, bottom HUD `Sector 00 · Maintenance`, title `Under maintenance — IPC Battlegrounds`.
+- **Retry** reconnects without a page reload: it hands the SDK provider a fresh connection builder (a reload only after a refused token). The Retry button is the CTA without the leading arrow (the arrow means "go somewhere"; Retry stays on the page).
+- **Screenshots:** `test/frontend/screenshots/connection/{offline,maintenance}-{1440,390}.png` (dev server; offline reached by failing the token request, maintenance forced with `window.__devConnection`; devtools and the egress panel hidden).
+- **Open questions (for the user):**
+  - **Maintenance refusal never reaches the browser.** The server upgrades the socket, then drops it without a close frame or reason when `client_connected` throws. The client shows the offline splash, and the SDK provider's manager keeps rebuilding the connection (backoff 1 s doubling to 30 s, so up to 2 attempts a minute per open tab). The maintenance splash and its classification are ready for a source that does reach the client.
+  - **Cost tables are not subscribed.** The reference set has characters, light cones, archetypes, character archetypes and the published cost sets; the three cost tables wait because the module has no single active cost set (a lobby picks any published set or the default set 0).
+  - **Bundle growth.** The SDK and the generated bindings take the main chunk from 165 kB (55 gzip) to 457 kB (111 gzip). Option: load the connection layer lazily after the first paint.
+  - **M5 token swap.** The provider keeps a live connection and its token; a signed-in token needs the provider unmounted for a tick (past the manager's 0 ms release) or a page reload.
+  - **CSP for M7.** `connect-src` must allow `wss://maincloud.spacetimedb.com` (the socket) and `https://maincloud.spacetimedb.com` (the token exchange, `POST /v1/identity/websocket-token`, whenever a token is stored).
+- **Dev helpers:** `window.__devConnection('offline' | 'maintenance' | 'reconnecting' | 'connected' | 'retry')`; the egress meter `window.__wireStats()` and its panel. Neither is in the production build (check:patterns gate 3).
 
 ## Fonts (M3)
 
