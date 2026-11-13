@@ -1,6 +1,7 @@
 import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { authStore } from '@/auth/authStore';
 import { MockConnection, profileRow } from '@/test/mockConnection';
 import { renderWithConnection } from '@/test/renderWithConnection';
 import { connectionStatusStore, setConnectionStatus } from './connectionStatus';
@@ -115,14 +116,15 @@ describe('failure splashes in place of the routes', () => {
         );
     });
 
-    it('a Layer 0 subscription error shows the offline splash; Retry asks for a new connection', async () => {
+    it('a Layer 0 subscription error (cached rows not dropped) shows the offline splash; Retry asks for a new connection', async () => {
         const member = profileRow();
         conn.db.viewMyProfile.seed(member);
         renderWithConnection('/profile', conn);
         act(() => conn.apply(LAYER0_QUERIES.profile));
         expect(await screen.findByText('Profile')).toBeInTheDocument();
 
-        // A replay of view_my_profile fails: the user must not stay signed in on a dead view.
+        // An error on view_my_profile: the user must not stay signed in on a dead view. (The
+        // replay order, with the row delete after the error, is the next test.)
         await act(async () => {
             conn.live()
                 .find((s) => s.query === LAYER0_QUERIES.profile)
@@ -145,6 +147,37 @@ describe('failure splashes in place of the routes', () => {
             status: { state: 'connecting' },
             generation: generation + 1,
         });
+    });
+
+    it('replay of view_my_profile fails for a signed-in user: auth is not ready, the path stays /profile, the splash shows; after Retry and a new profile row the page returns', async () => {
+        const member = profileRow();
+        conn.db.viewMyProfile.seed(member);
+        const { router, rerenderWithConnection } = renderWithConnection('/profile', conn);
+        act(() => conn.applyAll());
+        expect(await screen.findByText('Profile')).toBeInTheDocument();
+
+        // The SDK's order for a failed replay: the error callback, then the delete of the row
+        // the failed subscription had cached.
+        await act(async () => {
+            conn.live()
+                .find((s) => s.query === LAYER0_QUERIES.profile)
+                ?.fail('view gone', () => conn.db.viewMyProfile.delete(member));
+        });
+        expect(authStore.getSnapshot()).toEqual({ ready: false });
+        expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent(
+            'Connection lost.',
+        );
+        // Give a sign-in redirect every chance to happen: it must not.
+        await act(async () => new Promise((r) => setTimeout(r, 50)));
+        expect(router.state.location.href).toBe('/profile');
+
+        await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+        const next = new MockConnection();
+        next.db.viewMyProfile.seed(profileRow());
+        rerenderWithConnection(next);
+        act(() => next.applyAll());
+        expect(await screen.findByText('Profile')).toBeInTheDocument();
+        expect(router.state.location.href).toBe('/profile');
     });
 
     it('a new connection object after Retry: Layer 0 subscribes again on it and the route returns', async () => {

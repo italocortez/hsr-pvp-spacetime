@@ -136,6 +136,8 @@ describe('a stored token the server refuses', () => {
         const reload = vi.spyOn(pageReload, 'run').mockImplementation(() => {});
         builder.connectError(tokenError(code));
         expect(localStorage.getItem(KEY)).toBeNull();
+        // The refused connection is closed, so the provider's manager does not rebuild it.
+        expect(builder.conn.disconnects).toBe(1);
         expect(status()).toMatchObject({ state: 'failed', kind: 'offline', recovery: 'reload' });
 
         const generation = connectionStatusStore.getSnapshot().generation;
@@ -148,6 +150,7 @@ describe('a stored token the server refuses', () => {
         localStorage.setItem(KEY, 'tok');
         builder.connectError(tokenError(500));
         expect(localStorage.getItem(KEY)).toBe('tok');
+        expect(builder.conn.disconnects).toBe(0);
         expect(status()).toMatchObject({ state: 'failed', recovery: 'retry' });
     });
 

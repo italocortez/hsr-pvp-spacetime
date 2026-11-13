@@ -111,9 +111,43 @@ if (listed.error || listed.status !== 0) {
     }
 }
 
+// 7. Dev guard present (user decision 2026-11-13): the dev server never runs against prod.
+//    main.tsx calls assertDevTarget before the first render and before the dev helpers load;
+//    vite.config.ts refuses `serve` (not preview) with the prod target.
+const DEV_REFUSAL = 'Dev mode cannot run against the prod database. Set VITE_STDB_TARGET=test.';
+{
+    const mainPath = join(ROOT, 'web', 'src', 'main.tsx');
+    const main = existsSync(mainPath) ? readFileSync(mainPath, 'utf8') : '';
+    const guard = main.indexOf('assertDevTarget(import.meta.env.DEV');
+    const firstRender = main.indexOf('createRoot(');
+    const devHelpers = main.indexOf("import('@/dev/");
+    if (guard < 0) {
+        hits.push('[dev-guard] web/src/main.tsx: no assertDevTarget(import.meta.env.DEV, …) call');
+    } else if (
+        (firstRender >= 0 && guard > firstRender) ||
+        (devHelpers >= 0 && guard > devHelpers)
+    ) {
+        hits.push(
+            '[dev-guard] web/src/main.tsx: assertDevTarget runs after the render or the dev helpers',
+        );
+    }
+    const configPath = join(ROOT, 'web', 'vite.config.ts');
+    const config = existsSync(configPath) ? readFileSync(configPath, 'utf8') : '';
+    for (const needle of [
+        "command === 'serve' && !isPreview",
+        "target === 'prod'",
+        'throw new Error(DEV_PROD_REFUSAL)',
+        DEV_REFUSAL,
+    ]) {
+        if (!config.includes(needle)) {
+            hits.push(`[dev-guard] web/vite.config.ts: missing "${needle}"`);
+        }
+    }
+}
+
 if (hits.length > 0) {
     console.error(`check:patterns: ${hits.length} hit(s)`);
     for (const hit of hits) console.error(`  ${hit}`);
     process.exit(1);
 }
-console.log('check:patterns: all six gates pass');
+console.log('check:patterns: all seven gates pass');

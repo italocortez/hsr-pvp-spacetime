@@ -128,14 +128,36 @@ describe('reference set', () => {
         expect([...next.liveQueries()].sort()).toEqual(
             [LAYER0_QUERIES.profile, LAYER0_QUERIES.lobbies, ...REFERENCE_QUERIES].sort(),
         );
-        // No empty flash: the last rows stay until the new subscriptions apply.
+        // No empty flash: the last rows stay, marked stale, until the new subscriptions apply.
         expect(result.current.characters).toEqual([character]);
         expect(result.current.ready).toBe(true);
+        expect(result.current.stale).toBe(true);
 
         const renamed = { ...character, displayName: 'Kafka (new)' };
         next.db.hsrCharacter.seed(renamed);
         await act(async () => next.applyAll());
         expect(result.current.characters).toEqual([renamed]);
+        expect(result.current.stale).toBe(false);
+    });
+
+    it('the error of one connection is cleared when the connection is replaced', async () => {
+        let current = conn;
+        const scope = ({ children }: { children: ReactNode }) => (
+            <ConnectionScope connection={current}>{children}</ConnectionScope>
+        );
+        const { result, rerender } = renderHook(() => useReferenceSet(), { wrapper: scope });
+        await act(async () =>
+            conn
+                .live()
+                .find((s) => s.query === REFERENCE_QUERIES[0])
+                ?.fail('x'),
+        );
+        expect(result.current.error).toBeDefined();
+        expect(result.current.stale).toBe(false);
+        current = new MockConnection();
+        rerender();
+        await act(async () => {});
+        expect(result.current.error).toBeUndefined();
     });
 
     it('a subscription error is exposed as error, not a silent not-ready', async () => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStdbConnection } from './connectionContext';
 import type { SubscriptionHandleLike } from './types';
 
@@ -11,6 +11,9 @@ import type { SubscriptionHandleLike } from './types';
  * Queries are SQL strings: `toSql(tables.x)` for a table or view, `SELECT * FROM view_x(42)` for a
  * view with arguments. A changed list unsubscribes the old set before subscribing the new one
  * (effect cleanup order), which is what views with arguments need (one argument set at a time).
+ *
+ * The list is compared in order: the same queries in a different order count as a new list and
+ * resubscribe. Callers pass a list in a fixed order (a constant, or built the same way each render).
  */
 
 export type RouteSubscriptionState = {
@@ -21,26 +24,34 @@ export type RouteSubscriptionState = {
 };
 
 /** Duplicates dropped, order kept: one subscription per query. */
-function unique(queries: readonly string[]): string[] {
+function unique(queries: readonly string[]): { list: string[]; dropped: string[] } {
     const seen = new Set<string>();
-    const out: string[] = [];
+    const list: string[] = [];
+    const dropped: string[] = [];
     for (const q of queries) {
-        if (seen.has(q)) {
-            if (import.meta.env.DEV)
-                console.warn(`[stdb] duplicate route subscription dropped: ${q}`);
-            continue;
+        if (seen.has(q)) dropped.push(q);
+        else {
+            seen.add(q);
+            list.push(q);
         }
-        seen.add(q);
-        out.push(q);
     }
-    return out;
+    return { list, dropped };
 }
 
 export function useRouteSubscriptions(queries: readonly string[]): RouteSubscriptionState {
     const conn = useStdbConnection();
     // A stable key (JSON, so any character in a query is safe): a new array with the same
     // queries does not resubscribe.
-    const key = JSON.stringify(unique(queries));
+    const { list: uniqueList, dropped } = unique(queries);
+    const key = JSON.stringify(uniqueList);
+    // A duplicate is a caller bug: say so once per mount (dev only), not on every render.
+    const warned = useRef(false);
+    const firstDropped = dropped[0];
+    useEffect(() => {
+        if (!import.meta.env.DEV || warned.current || firstDropped === undefined) return;
+        warned.current = true;
+        console.warn(`[stdb] duplicate route subscription dropped: ${firstDropped}`);
+    }, [firstDropped]);
     const [state, setState] = useState<RouteSubscriptionState & { key: string }>({
         key,
         ready: false,

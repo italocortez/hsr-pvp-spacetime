@@ -144,6 +144,33 @@ describe('startLayer0', () => {
         },
     );
 
+    it('a failed replay of view_my_profile, then the delete of its row: auth stays not ready', () => {
+        stop = startLayer0(conn);
+        const row = profileRow();
+        conn.db.viewMyProfile.seed(row);
+        conn.applyAll();
+        conn.live()[0]?.fail('view gone', () => conn.db.viewMyProfile.delete(row));
+        expect(auth()).toEqual({ ready: false });
+    });
+
+    it('two Layer 0 errors in one frame: the first reason stays, one close', async () => {
+        stop = startLayer0(conn);
+        conn.live()[0]?.fail('first');
+        conn.live()[0]?.fail('second');
+        expect(connectionStatusStore.getSnapshot().status).toMatchObject({ reason: 'first' });
+        await Promise.resolve();
+        expect(conn.disconnects).toBe(1);
+    });
+
+    it('a cleanup between the error and its microtask: the connection is not closed', async () => {
+        stop = startLayer0(conn);
+        conn.live()[0]?.fail('boom');
+        stop();
+        stop = undefined;
+        await Promise.resolve();
+        expect(conn.disconnects).toBe(0);
+    });
+
     it('an error that arrives after the cleanup is ignored', async () => {
         stop = startLayer0(conn);
         const handle = conn.subscriptions[0];
