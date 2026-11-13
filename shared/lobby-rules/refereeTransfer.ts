@@ -15,8 +15,7 @@ export interface MemberLite {
     joinOrder: number;
 }
 
-export type LobbyStage =
-    | 'Waiting' | 'Drafting' | 'Equipping' | 'Scoring' | 'AwaitingResult';
+export type LobbyStage = 'Waiting' | 'Drafting' | 'Equipping' | 'Scoring' | 'AwaitingResult';
 
 /** Stages where a referee is needed and a disconnect matters (D-08 scope; A67(1): the three live-game stages). */
 export const ACTIVE_STAGES: readonly LobbyStage[] = ['Drafting', 'Equipping', 'Scoring']; // A67(1)
@@ -42,18 +41,18 @@ function orderedCandidates(
     leaverUserId: number,
     predicate: (m: MemberLite) => boolean,
 ): MemberLite[] {
-    const eligible = members.filter(m => m.userId !== leaverUserId && !m.hasLeft && predicate(m));
-    const host = eligible.find(m => m.userId === hostUserId);
+    const eligible = members.filter((m) => m.userId !== leaverUserId && !m.hasLeft && predicate(m));
+    const host = eligible.find((m) => m.userId === hostUserId);
     const ordered: MemberLite[] = host ? [host] : [];
     const tiers: Array<(m: MemberLite) => boolean> = [
-        m => m.slot === 'BluePlayer',
-        m => m.slot === 'RedPlayer',
-        m => m.slot === 'Spectator',
-        m => m.slot === 'BlueCoach',
-        m => m.slot === 'RedCoach',
+        (m) => m.slot === 'BluePlayer',
+        (m) => m.slot === 'RedPlayer',
+        (m) => m.slot === 'Spectator',
+        (m) => m.slot === 'BlueCoach',
+        (m) => m.slot === 'RedCoach',
     ];
     for (const tier of tiers) {
-        ordered.push(...eligible.filter(m => m !== host && tier(m)).sort(byJoin));
+        ordered.push(...eligible.filter((m) => m !== host && tier(m)).sort(byJoin));
     }
     return ordered;
 }
@@ -62,7 +61,11 @@ function orderedCandidates(
  * A22 / A22a: the first *online* candidate in the A22(5) order (the 15 s check, where an away player loses the flags,
  * A68(7)). Skips the leaver, offline members and `hasLeft` rows. Returns null when nobody is eligible (the flag stays).
  */
-export function pickRefereeSuccessor(members: readonly MemberLite[], hostUserId: number, leaverUserId: number): number | null {
+export function pickRefereeSuccessor(
+    members: readonly MemberLite[],
+    hostUserId: number,
+    leaverUserId: number,
+): number | null {
     return pickSuccessor(members, hostUserId, leaverUserId, () => true, true);
 }
 
@@ -79,7 +82,7 @@ export function pickSuccessor(
     onlineOnly = false,
 ): number | null {
     const ordered = orderedCandidates(members, hostUserId, leaverUserId, predicate);
-    const pick = ordered.find(m => m.isOnline) ?? (onlineOnly ? undefined : ordered[0]);
+    const pick = ordered.find((m) => m.isOnline) ?? (onlineOnly ? undefined : ordered[0]);
     return pick?.userId ?? null;
 }
 
@@ -94,7 +97,10 @@ export interface TransferCheckInput {
 }
 
 export type TransferCheckDecision =
-    | { action: 'none'; reason: 'reconnected' | 'left-lobby' | 'not-referee' | 'inactive-stage' | 'no-candidate' }
+    | {
+          action: 'none';
+          reason: 'reconnected' | 'left-lobby' | 'not-referee' | 'inactive-stage' | 'no-candidate';
+      }
     | { action: 'transfer'; toUserId: number };
 
 /** The referee flag moves only if the subject is still offline when the check fires (A22a), in Waiting too (A92(5)). */
@@ -103,9 +109,12 @@ export function decideRefereeTransfer(input: TransferCheckInput): TransferCheckD
     if (!subject) return { action: 'none', reason: 'left-lobby' };
     if (subject.isOnline) return { action: 'none', reason: 'reconnected' };
     if (!subject.isReferee) return { action: 'none', reason: 'not-referee' };
-    if (!FLAG_CHECK_STAGES.includes(input.stage)) return { action: 'none', reason: 'inactive-stage' };
+    if (!FLAG_CHECK_STAGES.includes(input.stage))
+        return { action: 'none', reason: 'inactive-stage' };
     const to = pickRefereeSuccessor(input.members, input.hostUserId, subject.userId);
-    return to === null ? { action: 'none', reason: 'no-candidate' } : { action: 'transfer', toUserId: to };
+    return to === null
+        ? { action: 'none', reason: 'no-candidate' }
+        : { action: 'transfer', toUserId: to };
 }
 
 export interface AutoPauseInput {

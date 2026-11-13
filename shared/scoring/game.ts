@@ -53,13 +53,31 @@ export function scoreGame(
     const h = applyHandicaps(
         mode,
         settings,
-        { result: applyModifiers(rawBlue, blue.modifiers), rosterCost: blue.rosterCost, deaths: blue.deaths },
-        { result: applyModifiers(rawRed, red.modifiers), rosterCost: red.rosterCost, deaths: red.deaths },
+        {
+            result: applyModifiers(rawBlue, blue.modifiers),
+            rosterCost: blue.rosterCost,
+            deaths: blue.deaths,
+        },
+        {
+            result: applyModifiers(rawRed, red.modifiers),
+            rosterCost: red.rosterCost,
+            deaths: red.deaths,
+        },
     );
     const decision = decideWinner(
         mode,
-        { adjusted: h.blue.adjusted, rosterCost: blue.rosterCost, fourStarCount: blue.fourStarCount, fiveStarEidolons: blue.fiveStarEidolons },
-        { adjusted: h.red.adjusted, rosterCost: red.rosterCost, fourStarCount: red.fourStarCount, fiveStarEidolons: red.fiveStarEidolons },
+        {
+            adjusted: h.blue.adjusted,
+            rosterCost: blue.rosterCost,
+            fourStarCount: blue.fourStarCount,
+            fiveStarEidolons: blue.fiveStarEidolons,
+        },
+        {
+            adjusted: h.red.adjusted,
+            rosterCost: red.rosterCost,
+            fourStarCount: red.fourStarCount,
+            fiveStarEidolons: red.fiveStarEidolons,
+        },
     );
     return {
         blue: { raw: rawBlue, adjusted: h.blue.adjusted, handicap: h.blue.handicap },

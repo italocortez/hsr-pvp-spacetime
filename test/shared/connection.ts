@@ -11,7 +11,7 @@
  *   - Rejects with SenderError on reducer error (validation, permissions)
  */
 
-import { DbConnection } from '@/src/module_bindings';
+import { DbConnection } from '@bindings/index';
 import { readArgs } from '../../shared/stdb-targets';
 import { backendEnv, serverToken } from './env';
 

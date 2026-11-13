@@ -42,7 +42,7 @@ import {
     RefereeTransferCheck,
     TournamentFinalizeJob,
     UserDeletionJob,
-} from '@/src/module_bindings/types';
+} from '@bindings/types';
 import { createTestHarness, expectReducerError, type TestHarness } from '../shared/connection';
 
 const SCHEDULED_REDUCERS = [

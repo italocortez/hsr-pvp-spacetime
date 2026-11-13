@@ -30,7 +30,9 @@ export interface HandicapOutcome {
 /** Threshold rule: below → advantage, above → penalty, exactly at → neutral (settled S7); 0 disables. */
 export function thresholdAdvantage(settings: HandicapSettings, cost: number): number {
     if (settings.rosterThreshold === 0 || cost === settings.rosterThreshold) return 0;
-    return cost < settings.rosterThreshold ? settings.underThresholdAdvantage : -settings.aboveThresholdPenalty;
+    return cost < settings.rosterThreshold
+        ? settings.underThresholdAdvantage
+        : -settings.aboveThresholdPenalty;
 }
 
 /**
@@ -44,11 +46,15 @@ export function applyHandicaps(
     blue: HandicapTeam,
     red: HandicapTeam,
 ): { blue: HandicapOutcome; red: HandicapOutcome } {
-    const diffAdvantage = mulHundredths(settings.rosterDiffAdvantage, Math.abs(blue.rosterCost - red.rosterCost));
+    const diffAdvantage = mulHundredths(
+        settings.rosterDiffAdvantage,
+        Math.abs(blue.rosterCost - red.rosterCost),
+    );
     const side = (team: HandicapTeam, cheaper: boolean): HandicapOutcome => {
-        const handicap = (cheaper ? diffAdvantage : 0)
-            + thresholdAdvantage(settings, team.rosterCost)
-            - settings.deathPenalty * team.deaths;
+        const handicap =
+            (cheaper ? diffAdvantage : 0) +
+            thresholdAdvantage(settings, team.rosterCost) -
+            settings.deathPenalty * team.deaths;
         return { adjusted: team.result + advantageToDelta(mode, handicap), handicap };
     };
     return {

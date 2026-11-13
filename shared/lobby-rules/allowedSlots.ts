@@ -13,7 +13,13 @@ export interface SeatContext {
     team2StandInIds: readonly number[];
 }
 
-export const ALL_SLOTS: readonly Slot[] = ['BluePlayer', 'BlueCoach', 'RedPlayer', 'RedCoach', 'Spectator'];
+export const ALL_SLOTS: readonly Slot[] = [
+    'BluePlayer',
+    'BlueCoach',
+    'RedPlayer',
+    'RedCoach',
+    'Spectator',
+];
 
 /**
  * Decision recorded in ACCESS-SECURITY-OPS.md (delegated by the user): coaches COUNT as team
@@ -30,7 +36,13 @@ export function allowedSlotsFor(ctx: SeatContext, userId: number): ReadonlySet<S
     const onTeam1 = member1 || (ctx.team1StandInIds.includes(userId) && !member2);
     const onTeam2 = member2 || (ctx.team2StandInIds.includes(userId) && !member1);
     const allowed = new Set<Slot>(['Spectator']);
-    if (onTeam1) { allowed.add('BluePlayer'); allowed.add('BlueCoach'); }
-    if (onTeam2) { allowed.add('RedPlayer'); allowed.add('RedCoach'); }
+    if (onTeam1) {
+        allowed.add('BluePlayer');
+        allowed.add('BlueCoach');
+    }
+    if (onTeam2) {
+        allowed.add('RedPlayer');
+        allowed.add('RedCoach');
+    }
     return allowed;
 }

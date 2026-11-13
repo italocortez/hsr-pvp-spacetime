@@ -6,7 +6,8 @@ import { foldSeeding, groupKey, nextPowerOf2 } from './engine';
 
 /** A32: `groupSize` is a minimum. Group count = floor(teams / groupSize), at least 1. */
 export function groupCount(teamCount: number, groupSize: number): number {
-    if (!Number.isInteger(groupSize) || groupSize < 1) throw new Error('groupSize must be a positive integer.');
+    if (!Number.isInteger(groupSize) || groupSize < 1)
+        throw new Error('groupSize must be a positive integer.');
     return Math.max(1, Math.floor(teamCount / groupSize));
 }
 
@@ -59,10 +60,10 @@ export function roundRobin(teamIds: readonly number[]): [number, number][][] {
 }
 
 export interface GroupMatchSpec {
-    key: string;          // groupKey(groupIndex, round, number)
-    groupIndex: number;   // 0-based, = TournamentTeam.groupId / BracketMatch.groupId
-    round: number;        // 1-based
-    number: number;       // 1-based within (group, round)
+    key: string; // groupKey(groupIndex, round, number)
+    groupIndex: number; // 0-based, = TournamentTeam.groupId / BracketMatch.groupId
+    round: number; // 1-based
+    number: number; // 1-based within (group, round)
     team1: number;
     team2: number;
 }
@@ -73,7 +74,14 @@ export function groupSpec(groups: readonly (readonly number[])[]): GroupMatchSpe
     groups.forEach((teams, groupIndex) => {
         roundRobin(teams).forEach((matches, r) => {
             matches.forEach(([team1, team2], m) => {
-                out.push({ key: groupKey(groupIndex, r + 1, m + 1), groupIndex, round: r + 1, number: m + 1, team1, team2 });
+                out.push({
+                    key: groupKey(groupIndex, r + 1, m + 1),
+                    groupIndex,
+                    round: r + 1,
+                    number: m + 1,
+                    team1,
+                    team2,
+                });
             });
         });
     });
@@ -86,11 +94,18 @@ export function groupSpec(groups: readonly (readonly number[])[]): GroupMatchSpe
  */
 export function meetingRound(seedA: number, seedB: number, bracketSize: number): number {
     const matchOf = new Map<number, number>();
-    foldSeeding(bracketSize).forEach(([a, b], i) => { matchOf.set(a, i); matchOf.set(b, i); });
+    foldSeeding(bracketSize).forEach(([a, b], i) => {
+        matchOf.set(a, i);
+        matchOf.set(b, i);
+    });
     let ma = matchOf.get(seedA)!;
     let mb = matchOf.get(seedB)!;
     let round = 1;
-    while (ma !== mb) { ma >>= 1; mb >>= 1; round++; }
+    while (ma !== mb) {
+        ma >>= 1;
+        mb >>= 1;
+        round++;
+    }
     return round;
 }
 
@@ -110,17 +125,22 @@ export function meetingRound(seedA: number, seedB: number, bracketSize: number):
  * two groups. (A literal "runners-up in reverse group order" would pair every runner-up with its own group
  * winner under fold seeding when the block exactly fills the bracket, e.g. 2 groups × 2 qualifiers.)
  */
-export function placeQualifiers(rankedGroups: readonly (readonly number[])[], advanceCount: number): number[] {
-    if (!Number.isInteger(advanceCount) || advanceCount < 1) throw new Error('advanceCount must be a positive integer.');
+export function placeQualifiers(
+    rankedGroups: readonly (readonly number[])[],
+    advanceCount: number,
+): number[] {
+    if (!Number.isInteger(advanceCount) || advanceCount < 1)
+        throw new Error('advanceCount must be a positive integer.');
     const groupCountValue = rankedGroups.length;
     const qualifierCount = rankedGroups.reduce((n, g) => n + Math.min(advanceCount, g.length), 0);
     const bracketSize = nextPowerOf2(Math.max(2, qualifierCount));
-    const seedOf = new Map<number, number>();          // teamId → seed
-    const bySeed: number[] = [];                       // seed - 1 → teamId
+    const seedOf = new Map<number, number>(); // teamId → seed
+    const bySeed: number[] = []; // seed - 1 → teamId
     let nextSeed = 1;
     for (let rank = 0; rank < advanceCount; rank++) {
-        const order = Array.from({ length: groupCountValue }, (_, i) => (rank % 2 === 0 ? i : groupCountValue - 1 - i))
-            .filter((g) => rankedGroups[g].length > rank);
+        const order = Array.from({ length: groupCountValue }, (_, i) =>
+            rank % 2 === 0 ? i : groupCountValue - 1 - i,
+        ).filter((g) => rankedGroups[g].length > rank);
         const block = order.map((_, i) => nextSeed + i);
         nextSeed += block.length;
         const free = new Set(block);
@@ -131,8 +151,14 @@ export function placeQualifiers(rankedGroups: readonly (readonly number[])[], ad
             let bestRound = -1;
             for (const seed of block) {
                 if (!free.has(seed)) continue;
-                const round = mates.length === 0 ? Infinity : Math.min(...mates.map((s) => meetingRound(s, seed, bracketSize)));
-                if (round > bestRound) { best = seed; bestRound = round; }
+                const round =
+                    mates.length === 0
+                        ? Infinity
+                        : Math.min(...mates.map((s) => meetingRound(s, seed, bracketSize)));
+                if (round > bestRound) {
+                    best = seed;
+                    bestRound = round;
+                }
             }
             free.delete(best);
             seedOf.set(teamId, best);

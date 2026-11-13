@@ -1,14 +1,15 @@
 # Test Suite
 
-Three layers (CLAUDE.md §6). Counts as of S10 (2026-11-09):
+Four layers (CLAUDE.md §6). Counts measured at M9 (2026-11-13):
 
 | Layer | Where | Runs against | Files / tests |
 |---|---|---|---|
-| Unit | `test/backend/**/*.unit.test.ts`, `shared/**/*.test.ts` | nothing (pure functions; `spacetimedb/server` mocked) | 18 / 395 |
-| In-memory module tests (the default verification layer) | `spacetimedb/src/__tests__/*.test.ts` | the module in-process, no network | 44 / 1041 (1024 pass, 1 skipped placeholder, 16 todo) |
+| Unit | `test/backend/**/*.unit.test.ts`, `shared/**/*.test.ts` | nothing (pure functions; `spacetimedb/server` mocked) | 21 / 432 |
+| In-memory module tests (the default verification layer) | `spacetimedb/src/__tests__/*.test.ts` | the module in-process, no network | 108 / 2173 (2157 pass, 1 skipped placeholder, 15 todo) |
+| Web (M9) | `web/src/**/*.test.{ts,tsx}` | jsdom, no network | 7 / 125 |
 | Live residue | `test/live/*.test.ts` | `hsr-spacetimedb-test1` only, once per release | 7 / 40 (+ 3 todo) |
 
-`npm test` runs the first two and never touches maincloud. The old live suite (61 integration files under `test/backend/`) was ported to the in-memory harness in S10 and deleted; see `docs/log/2026-11-09-s10.md` for the file-by-file map.
+`npm test` runs the first two, then the frontend tests (below), and never touches maincloud. The old live suite (61 integration files under `test/backend/`) was ported to the in-memory harness in S10 and deleted; see `docs/log/2026-11-09-s10.md` for the file-by-file map.
 
 ## Structure
 
@@ -38,12 +39,21 @@ spacetimedb/src/__tests__/            # one folder per subject (lobby, match-ses
 
 | Command | What it runs | Cost |
 |---|---|---|
-| `npm test` | unit + in-memory, in that order | ≈ 15 s, no network |
+| `npm test` | unit, in-memory, then web, in that order | ≈ 35 s, no network |
+| `npm run test:web` | the frontend tests alone | ≈ 3 s, no network |
 | `npm run test:watch` | unit tests in watch mode | — |
 | `npx vitest run --config spacetimedb/vitest.config.mts <name filter>` | one in-memory suite, e.g. `s10-lobby` | seconds |
 | `npm run test:integration` | the live residue on test1; **globalSetup wipes and re-bootstraps test1 first** | ≈ 5 min nominal, ≤ 7 min worst, cap 15 min (§D.5) |
 
 `npm run test:integration` is a release step, never run unasked: it is a `spacetime publish --clear` of test1 (a user gate), it costs maincloud energy, and the residue's first run is S11 (test1 is stale until that clear-publish). Single residue file: `npm run test:integration -- test/live/smoke.test.ts`; `SKIP_DB_CLEAR=1` skips the wipe when test1 is known clean.
+
+## Frontend tests (M9)
+
+- **Where:** next to the code in `web/src/` as `*.test.ts` / `*.test.tsx`: pure helpers next to the helper, route behaviour in `web/src/routes/routes.test.tsx`, page rendering in `web/src/pages/splash.test.tsx`. Config `web/vitest.config.ts`: jsdom, the `@` / `@shared` / `@bindings` aliases of `vite.config.ts`, CSS Modules as stable class-name proxies, setup `web/src/test/setup.ts` (jest-dom matchers, cleanup, `VITE_STDB_TARGET=test`).
+- **Run:** `npm run test:web` from the repo root (it is also the third suite of `npm test`).
+- **Helper:** `renderWithRouter(path, auth)` in `web/src/test/renderWithRouter.tsx` renders the real `App` (`web/src/App.tsx`, which takes an optional `router`) and route tree with a memory history and a given auth snapshot (`AUTH.visitor`, `guest`, `member`, `tournamentHost`, `moderator`, `admin`, `notReady`) and, after each test, unmounts, resets the auth store and blanks `document.title`. Change auth mid-test with `setAuthSnapshot` inside `act`.
+- **No network:** no `DbConnection`, no maincloud, no fetch; a connection mock comes with M6. The router plugin is not loaded, so a test run never rewrites `routeTree.gen.ts`; test files under `web/src/routes/` stay out of the route tree through `routeFileIgnorePattern` in `vite.config.ts`.
+- **CI:** `.github/workflows/ci.yml` runs typecheck, `lint:ci`, `npm test`, the web build and `check:patterns` on every push to `main` and every pull request. Signal only, no secrets.
 
 ## In-memory harness (how the s*-suites work)
 

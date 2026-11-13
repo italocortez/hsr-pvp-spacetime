@@ -9,7 +9,7 @@
  *   declared env value, read by requireTestDatabase).
  * - test always adds `--yes=remote` (skips the "publish to a non-local server?" prompt, so it runs without
  *   a terminal, e.g. from test/global-setup.ts); migration prompts still ask.
- * - --clear wipes all data (`--delete-data=always --yes=delete-data`) and is refused for prod.
+ * - --clear wipes all data (the wipe flags come from publishArgs) and is refused for prod.
  * - prod = `--yes=migrate` only (no `--yes=remote`: the non-local prompt still asks); forbidden flags are
  *   re-checked before spawning; refuses a dirty tree.
  * - Runs `npm run typecheck` first and aborts on errors: `spacetime build` cannot find tsc in this
@@ -62,7 +62,7 @@ runMain('publish', () => {
     console.log('[publish] npm run typecheck');
     runLocal('npm run typecheck');
 
-    console.log(`[publish] ${target}${clear ? ' (WIPE: --delete-data=always)' : ''}`);
+    console.log(`[publish] ${target}${clear ? ' (WIPE: all data deleted)' : ''}`);
     runSpacetime({ args: cmd.args, target, env: cmd.env, dryRun: false });
     console.log('[publish] done');
 });

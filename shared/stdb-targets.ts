@@ -44,7 +44,9 @@ export class EnvConfigError extends Error {
 
 export function parseTarget(raw: string | undefined, source: string = ENV_KEYS.target): Target {
     if (raw === undefined || raw === '') {
-        throw new EnvConfigError(`${source} is required (expected "test" or "prod"); refusing to guess a database.`);
+        throw new EnvConfigError(
+            `${source} is required (expected "test" or "prod"); refusing to guess a database.`,
+        );
     }
     if (raw !== 'test' && raw !== 'prod') {
         throw new EnvConfigError(`${source}="${raw}" is not a target; expected "test" or "prod".`);
@@ -61,13 +63,19 @@ export function envFileFor(target: Target): string {
 export function assertNameMatchesTarget(target: Target, dbName: string): void {
     const hasTestMarker = dbName.includes('-test');
     if (target === 'test' && !hasTestMarker) {
-        throw new EnvConfigError(`database "${dbName}" is configured as test but its name has no "-test" marker.`);
+        throw new EnvConfigError(
+            `database "${dbName}" is configured as test but its name has no "-test" marker.`,
+        );
     }
     if (target === 'prod' && hasTestMarker) {
-        throw new EnvConfigError(`database "${dbName}" is configured as prod but its name carries a "-test" marker.`);
+        throw new EnvConfigError(
+            `database "${dbName}" is configured as prod but its name carries a "-test" marker.`,
+        );
     }
     if (dbName !== STDB_DATABASES[target]) {
-        throw new EnvConfigError(`database "${dbName}" is not the committed ${target} database "${STDB_DATABASES[target]}".`);
+        throw new EnvConfigError(
+            `database "${dbName}" is not the committed ${target} database "${STDB_DATABASES[target]}".`,
+        );
     }
 }
 
@@ -141,7 +149,9 @@ export function resolveBrowserEnv(env: Readonly<Record<string, string | undefine
 /** Guard used by global-setup, nuke scripts and the publish builder. */
 export function assertWipeAllowed(target: Target): void {
     if (target !== 'test') {
-        throw new EnvConfigError(`refusing a destructive operation on target "${target}"; only "test" may be wiped.`);
+        throw new EnvConfigError(
+            `refusing a destructive operation on target "${target}"; only "test" may be wiped.`,
+        );
     }
 }
 
@@ -175,7 +185,15 @@ export interface PublishCommand {
 export function publishArgs(target: Target, opts: PublishOptions): PublishCommand {
     const dbName = STDB_DATABASES[target];
     assertNameMatchesTarget(target, dbName);
-    const args = ['publish', dbName, '--server', STDB_SERVER_NICKNAME, '--no-config', '--module-path', opts.modulePath];
+    const args = [
+        'publish',
+        dbName,
+        '--server',
+        STDB_SERVER_NICKNAME,
+        '--no-config',
+        '--module-path',
+        opts.modulePath,
+    ];
     const env = { [ENV_KEYS.target]: target };
     if (target === 'test') args.push('--yes=remote');
 
@@ -186,7 +204,9 @@ export function publishArgs(target: Target, opts: PublishOptions): PublishComman
     }
     if (target === 'prod') {
         if (!opts.yesMigrate) {
-            throw new EnvConfigError('prod publishes must pass yesMigrate: true (reviewed delta, `--yes=migrate`).');
+            throw new EnvConfigError(
+                'prod publishes must pass yesMigrate: true (reviewed delta, `--yes=migrate`).',
+            );
         }
         args.push('--yes=migrate');
         return { args, env };
@@ -196,7 +216,11 @@ export function publishArgs(target: Target, opts: PublishOptions): PublishComman
 }
 
 /** Read-only CLI commands against a target: describe / sql / logs. */
-export function readArgs(target: Target, command: 'describe' | 'sql' | 'logs', extra: string[] = []): string[] {
+export function readArgs(
+    target: Target,
+    command: 'describe' | 'sql' | 'logs',
+    extra: string[] = [],
+): string[] {
     const dbName = STDB_DATABASES[target];
     assertNameMatchesTarget(target, dbName);
     const base = [command, dbName, '--server', STDB_SERVER_NICKNAME, '--no-config'];
@@ -205,18 +229,26 @@ export function readArgs(target: Target, command: 'describe' | 'sql' | 'logs', e
 }
 
 /** Forbidden anywhere in automation; listed so a lint/grep gate can assert their absence. */
-export const FORBIDDEN_PROD_FLAGS = ['--clear-database', '--delete-data', '-c', '--yes=delete-data', '--yes=all', '--yes', '-y'] as const;
+export const FORBIDDEN_PROD_FLAGS = [
+    '--clear-database',
+    '--delete-data',
+    '-c',
+    '--yes=delete-data',
+    '--yes=all',
+    '--yes',
+    '-y',
+] as const;
 
 /**
  * S10s (A122(23), L100): the only flags a prod command may carry, exactly as written (no `=value` variants except
  * `--yes=migrate`): the ones publishArgs and readArgs build. `true` = the flag takes the next argument as its value.
  */
 export const ALLOWED_PROD_FLAGS: Readonly<Record<string, boolean>> = {
-    '--server': true,       // value must be STDB_SERVER_NICKNAME
+    '--server': true, // value must be STDB_SERVER_NICKNAME
     '--no-config': false,
-    '--module-path': true,  // value: any path that is not itself a flag
+    '--module-path': true, // value: any path that is not itself a flag
     '--yes=migrate': false, // the one confirmation prod accepts (CLAUDE.md §5, skill "Publishing")
-    '--json': false,        // describe
+    '--json': false, // describe
 };
 
 /**
@@ -229,12 +261,16 @@ export function assertNoForbiddenProdFlags(args: readonly string[]): void {
     for (let i = 0; i < args.length; i++) {
         const a = args[i];
         if (a === undefined || !a.startsWith('-')) continue;
-        if (!Object.prototype.hasOwnProperty.call(ALLOWED_PROD_FLAGS, a)) {
+        if (!Object.hasOwn(ALLOWED_PROD_FLAGS, a)) {
             throw new EnvConfigError(`argument "${a}" is forbidden against prod.`);
         }
         if (!ALLOWED_PROD_FLAGS[a]) continue;
         const value = args[i + 1];
-        if (value === undefined || value.startsWith('-') || (a === '--server' && value !== STDB_SERVER_NICKNAME)) {
+        if (
+            value === undefined ||
+            value.startsWith('-') ||
+            (a === '--server' && value !== STDB_SERVER_NICKNAME)
+        ) {
             throw new EnvConfigError(`argument "${a} ${value ?? ''}" is forbidden against prod.`);
         }
         i++; // the value is consumed

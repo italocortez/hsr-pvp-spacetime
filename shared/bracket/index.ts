@@ -3,5 +3,5 @@
 // consumers import this index. Pure TypeScript: nothing here imports `spacetimedb` or `react`.
 export * from './engine';
 export * from './groups';
-export * from './standings';
 export * from './guards';
+export * from './standings';

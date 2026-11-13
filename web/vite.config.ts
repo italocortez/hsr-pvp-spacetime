@@ -25,6 +25,8 @@ export default defineConfig(({ command, mode }) => {
                 autoCodeSplitting: true,
                 routesDirectory: 'src/routes',
                 generatedRouteTree: 'src/routeTree.gen.ts',
+                // Test files next to the routes (routes.test.tsx) are not routes.
+                routeFileIgnorePattern: '\\.test\\.tsx?$',
             }),
             react(),
         ],

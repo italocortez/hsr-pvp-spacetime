@@ -1673,3 +1673,14 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   3. Search parameters are written as plain text in the address bar, never in the router's JSON style. A list repeats its key (`?el=fire&el=ice`). Pages convert text to numbers in their own validators.
 - **Why:** user, 2026-11-12: "straight 404 for 1. For 2, a no access page, for 3, explain more to me", then, after the explanation with examples: "i like the plain text persion".
 - **Where implemented:** M4 follow-up: `web/src/router.tsx`, `web/src/auth/StaffOutlet.tsx`, `web/src/pages/no-access/`, `web/src/lib/searchParams.ts`, `docs/frontend/pages.md`
+
+### A170 — CI scope, import pattern, footer icons
+
+- **Date:** 2026-11-13 · **Status:** decided
+- **Decision:**
+  1. CI (`.github/workflows/ci.yml`) is a signal only: no branch protection, no required checks. It lints the frontend and shared code now (`lint:ci`: `web/`, `shared/`, `scripts/ci/`); the old findings in the module, scripts and older tests are cleaned later (S12), one section at a time. CI holds no secret and never touches a database, the live suite, a deploy or a publish.
+  2. Standalone SVG files stay out of the lint; their accessibility is handled, and linted, in the code that uses them.
+  3. Import pattern: one named alias per section. `./file` inside a folder; across folders `@/` in `web/` only and `@module/` in the module; `@shared/` and `@bindings/` from anywhere; no `../../` chains across folders. The generated bindings are never rewritten by hand. The live tests' leftover `@/src/module_bindings` alias is replaced by `@bindings/` now; the module's parent-relative imports move to `@module/` at S12.
+  4. Footer "built with" icons are SpacetimeDB, TypeScript and React; the Next.js icon is removed and a React icon supplied by the user is added.
+- **Why:** user, 2026-11-13: "i agree on your recomendations for CI"; "agree on the linter part"; "as long as we are not rewriting the auto generative code that spacetime db does, i'm okay with your suggestions for a cleaner import pattern"; "we could use the footer icons in our site, we use spacetimedb, typescript and react only so the next js icon is not needed".
+- **Where implemented:** M9, `docs/log/2026-11-13-m9.md`, `CLAUDE.md` sections 1, 4, 5, 6

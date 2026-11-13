@@ -3,10 +3,10 @@
 // index. Pure TypeScript: nothing here imports `spacetimedb` or `react`, and all arithmetic is integer
 // hundredths (floats only in toHundredths / fromHundredths at the boundary).
 export * from './fixedPoint';
-export * from './units';
-export * from './groups';
-export * from './synergy';
-export * from './rosterCost';
-export * from './handicaps';
-export * from './winner';
 export * from './game';
+export * from './groups';
+export * from './handicaps';
+export * from './rosterCost';
+export * from './synergy';
+export * from './units';
+export * from './winner';

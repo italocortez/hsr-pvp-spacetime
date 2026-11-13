@@ -74,6 +74,14 @@ A prop answers "what does this show?", never "where am I rendered?". No `isInSid
 - Keyframes live in the module that uses them. Continuous animations are opted in under `@media (prefers-reduced-motion: no-preference)`.
 - One SVG source per graphic: the logo is `components/BrandLogo` (and `public/favicon.svg` mirrors it); never paste the same inline SVG twice.
 
+## Rule 7: tests
+
+- **What gets a test:** every validator, guard and pure helper (a table of kept and dropped inputs, idempotence where the router re-runs it); route behaviour (redirects, not-found, no-access, search rewrites) through the real route tree; a page's landmarks and headline when it is added. Not every component: a component without logic is covered by the screenshot loop.
+- **Where:** next to the code as `<name>.test.ts(x)`; route behaviour in `web/src/routes/routes.test.tsx` through `renderWithRouter` (`web/src/test/`). Test files under `routes/` are ignored by the route generator (`routeFileIgnorePattern`).
+- **No network:** no connection, maincloud or fetch in a web test; a mocked `DbConnection` comes with M6.
+- **No snapshot tests:** assert roles, text and attributes a user can see (`getByRole`, `toHaveTextContent`, `toHaveAttribute`); each test name says what it proves.
+- Test files change only under a T-task (`CLAUDE.md` §6). Run with `npm run test:web`; `test/README.md` has the details.
+
 ## Greps
 
 ```sh

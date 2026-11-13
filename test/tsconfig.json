@@ -9,15 +9,6 @@
             "@bindings/*": [
                 "../web/src/module_bindings/*"
             ],
-            "@/src/module_bindings": [
-                "../web/src/module_bindings"
-            ],
-            "@/src/module_bindings/*": [
-                "../web/src/module_bindings/*"
-            ],
-            "@/*": [
-                "../*"
-            ],
             "@module/tables/identity/*": ["../spacetimedb/src/tables/identity/*"],
             "@module/tables/lobby/*": ["../spacetimedb/src/tables/lobby/*"],
             "@module/tables/draft/*": ["../spacetimedb/src/tables/draft/*"],

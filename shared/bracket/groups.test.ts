@@ -40,19 +40,32 @@ describe('splitIntoGroups (A32 snake seeding)', () => {
     it('7 teams / size 3 → groups of 4 and 3', () => {
         const g = splitIntoGroups(ids(7), 3);
         expect(sizes(g).sort()).toEqual([3, 4]);
-        expect(g).toEqual([[1, 4, 5], [2, 3, 6, 7]]);   // snake: the 7th seed lands in group 1
+        expect(g).toEqual([
+            [1, 4, 5],
+            [2, 3, 6, 7],
+        ]); // snake: the 7th seed lands in group 1
     });
     it('4 teams / size 4 → one group', () => {
         expect(splitIntoGroups(ids(4), 4)).toEqual([[1, 2, 3, 4]]);
     });
     it('snake order: 8 teams / size 4 → [[1,4,5,8],[2,3,6,7]]', () => {
-        expect(splitIntoGroups(ids(8), 4)).toEqual([[1, 4, 5, 8], [2, 3, 6, 7]]);
+        expect(splitIntoGroups(ids(8), 4)).toEqual([
+            [1, 4, 5, 8],
+            [2, 3, 6, 7],
+        ]);
     });
     it('snake order over three groups', () => {
-        expect(splitIntoGroups(ids(9), 3)).toEqual([[1, 6, 7], [2, 5, 8], [3, 4, 9]]);
+        expect(splitIntoGroups(ids(9), 3)).toEqual([
+            [1, 6, 7],
+            [2, 5, 8],
+            [3, 4, 9],
+        ]);
     });
     it('keeps the team ids (not the seed numbers)', () => {
-        expect(splitIntoGroups([40, 30, 20, 10], 2)).toEqual([[40, 10], [30, 20]]);
+        expect(splitIntoGroups([40, 30, 20, 10], 2)).toEqual([
+            [40, 10],
+            [30, 20],
+        ]);
     });
     it('for every n in 2..32 and size in 2..6: no group below the size (unless one group), sizes differ by ≤ 1, every team once', () => {
         for (let n = 2; n <= 32; n++) {
@@ -80,7 +93,8 @@ describe('roundRobin (circle method)', () => {
                 for (const [a, b] of round) {
                     expect(a).not.toBe(b);
                     expect(seen.has(a) || seen.has(b)).toBe(false);
-                    seen.add(a); seen.add(b);
+                    seen.add(a);
+                    seen.add(b);
                     const key = [a, b].sort((x, y) => x - y).join('-');
                     expect(pairs.has(key)).toBe(false);
                     pairs.add(key);
@@ -105,15 +119,23 @@ describe('roundRobin (circle method)', () => {
 
 describe('groupSpec', () => {
     it('keys G{g}-R{r}-M{m}, match numbers counted within (group, round)', () => {
-        const spec = groupSpec([[1, 2, 3, 4], [5, 6, 7, 8]]);
+        const spec = groupSpec([
+            [1, 2, 3, 4],
+            [5, 6, 7, 8],
+        ]);
         expect(spec).toHaveLength(12);
         for (const m of spec) {
             expect(m.key).toBe(groupKey(m.groupIndex, m.round, m.number));
             expect(m.key).toMatch(/^G\d+-R\d+-M\d+$/);
         }
         expect(new Set(spec.map((m) => m.key)).size).toBe(12);
-        expect(spec.filter((m) => m.groupIndex === 0 && m.round === 1).map((m) => m.number)).toEqual([1, 2]);
-        expect(spec.filter((m) => m.groupIndex === 1 && m.round === 3).map((m) => m.key)).toEqual(['G1-R3-M1', 'G1-R3-M2']);
+        expect(
+            spec.filter((m) => m.groupIndex === 0 && m.round === 1).map((m) => m.number),
+        ).toEqual([1, 2]);
+        expect(spec.filter((m) => m.groupIndex === 1 && m.round === 3).map((m) => m.key)).toEqual([
+            'G1-R3-M1',
+            'G1-R3-M2',
+        ]);
         // teams stay within their group
         for (const m of spec) {
             const group = m.groupIndex === 0 ? [1, 2, 3, 4] : [5, 6, 7, 8];
@@ -146,7 +168,9 @@ function round1Pairs(teamIdsBySeed: number[]): [number, number][] {
 
 /** groups × advance ranked groups: team id = 100 * (group + 1) + rank (rank 1-based). */
 function rankedGroups(groups: number, perGroup: number): number[][] {
-    return Array.from({ length: groups }, (_, g) => Array.from({ length: perGroup }, (_, r) => 100 * (g + 1) + r + 1));
+    return Array.from({ length: groups }, (_, g) =>
+        Array.from({ length: perGroup }, (_, r) => 100 * (g + 1) + r + 1),
+    );
 }
 const groupOf = (teamId: number) => Math.floor(teamId / 100);
 const rankOf = (teamId: number) => teamId % 100;
@@ -155,7 +179,7 @@ describe('placeQualifiers (review T7)', () => {
     it('4 groups × top 2: no round-1 match pairs two teams of the same group; winners precede runners-up', () => {
         const order = placeQualifiers(rankedGroups(4, 4), 2);
         expect(order).toHaveLength(8);
-        expect(order.slice(0, 4)).toEqual([101, 201, 301, 401]);     // winners in group order
+        expect(order.slice(0, 4)).toEqual([101, 201, 301, 401]); // winners in group order
         expect(order.slice(4).every((id) => rankOf(id) === 2)).toBe(true);
         for (const [a, b] of round1Pairs(order)) expect(groupOf(a)).not.toBe(groupOf(b));
         // the elimination bracket built over that order is consistent
@@ -173,9 +197,13 @@ describe('placeQualifiers (review T7)', () => {
                 const ranked = rankedGroups(groups, 4);
                 const order = placeQualifiers(ranked, adv);
                 const expected = ranked.flatMap((g) => g.slice(0, adv)).sort((a, b) => a - b);
-                expect([...order].sort((a, b) => a - b), `${groups}×${adv}`).toEqual(expected);
+                expect(
+                    [...order].sort((a, b) => a - b),
+                    `${groups}×${adv}`,
+                ).toEqual(expected);
                 // a better rank always gets a better seed
-                for (let i = 1; i < order.length; i++) expect(rankOf(order[i])).toBeGreaterThanOrEqual(rankOf(order[i - 1]));
+                for (let i = 1; i < order.length; i++)
+                    expect(rankOf(order[i])).toBeGreaterThanOrEqual(rankOf(order[i - 1]));
                 expect(order.slice(0, groups)).toEqual(ranked.map((g) => g[0]));
                 for (const [a, b] of round1Pairs(order)) {
                     expect(groupOf(a), `${groups}×${adv}: ${a} v ${b}`).not.toBe(groupOf(b));

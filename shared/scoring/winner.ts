@@ -1,4 +1,4 @@
-import { lowerWins, type GameModeTag } from './units';
+import { type GameModeTag, lowerWins } from './units';
 
 // A21 tie-break chain (A31: no draws; A39 authority for level 4):
 // 0 adjusted result → 1 lower roster cost → 2 more 4★ characters → 3 fewer total eidolons on the team's 5★
@@ -28,7 +28,7 @@ export interface WinnerDecision {
 /** The side with the smaller (preferLower) or larger value, or null on equality. */
 function compare(blue: number, red: number, preferLower: boolean): Side | null {
     if (blue === red) return null;
-    return (blue < red) === preferLower ? 'Blue' : 'Red';
+    return blue < red === preferLower ? 'Blue' : 'Red';
 }
 
 export function decideWinner(mode: GameModeTag, blue: WinnerTeam, red: WinnerTeam): WinnerDecision {
