@@ -13,6 +13,7 @@ Migration in progress: `ROADMAP.md` lists which steps have landed; a path or scr
 | `shared/` | pure TS used by both sides: `stdb-targets.ts`, `scoring/`, `bracket/`, `lobby-rules/`; no runtime import of `spacetimedb` or `react` (M2, S7, S8) |
 | `api/auth/discord/` | the one Vercel function pair (M5) |
 | `scripts/stdb/` | publish, bootstrap, seed, generate, describe, manage-user (M2); backup, restore (S13); all take `--target test\|prod` |
+| `scripts/preview/` | local preview of the built app on 127.0.0.1, test database only, imitating the `vercel.json` rules: `npm run preview` (`--port`, `--no-build`, `--maintenance`) (M8) |
 | `data/seed/` | public reference data: characters, light cones, synergies, achievements (A18) |
 | `test/` | live residue + harness, `frontend/screenshots/<page>/`; frontend tests live next to the code as `web/src/**/*.test.ts(x)` (M9) |
 | `.github/workflows/ci.yml`, `scripts/ci/` | signal-only CI (typecheck, `lint:ci`, `npm test`, web build, `check:patterns`); no secrets, no database, no deploy (M9) |
@@ -72,12 +73,12 @@ Skip it for backend-only edits, pure refactors with no visual delta, and utility
 | Databases (committed constants) | `STDB_DATABASES.test = hsr-spacetimedb-test1`, `.prod = hsr-spacetimedb-prod` | in `shared/stdb-targets.ts`; not env vars; no fallback |
 | Host / server | `wss://maincloud.spacetimedb.com` / `maincloud` | constants |
 | Node-side target | `STDB_TARGET` env **or** `--target` CLI flag (flag wins) | scripts, vitest configs, test harness |
-| Browser target | `VITE_STDB_TARGET` | Vercel Preview = `test`, Production = `prod`; `.env.development` = `test` |
+| Browser target | `VITE_STDB_TARGET` | Vercel = `prod` only: every Vercel deploy is treated as production (A174); `.env.development` and `npm run preview` = `test`; `vite preview` is refused |
 | Server token | `STDB_SERVER_TOKEN` | same key name, **different file per target** |
 | Secret files | `.env.test.local`, `.env.prod.local` | gitignored by `.env*.local`; nothing reads `.env.local` |
 | Auth function secrets | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `AUTH_SECRET`, `STDB_SERVER_TOKEN` | Vercel env per environment; never in the repo |
 | Module env (D-C1) | `STDB_TARGET` declared in `schema({...}, { env: { STDB_TARGET: t.enum('StdbTarget', ['test','prod']) } })` | the publish script spawns `spacetime publish …` with `STDB_TARGET=<target>` in the **process environment** (`publishArgs(...).env`). Note: the CLI's `--env <name>` flag selects a `spacetime.<name>.json` config file, it does not set a value (2.15.0 `publish --help`) |
-| npm scripts | `stdb:publish:test`, `stdb:publish:test:clear`, `stdb:publish:prod`, `stdb:bootstrap:<t>`, `stdb:seed:<t>`, `stdb:describe:<t>`, `stdb:generate`, `test:integration` (test only), `test:web`, `lint:ci` (`web/`, `shared/`, `scripts/ci/`; no SVG files), `check:patterns` | all call `scripts/stdb/*.ts --target …` |
+| npm scripts | `stdb:publish:test`, `stdb:publish:test:clear`, `stdb:publish:prod`, `stdb:bootstrap:<t>`, `stdb:seed:<t>`, `stdb:describe:<t>`, `stdb:generate`, `test:integration` (test only), `test:web`, `lint:ci` (`web/`, `shared/`, `scripts/ci/`, `scripts/preview/`; no SVG files), `check:patterns`, `preview` (test only) | all call `scripts/stdb/*.ts --target …` |
 
 **Never read `.env*.local` values; key names only.** Never delete or commit `.env` / `.env*.local`.
 

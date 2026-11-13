@@ -1,6 +1,6 @@
 # Hosting (M7)
 
-Vercel Hobby, static site, CLI deploys only (A5, A50). This page covers `vercel.json`, `.vercelignore`, `web/public/robots.txt` and the maintenance status file `web/public/status.json`. Nothing here is deployed yet: linking the project and the first preview are M8, the auth function is M5.
+Vercel Hobby, static site, CLI deploys only (A5, A50). This page covers `vercel.json`, `.vercelignore`, `web/public/robots.txt` and the maintenance status file `web/public/status.json`. Nothing here is deployed yet: the preview runs on this machine (M8, see "Local preview"), the auth function is M5.
 
 ## `vercel.json` (repo root)
 
@@ -132,11 +132,30 @@ Ending it (the reverse order: the module first, so tabs that connect find it ope
 
 `?maintenance=skip` on any URL sets a `sessionStorage` flag (`hsr-pvp:maintenance-skip`) and the tab then ignores the status file. The module stays the authority: during maintenance it still lets only Admins connect (B-8), so anyone else who uses the parameter gets the refused socket and the offline splash. There is no link to it in the UI. Orchestrator's choice, for the user to rule on.
 
+## Local preview (M8)
+
+User decision 2026-11-13: every Vercel deploy is treated as production; the preview is the built app on this machine, against the **test** database. Nothing is deployed.
+
+```
+npm run preview                               # build for test, then serve web/dist on http://127.0.0.1:4173/
+npm run preview -- --port 5000                # another port (plain digits, 1 to 65535)
+npm run preview -- --no-build                 # serve the existing web/dist, after the target check
+npm run preview -- --no-build --maintenance   # maintenance rehearsal
+```
+
+- **Code:** `scripts/preview/`: `vercel-rules.mjs` (pure rules), `serve.mjs` (the server), `preview.mjs` (the entry). Plain Node, no dependency. `web/package.json` no longer has its own `preview` script, and `web/vite.config.ts` refuses `vite preview` for every target with a message pointing here: it ignores `vercel.json` and would serve a prod build on localhost.
+- **Build:** `vercel.json` is read and its rules compiled first (unsupported syntax stops the command before any build). Then `buildCommand` runs with `VITE_STDB_TARGET=test` set in the child's environment, over any value in the parent (no shell syntax, Windows and Linux alike); a missing `buildCommand` is an error (use `--no-build`). The built bundle goes through the same target check as `--no-build`.
+- **Test only:** there is no target flag (`--target`, `--prod`, `--env` exit with code 2). `--no-build` first reads the target out of the bundle and refuses (exit code 1) a bundle built for prod, a bundle with no marker, an empty `web/dist`, or a bundle whose test entry is not `hsr-spacetimedb-test1`. The marker is the `import.meta.env` object Vite inlines where the app passes the whole object (`resolveBrowserEnv(import.meta.env)` in `main.tsx` and `StdbProvider.tsx`): `VITE_STDB_TARGET:"test"`. The database names alone prove nothing: both are in every bundle (the `STDB_DATABASES` map). The check fails closed: if a refactor reads only `import.meta.env.VITE_STDB_TARGET`, Vite inlines the bare string, the marker disappears and `--no-build` refuses until the check is updated. It guards against mistakes, not against a hand-edited bundle. **While running**, every answer that serves the app page (`/index.html` directly or through the rewrite) repeats the full check, with no cache (about 5 ms on the real dist, measured at M8); a bundle that no longer targets test, or a dist that cannot be read, makes the app page answer 503 (`no-store`, the refusal text) until the bundle is test again. Other answers (assets, images) are not checked. Both checks read every `.js`, `.mjs`, `.cjs` and `.html` file in dist, extension matched without case.
+- **Server:** binds `127.0.0.1` only; `GET` and `HEAD` only (others 405); reads `vercel.json` at start and throws at start on what it does not support (named parameters, modifiers or `{ }` outside a group, nested capturing groups, `has`, `missing`, `redirects`, `routes`, `cleanUrls`, `trailingSlash`, destinations that are not a fixed local path). A file is served only when the decoded path names it exactly: no `:` or `\` (Windows stream names and separators), no path that leaves `web/dist` lexically or through a symlink or junction, and the real path on disk must spell the request with the same case (`/INDEX.HTML` is not `/index.html` on Windows either). A path that is not a file follows the rules (rewrite or 404), so `--maintenance` cannot be bypassed by a case variant. Any stat or realpath failure (a link loop, no access) counts as "not a file"; any other error inside a request answers 500 and the server keeps running. A request target that is absolute or starts with `//` is a 400. `/api/` and everything under it answer 404 with a note: functions do not run here (M5 decides how the login function runs locally); `/api` itself follows the rules. One log line per request (method, path, status).
+- **What it imitates:** filesystem first, then rewrites in order; every matching header rule in order, a later rule wins per key; `public, max-age=0, must-revalidate` on static files without a Cache-Control rule; header rules also apply to 404 answers, without the default cache value. `check:patterns` gate 9 reads rewrite sources with the same function (`sourceToRegExp`), so the gate and the preview cannot drift apart. Since the M8 fix pass a parenthesis inside a character class (`[(]`) is not read as a group (no committed source has one).
+- **Maintenance rehearsal:** `--maintenance` answers `/status.json` with `{ "maintenance": true }` (`no-store`) from memory; `web/public/status.json` and `web/dist/status.json` are not touched, so gate 9 stays green. The banner says so. Checked at M8: the maintenance splash shows, no socket opens, no maincloud request.
+- **What it cannot prove** (stays on the list below for the first real deploy): Vercel's own matching details (case sensitivity, trailing slashes, which path form it tests a source against, and whether its matcher handles `(?:` and `(?!` groups in a source the way JavaScript's RegExp does here), headers Vercel adds or drops on its own, HTTPS and HSTS behaviour, compression, the 404 page and headers Vercel really sends, the firewall, functions, environment variables per environment, and the deployment file list.
+
 ## To do
 
 - **M5:** the `functions` block (no `runtime` value; confirm Node 26 is available for functions); `/api/` rate limit in the firewall.
 - **M10:** the service worker never caches `/status.json`.
-- **M8:** `vercel link`, environment variables (`VITE_STDB_TARGET` per environment), first preview; confirm on the preview with `curl -sI` and the browser: every header above, the rewrite and the 404s, `immutable` on `/assets/*`, `no-store` on `/status.json`, zero CSP violations; whether Vercel puts the `immutable` header on a 404 for a missing asset (the local imitation does); the 404s for missing extension paths and dot-paths; the deployment file list (A50 done-check).
+- **First real Vercel deploy** (M8 moved the preview to this machine, see "Local preview"; the items below stay unproven until a deploy): `vercel link`, environment variables (`VITE_STDB_TARGET` per environment); confirm on the deploy with `curl -sI` and the browser: every header above, the rewrite and the 404s, `immutable` on `/assets/*`, `no-store` on `/status.json`, zero CSP violations; whether Vercel puts the `immutable` header on a 404 for a missing asset (the local imitation does); the 404s for missing extension paths and dot-paths; whether Vercel's source matcher treats the `(?:` and `(?!` groups of the index rewrite as JavaScript's RegExp does (the preview and gate 9 assume so; the 404 checks above would show a difference); the deployment file list (A50 done-check).
 
 ## Proposals (not applied)
 

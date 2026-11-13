@@ -1,6 +1,6 @@
-// `npm run lint:ci`: Biome on the tracked and new (not ignored) files of web/, shared/ and
-// scripts/ci/ (M9, user decision 2026-11-13: the frontend and shared code are linted now, older
-// findings elsewhere are cleaned later). biome.json ignores still apply (module_bindings,
+// `npm run lint:ci`: Biome on the tracked and new (not ignored) files of web/, shared/,
+// scripts/ci/ and scripts/preview/ (M9, user decision 2026-11-13: the frontend and shared code are
+// linted now, older findings elsewhere are cleaned later; scripts/preview/ added at M8). biome.json ignores still apply (module_bindings,
 // lib/legacy, routeTree.gen.ts, dist).
 //
 // Left out: web/public/**/*.svg. noSvgWithoutTitle on standalone SVG assets; their accessibility
@@ -10,7 +10,7 @@
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 
-const DIRS = ['web', 'shared', 'scripts/ci'];
+const DIRS = ['web', 'shared', 'scripts/ci', 'scripts/preview'];
 const LEFT_OUT = [/^web\/public\/.*\.svg$/];
 const BATCH = 100;
 

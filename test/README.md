@@ -55,6 +55,10 @@ spacetimedb/src/__tests__/            # one folder per subject (lobby, match-ses
 - **No network:** no `DbConnection`, no maincloud, no fetch; a connection mock comes with M6. The router plugin is not loaded, so a test run never rewrites `routeTree.gen.ts`; test files under `web/src/routes/` stay out of the route tree through `routeFileIgnorePattern` in `vite.config.ts`.
 - **CI:** `.github/workflows/ci.yml` runs typecheck, `lint:ci`, `npm test`, the web build and `check:patterns` on every push to `main` and every pull request. Signal only, no secrets.
 
+## Local preview tests (M8)
+
+`test/backend/preview/*.unit.test.ts` (unit suite, no config change; types from the `.d.mts` files next to `scripts/preview/*.mjs`) cover the `vercel.json` rules, header merging, the path traversal guard, the maintenance rehearsal and the test-only refusal. One file starts the real preview server on `127.0.0.1`, port 0, and talks to it from the same process: loopback only, nothing leaves the machine, so it is not the network of the no-network rule. Fixtures are written to the OS temp folder by the test and removed after it.
+
 ## In-memory harness (how the s*-suites work)
 
 `createModuleTestHarness()` loads the module in-process. Facts that bite (full list: `docs/log/2026-11-06-s4.md`, helpers: `spacetimedb/src/__tests__/fixtures/harness.ts`):

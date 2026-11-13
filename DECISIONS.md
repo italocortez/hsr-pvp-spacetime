@@ -1716,3 +1716,16 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Decision:** Pages reach the database through the hooks in `web/src/stdb/` (`useStdbConnection`, `useRouteSubscriptions`, the reference set), not through the SDK's `useTable` / `useReducer`. The SDK's subscriptions, local cache and generated bindings are used untouched, so live updates work the same way. Two small hooks are built with the first page that needs them: one that reads a route's rows into React, and one reducer-call wrapper that refuses at once when there is no connection (no silent queue).
 - **Why:** user, 2026-11-13, after the comparison with code examples and the explanation of live updates and route leave: "okay this makes sense". Confirms A172 item 6. A172 items 2 to 5 still await a ruling.
 - **Where implemented:** `web/src/stdb/`; the two new hooks at the first page port
+
+### A174 — Vercel is production only; the preview is local
+
+- **Date:** 2026-11-13 · **Status:** decided
+- **Decision:**
+  1. The project plans as if the Vercel free tier gives no preview: every Vercel deploy is treated as a production deploy. The preview is a localhost server of the built app against the test database (`npm run preview`, M8).
+  2. Env scheme change: on Vercel `VITE_STDB_TARGET` is `prod` only; `test` lives on localhost (`.env.development`, `npm run preview`). `vite preview` is refused (orchestrator's addition after review: it would serve any target).
+  3. The login function (M5) is tested on localhost, not on a Vercel address.
+  4. Open, orchestrator's recommendation, not yet ruled on: a first real Vercel deploy as a maintenance smoke test (status file on, no database reached) before launch, to prove the hosting rules on real Vercel. It needs the user's login and deploy approval.
+  5. Noted: the pricing page (read 2026-11-13) neither confirms nor denies previews on Hobby; it does say password protection is not available, so any deploy has a public address.
+- **Why:** user, 2026-11-13: "right now vercel free tier has no previews, so everything will go to prod, our preview will have to be a localhost server of the app"; then "okay lets go with m8 now then".
+- **Supersedes:** the "Vercel Preview = test" part of the env scheme (M2) and the preview deploy of M8 in the migration plan.
+- **Where implemented:** `scripts/preview/`, `web/vite.config.ts`, `docs/frontend/hosting.md`, `CLAUDE.md` section 5, `docs/log/2026-11-13-m8.md`

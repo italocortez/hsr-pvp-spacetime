@@ -37,7 +37,7 @@ jobs:
             - name: Typecheck
               run: npm run typecheck
 
-            - name: Lint (web, shared, scripts/ci)
+            - name: Lint (web, shared, scripts/ci, scripts/preview)
               run: npm run lint:ci
 
             - name: Tests (unit, in-memory module, web; no network)

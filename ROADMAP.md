@@ -68,7 +68,7 @@ Each executed step writes its log to `docs/log/<date>-<step>.md` (goal, decision
 | M9 | Test strategy wiring and CI workflow | M4 | done 2026-11-13 |
 | M6 | Provider, subscription layer, dev egress meter; upgrade report R5: keep subscription handles and unsubscribe on cleanup | M9, S11a | done 2026-11-13 |
 | M7 | `vercel.json`, CSP and headers, `.vercelignore` (A50), `robots.txt`, maintenance status file (A171, A172); the `functions` block waits for M5 | M6 | done 2026-11-13 |
-| M8 (preview) | New Vercel project, env per environment, first preview deploy; env plan (M2): Production `VITE_STDB_TARGET=prod`, Preview + Development `=test`; function secrets `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `AUTH_SECRET`, `STDB_SERVER_TOKEN` per environment, set in the dashboard, never in the repo | M7 | pending |
+| M8 (preview) | Local preview instead of a Vercel preview deploy (A174): `npm run preview` builds against test and serves `web/dist` on 127.0.0.1 through the `vercel.json` rules; test only; maintenance rehearsal. The first real Vercel deploy (project, env `VITE_STDB_TARGET=prod`, function secrets set in the dashboard, never in the repo) is a later gated step, by S13 at the latest | M7 | done 2026-11-13 |
 | M5 | Auth: link-code flow + Vercel function (A46), spike first | M8 (preview) | pending |
 | M10 | Asset service worker and preloading | M5 | pending |
 | S11b | Live checks that need pages (split from S11, A158): the two-tabs presence check; both countdowns (turn and reserve), the manual resume after a return, the client clock offset; cursor events in the room; a guided walk-through with the user if asked (format in `test/README.md`). Re-publish to test1 if the module changed since S11a (user gate) | M10 | pending |

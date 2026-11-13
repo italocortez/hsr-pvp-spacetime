@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { sourceToRegExp } from '../preview/vercel-rules.mjs';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const DIST = join(ROOT, 'web', 'dist');
@@ -113,7 +114,7 @@ if (listed.error || listed.status !== 0) {
 
 // 7. Dev guard present (user decision 2026-11-13): the dev server never runs against prod.
 //    main.tsx calls assertDevTarget before the first render and before the dev helpers load;
-//    vite.config.ts refuses `serve` (not preview) with the prod target.
+//    vite.config.ts refuses `serve` (dev) with the prod target, and `vite preview` always (M8).
 const DEV_REFUSAL = 'Dev mode cannot run against the prod database. Set VITE_STDB_TARGET=test.';
 {
     const mainPath = join(ROOT, 'web', 'src', 'main.tsx');
@@ -138,6 +139,9 @@ const DEV_REFUSAL = 'Dev mode cannot run against the prod database. Set VITE_STD
         "target === 'prod'",
         'throw new Error(DEV_PROD_REFUSAL)',
         DEV_REFUSAL,
+        // M8: `vite preview` is refused for every target; the local preview is npm run preview.
+        "if (command === 'serve' && isPreview) throw new Error(VITE_PREVIEW_REFUSAL);",
+        'Run `npm run preview` (test database only',
     ]) {
         if (!config.includes(needle)) {
             hits.push(`[dev-guard] web/vite.config.ts: missing "${needle}"`);
@@ -273,26 +277,7 @@ const DEV_REFUSAL = 'Dev mode cannot run against the prod database. Set VITE_STD
 
         // Rewrites: the ones to /index.html must send client routes to the app and leave files,
         // the status file and dot-paths alone. A source is read like path-to-regexp: groups are
-        // regex, everything else literal.
-        const sourceToRegExp = (source) => {
-            let out = '';
-            for (let i = 0; i < source.length; i++) {
-                if (source[i] !== '(') {
-                    out += source[i].replace(/[.*+?^${}|[\]\\]/g, '\\$&');
-                    continue;
-                }
-                let depth = 0;
-                let j = i;
-                for (; j < source.length; j++) {
-                    if (source[j] === '\\') j++;
-                    else if (source[j] === '(') depth++;
-                    else if (source[j] === ')' && --depth === 0) break;
-                }
-                out += source.slice(i, j + 1);
-                i = j;
-            }
-            return new RegExp(`^${out}$`);
-        };
+        // regex, everything else literal (sourceToRegExp, shared with the local preview, M8).
         if (vercel.rewrites !== undefined && !Array.isArray(vercel.rewrites)) {
             hosting('"rewrites" is not an array');
         }
