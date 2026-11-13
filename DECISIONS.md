@@ -1684,3 +1684,14 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   4. Footer "built with" icons are SpacetimeDB, TypeScript and React; the Next.js icon is removed and a React icon supplied by the user is added.
 - **Why:** user, 2026-11-13: "i agree on your recomendations for CI"; "agree on the linter part"; "as long as we are not rewriting the auto generative code that spacetime db does, i'm okay with your suggestions for a cleaner import pattern"; "we could use the footer icons in our site, we use spacetimedb, typescript and react only so the next js icon is not needed".
 - **Where implemented:** M9, `docs/log/2026-11-13-m9.md`, `CLAUDE.md` sections 1, 4, 5, 6
+
+### A171 — M6 follow-ups: maintenance message, first download, dev guard, cost tables
+
+- **Date:** 2026-11-13 · **Status:** decided
+- **Decision:**
+  1. Maintenance: the offline splash stays for now (the server drops a refused socket without a reason, so the browser cannot tell maintenance from an outage). A static status file that the site reads before connecting is planned at M7; it shows the maintenance message and stops the retries without database energy. B-8 (maintenance refuses non-Admin connections) stands.
+  2. First download size: loading the connection after the first paint is planned for the app shell step, measured against the real landing page.
+  3. Dev mode refuses to start against the prod target ("Dev mode cannot run against the prod database. Set VITE_STDB_TARGET=test."). A production build with the prod target is unaffected.
+  4. Cost tables in the reference set: the default cost set plus a lobby's own set; the final decision is taken when the costs page is ported. No code now.
+- **Why:** user, 2026-11-13, on the orchestrator's four recommendations after the M6 review: "i agree with your recommendation".
+- **Where implemented:** `web/src/stdb/assertDevTarget.ts`, `web/vite.config.ts`, `docs/frontend/pages.md`; items 1, 2 and 4 at M7, the app shell step and the costs page

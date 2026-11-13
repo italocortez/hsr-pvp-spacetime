@@ -5,7 +5,17 @@ import { defineConfig, loadEnv } from 'vite';
 
 const r = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 
-export default defineConfig(({ command, mode }) => {
+/** Same text as DEV_PROD_REFUSAL in src/stdb/assertDevTarget.ts (user decision 2026-11-13). */
+const DEV_PROD_REFUSAL =
+    'Dev mode cannot run against the prod database. Set VITE_STDB_TARGET=test.';
+
+export default defineConfig(({ command, mode, isPreview }) => {
+    if (command === 'serve' && !isPreview) {
+        // The dev server never serves the prod target (preview of a prod build is not dev).
+        const target =
+            process.env.VITE_STDB_TARGET ?? loadEnv(mode, r('.'), 'VITE_').VITE_STDB_TARGET;
+        if (target === 'prod') throw new Error(DEV_PROD_REFUSAL);
+    }
     if (command === 'build') {
         // main.tsx throws at start on a missing or unknown target: refuse to build such a page.
         const target =
