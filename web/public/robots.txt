@@ -1,0 +1,7 @@
+User-agent: *
+Disallow: /lobby/
+Disallow: /admin
+Disallow: /api/
+Disallow: /profile
+Disallow: /calendar
+Disallow: /tournaments

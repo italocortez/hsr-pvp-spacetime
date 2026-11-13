@@ -67,7 +67,7 @@ Each executed step writes its log to `docs/log/<date>-<step>.md` (goal, decision
 | M4 | Router and guards (TanStack Router, typed links) | M3 | done 2026-11-12 |
 | M9 | Test strategy wiring and CI workflow | M4 | done 2026-11-13 |
 | M6 | Provider, subscription layer, dev egress meter; upgrade report R5: keep subscription handles and unsubscribe on cleanup | M9, S11a | done 2026-11-13 |
-| M7 | `vercel.json`, CSP and headers, `.vercelignore` (A50), `robots.txt` | M6 | pending |
+| M7 | `vercel.json`, CSP and headers, `.vercelignore` (A50), `robots.txt`, maintenance status file (A171, A172); the `functions` block waits for M5 | M6 | done 2026-11-13 |
 | M8 (preview) | New Vercel project, env per environment, first preview deploy; env plan (M2): Production `VITE_STDB_TARGET=prod`, Preview + Development `=test`; function secrets `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `AUTH_SECRET`, `STDB_SERVER_TOKEN` per environment, set in the dashboard, never in the repo | M7 | pending |
 | M5 | Auth: link-code flow + Vercel function (A46), spike first | M8 (preview) | pending |
 | M10 | Asset service worker and preloading | M5 | pending |

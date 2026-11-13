@@ -1,0 +1,27 @@
+# A50: Vercel receives only what the web build needs. Rules: docs/frontend/hosting.md.
+/docs/
+/design/
+/test/
+/notes/
+/backups/
+/tools/
+/spacetimedb/
+/data/
+/.planning/
+/.claude/
+/tmp/
+/scripts/
+/.github/
+/.vscode/
+/.playwright-cli/
+/.playwright/
+.mcp.json
+# Local build output: a source upload builds it again.
+/web/dist/
+# Env files: secrets never leave the machine; the committed, secret-free ones stay.
+.env*
+!/.env.example
+!/web/.env.development
+# Markdown outside web/
+*.md
+!/web/**/*.md

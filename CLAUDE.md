@@ -16,6 +16,7 @@ Migration in progress: `ROADMAP.md` lists which steps have landed; a path or scr
 | `data/seed/` | public reference data: characters, light cones, synergies, achievements (A18) |
 | `test/` | live residue + harness, `frontend/screenshots/<page>/`; frontend tests live next to the code as `web/src/**/*.test.ts(x)` (M9) |
 | `.github/workflows/ci.yml`, `scripts/ci/` | signal-only CI (typecheck, `lint:ci`, `npm test`, web build, `check:patterns`); no secrets, no database, no deploy (M9) |
+| `vercel.json`, `.vercelignore` | hosting: CSP and headers, cache rules, SPA rewrite, upload ignore list; rules in `docs/frontend/hosting.md` (M7) |
 | `docs/` | `<feature>/{contract,architecture}.md`, `ERD.md`, `frontend/`, `research/`, `log/<date>-<step>.md` |
 | `design/` | local only, gitignored (A53): `DESIGN.md`, `UI-DECISIONS.md`, frozen `mockups/*.html`, `assets/`; mirror of the Open Design project |
 | `tools/` | `energy-model.js`, `capture-ws-frames.ts` |
@@ -48,6 +49,7 @@ Two databases: `hsr-spacetimedb-test1` and `hsr-spacetimedb-prod`. The names liv
 - Subscribe only to **views and the public reference set**. `subscribeToAllTables` is banned in `web/` (`npm run check:patterns`, run in CI with the other build gates).
 - No page subscribes the `User` table: it is private (A77, lands at S11). The admin Users tab reads `view_admin_users`; names and avatars are denormalized into the views that need them (PAGE-MAP D2).
 - One subscription per table per route; keep the handles and unsubscribe on route leave. The reference set is subscribed by the first route that needs it and kept for the session; `/` and `/profile` never trigger it.
+- Maintenance is switched with `web/public/status.json` (`docs/frontend/hosting.md`): while it says `true` the app builds no connection. Pages reach the database through `useStdbConnection` and the hooks in `web/src/stdb/`; the SDK's provider sits beside the app, so its own React hooks have no provider above a page (M7).
 - Match views and cursor events subscribe only once the lobby stage is past Waiting; cursor events are consumed via `onInsert`.
 - Styling: CSS Modules + `web/src/styles/tokens.css` (from `design/DESIGN.md`); no Tailwind; no repeated inline SVG.
 - Breakpoints: the shared `@custom-media` scale **480 / 560 / 768 / 1040 / 1120 / 1320** (A49a). Snap mockup values to the nearest step and record the snaps in the PR; a layout that visibly breaks at a snapped width keeps its value as a page-local custom media query.
