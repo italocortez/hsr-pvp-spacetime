@@ -1709,3 +1709,10 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   7. The `functions` block of `vercel.json` waits for M5; `'unsafe-eval'` stays in `script-src` (required by the SDK, proven).
 - **Why:** user, 2026-11-13, on the orchestrator's M7 outline: "lets go with it then". Items 2 to 6 were chosen by the orchestrator during the step and reported to the user.
 - **Where implemented:** `vercel.json`, `.vercelignore`, `web/public/{robots.txt,status.json}`, `web/src/stdb/{statusFile.ts,MaintenanceGate.tsx,StdbProvider.tsx}`, `scripts/ci/check-patterns.mjs`, `docs/frontend/hosting.md`, `docs/log/2026-11-13-m7.md`
+
+### A173 — Pages use the repo's own connection hooks
+
+- **Date:** 2026-11-13 · **Status:** decided
+- **Decision:** Pages reach the database through the hooks in `web/src/stdb/` (`useStdbConnection`, `useRouteSubscriptions`, the reference set), not through the SDK's `useTable` / `useReducer`. The SDK's subscriptions, local cache and generated bindings are used untouched, so live updates work the same way. Two small hooks are built with the first page that needs them: one that reads a route's rows into React, and one reducer-call wrapper that refuses at once when there is no connection (no silent queue).
+- **Why:** user, 2026-11-13, after the comparison with code examples and the explanation of live updates and route leave: "okay this makes sense". Confirms A172 item 6. A172 items 2 to 5 still await a ruling.
+- **Where implemented:** `web/src/stdb/`; the two new hooks at the first page port
