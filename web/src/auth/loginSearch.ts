@@ -24,13 +24,16 @@ export function safeNextPath(value: unknown): string | undefined {
 }
 
 /**
- * `validateSearch` for `/`: keeps `login` only when it is 1 and `next` only when it is safe. Both
+ * `validateSearch` for `/`: keeps `login` only when it is the text "1" (typed as `1`) and `next`
+ * only when it is safe (a repeated `next` arrives as an array and is dropped). The router also
+ * re-runs validators on already-validated values when it builds a location, so `1` is accepted
+ * too (validators must be idempotent). Both
  * keys are always present (maybe undefined): the router merges the raw search under the validated
  * one, so a key left out would let the raw, rejected value through.
  */
 export function parseLoginSearch(search: Record<string, unknown>): LoginSearch {
     return {
-        login: search.login === 1 || search.login === '1' ? 1 : undefined,
+        login: search.login === '1' || search.login === 1 ? 1 : undefined,
         next: safeNextPath(search.next),
     };
 }

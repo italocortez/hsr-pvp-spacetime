@@ -1663,3 +1663,13 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Decision:** On the splash pages (standby, not found) the artwork gets a dark band at the top edge (58% void colour over the top 48px, gone by 120px) and the site name in the top bar uses the body text colour with the label text shadow. Chosen from A/B screenshots. The art below the top bar is unchanged. The eyebrow line over the art stays as the mockup has it (below 4.5:1 in the worst case) and is open.
 - **Why:** user, 2026-11-12, on the orchestrator's recommendation of option B: "I like your recommendation, lets keep that".
 - **Where implemented:** `web/src/components/SplashLayout/SplashLayout.module.css`, `docs/frontend/pages.md`
+
+### A169 — Routes: straight 404, a no-access page, plain-text addresses
+
+- **Date:** 2026-11-12 · **Status:** decided
+- **Decision:**
+  1. An unknown address under a guarded area (for example `/admin/zzz`) shows the 404 page at once for everyone, without the sign-in redirect.
+  2. A signed-in user below Moderator who opens `/admin` sees a no-access page at the same address instead of returning silently to `/`. A visitor is still sent to sign in. Orchestrator's choices: wording "Access denied." with "This area is for IPC staff. If you think this is a mistake, contact an admin.", on the standby artwork like the 404 page (A167).
+  3. Search parameters are written as plain text in the address bar, never in the router's JSON style. A list repeats its key (`?el=fire&el=ice`). Pages convert text to numbers in their own validators.
+- **Why:** user, 2026-11-12: "straight 404 for 1. For 2, a no access page, for 3, explain more to me", then, after the explanation with examples: "i like the plain text persion".
+- **Where implemented:** M4 follow-up: `web/src/router.tsx`, `web/src/auth/StaffOutlet.tsx`, `web/src/pages/no-access/`, `web/src/lib/searchParams.ts`, `docs/frontend/pages.md`
