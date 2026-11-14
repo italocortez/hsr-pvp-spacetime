@@ -8,7 +8,8 @@ import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { handOverMatchEventsOfFormerStaff } from '@module/helpers/calendar/calendarCascade';
 import { seedSystemLobbyPreset } from '@module/helpers/lobby/systemPreset';
 import { setGuestCreationEnabled, setGuestLobbyCreationEnabled } from '@module/helpers/lobby/abuseControls';
-import { applyProviderLink, cleanProviderName, planProviderLink } from '@module/helpers/identity/providerLink';
+import { cleanProviderName, planProviderLink } from '@module/helpers/identity/providerLink';
+import { requireLinker, trustedServerRow } from '@module/helpers/identity/serverIdentities';
 import {
     CONFIRM_HASH_INVALID_TEXT,
     CONFIRM_WINDOW_MICROS,
@@ -21,11 +22,12 @@ import {
 import { DISCORD_LOGIN_METHOD } from '@module/helpers/lobby/banHelper';
 
 /**
- * Guard: the caller is a registered server identity (Owner or Delegate, §C.4).
+ * Guard: the caller is a trusted server identity (Owner or Delegate, §C.4). A Linker (M5a3) is refused with the same
+ * text: it may only present sign-in codes (linker_present_code).
  * Used by every server_* reducer.
  */
 function requireServer(ctx: any) {
-    const server = ctx.db.ServerIdentity.identity.find(ctx.sender);
+    const server = trustedServerRow(ctx, ctx.sender);
     if (!server) {
         throw new SenderError('Forbidden: caller is not a registered server identity.');
     }
@@ -54,14 +56,14 @@ function requireTestDatabase(ctx: { readonly env: { readonly STDB_TARGET: string
     if (ctx.env.STDB_TARGET !== 'test') throw new SenderError('Not a test database.');
 }
 
-function parseIdentityHex(identityHex: string, argName = 'identityHex'): Identity {
+function parseIdentityHex(identityHex: string): Identity {
     if (!identityHex || identityHex.length === 0) {
-        throw new SenderError(`${argName} is required`);
+        throw new SenderError('identityHex is required');
     }
     try {
         return Identity.fromString(identityHex);
     } catch {
-        throw new SenderError(`${argName} is not a valid identity`);
+        throw new SenderError('identityHex is not a valid identity');
     }
 }
 
@@ -69,8 +71,8 @@ function parseIdentityHex(identityHex: string, argName = 'identityHex'): Identit
 // with login_as_guest).
 
 /**
- * Owner-only: register a delegate server identity (e.g. the bootstrap script's fresh token,
- * the Vercel auth function). The delegate is linked to the SYSTEM user through UserIdentity so
+ * Owner-only: register a delegate server identity (the bootstrap script's fresh token; since M5a3 the Vercel auth
+ * function holds a Linker instead). The delegate is linked to the SYSTEM user through UserIdentity so
  * its connections pass the getAuthenticatedUser / ensureAdmin checks (admin_bulk_upsert, seeding).
  *
  * Run via: scripts/stdb/bootstrap.ts --target <test|prod>
@@ -136,36 +138,58 @@ export const server_revoke_delegate = spacetimedb.reducer({
 });
 
 /**
- * Server-only reducer: link an OAuth provider to a user identity.
- * Replaces server_link_discord with a unified, extensible approach.
- * Currently supports: discord (only provider in scope).
- *
- * Called by a registered server identity (Owner or Delegate). Since M5a the auth function calls server_link_by_code
- * (below) instead; this identity-hex form stays for the live test harness and the in-memory fixtures.
- *
- * The merge itself (checks and the three cases) is planProviderLink / applyProviderLink
- * (helpers/identity/providerLink.ts), shared with server_link_by_code.
+ * M5a3: Owner-only: register the Linker identity of the Vercel auth function (bootstrap mints it). Unlike a delegate, a
+ * linker gets no UserIdentity row (it is not mapped to the SYSTEM user): it passes no user, admin or server_* guard
+ * and may only call linker_present_code. A sibling of server_register_delegate rather than a kind argument on it, so
+ * the delegate reducer's signature and its callers stay as they are.
  */
-export const server_link_provider = spacetimedb.reducer({
-    callerIdentityHex: t.string(),
-    provider: t.string(),       // 'discord' -- extensible for future providers
-    providerId: t.string(),
-    providerName: t.string(),
-}, (ctx, { callerIdentityHex, provider, providerId, providerName }) => {
-    requireServer(ctx);
-    const plan = planProviderLink(ctx, { provider, providerId, providerName }, () => {
-        if (!callerIdentityHex || callerIdentityHex.length === 0) {
-            throw new SenderError('callerIdentityHex is required');
-        }
-        return parseIdentityHex(callerIdentityHex, 'callerIdentityHex');
+export const server_register_linker = spacetimedb.reducer({
+    identityHex: t.string(),
+    label: t.string(),
+}, (ctx, { identityHex, label }) => {
+    requireOwner(ctx);
+    const identity = parseIdentityHex(identityHex);
+    if (!label || label.length === 0) {
+        throw new SenderError('label is required');
+    }
+    if (ctx.db.ServerIdentity.identity.find(identity)) {
+        throw new SenderError('Already registered.');
+    }
+    if (ctx.db.UserIdentity.identity.find(identity)) {
+        throw new SenderError('Identity is already linked to a user; mint a fresh identity for the linker.');
+    }
+    ctx.db.ServerIdentity.insert({
+        identity,
+        kind: { tag: 'Linker' },
+        label,
+        registeredAt: ctx.timestamp,
     });
-    applyProviderLink(ctx, plan);
 });
 
 /**
- * M5a (A44(3), A46), M5a2 (the second lock): server-only reducer, the auth function's one call. The browser asked for a
- * one-time code with request_link_code and sent only that code to the function; after Discord confirms the user, the
- * function (delegate token) presents the code here with the Discord account and the hash of a one-time confirm token it
+ * M5a3: Owner-only: revoke a Linker identity (a leaked function token is revoked here and a new one minted by
+ * bootstrap). Deletes the ServerIdentity row only: a linker has no UserIdentity or UserPresence row.
+ */
+export const server_revoke_linker = spacetimedb.reducer({
+    identityHex: t.string(),
+}, (ctx, { identityHex }) => {
+    requireOwner(ctx);
+    const identity = parseIdentityHex(identityHex);
+    const row = ctx.db.ServerIdentity.identity.find(identity);
+    if (!row) {
+        throw new SenderError('Not a registered server identity.');
+    }
+    if (row.kind.tag !== 'Linker') {
+        throw new SenderError('Only linkers can be revoked here.');
+    }
+    ctx.db.ServerIdentity.identity.delete(identity);
+});
+
+/**
+ * M5a (A44(3), A46), M5a2 (the second lock), M5a3 (linker only; was server_link_by_code): the auth function's one call,
+ * accepted only from the registered Linker identity (requireLinker: not the Owner, not a Delegate). The browser asked
+ * for a one-time code with request_link_code and sent only that code to the function; after Discord confirms the user,
+ * the function (linker token) presents the code here with the Discord account and the hash of a one-time confirm token it
  * hands to the browser that finished Discord. Nothing is linked here: the requesting identity links with confirm_link.
  *
  * - Input checks first (before the code is looked at): a Discord providerId is a snowflake (NOT_A_DISCORD_ID_TEXT);
@@ -177,14 +201,14 @@ export const server_link_provider = spacetimedb.reducer({
  * - Otherwise the row records the pending account (provider, id, cleaned name), confirmHash, usedAt = now and
  *   expiresAt = now + 2 minutes (the confirm window). One presentation per code. Nothing is written to User.
  */
-export const server_link_by_code = spacetimedb.reducer({
+export const linker_present_code = spacetimedb.reducer({
     linkCode: t.string(),
     provider: t.string(),
     providerId: t.string(),
     providerName: t.string(),
     confirmHash: t.string(),
 }, (ctx, { linkCode, provider, providerId, providerName, confirmHash }) => {
-    requireServer(ctx);
+    requireLinker(ctx);
     // A Discord user id is a snowflake: digits only, 17 to 20 long. Checked before the code is looked at.
     if (provider === DISCORD_LOGIN_METHOD && !DISCORD_ID_SHAPE.test(providerId)) {
         throw new SenderError(NOT_A_DISCORD_ID_TEXT);
@@ -192,7 +216,7 @@ export const server_link_by_code = spacetimedb.reducer({
     if (!isBase64Url32(confirmHash)) throw new SenderError(CONFIRM_HASH_INVALID_TEXT);
 
     const refuse = (reason: string) => {
-        console.log(`[LINK] server_link_by_code refused: ${reason}`);
+        console.log(`[LINK] linker_present_code refused: ${reason}`);
         return new SenderError(LINK_CODE_REFUSED_TEXT);
     };
     const row = linkCode ? ctx.db.LinkRequest.code.find(linkCode) : undefined;

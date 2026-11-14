@@ -2,9 +2,9 @@ import { SenderError } from 'spacetimedb/server';
 
 // ─── M5a: one-time link codes (LinkRequest; A44(3), A46) ──────────────────────────────────────────────────────────
 // A connected guest asks request_link_code for a code; the browser hands only that code to the auth function, which
-// names it in server_link_by_code once Discord confirms the user. The code is a bearer secret for five minutes.
+// names it in linker_present_code once Discord confirms the user. The code is a bearer secret for five minutes.
 
-/** One text for an unknown, used or expired code (server_link_by_code), so the function cannot probe codes. */
+/** One text for an unknown, used or expired code (linker_present_code), so the function cannot probe codes. */
 export const LINK_CODE_REFUSED_TEXT = 'This link code is invalid or has expired.';
 
 /** How long a code lives: five minutes, in microseconds. */
@@ -179,7 +179,7 @@ export function deleteLinkRequestsOfUser(ctx: any, userId: number): void {
 }
 
 // ─── M5a2: the second lock (presentation, then confirmation by the requesting browser) ──────────────────────────────
-// server_link_by_code no longer merges: it records the Discord account as pending, with the SHA-256 of a one-time
+// linker_present_code no longer merges: it records the Discord account as pending, with the SHA-256 of a one-time
 // confirm token that the auth function gave to the browser that finished Discord. confirm_link, called by the
 // requesting identity itself with that token, performs the merge. The function alone holds the hash, never the token
 // after the redirect, and cannot call confirm_link as the requesting identity.
@@ -195,9 +195,9 @@ export const CONFIRM_TOKEN_INVALID_TEXT = 'confirmToken must be 43 base64url cha
 export const NO_PENDING_LINK_TEXT = 'No sign-in is waiting for confirmation. Please start again.';
 /** confirm_link: the token does not match the stored hash. */
 export const CONFIRM_REFUSED_TEXT = 'This sign-in could not be confirmed.';
-/** server_link_by_code / confirm_link: the identity no longer maps to the live guest that asked for the code. */
+/** linker_present_code / confirm_link: the identity no longer maps to the live guest that asked for the code. */
 export const ACCOUNT_CHANGED_TEXT = 'This account changed since the sign-in started. Please start again.';
-/** server_link_by_code with provider discord and a providerId that is not a snowflake (digits, 17 to 20). */
+/** linker_present_code with provider discord and a providerId that is not a snowflake (digits, 17 to 20). */
 export const NOT_A_DISCORD_ID_TEXT = 'providerId is not a Discord id.';
 export const DISCORD_ID_SHAPE = /^[0-9]{17,20}$/;
 
@@ -272,7 +272,7 @@ export function isAwaitingConfirm(row: any): boolean {
 }
 
 /**
- * server_link_by_code and confirm_link: the row's identity must still map to the live guest that asked for the code
+ * linker_present_code and confirm_link: the row's identity must still map to the live guest that asked for the code
  * (same user id, still a guest, no provider, not soft-deleted). An identity with no mapping is left to planProviderLink
  * ("Identity not registered").
  */

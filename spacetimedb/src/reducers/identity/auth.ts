@@ -17,6 +17,7 @@ import {
     sweepStaleLinkRequests,
 } from '@module/helpers/identity/linkCode';
 import { applyProviderLink, planProviderLink } from '@module/helpers/identity/providerLink';
+import { isLinkerIdentity, LINKER_NOT_A_USER_TEXT } from '@module/helpers/identity/serverIdentities';
 import { SYSTEM_USER_ID } from '@module/helpers/admin/auditColumns';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { markPresenceOnline } from '@module/helpers/identity/presenceHelpers';
@@ -38,6 +39,8 @@ import { ensureNotInMaintenance } from '@module/helpers/identity/ensurePermissio
  *   insert never aborts on the unique User.username index.
  */
 export const login_as_guest = spacetimedb.reducer((ctx) => {
+    // M5a3: the Linker identity of the auth function never becomes a user (no guest row, no presence).
+    if (isLinkerIdentity(ctx, ctx.sender)) throw new SenderError(LINKER_NOT_A_USER_TEXT);
     const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
     // A163(3) (S11a): while maintenance mode is on only an Admin acts; no guest is created or refreshed.
     ensureNotInMaintenance(ctx, mapping ? ctx.db.User.id.find(mapping.userId) : undefined);
@@ -104,7 +107,7 @@ const DELETED_ACCOUNT_TEXT = 'Unauthorized: This account has been deleted.';
  * M5a (A44(3), A46): a connected guest asks for a one-time link code for the Discord sign-in. The caller is ctx.sender;
  * the one argument, clientNonce, is 32 bytes from the browser's crypto.getRandomValues in base64url (43 characters),
  * checked by checkClientNonce, mixed into the code and never stored or logged. The code is read back through view_my_link_request and handed to the auth function, which names it in
- * server_link_by_code; the browser's SpacetimeDB token never leaves the browser.
+ * linker_present_code; the browser's SpacetimeDB token never leaves the browser.
  * - Refused: maintenance mode for a non-Admin (A163(3), as login_as_guest and the profile reducers); an identity with
  *   no live user; a soft-deleted user (deleted, or banned pending the cascade); a user that is not a guest or already
  *   has a provider linked.

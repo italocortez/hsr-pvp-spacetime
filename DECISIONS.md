@@ -1757,3 +1757,16 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   4. Open: A175 item 10 (guest-creation switch blocks new-browser sign-ins).
 - **Why:** user, 2026-11-13, after the explanation of the attack and the two locks: "alright lets do it".
 - **Where implemented:** `spacetimedb/src/tables/identity/linkRequest.ts`, `spacetimedb/src/helpers/identity/{linkCode,providerLink}.ts`, `spacetimedb/src/reducers/identity/{auth,server}.ts`, `spacetimedb/src/views/identityViews.ts`, `docs/auth/architecture.md` ("Phase M5a2 execution", "Requirements for M5b")
+
+### A177 — The login function gets a narrow key; the old direct link is removed
+
+- **Date:** 2026-11-13 · **Status:** items 1 to 4 decided and implemented; item 5 open
+- **Decision:**
+  1. The auth function holds a narrow server identity, a "linker", that can only present a sign-in code (`linker_present_code`, renamed from `server_link_by_code`; Owner and Delegate are refused there). Its key is `STDB_LINK_TOKEN`; the Admin-level `STDB_SERVER_TOKEN` stays with the scripts and never goes to Vercel. Settles A176 item 2.
+  2. The old direct link `server_link_provider` is removed. Tests and the live harness sign in through the three real steps. Supersedes A175 item 6. Test files were edited under the test task this ruling approved; expectations changed only where they pinned the removed reducer's surface or a path that no longer exists (a second sign-in on a linked account is now refused).
+  3. Signing in to an account whose deletion is pending is left as it is (the deletion job runs 5 seconds after it is scheduled). Settles A176 item 3.
+  4. The guest-creation switch blocking sign-in from a new browser is left for now. Settles A175 item 10 and A176 item 4 until launch preparation.
+  5. Open (review finding, corrected by the orchestrator after first describing the narrow key as a larger reduction than it is): a holder of the link token can still sign in as any Discord-linked account, staff included, by presenting its own guest's code with that account's Discord id. The narrow key removed the direct powers only. Orchestrator recommends accepting this for test1 and adding new-device approval for staff accounts before the first prod publish.
+  6. Orchestrator's choice: bootstrap keeps the existing linker across runs and mints a new one only when none exists or with `--rotate-linker`, so a re-run cannot break a deployed function.
+- **Why:** user, 2026-11-13: "For #1 I agree, for #2 the account will be deleted anyway so it doesnt really matter if they sign back ... For #4, yeah leave it for now"; "yeah lets just use the new way, the old sign in does not need to stay".
+- **Where implemented:** `spacetimedb/src/helpers/identity/serverIdentities.ts`, `spacetimedb/src/reducers/identity/{auth,server}.ts`, `scripts/stdb/{bootstrap,_delegate,_env}.ts`, `shared/stdb-targets.ts`, the test fixtures, `docs/auth/architecture.md`, `docs/log/2026-11-13-m5a.md`

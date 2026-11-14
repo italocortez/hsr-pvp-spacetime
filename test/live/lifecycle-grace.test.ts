@@ -18,7 +18,8 @@
 
 import { describe, it, expect, afterAll } from 'vitest';
 import { queryPrivateTable } from '../shared/connection';
-import { createTwoVerifiedHarnesses, disconnectBoth, hasServerToken, type TwoIdentities } from '../shared/two-identity-harness';
+import { createTwoVerifiedHarnesses, disconnectBoth, type TwoIdentities } from '../shared/two-identity-harness';
+import { hasLinkToken } from '../shared/sign-in'; // T-M5a3: the verified users sign in through the linker
 import { type LiveConn, closeAll, memberAs, openConnection, setupOneVsOne, sleep, waitFor } from './_helpers';
 
 const GRACE_MS = 15_000;
@@ -43,7 +44,7 @@ describe('A22a / A68 lifecycle over the wire (§D.5)', () => {
         return { a, b, lobbyId };
     }
 
-    it.skipIf(!hasServerToken())(
+    it.skipIf(!hasLinkToken())(
         '(a) A22a + A22(2): the referee drops and reconnects inside the 15 s window → nothing moves, flags kept, the pending check deleted',
         async () => {
             const { a, b, lobbyId } = await draftingPair();
@@ -87,7 +88,7 @@ describe('A22a / A68 lifecycle over the wire (§D.5)', () => {
         150_000,
     );
 
-    it.skipIf(!hasServerToken())(
+    it.skipIf(!hasLinkToken())(
         '(b) A22a + A22(5): a drop that outlasts the grace moves the referee (and host) flag to the first online candidate; the member stays offline',
         async () => {
             const { a, b, lobbyId } = await draftingPair();
@@ -118,7 +119,7 @@ describe('A22a / A68 lifecycle over the wire (§D.5)', () => {
         150_000,
     );
 
-    it.skipIf(!hasServerToken())(
+    it.skipIf(!hasLinkToken())(
         '(c) A68(1)(2): a player\'s leave_lobby during Drafting keeps the row as away, and the grace check runs for them although they stay connected',
         async () => {
             const { a, b, lobbyId } = await draftingPair();

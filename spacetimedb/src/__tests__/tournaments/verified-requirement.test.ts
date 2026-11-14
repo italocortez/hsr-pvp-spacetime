@@ -7,13 +7,14 @@
 // T-S10m: in-memory tests for step S10m (DECISIONS.md A113): settings under which a guest cannot play force a
 // tournament's requireVerified on (create and update); turning it on is refused while guests hold an entry; signing in
 // to an existing account (A112) is refused while the guest plays a live game; a moved entry takes the guest's match
-// calendar invites along; a guest cannot be a tournament assistant. server_link_provider runs as the owner ('internal',
-// linkDiscord). Rows set directly through `test.db` are written outside any transaction. Nothing reaches maincloud.
+// calendar invites along; a guest cannot be a tournament assistant. The sign-in runs through linkDiscord (request, present as
+// the linker, confirm; T-M5a3). Rows set directly through `test.db` are written outside any transaction. Nothing reaches maincloud.
 //
 // Titles starting "pins current behaviour (row silent)": the decision row says nothing about the case, so the test
 // records today's behaviour rather than a rule; the owner accepted these pins (A145). A later decision on the case
 // replaces the pin with a rule test.
 import { describe, expect, it } from 'vitest';
+import { discordId } from '../fixtures/harness'; // T-M5a3: valid Discord ids from labels
 import {
     M,
     expectReject,
@@ -216,9 +217,7 @@ describe('A113(4): signing in to an existing account is refused while the guest 
             const entryBefore = enrolled(test, id, guestId);
             const userBefore = test.db.User.id.find(guestId);
 
-            expectReject(test, 'internal', (ctx) => M.server_link_provider(ctx, {
-                callerIdentityHex: g.identity.toHexString(), provider: 'discord', providerId: e.providerId, providerName: 'ignored',
-            }), FINISH_TEXT);
+            expect(() => linkDiscord(test, g, e.providerId, 'ignored')).toThrow(FINISH_TEXT); // T-M5a3: the real sign-in
 
             expect(test.db.User.id.find(guestId)).toEqual(userBefore);
             expect(userBefore!.isGuest).toBe(true);
@@ -270,7 +269,7 @@ describe('A113(4): signing in to an existing account is refused while the guest 
 
     it('A113(4): the first-time link (the guest upgraded in place) during a live game is accepted', () => {
         const { test, id, g, guestId, lobbyId } = seated('BluePlayer');
-        linkDiscord(test, g, 'pid-fresh', 'Fresh');
+        linkDiscord(test, g, discordId('pid-fresh'), 'Fresh');
         expect(g.userId).toBe(guestId);
         expect(test.db.User.id.find(guestId)!.isGuest).toBe(false);
         expect(enrolled(test, id, guestId)).toBeTruthy();
@@ -404,9 +403,8 @@ describe('A113(6): a guest cannot be made a tournament assistant', () => {
 
 // ─── Texts ───────────────────────────────────────────────────────────────────
 
-const signInBody = (g: Actor, providerId: string) => (ctx: any) => M.server_link_provider(ctx, {
-    callerIdentityHex: g.identity.toHexString(), provider: 'discord', providerId, providerName: 'ignored',
-});
+/** T-M5a3: the sign-in of `g` to the account owning `providerId`, the real way (request, present, confirm). */
+const signIn3 = (test: Harness, g: Actor, providerId: string) => linkDiscord(test, g, providerId, 'ignored');
 
 // ════════════════════════════════════════════════════════════════════════════
 // Gap 3. A113 (S10m review F5)
@@ -497,7 +495,7 @@ describe('Gap 3, A113: guest counts, the live-game guard, invites, minimumMmr 0 
         expect(member(test, lobbyId, guestId)!.abandonedAt).toBeUndefined();
         const entryBefore = enrolled(test, id, guestId);
 
-        expectReject(test, 'internal', signInBody(g, e.providerId), FINISH_TEXT);
+        expect(() => signIn3(test, g, e.providerId)).toThrow(FINISH_TEXT);
 
         expect(mappedUser(test, g)).toBe(guestId);
         expect(test.db.User.id.find(guestId)!.isGuest).toBe(true);
@@ -511,7 +509,7 @@ describe('Gap 3, A113: guest counts, the live-game guard, invites, minimumMmr 0 
         const seatBefore = member(test, lobbyId, guestId);
         const entryBefore = enrolled(test, id, guestId);
 
-        tx(test, 'internal', signInBody(g, e.providerId));
+        signIn3(test, g, e.providerId);
 
         expect(mappedUser(test, g)).toBe(e.a.userId);
         expect(test.db.User.id.find(guestId)!.isGuest).toBe(true);

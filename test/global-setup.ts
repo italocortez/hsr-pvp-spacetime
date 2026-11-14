@@ -35,7 +35,7 @@ import {
     assertWipeAllowed,
     parseTarget,
 } from '../shared/stdb-targets';
-import { backendEnv } from './shared/env';
+import { backendEnv, linkToken } from './shared/env';
 
 export default async function setup() {
     if (process.env.SKIP_DB_CLEAR === '1') {
@@ -64,7 +64,7 @@ export default async function setup() {
         );
     }
 
-    console.log('[global-setup] Running bootstrap (delegate + seed data)...');
+    console.log('[global-setup] Running bootstrap (delegate, linker, seed data)...');
     try {
         execSync('npx tsx scripts/stdb/bootstrap.ts --target test', {
             stdio: 'inherit',
@@ -78,12 +78,17 @@ export default async function setup() {
         );
     }
 
-    // bootstrap ROTATES the delegate token and writes it to .env.test.local.
+    // bootstrap ROTATES the delegate token and writes it to .env.test.local; since M5a3 it keeps the linker (registered
+    // again after the wipe) or mints one and writes STDB_LINK_TOKEN when the file has none.
     // backendEnv() re-reads the file into process.env, so subsequent harness
     // connections use the fresh token, not a stale one from before the wipe.
-    if (!backendEnv().serverToken) {
+    const missing = [
+        backendEnv().serverToken ? undefined : 'STDB_SERVER_TOKEN',
+        linkToken() ? undefined : 'STDB_LINK_TOKEN',
+    ].filter((key) => key !== undefined);
+    if (missing.length > 0) {
         throw new Error(
-            '[global-setup] bootstrap completed but STDB_SERVER_TOKEN is missing from .env.test.local. ' +
+            `[global-setup] bootstrap completed but ${missing.join(' and ')} ${missing.length > 1 ? 'are' : 'is'} missing from .env.test.local. ` +
             'Something went wrong during bootstrap.'
         );
     }

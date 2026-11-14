@@ -41,8 +41,9 @@ IdentityGcJob (scheduledId: u64 autoInc PK)  [PRIVATE]
 5. Seed the system lobby preset "Tournament default" (`isSystemPreset`, owner `SYSTEM_USER_ID`), only when absent, on every init (Phase S6 execution, A33a / CH-S4)
 
 ### Guards (reducers/identity/server.ts)
-- `requireServer(ctx)`: `ctx.sender` has any `ServerIdentity` row (Owner or Delegate). Used by `server_link_provider`, `server_set_role`, `server_delete_user` and the test-only reducers.
-- `requireOwner(ctx)`: the row's `kind` is `Owner`. Used by the delegate reducers.
+- `requireServer(ctx)`: `ctx.sender` has an Owner or Delegate `ServerIdentity` row (`trustedServerRow`; since M5a3 a Linker row is refused). Used by `server_set_role`, `server_delete_user` and the test-only reducers (`server_link_provider` was removed in M5a3).
+- `requireOwner(ctx)`: the row's `kind` is `Owner`. Used by the delegate and linker reducers.
+- `requireLinker(ctx)` (`helpers/identity/serverIdentities.ts`, M5a3): the row's `kind` is `Linker`. Used by `linker_present_code` only.
 - `requireTestDatabase(ctx)`: `ctx.env.STDB_TARGET === 'test'`, else "Not a test database." First line of `server_set_datetime`, `server_set_online`, `server_set_mmr`, `server_nuke_test_data` (default-deny: a database published without the value rejects too).
 
 ### server_register_delegate(identityHex, label) -- Owner only

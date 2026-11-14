@@ -14,6 +14,7 @@
 import { DbConnection } from '@bindings/index';
 import { readArgs } from '../../shared/stdb-targets';
 import { backendEnv, serverToken } from './env';
+import { hasLinkToken, signInLive } from './sign-in';
 
 // Resolved lazily through the shared/stdb-targets.ts resolver (STDB_TARGET=test + .env.test.local),
 // so the token rotated by globalSetup's bootstrap is picked up on the next call.
@@ -56,14 +57,14 @@ export async function createTestHarness(): Promise<TestHarness> {
 
 /**
  * Creates a connected test harness with a verified (non-guest) user.
- * Requires STDB_SERVER_TOKEN in .env.test.local.
- * Calls server_link_provider to upgrade the guest to a verified user.
+ * Requires STDB_LINK_TOKEN in .env.test.local (T-M5a3).
+ * Signs the guest in the real way (request, present as the linker, confirm; test/shared/sign-in.ts).
  */
 export async function createVerifiedTestHarness(): Promise<TestHarness> {
-  if (!hasServerToken()) {
+  if (!hasLinkToken()) {
     throw new Error(
-      'STDB_SERVER_TOKEN required for verified test harness. ' +
-      'It lives in .env.test.local (written by npm run stdb:bootstrap:test)'
+      'STDB_LINK_TOKEN required for verified test harness. ' +
+      'It lives in .env.test.local (written by npm run stdb:bootstrap:test since M5a3)'
     );
   }
   return createHarnessInternal({ verify: true });
@@ -82,14 +83,23 @@ function createHarnessInternal(opts: { verify: boolean }): Promise<TestHarness> 
       .onConnect(async (connInner, identity, _token) => {
         const identityHex = identity.toHexString();
 
-        // Login as guest first
-        await connInner.reducers.loginAsGuest({});
-
-        if (opts.verify && getServerToken()) {
-          // Create a second connection with the server token to call server_link_provider
-          await verifyUserViaServerConnection(identityHex);
-          // Re-login to refresh the user data in subscription cache
+        // T-M5a3-fix: a rejection here (login or sign-in) must reach the caller with its own message, not as the 30 s
+        // timeout: an async onConnect's rejection is not seen by the SDK.
+        try {
+          // Login as guest first
           await connInner.reducers.loginAsGuest({});
+
+          if (opts.verify) {
+            // T-M5a3: the real sign-in (request, present on a linker-token connection, confirm on this connection)
+            await signInLive(connInner as any, `TestUser_${Math.random().toString(36).slice(2, 8)}`);
+            // Re-login to refresh the user data in subscription cache
+            await connInner.reducers.loginAsGuest({});
+          }
+        } catch (err) {
+          clearTimeout(timeout);
+          connInner.disconnect();
+          reject(new Error(`${opts.verify ? 'Sign-in' : 'Guest login'} failed: ${err instanceof Error ? err.message : String(err)}`));
+          return;
         }
 
         clearTimeout(timeout);
@@ -131,48 +141,6 @@ function createHarnessInternal(opts: { verify: boolean }): Promise<TestHarness> 
   });
 }
 
-/**
- * Uses a server-token connection to call server_link_provider,
- * which upgrades a guest user to verified.
- */
-function verifyUserViaServerConnection(targetIdentityHex: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('Server connection timeout')), 10000);
-
-    // Generate a unique fake Discord ID for test users
-    const testDiscordId = `test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-
-    DbConnection.builder()
-      .withUri(getUri())
-      .withDatabaseName(getDb())
-      .withToken(getServerToken())
-      .withConfirmedReads(false)
-      .onConnect(async (serverConn) => {
-        try {
-          await serverConn.reducers.serverLinkProvider({
-            callerIdentityHex: targetIdentityHex,
-            provider: 'discord',
-            providerId: testDiscordId,
-            providerName: `TestUser_${testDiscordId.slice(-6)}`,
-          });
-          clearTimeout(timeout);
-          serverConn.disconnect();
-          // Give time for the update to propagate
-          setTimeout(resolve, 500);
-        } catch (err) {
-          clearTimeout(timeout);
-          serverConn.disconnect();
-          reject(err);
-        }
-      })
-      .onConnectError((_ctx, err) => {
-        clearTimeout(timeout);
-        reject(new Error(`Server connection failed: ${err}`));
-      })
-      .onDisconnect(() => {})
-      .build();
-  });
-}
 
 /**
  * Unwrap SpacetimeDB SQL optional value format.

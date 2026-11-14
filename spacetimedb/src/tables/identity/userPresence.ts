@@ -16,7 +16,7 @@ import { table, t } from 'spacetimedb/server';
  *
  * Writers (A48): `client_connected` upserts `{ identity, userId, isOnline: true, lastLoginAt: now,
  * lastSeenAt: now }` once the UserIdentity mapping exists; `login_as_guest` does the same for a fresh guest
- * (its connect preceded the mapping); `server_link_provider` rewrites `userId` + `lastLoginAt` when it
+ * (its connect preceded the mapping); `confirm_link` rewrites `userId` + `lastLoginAt` when it
  * re-points an identity to another user; `client_disconnected` sets `isOnline = false, lastSeenAt = now` on
  * the one row and, only when the user has no other live row, marks the active-stage memberships offline and
  * inserts the RefereeTransferCheck; identity GC and user deletion delete the rows with the identity;

@@ -459,7 +459,7 @@ describe('A124: a server deletion or ban of an organizer cancels the unfinished 
 // Gap 8. A124 (S10s re-review N5)
 // ════════════════════════════════════════════════════════════════════════════
 
-describe('Gap 8, A124: server deletions cancel; identity GC and server_link_provider do not (S10s re-review N5)', () => {
+describe('Gap 8, A124: server deletions cancel; identity GC and the sign-in re-point (confirm_link) do not (S10s re-review N5)', () => {
     it('A124 (N5: a Draft tournament): server_delete_user of its organizer cancels a tournament still in Draft; no assistant takes over', () => {
         const test = newHarness();
         const org = host(test);
@@ -512,7 +512,7 @@ describe('Gap 8, A124: server deletions cancel; identity GC and server_link_prov
         expect(tRow(test, id).organizerId).toBe(g.userId);
     });
 
-    it('pins current behaviour (row silent): A124 (N5: server_link_provider): a guest organizer signing in to an existing account is deleted; the tournament is not cancelled and keeps the guest\'s organizer id', () => {
+    it('pins current behaviour (row silent): A124 (N5: the sign-in, confirm_link): a guest organizer signing in to an existing account is deleted; the tournament is not cancelled and keeps the guest\'s organizer id', () => {
         const test = newHarness();
         const { id, g } = guestOrganized(test, 'link-org');
         const e = existingUser(test, 'e-link-org');

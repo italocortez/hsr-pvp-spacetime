@@ -5,7 +5,7 @@ import { table, t } from 'spacetimedb/server';
  *
  * A connected guest calls `request_link_code()` (M5a): a row with a random code, the requesting
  * identity and user, and a 5-minute expiry. The Vercel auth function completes the Discord OAuth exchange
- * and calls `server_link_by_code({ linkCode, ... })` with the delegate token; the module resolves the code
+ * and calls `linker_present_code({ linkCode, ... })` with the linker token (M5a3); the module resolves the code
  * back to the identity, so the browser's SpacetimeDB token never leaves the browser.
  * M5a2 (the second lock): the function's call no longer links. It presents the code once: `usedAt` is set, the
  * Discord account is stored in the pending columns with `confirmHash` (base64url SHA-256 of a one-time token the
@@ -26,7 +26,7 @@ export const linkRequestColumns = {
     createdDate: t.timestamp(),
     lastModifiedById: t.u32(),
     lastModifiedDate: t.timestamp(),
-    // M5a2: the pending stage, set by server_link_by_code (appended last, default None: an additive migration)
+    // M5a2: the pending stage, set by linker_present_code (appended last, default None: an additive migration)
     pendingProvider: t.string().optional().default(undefined),
     pendingProviderId: t.string().optional().default(undefined),
     pendingProviderName: t.string().optional().default(undefined),

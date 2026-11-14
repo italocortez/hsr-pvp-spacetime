@@ -125,6 +125,7 @@ import JoinLobbyReducer from "./join_lobby_reducer";
 import KickMemberReducer from "./kick_member_reducer";
 import LeaveLobbyReducer from "./leave_lobby_reducer";
 import LeaveTournamentTeamReducer from "./leave_tournament_team_reducer";
+import LinkerPresentCodeReducer from "./linker_present_code_reducer";
 import LockCostSetReducer from "./lock_cost_set_reducer";
 import LockTournamentAccountsReducer from "./lock_tournament_accounts_reducer";
 import LoginAsGuestReducer from "./login_as_guest_reducer";
@@ -162,11 +163,11 @@ import SeedLobbyGcJobReducer from "./seed_lobby_gc_job_reducer";
 import SelectMatchAccountReducer from "./select_match_account_reducer";
 import SendChatMessageReducer from "./send_chat_message_reducer";
 import ServerDeleteUserReducer from "./server_delete_user_reducer";
-import ServerLinkByCodeReducer from "./server_link_by_code_reducer";
-import ServerLinkProviderReducer from "./server_link_provider_reducer";
 import ServerNukeTestDataReducer from "./server_nuke_test_data_reducer";
 import ServerRegisterDelegateReducer from "./server_register_delegate_reducer";
+import ServerRegisterLinkerReducer from "./server_register_linker_reducer";
 import ServerRevokeDelegateReducer from "./server_revoke_delegate_reducer";
+import ServerRevokeLinkerReducer from "./server_revoke_linker_reducer";
 import ServerSetDatetimeReducer from "./server_set_datetime_reducer";
 import ServerSetGuestCreationReducer from "./server_set_guest_creation_reducer";
 import ServerSetGuestLobbyCreationReducer from "./server_set_guest_lobby_creation_reducer";
@@ -1213,6 +1214,7 @@ const reducersSchema = __reducers(
   __reducerSchema("kick_member", KickMemberReducer),
   __reducerSchema("leave_lobby", LeaveLobbyReducer),
   __reducerSchema("leave_tournament_team", LeaveTournamentTeamReducer),
+  __reducerSchema("linker_present_code", LinkerPresentCodeReducer),
   __reducerSchema("lock_cost_set", LockCostSetReducer),
   __reducerSchema("lock_tournament_accounts", LockTournamentAccountsReducer),
   __reducerSchema("login_as_guest", LoginAsGuestReducer),
@@ -1250,11 +1252,11 @@ const reducersSchema = __reducers(
   __reducerSchema("select_match_account", SelectMatchAccountReducer),
   __reducerSchema("send_chat_message", SendChatMessageReducer),
   __reducerSchema("server_delete_user", ServerDeleteUserReducer),
-  __reducerSchema("server_link_by_code", ServerLinkByCodeReducer),
-  __reducerSchema("server_link_provider", ServerLinkProviderReducer),
   __reducerSchema("server_nuke_test_data", ServerNukeTestDataReducer),
   __reducerSchema("server_register_delegate", ServerRegisterDelegateReducer),
+  __reducerSchema("server_register_linker", ServerRegisterLinkerReducer),
   __reducerSchema("server_revoke_delegate", ServerRevokeDelegateReducer),
+  __reducerSchema("server_revoke_linker", ServerRevokeLinkerReducer),
   __reducerSchema("server_set_datetime", ServerSetDatetimeReducer),
   __reducerSchema("server_set_guest_creation", ServerSetGuestCreationReducer),
   __reducerSchema("server_set_guest_lobby_creation", ServerSetGuestLobbyCreationReducer),

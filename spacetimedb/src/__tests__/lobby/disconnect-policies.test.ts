@@ -3,6 +3,7 @@
 // Contracts: docs/lobby/contract.md
 // From S10c, S10d (s10c-high-fixes.test.ts, s10d-rulings.test.ts).
 import { describe, expect, it } from 'vitest';
+import { discordId } from '../fixtures/harness'; // T-M5a3: valid Discord ids from labels
 import {
     DEFAULT_LOBBY_ARGS,
     M,
@@ -801,11 +802,11 @@ describe('A92(9): view_my_lobby_members.disconnectActionAt', () => {
     it('a stamped offline seat whose user is live on another identity (new browser, linked after client_connected, no join_lobby) reads Online and still carries the instant; claim_forfeit accepts at it (A92(9), S10d review F2)', () => {
         const test = newHarness();
         const dev1 = guest(test, 'b1');
-        linkDiscord(test, dev1, 'discord-b1', 'B1');
+        linkDiscord(test, dev1, discordId('discord-b1'), 'B1');
         const s = setupLobby(test, { seats: ONE_V_ONE, actors: { b1: dev1 } }); // host = exclusive Spectator referee
         disconnect(test, dev1);
         const dev2 = guest(test, 'b1-browser');
-        linkDiscord(test, dev2, 'discord-b1', 'B1'); // re-points dev2's identity and its live UserPresence row to b1
+        linkDiscord(test, dev2, discordId('discord-b1'), 'B1'); // re-points dev2's identity and its live UserPresence row to b1
         expect(dev2.userId).toBe(dev1.userId);
         expect(member(test, s.lobbyId, dev1.userId).isOnline).toBe(false);
         expect([...test.db.UserPresence.user_id.filter(dev1.userId)].some((p) => p.isOnline)).toBe(true);

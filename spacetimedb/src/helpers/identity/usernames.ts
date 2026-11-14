@@ -1,4 +1,4 @@
-// User.username helpers shared by login_as_guest (reducers/identity/auth.ts) and server_link_provider
+// User.username helpers shared by login_as_guest (reducers/identity/auth.ts) and confirm_link
 // (reducers/identity/server.ts). User.username is a unique column: an insert or update with a taken name aborts the
 // whole transaction on the index, so every writer that derives a name picks a free one first.
 import { SenderError } from 'spacetimedb/server';

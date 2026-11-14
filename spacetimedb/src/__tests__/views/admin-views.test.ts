@@ -2,6 +2,7 @@
 // Contracts: docs/views/contract.md
 // From S9b (s9b-views.test.ts).
 import { describe, expect, it } from 'vitest';
+import { discordId } from '../fixtures/harness'; // T-M5a3: valid Discord ids from labels
 import type {
     AdminAbuseConfigRow,
     AdminBanRecordRow,
@@ -29,14 +30,14 @@ describe('admin views (S9b-AD1..AD3, S9b-V9)', () => {
         setRole(test, admin.userId, 'Admin');
         const player = verified(test, 'aplayer');
         // a provider ban (soft-deletes the banned user)
-        const bannee = linked(test, 'bannee-dev', 'pid-bannee', 'Bannee');
-        tx(test, admin, (ctx) => M.admin_ban_user(ctx, { banTypeTag: 'DiscordId', providerId: 'pid-bannee', reason: 'cheating' }));
+        const bannee = linked(test, 'bannee-dev', discordId('pid-bannee'), 'Bannee');
+        tx(test, admin, (ctx) => M.admin_ban_user(ctx, { banTypeTag: 'DiscordId', providerId: discordId('pid-bannee'), reason: 'cheating' }));
         // a verified user who deletes their account → DeletedUser archive
         const leaver = verified(test, 'aleaver');
         tx(test, leaver, (ctx) => M.delete_my_account(ctx, {}));
         // one user on two devices (A48): connect both, close one
-        const d1 = linked(test, 'dev-1', 'pid-dev', 'Dev');
-        const d2 = linked(test, 'dev-2', 'pid-dev', 'Dev');
+        const d1 = linked(test, 'dev-1', discordId('pid-dev'), 'Dev');
+        const d2 = linked(test, 'dev-2', discordId('pid-dev'), 'Dev');
         expect(d2.userId).toBe(d1.userId);
         connect(test, d1);
         connect(test, d2);
@@ -76,7 +77,7 @@ describe('admin views (S9b-AD1..AD3, S9b-V9)', () => {
         const rows = view<AdminBanRecordRow>(w.test, 'view_admin_ban_records', w.mod);
         expect(rows).toHaveLength(1);
         expect(keysOf(rows[0])).toEqual(sorted('adminBan'));
-        expect(rows[0]).toMatchObject({ loginMethod: 'discord', providerId: 'pid-bannee', reason: 'cheating', bannedByUserId: w.admin.userId, bannedByLabel: displayName(w.test, w.admin) });
+        expect(rows[0]).toMatchObject({ loginMethod: 'discord', providerId: discordId('pid-bannee'), reason: 'cheating', bannedByUserId: w.admin.userId, bannedByLabel: displayName(w.test, w.admin) });
     });
 
     it('view_admin_deleted_users: the archived user', () => {
@@ -127,8 +128,8 @@ describe('admin views (S9b-AD1..AD3, S9b-V9)', () => {
         const w = world();
         const rows = view<AdminUserPrivateRow>(w.test, 'view_admin_user_private', w.mod);
         for (const r of rows) expect(keysOf(r)).toEqual(sorted('adminUserPrivate'));
-        expect(rows.find((r) => r.providerId === 'pid-dev')).toMatchObject({ userId: w.d1.userId, loginMethod: 'discord', providerUsername: 'Dev' });
-        expect(rows.find((r) => r.providerId === 'pid-bannee')).toMatchObject({ userId: w.bannee.userId });
+        expect(rows.find((r) => r.providerId === discordId('pid-dev'))).toMatchObject({ userId: w.d1.userId, loginMethod: 'discord', providerUsername: 'Dev' });
+        expect(rows.find((r) => r.providerId === discordId('pid-bannee'))).toMatchObject({ userId: w.bannee.userId });
         // T-S11a (A77): one row per user with a provider link on the User row (UserPrivate merged)
         expect(rows).toHaveLength([...w.test.db.User.iter()].filter((u) => u.providerId !== undefined).length);
         expect(rows.find((r) => r.userId === w.outsider.userId)).toBeUndefined(); // a guest: no link, no row

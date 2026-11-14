@@ -7,6 +7,7 @@
 // Reuses the S4 builders; everything runs in the SDK's in-memory datastore on the TestClock (no real waiting).
 // Admin calls run as the owner identity (TestAuth.internal()), which init links to the SYSTEM user (role Admin).
 import { describe, expect, it } from 'vitest';
+import { discordId } from '../fixtures/harness'; // T-M5a3: valid Discord ids from labels
 import {
     DEFAULT_LOBBY_ARGS,
     M,
@@ -157,7 +158,7 @@ describe('A42: guest kill switch', () => {
         createLobby(test, seated);
         const g = guest(test, 'late');
         const verified = guest(test, 'verified');
-        linkDiscord(test, verified, 'discord-1', 'Verified');
+        linkDiscord(test, verified, discordId('discord-1'), 'Verified');
 
         tx(test, 'internal', (ctx) => M.admin_set_guest_lobby_creation(ctx, { enabled: false }));
         expect(config(test).guestLobbyCreationEnabled).toBe(false);
@@ -225,7 +226,7 @@ describe('A57: inline circuit breaker', () => {
         expect(alerts(test)).toHaveLength(0);
 
         const verified = guest(test, 'verified');
-        linkDiscord(test, verified, 'discord-v', 'Verified');
+        linkDiscord(test, verified, discordId('discord-v'), 'Verified');
         createLobby(test, verified);
         expect(counter(test)!.count).toBe(20);
 

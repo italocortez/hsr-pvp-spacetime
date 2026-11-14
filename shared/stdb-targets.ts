@@ -31,6 +31,8 @@ export const ENV_KEYS = {
     /** Node side (scripts, test harness, vitest configs). */
     target: 'STDB_TARGET',
     serverToken: 'STDB_SERVER_TOKEN',
+    /** M5a3: the auth function's Linker token (it may only present sign-in codes); written by bootstrap. */
+    linkToken: 'STDB_LINK_TOKEN',
     /** Browser side (Vite only exposes VITE_*). The value set is identical: `test` | `prod`. */
     viteTarget: 'VITE_STDB_TARGET',
 } as const;

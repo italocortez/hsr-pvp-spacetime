@@ -153,7 +153,7 @@ export interface UserDeletionOptions {
      * True only when a server identity (Owner or Delegate) deleted or banned the user with no staff user behind it:
      * three sites set it: server_delete_user; run_user_deletion for a job created by the SYSTEM user (a ban or
      * admin_delete_row('User') sent by the Owner or a Delegate); and admin_delete_row('UserIdentity') sent as the SYSTEM
-     * user when it removes a guest's last identity (admin.ts). Identity GC, server_link_provider and the other paths
+     * user when it removes a guest's last identity (admin.ts). Identity GC, confirm_link and the other paths
      * never set it.
      */
     serverDeletion?: boolean;

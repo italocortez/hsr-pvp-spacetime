@@ -221,10 +221,13 @@ export const BracketSide = t.enum('BracketSide', {
 // `login_method` claim ('discord' today), so a new provider needs no enum variant and no wipe.
 
 // ServerIdentity row kind (M2, ACCESS-SECURITY-OPS §C.4): the publisher is registered as Owner by `init`;
-// the owner registers Delegate identities (e.g. the Vercel auth function) with server_register_delegate.
+// the owner registers Delegate identities (bootstrap, seeding, the manage-user script) with server_register_delegate,
+// and (M5a3) the Linker identity of the Vercel auth function with server_register_linker. A Linker may only present a
+// sign-in code (linker_present_code); it has no UserIdentity and every other reducer refuses it. Variant appended last.
 export const ServerIdentityKind = t.enum('ServerIdentityKind', {
     Owner: t.unit(),
     Delegate: t.unit(),
+    Linker: t.unit(),
 });
 
 // ─── S3 backend reset enums ──────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 // ─── A112 (S10l): a guest's tournament entries follow the guest to an existing account ────────────────────────────
-// server_link_provider, the case where the caller's identity points at a guest and the provider account already
+// confirm_link, the case where the caller's identity points at a guest and the provider account already
 // belongs to another user: the identity is re-pointed and the guest deleted (performUserDeletion). Before the deletion,
 // moveTournamentTiesToUser moves each of the guest's enrolments in a tournament that is not Completed or Cancelled to
 // the existing user when that user can hold it (canHoldEntry); what is not moved is settled by the deletion as before
@@ -153,7 +153,7 @@ function moveEntry(ctx: any, tournament: any, enrolled: any, fromGuestId: number
 
 /**
  * A112 (S10l): moves the guest's entries in unfinished tournaments to `toUserId` (see the header). Called by
- * server_link_provider before performUserDeletion; entries it leaves behind are settled by the deletion (A94(2)).
+ * confirm_link before performUserDeletion; entries it leaves behind are settled by the deletion (A94(2)).
  */
 export function moveTournamentTiesToUser(ctx: any, fromGuestId: number, toUserId: number, actorId: number): void {
     const target = ctx.db.User.id.find(toUserId);

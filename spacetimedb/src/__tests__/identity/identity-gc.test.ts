@@ -41,7 +41,7 @@ const hasIdentity = (test: Harness, a: Actor) => !!test.db.UserIdentity.identity
 
 /**
  * A verified user on two devices: `first` links the provider id, `second` (a later guest) links the same id and is
- * re-pointed to the same user (server_link_provider Case 1b). `second` reconnects `gapDays` later, so it is the newest
+ * re-pointed to the same user (Case 1b of the sign-in, confirm_link). `second` reconnects `gapDays` later, so it is the newest
  * identity. Both devices are offline at the end unless `keepOnline` names one.
  */
 function twoDeviceUser(test: Harness, name: string, gapDays = 10, keepOnline?: 'first' | 'second') {

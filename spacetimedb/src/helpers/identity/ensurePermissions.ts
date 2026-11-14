@@ -28,6 +28,9 @@ export function isRoleAtLeast(userRole: any, requiredRole: string): boolean {
  * Resolves ctx.sender (identity) → UserIdentity → User.
  * Returns both the mapping row and the User row.
  * Throws if the identity is not linked to any user.
+ * M5a3: a Linker identity is not checked here (that would add a ServerIdentity read to every authenticated call); it
+ * never has a mapping because every writer that creates one refuses it: login_as_guest, server_register_delegate
+ * ("Already registered.") and server_register_linker (refuses a mapped identity).
  */
 export function getAuthenticatedUser(ctx: any) {
     const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);

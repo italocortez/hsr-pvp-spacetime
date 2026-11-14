@@ -3,6 +3,7 @@
 // Contracts: docs/tournament/contract.md, docs/brackets/contract.md
 // From S10o, S10q (s10o-autopick-guest-entry.test.ts, s10q-gap-coverage.test.ts).
 import { describe, expect, it } from 'vitest';
+import { discordId } from '../fixtures/harness'; // T-M5a3: valid Discord ids from labels
 import { M, expectReject, guest, linkDiscord, newHarness, tx, type Actor } from '../fixtures/harness';
 import { host, verified } from '../fixtures/identity';
 import { createEvent, invite, seedInvite } from '../fixtures/calendar';
@@ -70,7 +71,7 @@ describe('A118: reject_participant removes a guest\'s approved entry as a withdr
         expect(enrolled(test, id, g.userId).status.tag).toBe('Registered');
 
         tx(test, org, reject(id, g.userId));
-        linkDiscord(test, g, 'pid-g', 'g'); // first-time link: the guest is upgraded in place
+        linkDiscord(test, g, discordId('pid-g'), 'g'); // first-time link: the guest is upgraded in place
         expect(test.db.User.id.find(g.userId)!.isGuest).toBe(false);
         register(test, g, id);
         expect(enrolled(test, id, g.userId).status.tag).toBe('Registered');
@@ -192,7 +193,7 @@ describe('A118: reject_participant removes a guest\'s approved entry as a withdr
         const id = openTournament(test, org, { teamSize: 1 });
         const g = guest(test, 'g');
         register(test, g, id);
-        linkDiscord(test, g, 'pid-g', 'g'); // first-time link: the same User row, now verified, keeps its entry
+        linkDiscord(test, g, discordId('pid-g'), 'g'); // first-time link: the same User row, now verified, keeps its entry
         expect(test.db.User.id.find(g.userId)!.isGuest).toBe(false);
         const before = enrolled(test, id, g.userId)!;
         expect(before.approvedByToAt).toBeDefined();

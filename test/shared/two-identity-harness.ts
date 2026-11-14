@@ -22,8 +22,8 @@ export interface TwoIdentities {
 
 /**
  * Creates two fresh verified harnesses (distinct Discord IDs).
- * Each call to `createVerifiedTestHarness` generates a unique
- * `test_<timestamp>_<random>` provider ID, so userA and userB end up
+ * Each call to `createVerifiedTestHarness` signs in with a random
+ * 18-digit Discord id (sign-in.ts, T-M5a3), so userA and userB end up
  * as independent UserIdentity → User rows on the server.
  */
 export async function createTwoVerifiedHarnesses(): Promise<TwoIdentities> {

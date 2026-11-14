@@ -8,7 +8,7 @@
  */
 
 import { envFilePath, readEnvFile } from '../../scripts/stdb/_env';
-import { type BackendEnv, parseTarget, resolveBackendEnv } from '../../shared/stdb-targets';
+import { type BackendEnv, ENV_KEYS, parseTarget, resolveBackendEnv } from '../../shared/stdb-targets';
 
 export function backendEnv(): BackendEnv {
     const target = parseTarget(process.env.STDB_TARGET);
@@ -25,4 +25,10 @@ export function backendEnv(): BackendEnv {
 /** Delegate token from .env.test.local ('' when bootstrap has not run). */
 export function serverToken(): string {
     return backendEnv().serverToken ?? '';
+}
+
+/** M5a3: the auth function's Linker token from .env.test.local ('' when bootstrap has not run). */
+export function linkToken(): string {
+    backendEnv(); // merges .env.test.local into process.env
+    return process.env[ENV_KEYS.linkToken] ?? '';
 }

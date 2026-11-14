@@ -2345,6 +2345,7 @@ export type ServerIdentity = __Infer<typeof ServerIdentity>;
 export const ServerIdentityKind = __t.enum("ServerIdentityKind", {
   Owner: __t.unit(),
   Delegate: __t.unit(),
+  Linker: __t.unit(),
 });
 export type ServerIdentityKind = __Infer<typeof ServerIdentityKind>;
 

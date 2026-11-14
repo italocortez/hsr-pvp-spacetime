@@ -47,12 +47,11 @@ BanRecord (id: u32 autoInc PK)  [PRIVATE -- public: false]
 3. Revoke: delete the delegate's `ServerIdentity` and `UserIdentity` rows; the Owner cannot be revoked. Phase S10e execution (identity audit #5): the identity's `UserPresence` row is deleted too (a live row would otherwise keep the SYSTEM user online, since `client_disconnected` stops at the missing mapping)
 4. Phase S10e execution (identity audit #1): identity GC never collects a `ServerIdentity` identity or a SYSTEM mapping (`docs/auth/architecture.md`)
 
-### server_link_provider(identity, discordId, discordUsername, email?)
-1. `requireServer(ctx)` -- validate caller has a ServerIdentity row (Owner or Delegate)
-2. Look up `UserIdentity` by provided identity
-3. Check ban: `rejectIfBanned(ctx, discordId)` -- reject if BanRecord exists
-4. Three merge cases based on current state (see auth/architecture.md for case details)
-5. Write `UserPrivate` (discordId, discordUsername, email), set `User.hasDiscordLinked=true`
+### server_link_provider -- removed in Phase M5a3
+No reducer links an identity by its hex any more. The sign-in is `request_link_code` (the guest), `linker_present_code` (the auth function's Linker identity, which no admin or `server_*` reducer accepts) and `confirm_link` (the guest); the merge rules and the linker are in `docs/auth/architecture.md` ("Server Identity", "Phase M5a3 execution").
+
+### server_register_linker(identityHex, label) / server_revoke_linker(identityHex) -- Owner only (Phase M5a3)
+Register inserts a `ServerIdentity` row of kind `Linker` and no `UserIdentity` row (an identity already registered or already mapped to a user is refused); revoke deletes it and refuses a delegate. Details: `docs/auth/architecture.md` "Phase M5a3 execution".
 
 ### server_set_role(username, roleTag)
 1. `requireServer(ctx)` -- validate caller has a ServerIdentity row (Owner or Delegate)

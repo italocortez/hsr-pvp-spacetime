@@ -11,6 +11,7 @@
 
 import { DbConnection, type SubscriptionHandle } from '@bindings/index';
 import { backendEnv, serverToken } from '../shared/env';
+import { signInLive } from '../shared/sign-in';
 
 export type Reducers = DbConnection['reducers'];
 /** What the lobby helpers need: typed reducers and a client cache. The shared harness's `conn` (db: any) fits. */
@@ -135,21 +136,14 @@ export async function connectGuest(extraQueries: string[] = []): Promise<LiveUse
 }
 
 /**
- * A verified user: a guest upgraded through `server_link_provider` on a server-token connection (the auth
- * function's path, M5). The username is the provider name, `Live_<random>`, unique per call.
+ * A verified user: a guest signed in the real way (T-M5a3: request, present on a linker-token connection, confirm;
+ * test/shared/sign-in.ts). The username is the provider name, `Live_<random>`, unique per call.
  */
 export async function connectVerified(extraQueries: string[] = []): Promise<LiveUser> {
     const c = await openConnection();
     await c.conn.reducers.loginAsGuest({});
     const suffix = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-    await withServer((s) =>
-        s.reducers.serverLinkProvider({
-            callerIdentityHex: c.identity,
-            provider: 'discord',
-            providerId: `live_${suffix}`,
-            providerName: `Live_${suffix}`,
-        }),
-    );
+    await signInLive(c.conn, `Live_${suffix}`);
     return readSelf(c, extraQueries, false);
 }
 

@@ -7,7 +7,7 @@
 // `test.db` is read only outside `tx` bodies (reading it inside `withReducerTx` crashes the in-memory datastore).
 // Nothing reaches maincloud.
 import { ConnectionId } from 'spacetimedb';
-import { AUDIT, M, TestAuth, byId, guest, linkDiscord, tx, type Actor, type Harness } from './harness';
+import { AUDIT, M, TestAuth, byId, discordId, guest, linkDiscord, tx, type Actor, type Harness } from './harness';
 import { insertHsrAccount } from './roster';
 
 // ─── Users and roles ─────────────────────────────────────────────────────────
@@ -19,7 +19,7 @@ let nextProvider = 1;
 /** A verified (Discord-linked) user. */
 export function verified(test: Harness, name: string): Actor {
     const a = guest(test, name);
-    linkDiscord(test, a, `discord-${name}-${nextProvider++}`, name);
+    linkDiscord(test, a, discordId(`discord-${name}-${nextProvider++}`), name); // T-M5a3: a valid snowflake
     return a;
 }
 
@@ -118,14 +118,14 @@ export interface ExistingUserOpts {
 /** A verified user with a known provider id (the account a guest signs in to) and its HSR accounts (ids ascending). */
 export function existingUser(test: Harness, sub: string, o: ExistingUserOpts = {}): { a: Actor; providerId: string; accountIds: number[] } {
     const a = guest(test, sub);
-    const providerId = `pid-${sub}`;
+    const providerId = discordId(`pid-${sub}`); // T-M5a3: a valid snowflake from the old label
     linkDiscord(test, a, providerId, o.name ?? sub);
     const uids = o.uids ?? Array.from({ length: o.accounts ?? 1 }, (_, i) => `${sub}-acc-${i}`);
     const accountIds = uids.map((uid) => insertHsrAccount(test, a.userId, uid)).sort(byId);
     return { a, providerId, accountIds };
 }
 
-/** server_link_provider (as the owner) for `g` to the account owning `providerId`; returns the guest's former user id. */
+/** Signs `g` in to the account owning `providerId` (linkDiscord: request, present, confirm); returns the guest's former user id. */
 export function signIn(test: Harness, g: Actor, providerId: string): number {
     const guestId = g.userId;
     linkDiscord(test, g, providerId, 'ignored');
