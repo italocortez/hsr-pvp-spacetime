@@ -126,6 +126,7 @@ describe('publishArgs', () => {
             '--module-path',
             'spacetimedb',
             '--yes=remote',
+            '--yes=break-clients',
             '--delete-data=always',
             '--yes=delete-data',
         ]);
@@ -141,6 +142,7 @@ describe('publishArgs', () => {
             '--module-path',
             'spacetimedb',
             '--yes=remote',
+            '--yes=break-clients',
         ]);
         expect(publishArgs('test', { modulePath, clearDatabase: true }).args).toContain(
             '--yes=remote',
@@ -154,6 +156,7 @@ describe('publishArgs', () => {
             '--module-path',
             'spacetimedb',
             '--yes=remote',
+            '--yes=break-clients',
             '--yes=migrate',
         ]);
     });

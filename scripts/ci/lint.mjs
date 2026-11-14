@@ -1,5 +1,5 @@
 // `npm run lint:ci`: Biome on the tracked and new (not ignored) files of web/, shared/,
-// scripts/ci/ and scripts/preview/ (M9, user decision 2026-11-13: the frontend and shared code are
+// scripts/ci/, scripts/preview/, scripts/local-auth/ and api/ (M9; the last two since M5b; user decision 2026-11-13: the frontend and shared code are
 // linted now, older findings elsewhere are cleaned later; scripts/preview/ added at M8). biome.json ignores still apply (module_bindings,
 // lib/legacy, routeTree.gen.ts, dist).
 //
@@ -10,7 +10,7 @@
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 
-const DIRS = ['web', 'shared', 'scripts/ci', 'scripts/preview'];
+const DIRS = ['web', 'shared', 'scripts/ci', 'scripts/preview', 'scripts/local-auth', 'api'];
 const LEFT_OUT = [/^web\/public\/.*\.svg$/];
 const BATCH = 100;
 

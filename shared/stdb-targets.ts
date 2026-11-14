@@ -13,7 +13,8 @@
 //   5. `--clear-database` / `--delete-data` are refused for prod at the resolver, before any
 //      shell command is built. Prod publishes always carry `--yes=migrate` and nothing more; every prod command is
 //      checked against an allow-list of exact flags (S10s, assertNoForbiddenProdFlags), which refuses `--yes=remote`.
-//      Test publishes always carry `--yes=remote` so they run without a terminal.
+//      Test publishes always carry `--yes=remote` and `--yes=break-clients` so they run without a terminal (M5b, user
+//      ruling 2026-11-14: a test publish may disconnect clients).
 
 export type Target = 'test' | 'prod';
 
@@ -26,15 +27,23 @@ export const STDB_DATABASES: Readonly<Record<Target, string>> = {
 export const STDB_SERVER_NICKNAME = 'maincloud';
 export const STDB_HOST = 'wss://maincloud.spacetimedb.com';
 
-/** The one env-var vocabulary, used identically in every layer. */
+/** The target key names, standalone so browser code reads them without ENV_KEYS. */
+const TARGET_KEY = 'STDB_TARGET';
+const VITE_TARGET_KEY = 'VITE_STDB_TARGET';
+
+/**
+ * The one env-var vocabulary, used identically in every layer. M5b: browser code must not reference
+ * this object (it names the secret keys, and check:patterns gate 10 refuses them in web/dist);
+ * `parseTarget` and `resolveBrowserEnv` use the standalone constants above, so the bundler drops it.
+ */
 export const ENV_KEYS = {
     /** Node side (scripts, test harness, vitest configs). */
-    target: 'STDB_TARGET',
+    target: TARGET_KEY,
     serverToken: 'STDB_SERVER_TOKEN',
     /** M5a3: the auth function's Linker token (it may only present sign-in codes); written by bootstrap. */
     linkToken: 'STDB_LINK_TOKEN',
     /** Browser side (Vite only exposes VITE_*). The value set is identical: `test` | `prod`. */
-    viteTarget: 'VITE_STDB_TARGET',
+    viteTarget: VITE_TARGET_KEY,
 } as const;
 
 export class EnvConfigError extends Error {
@@ -44,7 +53,7 @@ export class EnvConfigError extends Error {
     }
 }
 
-export function parseTarget(raw: string | undefined, source: string = ENV_KEYS.target): Target {
+export function parseTarget(raw: string | undefined, source: string = TARGET_KEY): Target {
     if (raw === undefined || raw === '') {
         throw new EnvConfigError(
             `${source} is required (expected "test" or "prod"); refusing to guess a database.`,
@@ -135,7 +144,7 @@ export interface BrowserEnv {
 
 /** Vite side: `import.meta.env` is passed in; only VITE_STDB_TARGET is read. */
 export function resolveBrowserEnv(env: Readonly<Record<string, string | undefined>>): BrowserEnv {
-    const target = parseTarget(env[ENV_KEYS.viteTarget], ENV_KEYS.viteTarget);
+    const target = parseTarget(env[VITE_TARGET_KEY], VITE_TARGET_KEY);
     const dbName = STDB_DATABASES[target];
     assertNameMatchesTarget(target, dbName);
     return {
@@ -180,8 +189,9 @@ export interface PublishCommand {
  * `spacetime publish …` for CLI 2.15.0 (`--help` unchanged since 2.14.1): `-c, --delete-data[=always|on-conflict|never]`
  * is the wipe (`--clear-database` is only the placeholder name in `--help`), `--yes=<list>` skips named prompts
  * (repeated `--yes=<value>` flags are accepted).
- * Test publishes always carry `--yes=remote` (skips only the "publish to a non-local server?" prompt, so the
- * script and the live suite's globalSetup run without a terminal); migration and break-clients prompts stay.
+ * Test publishes always carry `--yes=remote` (skips the "publish to a non-local server?" prompt, so the script and
+ * the live suite's globalSetup run without a terminal) and, since M5b, `--yes=break-clients` (user ruling
+ * 2026-11-14: "we accept that it would disconnect clients"); the migration prompt stays.
  * Prod never gets `--yes=remote`: it keeps `--yes=migrate` only and its interactive non-local confirmation.
  */
 export function publishArgs(target: Target, opts: PublishOptions): PublishCommand {
@@ -197,7 +207,7 @@ export function publishArgs(target: Target, opts: PublishOptions): PublishComman
         opts.modulePath,
     ];
     const env = { [ENV_KEYS.target]: target };
-    if (target === 'test') args.push('--yes=remote');
+    if (target === 'test') args.push('--yes=remote', '--yes=break-clients');
 
     if (opts.clearDatabase) {
         assertWipeAllowed(target);

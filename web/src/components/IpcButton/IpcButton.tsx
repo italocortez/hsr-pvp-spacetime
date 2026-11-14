@@ -22,18 +22,26 @@ export function IpcButton({ to, children }: { to: FixedPath; children: ReactNode
 }
 
 /**
- * The same CTA as a button, for an in-place action (Retry on the connection splashes). No arrow:
- * the arrow means "go somewhere"; an action stays on the page.
+ * The same CTA as a button, for an in-place action (Retry on the connection splashes, the sign-in
+ * panel). No arrow: the arrow means "go somewhere"; an action stays on the page. `disabled` while
+ * the action runs (M5b).
  */
 export function IpcActionButton({
     onClick,
     children,
+    disabled = false,
 }: {
     onClick: () => void;
     children: ReactNode;
+    disabled?: boolean;
 }) {
     return (
-        <button type="button" className={`${styles.cta} ${styles.button}`} onClick={onClick}>
+        <button
+            type="button"
+            className={`${styles.cta} ${styles.button}`}
+            onClick={onClick}
+            disabled={disabled}
+        >
             <span>{children}</span>
         </button>
     );

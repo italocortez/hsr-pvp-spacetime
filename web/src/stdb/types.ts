@@ -4,6 +4,7 @@ import type {
     HsrCharacter,
     HsrCharacterArchetype,
     HsrLightcone,
+    MyLinkRequestRow,
     MyLobbyListRow,
     MyProfileRow,
 } from '@bindings/types';
@@ -44,8 +45,24 @@ export interface TableLike<Row> {
 /** A client-cache table handle without a primary key (insert and delete only). */
 export type KeylessTableLike<Row> = Omit<TableLike<Row>, 'onUpdate' | 'removeOnUpdate'>;
 
+/**
+ * The reducers the app calls (`conn.reducers`, generated). M5b: the sign-in flow. Each returns a
+ * promise that rejects with the module's refusal text.
+ */
+export interface ReducersLike {
+    /** The generated connection takes an empty object here (the SDK hook would take none). */
+    loginAsGuest(params: Record<string, never>): Promise<void>;
+    requestLinkCode(args: { clientNonce: string }): Promise<void>;
+    confirmLink(args: { confirmToken: string }): Promise<void>;
+}
+
 export interface StdbConnectionLike {
     subscriptionBuilder(): SubscriptionBuilderLike;
+    /**
+     * Optional so the test double of the earlier steps (`test/mockConnection.ts`) still fits; the
+     * generated connection always has it. `useReducerCall` treats a missing one as not connected.
+     */
+    reducers?: ReducersLike;
     /** Closes the connection for good (the provider's manager then waits for a Retry). */
     disconnect(): void;
     db: {
@@ -56,5 +73,7 @@ export interface StdbConnectionLike {
         archetype: TableLike<Archetype>;
         hsrCharacterArchetype: KeylessTableLike<HsrCharacterArchetype>;
         viewPublishedCostSets: TableLike<CostSet>;
+        /** M5b: keyless (no primary key): a replaced row arrives as an insert plus a delete. Optional as `reducers`. */
+        viewMyLinkRequest?: KeylessTableLike<MyLinkRequestRow>;
     };
 }

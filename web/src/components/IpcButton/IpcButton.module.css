@@ -96,4 +96,10 @@
     padding-inline: 28px;
     border: 0;
     background: none;
+
+    /* M5b: an action in progress (the sign-in panel). */
+    &:disabled {
+        cursor: progress;
+        opacity: 0.6;
+    }
 }

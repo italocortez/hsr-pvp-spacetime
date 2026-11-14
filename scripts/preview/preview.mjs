@@ -138,12 +138,13 @@ export function createBundleGuard(distDir) {
 /**
  * The whole command. Returns `{ code }` on a refusal or failure, or the running server.
  * @param {readonly string[]} argv
- * @param {{ root?: string, out?: (line: string) => void, err?: (line: string) => void, port?: number }} [io]
- *   `port` overrides the flag (tests listen on port 0; the command line cannot pass 0).
+ * @param {{ root?: string, out?: (line: string) => void, err?: (line: string) => void, port?: number, auth?: object }} [io]
+ *   `port` overrides the flag (tests listen on port 0; the command line cannot pass 0). `auth`
+ *   (M5b) is the local login mount (scripts/local-auth/localAuth.ts); the command line passes it.
  */
 export async function runPreview(
     argv,
-    { root = ROOT, out = console.log, err = console.error, port } = {},
+    { root = ROOT, out = console.log, err = console.error, port, auth } = {},
 ) {
     const args = parseArgs(argv);
     if ('error' in args) {
@@ -204,6 +205,7 @@ export async function runPreview(
             maintenance: args.maintenance,
             log: out,
             guard: createBundleGuard(distDir),
+            auth,
         });
         out('');
         out(`Local preview: ${started.url}`);
@@ -212,7 +214,12 @@ export async function runPreview(
         out(
             "This server imitates Vercel's rules; it is not Vercel. vercel.json was read at start.",
         );
-        out('/api/* answers 404: functions do not run in the local preview.');
+        if (auth) {
+            for (const line of auth.banner ?? []) out(line);
+            out('Every other /api/* path answers 404.');
+        } else {
+            out('/api/* answers 404: the login routes are not mounted.');
+        }
         if (args.maintenance) {
             out(
                 'MAINTENANCE REHEARSAL: /status.json answers { "maintenance": true } from memory (web/public and web/dist untouched).',
@@ -229,7 +236,12 @@ export async function runPreview(
 
 const isMain = process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url;
 if (isMain) {
-    const result = await runPreview(process.argv.slice(2));
+    // M5b: the login handlers are TypeScript; tsx (a pinned dev dependency) loads them, so their
+    // `.js` import specifiers resolve as on Vercel's build. Test target only (PREVIEW_TARGET).
+    const { tsImport } = await import('tsx/esm/api');
+    const { createLocalAuth } = await tsImport('../local-auth/localAuth.ts', import.meta.url);
+    const auth = createLocalAuth({ root: ROOT, target: PREVIEW_TARGET, shellEnv: process.env });
+    const result = await runPreview(process.argv.slice(2), { auth });
     if (result.code !== 0) process.exit(result.code);
     const stop = () => {
         result.server.close(() => process.exit(0));

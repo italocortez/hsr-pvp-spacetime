@@ -8,7 +8,8 @@
  *   --server maincloud --no-config, and STDB_TARGET=<target> in the child environment (the module's
  *   declared env value, read by requireTestDatabase).
  * - test always adds `--yes=remote` (skips the "publish to a non-local server?" prompt, so it runs without
- *   a terminal, e.g. from test/global-setup.ts); migration prompts still ask.
+ *   a terminal, e.g. from test/global-setup.ts) and `--yes=break-clients` (M5b, user ruling 2026-11-14: a
+ *   test publish may disconnect clients); migration prompts still ask.
  * - --clear wipes all data (the wipe flags come from publishArgs) and is refused for prod.
  * - prod = `--yes=migrate` only (no `--yes=remote`: the non-local prompt still asks); forbidden flags are
  *   re-checked before spawning; refuses a dirty tree.

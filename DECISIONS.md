@@ -1770,3 +1770,18 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   6. Orchestrator's choice: bootstrap keeps the existing linker across runs and mints a new one only when none exists or with `--rotate-linker`, so a re-run cannot break a deployed function.
 - **Why:** user, 2026-11-13: "For #1 I agree, for #2 the account will be deleted anyway so it doesnt really matter if they sign back ... For #4, yeah leave it for now"; "yeah lets just use the new way, the old sign in does not need to stay".
 - **Where implemented:** `spacetimedb/src/helpers/identity/serverIdentities.ts`, `spacetimedb/src/reducers/identity/{auth,server}.ts`, `scripts/stdb/{bootstrap,_delegate,_env}.ts`, `shared/stdb-targets.ts`, the test fixtures, `docs/auth/architecture.md`, `docs/log/2026-11-13-m5a.md`
+
+### A178 — M5b: login functions, local sign-in, test publishes accept the client-disconnect prompt
+
+- **Date:** 2026-11-14 · **Status:** items 1 and 2 decided; items 3 to 8 implemented as the orchestrator's choices, for the user to rule on
+- **Decision:**
+  1. Test publishes pass `--yes=break-clients` as well as `--yes=remote`. Prod publishes are unchanged.
+  2. M5b is built now; the user supplies the Discord values and the redirect addresses when asked, in `.env.test.local`.
+  3. Orchestrator: the sign-in wording (panel "Sign in.", confirm "Link account." with the Discord handle and the buttons "Link this account" / "Cancel", "Sign-in refused.", "Sign-in failed.", "The sign-in took too long. Please try again.", "The sign-in changed in another tab. Please try again.", "The connection dropped. The result is unknown: reload and check before trying again.").
+  4. Orchestrator: the deployed function reads a fixed `AUTH_ORIGIN` for its Origin check and return address instead of trusting the request, and accepts the prod target only (`STDB_TARGET=prod`); the local runner serves the test target only.
+  5. Orchestrator: the readable cookies use `SameSite=Strict` (verified in Edge only; one constant switches to Lax if Firefox needs it).
+  6. Orchestrator: a module refusal is shown to the visitor only when it is a short single-line plain text; anything else is a generic failure.
+  7. Orchestrator: a lobby address takes a canonical id only (no leading zeros, not 0).
+  8. Orchestrator, to be confirmed: a narrow same-user window on the confirm click is accepted for now (two sign-ins in two tabs with two Discord accounts while the first tab's connection no longer receives); closing it needs `confirm_link` to take the expiry the page saw.
+- **Why:** user, 2026-11-14: "we accept that it would disconnect clients, we can adapt the script for that. Work on the next step and ask them when you need me to write down the client secret and auth secret and in which .env file i should write it".
+- **Where implemented:** `api/`, `shared/auth-flow.ts`, `scripts/local-auth/`, `web/vite-plugin-local-auth.ts`, `scripts/preview/`, `web/src/auth/`, `web/src/pages/sign-in/`, `web/src/stdb/{useRows,useReducerCall}.ts`, `shared/stdb-targets.ts`, `scripts/ci/{check-patterns,import-specifiers}.mjs`, `.env.example`, `docs/auth/architecture.md`, `docs/frontend/{hosting,pages}.md`, `docs/log/2026-11-14-m5b.md`

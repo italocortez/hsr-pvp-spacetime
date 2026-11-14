@@ -1,5 +1,5 @@
 // Types for serve.mjs (read by the unit tests' typecheck).
-import type { Server } from 'node:http';
+import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 
 export declare const HOST: string;
 export declare const DEFAULT_PORT: number;
@@ -20,6 +20,14 @@ export interface PreviewServerOptions {
     guard?: () => string | null;
     /** Injectable file read (tests). */
     readFile?: (path: string) => Buffer;
+    /** M5b: the local login routes (scripts/local-auth/localAuth.ts); true when it answered. */
+    auth?: {
+        handle(
+            req: IncomingMessage,
+            res: ServerResponse,
+            extraHeaders?: Record<string, string>,
+        ): boolean;
+    };
 }
 
 export declare function createPreviewServer(options: PreviewServerOptions): Server;

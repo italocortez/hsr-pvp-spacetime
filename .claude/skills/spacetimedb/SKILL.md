@@ -643,7 +643,7 @@ spacetime call <name> <reducer_name> [args...] --server maincloud --no-config  #
 
 ### Publishing: `--yes=migrate` only for reviewed schema deltas
 
-`npm run stdb:publish:test` stays interactive — the destructive-migration confirm dialog is a safety feature, not friction. `npm run stdb:publish:prod` always passes `--yes=migrate` (v2.2.0+, PR #4885) and nothing else, so it runs only after the §C.5 schema-delta gate (`stdb:describe:prod` vs `stdb:describe:test`).
+`npm run stdb:publish:test` keeps the destructive-migration confirm dialog (a safety feature, not friction); it pre-answers only `--yes=remote` and, since M5b (user ruling 2026-11-14), `--yes=break-clients`: a test publish may disconnect connected clients. `npm run stdb:publish:prod` always passes `--yes=migrate` (v2.2.0+, PR #4885) and nothing else, so it runs only after the §C.5 schema-delta gate (`stdb:describe:prod` vs `stdb:describe:test`).
 
 The `--yes=migrate` value must attach with `=` (per `spacetime publish --help`). Other `--yes` values (`break-clients`, `delete-data`, `remote`, `skip-login`) are never passed for prod; `assertNoForbiddenProdFlags` refuses them.
 
