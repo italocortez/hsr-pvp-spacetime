@@ -1785,3 +1785,13 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   8. Orchestrator, to be confirmed: a narrow same-user window on the confirm click is accepted for now (two sign-ins in two tabs with two Discord accounts while the first tab's connection no longer receives); closing it needs `confirm_link` to take the expiry the page saw.
 - **Why:** user, 2026-11-14: "we accept that it would disconnect clients, we can adapt the script for that. Work on the next step and ask them when you need me to write down the client secret and auth secret and in which .env file i should write it".
 - **Where implemented:** `api/`, `shared/auth-flow.ts`, `scripts/local-auth/`, `web/vite-plugin-local-auth.ts`, `scripts/preview/`, `web/src/auth/`, `web/src/pages/sign-in/`, `web/src/stdb/{useRows,useReducerCall}.ts`, `shared/stdb-targets.ts`, `scripts/ci/{check-patterns,import-specifiers}.mjs`, `.env.example`, `docs/auth/architecture.md`, `docs/frontend/{hosting,pages}.md`, `docs/log/2026-11-14-m5b.md`
+
+### A179 — Sign-in wording and the open points after the real Discord test
+
+- **Date:** 2026-11-14 · **Status:** decided
+- **Decision:**
+  1. The sign-in panel's lede reads: "Sign in with Discord to get access to all our lobby, tournament and calendar features!" The other sign-in lines of A178 item 3 are kept.
+  2. The orchestrator's recommendations on the remaining open points are accepted: the narrow same-user two-tab window on the confirm click stays as documented (A178 item 8); the user's account on test1 becomes an Admin when the admin page work starts, not before; a holder of the link token being able to sign in as staff is accepted for test1, with new-device approval for staff to be built before the first prod publish (A177 item 5); the M7 choices stand (A172 items 2 to 5: search indexing, maintenance order and CI rule, the `?maintenance=skip` way in, the re-check rhythm); the A178 items 4 to 7 stand.
+  3. The real Discord test passed in Edge and Firefox on localhost against the test database (2026-11-14).
+- **Why:** user, 2026-11-14: "the signin says ... I should just read \"Sign in with Discord to get access to all our lobby, tournament and calendar features!\""; "i accept your recomendations on the other open points you have".
+- **Where implemented:** `web/src/pages/sign-in/SignInPage.tsx`, `docs/frontend/pages.md`, `docs/log/2026-11-14-m5b.md`

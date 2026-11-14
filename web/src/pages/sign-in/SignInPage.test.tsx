@@ -80,7 +80,9 @@ describe('the panel', () => {
         expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
         expect(screen.getByText('Access // Sign in')).toBeInTheDocument();
         expect(
-            screen.getByText('Sign in with Discord to join lobbies and tournaments.'),
+            screen.getByText(
+                'Sign in with Discord to get access to all our lobby, tournament and calendar features!',
+            ),
         ).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Sign in with Discord' })).toBeEnabled();
         await waitFor(() => expect(document.title).toBe('Sign in — IPC Battlegrounds'));

@@ -12,7 +12,7 @@ const IMAGE = { src: '/standby.webp', width: 1920, height: 1080 };
 export const SIGN_IN_TEXT = {
     eyebrow: 'Access // Sign in',
     chip: 'SYS://AUTH',
-    lede: 'Sign in with Discord to join lobbies and tournaments.',
+    lede: 'Sign in with Discord to get access to all our lobby, tournament and calendar features!',
     button: 'Sign in with Discord',
     notConfigured: 'Sign-in is not configured on this machine.',
     confirmButton: 'Link this account',
