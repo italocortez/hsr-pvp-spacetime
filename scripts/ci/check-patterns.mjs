@@ -1,10 +1,11 @@
 // `npm run check:patterns` (M9): grep gates for rules a typecheck cannot see. Run after
 // `npm run build -w web`; plain Node, no dependencies. Prints one line per hit and exits 1 on any.
 import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sourceToRegExp } from '../preview/vercel-rules.mjs';
+import { importSpecifiers } from './import-specifiers.mjs';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const DIST = join(ROOT, 'web', 'dist');
@@ -71,6 +72,9 @@ if (!existsSync(DIST)) {
             '__devConnection',
             '__wireStats',
             'TanStackRouterDevtools',
+            // M5b fix pass: the dev-only loopback rule of isFollowable (web/src/auth/signIn.ts),
+            // the regex source as the minifier keeps it.
+            String.raw`(?:localhost|127\.0\.0\.1)`,
         ]);
         // 4. Fonts are self-hosted (no Google Fonts requests).
         scan('google-fonts', file, ['fonts.googleapis.com', 'fonts.gstatic.com']);
@@ -346,9 +350,172 @@ const DEV_REFUSAL = 'Dev mode cannot run against the prod database. Set VITE_STD
     }
 }
 
+// 10. Secrets stay on the server (M5b). The needles are assembled so this file does not match
+//     itself. (a) The built site holds none of the secret key names, nor the local Discord stub's
+//     variable. (b) No VITE_-prefixed name containing SECRET or TOKEN anywhere under web/ (built
+//     site included) or in a tracked `.env*` file that is not `.local` (Vite would ship its
+//     value); `.env*.local` files are never opened. (c) No file under web/src imports from api/
+//     or scripts/, and none names the stub variable. (d) No file under api/ imports from web/ or
+//     scripts/ (a type-only import from @bindings is allowed) or names the stub variable: the stub
+//     lives in scripts/local-auth/ only. (e) Nothing web/vite.config.ts imports, or any file
+//     those import in turn, reaches scripts/ (not uploaded to Vercel, .vercelignore; the dev
+//     plugin loads the local runner at dev-server start instead). Imports are read by
+//     ./import-specifiers.mjs after comments and string contents are masked: static imports,
+//     `import()` / `require()` with a string or template literal, and `import.meta.glob`. A
+//     specifier points into a folder when it is relative (`./`, `../`), root-resolved (`/…`) or
+//     one of the aliases `@/`, `@shared/`, `@bindings/` (resolved first): `some-package/api` is
+//     not api/, and `@/lib/api/client` is web/src/lib/api/, not api/.
+{
+    const SECRET_KEYS = [
+        ['DISCORD', 'CLIENT', 'SECRET'],
+        ['AUTH', 'SECRET'],
+        ['STDB', 'LINK', 'TOKEN'],
+        ['STDB', 'SERVER', 'TOKEN'],
+    ].map((parts) => parts.join('_'));
+    const STUB_KEY = ['HSR', 'LOCAL', 'DISCORD', 'STUB'].join('_');
+    const VITE_SECRET = new RegExp(
+        `\\b${'VITE'}_[A-Z0-9_]*(?:${'SECRET'}|${'TOKEN'})[A-Z0-9_]*`,
+        'g',
+    );
+    const CODE = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
+    /** Static, dynamic (literal argument), require and import.meta.glob specifiers, comments dropped. */
+    const specifiers = (text) => importSpecifiers(text);
+    /** The app's path aliases (web/vite.config.ts, tsconfig.base.json), resolved before the folder test. */
+    const ALIASES = [
+        ['@/', 'web/src/'],
+        ['@shared/', 'shared/'],
+        ['@bindings/', 'web/src/module_bindings/'],
+    ];
+    /** The repo path a specifier names (relative, root-resolved or an alias); undefined for a package. */
+    const pointsAt = (fromFile, spec) => {
+        if (spec === '@shared') return 'shared';
+        if (spec === '@bindings') return 'web/src/module_bindings';
+        for (const [alias, dir] of ALIASES) {
+            if (spec.startsWith(alias)) return rel(resolve(ROOT, dir + spec.slice(alias.length)));
+        }
+        if (spec.startsWith('.')) return rel(resolve(dirname(fromFile), spec));
+        if (spec.startsWith('/')) return rel(resolve(ROOT, spec.replace(/^\/+/, '')));
+        return undefined;
+    };
+    const under = (path, dir) => path !== undefined && (path === dir || path.startsWith(`${dir}/`));
+    /** The file a resolved specifier loads (TypeScript's `.js` to `.ts` mapping included). */
+    const fileFor = (abs) => {
+        const bases = [abs, abs.replace(/\.(m|c)?js$/, '.$1ts'), abs.replace(/\.js$/, '.tsx')];
+        const candidates = [
+            ...bases,
+            ...['.ts', '.tsx', '.mts', '.js', '.mjs'].map((ext) => abs + ext),
+            ...['index.ts', 'index.tsx', 'index.js'].map((name) => join(abs, name)),
+        ];
+        return candidates.find((c) => existsSync(c) && !statSync(c).isDirectory());
+    };
+    const viteSecrets = (file) => {
+        for (const [name] of readFileSync(file, 'utf8').matchAll(VITE_SECRET)) {
+            hits.push(`[secrets] ${rel(file)}: a VITE_ name that looks like a secret ("${name}")`);
+        }
+    };
+    const isEnvFile = (name) => name.startsWith('.env');
+
+    // (a) and (b) on the built site.
+    if (existsSync(DIST)) {
+        for (const file of walk(DIST)) {
+            scan('secrets', file, [...SECRET_KEYS, STUB_KEY]);
+            viteSecrets(file);
+        }
+    } else {
+        console.log('[secrets] web/dist is missing: the built-site part of gate 10 did not run');
+    }
+    // (b) and (c) on the sources under web/. Env files are left to the tracked-file pass below.
+    for (const file of walk(join(ROOT, 'web'))) {
+        const path = rel(file);
+        if (
+            path.startsWith('web/node_modules/') ||
+            path.startsWith('web/dist/') ||
+            path.startsWith('web/src/module_bindings/') ||
+            isEnvFile(basename(path))
+        ) {
+            continue;
+        }
+        viteSecrets(file);
+        if (path.startsWith('web/src/') && CODE.test(path)) {
+            const text = readFileSync(file, 'utf8');
+            if (text.includes(STUB_KEY))
+                hits.push(`[secrets] ${path}: names the local Discord stub`);
+            for (const { spec } of specifiers(text)) {
+                const to = pointsAt(file, spec);
+                if (under(to, 'api')) hits.push(`[secrets] ${path}: imports from api/ ("${spec}")`);
+                if (under(to, 'scripts')) {
+                    hits.push(`[secrets] ${path}: imports from scripts/ ("${spec}")`);
+                }
+            }
+        }
+    }
+    // (b) on the tracked env files that are not `.local` (only names that git tracks are opened).
+    const tracked = spawnSync('git', ['ls-files', '-z', '--cached'], {
+        cwd: ROOT,
+        encoding: 'utf8',
+    });
+    if (tracked.error || tracked.status !== 0) {
+        hits.push('[secrets] could not list the tracked files with git');
+    } else {
+        for (const path of tracked.stdout.split('\0')) {
+            const name = basename(path);
+            if (!isEnvFile(name) || name.includes('.local')) continue;
+            const abs = join(ROOT, path);
+            if (existsSync(abs)) viteSecrets(abs);
+        }
+    }
+    // (d) on api/.
+    const API = join(ROOT, 'api');
+    if (existsSync(API)) {
+        for (const file of walk(API)) {
+            const path = rel(file);
+            if (!CODE.test(path)) continue;
+            const text = readFileSync(file, 'utf8');
+            if (text.includes(STUB_KEY))
+                hits.push(`[secrets] ${path}: names the local Discord stub`);
+            for (const { spec, typeOnly } of specifiers(text)) {
+                const to = pointsAt(file, spec);
+                if (spec === '@bindings' || spec.startsWith('@bindings/')) {
+                    // Generated types only: a type-only import is allowed, a value import is not.
+                    if (!typeOnly) {
+                        hits.push(`[secrets] ${path}: a value import from @bindings ("${spec}")`);
+                    }
+                } else if (under(to, 'web')) {
+                    hits.push(`[secrets] ${path}: imports from web/ ("${spec}")`);
+                } else if (under(to, 'scripts')) {
+                    hits.push(`[secrets] ${path}: imports from scripts/ ("${spec}")`);
+                }
+            }
+        }
+    }
+    // (e) the import chain of web/vite.config.ts: static imports, and dynamic imports, require
+    //     and import.meta.glob with a literal argument (a bundler follows those too). The dev
+    //     plugin's loader passes its path as a plain argument to tsx's tsImport(), which is no
+    //     import expression, so it is not followed and stays allowed.
+    const queue = [join(ROOT, 'web', 'vite.config.ts')];
+    const seen = new Set();
+    while (queue.length > 0) {
+        const file = queue.pop();
+        if (seen.has(file) || !existsSync(file)) continue;
+        seen.add(file);
+        for (const { spec, kind } of specifiers(readFileSync(file, 'utf8'))) {
+            const to = pointsAt(file, spec);
+            if (to === undefined) continue;
+            if (under(to, 'scripts')) {
+                hits.push(
+                    `[secrets] ${rel(file)}: an import (${kind}) into scripts/ on the build path of web/vite.config.ts ("${spec}")`,
+                );
+                continue;
+            }
+            const next = fileFor(join(ROOT, to));
+            if (next && !rel(next).includes('node_modules/')) queue.push(next);
+        }
+    }
+}
+
 if (hits.length > 0) {
     console.error(`check:patterns: ${hits.length} hit(s)`);
     for (const hit of hits) console.error(`  ${hit}`);
     process.exit(1);
 }
-console.log('check:patterns: all nine gates pass');
+console.log('check:patterns: all ten gates pass');

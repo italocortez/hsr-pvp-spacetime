@@ -14,6 +14,7 @@ Migration in progress: `ROADMAP.md` lists which steps have landed; a path or scr
 | `api/auth/discord/` | the one Vercel function pair (M5) |
 | `scripts/stdb/` | publish, bootstrap, seed, generate, describe, manage-user (M2); backup, restore (S13); all take `--target test\|prod` |
 | `scripts/preview/` | local preview of the built app on 127.0.0.1, test database only, imitating the `vercel.json` rules: `npm run preview` (`--port`, `--no-build`, `--maintenance`) (M8) |
+| `api/_lib/`, `scripts/local-auth/` | the login handlers behind the two routes, and the local runner that mounts them under `npm run dev` and `npm run preview` (test only, loads `.env.test.local`); `web/src` never imports `api/` or `scripts/`, `api/` never imports `web/` or `scripts/` (gate 10) (M5) |
 | `data/seed/` | public reference data: characters, light cones, synergies, achievements (A18) |
 | `test/` | live residue + harness, `frontend/screenshots/<page>/`; frontend tests live next to the code as `web/src/**/*.test.ts(x)` (M9) |
 | `.github/workflows/ci.yml`, `scripts/ci/` | signal-only CI (typecheck, `lint:ci`, `npm test`, web build, `check:patterns`); no secrets, no database, no deploy (M9) |
@@ -77,7 +78,7 @@ Skip it for backend-only edits, pure refactors with no visual delta, and utility
 | Server token | `STDB_SERVER_TOKEN` | same key name, **different file per target**; Admin-level; used by bootstrap, seed and the scripts only, never by the auth function |
 | Link token (A177) | `STDB_LINK_TOKEN` (+ `STDB_LINK_IDENTITY`) | the auth function's only database secret: it can present a sign-in code and nothing else, but that is enough to sign in as any Discord-linked account, so treat it as a top secret; written by bootstrap, kept across runs, `-- --rotate-linker` mints a new one |
 | Secret files | `.env.test.local`, `.env.prod.local` | gitignored by `.env*.local`; nothing reads `.env.local` |
-| Auth function secrets | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `AUTH_SECRET`, `STDB_LINK_TOKEN` | Vercel env for prod; `.env.test.local` for local login tests; never in the repo |
+| Auth function settings | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `AUTH_SECRET`, `STDB_LINK_TOKEN`; on Vercel also `AUTH_ORIGIN` (the site's own `https://` origin) and `STDB_TARGET=prod` | Vercel project settings for prod; `.env.test.local` for local login tests (no quotes around values); never in the repo; a secret never gets a `VITE_` name |
 | Module env (D-C1) | `STDB_TARGET` declared in `schema({...}, { env: { STDB_TARGET: t.enum('StdbTarget', ['test','prod']) } })` | the publish script spawns `spacetime publish …` with `STDB_TARGET=<target>` in the **process environment** (`publishArgs(...).env`). Note: the CLI's `--env <name>` flag selects a `spacetime.<name>.json` config file, it does not set a value (2.15.0 `publish --help`) |
 | npm scripts | `stdb:publish:test`, `stdb:publish:test:clear`, `stdb:publish:prod`, `stdb:bootstrap:<t>`, `stdb:seed:<t>`, `stdb:describe:<t>`, `stdb:generate`, `test:integration` (test only), `test:web`, `lint:ci` (`web/`, `shared/`, `scripts/ci/`, `scripts/preview/`; no SVG files), `check:patterns`, `preview` (test only) | all call `scripts/stdb/*.ts --target …` |
 

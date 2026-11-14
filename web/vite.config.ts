@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
+import { localAuthPlugin } from './vite-plugin-local-auth';
 
 const r = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 
@@ -44,6 +45,9 @@ export default defineConfig(({ command, mode, isPreview }) => {
                 routeFileIgnorePattern: '\\.test\\.tsx?$',
             }),
             react(),
+            // M5b: the login routes on `npm run dev` only (test database only; not in the bundle).
+            // A build never adds it, and the plugin loads scripts/ lazily (not uploaded to Vercel).
+            ...(command === 'serve' && !isPreview ? [localAuthPlugin(r('..'))] : []),
         ],
         resolve: {
             alias: {

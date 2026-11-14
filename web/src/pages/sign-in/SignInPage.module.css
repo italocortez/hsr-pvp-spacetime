@@ -1,0 +1,54 @@
+/* The sign-in panel's own pieces (M5b); everything else is SplashLayout's. */
+
+/* The confirm state's two actions: the CTA and a quiet Cancel beside it; they wrap on narrow screens. */
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 20px;
+}
+
+.secondary {
+    min-block-size: 44px;
+    padding: 0 8px;
+    border: 0;
+    background: none;
+    color: var(--text-body);
+    font-family: var(--font-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    text-decoration: underline;
+    text-decoration-color: rgba(201, 169, 97, 0.55);
+    text-underline-offset: 6px;
+    cursor: pointer;
+    transition: color var(--duration-fast) var(--ease-out);
+
+    &:hover {
+        color: var(--text-heading);
+    }
+
+    &:disabled {
+        cursor: progress;
+        opacity: 0.6;
+    }
+}
+
+/* A short status line under the headline ("not configured"). */
+.notice {
+    max-inline-size: 440px;
+    padding: 8px 14px;
+    border-inline-start: 2px solid var(--color-warning);
+    background: rgba(8, 9, 14, 0.55);
+    color: var(--text-heading);
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+/* The Discord handle in the confirm lede: plain text, never HTML. */
+.handle {
+    color: var(--text-heading);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}

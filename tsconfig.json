@@ -4,5 +4,5 @@
         "noEmit": true,
         "types": ["node"]
     },
-    "include": ["scripts/**/*.ts", "shared/**/*.ts"]
+    "include": ["scripts/**/*.ts", "shared/**/*.ts", "api/**/*.ts"]
 }

@@ -23,5 +23,9 @@ export declare function runPreview(
         out?: (line: string) => void;
         err?: (line: string) => void;
         port?: number;
+        /** M5b: the local login routes, mounted on the server. */
+        auth?: NonNullable<import('./serve.mjs').PreviewServerOptions['auth']> & {
+            banner?: readonly string[];
+        };
     },
 ): Promise<{ code: number; server?: Server; port?: number; url?: string }>;

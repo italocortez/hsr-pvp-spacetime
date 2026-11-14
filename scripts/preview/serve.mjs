@@ -36,7 +36,7 @@ export const CONTENT_TYPES = {
 };
 
 export const API_NOTE =
-    'Functions do not run in the local preview: /api/* is always 404 here (M5 decides how the login function runs locally).\n';
+    'Only the login routes /api/auth/discord/start and /callback run in the local preview (when mounted); every other /api/* path is 404 here.\n';
 
 /** The maintenance rehearsal's status file, served from memory. */
 export const MAINTENANCE_BODY = '{ "maintenance": true }\n';
@@ -92,9 +92,12 @@ export function safeFile(distDir, sitePath) {
  *   log?: (line: string) => void,
  *   guard?: () => string | null,
  *   readFile?: (path: string) => Buffer,
+ *   auth?: { handle(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, extraHeaders?: Record<string, string>): boolean },
  * }} options
  *   `guard` returns a refusal text when the bundle no longer targets test (answered 503 for the
- *   app page); `readFile` is injectable for tests.
+ *   app page); `readFile` is injectable for tests. `auth` (M5b, scripts/local-auth/localAuth.ts)
+ *   answers the two login routes, any method, before the rules; vercel.json's header rules are
+ *   added to its answers as Vercel adds them to a function's.
  */
 export function createPreviewServer({
     distDir,
@@ -103,6 +106,7 @@ export function createPreviewServer({
     log = console.log,
     guard = () => null,
     readFile = readFileSync,
+    auth,
 }) {
     const rules = compileRules(config);
     const text = 'text/plain; charset=utf-8';
@@ -166,6 +170,17 @@ export function createPreviewServer({
     }
 
     return createServer((req, res) => {
+        if (auth) {
+            const path = (req.url ?? '').split('?')[0];
+            const extra = path.startsWith('/api/')
+                ? rules.headersFor(path, { staticFile: false })
+                : {};
+            if (auth.handle(req, res, extra)) {
+                // The path only: the callback's query carries Discord's code and the state.
+                res.on('finish', () => log(`${req.method} ${path} ${res.statusCode}`));
+                return;
+            }
+        }
         const send = (status, headers, body) => {
             const buffer = typeof body === 'string' ? Buffer.from(body, 'utf8') : body;
             res.writeHead(status, { ...headers, 'Content-Length': String(buffer.length) });

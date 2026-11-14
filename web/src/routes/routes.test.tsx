@@ -34,7 +34,8 @@ describe('guards: visitors are sent to sign in', () => {
     it('visitor on /lobby/123 ends on /?login=1&next=%2Flobby%2F123', async () => {
         const r = renderWithRouter('/lobby/123', AUTH.visitor);
         await expectResolved(r, '/?login=1&next=%2Flobby%2F123');
-        await expectHeadline('Module offline.');
+        // M5b: /?login=1 renders the sign-in panel (was the standby page).
+        await expectHeadline('Sign in.');
         expect(screen.queryByText('Lobby Room')).toBeNull();
     });
 
@@ -48,7 +49,8 @@ describe('guards: visitors are sent to sign in', () => {
         const r = renderWithRouter('/admin', AUTH.visitor);
         await expectResolved(r, '/?login=1&next=%2Fadmin');
         expect(screen.queryByText('Admin Console')).toBeNull();
-        expect(screen.queryByText(/Access/)).toBeNull();
+        // M5b: the sign-in eyebrow reads "Access // Sign in"; the no-access page must not show.
+        expect(screen.queryByText(/Access denied/)).toBeNull();
     });
 });
 
@@ -110,7 +112,7 @@ describe('guards: live auth changes', () => {
         await expectResolved(r, '/profile');
         act(() => setAuthSnapshot(AUTH.visitor));
         await expectResolved(r, '/?login=1&next=%2Fprofile');
-        await expectHeadline('Module offline.');
+        await expectHeadline('Sign in.'); // M5b: the sign-in panel (was the standby page)
     });
 
     it('not ready to ready as a member renders the route', async () => {
@@ -158,14 +160,15 @@ describe('search params', () => {
         expect(screen.queryByText('Requested module')).toBeNull();
     });
 
+    // M5b: a page with login=1 is the sign-in panel (was the standby page).
     it.each([
-        ['/?next=//evil.example', '/'],
-        ['/?next=https://evil.example', '/'],
-        ['/?login=1&next=/%5Cevil.example', '/?login=1'],
-    ])('%s drops the unsafe next and ends on %s', async (start, end) => {
+        ['/?next=//evil.example', '/', 'Module offline.'],
+        ['/?next=https://evil.example', '/', 'Module offline.'],
+        ['/?login=1&next=/%5Cevil.example', '/?login=1', 'Sign in.'],
+    ])('%s drops the unsafe next and ends on %s', async (start, end, headline) => {
         const r = renderWithRouter(start);
         await expectResolved(r, end);
-        await expectHeadline('Module offline.');
+        await expectHeadline(headline);
     });
 
     it('keeps an unknown search key in the URL', async () => {
