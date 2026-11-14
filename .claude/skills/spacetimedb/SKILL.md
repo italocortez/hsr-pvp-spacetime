@@ -467,7 +467,8 @@ The SpacetimeDB v2.2.0 engine itself rejects external WebSocket calls to schedul
 
 | Project gate | Concept | Replace with `AuthCtx`? |
 |---|---|---|
-| `requireServer(ctx)` (local to `reducers/identity/server.ts`) | "Caller has a `ServerIdentity` row (Owner from `init`, or a Delegate)" | NO — `scripts/stdb/bootstrap.ts` and the auth function (planned, M5) are external WebSocket clients; `AuthCtx.isInternal` would always be `false` for it (and is broken in v2.2.0 anyway). The SERVER_TOKEN/`ServerIdentity` row check is orthogonal. |
+| `requireServer(ctx)` (local to `reducers/identity/server.ts`) | "Caller has an Owner (from `init`) or Delegate `ServerIdentity` row" (`trustedServerRow`; since M5a3 a Linker row is refused) | NO — `scripts/stdb/bootstrap.ts` is an external WebSocket client; `AuthCtx.isInternal` would always be `false` for it (and is broken in v2.2.0 anyway). The SERVER_TOKEN/`ServerIdentity` row check is orthogonal. |
+| `requireLinker(ctx)` (`helpers/identity/serverIdentities.ts`, M5a3) | "Caller has a Linker `ServerIdentity` row" (the auth function, `STDB_LINK_TOKEN`); guards `linker_present_code` only | NO — the auth function is an external client too. |
 | `getAuthenticatedUser(ctx)` | "Resolve `ctx.sender → UserIdentity → User → role.tag`" | NO — project auth model is not JWT-claims-based; `AuthCtx.jwt` is for native OIDC, which the project does not use: auth is the Vercel function, SpacetimeAuth is deferred (A46). |
 | `ensureModerator/Admin(ctx)` (`helpers/identity/ensurePermissions.ts`) | Role-tag-based admin gates | NO — same reason as above. |
 
@@ -619,7 +620,7 @@ Two targets, one vocabulary (ACCESS-SECURITY-OPS §C.2), implemented by `shared/
 npm run stdb:publish:test            # publish to test1 (runs npm run typecheck first)
 npm run stdb:publish:test:clear      # wipe test1: --delete-data=always --yes=delete-data (test only)
 npm run stdb:publish:prod            # --yes=migrate only; refuses a dirty tree and any wipe flag
-npm run stdb:bootstrap:test          # delegate token -> .env.test.local, seed data/seed/, GC jobs
+npm run stdb:bootstrap:test          # delegate token -> .env.test.local, linker kept (-- --rotate-linker mints a new one), seed data/seed/, GC jobs
 npm run stdb:describe:test           # describe <db> --server maincloud --no-config --json
 npm run stdb:generate                # local bindings regeneration
 npm run stdb:manage-user -- --target prod set-role <username> Admin
@@ -735,7 +736,7 @@ Everything else is planned: Vite shell, tokens and base CSS (M3), TanStack Route
 | Table columns | `camelCase` | `hostUserId`, `avatarCharacterName`, `createdById` |
 | Struct/object fields | `camelCase` | `teamSize`, `characterName`, `isPaused` |
 | Enum variants | `PascalCase` | `MemoryOfChaos`, `BlueWins`, `TournamentHost` |
-| Reducer export names | `snake_case` | `login_as_guest`, `server_link_provider` |
+| Reducer export names | `snake_case` | `login_as_guest`, `linker_present_code` |
 | Index accessors (code-facing) | `snake_case` | `host_user_id`, `discord_id`, `user_id` |
 | Table names (in `table()`) | `snake_case` | `'user'`, `'hsr_character'`, `'lobby_member'` |
 | Helper functions | `camelCase` | `getAuthenticatedUser`, `ensureAdmin`, `auditInsert` |

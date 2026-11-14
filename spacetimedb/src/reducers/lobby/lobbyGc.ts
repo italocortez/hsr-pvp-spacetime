@@ -10,6 +10,7 @@ import { SenderError } from 'spacetimedb/server';
 import { ensureScheduler } from '@module/helpers/admin/schedulerGuard';
 import { rearmScheduledJob } from '@module/helpers/admin/scheduledJobRearm';
 import { deleteCursorStamps } from '@module/helpers/lobby/cursorStamps';
+import { trustedServerRow } from '@module/helpers/identity/serverIdentities';
 // S11a (L11): `run_lobby_gc` is refused unless the scheduler calls it (ensureScheduler). `seed_lobby_gc_job` and
 // `admin_gc_lobbies` keep their project-level gates (`ServerIdentity` check and `ensureModerator` respectively).
 
@@ -222,7 +223,8 @@ function armLobbyGcJobIfMissing(ctx: any): boolean {
 // Retroactive fix: Phase 09 required manual seeding — this automates it.
 
 export const seed_lobby_gc_job = spacetimedb.reducer((ctx) => {
-    const server = ctx.db.ServerIdentity.identity.find(ctx.sender);
+    // M5a3: a Linker is not a trusted server identity (trustedServerRow).
+    const server = trustedServerRow(ctx, ctx.sender);
     if (!server) {
         throw new SenderError('Forbidden: caller is not the registered server identity.');
     }

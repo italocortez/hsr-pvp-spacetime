@@ -18,7 +18,7 @@ export const run_user_deletion = spacetimedb.reducer(
         // job is a server deletion: the user's unfinished tournaments are cancelled. A staff Admin's job hands them over
         // (A121). The flag is set at three sites: here, in server_delete_user, and in admin_delete_row('UserIdentity')
         // when it is sent as the SYSTEM user and removes a guest's last identity (admin.ts); identity GC and
-        // server_link_provider never set it.
+        // confirm_link never set it.
         const systemUserId = ctx.db.User.username.find('SYSTEM')?.id;
         const serverDeletion = systemUserId !== undefined && arg.createdById === systemUserId;
         performUserDeletion(ctx, arg.userId, arg.createdById, { serverDeletion });

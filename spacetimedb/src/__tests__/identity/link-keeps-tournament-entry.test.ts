@@ -5,16 +5,17 @@
 // From S10l, S10q (s10l-link-keeps-entry.test.ts, s10q-gap-coverage.test.ts); merged by T-REORG2.
 //
 // T-S10l: in-memory tests for step S10l (DECISIONS.md A112): a guest who signs in with a provider account that already
-// has a user keeps the guest's tournament entries (server_link_provider, the re-point + guest-deletion path). The entry,
+// has a user keeps the guest's tournament entries (the sign-in's re-point + guest-deletion path, confirm_link since M5a3). The entry,
 // its team membership, captaincy and requests move to the existing user; locks are rebuilt from the existing user's own
-// game accounts; an entry the existing user cannot hold is settled as a deletion (A94(2)). server_link_provider runs as
-// the owner ('internal', linkDiscord). Roles, HSR accounts and rate rows are read or written through `test.db` outside
+// game accounts; an entry the existing user cannot hold is settled as a deletion (A94(2)). The sign-in runs through
+// linkDiscord (request, present as the linker, confirm; T-M5a3). Roles, HSR accounts and rate rows are read or written through `test.db` outside
 // any transaction. Nothing reaches maincloud.
 //
 // Titles starting "pins current behaviour (row silent)": the decision row says nothing about the case, so the test
 // records today's behaviour rather than a rule; the owner accepted these pins (A145). A later decision on the case
 // replaces the pin with a rule test.
 import { describe, expect, it } from 'vitest';
+import { discordId } from '../fixtures/harness'; // T-M5a3: valid Discord ids from labels
 import {
     M,
     expectReject,
@@ -91,7 +92,7 @@ describe('A112: a guest signing in to an existing account keeps the tournament e
         const org = host(test);
         const id = openTournament(test, org, { teamSize: 1 });
         const namesake = guest(test, 'namesake');
-        linkDiscord(test, namesake, 'pid-namesake', 'Ex'); // another player whose solo team is already called "Ex"
+        linkDiscord(test, namesake, discordId('pid-namesake'), 'Ex'); // another player whose solo team is already called "Ex"
         register(test, namesake, id);
         const g = guest(test, 'g-solo');
         const guestAccount = insertHsrAccount(test, g.userId, 'g-solo-acc');
@@ -442,7 +443,7 @@ describe('A112: the other link paths and side effects', () => {
         const before = enrolled(test, id, g.userId)!;
         const guestId = g.userId;
 
-        linkDiscord(test, g, 'pid-brand-new', 'Newcomer');
+        linkDiscord(test, g, discordId('pid-brand-new'), 'Newcomer');
 
         expect(g.userId).toBe(guestId);
         expect(test.db.User.id.find(guestId)!.isGuest).toBe(false);

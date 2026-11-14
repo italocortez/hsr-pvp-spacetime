@@ -8,6 +8,7 @@
 // (Moderator+); the public leaderboard carries the player's name and avatar (A77(1), denormalized columns). In-memory
 // only; nothing reaches maincloud.
 import { describe, expect, expectTypeOf, it } from 'vitest';
+import { discordId } from '../fixtures/harness'; // T-M5a3: valid Discord ids from labels
 import type { tables as bindingTables } from '@bindings/index';
 import type { AdminUserRow } from '@bindings/types';
 import { rebuildLeaderboard } from '@module/helpers/stats/leaderboardRebuild';
@@ -18,7 +19,7 @@ import { createTitledEvent, saveCalendar } from '../fixtures/calendar';
 import { join } from '../fixtures/lobby';
 import { keysOf, profileGhost, sorted, view, type Reader } from '../fixtures/views';
 
-const SECRET_PROVIDER_ID = 'pid-SECRET-a77';
+const SECRET_PROVIDER_ID = discordId('pid-SECRET-a77');
 const SECRET_PROVIDER_NAME = 'SecretProviderName';
 /** Keys that carry what A77 hides; only view_my_profile (the caller's own row) and the staff views may hold them. */
 const PRIVATE_KEYS = ['loginMethod', 'providerId', 'providerUsername', 'linkedAt', 'hasDiscordLinked', 'role', 'isGuest', 'deletedAt'];

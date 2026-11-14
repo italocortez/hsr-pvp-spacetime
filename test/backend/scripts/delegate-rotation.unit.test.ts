@@ -42,6 +42,22 @@ describe('A122(23) L101: bootstrap registers and saves the new delegate before r
         }
     });
 
+    it('T-M5a3: the linker rotation runs the same order and its log lines say "linker"; without a noun they say "delegate"', async () => {
+        const logs: string[] = [];
+        const { calls, steps } = fakes();
+        await rotateDelegate({ ...ROTATION, noun: 'linker', label: 'vercel-link-test' }, { ...steps, log: (l) => logs.push(l) });
+        expect(calls).toEqual(['register new-hex vercel-link-test', 'save tok-new new-hex', 'revoke old-hex']);
+        expect(logs).toEqual([
+            '[bootstrap] registered linker "vercel-link-test"',
+            '[bootstrap] saved the new linker token and identity',
+            '[bootstrap] revoked previous linker old-hex',
+        ]);
+        const delegateLogs: string[] = [];
+        const plain = fakes();
+        await rotateDelegate(ROTATION, { ...plain.steps, log: (l) => delegateLogs.push(l) });
+        expect(delegateLogs[0]).toBe('[bootstrap] registered delegate "vercel-auth-test"');
+    });
+
     it('A122(23) L101 (neighbour): a failed revoke is reported, not thrown; no previous delegate, or the same identity, means no revoke', async () => {
         const failing = fakes('revoke');
         await expect(rotateDelegate(ROTATION, failing.steps)).resolves.toBeUndefined();

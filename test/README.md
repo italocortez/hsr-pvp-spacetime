@@ -65,7 +65,7 @@ spacetimedb/src/__tests__/            # one folder per subject (lobby, match-ses
 
 - Call reducers inside `withReducerTx(auth, ctx => M.reducer(ctx, args))`; read `test.db` only **outside** a transaction (reading inside crashes the datastore).
 - Views are functions: `(M as any).view_x(test.viewContext(auth), {})`.
-- `ctx.env` throws (`env_get` stub), so `server_set_datetime` / `_online` / `_mmr` / `_nuke_test_data` (gated by `requireTestDatabase`) cannot run in memory; that is the one skipped test in `harness/smoke`. `server_link_provider`, `server_delete_user`, `server_set_role` and `seed_identity_gc_job` run as `'internal'`.
+- `ctx.env` throws (`env_get` stub), so `server_set_datetime` / `_online` / `_mmr` / `_nuke_test_data` (gated by `requireTestDatabase`) cannot run in memory; that is the one skipped test in `harness/smoke`. `server_delete_user`, `server_set_role` and `seed_identity_gc_job` run as `'internal'`; `linker_present_code` runs as the harness's Linker identity (`linkerAuth` in `fixtures/harness.ts`, registered by the owner on first use), and `linkDiscord` signs a user in through request, present and confirm (T-M5a3; `server_link_provider` was removed).
 - Roles are set through `test.db` (`setUserRole` / `setRole`), never `server_set_role`; `'internal'` is Owner and passes the admin gates.
 - Scheduled reducers are fired by hand; the clock moves with `advance(test, ms)` (timers validate elapsed time; chat throttle = 2.1 s per send).
 - Seats, not user ids: `seatOf(src, lobbyId, userId)` for every `targetJoinSeq` / `bannedJoinSeq` (A74).
@@ -86,9 +86,9 @@ What the in-memory harness cannot drive (ACCESS-SECURITY-OPS §D.5): subscriptio
 | `smoke` | bootstrap invariants (cost set 0, characters, achievements), a two-identity lobby with seats [1, 2], a cursor broadcast in a started 1v1 draft reaching the other member (a cursor in Waiting is dropped, S11a L19) |
 | `outsider-isolation` | one Ranked anonymous 1v1 with a spectator, conceded in Drafting (triage L110): per-sender lobby, match and history views empty for an outsider over a real subscription, views with arguments subscribed by name, an unmapped identity sees nothing, anonymized seats carry `userId 0` on the wire |
 
-Prerequisites: `spacetime login` as the owner of test1; `.env.test.local` with `STDB_SERVER_TOKEN` (written by `npm run stdb:bootstrap:test`, which globalSetup runs). Key names only: never read or commit `.env*.local`. `it.skipIf(!hasServerToken())` guards the token-dependent tests.
+Prerequisites: `spacetime login` as the owner of test1; `.env.test.local` with `STDB_SERVER_TOKEN` and, since M5a3, `STDB_LINK_TOKEN` / `STDB_LINK_IDENTITY` (all written by `npm run stdb:bootstrap:test`, which globalSetup runs; the linker is kept across runs and registered again after the wipe). Key names only: never read or commit `.env*.local`. `it.skipIf(!hasServerToken())` guards the tests that call `server_*` reducers; `skipIf(!hasLinkToken())` (`test/shared/sign-in.ts`) guards the tests that sign a verified user in (request, present as the linker, confirm).
 
-globalSetup (`test/global-setup.ts`): requires `STDB_TARGET=test`, refuses anything but the committed "-test" database, runs `scripts/stdb/publish.ts --target test --clear` then `scripts/stdb/bootstrap.ts --target test`, re-reads the rotated token through `backendEnv()`. ≈ 12 s.
+globalSetup (`test/global-setup.ts`): requires `STDB_TARGET=test`, refuses anything but the committed "-test" database, runs `scripts/stdb/publish.ts --target test --clear` then `scripts/stdb/bootstrap.ts --target test`, re-reads the rotated token through `backendEnv()` and fails when `STDB_SERVER_TOKEN` or `STDB_LINK_TOKEN` is missing afterwards. ≈ 12 s.
 
 ## Adding tests
 

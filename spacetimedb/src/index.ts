@@ -9,6 +9,7 @@ import { seedAbuseConfigDefaults } from '@module/helpers/lobby/abuseControls';
 import { seedSystemLobbyPreset } from '@module/helpers/lobby/systemPreset';
 import { memberHasLeft } from '@module/helpers/lobby/lobbyHelpers';
 import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
+import { trustedServerRow } from '@module/helpers/identity/serverIdentities';
 
 // Private auth tables — imported for schema registration (UserPrivate was merged into User, A77)
 import '@module/tables/admin/banRecord';
@@ -122,7 +123,7 @@ export {
 export { broadcast_cursor } from '@module/reducers/lobby/cursor';
 export { login_as_guest, request_link_code, confirm_link } from '@module/reducers/identity/auth';
 export { delete_my_account, update_display_name, update_username, update_avatar } from '@module/reducers/identity/profile';
-export { server_register_delegate, server_revoke_delegate, server_link_provider, server_link_by_code, server_set_role, server_delete_user, server_set_guest_creation, server_set_guest_lobby_creation, server_set_datetime, server_set_online, server_set_mmr, server_nuke_test_data } from '@module/reducers/identity/server';
+export { server_register_delegate, server_revoke_delegate, server_register_linker, server_revoke_linker, linker_present_code, server_set_role, server_delete_user, server_set_guest_creation, server_set_guest_lobby_creation, server_set_datetime, server_set_online, server_set_mmr, server_nuke_test_data } from '@module/reducers/identity/server';
 export { admin_ban_user, admin_unban_user } from '@module/reducers/admin/banAdmin';
 export { admin_delete_row, admin_bulk_upsert, admin_update_user } from '@module/reducers/admin/admin';
 export { admin_update_elo_config, admin_seed_elo_config } from '@module/reducers/stats/eloAdmin';
@@ -229,7 +230,8 @@ export const client_connected = spacetimedb.clientConnected((ctx) => {
   // how-to "Rejecting Client Connections"). The AbuseConfig singleton (id 1) is seeded by init; while the row is
   // absent this check is inert. A connected non-Admin is refused on every action by ensureNotInMaintenance.
   const abuseConfig = ctx.db.AbuseConfig.id.find(1);
-  if (abuseConfig?.maintenanceMode && !ctx.db.ServerIdentity.identity.find(ctx.sender)) {
+  // M5a3: only the trusted server identities (Owner, Delegate) are admitted; a Linker is refused like any client.
+  if (abuseConfig?.maintenanceMode && !trustedServerRow(ctx, ctx.sender)) {
     const adminMapping = ctx.db.UserIdentity.identity.find(ctx.sender);
     const adminUser = adminMapping ? ctx.db.User.id.find(adminMapping.userId) : undefined;
     if (!adminUser || adminUser.deletedAt || !isRoleAtLeast(adminUser.role, 'Admin')) {

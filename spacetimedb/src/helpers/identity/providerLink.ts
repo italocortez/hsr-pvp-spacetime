@@ -8,8 +8,9 @@ import { moveTournamentTiesToUser } from '@module/helpers/tournament/entryTransf
 import { rejectIfBanned, DISCORD_LOGIN_METHOD } from '@module/helpers/lobby/banHelper';
 import { LIVE_STAGES, slotIsCoach, slotIsSpectator } from '@module/helpers/lobby/lobbyHelpers';
 
-// The guest -> verified merge of a provider link, shared by server_link_provider (identity hex argument) and
-// server_link_by_code (M5a: the identity comes from a LinkRequest row). Moved out of reducers/identity/server.ts
+// The guest -> verified merge of a provider link. Since M5a3 only confirm_link runs it (the identity is the caller,
+// found through its LinkRequest row); linker_present_code runs planProviderLink as a pre-check, and the direct
+// identity-hex reducer server_link_provider is removed. Moved out of reducers/identity/server.ts in M5a
 // unchanged. It runs in two steps so a caller can catch a refusal without leaving a half-written merge behind:
 //   planProviderLink   every check; throws a SenderError and writes nothing;
 //   applyProviderLink  every write; throws no SenderError of its own.
@@ -64,8 +65,8 @@ export type ProviderLinkPlan =
     | { kind: 'upgrade'; userMapping: any; currentUser: any; loginMethod: string; providerId: string; name: string };
 
 /**
- * Every check of the merge, in the order server_link_provider has always run them. Writes nothing.
- * `resolveIdentity` is called after the ban check (where server_link_provider parsed its identity hex argument).
+ * Every check of the merge, in the order the former server_link_provider ran them. Writes nothing.
+ * `resolveIdentity` is called after the ban check.
  */
 export function planProviderLink(ctx: any, input: ProviderLinkInput, resolveIdentity: () => Identity): ProviderLinkPlan {
     const { provider, providerId, providerName } = input;
@@ -73,6 +74,8 @@ export function planProviderLink(ctx: any, input: ProviderLinkInput, resolveIden
     // Validate inputs. S10e (identity audit #3): the provider name is trimmed and capped like a username
     // (USERNAME_MAX_LENGTH, update_username / update_display_name). M5a review: C0 / C1 control characters (and DEL) are
     // stripped first, and the cap never splits a surrogate pair.
+    // M5a3: reached only by linker_present_code with a provider other than Discord (a Discord id is shape-checked
+    // first, and the merge then refuses the provider anyway); confirm_link never gets here with an empty id.
     if (!providerId || providerId.length === 0) {
         throw new SenderError('providerId is required');
     }
@@ -107,6 +110,10 @@ export function planProviderLink(ctx: any, input: ProviderLinkInput, resolveIden
         .filter((u: any) => u.loginMethod === loginMethod);
     const providerOwner = existingByProvider.length > 0 ? existingByProvider[0] : null;
 
+    // M5a3: both reducers that run the merge first require the live, unlinked guest that asked
+    // (ensureStillTheRequestingGuest), so the non-guest sides below (a verified currentUser: re-point without the
+    // live-game check, or Case 1c, the refresh of an already linked identity) are no longer reached by any reducer.
+    // Kept, and pinned by direct tests (__tests__/identity/provider-link-direct.test.ts).
     if (currentUser) {
         if (providerOwner && providerOwner.id !== currentUser.id) {
             // A113(4) (S10m): the guest is deleted by the re-point when this identity is its only link. On that path,
@@ -122,6 +129,9 @@ export function planProviderLink(ctx: any, input: ProviderLinkInput, resolveIden
 
     // No UserIdentity mapping exists for this identity yet (Case 2, cross-device login with a known provider, and
     // Case 3, a fresh identity, alike): the client must call login_as_guest first.
+    // M5a3: confirm_link refuses an unmapped caller before the merge; only linker_present_code still gets here, when the
+    // requesting identity's mapping was removed after the request (admin_delete_row('UserIdentity') while the guest
+    // lives on through another identity).
     throw new SenderError(IDENTITY_NOT_REGISTERED_TEXT);
 }
 
@@ -153,6 +163,7 @@ export function applyProviderLink(ctx: any, plan: ProviderLinkPlan): void {
             }, systemUserId));
         }
 
+        // M5a3: always a guest through the reducers (see planProviderLink); the non-guest side is unreachable, kept.
         if (wasGuest) {
             const remainingLinks = [...ctx.db.UserIdentity.user_id.filter(oldGuestId)];
             if (remainingLinks.length === 0) {
@@ -170,6 +181,7 @@ export function applyProviderLink(ctx: any, plan: ProviderLinkPlan): void {
     // A77 (S11a): the provider columns are written on the User row (formerly the UserPrivate upsert). linkedAt is
     // the time the current provider account was linked: set on the first link and when the provider id or login
     // method changes; a refresh of the same link (Case 1c) keeps it and updates the provider name only.
+    // M5a3: Case 1c and the non-guest sides of the ternaries below are no longer reached by any reducer (kept).
     const { userMapping, currentUser, loginMethod, providerId, name } = plan;
     const sameLink = currentUser.loginMethod === loginMethod && currentUser.providerId === providerId;
     ctx.db.User.id.update(updateWithAudit(ctx, currentUser, {

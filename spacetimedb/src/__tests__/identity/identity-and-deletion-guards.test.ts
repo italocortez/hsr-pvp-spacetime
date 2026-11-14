@@ -13,6 +13,7 @@ import {
     fireCheck,
     guest,
     joinAsSpectator,
+    discordId,
     linkDiscord,
     lobbyRow,
     member,
@@ -98,12 +99,16 @@ describe('identity audit #1: identity GC and the server identities', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// 10. Identity audit #3: server_link_provider and a taken username
+// 10. Identity audit #3: a guest upgrade (sign-in) and a taken username
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('identity audit #3: a guest upgrade with a provider name another user holds', () => {
-    const link = (test: Harness, a: Actor, providerId: string, providerName: string) => (ctx: any) =>
-        M.server_link_provider(ctx, { callerIdentityHex: a.identity.toHexString(), provider: 'discord', providerId, providerName });
+    // T-M5a3: the sign-in runs the real flow (linkDiscord: request, present, confirm); the ids are valid snowflakes.
+    const link = (test: Harness, a: Actor, label: string, providerName: string) => linkDiscord(test, a, discordId(label), providerName);
+    const linkRefusal = (test: Harness, a: Actor, label: string, providerName: string): string => {
+        try { link(test, a, label, providerName); } catch (e) { return e instanceof Error ? e.message : String(e); }
+        throw new Error('the sign-in was expected to be refused');
+    };
     const userOf = (test: Harness, a: Actor) => test.db.User.id.find(a.userId)!;
 
     it('a taken name links with the first free name_2, name_3 ...; the display name is the provider name (identity audit #3)', () => {
@@ -111,10 +116,10 @@ describe('identity audit #3: a guest upgrade with a provider name another user h
         const bob = verified(test, 'bob');
         expect(userOf(test, bob).username).toBe('bob');
         const g2 = guest(test, 'g2');
-        tx(test, 'internal', link(test, g2, 'p-g2', 'bob'));
+        link(test, g2, 'p-g2', 'bob');
         expect(userOf(test, g2)).toMatchObject({ username: 'bob_2', displayName: 'bob', isGuest: false });
         const g3 = guest(test, 'g3');
-        tx(test, 'internal', link(test, g3, 'p-g3', 'bob'));
+        link(test, g3, 'p-g3', 'bob');
         expect(userOf(test, g3).username).toBe('bob_3');
         expect(userOf(test, bob).username).toBe('bob');
     });
@@ -123,16 +128,16 @@ describe('identity audit #3: a guest upgrade with a provider name another user h
         const test = newHarness();
         const long = 'x'.repeat(40);
         const g1 = guest(test, 'g1');
-        tx(test, 'internal', link(test, g1, 'p-1', `  ${long}  `));
+        link(test, g1, 'p-1', `  ${long}  `);
         expect(userOf(test, g1)).toMatchObject({ username: 'x'.repeat(32), displayName: 'x'.repeat(32) });
         expect(test.db.User.id.find(g1.userId)?.providerUsername).toBe('x'.repeat(32));
 
         const g2 = guest(test, 'g2');
-        tx(test, 'internal', link(test, g2, 'p-2', long));
+        link(test, g2, 'p-2', long);
         expect(userOf(test, g2).username).toBe(`${'x'.repeat(30)}_2`);
 
         const g3 = guest(test, 'g3');
-        const msg = rejection(test, 'internal', link(test, g3, 'p-3', '   '));
+        const msg = linkRefusal(test, g3, 'p-3', '   ');
         expect(userOf(test, g3).isGuest).toBe(true);
         expect(msg).toBe('providerName is required');
     });

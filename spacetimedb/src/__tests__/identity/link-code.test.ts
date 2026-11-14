@@ -1,5 +1,5 @@
 // Identity: the one-time link codes of the Discord sign-in (M5a) and the second lock (M5a2): request_link_code,
-// view_my_link_request, server_link_by_code (presentation), confirm_link, the clean-up of stale rows.
+// view_my_link_request, linker_present_code (presentation; server_link_by_code before M5a3), confirm_link, the clean-up of stale rows.
 // Decisions: A44(3), A46, A77, A94, A113(4)
 // Contracts: docs/auth/contract.md (entries proposed in the M5a hand-back)
 // T-M5a (new file), T-M5a2 (presentation and confirmation; the M5a direct-merge-by-code tests adapted).
@@ -7,7 +7,8 @@
 // Everything runs in the SDK's in-memory datastore; server reducers run as the owner identity ('internal', registered by
 // init). `test.db` is read only outside `tx` bodies. Nothing reaches maincloud.
 import { describe, expect, it } from 'vitest';
-import { ScheduleAt, Timestamp } from 'spacetimedb';
+import { discordId, linkerAuth } from '../fixtures/harness'; // T-M5a3: valid Discord ids; the linker identity
+import { Identity, ScheduleAt, Timestamp } from 'spacetimedb';
 import {
     ACCOUNT_CHANGED_TEXT,
     CLIENT_NONCE_INVALID_TEXT,
@@ -27,6 +28,7 @@ import {
     sha256,
 } from '@module/helpers/identity/linkCode';
 import { capOnCodePoint, FINISH_GAME_BEFORE_SIGN_IN_TEXT } from '@module/helpers/identity/providerLink';
+import { LINKER_NOT_A_USER_TEXT, LINKER_ONLY_TEXT } from '@module/helpers/identity/serverIdentities';
 import { MAINTENANCE_TEXT } from '@module/helpers/identity/ensurePermissions';
 import { ABUSE_CONFIG_ID } from '@module/helpers/lobby/abuseControls';
 import {
@@ -51,6 +53,16 @@ import { view } from '../fixtures/views';
 
 const FIVE_MINUTES_MS = 5 * 60_000;
 const FORBIDDEN = 'Forbidden: caller is not a registered server identity.';
+/** T-M5a3: the auth function's Linker identity, as an actor for tx / rejection. */
+const LINKER = (test: Harness) => ({ auth: linkerAuth(test) }) as Actor;
+/** T-M5a3: a Delegate server identity registered by the owner, as an actor. */
+function registeredDelegate(test: Harness, sub: string): Actor {
+    const { auth, identity } = freshAuth(test, sub);
+    tx(test, 'internal', (ctx) => M.server_register_delegate(ctx, { identityHex: identity.toHexString(), label: sub }));
+    return { sub, auth, identity, userId: test.db.UserIdentity.identity.find(identity)!.userId };
+}
+/** T-M5a3: a second identity of `a`'s user, as an actor (signs the same user in without touching `a`'s row). */
+const otherDeviceOf = (test: Harness, a: Actor, sub: string): Actor => ({ sub, ...addSecondIdentity(test, a.userId, sub), userId: a.userId });
 const NO_ACCOUNT = 'No account for this identity. Call login_as_guest first.';
 const ALREADY_LINKED = 'This account is already linked.';
 const DELETED = 'Unauthorized: This account has been deleted.';
@@ -87,7 +99,7 @@ const presentArgs = (linkCode: string, providerId: string, providerName: string,
     ({ linkCode, provider, providerId, providerName, confirmHash: confirmHashOf(token) });
 /** The auth function's call: presents the code with the Discord account and the hash of the confirm token. */
 const present = (test: Harness, linkCode: string, providerId: string, providerName: string, token: string) =>
-    tx(test, 'internal', (ctx) => M.server_link_by_code(ctx, presentArgs(linkCode, providerId, providerName, token)));
+    tx(test, LINKER(test), (ctx) => M.linker_present_code(ctx, presentArgs(linkCode, providerId, providerName, token)));
 /** The requesting browser's call with the confirm token. */
 const confirm = (test: Harness, a: Actor, confirmToken: string) => tx(test, a, (ctx) => M.confirm_link(ctx, { confirmToken }));
 /** The whole sign-in: request, present, confirm. */
@@ -116,7 +128,7 @@ function onTestDatabase(ctx: Ctx): Ctx {
 }
 
 let nextSnowflake = 400_000_000_000_000_001n;
-/** A verified user whose provider id is Discord-shaped (server_link_by_code checks the shape; existingUser uses pid-...). */
+/** A verified user whose provider id is Discord-shaped (linker_present_code checks the shape). */
 function existingDiscordUser(test: Harness, sub: string): { a: Actor; providerId: string } {
     const providerId = String(nextSnowflake++);
     return { a: linked(test, sub, providerId, sub), providerId };
@@ -176,7 +188,7 @@ describe('request_link_code and view_my_link_request (M5a)', () => {
 
         expect(second).not.toBe(first);
         expect(linkRows(test).map((r) => r.code)).toEqual([second]);
-        const msg = rejection(test, 'internal', (ctx) => M.server_link_by_code(ctx, presentArgs(first, '100000000000000001', 'Twice', TOKEN_A)));
+        const msg = rejection(test, LINKER(test), (ctx) => M.linker_present_code(ctx, presentArgs(first, '100000000000000001', 'Twice', TOKEN_A)));
         expect(userRow(test, g.userId)).toMatchObject({ isGuest: true, loginMethod: undefined });
         expect(msg).toBe(LINK_CODE_REFUSED_TEXT);
         present(test, second, '100000000000000001', 'Twice', TOKEN_A);
@@ -300,19 +312,20 @@ describe('request_link_code and view_my_link_request (M5a)', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// server_link_by_code: the presentation (M5a2: it no longer links)
+// linker_present_code (server_link_by_code before M5a3): the presentation (M5a2: it no longer links)
 // ════════════════════════════════════════════════════════════════════════════
 
-describe('server_link_by_code: presentation (M5a2)', () => {
-    it('a caller that is not a registered server identity is refused, even an Admin; the code stays live', () => {
+describe('linker_present_code: presentation (M5a2; renamed from server_link_by_code in M5a3)', () => {
+    it('only the linker identity may present (M5a3): an Admin, the guest itself, the Owner and a Delegate are refused; the code stays live', () => {
         const test = newHarness();
         const boss = admin(test);
         const g = guest(test, 'victim');
         requestCode(test, g);
         const code = codeOf(test, g);
-        for (const who of [boss, g]) {
-            const msg = rejection(test, who, (ctx) => M.server_link_by_code(ctx, presentArgs(code, '100000000000000002', 'Steal', TOKEN_A)));
-            expect(msg).toBe(FORBIDDEN);
+        const delegate = registeredDelegate(test, 'delegate-x');
+        for (const who of [boss, g, 'internal' as const, delegate]) {
+            const msg = rejection(test, who, (ctx) => M.linker_present_code(ctx, presentArgs(code, '100000000000000002', 'Steal', TOKEN_A)));
+            expect(msg).toBe(LINKER_ONLY_TEXT);
         }
         expect(userRow(test, g.userId)!.isGuest).toBe(true);
         expect(codeOf(test, g)).toBe(code);
@@ -349,7 +362,7 @@ describe('server_link_by_code: presentation (M5a2)', () => {
         const code = codeOf(test, g);
         present(test, code, '100000000000000004', 'First', TOKEN_A);
         const before = jsonOf(linkRows(test));
-        const msg = rejection(test, 'internal', (ctx) => M.server_link_by_code(ctx, presentArgs(code, '100000000000000005', 'Second', TOKEN_B)));
+        const msg = rejection(test, LINKER(test), (ctx) => M.linker_present_code(ctx, presentArgs(code, '100000000000000005', 'Second', TOKEN_B)));
         expect(jsonOf(linkRows(test))).toBe(before);
         expect(msg).toBe(LINK_CODE_REFUSED_TEXT);
     });
@@ -368,7 +381,7 @@ describe('server_link_by_code: presentation (M5a2)', () => {
         expect(myRequest(test, onTime)[0].awaitingConfirm).toBe(true);
 
         advance(test, 1);
-        const msg = rejection(test, 'internal', (ctx) => M.server_link_by_code(ctx, presentArgs(lateCode, '100000000000000007', 'Late', TOKEN_A)));
+        const msg = rejection(test, LINKER(test), (ctx) => M.linker_present_code(ctx, presentArgs(lateCode, '100000000000000007', 'Late', TOKEN_A)));
         expect(myRequest(test, late)[0].awaitingConfirm).toBe(false);
         expect(msg).toBe(LINK_CODE_REFUSED_TEXT);
     });
@@ -378,7 +391,7 @@ describe('server_link_by_code: presentation (M5a2)', () => {
         const g = guest(test, 'bystander');
         requestCode(test, g);
         for (const linkCode of ['no-such-code', '', 'x'.repeat(LINK_CODE_LENGTH)]) {
-            const msg = rejection(test, 'internal', (ctx) => M.server_link_by_code(ctx, presentArgs(linkCode, '100000000000000008', 'X', TOKEN_A)));
+            const msg = rejection(test, LINKER(test), (ctx) => M.linker_present_code(ctx, presentArgs(linkCode, '100000000000000008', 'X', TOKEN_A)));
             expect(msg).toBe(LINK_CODE_REFUSED_TEXT);
         }
         expect(myRequest(test, g)[0].awaitingConfirm).toBe(false);
@@ -389,17 +402,17 @@ describe('server_link_by_code: presentation (M5a2)', () => {
         ['too long (21 digits)', '1'.repeat(21)],
         ['a letter', '1234567890123456a'],
         ['a leading space', ' 12345678901234567'],
-        ['a test-style id', 'pid-someone'],
+        ['a test-style id', 'not-a-snowflake'],
         ['empty', ''],
     ])('a Discord providerId that is %s is refused before the code is looked at; the code stays live', (_label, providerId) => {
         const test = newHarness();
         const g = guest(test, 'id-shape');
         requestCode(test, g);
         const code = codeOf(test, g);
-        const msg = rejection(test, 'internal', (ctx) => M.server_link_by_code(ctx, presentArgs(code, providerId, 'Shape', TOKEN_A)));
+        const msg = rejection(test, LINKER(test), (ctx) => M.linker_present_code(ctx, presentArgs(code, providerId, 'Shape', TOKEN_A)));
         expect(myRequest(test, g)[0]).toMatchObject({ code, awaitingConfirm: false });
         expect(msg).toBe(NOT_A_DISCORD_ID_TEXT);
-        const unknown = rejection(test, 'internal', (ctx) => M.server_link_by_code(ctx, presentArgs('no-such-code', providerId, 'Shape', TOKEN_A)));
+        const unknown = rejection(test, LINKER(test), (ctx) => M.linker_present_code(ctx, presentArgs('no-such-code', providerId, 'Shape', TOKEN_A)));
         expect(unknown).toBe(NOT_A_DISCORD_ID_TEXT);
     });
 
@@ -424,7 +437,7 @@ describe('server_link_by_code: presentation (M5a2)', () => {
         const g = guest(test, 'hash-shape');
         requestCode(test, g);
         const code = codeOf(test, g);
-        const msg = rejection(test, 'internal', (ctx) => M.server_link_by_code(ctx, { linkCode: code, provider: 'discord', providerId: '100000000000000009', providerName: 'H', confirmHash }));
+        const msg = rejection(test, LINKER(test), (ctx) => M.linker_present_code(ctx, { linkCode: code, provider: 'discord', providerId: '100000000000000009', providerName: 'H', confirmHash }));
         expect(myRequest(test, g)[0]).toMatchObject({ code, awaitingConfirm: false });
         expect(msg).toBe(CONFIRM_HASH_INVALID_TEXT);
     });
@@ -438,7 +451,7 @@ describe('server_link_by_code: presentation (M5a2)', () => {
         requestCode(test, g);
         const code = codeOf(test, g);
 
-        const msg = rejection(test, 'internal', (ctx) => M.server_link_by_code(ctx, presentArgs(code, pid, 'Wannabe', TOKEN_A)));
+        const msg = rejection(test, LINKER(test), (ctx) => M.linker_present_code(ctx, presentArgs(code, pid, 'Wannabe', TOKEN_A)));
         expect(myRequest(test, g)[0]).toMatchObject({ code, awaitingConfirm: false });
         expect(msg).toBe(BANNED_TEXT);
 
@@ -457,7 +470,7 @@ describe('server_link_by_code: presentation (M5a2)', () => {
         const g = guest(test, 'val');
         requestCode(test, g);
         const code = codeOf(test, g);
-        const msg = rejection(test, 'internal', (ctx) => M.server_link_by_code(ctx, { ...presentArgs(code, '100000000000000011', 'Val', TOKEN_A), ...over }));
+        const msg = rejection(test, LINKER(test), (ctx) => M.linker_present_code(ctx, { ...presentArgs(code, '100000000000000011', 'Val', TOKEN_A), ...over }));
         expect(myRequest(test, g)[0]).toMatchObject({ code, awaitingConfirm: false });
         expect(msg).toBe(text);
     });
@@ -471,7 +484,7 @@ describe('server_link_by_code: presentation (M5a2)', () => {
         requestCode(test, g);
         const code = codeOf(test, g);
 
-        const msg = rejection(test, 'internal', (ctx) => M.server_link_by_code(ctx, presentArgs(code, providerId, 'ignored', TOKEN_A)));
+        const msg = rejection(test, LINKER(test), (ctx) => M.linker_present_code(ctx, presentArgs(code, providerId, 'ignored', TOKEN_A)));
         expect(test.db.UserIdentity.identity.find(g.identity)!.userId).toBe(g.userId);
         expect(myRequest(test, g)[0]).toMatchObject({ code, awaitingConfirm: false });
         expect(msg).toBe(FINISH_GAME_BEFORE_SIGN_IN_TEXT);
@@ -482,25 +495,26 @@ describe('server_link_by_code: presentation (M5a2)', () => {
         const g = guest(test, 'raced');
         requestCode(test, g);
         const code = codeOf(test, g);
-        linkDiscord(test, g, 'pid-first', 'First'); // server_link_provider by identity hex, after the code was issued
-        const msg = rejection(test, 'internal', (ctx) => M.server_link_by_code(ctx, presentArgs(code, '100000000000000012', 'Second', TOKEN_A)));
-        expect(userRow(test, g.userId)).toMatchObject({ isGuest: false, providerId: 'pid-first' });
+        linkDiscord(test, otherDeviceOf(test, g, 'raced-b'), discordId('pid-first'), 'First'); // T-M5a3: signed in on another device of the same user
+        const msg = rejection(test, LINKER(test), (ctx) => M.linker_present_code(ctx, presentArgs(code, '100000000000000012', 'Second', TOKEN_A)));
+        expect(userRow(test, g.userId)).toMatchObject({ isGuest: false, providerId: discordId('pid-first') });
         expect(linkRows(test).map((r) => r.code)).toEqual([code]);
         expect(msg).toBe(ACCOUNT_CHANGED_TEXT);
     });
 
     it('account changed at presentation: the identity was re-pointed to another user while the old guest lives on through a second identity', () => {
         const test = newHarness();
-        const { providerId } = existingDiscordUser(test, 'owner');
+        const { a: owner } = existingDiscordUser(test, 'owner');
         const g = guest(test, 'two-devices');
         const guestId = g.userId;
         addSecondIdentity(test, guestId, 'two-devices-b');
         requestCode(test, g);
         const code = codeOf(test, g);
-        linkDiscord(test, g, providerId, 'ignored'); // server_link_provider Case 1b: re-pointed, the guest is kept
+        // T-M5a3: no reducer re-points another identity any more; the mapping is moved directly (the guest is kept).
+        test.db.UserIdentity.identity.update({ ...test.db.UserIdentity.identity.find(g.identity)!, userId: owner.userId });
         expect(userRow(test, guestId)).toBeTruthy();
 
-        const msg = rejection(test, 'internal', (ctx) => M.server_link_by_code(ctx, presentArgs(code, '100000000000000013', 'Other', TOKEN_A)));
+        const msg = rejection(test, LINKER(test), (ctx) => M.linker_present_code(ctx, presentArgs(code, '100000000000000013', 'Other', TOKEN_A)));
         expect(userRow(test, guestId)).toMatchObject({ isGuest: true, loginMethod: undefined });
         expect(linkRows(test).map((r) => r.code)).toEqual([code]);
         expect(msg).toBe(ACCOUNT_CHANGED_TEXT);
@@ -513,7 +527,7 @@ describe('server_link_by_code: presentation (M5a2)', () => {
         requestCode(test, g);
         const code = codeOf(test, g);
         tx(test, boss, (ctx) => M.admin_delete_row(ctx, { tableName: 'User', primaryKeyJson: String(g.userId) }));
-        const msg = rejection(test, 'internal', (ctx) => M.server_link_by_code(ctx, presentArgs(code, '100000000000000014', 'Late', TOKEN_A)));
+        const msg = rejection(test, LINKER(test), (ctx) => M.linker_present_code(ctx, presentArgs(code, '100000000000000014', 'Late', TOKEN_A)));
         expect(userRow(test, g.userId)!.deletedAt).toBeDefined();
         expect(msg).toBe(ACCOUNT_CHANGED_TEXT);
     });
@@ -657,9 +671,9 @@ describe('confirm_link (M5a2)', () => {
         const g = guest(test, 'raced-late');
         requestCode(test, g);
         present(test, codeOf(test, g), '100000000000000028', 'Second', TOKEN_A);
-        linkDiscord(test, g, 'pid-first', 'First');
+        linkDiscord(test, otherDeviceOf(test, g, 'raced-late-b'), discordId('pid-first'), 'First'); // T-M5a3: another device
         expect(rejection(test, g, (ctx) => M.confirm_link(ctx, { confirmToken: TOKEN_A }))).toBe(ACCOUNT_CHANGED_TEXT);
-        expect(userRow(test, g.userId)).toMatchObject({ providerId: 'pid-first' });
+        expect(userRow(test, g.userId)).toMatchObject({ providerId: discordId('pid-first') });
     });
 
     it('a caller soft-deleted between presentation and confirm is refused with the deleted-account text', () => {
@@ -730,11 +744,13 @@ describe('confirm_link (M5a2)', () => {
         }
     });
 
-    it('server_link_provider (identity argument) still merges directly, with no row and no confirm', () => {
+    it('M5a3: the direct link (server_link_provider) is gone; linkDiscord signs in through request, present and confirm', () => {
+        expect((M as any).server_link_provider).toBeUndefined();
+        expect((M as any).server_link_by_code).toBeUndefined();
         const test = newHarness();
         const g = guest(test, 'direct');
-        linkDiscord(test, g, 'pid-direct', 'Direct');
-        expect(userRow(test, g.userId)).toMatchObject({ isGuest: false, providerId: 'pid-direct' });
+        linkDiscord(test, g, discordId('pid-direct'), 'Direct');
+        expect(userRow(test, g.userId)).toMatchObject({ isGuest: false, providerId: discordId('pid-direct') });
         expect(linkRows(test)).toHaveLength(0);
     });
 });
@@ -1016,7 +1032,7 @@ describe('M5a2 review fix pass', () => {
         const blank = guest(test, 'only-format');
         requestCode(test, blank);
         const code = codeOf(test, blank);
-        const msg = rejection(test, 'internal', (ctx) => M.server_link_by_code(ctx, presentArgs(code, '100000000000000056', ' ​‮﻿ ', TOKEN_A)));
+        const msg = rejection(test, LINKER(test), (ctx) => M.linker_present_code(ctx, presentArgs(code, '100000000000000056', ' ​‮﻿ ', TOKEN_A)));
         expect(msg).toBe('providerName is required');
 
         const kept = guest(test, 'kept');
@@ -1031,7 +1047,7 @@ describe('M5a2 review fix pass', () => {
         const linkedLater = guest(test, 'linked-later');
         requestCode(test, linkedLater);
         present(test, codeOf(test, linkedLater), '100000000000000058', 'Later', TOKEN_A);
-        linkDiscord(test, linkedLater, 'pid-other-way', 'Other');
+        linkDiscord(test, otherDeviceOf(test, linkedLater, 'linked-later-b'), discordId('pid-other-way'), 'Other'); // T-M5a3: another device
         expect(myRequest(test, linkedLater)).toEqual([]);
         expect(test.db.LinkRequest.identity.find(linkedLater.identity)).toBeTruthy();
 
@@ -1044,4 +1060,91 @@ describe('M5a2 review fix pass', () => {
 
     // Not covered: the module log over a full flow and refusals. The in-memory harness (spacetimedb/server/test-utils)
     // has no log capture API, so the "no code, nonce, token, hash or provider id in the log" check is not automated.
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// M5a3: the Linker server identity
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('M5a3: the linker identity (the auth function) may only present sign-in codes', () => {
+    const NOT_SERVER = 'Forbidden: caller is not a registered server identity.';
+    const OWNER_ONLY = 'Forbidden: only the owner server identity may do this.';
+    const NO_USER = 'Unauthorized: No user linked to this identity.';
+
+    it('server_register_linker: the owner registers a Linker row with no UserIdentity; a delegate, an Admin and the linker itself are refused', () => {
+        const test = newHarness();
+        const linker = LINKER(test); // registered by the owner on first use
+        const identity = test.viewContext(linker.auth).sender;
+        expect(test.db.ServerIdentity.identity.find(identity)).toMatchObject({ kind: { tag: 'Linker' }, label: 'vercel-link-test' });
+        expect(test.db.UserIdentity.identity.find(identity)).toBeFalsy();
+
+        const candidate = freshAuth(test, 'linker-candidate').identity.toHexString();
+        const delegate = registeredDelegate(test, 'delegate-r');
+        const boss = admin(test);
+        for (const who of [delegate, boss]) {
+            const msg = rejection(test, who, (ctx) => M.server_register_linker(ctx, { identityHex: candidate, label: 'x' }));
+            expect(msg).toBe(who === boss ? NOT_SERVER : OWNER_ONLY);
+        }
+        expect(rejection(test, linker, (ctx) => M.server_register_linker(ctx, { identityHex: candidate, label: 'x' }))).toBe(NOT_SERVER);
+        expect(rejection(test, 'internal', (ctx) => M.server_register_linker(ctx, { identityHex: identity.toHexString(), label: 'again' }))).toBe('Already registered.');
+        const g = guest(test, 'mapped');
+        expect(rejection(test, 'internal', (ctx) => M.server_register_linker(ctx, { identityHex: g.identity.toHexString(), label: 'x' })))
+            .toBe('Identity is already linked to a user; mint a fresh identity for the linker.');
+        expect(test.db.ServerIdentity.identity.find(Identity.fromString(candidate))).toBeFalsy();
+    });
+
+    it('the linker is refused by every other kind of reducer: server_*, owner-only, admin, user, the GC seeds', () => {
+        const test = newHarness();
+        const linker = LINKER(test);
+        const v = verified(test, 'someone');
+        const usersBefore = [...test.db.User.iter()].length;
+        expect(rejection(test, linker, (ctx) => M.server_set_role(ctx, { username: 'someone', roleTag: 'Admin' }))).toBe(NOT_SERVER);
+        expect(rejection(test, linker, (ctx) => M.server_delete_user(ctx, { username: 'someone' }))).toBe(NOT_SERVER);
+        expect(rejection(test, linker, (ctx) => M.server_set_guest_creation(ctx, { enabled: false }))).toBe(NOT_SERVER);
+        expect(rejection(test, linker, (ctx) => M.server_register_delegate(ctx, { identityHex: freshAuth(test, 'x').identity.toHexString(), label: 'x' }))).toBe(NOT_SERVER);
+        expect(rejection(test, linker, (ctx) => M.admin_ban_user(ctx, { banTypeTag: 'DiscordId', providerId: discordId('pid-x'), reason: 'r' }))).toBe(NO_USER);
+        expect(rejection(test, linker, (ctx) => M.seed_identity_gc_job(ctx, {}))).toBe('Forbidden: caller is not the registered server identity.');
+        expect(rejection(test, linker, (ctx) => M.seed_lobby_gc_job(ctx, {}))).toBe('Forbidden: caller is not the registered server identity.');
+        expect(rejection(test, linker, (ctx) => M.login_as_guest(ctx, {}))).toBe(LINKER_NOT_A_USER_TEXT);
+        expect(rejection(test, linker, (ctx) => M.request_link_code(ctx, { clientNonce: nextNonce() }))).toBe(NO_ACCOUNT);
+        expect(rejection(test, linker, (ctx) => M.confirm_link(ctx, { confirmToken: TOKEN_A }))).toBe(NO_ACCOUNT);
+        expect(rejection(test, linker, (ctx) => M.update_display_name(ctx, { newDisplayName: 'x' }))).toBeTruthy();
+        expect([...test.db.User.iter()]).toHaveLength(usersBefore);
+        expect(userRow(test, v.userId)!.role.tag).toBe('User');
+    });
+
+    it('a linker connecting and disconnecting writes nothing user-related; under maintenance its connection is refused (the Owner is admitted)', () => {
+        const test = newHarness();
+        const linker = LINKER(test);
+        const identity = test.viewContext(linker.auth).sender;
+        const before = jsonOf([[...test.db.User.iter()], [...test.db.UserIdentity.iter()], [...test.db.UserPresence.iter()]]);
+        tx(test, linker, (ctx) => M.client_connected(ctx, {}));
+        tx(test, linker, (ctx) => M.client_disconnected(ctx, {}));
+        expect(jsonOf([[...test.db.User.iter()], [...test.db.UserIdentity.iter()], [...test.db.UserPresence.iter()]])).toBe(before);
+        expect(test.db.UserPresence.identity.find(identity)).toBeFalsy();
+
+        const config = test.db.AbuseConfig.id.find(ABUSE_CONFIG_ID)!;
+        test.db.AbuseConfig.id.update({ ...config, maintenanceMode: true });
+        expect(rejection(test, linker, (ctx) => M.client_connected(ctx, {}))).toMatch(/Maintenance mode/);
+        tx(test, 'internal', (ctx) => M.client_connected(ctx, {}));
+    });
+
+    it('server_revoke_linker: owner only; after the revoke the old linker cannot present; the delegate and linker revokes do not cross', () => {
+        const test = newHarness();
+        const linker = LINKER(test);
+        const hex = test.viewContext(linker.auth).sender.toHexString();
+        const delegate = registeredDelegate(test, 'delegate-v');
+        const delegateHex = delegate.identity.toHexString();
+        expect(rejection(test, delegate, (ctx) => M.server_revoke_linker(ctx, { identityHex: hex }))).toBe(OWNER_ONLY);
+        expect(rejection(test, 'internal', (ctx) => M.server_revoke_linker(ctx, { identityHex: delegateHex }))).toBe('Only linkers can be revoked here.');
+        expect(rejection(test, 'internal', (ctx) => M.server_revoke_delegate(ctx, { identityHex: hex }))).toBe('Only delegates can be revoked.');
+
+        const g = guest(test, 'after-revoke');
+        requestCode(test, g);
+        const code = codeOf(test, g);
+        tx(test, 'internal', (ctx) => M.server_revoke_linker(ctx, { identityHex: hex }));
+        expect(test.db.ServerIdentity.identity.find(Identity.fromString(hex))).toBeFalsy();
+        expect(rejection(test, linker, (ctx) => M.linker_present_code(ctx, presentArgs(code, '100000000000000060', 'X', TOKEN_A)))).toBe(LINKER_ONLY_TEXT);
+        expect(myRequest(test, g)[0]).toMatchObject({ code, awaitingConfirm: false });
+    });
 });

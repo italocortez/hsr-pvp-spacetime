@@ -19,6 +19,8 @@ export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..
 
 /** Written next to STDB_SERVER_TOKEN by bootstrap, so the next bootstrap can revoke the old delegate. */
 export const SERVER_IDENTITY_KEY = 'STDB_SERVER_IDENTITY';
+/** M5a3: the identity hex of the Linker bootstrap registered last (the one the next run revokes). */
+export const LINK_IDENTITY_KEY = 'STDB_LINK_IDENTITY';
 
 export function envFilePath(target: Target): string {
     return resolve(REPO_ROOT, envFileFor(target));

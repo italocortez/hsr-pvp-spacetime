@@ -5,7 +5,7 @@
 // the draft builders; HSR accounts and the ranked flag are written straight into the in-memory datastore (outside any
 // reducer). `test.db` is read only outside `tx` bodies. Nothing reaches maincloud.
 import { expect } from 'vitest';
-import { M, linkDiscord, guest, lobbyRow, setupLobby, tx, type Actor, type Harness, type Lobby, type SetupOpts } from './harness';
+import { discordId, M, linkDiscord, guest, lobbyRow, setupLobby, tx, type Actor, type Harness, type Lobby, type SetupOpts } from './harness';
 import { H, arrange, blueNames, captain, closeGame, draftWithBans, halves, redNames, side } from './draft-and-scoring';
 import { accountsOf, insertHsrAccount, roster } from './roster';
 
@@ -48,7 +48,7 @@ export function seedRatingData(test: Harness) {
  */
 export function twoAccountPlayer(test: Harness, name = 'multi', providerName = name): { who: Actor; acct1: number; acct2: number } {
     const who = guest(test, name);
-    linkDiscord(test, who, `discord-${name}`, providerName);
+    linkDiscord(test, who, discordId(`discord-${name}`), providerName);
     tx(test, who, (ctx) => M.create_hsr_account(ctx, { uid: '600000001', displayLabel: 'main' }));
     tx(test, who, (ctx) => M.create_hsr_account(ctx, { uid: '600000002', displayLabel: 'alt' }));
     const [acct1, acct2] = accountsOf(test, who.userId).map((a) => a.id).sort((a, b) => a - b);

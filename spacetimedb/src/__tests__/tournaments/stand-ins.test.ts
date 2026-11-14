@@ -7,6 +7,7 @@
 // (SI1 to SI16). In-memory only; nothing reaches maincloud. Every `it` cites the decision row and the audit id; each
 // rule is paired with its neighbouring allowed case. Probe sequences follow the audit's probes (P1 to P13).
 import { describe, it, expect } from 'vitest';
+import { discordId } from '../fixtures/harness'; // T-M5a3: valid Discord ids from labels
 import {
     M,
     tx,
@@ -844,11 +845,11 @@ describe('S10v fix pass: A137 and review findings', () => {
         seedAndGenerate(test, org, id);
         advanceStage(test, org, id, 'InProgress');
         const e = guest(test, 'existing');
-        linkDiscord(test, e, 'pid-existing-f2', 'Existing');
+        linkDiscord(test, e, discordId('pid-existing-f2'), 'Existing');
         const unrelated = bracketRows(test, id).find((r) => r.team1Id !== undefined && r.team2Id !== undefined && r.team1Id !== gTeam && r.team2Id !== gTeam)!;
         tx(test, org, approve(unrelated.id, unrelated.team1Id!, e.userId));
         expect(rowsOf(test)).toHaveLength(1);
-        linkDiscord(test, g, 'pid-existing-f2', 'ignored');
+        linkDiscord(test, g, discordId('pid-existing-f2'), 'ignored');
         expect(rowsOf(test)).toEqual([]);
     });
 

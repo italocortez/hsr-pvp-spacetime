@@ -3,6 +3,7 @@
 // Contracts: docs/auth/contract.md
 // From S6, S10r (s6-rules.test.ts, s10r-triage-fixes.test.ts).
 import { describe, expect, it } from 'vitest';
+import { discordId } from '../fixtures/harness'; // T-M5a3: valid Discord ids from labels
 import { M, expectReject, guest, linkDiscord, lobbyRow, newHarness, setupLobby, tx } from '../fixtures/harness';
 import { host, verified, fireDeletionJob, admin } from '../fixtures/identity';
 import { presetArgs, presetNamed } from '../fixtures/lobby';
@@ -12,7 +13,7 @@ describe('A45(3): delete_my_account', () => {
     it('a verified user outside any lobby is deleted through performUserDeletion', () => {
         const test = newHarness();
         const v = guest(test, 'v');
-        linkDiscord(test, v, 'discord-v', 'Verified');
+        linkDiscord(test, v, discordId('discord-v'), 'Verified');
         tx(test, v, (ctx) => M.delete_my_account(ctx, {}));
         expect(test.db.User.id.find(v.userId)).toBeNull();
         expect(test.db.UserIdentity.identity.find(v.identity)).toBeNull();
@@ -30,7 +31,7 @@ describe('A45(3): delete_my_account', () => {
     it('a verified user seated in a lobby is rejected', () => {
         const test = newHarness();
         const v = guest(test, 'v');
-        linkDiscord(test, v, 'discord-v', 'Verified');
+        linkDiscord(test, v, discordId('discord-v'), 'Verified');
         setupLobby(test, { noStart: true, actors: { b1: v } });
         expectReject(test, v, (ctx) => M.delete_my_account(ctx, {}), /Leave your lobby/);
         expect(test.db.User.id.find(v.userId)).not.toBeNull();

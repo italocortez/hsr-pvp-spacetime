@@ -74,9 +74,10 @@ Skip it for backend-only edits, pure refactors with no visual delta, and utility
 | Host / server | `wss://maincloud.spacetimedb.com` / `maincloud` | constants |
 | Node-side target | `STDB_TARGET` env **or** `--target` CLI flag (flag wins) | scripts, vitest configs, test harness |
 | Browser target | `VITE_STDB_TARGET` | Vercel = `prod` only: every Vercel deploy is treated as production (A174); `.env.development` and `npm run preview` = `test`; `vite preview` is refused |
-| Server token | `STDB_SERVER_TOKEN` | same key name, **different file per target** |
+| Server token | `STDB_SERVER_TOKEN` | same key name, **different file per target**; Admin-level; used by bootstrap, seed and the scripts only, never by the auth function |
+| Link token (A177) | `STDB_LINK_TOKEN` (+ `STDB_LINK_IDENTITY`) | the auth function's only database secret: it can present a sign-in code and nothing else, but that is enough to sign in as any Discord-linked account, so treat it as a top secret; written by bootstrap, kept across runs, `-- --rotate-linker` mints a new one |
 | Secret files | `.env.test.local`, `.env.prod.local` | gitignored by `.env*.local`; nothing reads `.env.local` |
-| Auth function secrets | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `AUTH_SECRET`, `STDB_SERVER_TOKEN` | Vercel env per environment; never in the repo |
+| Auth function secrets | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `AUTH_SECRET`, `STDB_LINK_TOKEN` | Vercel env for prod; `.env.test.local` for local login tests; never in the repo |
 | Module env (D-C1) | `STDB_TARGET` declared in `schema({...}, { env: { STDB_TARGET: t.enum('StdbTarget', ['test','prod']) } })` | the publish script spawns `spacetime publish …` with `STDB_TARGET=<target>` in the **process environment** (`publishArgs(...).env`). Note: the CLI's `--env <name>` flag selects a `spacetime.<name>.json` config file, it does not set a value (2.15.0 `publish --help`) |
 | npm scripts | `stdb:publish:test`, `stdb:publish:test:clear`, `stdb:publish:prod`, `stdb:bootstrap:<t>`, `stdb:seed:<t>`, `stdb:describe:<t>`, `stdb:generate`, `test:integration` (test only), `test:web`, `lint:ci` (`web/`, `shared/`, `scripts/ci/`, `scripts/preview/`; no SVG files), `check:patterns`, `preview` (test only) | all call `scripts/stdb/*.ts --target …` |
 

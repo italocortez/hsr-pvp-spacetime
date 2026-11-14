@@ -4,6 +4,7 @@
 // Contracts: docs/lobby/contract.md
 // From S4 (s4-referee-transfer.test.ts, s4-lobby-fixes.test.ts).
 import { describe, expect, it } from 'vitest';
+import { discordId } from '../fixtures/harness'; // T-M5a3: valid Discord ids from labels
 import { ScheduleAt } from 'spacetimedb';
 import {
     M,
@@ -253,10 +254,10 @@ describe('A48: multi-device presence', () => {
         // b1 on device 1, upgraded to a Discord user; device 2 logs in as a guest and links the same Discord id,
         // which re-points device 2's identity (and its UserPresence row) to b1's user.
         const dev1 = guest(test, 'b1');
-        linkDiscord(test, dev1, 'discord-b1', 'B1');
+        linkDiscord(test, dev1, discordId('discord-b1'), 'B1');
         const dev2 = guest(test, 'b1-phone');
         const orphanGuestId = dev2.userId;
-        linkDiscord(test, dev2, 'discord-b1', 'B1');
+        linkDiscord(test, dev2, discordId('discord-b1'), 'B1');
         expect(dev2.userId).toBe(dev1.userId);
         expect(orphanGuestId).not.toBe(dev1.userId);
         const presence = [...test.db.UserPresence.user_id.filter(dev1.userId)];

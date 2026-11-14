@@ -10,6 +10,7 @@ import { ConnectionId, TimeDuration, Timestamp } from 'spacetimedb';
 import { createModuleTestHarness, TestAuth, TestClock } from 'spacetimedb/server/test-utils';
 import spacetimedb from '@module/schema';
 import * as M from '@module/index';
+import { confirmHashOf, encodeBase64Url } from '@module/helpers/identity/linkCode';
 
 export { M, TestAuth };
 export const START = Timestamp.fromDate(new Date('2026-01-01T00:00:00Z'));
@@ -184,16 +185,55 @@ export function pendingCheck(test: Harness, lobbyId: number, userId: number): Ch
     return rows[0];
 }
 
-/** server_link_provider as the owner: links (or re-points) `a`'s identity to the user that owns `providerId`. */
+// ─── T-M5a3: signing in the real way (request, present as the linker, confirm) ───────────────────────────────────
+
+/**
+ * A stable, valid Discord id (a snowflake: 18 digits) from a readable label, so tests keep names like
+ * `discordId('fresh')` instead of literals. FNV-1a 64-bit over the label, folded into [1e17, 1e18). A label that is
+ * already a valid id (17 to 20 digits) is returned as it is.
+ */
+export function discordId(label: string): string {
+    if (/^[0-9]{17,20}$/.test(label)) return label;
+    let h = 0xcbf29ce484222325n;
+    for (let i = 0; i < label.length; i++) {
+        h ^= BigInt(label.charCodeAt(i));
+        h = BigInt.asUintN(64, h * 0x100000001b3n);
+    }
+    return String(100_000_000_000_000_000n + (h % 900_000_000_000_000_000n));
+}
+
+/** The fixed client nonce and confirm token of linkDiscord (the code still differs per identity). */
+export const TEST_CLIENT_NONCE = 'T'.repeat(42) + 'A';
+export const TEST_CONFIRM_TOKEN = encodeBase64Url(new Uint8Array(32).fill(7));
+export const TEST_CONFIRM_HASH = confirmHashOf(TEST_CONFIRM_TOKEN);
+
+const linkers = new WeakMap<object, TestAuth>();
+
+/** The harness's Linker identity (registered by the owner on first use), as the auth function would act. */
+export function linkerAuth(test: Harness): TestAuth {
+    let auth = linkers.get(test);
+    if (!auth) {
+        auth = TestAuth.fromJwtPayload(JSON.stringify({ iss: 'test', sub: 'linker-function' }), new ConnectionId(nextConnectionId++));
+        const identityHex = test.viewContext(auth).sender.toHexString();
+        test.withReducerTx(TestAuth.internal(), (ctx) => M.server_register_linker(ctx, { identityHex, label: 'vercel-link-test' }));
+        linkers.set(test, auth);
+    }
+    return auth;
+}
+
+/**
+ * T-M5a3: signs `a` in with the Discord account `providerId` the real way (the removed server_link_provider did this in
+ * one call): request_link_code as `a`, linker_present_code as the linker, confirm_link as `a`. Links (Case 1a) or
+ * re-points (Case 1b) `a`'s identity exactly as before; `a.userId` follows. Throws the refusal of whichever step
+ * refuses (a ban or the live-game rule at presentation, an already linked account at the request).
+ */
 export function linkDiscord(test: Harness, a: Actor, providerId: string, name: string) {
-    tx(test, 'internal', (ctx) =>
-        M.server_link_provider(ctx, {
-            callerIdentityHex: a.identity.toHexString(),
-            provider: 'discord',
-            providerId,
-            providerName: name,
-        }),
-    );
+    test.withReducerTx(a.auth, (ctx) => M.request_link_code(ctx, { clientNonce: TEST_CLIENT_NONCE }));
+    const code = test.db.LinkRequest.identity.find(a.identity)!.code;
+    test.withReducerTx(linkerAuth(test), (ctx) => M.linker_present_code(ctx, {
+        linkCode: code, provider: 'discord', providerId, providerName: name, confirmHash: TEST_CONFIRM_HASH,
+    }));
+    test.withReducerTx(a.auth, (ctx) => M.confirm_link(ctx, { confirmToken: TEST_CONFIRM_TOKEN }));
     a.userId = test.db.UserIdentity.identity.find(a.identity)!.userId;
 }
 

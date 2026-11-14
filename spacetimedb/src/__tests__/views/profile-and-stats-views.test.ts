@@ -3,6 +3,7 @@
 // Contracts: docs/views/contract.md
 // From S9b (s9b-views.test.ts).
 import { describe, expect, expectTypeOf, it } from 'vitest';
+import { discordId } from '../fixtures/harness'; // T-M5a3: valid Discord ids from labels
 import type {
     AdminAbuseConfigRow,
     AdminBanRecordRow,
@@ -185,14 +186,14 @@ describe('view_my_profile (S9b-V1, S3 hand-off, PAGE-MAP profile)', () => {
 
     it('a verified user: loginMethod / providerId / providerUsername from the User row (A46; A77: UserPrivate merged, row shape kept, hasDiscordLinked derived); role and title from User', () => {
         const test = newHarness();
-        const pat = linked(test, 'pat-dev', 'pid-pat', 'Pat');
+        const pat = linked(test, 'pat-dev', discordId('pid-pat'), 'Pat');
         test.db.User.id.update({ ...test.db.User.id.find(pat.userId)!, avatarCharacterName: 'Kafka', displayedAchievementId: 4 });
         setRole(test, pat.userId, 'Moderator');
         const [row] = view<MyProfileRow>(test, 'view_my_profile', pat);
         expect(row).toEqual({
             id: pat.userId, username: 'Pat', displayName: 'Pat', avatarCharacterName: 'Kafka', displayedAchievementId: 4,
             hasDiscordLinked: true, isGuest: false, role: test.db.User.id.find(pat.userId)!.role, loginMethod: 'discord',
-            providerId: 'pid-pat', providerUsername: 'Pat',
+            providerId: discordId('pid-pat'), providerUsername: 'Pat',
         });
         expect(row.role.tag).toBe('Moderator');
     });
@@ -210,7 +211,7 @@ describe('view_my_profile (S9b-V1, S3 hand-off, PAGE-MAP profile)', () => {
 describe('view_user_by_username(username) (S9b-V2, S9b-C4, A44(1) D7)', () => {
     function world() {
         const test = newHarness();
-        const erin = linked(test, 'erin-dev', 'pid-erin', 'ErinX');
+        const erin = linked(test, 'erin-dev', discordId('pid-erin'), 'ErinX');
         test.db.User.id.update({ ...test.db.User.id.find(erin.userId)!, avatarCharacterName: 'Kafka', displayedAchievementId: 3 });
         return { test, erin };
     }
@@ -233,7 +234,7 @@ describe('view_user_by_username(username) (S9b-V2, S9b-C4, A44(1) D7)', () => {
         const { test } = world();
         const boss = verified(test, 'boss');
         setRole(test, boss.userId, 'Admin');
-        tx(test, boss, (ctx) => M.admin_ban_user(ctx, { banTypeTag: 'DiscordId', providerId: 'pid-erin', reason: 'abuse' }));
+        tx(test, boss, (ctx) => M.admin_ban_user(ctx, { banTypeTag: 'DiscordId', providerId: discordId('pid-erin'), reason: 'abuse' }));
         expect(test.db.User.username.find('ErinX')!.deletedAt).toBeDefined();
         expect(shared(test, 'view_user_by_username', { username: 'ErinX' })).toEqual([]);
     });

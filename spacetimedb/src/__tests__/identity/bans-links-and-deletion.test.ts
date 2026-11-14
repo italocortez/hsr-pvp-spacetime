@@ -5,7 +5,7 @@
 //
 // T-S10 (batch C1): bans, provider linking and user deletion in memory, ported from the live
 // test/backend/auth/{ban-admin, server-link-provider, auth-security (SEC-03a only), user-deletion (the in-memory part)}
-// tests. Spec: docs/auth/contract.md (admin_ban_user, admin_unban_user, server_link_provider, clientConnected, the D-08
+// tests. Spec: docs/auth/contract.md (admin_ban_user, admin_unban_user, the sign-in (server_link_provider until M5a3), clientConnected, the D-08
 // three-point ban enforcement, D-09 cascade branching, D-12 resolveUserLabel) and docs/admin/contract.md
 // (admin_delete_row, run_user_deletion). Server reducers run as the owner identity ('internal', registered by init);
 // admin reducers run as a verified user promoted on the row. Scheduled UserDeletionJob rows are fired by hand
@@ -14,6 +14,7 @@
 // there the user adopted the code's wording (A76, T-S10 align) and the test asserts the code's exact text, state first.
 // Nothing reaches maincloud.
 import { describe, expect, it } from 'vitest';
+import { discordId, linkerAuth, TEST_CLIENT_NONCE, TEST_CONFIRM_HASH, TEST_CONFIRM_TOKEN } from '../fixtures/harness'; // T-M5a3
 import { ScheduleAt } from 'spacetimedb';
 import { resolveUserLabel } from '@module/helpers/identity/userLabel';
 import {
@@ -54,13 +55,22 @@ const NO_LINK = { loginMethod: undefined, providerId: undefined, providerUsernam
 const bans = (test: Harness) => [...test.db.BanRecord.iter()];
 const ban = (test: Harness, who: Actor | 'internal', providerId: string, reason = 'abuse', banTypeTag = 'DiscordId') =>
     tx(test, who, (ctx) => M.admin_ban_user(ctx, { banTypeTag, providerId, reason }));
-const link = (test: Harness, args: Partial<{ callerIdentityHex: string; provider: string; providerId: string; providerName: string }>) =>
-    tx(test, 'internal', (ctx) => M.server_link_provider(ctx, {
-        callerIdentityHex: args.callerIdentityHex ?? '',
+/**
+ * T-M5a3: a sign-in of `a` the real way (request as `a`, present as the linker, confirm as `a`) with presentation
+ * arguments that may be overridden; the removed server_link_provider took the same provider arguments in one call.
+ */
+const link = (test: Harness, a: Actor, args: Partial<{ provider: string; providerId: string; providerName: string }>) => {
+    tx(test, a, (ctx) => M.request_link_code(ctx, { clientNonce: TEST_CLIENT_NONCE }));
+    const code = test.db.LinkRequest.identity.find(a.identity)!.code;
+    test.withReducerTx(linkerAuth(test), (ctx) => M.linker_present_code(ctx, {
+        linkCode: code,
         provider: args.provider ?? 'discord',
         providerId: args.providerId ?? '',
         providerName: args.providerName ?? '',
+        confirmHash: TEST_CONFIRM_HASH,
     }));
+    tx(test, a, (ctx) => M.confirm_link(ctx, { confirmToken: TEST_CONFIRM_TOKEN }));
+};
 const deleteUserRow = (test: Harness, who: Actor | 'internal', userId: number | string) =>
     tx(test, who, (ctx) => M.admin_delete_row(ctx, { tableName: 'User', primaryKeyJson: String(userId) }));
 
@@ -89,8 +99,8 @@ describe('admin_ban_user (auth contract § admin_ban_user; D-08 point 3, D-10)',
     it('a provider id no user holds is banned without touching any user or scheduling a job', () => {
         const test = newHarness();
         const boss = admin(test);
-        ban(test, boss, 'pid-nobody');
-        expect(bans(test).map((b) => b.providerId)).toEqual(['pid-nobody']);
+        ban(test, boss, discordId('pid-nobody'));
+        expect(bans(test).map((b) => b.providerId)).toEqual([discordId('pid-nobody')]);
         expect([...test.db.UserDeletionJob.iter()]).toHaveLength(0);
         expect(userRow(test, boss)!.deletedAt).toBeUndefined();
     });
@@ -104,7 +114,7 @@ describe('admin_ban_user (auth contract § admin_ban_user; D-08 point 3, D-10)',
     ])('input validation: %s is rejected and nothing is written', (_label, over, msg) => {
         const test = newHarness();
         const boss = admin(test);
-        const args = { banTypeTag: 'DiscordId', providerId: 'pid-1', reason: 'abuse', ...over };
+        const args = { banTypeTag: 'DiscordId', providerId: discordId('pid-1'), reason: 'abuse', ...over };
         expectReject(test, boss, (ctx) => M.admin_ban_user(ctx, args), msg);
         expect(bans(test)).toHaveLength(0);
     });
@@ -112,10 +122,10 @@ describe('admin_ban_user (auth contract § admin_ban_user; D-08 point 3, D-10)',
     it('a second ban of the same provider id is rejected (contract error "Duplicate ban exists") (text per A76)', () => {
         const test = newHarness();
         const boss = admin(test);
-        ban(test, boss, 'pid-dup');
-        const msg = rejection(test, boss, (ctx) => M.admin_ban_user(ctx, { banTypeTag: 'DiscordId', providerId: 'pid-dup', reason: 'again' }));
+        ban(test, boss, discordId('pid-dup'));
+        const msg = rejection(test, boss, (ctx) => M.admin_ban_user(ctx, { banTypeTag: 'DiscordId', providerId: discordId('pid-dup'), reason: 'again' }));
         expect(bans(test)).toHaveLength(1);
-        expect(msg).toBe('Provider DiscordId:pid-dup is already banned.');
+        expect(msg).toBe(`Provider DiscordId:${discordId('pid-dup')} is already banned.`); // T-M5a3: the id is a snowflake
     });
 
     it('a guest, a verified User and a Moderator are rejected: Admin only (contract error "Caller is not Admin")', () => {
@@ -124,7 +134,7 @@ describe('admin_ban_user (auth contract § admin_ban_user; D-08 point 3, D-10)',
         const user = verified(test, 'plain');
         const mod = moderator(test);
         for (const who of [g, user, mod]) {
-            expectReject(test, who, (ctx) => M.admin_ban_user(ctx, { banTypeTag: 'DiscordId', providerId: 'pid-x', reason: 'abuse' }), ADMIN_ONLY);
+            expectReject(test, who, (ctx) => M.admin_ban_user(ctx, { banTypeTag: 'DiscordId', providerId: discordId('pid-x'), reason: 'abuse' }), ADMIN_ONLY);
         }
         expect(bans(test)).toHaveLength(0);
     });
@@ -134,12 +144,12 @@ describe('admin_unban_user (auth contract § admin_unban_user; D-07 permanent ba
     it('deletes the BanRecord, after which the provider id links again (D-08 point 1 no longer fires)', () => {
         const test = newHarness();
         const boss = admin(test);
-        ban(test, boss, 'pid-lifted');
+        ban(test, boss, discordId('pid-lifted'));
         const id = bans(test)[0].id;
         tx(test, boss, (ctx) => M.admin_unban_user(ctx, { banRecordId: id }));
         expect(bans(test)).toHaveLength(0);
         const back = guest(test, 'back');
-        linkDiscord(test, back, 'pid-lifted', 'Back');
+        linkDiscord(test, back, discordId('pid-lifted'), 'Back');
         expect(userRow(test, back)).toMatchObject({ isGuest: false, loginMethod: 'discord' });
     });
 
@@ -147,7 +157,7 @@ describe('admin_unban_user (auth contract § admin_unban_user; D-07 permanent ba
         const test = newHarness();
         const boss = admin(test);
         const mod = moderator(test);
-        ban(test, boss, 'pid-stays');
+        ban(test, boss, discordId('pid-stays'));
         const id = bans(test)[0].id;
         expectReject(test, boss, (ctx) => M.admin_unban_user(ctx, { banRecordId: 4040 }), /BanRecord #?4040 not found/);
         expectReject(test, mod, (ctx) => M.admin_unban_user(ctx, { banRecordId: id }), ADMIN_ONLY);
@@ -194,72 +204,71 @@ describe('ban on reconnect (auth contract § clientConnected; D-08 point 2, D-10
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// server_link_provider (auth contract § server_link_provider; admin contract § server_link_discord)
+// Provider linking (auth contract § server_link_provider; since M5a3 the sign-in: request, present, confirm)
 // ════════════════════════════════════════════════════════════════════════════
 
-describe('server_link_provider as the owner server identity', () => {
+describe('provider linking through the sign-in (T-M5a3: was server_link_provider as the owner)', () => {
     it('Case 1a: a guest is upgraded (isGuest false, username / displayName = providerName) and its User row gets the provider link with linkedAt (A77; scenario "Provider Linking (Discord)")', () => {
         const test = newHarness();
         const g = guest(test, 'fresh');
-        link(test, { callerIdentityHex: g.identity.toHexString(), providerId: 'pid-fresh', providerName: 'FreshName' });
+        link(test, g, { providerId: discordId('pid-fresh'), providerName: 'FreshName' });
         expect(userRow(test, g)).toMatchObject({ isGuest: false, username: 'FreshName', displayName: 'FreshName',
-            loginMethod: 'discord', providerId: 'pid-fresh', providerUsername: 'FreshName' });
+            loginMethod: 'discord', providerId: discordId('pid-fresh'), providerUsername: 'FreshName' });
         expect(userRow(test, g)!.linkedAt?.microsSinceUnixEpoch).toBe(now(test));
     });
 
-    it('Case 1c: re-linking the same identity is idempotent: one User row, still verified, the username kept, the provider username refreshed, linkedAt kept (A77; edge case "already-verified user")', () => {
+    it('T-M5a3 (was Case 1c, the refresh of a linked identity): a linked user cannot start a second sign-in; the link, username and linkedAt are unchanged', () => {
         const test = newHarness();
         const g = guest(test, 'twice');
-        const hex = g.identity.toHexString();
-        link(test, { callerIdentityHex: hex, providerId: 'pid-twice', providerName: 'First' });
-        const linkedAt = userRow(test, g)!.linkedAt;
+        link(test, g, { providerId: discordId('pid-twice'), providerName: 'First' });
+        const before = userRow(test, g);
         advance(test, 60_000);
-        link(test, { callerIdentityHex: hex, providerId: 'pid-twice', providerName: 'Renamed' });
-        expect([...test.db.User.provider_id.filter('pid-twice')].map((u) => u.id)).toEqual([g.userId]);
-        expect(userRow(test, g)).toMatchObject({ isGuest: false, username: 'First', providerUsername: 'Renamed', linkedAt });
+        expect(() => link(test, g, { providerId: discordId('pid-twice'), providerName: 'Renamed' })).toThrow('This account is already linked.');
+        expect([...test.db.User.provider_id.filter(discordId('pid-twice'))].map((u) => u.id)).toEqual([g.userId]);
+        expect(userRow(test, g)).toEqual(before);
         expect(identitiesOf(test, g.userId)).toHaveLength(1);
     });
 
     it.each([
-        ['an empty providerId', { providerId: '' }, 'providerId is required'],
+        ['an empty providerId', { providerId: '' }, 'providerId is not a Discord id.'],
         ['an empty providerName', { providerName: '' }, 'providerName is required'],
-        ['an empty callerIdentityHex', { callerIdentityHex: '' }, 'callerIdentityHex is required'],
-        ['a callerIdentityHex that is not an identity', { callerIdentityHex: 'not-hex' }, 'callerIdentityHex is not a valid identity'],
         ['an unknown provider', { provider: 'facebook' }, 'Invalid provider "facebook". Must be one of: discord'],
     ])('input validation: %s is rejected; the guest is unchanged', (_label, over, msg) => {
         const test = newHarness();
         const g = guest(test, 'val');
-        const args = { callerIdentityHex: g.identity.toHexString(), provider: 'discord', providerId: 'pid-val', providerName: 'Val', ...over };
-        expect(() => link(test, args)).toThrow(msg);
+        const args = { provider: 'discord', providerId: discordId('pid-val'), providerName: 'Val', ...over };
+        expect(() => link(test, g, args)).toThrow(msg);
         expect(userRow(test, g)).toMatchObject({ isGuest: true, ...NO_LINK });
     });
 
-    it('an identity with no UserIdentity row is told to log in as a guest first (contract error "Identity not registered")', () => {
+    it('an identity with no UserIdentity row is told to log in as a guest first: refused at the request with "No account for this identity" (T-M5a3; the merge\'s "Identity not registered" is pinned in provider-link-direct)', () => {
         const test = newHarness();
-        const { identity } = freshAuth(test, 'never-logged-in');
-        expect(() => link(test, { callerIdentityHex: identity.toHexString(), providerId: 'pid-new', providerName: 'New' }))
-            .toThrow('Identity not registered. Call login_as_guest first.');
+        const { auth, identity } = freshAuth(test, 'never-logged-in');
+        const nobody = { sub: 'never-logged-in', auth, identity, userId: -1 } as Actor;
+        expect(() => link(test, nobody, { providerId: discordId('pid-new'), providerName: 'New' }))
+            .toThrow('No account for this identity. Call login_as_guest first.');
         expect([...test.db.User.iter()].filter((u) => u.providerId !== undefined)).toHaveLength(0); // T-S11a (A77)
     });
 
-    it('a caller that is not a registered server identity is rejected, even an Admin', () => {
+    it('a caller that is not the linker identity cannot present a sign-in, even an Admin (T-M5a3: was "not a registered server identity")', () => {
         const test = newHarness();
         const boss = admin(test);
         const g = guest(test, 'victim');
-        expectReject(test, boss, (ctx) => M.server_link_provider(ctx, {
-            callerIdentityHex: g.identity.toHexString(), provider: 'discord', providerId: 'pid-steal', providerName: 'Steal',
-        }), 'Forbidden: caller is not a registered server identity.');
+        tx(test, g, (ctx) => M.request_link_code(ctx, { clientNonce: TEST_CLIENT_NONCE }));
+        const linkCode = test.db.LinkRequest.identity.find(g.identity)!.code;
+        expectReject(test, boss, (ctx) => M.linker_present_code(ctx, {
+            linkCode, provider: 'discord', providerId: discordId('pid-steal'), providerName: 'Steal', confirmHash: TEST_CONFIRM_HASH,
+        }), 'Forbidden: caller is not the registered linker identity.');
         expect(userRow(test, g)!.isGuest).toBe(true);
     });
 
     it('SEC-03a: a banned provider id cannot be linked; no provider link is written and the user is unchanged (scenario "Ban Enforcement at Link-Time") (text per A76)', () => {
         const test = newHarness();
         const boss = admin(test);
-        ban(test, boss, 'pid-banned');
+        ban(test, boss, discordId('pid-banned'));
         const g = guest(test, 'wannabe');
-        const msg = rejection(test, 'internal', (ctx) => M.server_link_provider(ctx, {
-            callerIdentityHex: g.identity.toHexString(), provider: 'discord', providerId: 'pid-banned', providerName: 'Wannabe',
-        }));
+        let msg = '';
+        try { link(test, g, { providerId: discordId('pid-banned'), providerName: 'Wannabe' }); } catch (e) { msg = (e as Error).message; }
         expect(userRow(test, g)).toMatchObject({ isGuest: true, ...NO_LINK });
         expect(msg).toBe('This discord account is banned and cannot be linked.');
     });

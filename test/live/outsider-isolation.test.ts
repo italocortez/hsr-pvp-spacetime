@@ -18,8 +18,8 @@
  * player sees them), so an empty outsider cache is not vacuous; where the player's own cache is empty too (no draft
  * step, no game, no lineup in a match conceded at the start of the draft) the check still runs and says so in its title.
  *
- * Maincloud calls (one run): 5 connections (+3 short delegate connections for server_link_provider); about 19 reducer
- * calls (4 login_as_guest, 3 server_link_provider, 2 create_hsr_account, create_lobby, 2 set_team_slot, 2 confirm_ready,
+ * Maincloud calls (one run): 5 connections (+3 short linker connections for linker_present_code, T-M5a3); about 25 reducer
+ * calls (4 login_as_guest, 3 request_link_code + 3 linker_present_code + 3 confirm_link, 2 create_hsr_account, create_lobby, 2 set_team_slot, 2 confirm_ready,
  * 2 join_lobby, select_match_account, start_draft, concede_match); about 30 subscribe calls, the largest being U's one
  * call over the 38 per-sender views without arguments (0 rows expected). No reference table is subscribed.
  *
@@ -28,7 +28,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { DbConnection } from '@bindings/index';
-import { hasServerToken } from '../shared/connection';
+import { hasLinkToken } from '../shared/sign-in';
 import {
     type LiveConn,
     type LiveUser,
@@ -101,7 +101,7 @@ async function readOnce(conn: DbConnection, view: string, query: string): Promis
 /** A random 9-digit UID with a valid region digit (validateUid: /^\d{9}$/, first digit 6-9). */
 const randomUid = () => `6${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`;
 
-describe.skipIf(!hasServerToken())('Outsider isolation over the wire (§D.5, triage L110)', () => {
+describe.skipIf(!hasLinkToken())('Outsider isolation over the wire (§D.5, triage L110)', () => {
     const open: Array<LiveConn | LiveUser> = [];
     let A: LiveUser; // host, Blue player
     let B: LiveUser; // Red player

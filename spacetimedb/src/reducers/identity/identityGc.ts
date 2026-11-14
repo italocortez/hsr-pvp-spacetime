@@ -12,6 +12,7 @@ import { ensureModerator } from '@module/helpers/identity/ensurePermissions';
 import { hasLivePresence } from '@module/helpers/identity/presenceHelpers';
 import { hasHistoryReferences, performUserDeletion } from '@module/helpers/identity/userDeletionHelper';
 import { sweepExpiredCalendarRows } from '@module/helpers/calendar/calendarCleanup';
+import { trustedServerRow } from '@module/helpers/identity/serverIdentities';
 import { LINK_SWEEP_GC_SCAN_LIMIT, sweepStaleLinkRequests } from '@module/helpers/identity/linkCode';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -293,7 +294,8 @@ function armIdentityGcJobIfMissing(ctx: any): boolean {
 
 export const seed_identity_gc_job = spacetimedb.reducer((ctx) => {
     // Server-only: verify caller is the registered server identity
-    const server = ctx.db.ServerIdentity.identity.find(ctx.sender);
+    // M5a3: a Linker is not a trusted server identity (trustedServerRow).
+    const server = trustedServerRow(ctx, ctx.sender);
     if (!server) {
         throw new SenderError('Forbidden: caller is not the registered server identity.');
     }

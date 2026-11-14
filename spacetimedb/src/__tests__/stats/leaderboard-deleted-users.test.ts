@@ -77,7 +77,7 @@ describe('A163(1): a ranked user deleted on each path leaves the leaderboard; th
         });
     }
 
-    it('identity GC and server_link_provider delete through the same performUserDeletion call: a ranked guest leaves the board too', () => {
+    it('identity GC and the sign-in re-point (confirm_link) delete through the same performUserDeletion call: a ranked guest leaves the board too', () => {
         // The identity GC never deletes a guest that holds a Leaderboard row (hasHistoryReferences checks it), so the
         // cascade is driven directly with the GC's arguments (actor SYSTEM_USER_ID 0, no options).
         const { test, a, b, c } = world();
