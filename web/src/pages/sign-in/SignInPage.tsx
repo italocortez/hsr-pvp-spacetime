@@ -4,25 +4,10 @@ import { IpcActionButton } from '@/components/IpcButton/IpcButton';
 import { SplashLayout } from '@/components/SplashLayout/SplashLayout';
 import { useDocumentTitle } from '@/lib/useDocumentTitle';
 import styles from './SignInPage.module.css';
+import { SIGN_IN_FRAME, SIGN_IN_TEXT, SIGN_IN_TITLE } from './signInText';
 import { defaultSignInIo, type SignInIo, type SignInPhase, useSignIn } from './useSignIn';
 
-const IMAGE = { src: '/standby.webp', width: 1920, height: 1080 };
-
-/** Wording: the orchestrator's proposal (M5b), kept exactly for the user's ruling. */
-export const SIGN_IN_TEXT = {
-    eyebrow: 'Access // Sign in',
-    chip: 'SYS://AUTH',
-    lede: 'Sign in with Discord to get access to all our lobby, tournament and calendar features!',
-    button: 'Sign in with Discord',
-    notConfigured: 'Sign-in is not configured on this machine.',
-    confirmButton: 'Link this account',
-    cancel: 'Cancel',
-    failedLede: 'Nothing was changed. You can try again.',
-    tooLong: 'The sign-in took too long. Please try again.',
-    changed: 'The sign-in changed in another tab. Please try again.',
-    unknown: 'The connection dropped. The result is unknown: reload and check before trying again.',
-    tryAgain: 'Try again',
-} as const;
+export { SIGN_IN_TEXT };
 
 type View = { title: ReactNode; lede: ReactNode; notice?: string; action: ReactNode };
 
@@ -40,19 +25,11 @@ export function SignInPage({
     io?: SignInIo;
 }) {
     const { phase, start, confirm, cancel } = useSignIn({ status, next }, io);
-    useDocumentTitle('Sign in — IPC Battlegrounds');
+    useDocumentTitle(SIGN_IN_TITLE);
     const view = describe(phase, { start, confirm, cancel });
 
     return (
-        <SplashLayout
-            image={IMAGE}
-            hudLabel={SIGN_IN_TEXT.chip}
-            hudCoord="Sector 00 · Access"
-            eyebrow={SIGN_IN_TEXT.eyebrow}
-            title={view.title}
-            lede={view.lede}
-            action={view.action}
-        >
+        <SplashLayout {...SIGN_IN_FRAME} title={view.title} lede={view.lede} action={view.action}>
             {view.notice && (
                 <p className={styles.notice} role="status">
                     {view.notice}

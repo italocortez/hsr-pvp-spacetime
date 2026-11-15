@@ -1,4 +1,4 @@
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { authStore } from '@/auth/authStore';
@@ -201,6 +201,8 @@ describe('failure splashes in place of the routes', () => {
     it('reconnecting blocks nothing', async () => {
         renderWithConnection('/lobbies', conn, { ready: true });
         act(() => setConnectionStatus({ state: 'reconnecting', reason: 'Connection lost' }));
-        expect(await screen.findByText('Lobbies')).toBeInTheDocument();
+        // S14.1: the bar also says "Lobbies"; the page is the placeholder in the main area.
+        const main = await screen.findByRole('main');
+        expect(await within(main).findByText('Lobbies')).toBeInTheDocument();
     });
 });

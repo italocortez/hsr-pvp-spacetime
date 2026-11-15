@@ -21,7 +21,10 @@ export const LAYER0_QUERIES = {
 export function profileToAuth(rows: readonly MyProfileRow[]): AuthSnapshot {
     const row = rows[0];
     if (!row) return { ready: true };
-    return { ready: true, user: { id: row.id, role: row.role, isGuest: row.isGuest } };
+    return {
+        ready: true,
+        user: { id: row.id, role: row.role, isGuest: row.isGuest, displayName: row.displayName },
+    };
 }
 
 function sameAuth(a: AuthSnapshot, b: AuthSnapshot): boolean {
@@ -30,7 +33,8 @@ function sameAuth(a: AuthSnapshot, b: AuthSnapshot): boolean {
     return (
         a.user.id === b.user.id &&
         a.user.role.tag === b.user.role.tag &&
-        a.user.isGuest === b.user.isGuest
+        a.user.isGuest === b.user.isGuest &&
+        a.user.displayName === b.user.displayName
     );
 }
 

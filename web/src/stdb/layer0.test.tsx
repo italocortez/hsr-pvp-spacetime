@@ -31,11 +31,12 @@ describe('profileToAuth', () => {
         expect(profileToAuth([])).toEqual({ ready: true });
     });
 
-    it('a row is a ready user with the numeric id, role and guest flag of the row', () => {
+    // S14.1: the user also carries the display name (the bar's account area).
+    it('a row is a ready user with the numeric id, role, guest flag and display name of the row', () => {
         const row = profileRow({ id: 42, role: { tag: 'Moderator' }, isGuest: true });
         expect(profileToAuth([row])).toEqual({
             ready: true,
-            user: { id: 42, role: { tag: 'Moderator' }, isGuest: true },
+            user: { id: 42, role: { tag: 'Moderator' }, isGuest: true, displayName: 'Kafka' },
         });
         expect(typeof profileToAuth([row]).user?.id).toBe('number');
     });
@@ -67,7 +68,7 @@ describe('startLayer0', () => {
         conn.apply(LAYER0_QUERIES.profile);
         expect(auth()).toEqual({
             ready: true,
-            user: { id: 9, role: { tag: 'Admin' }, isGuest: false },
+            user: { id: 9, role: { tag: 'Admin' }, isGuest: false, displayName: 'Kafka' },
         });
     });
 
@@ -80,25 +81,43 @@ describe('startLayer0', () => {
         conn.db.viewMyProfile.insert(guest);
         expect(auth()).toEqual({
             ready: true,
-            user: { id: 3, role: { tag: 'User' }, isGuest: true },
+            user: { id: 3, role: { tag: 'User' }, isGuest: true, displayName: 'Kafka' },
         });
 
         const promoted = { ...guest, isGuest: false, role: { tag: 'Moderator' as const } };
         conn.db.viewMyProfile.update(guest, promoted);
-        expect(auth().user).toEqual({ id: 3, role: { tag: 'Moderator' }, isGuest: false });
+        expect(auth().user).toEqual({
+            id: 3,
+            role: { tag: 'Moderator' },
+            isGuest: false,
+            displayName: 'Kafka',
+        });
 
         conn.db.viewMyProfile.delete(promoted);
         expect(auth()).toEqual({ ready: true });
     });
 
-    it('keeps the same snapshot object when a row change does not touch id, role or guest flag', () => {
+    it('keeps the same snapshot object when a row change does not touch id, role, guest flag or display name', () => {
+        stop = startLayer0(conn);
+        const row = profileRow();
+        conn.db.viewMyProfile.seed(row);
+        conn.apply(LAYER0_QUERIES.profile);
+        const before = auth();
+        // S14.1: the display name is now part of the snapshot (renamed below), so an unshown
+        // field stands in here.
+        conn.db.viewMyProfile.update(row, { ...row, avatarCharacterName: 'himeko' });
+        expect(auth()).toBe(before);
+    });
+
+    it('S14.1: a display name change gives a new snapshot with the new name', () => {
         stop = startLayer0(conn);
         const row = profileRow();
         conn.db.viewMyProfile.seed(row);
         conn.apply(LAYER0_QUERIES.profile);
         const before = auth();
         conn.db.viewMyProfile.update(row, { ...row, displayName: 'Renamed' });
-        expect(auth()).toBe(before);
+        expect(auth()).not.toBe(before);
+        expect(auth().user?.displayName).toBe('Renamed');
     });
 
     it('a second applied (a replay after a reconnect) keeps the mapping and subscribes nothing new', () => {

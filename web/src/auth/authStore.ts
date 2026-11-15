@@ -6,7 +6,13 @@ export type AuthSnapshot = {
     /** False until the connection has said who the viewer is; guards wait instead of redirecting. */
     ready: boolean;
     /** Absent for a visitor (not signed in). */
-    user?: { id: MyProfileRow['id']; role: Role; isGuest: boolean };
+    user?: {
+        id: MyProfileRow['id'];
+        role: Role;
+        isGuest: boolean;
+        /** The profile's display name, for the bar's account area (S14.1). */
+        displayName?: string;
+    };
 };
 
 // Not ready until the first `view_my_profile` result arrives (stdb/layer0.ts); tests set snapshots.

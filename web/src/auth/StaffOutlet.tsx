@@ -1,7 +1,7 @@
 import { Outlet } from '@tanstack/react-router';
 import { NoAccessPage } from '@/pages/no-access/NoAccessPage';
 import { useAuth } from './authStore';
-import { isStaff } from './guards';
+import { showsNoAccess } from './guards';
 import { NotReady } from './NotReady';
 
 /**
@@ -12,5 +12,5 @@ import { NotReady } from './NotReady';
 export function StaffOutlet() {
     const auth = useAuth();
     if (!auth.ready || !auth.user) return <NotReady />;
-    return isStaff(auth) ? <Outlet /> : <NoAccessPage />;
+    return showsNoAccess(auth) ? <NoAccessPage /> : <Outlet />;
 }

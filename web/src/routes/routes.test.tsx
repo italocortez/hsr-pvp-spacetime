@@ -1,7 +1,16 @@
 import { act, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { setAuthSnapshot } from '@/auth/authStore';
+import { loadSignInPage } from '@/pages/sign-in/signInPanel';
 import { AUTH, renderWithRouter } from '@/test/renderWithRouter';
+
+// S14.1: `/?login=1` resolves only once the sign-in panel's chunk has loaded (the route's loader).
+// Loaded once up front, so no guard case below waits on a module transform (a cold transform
+// cache takes over a second); the cold path itself is pinned in shell/signIn*.test.tsx.
+// (Awaited in a block: a hook that returns a function has it called as its teardown.)
+beforeAll(async () => {
+    await loadSignInPage();
+}, 30_000);
 
 /*
  * The real `App` and route tree with the app's router options (docs/frontend/pages.md
@@ -101,10 +110,13 @@ describe('guards: live auth changes', () => {
         expect(href(r)).toBe('/admin');
     });
 
-    it('not ready on a guarded route renders no main and does not redirect', async () => {
+    // S14.1: the page area stays blank (no heading, no content) inside the app shell's one main;
+    // before the shell the blank state had no main at all.
+    it('not ready on a guarded route renders an empty main and does not redirect', async () => {
         const r = renderWithRouter('/profile', AUTH.notReady);
         await expectResolved(r, '/profile');
-        expect(screen.queryByRole('main')).toBeNull();
+        expect(screen.getByRole('main')).toBeEmptyDOMElement();
+        expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
     });
 
     it('not ready to ready as a visitor redirects to sign in', async () => {

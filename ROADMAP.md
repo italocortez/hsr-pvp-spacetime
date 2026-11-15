@@ -74,7 +74,7 @@ Each executed step writes its log to `docs/log/<date>-<step>.md` (goal, decision
 | S11b | Live checks that need pages (split from S11, A158): the two-tabs presence check; both countdowns (turn and reserve), the manual resume after a return, the client clock offset; cursor events in the room; a guided walk-through with the user if asked (format in `test/README.md`). Re-publish to test1 if the module changed since S11a (user gate) | M10 | pending |
 | S12 | Contract/architecture updates, DECISIONS.md, skill refresh (A51, A52) | S11b | pending |
 | S13 | First prod publish, bootstrap, lock, first admin (user gate); M8 production deploy follows | S12 | pending |
-| S14.1 | Port: shell + `standby` (404, maintenance) | S13 | pending |
+| S14.1 | Port: shell + `standby` (404, maintenance). App shell done 2026-11-15, ahead of S13 (user: "yeah u can go shell after"): bar, account menu, reconnecting banner, focus and announcement after navigation, connection loaded after the first render (entry 455 kB to 175 kB). Open: the phone bar form (A180 item 3) | M5 | done 2026-11-15 |
 | S14.2 | Port: `costs` | S14.1 | pending |
 | S14.3 | Port: `teambuilder` | S14.2 | pending |
 | S14.4 | Port: `index` (landing, auth modal, create-lobby modal) | S14.3 | pending |

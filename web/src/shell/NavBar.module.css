@@ -1,0 +1,331 @@
+@import "@/styles/media.css";
+
+/*
+ * Port of the mockups' navigation bar (`.navbar` in design/mockups/*.html, the same rules in the
+ * nine that have one). At every width the items scroll sideways when they do not fit. Phone
+ * widths (below --bp-sm, 560): index.html's 768px rule (bar padding 12px) plus tighter spacing
+ * around the brand mark and the items, so one item and part of the next stay visible at 390px
+ * (docs/frontend/pages.md, Shell). DESIGN.md 5.3: fixed 56px bar, frosted glass on the bar itself.
+ */
+
+.bar {
+    --bar-pad: 24px;
+
+    position: fixed;
+    inset-block-start: 0;
+    inset-inline: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    block-size: 56px;
+    padding: 0 var(--bar-pad) 6px;
+    background: var(--bg-nav);
+
+    @media (--bp-sm) {
+        --bar-pad: 12px;
+    }
+
+    /* Frosted glass where supported; the solid nav surface otherwise (the mockups' value). */
+    @supports (backdrop-filter: blur(1px)) {
+        background: color-mix(in srgb, var(--bg-nav) 80%, transparent);
+        backdrop-filter: blur(12px);
+    }
+
+    /* The 6px hairline band along the bottom edge. */
+    &::after {
+        content: "";
+        position: absolute;
+        inset: auto 0 0 0;
+        block-size: 6px;
+        background: var(--border-subtle);
+        z-index: 0;
+    }
+}
+
+.left {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.home {
+    display: flex;
+    align-items: center;
+    padding: 6px;
+
+    @media (--bp-sm) {
+        padding: 6px 4px;
+    }
+}
+
+.logo {
+    inline-size: 36px;
+    block-size: 36px;
+    transition: filter var(--duration-base) var(--ease-out);
+
+    @media (prefers-reduced-motion: no-preference) {
+        transition:
+            filter var(--duration-base) var(--ease-out),
+            transform var(--duration-base) var(--ease-out);
+    }
+
+    .home:hover & {
+        filter: drop-shadow(0 0 6px rgba(126, 112, 224, 0.6));
+
+        @media (prefers-reduced-motion: no-preference) {
+            transform: scale(1.08);
+        }
+    }
+
+    /* DESIGN.md 5.3 / 7: the calm persistent glow on the current home link. */
+    .home[aria-current="page"] & {
+        filter: drop-shadow(0 0 5px rgba(126, 112, 224, 0.45));
+    }
+
+    .home[aria-current="page"]:hover & {
+        filter: drop-shadow(0 0 8px rgba(126, 112, 224, 0.7));
+    }
+}
+
+/* Scroll chevrons: transparent and inert until there is more on their side. */
+.chevron {
+    position: relative;
+    z-index: 20;
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    inline-size: 20px;
+    block-size: 56px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: transparent;
+    font-size: 18px;
+    cursor: default;
+    pointer-events: none;
+    transition: color var(--duration-fast) var(--ease-out);
+
+    &[data-chevron="left"] {
+        margin-inline-end: 4px;
+    }
+
+    &[data-chevron="right"] {
+        margin-inline-start: 4px;
+    }
+
+    @media (--bp-sm) {
+        inline-size: 16px;
+
+        &[data-chevron="left"] {
+            margin-inline-end: 0;
+        }
+
+        &[data-chevron="right"] {
+            margin-inline-start: 0;
+        }
+    }
+
+    /* The base rule's 44px coarse-pointer minimum would widen a hidden chevron. */
+    @media (pointer: coarse) {
+        min-inline-size: 0;
+    }
+}
+
+.chevronVisible {
+    color: var(--color-ash);
+    cursor: pointer;
+    pointer-events: auto;
+
+    &:hover {
+        color: var(--color-snow);
+    }
+}
+
+.nav {
+    display: flex;
+    flex: 1;
+    min-inline-size: 0;
+}
+
+/* The items: one row that scrolls sideways when it does not fit (the mockups' `.centerNav`). */
+.items {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-inline-size: 0;
+    margin: 0 0 -12px;
+    padding: 0 0 12px;
+    list-style: none;
+    overflow-x: auto;
+    /* A focused item scrolls in clear of the list's edges, so its ring is never cut off. */
+    scroll-padding-inline: 4px;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+        display: none;
+    }
+}
+
+.itemSlot {
+    display: flex;
+    flex-shrink: 0;
+}
+
+.item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    block-size: 40px;
+    padding: 8px 20px 8px 24px;
+    font-family: var(--font-secondary);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: var(--text-muted);
+    transition:
+        color var(--duration-fast) var(--ease-out),
+        letter-spacing var(--duration-fast) var(--ease-out),
+        text-shadow var(--duration-fast) var(--ease-out);
+
+    @media (--bp-sm) {
+        padding: 8px 14px 8px 18px;
+    }
+
+    &:hover {
+        color: var(--text-heading);
+        letter-spacing: 1.8px;
+        text-shadow: 0 0 8px rgba(238, 238, 246, 0.3);
+    }
+
+    /* Persistent selected state: champagne label and the swept-in underline mark. */
+    &[aria-current="page"] {
+        color: var(--color-prestige);
+        text-shadow: 0 0 10px rgba(201, 169, 97, 0.4);
+    }
+
+    /* A focus ring inside the scroller, which clips anything outside its padding box. */
+    &:focus-visible {
+        outline-offset: -2px;
+        color: var(--text-heading);
+    }
+
+    /* The skewed hairline between neighbours. */
+    .itemSlot + .itemSlot &::before {
+        content: "";
+        position: absolute;
+        inset-inline-start: -1px;
+        inset-block-start: 15%;
+        inline-size: 1px;
+        block-size: 70%;
+        background: rgba(255, 255, 255, 0.15);
+        transform: skewX(-19.7deg);
+    }
+}
+
+/* The champagne underline mark: hidden by a zero-height mask, swept up on hover and when current. */
+.itemBorder {
+    position: absolute;
+    inset: 0 0 -8px 0;
+    z-index: 2;
+    background: var(--accent-prestige);
+    clip-path: polygon(
+        17px 0,
+        3px calc(100% - 8px),
+        0 100%,
+        calc(100% - 15px) calc(100% - 5px),
+        calc(100% - 14px) calc(100% - 8px),
+        100% 0,
+        calc(100% - 16px) calc(100% - 8px),
+        5px calc(100% - 8px)
+    );
+    mask-image: linear-gradient(to top, black, black);
+    mask-size: 100% 0%;
+    mask-position: bottom;
+    mask-repeat: no-repeat;
+    pointer-events: none;
+    transition: mask-size 0.25s var(--ease-out);
+
+    .item:hover &,
+    .item[aria-current="page"] & {
+        mask-size: 100% 100%;
+    }
+
+    .item[aria-current="page"] & {
+        @media (prefers-reduced-motion: no-preference) {
+            animation: glowPulse 2.4s var(--ease-in-out) infinite;
+        }
+    }
+}
+
+@keyframes glowPulse {
+    0%,
+    100% {
+        filter: drop-shadow(0 0 3px rgba(201, 169, 97, 0.4));
+    }
+
+    50% {
+        filter: drop-shadow(0 0 8px rgba(201, 169, 97, 0.7));
+    }
+}
+
+.right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    margin-inline-start: 12px;
+
+    @media (--bp-sm) {
+        gap: 4px;
+        margin-inline-start: 4px;
+    }
+}
+
+/* The admin gear (staff only); champagne with a slow glow on /admin. */
+.gear {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    color: var(--text-muted);
+    transition: color var(--duration-fast) var(--ease-out);
+
+    &:hover {
+        color: var(--text-heading);
+    }
+
+    &[aria-current="page"] {
+        color: var(--color-prestige);
+    }
+}
+
+.gearIcon {
+    @media (prefers-reduced-motion: no-preference) {
+        transition: transform var(--duration-base) var(--ease-out);
+
+        .gear:hover & {
+            transform: rotate(90deg);
+        }
+
+        .gear[aria-current="page"] & {
+            animation: gearGlow 2.6s var(--ease-in-out) infinite;
+        }
+    }
+}
+
+@keyframes gearGlow {
+    0%,
+    100% {
+        filter: drop-shadow(0 0 3px rgba(201, 169, 97, 0.35));
+    }
+
+    50% {
+        filter: drop-shadow(0 0 9px rgba(201, 169, 97, 0.7));
+    }
+}

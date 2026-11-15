@@ -4,6 +4,11 @@ import { type LoginSearch, parseLoginSearch } from '@/auth/loginSearch';
 /** Search params of `/`: the login prompt (`login`, `next`) plus the return `status` (M5b). */
 export type IndexSearch = LoginSearch & { status?: LoginStatus };
 
+/** True when `/`'s validated search asks for the sign-in panel (`login=1`). */
+export function isSignInSearch(search: Record<string, unknown>): boolean {
+    return search.login === 1;
+}
+
 /**
  * `validateSearch` for `/`. `status` is kept only when it is one of the four return words the
  * function writes (`confirm`, `refused`, `cancelled`, `failed`); nothing else is read from the

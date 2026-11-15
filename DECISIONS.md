@@ -1795,3 +1795,19 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   3. The real Discord test passed in Edge and Firefox on localhost against the test database (2026-11-14).
 - **Why:** user, 2026-11-14: "the signin says ... I should just read \"Sign in with Discord to get access to all our lobby, tournament and calendar features!\""; "i accept your recomendations on the other open points you have".
 - **Where implemented:** `web/src/pages/sign-in/SignInPage.tsx`, `docs/frontend/pages.md`, `docs/log/2026-11-14-m5b.md`
+
+### A180 — S14.1: the app shell
+
+- **Date:** 2026-11-15 · **Status:** items 1 and 2 decided; items 3 to 9 implemented as the orchestrator's choices, for the user to rule on
+- **Decision:**
+  1. The app shell is built now, before M10 and the page ports.
+  2. Sign-in stays a full-screen splash page; the landing mockup's auth modal comes with the landing port and reuses the same sign-in logic.
+  3. Open: on phones the bar is the mockups' sideways-scrolling row (at 390 px a visitor sees the current item and part of the next; tightened below 560 px with the landing mockup's own narrow values). Orchestrator recommends a menu button below 560 px instead; the row ships meanwhile.
+  4. Orchestrator: the Admin gear shows for staff only (all nine mockups show it to everyone).
+  5. Orchestrator: wording "Sign in" (mockups: "LOG IN"), "Profile", "Sign out", "Account", "Skip to main content", "Reconnecting…", and for a page that fails to load "The page could not be loaded. Check your connection and try again."
+  6. Orchestrator: unported pages render inside the shell with the standby block; a guarded page waiting for the profile shows the bar above an empty main.
+  7. Orchestrator: no avatar image in the account chip yet (an initial); avatars need the reference set, which `/` and `/profile` must not trigger.
+  8. Orchestrator: no footer in the shell (two mockups have one; it comes with the landing page); the tournaments item links to `/tournaments`; the active-lobby item waits for the lobby room port.
+  9. Implementer's deviation, accepted: the shell is the root layout's body, not a pathless layout route (moving eleven route files would delete paths); the reconnecting notice appears after 2 seconds; focus moves to the new page's heading after a client-side navigation once the viewer has pressed a key or pointer.
+- **Why:** user, 2026-11-14: "yeah u can go shell after"; the sign-in recommendation was among those accepted in A179.
+- **Where implemented:** `web/src/shell/`, `web/src/stdb/{LazyStdbProvider.tsx,tokenStorage.ts}`, `web/src/routes/{__root,index}.tsx`, `web/src/pages/sign-in/`, `web/src/pages/connection/LoadFailedPage.tsx`, `docs/frontend/pages.md`, `docs/log/2026-11-15-s14-1.md`

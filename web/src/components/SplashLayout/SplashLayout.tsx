@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { BrandLogo } from '@/components/BrandLogo/BrandLogo';
 import { HudChip } from '@/components/HudChip/HudChip';
 import { IpcButton } from '@/components/IpcButton/IpcButton';
+import { useInShell } from '@/shell/shellContext';
 import styles from './SplashLayout.module.css';
 
 type Props = {
@@ -23,7 +24,8 @@ type Props = {
  * Full-bleed editorial screen from design/mockups/standby.html (DESIGN.md §4.5): art + scrims,
  * brand mark, HUD chip, text column with one IPC CTA back to base, bottom HUD line.
  * Used by the standby page and, through `ErrorSplash`, the 404 and no-access pages, and through
- * `ConnectionSplash` the offline and maintenance screens.
+ * `ConnectionSplash` the offline and maintenance screens. Inside the app shell (S14.1: the standby
+ * block of an unported page) it renders without its own `main` and brand link.
  */
 export function SplashLayout({
     image,
@@ -35,8 +37,12 @@ export function SplashLayout({
     children,
     action = <IpcButton to="/">Return to Base</IpcButton>,
 }: Props) {
+    // Inside the app shell (S14.1: the standby block of an unported page) the shell owns the
+    // `main` landmark and the brand mark, and sets `--shell-offset` to its bar height.
+    const inShell = useInShell();
+    const Root = inShell ? 'div' : 'main';
     return (
-        <main className={styles.splash}>
+        <Root className={styles.splash}>
             <img
                 className={styles.image}
                 src={image.src}
@@ -50,10 +56,12 @@ export function SplashLayout({
             <div className={styles.scrimEdges} aria-hidden="true" />
 
             {/* The word is hidden on narrow screens; the label keeps the link's name (= the visible text). */}
-            <Link className={styles.brand} to="/" aria-label="IPC Battlegrounds">
-                <BrandLogo className={styles.brandLogo} />
-                <span className={styles.brandWord}>IPC Battlegrounds</span>
-            </Link>
+            {!inShell && (
+                <Link className={styles.brand} to="/" aria-label="IPC Battlegrounds">
+                    <BrandLogo className={styles.brandLogo} />
+                    <span className={styles.brandWord}>IPC Battlegrounds</span>
+                </Link>
+            )}
 
             <div className={styles.hud}>
                 <HudChip label={hudLabel} />
@@ -74,6 +82,6 @@ export function SplashLayout({
                 <span className={styles.sep} />
                 <span>v0.9</span>
             </div>
-        </main>
+        </Root>
     );
 }

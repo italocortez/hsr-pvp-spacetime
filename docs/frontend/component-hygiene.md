@@ -11,6 +11,7 @@ Rules for every page and component PR in `web/`. They are narrow on purpose: a r
 | `web/src/auth/` | the auth store, role helper, route guards and the `next` check |
 | `web/src/pages/<page>/` | one folder per screen: `<Name>Page.tsx`, its `<Name>Page.module.css`, page hooks (`use*.ts`) |
 | `web/src/components/<Name>/` | shared pieces used by two or more pages: `<Name>.tsx` + `<Name>.module.css` |
+| `web/src/shell/` | the app shell around every non-splash page (S14.1): bar, account area, banner, announcer, the splash rule; each component with its own `.module.css` |
 | `web/src/styles/` | the only global CSS: `tokens.css`, `media.css`, `base.css`, plus `fonts.css` (the `@font-face` rules) |
 | `web/src/lib/` | hooks and helpers with no markup (`lib/legacy/` is reference only, not built or typechecked) |
 
@@ -66,6 +67,10 @@ State, derivations, effects and URL or storage sync go into a `use*` hook next t
 ## Rule 5: layout-agnostic props
 
 A prop answers "what does this show?", never "where am I rendered?". No `isInSidebar`, `leftOffset`, `stackVertically`. The parent positions the component by wrapping it (for example `SplashLayout` wraps `HudChip` in its corner slot). Two genuinely different presentations are two components with the same data contract.
+
+One sanctioned exception (S14.1): the app shell provides `useInShell()` (`web/src/shell/shellContext.ts`) because it owns the page's `main` landmark and the brand mark. A full-bleed layout reads it to avoid a second `main` and a second brand link (`SplashLayout`); sizes still come from the parent through a custom property (`--shell-offset`), not from the context.
+
+Page routes that render a full-screen splash say so in `staticData.splash` (`web/src/shell/splash.ts`), so the shell is left out before the route's chunk loads.
 
 ## Rule 6: CSS is co-located and uses tokens
 

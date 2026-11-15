@@ -24,6 +24,14 @@ export function safeNextPath(value: unknown): string | undefined {
 }
 
 /**
+ * The search of the sign-in address for a viewer on `href` (the bar's "Sign in", S14.1):
+ * `login=1` and `next` when `href` passes `safeNextPath`, else no `next`.
+ */
+export function loginSearchFor(href: string): LoginSearch {
+    return { login: 1, next: safeNextPath(href) };
+}
+
+/**
  * `validateSearch` for `/`: keeps `login` only when it is the text "1" (typed as `1`) and `next`
  * only when it is safe (a repeated `next` arrives as an array and is dropped). The router also
  * re-runs validators on already-validated values when it builds a location, so `1` is accepted

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { authStore, setAuthSnapshot } from '@/auth/authStore';
 import type { StdbConnectionLike } from '@/stdb/types';
 import { MockBuilder } from '@/test/mockConnection';
-import { isRefusedToken, readStoredToken, storeToken, wireConnectionEvents } from './connection';
+import { isRefusedToken, wireConnectionEvents } from './connection';
 import { setCurrentConnection } from './connectionContext';
 import {
     classifyFailure,
@@ -12,6 +12,7 @@ import {
     resetConnectionStatus,
     retryConnection,
 } from './connectionStatus';
+import { readStoredToken, storeToken } from './tokenStorage';
 
 /*
  * The connection callbacks (M6 brief items 1 and 3): token storage, the status store and its

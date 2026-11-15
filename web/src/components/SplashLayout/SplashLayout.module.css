@@ -8,7 +8,8 @@
     grid-template-columns: minmax(0, 540px) 1fr;
     align-items: center;
     inline-size: 100%;
-    min-block-size: 100dvh;
+    /* `--shell-offset`: the app shell's bar height when rendered below it (S14.1), else 0. */
+    min-block-size: calc(100dvh - var(--shell-offset, 0px));
     overflow: hidden;
     background: var(--color-void);
 
@@ -216,6 +217,11 @@
 
     @media (--bp-sm) {
         font-size: clamp(2.5rem, 13vw, 4rem);
+    }
+
+    /* A focus target after navigation (S14.1, RouteAnnouncer), not a control: no ring. */
+    &[tabindex="-1"]:focus {
+        outline: none;
     }
 }
 

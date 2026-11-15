@@ -7,10 +7,24 @@ import { type AuthSnapshot, setAuthSnapshot } from './authStore';
 
 const PRESETS = {
     visitor: { ready: true },
-    guest: { ready: true, user: { id: 1, role: { tag: 'User' }, isGuest: true } },
-    member: { ready: true, user: { id: 2, role: { tag: 'User' }, isGuest: false } },
-    moderator: { ready: true, user: { id: 3, role: { tag: 'Moderator' }, isGuest: false } },
-    admin: { ready: true, user: { id: 4, role: { tag: 'Admin' }, isGuest: false } },
+    guest: {
+        ready: true,
+        user: { id: 1, role: { tag: 'User' }, isGuest: true, displayName: 'Guest 0001' },
+    },
+    member: {
+        ready: true,
+        user: { id: 2, role: { tag: 'User' }, isGuest: false, displayName: 'Trailblazer' },
+    },
+    moderator: {
+        ready: true,
+        user: { id: 3, role: { tag: 'Moderator' }, isGuest: false, displayName: 'March 7th' },
+    },
+    admin: {
+        ready: true,
+        user: { id: 4, role: { tag: 'Admin' }, isGuest: false, displayName: 'Nathyron' },
+    },
+    /** Not ready: the bar's neutral account placeholder (S14.1). */
+    notReady: { ready: false },
 } satisfies Record<string, AuthSnapshot>;
 
 type DevAuthArg = AuthSnapshot | keyof typeof PRESETS;

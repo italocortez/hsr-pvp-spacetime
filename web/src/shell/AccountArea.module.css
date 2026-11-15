@@ -1,0 +1,262 @@
+@import "@/styles/media.css";
+
+/*
+ * The bar's account area: the mockups' `.loginCta` (visitor) and `.accountChip` (member), flush
+ * with the bar's right edge (margin cancels the bar padding). Mockup 560px snaps to --bp-sm (560,
+ * exact). index.html's 768px CTA shrink applies below --bp-sm (560) only, for phone widths.
+ */
+
+/*
+ * The placeholder has the "Sign in" control's size (its natural width in Inter, 131px), so a
+ * visitor's control replaces it without a shift; a member's chip has its own width.
+ */
+.slot {
+    --account-inline: 131px;
+    --account-block: 50px;
+
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    /* Flush with the window edge: cancels the bar's side padding (NavBar.module.css). */
+    margin-inline-end: calc(-1 * var(--bar-pad, 24px));
+
+    /* Phone widths: index.html's 768px `.loginCta` rule (44px high, smaller type). */
+    @media (--bp-sm) {
+        --account-inline: 92px;
+        --account-block: 44px;
+    }
+}
+
+/* Not ready: a quiet angled block where the control will appear. */
+.placeholder {
+    display: block;
+    inline-size: var(--account-inline);
+    block-size: var(--account-block);
+    clip-path: polygon(18px 0, 100% 0, 100% 100%, 0 100%);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+/* Visitor and guest: the angled iris "Sign in" CTA with the hover shimmer (DESIGN.md 5.1, nav size). */
+.signIn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: var(--account-inline);
+    block-size: var(--account-block);
+    padding: 0 32px 0 40px;
+    overflow: hidden;
+    clip-path: polygon(18px 0, 100% 0, 100% 100%, 0 100%);
+    background: var(--cta-fill);
+    color: var(--cta-text);
+    font-family: var(--font-secondary);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    transition:
+        background var(--duration-fast) var(--ease-out),
+        letter-spacing var(--duration-fast) var(--ease-out),
+        padding var(--duration-fast) var(--ease-out),
+        filter var(--duration-fast) var(--ease-out);
+
+    &::before {
+        content: "";
+        position: absolute;
+        inset-block: 0;
+        inset-inline-start: -200%;
+        inline-size: 200%;
+        background:
+            linear-gradient(115deg, transparent 20%, rgba(255, 255, 255, 0.3) 24%, transparent 28%),
+            linear-gradient(95deg, transparent 35%, rgba(255, 255, 255, 0.2) 38%, transparent 42%),
+            linear-gradient(108deg, transparent 50%, rgba(255, 255, 255, 0.4) 53%, transparent 57%);
+
+        @media (prefers-reduced-motion: no-preference) {
+            transition: inset-inline-start var(--duration-slow) var(--ease-out);
+        }
+    }
+
+    &:hover {
+        background: var(--cta-fill-hover);
+        letter-spacing: 2.5px;
+        padding-inline-end: 34px;
+        filter: brightness(1.05) drop-shadow(0 0 8px rgba(126, 112, 224, 0.55));
+
+        &::before {
+            inset-inline-start: 100%;
+        }
+    }
+
+    &:active {
+        background: var(--cta-fill-pressed);
+
+        @media (prefers-reduced-motion: no-preference) {
+            transform: scale(0.96);
+        }
+    }
+
+    /* The clip-path would cut an outside ring: draw it inside. */
+    &:focus-visible {
+        outline: 2px solid var(--color-snow);
+        outline-offset: -5px;
+    }
+
+    /* index.html at 768px: padding 0 18px 0 26px, 11px type, 1px letter spacing (snapped to 560). */
+    @media (--bp-sm) {
+        padding: 0 18px 0 26px;
+        font-size: 0.6875rem;
+        letter-spacing: 1px;
+
+        &:hover {
+            letter-spacing: 1.5px;
+            padding-inline-end: 18px;
+        }
+    }
+}
+
+/* Member: the account chip opening the menu. */
+.menuWrap {
+    position: relative;
+    display: flex;
+}
+
+.chip {
+    position: relative;
+    display: inline-flex;
+    align-items: stretch;
+    block-size: var(--account-block);
+    padding: 1px;
+    border: none;
+    clip-path: polygon(18px 0, 100% 0, 100% 100%, 0 100%);
+    background: rgba(255, 255, 255, 0.12);
+    cursor: pointer;
+    transition:
+        background var(--duration-fast) var(--ease-out),
+        filter var(--duration-fast) var(--ease-out);
+
+    &:hover {
+        background: rgba(126, 112, 224, 0.6);
+        filter: drop-shadow(0 0 8px rgba(126, 112, 224, 0.45));
+    }
+
+    /* Open: the mockups' current-page tint of the chip. */
+    &[aria-expanded="true"] {
+        background: rgba(126, 112, 224, 0.5);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-snow);
+        outline-offset: -5px;
+    }
+}
+
+.chipInner {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    block-size: 100%;
+    padding: 0 30px 0 15px;
+    background:
+        linear-gradient(rgba(126, 112, 224, 0.18), rgba(126, 112, 224, 0.09)), var(--bg-nav);
+    transition: background var(--duration-fast) var(--ease-out);
+
+    .chip:hover & {
+        background:
+            linear-gradient(rgba(126, 112, 224, 0.28), rgba(126, 112, 224, 0.16)), var(--bg-nav);
+    }
+
+    @media (--bp-sm) {
+        padding: 0 22px 0 15px;
+    }
+}
+
+/* The avatar's fallback: the first letter on an iris disc (no image before the reference set). */
+.avatar {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    inline-size: 32px;
+    block-size: 32px;
+    border: 1px solid rgba(126, 112, 224, 0.6);
+    border-radius: 50%;
+    background: rgba(126, 112, 224, 0.22);
+    box-shadow: 0 0 8px rgba(126, 112, 224, 0.35);
+    color: var(--text-heading);
+    font-family: var(--font-primary);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.chipName {
+    max-inline-size: 16ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-primary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-mist);
+
+    /* Narrow screens show the disc only (the mockups); the name stays the button's name. */
+    @media (--bp-sm) {
+        position: absolute;
+        inline-size: 1px;
+        block-size: 1px;
+        margin: -1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+}
+
+/* The menu: a popover panel (DESIGN.md 11.3, 12px) under the chip. */
+.menu {
+    position: absolute;
+    inset-block-start: calc(100% + 6px);
+    inset-inline-end: 12px;
+    z-index: 110;
+    display: grid;
+    gap: 2px;
+    min-inline-size: 11rem;
+    padding: 6px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-panel);
+    background: var(--bg-elevated);
+
+    &[hidden] {
+        display: none;
+    }
+}
+
+.menuItem {
+    display: flex;
+    align-items: center;
+    min-block-size: 44px;
+    padding: 0 14px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-body);
+    font-family: var(--font-secondary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-align: start;
+    cursor: pointer;
+    transition:
+        background var(--duration-fast) var(--ease-out),
+        color var(--duration-fast) var(--ease-out);
+
+    &:hover,
+    &:focus-visible {
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text-heading);
+    }
+
+    &:focus-visible {
+        outline-offset: -2px;
+    }
+}

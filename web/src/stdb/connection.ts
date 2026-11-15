@@ -7,6 +7,7 @@ import {
     failConnection,
     setConnectionStatus,
 } from './connectionStatus';
+import { deleteStoredToken, readStoredToken, storeToken } from './tokenStorage';
 
 const getStatus = () => connectionStatusStore.getSnapshot().status;
 
@@ -16,34 +17,6 @@ const getStatus = () => connectionStatusStore.getSnapshot().status;
  * subscription after a reconnect (spacetimedb 2.15.0 `sdk/connection_manager.ts`,
  * `sdk/db_connection_impl.ts` `#replaySubscriptions`); nothing here reconnects by itself.
  */
-
-/** The stored SDK token, or undefined (none yet, empty, or storage blocked). */
-export function readStoredToken(key: string): string | undefined {
-    try {
-        return globalThis.localStorage?.getItem(key) || undefined;
-    } catch {
-        return undefined;
-    }
-}
-
-/** Saves the SDK token (never an empty one); a blocked storage only costs the identity next visit. */
-export function storeToken(key: string, token: string | undefined): void {
-    if (!token) return;
-    try {
-        globalThis.localStorage?.setItem(key, token);
-    } catch {
-        // Storage blocked (private window, site data off): the app keeps working this session.
-    }
-}
-
-/** Forgets the stored SDK token (the next connection is a new anonymous identity). */
-export function deleteStoredToken(key: string): void {
-    try {
-        globalThis.localStorage?.removeItem(key);
-    } catch {
-        // Storage blocked: nothing was stored either.
-    }
-}
 
 /**
  * True when the server refused the stored token at the token exchange

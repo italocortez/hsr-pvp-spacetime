@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseLoginSearch, safeNextPath } from './loginSearch';
+import { loginSearchFor, parseLoginSearch, safeNextPath } from './loginSearch';
 
 // The `next` rule (docs/frontend/pages.md, "The `next` rule"; A166 to A169).
 describe('safeNextPath', () => {
@@ -101,5 +101,26 @@ describe('parseLoginSearch', () => {
 
     it('ignores unknown keys', () => {
         expect(parseLoginSearch({ login: '1', other: 'x' })).toEqual({ login: 1, next: undefined });
+    });
+});
+
+// T-SHELL (S14.1): the bar's "Sign in" address for the page the viewer is on.
+describe('loginSearchFor', () => {
+    it('carries a safe page address as next', () => {
+        expect(loginSearchFor('/costs?el=fire#top')).toEqual({
+            login: 1,
+            next: '/costs?el=fire#top',
+        });
+    });
+
+    it.each([
+        ['a protocol-relative address', '//evil.example'],
+        ['a backslash form', '/\\evil.example'],
+        ['a control character', '/\t/evil.example'],
+        ['an over-long path', `/${'a'.repeat(2048)}`],
+    ])('drops next for %s', (_label, href) => {
+        const search = loginSearchFor(href);
+        expect(search.login).toBe(1);
+        expect(search.next).toBeUndefined();
     });
 });

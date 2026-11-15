@@ -84,7 +84,10 @@ describe('the panel', () => {
                 'Sign in with Discord to get access to all our lobby, tournament and calendar features!',
             ),
         ).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Sign in with Discord' })).toBeEnabled();
+        // S14.1: the panel's inert frame (same h1, button disabled) shows while its chunk loads.
+        await waitFor(() =>
+            expect(screen.getByRole('button', { name: 'Sign in with Discord' })).toBeEnabled(),
+        );
         await waitFor(() => expect(document.title).toBe('Sign in — IPC Battlegrounds'));
         expect(subscribedToLinkView(conn)).toBe(false);
     });

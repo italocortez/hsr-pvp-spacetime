@@ -1,0 +1,43 @@
+@import "@/styles/media.css";
+
+/* The reconnecting line, just under the fixed bar; it never takes pointer input. */
+
+.region {
+    position: fixed;
+    inset-block-start: 62px;
+    inset-inline: 0;
+    z-index: 90;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+
+    /* Narrow screens: start-aligned, clear of a page's top-right chip (the standby HUD chip). */
+    @media (--bp-sm) {
+        justify-content: flex-start;
+        padding-inline: 12px;
+    }
+}
+
+.banner {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 14px;
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    background: var(--bg-elevated);
+    color: var(--text-heading);
+    font-family: var(--font-primary);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+
+    &::before {
+        content: "";
+        inline-size: 6px;
+        block-size: 6px;
+        border-radius: 50%;
+        background: var(--color-warning);
+    }
+}

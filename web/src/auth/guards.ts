@@ -18,3 +18,8 @@ export function requireUser(auth: AuthSnapshot, href: string): void {
 export function isStaff(auth: AuthSnapshot): boolean {
     return auth.user !== undefined && isRoleAtLeast(auth.user.role, 'Moderator');
 }
+
+/** True when `_admin` shows the no-access page in place: a ready user below Moderator. */
+export function showsNoAccess(auth: AuthSnapshot): boolean {
+    return auth.ready && auth.user !== undefined && !isStaff(auth);
+}

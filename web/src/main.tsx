@@ -7,7 +7,9 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from '@/App';
 import { assertDevTarget } from '@/stdb/assertDevTarget';
-import { StdbProvider } from '@/stdb/StdbProvider';
+// The connection layer (SDK, bindings, StdbProvider) loads in its own chunk after the first
+// render (S14.1, A171 item 2); this entry imports none of it.
+import { LazyStdbProvider } from '@/stdb/LazyStdbProvider';
 
 // Fails fast on a missing or unknown VITE_STDB_TARGET, before any connection is built.
 const env = resolveBrowserEnv(import.meta.env);
@@ -20,9 +22,9 @@ if (!root) throw new Error('#root is missing from index.html');
 function render(): void {
     createRoot(root as HTMLElement).render(
         <StrictMode>
-            <StdbProvider>
+            <LazyStdbProvider>
                 <App />
-            </StdbProvider>
+            </LazyStdbProvider>
         </StrictMode>,
     );
 }

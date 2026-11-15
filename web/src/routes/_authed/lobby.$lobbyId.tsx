@@ -4,6 +4,8 @@ import { NotFoundPage } from '@/pages/not-found/NotFoundPage';
 import { StandbyPage } from '@/pages/standby/StandbyPage';
 
 export const Route = createFileRoute('/_authed/lobby/$lobbyId')({
+    // A bad id renders the not-found splash, outside the app shell (S14.1).
+    staticData: { splash: ({ params }) => parseLobbyId(params.lobbyId) === undefined },
     component: LobbyRoute,
 });
 
