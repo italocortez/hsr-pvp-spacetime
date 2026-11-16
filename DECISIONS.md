@@ -1821,3 +1821,10 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   3. Open: the width at which the menu replaces the row. It ships at 560 px. Between 561 and about 1,000 px the row still scrolls (one fully visible item at 561 px, two at 700 px, all five only from about 1,040 px). Orchestrator and reviewer recommend 1040 px, the step of the breakpoint scale where the full row fits for everyone. One line moves it: `--nav-menu` in `web/src/styles/media.css`.
 - **Why:** user, 2026-11-15: "would like another A/B test for the mobile menu, assuming it keep the same vibe as the nav bar"; then "I like how B2 was implemented, we can use that".
 - **Where implemented:** `web/src/shell/{PhoneMenu.tsx,NavBar.tsx,NavBar.module.css}`, `web/src/components/MenuIcon/`, `web/src/styles/media.css`, `docs/frontend/pages.md`, `docs/log/2026-11-15-s14-1b.md`
+
+### A182 — The menu is for phones; tablets keep the desktop bar
+
+- **Date:** 2026-11-15 · **Status:** decided
+- **Decision:** The menu button replaces the item row at phone widths only. The switch point stays at 560 px (`--nav-menu` in `web/src/styles/media.css`). Tablets and narrow desktop windows keep the original bar with the scrolling item row. Settles A181 item 3; the orchestrator's and reviewer's recommendation of 1040 px is not taken.
+- **Why:** user, 2026-11-15: "i would like this menu mainly for mobile versions, i think the tablet versions can still use the original desktop version".
+- **Where implemented:** no code change; `web/src/styles/media.css` already holds 560 px
