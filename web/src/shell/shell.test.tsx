@@ -483,7 +483,7 @@ describe('account menu', () => {
     });
 });
 
-describe('narrow screens: the items scroll, with pointer-only chevrons', () => {
+describe('the items row (above the menu switch point): the items scroll, with pointer-only chevrons', () => {
     it('the chevrons are out of the Tab order and hidden from assistive technology', async () => {
         const { container } = renderWithRouter('/costs', AUTH.visitor);
         await headline();

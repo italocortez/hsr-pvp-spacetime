@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { type CSSProperties, useEffect, useState } from 'react';
 import { useConnectionStatus } from '@/stdb/connectionStatus';
 import styles from './ConnectionBanner.module.css';
 
@@ -26,10 +26,12 @@ export function useReconnectingNotice(delayMs: number = RECONNECTING_NOTICE_MS):
  * the page stays usable under it. The polite live region is always present, so the text is
  * announced when it appears; the offline and maintenance splashes are separate (ConnectionGate).
  */
-export function ConnectionBanner() {
+export function ConnectionBanner({ inset = 0 }: { inset?: number }) {
     const show = useReconnectingNotice();
+    // `inset`: the open phone menu panel's height (S14.1b); the line sits below the panel.
+    const style = inset > 0 ? ({ '--menu-inset': `${inset}px` } as CSSProperties) : undefined;
     return (
-        <div className={styles.region} aria-live="polite" data-connection-banner="">
+        <div className={styles.region} style={style} aria-live="polite" data-connection-banner="">
             {show && <p className={styles.banner}>{'Reconnecting…'}</p>}
         </div>
     );

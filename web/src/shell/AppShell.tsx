@@ -1,5 +1,5 @@
 import { useRouterState } from '@tanstack/react-router';
-import type { MouseEvent, ReactNode } from 'react';
+import { type MouseEvent, type ReactNode, useState } from 'react';
 import { useAuth } from '@/auth/authStore';
 import styles from './AppShell.module.css';
 import { ConnectionBanner } from './ConnectionBanner';
@@ -20,6 +20,8 @@ export const MAIN_ID = 'main';
 export function AppShell({ children }: { children?: ReactNode }) {
     const auth = useAuth();
     const splash = useRouterState({ select: (s) => isSplashScreen(s.matches, auth) });
+    // The phone menu's open panel height: the reconnecting line moves below it (S14.1b).
+    const [menuInset, setMenuInset] = useState(0);
 
     return (
         <>
@@ -30,8 +32,8 @@ export function AppShell({ children }: { children?: ReactNode }) {
                     <a className={styles.skipLink} href={`#${MAIN_ID}`} onClick={skipToMain}>
                         Skip to main content
                     </a>
-                    <NavBar auth={auth} />
-                    <ConnectionBanner />
+                    <NavBar auth={auth} onMenuInset={setMenuInset} />
+                    <ConnectionBanner inset={menuInset} />
                     <main id={MAIN_ID} className={styles.main} tabIndex={-1}>
                         {children}
                     </main>

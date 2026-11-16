@@ -33,8 +33,10 @@ export default defineConfig({
         setupFiles: ['src/test/setup.ts'],
         // CSS is not processed: a CSS Module import is a proxy that returns a stable class name
         // for every key, so `styles.x` is always a non-empty string. Global CSS is never imported
-        // by the tested code (main.tsx is not loaded).
-        css: { modules: { classNameStrategy: 'stable' } },
+        // by the tested code (main.tsx is not loaded). One exception: styles/media.css, which the
+        // bar imports as text (`?raw`) to read its switch point (`--nav-menu`, S14.1b); without
+        // this it would be an empty string in tests.
+        css: { include: [/\/src\/styles\/media\.css/], modules: { classNameStrategy: 'stable' } },
         testTimeout: 5000,
     },
 });

@@ -1,11 +1,12 @@
 import { Link, useRouterState } from '@tanstack/react-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { AuthSnapshot } from '@/auth/authStore';
 import { isStaff } from '@/auth/guards';
 import { BrandLogo } from '@/components/BrandLogo/BrandLogo';
 import { GearIcon } from '@/components/GearIcon/GearIcon';
 import { AccountArea } from './AccountArea';
 import styles from './NavBar.module.css';
+import { type PhoneItem, PhoneMenu, useFocusHandover, useMenuForm } from './PhoneMenu';
 
 /**
  * The bar's items, in the order of every mockup's `.centerNav` (design/mockups/*.html). Labels are
@@ -23,16 +24,47 @@ export const NAV_ITEMS = [
 /** How far one chevron click scrolls the items (the mockups' value). */
 const SCROLL_STEP = 150;
 
+/** The panel's extra row for staff (the gear's target; the gear is not shown in the menu form). */
+const ADMIN_ITEM = { to: '/admin', label: 'Admin' } as const;
+
 /**
- * Fixed 56px bar (DESIGN.md 5.3, the mockups' `.navbar`): home mark, the items (a horizontal
- * scroller with chevrons when they do not fit, as in the mockups), the admin gear for staff, and
- * the account area. One `nav` landmark ("Primary") holds the page links.
+ * Fixed 56px bar (DESIGN.md 5.3, the mockups' `.navbar`): home mark, the page links, the admin
+ * gear for staff, and the account area. One `nav` landmark ("Primary") holds the page links at
+ * every width: above the switch point the items row (a horizontal scroller with chevrons when
+ * they do not fit, as in the mockups) and the gear; at or below it (`--nav-menu` in
+ * `styles/media.css`) the menu button with the current page's name and the panel (S14.1b,
+ * `PhoneMenu`), the gear's target being a row of the panel. Only one form is rendered; when the
+ * form switches with focus inside the navigation, focus moves to the new form (the Menu button,
+ * or the current page's row link, else the first).
  */
-export function NavBar({ auth }: { auth: AuthSnapshot }) {
-    const { listRef, canLeft, canRight, scrollBy } = useScroller();
+export function NavBar({
+    auth,
+    onMenuInset,
+}: {
+    auth: AuthSnapshot;
+    /** The open panel's height in px (0 when closed), so the reconnecting line can sit below it. */
+    onMenuInset?: (px: number) => void;
+}) {
+    const menuForm = useMenuForm();
+    const staff = isStaff(auth);
+    const phoneItems: readonly PhoneItem[] = staff ? [...NAV_ITEMS, ADMIN_ITEM] : NAV_ITEMS;
+
+    // Set by the form being replaced when focus was inside its nav; read once the new one is in.
+    const headerRef = useRef<HTMLElement>(null);
+    const handover = useRef(false);
+    useLayoutEffect(() => {
+        if (!handover.current) return;
+        handover.current = false;
+        const nav = headerRef.current?.querySelector('nav');
+        const target = menuForm
+            ? nav?.querySelector<HTMLElement>('button')
+            : (nav?.querySelector<HTMLElement>('a[aria-current="page"]') ??
+              nav?.querySelector<HTMLElement>('a'));
+        target?.focus();
+    }, [menuForm]);
 
     return (
-        <header className={styles.bar}>
+        <header className={styles.bar} ref={headerRef}>
             <div className={styles.left}>
                 <Link
                     to="/"
@@ -44,6 +76,32 @@ export function NavBar({ auth }: { auth: AuthSnapshot }) {
                 </Link>
             </div>
 
+            {menuForm ? (
+                <PhoneMenu items={phoneItems} onInset={onMenuInset} handover={handover} />
+            ) : (
+                <ItemRow handover={handover} />
+            )}
+
+            <div className={styles.right}>
+                {staff && !menuForm && (
+                    <Link to="/admin" className={styles.gear} aria-label="Admin Console">
+                        <GearIcon className={styles.gearIcon} />
+                    </Link>
+                )}
+                <AccountArea auth={auth} />
+            </div>
+        </header>
+    );
+}
+
+/** The items row above the switch point: the scroller with its pointer-only chevrons. */
+function ItemRow({ handover }: { handover: { current: boolean } }) {
+    const { listRef, canLeft, canRight, scrollBy } = useScroller();
+    const navRef = useRef<HTMLElement>(null);
+    useFocusHandover(navRef, handover);
+
+    return (
+        <>
             {/* Pointer aids only: keyboard users Tab through the links (the list scrolls the
                 focused one into view) and touch users swipe, so the chevrons stay out of the Tab
                 order and the accessibility tree, and a press never focuses them (focus stays
@@ -61,7 +119,7 @@ export function NavBar({ auth }: { auth: AuthSnapshot }) {
                 {'‹'}
             </button>
 
-            <nav className={styles.nav} aria-label="Primary">
+            <nav className={styles.nav} aria-label="Primary" ref={navRef}>
                 <ul className={styles.items} ref={listRef}>
                     {NAV_ITEMS.map((item) => (
                         <li key={item.to} className={styles.itemSlot}>
@@ -86,16 +144,7 @@ export function NavBar({ auth }: { auth: AuthSnapshot }) {
             >
                 {'›'}
             </button>
-
-            <div className={styles.right}>
-                {isStaff(auth) && (
-                    <Link to="/admin" className={styles.gear} aria-label="Admin Console">
-                        <GearIcon className={styles.gearIcon} />
-                    </Link>
-                )}
-                <AccountArea auth={auth} />
-            </div>
-        </header>
+        </>
     );
 }
 

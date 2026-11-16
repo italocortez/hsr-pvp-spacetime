@@ -19,3 +19,12 @@
 @custom-media --bp-lg (max-width: 1040px);
 @custom-media --bp-xl (max-width: 1120px);
 @custom-media --bp-2xl (min-width: 1320px);
+
+/*
+ * The navigation bar's menu form (S14.1b): at or below this width the bar shows the menu button,
+ * the page name and the panel instead of the items row (and no gear). This one line moves the
+ * switch point for the script and the CSS alike: web/src/shell/PhoneMenu.tsx reads it from this
+ * file. The phone-only tightening (bar padding, compact "Sign in", avatar-only chip, compact home
+ * mark) stays on --bp-sm whatever this is. Open for the user's ruling: 560 (now), 768 or 1040.
+ */
+@custom-media --nav-menu (max-width: 560px);

@@ -1,10 +1,13 @@
 @import "@/styles/media.css";
 
-/* The reconnecting line, just under the fixed bar; it never takes pointer input. */
+/*
+ * The reconnecting line, just under the fixed bar (and under the phone menu's panel while it is
+ * open: --menu-inset, set by the shell); it never takes pointer input.
+ */
 
 .region {
     position: fixed;
-    inset-block-start: 62px;
+    inset-block-start: calc(62px + var(--menu-inset, 0px));
     inset-inline: 0;
     z-index: 90;
     display: flex;

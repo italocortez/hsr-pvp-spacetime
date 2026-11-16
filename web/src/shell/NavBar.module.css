@@ -2,14 +2,19 @@
 
 /*
  * Port of the mockups' navigation bar (`.navbar` in design/mockups/*.html, the same rules in the
- * nine that have one). At every width the items scroll sideways when they do not fit. Phone
- * widths (below --bp-sm, 560): index.html's 768px rule (bar padding 12px) plus tighter spacing
- * around the brand mark and the items, so one item and part of the next stay visible at 390px
- * (docs/frontend/pages.md, Shell). DESIGN.md 5.3: fixed 56px bar, frosted glass on the bar itself.
+ * nine that have one). Above the switch point (--nav-menu, styles/media.css) the items scroll
+ * sideways when they do not fit; at or below it the row is replaced by the menu button and its
+ * panel (S14.1b, PhoneMenu.tsx). Phone widths (--bp-sm and below, whatever the switch point):
+ * index.html's 768px rule (bar padding 12px) and a tighter brand mark (docs/frontend/pages.md,
+ * Shell). DESIGN.md 5.3: fixed 56px bar, frosted glass on the bar itself.
  */
 
 .bar {
     --bar-pad: 24px;
+    /* The home mark and its side padding; the panel's label column starts right after it. */
+    --home-mark: 36px;
+    --home-pad: 6px;
+    --label-col: calc(var(--bar-pad) + var(--home-mark) + 2 * var(--home-pad));
 
     position: fixed;
     inset-block-start: 0;
@@ -24,6 +29,7 @@
 
     @media (--bp-sm) {
         --bar-pad: 12px;
+        --home-pad: 4px;
     }
 
     /* Frosted glass where supported; the solid nav surface otherwise (the mockups' value). */
@@ -52,16 +58,12 @@
 .home {
     display: flex;
     align-items: center;
-    padding: 6px;
-
-    @media (--bp-sm) {
-        padding: 6px 4px;
-    }
+    padding: 6px var(--home-pad);
 }
 
 .logo {
-    inline-size: 36px;
-    block-size: 36px;
+    inline-size: var(--home-mark);
+    block-size: var(--home-mark);
     transition: filter var(--duration-base) var(--ease-out);
 
     @media (prefers-reduced-motion: no-preference) {
@@ -113,18 +115,6 @@
 
     &[data-chevron="right"] {
         margin-inline-start: 4px;
-    }
-
-    @media (--bp-sm) {
-        inline-size: 16px;
-
-        &[data-chevron="left"] {
-            margin-inline-end: 0;
-        }
-
-        &[data-chevron="right"] {
-            margin-inline-start: 0;
-        }
     }
 
     /* The base rule's 44px coarse-pointer minimum would widen a hidden chevron. */
@@ -193,10 +183,6 @@
         letter-spacing var(--duration-fast) var(--ease-out),
         text-shadow var(--duration-fast) var(--ease-out);
 
-    @media (--bp-sm) {
-        padding: 8px 14px 8px 18px;
-    }
-
     &:hover {
         color: var(--text-heading);
         letter-spacing: 1.8px;
@@ -252,11 +238,14 @@
     transition: mask-size 0.25s var(--ease-out);
 
     .item:hover &,
-    .item[aria-current="page"] & {
+    .item[aria-current="page"] &,
+    .panelLink:hover &,
+    .panelLink[aria-current="page"] & {
         mask-size: 100% 100%;
     }
 
-    .item[aria-current="page"] & {
+    .item[aria-current="page"] &,
+    .panelLink[aria-current="page"] & {
         @media (prefers-reduced-motion: no-preference) {
             animation: glowPulse 2.4s var(--ease-in-out) infinite;
         }
@@ -315,6 +304,179 @@
 
         .gear[aria-current="page"] & {
             animation: gearGlow 2.6s var(--ease-in-out) infinite;
+        }
+    }
+}
+
+/*
+ * ── The menu form (S14.1b): the menu button, the current page's name, the panel ──────────────
+ * Rendered by NavBar.tsx only at or below --nav-menu (styles/media.css), so these rules need no
+ * media query of their own: the switch point lives in that one line. Lengths come from the bar's
+ * variables, so they hold at either bar padding.
+ */
+
+/* The bar's band moves to the panel's bottom edge while it is open: the bar grows downward. */
+.bar:has(.panel:not([hidden]))::after {
+    display: none;
+}
+
+/* The one `nav` at phone widths: the button, the page name, the panel (positioned on the bar). */
+.phone {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-inline-size: 0;
+}
+
+/* A compact icon button: 44px square, the bar's muted line colour, the base focus ring inside. */
+.menuButton {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: 44px;
+    block-size: 44px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color var(--duration-fast) var(--ease-out);
+
+    &:hover,
+    &[aria-expanded="true"] {
+        color: var(--text-heading);
+    }
+
+    &:focus-visible {
+        outline-offset: -2px;
+    }
+}
+
+.menuIcon {
+    display: block;
+}
+
+/* The current page's name: plain bar text in the item type, cut with an ellipsis when short. */
+.here {
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    padding-inline: 2px 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-secondary);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text-body);
+}
+
+/*
+ * The panel: the bar's surface continued under it, full width, one item per row. Solid
+ * --bg-nav (the bar's own fallback): a backdrop filter inside the bar's would blur nothing. Never
+ * taller than the space under the bar; it scrolls inside if it would be. The bottom border is the
+ * bar's 6px band (a border, so it stays put when the list scrolls).
+ */
+.panel {
+    position: absolute;
+    inset-block-start: 100%;
+    inset-inline: 0;
+    z-index: 5;
+    max-block-size: calc(100dvh - 56px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-block-start: 1px solid var(--border-subtle);
+    border-block-end: 6px solid var(--border-subtle);
+    background: var(--bg-nav);
+
+    &[hidden] {
+        display: none;
+    }
+}
+
+/* A short top-to-bottom reveal; none under reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+    .panel {
+        clip-path: inset(0 0 0 0);
+        transition:
+            clip-path var(--duration-base) var(--ease-out),
+            opacity var(--duration-fast) var(--ease-out);
+    }
+
+    @starting-style {
+        .panel {
+            clip-path: inset(0 0 100% 0);
+            opacity: 0;
+        }
+    }
+}
+
+/*
+ * 8px of bottom room: the underline mark reaches 8px below its label, which at large text sits
+ * at the bottom of the last row; with less, the panel would scroll by those pixels though it fits.
+ */
+.panelList {
+    margin: 0;
+    padding: 4px 0 8px;
+    list-style: none;
+}
+
+/* Plain hairlines between rows, from the label column to the bar's right padding. */
+.panelSlot {
+    position: relative;
+}
+
+.panelSlot + .panelSlot::before {
+    content: "";
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline: var(--label-col) var(--bar-pad);
+    block-size: 1px;
+    background: var(--border-subtle);
+}
+
+/* A 48px row; the label starts in the column after the home mark. */
+.panelLink {
+    display: flex;
+    align-items: center;
+    min-block-size: 48px;
+    padding-inline: var(--label-col) var(--bar-pad);
+    color: var(--text-muted);
+    transition: color var(--duration-fast) var(--ease-out);
+
+    &:hover {
+        color: var(--text-heading);
+    }
+
+    /* The bar's selected state: champagne label and the swept-in underline mark. */
+    &[aria-current="page"] {
+        color: var(--color-prestige);
+        text-shadow: 0 0 10px rgba(201, 169, 97, 0.4);
+    }
+
+    &:focus-visible {
+        outline-offset: -2px;
+    }
+}
+
+/* The label in the item style; it carries the underline mark at its own width. */
+.panelLabel {
+    position: relative;
+    min-inline-size: 0;
+    padding: 8px 14px 8px 18px;
+    overflow-wrap: anywhere;
+    font-family: var(--font-secondary);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+
+    /* Forced colours drop the mark (a background): a text underline marks the current row. */
+    @media (forced-colors: active) {
+        .panelLink[aria-current="page"] & {
+            text-decoration: underline 2px;
+            text-underline-offset: 6px;
         }
     }
 }

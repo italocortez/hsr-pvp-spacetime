@@ -1811,3 +1811,13 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   9. Implementer's deviation, accepted: the shell is the root layout's body, not a pathless layout route (moving eleven route files would delete paths); the reconnecting notice appears after 2 seconds; focus moves to the new page's heading after a client-side navigation once the viewer has pressed a key or pointer.
 - **Why:** user, 2026-11-14: "yeah u can go shell after"; the sign-in recommendation was among those accepted in A179.
 - **Where implemented:** `web/src/shell/`, `web/src/stdb/{LazyStdbProvider.tsx,tokenStorage.ts}`, `web/src/routes/{__root,index}.tsx`, `web/src/pages/sign-in/`, `web/src/pages/connection/LoadFailedPage.tsx`, `docs/frontend/pages.md`, `docs/log/2026-11-15-s14-1.md`
+
+### A181 — Phone navigation: a compact menu button
+
+- **Date:** 2026-11-15 · **Status:** items 1 and 2 decided and implemented; item 3 open
+- **Decision:**
+  1. At narrow widths the bar shows a compact icon button (named "Menu"), the current page's name beside it as plain text, and a panel under the bar listing every bar item (an Admin row for staff; the gear is hidden there). Chosen by the user from an A/B prototype of three forms: the mockups' scrolling row (A), a labelled button (B1), the compact button (B2). Settles A180 item 3. The mockups have no menu: this is an upgrade made in this repo.
+  2. Orchestrator's and implementer's choices in the build: a disclosure (button with `aria-expanded` revealing links), not an ARIA menu; the bar decides its form in script so only one navigation landmark exists; the page name is hidden from assistive technology; the panel surface is solid; plain hairlines between rows; a link to the current page with another search goes to the bare path in both forms.
+  3. Open: the width at which the menu replaces the row. It ships at 560 px. Between 561 and about 1,000 px the row still scrolls (one fully visible item at 561 px, two at 700 px, all five only from about 1,040 px). Orchestrator and reviewer recommend 1040 px, the step of the breakpoint scale where the full row fits for everyone. One line moves it: `--nav-menu` in `web/src/styles/media.css`.
+- **Why:** user, 2026-11-15: "would like another A/B test for the mobile menu, assuming it keep the same vibe as the nav bar"; then "I like how B2 was implemented, we can use that".
+- **Where implemented:** `web/src/shell/{PhoneMenu.tsx,NavBar.tsx,NavBar.module.css}`, `web/src/components/MenuIcon/`, `web/src/styles/media.css`, `docs/frontend/pages.md`, `docs/log/2026-11-15-s14-1b.md`
