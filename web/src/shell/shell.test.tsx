@@ -819,6 +819,31 @@ describe('focus and announcement after navigation', () => {
         off();
         expect(announcer()).not.toHaveTextContent('Lobbies');
     });
+
+    // T-COSTS-B (C4). The rule: a resolved address change counts as a new page when its route
+    // matches differ OR, on the same matches, the document title differs from the one read for
+    // that page. A title change with no address change is not looked at.
+    it('the same page with a new title (a search change after the title was read) is announced', async () => {
+        const r = renderWithRouter('/costs', AUTH.visitor);
+        await headline();
+        await act(() => new Promise((r2) => setTimeout(r2, 60)));
+        fireEvent.keyDown(document.body, { key: 'Shift' });
+        document.title = 'Retitled';
+        act(() => r.router.history.push('/costs?el=fire'));
+        await waitFor(() => expect(announcer()).toHaveTextContent('Retitled'));
+        expect(screen.getByRole('heading', { level: 1 })).toHaveFocus();
+    });
+
+    it('a title change with no address change is not announced', async () => {
+        renderWithRouter('/costs', AUTH.visitor);
+        await headline();
+        await act(() => new Promise((r2) => setTimeout(r2, 60)));
+        fireEvent.keyDown(document.body, { key: 'Shift' });
+        document.title = 'Retitled in place';
+        await act(() => new Promise((r2) => setTimeout(r2, 150)));
+        expect(announcer()).toHaveTextContent('');
+        expect(document.body).toHaveFocus();
+    });
 });
 
 describe('the announcer without a main (a bare router)', () => {

@@ -75,7 +75,7 @@ Each executed step writes its log to `docs/log/<date>-<step>.md` (goal, decision
 | S12 | Contract/architecture updates, DECISIONS.md, skill refresh (A51, A52) | S11b | pending |
 | S13 | First prod publish, bootstrap, lock, first admin (user gate); M8 production deploy follows | S12 | pending |
 | S14.1 | Port: shell + `standby` (404, maintenance). App shell done 2026-11-15, ahead of S13 (user: "yeah u can go shell after"): bar, account menu, reconnecting banner, focus and announcement after navigation, connection loaded after the first render (entry 455 kB to 175 kB). Phone menu added (S14.1b, A181). The menu is for phones only, 560 px and below (A182) | M5 | done 2026-11-15 |
-| S14.2 | Port: `costs` | S14.1 | pending |
+| S14.2 | Port: `costs`. Done 2026-11-16 (A185): real cost data, all view state in the address, default cost set plus published sets, synergy pairs per draft mode, a 3-star rarity, the scroll-linked name column on phones, the archetype filter (shared `MultiSelectDropdown`), element chips in one row. Open: the wording table in `docs/frontend/pages.md`; six screenshots to retake; smaller light cone images on UploadThing | S14.1 | done 2026-11-16 |
 | S14.3 | Port: `teambuilder` | S14.2 | pending |
 | S14.4 | Port: `index` (landing, auth modal, create-lobby modal) | S14.3 | pending |
 | S14.5 | Port: `profile` | S14.4 | pending |

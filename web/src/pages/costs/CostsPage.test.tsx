@@ -1,3 +1,4 @@
+import type { Archetype, HsrCharacterArchetype } from '@bindings/types';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -510,22 +511,52 @@ describe('expanded rows', () => {
         expect(claraOpen()).toBe('false');
     });
 
-    it("a synergy value is tied to the sub-rows' own headers, not the column headers", async () => {
+    it("a synergy value names the character, the partner and Extra Cost, not the column's header", async () => {
         const user = userEvent.setup();
         await open();
         await user.click(screen.getByRole('button', { name: 'Synergies for Clara' }));
-        const value = screen.getByText('−1').closest('td') as HTMLElement;
+        const value = screen.getByText('\u22121').closest('td') as HTMLElement;
         const headerOf = (cell: HTMLElement) =>
             (cell.getAttribute('headers') ?? '')
                 .split(' ')
-                .map((id) => document.getElementById(id));
-        expect(headerOf(value).map((h) => [h?.tagName, h?.textContent])).toEqual([
-            ['TH', 'Extra Cost'],
-        ]);
-        const partner = within(value.closest('tr') as HTMLElement).getAllByRole('cell')[0];
-        expect(headerOf(partner as HTMLElement).map((h) => h?.textContent)).toEqual([
+                .map((id) => document.getElementById(id) as HTMLElement);
+        const [owner, partner, extra] = headerOf(value);
+        expect(headerOf(value)).toHaveLength(3);
+        expect(owner).toHaveAccessibleName('Clara');
+        // The partner is the sub-row's header (S14.2b): the value no longer reads without it.
+        expect(partner?.tagName).toBe('TH');
+        expect(partner).toHaveAccessibleName('Huohuo');
+        expect(partner?.closest('tr')).toBe(value.closest('tr'));
+        expect(extra).toHaveTextContent('Extra Cost');
+        expect(headerOf(partner as HTMLElement).map((h) => h.textContent?.trim())).toEqual([
+            expect.stringMatching(/^Clara/),
             'Paired Unit',
         ]);
+        // The value's copy in the collapsed column is drawn by CSS: one "\u22121" in the DOM.
+        expect(screen.getAllByText('\u22121')).toHaveLength(1);
+        expect(partner?.querySelector('[data-value]')).toHaveAttribute('data-value', '\u22121');
+    });
+
+    it('a row header is named by the name alone (not the expander or the badge)', async () => {
+        await open();
+        const headers = within(table()).getAllByRole('rowheader');
+        expect(headers.map((h) => h.getAttribute('aria-labelledby') !== null)).toEqual([
+            true,
+            true,
+            true,
+            true,
+        ]);
+        expect(screen.getByRole('rowheader', { name: 'Clara' })).toBeInTheDocument();
+        expect(screen.getByRole('rowheader', { name: 'Pela' })).toBeInTheDocument();
+        expect(screen.queryByRole('rowheader', { name: /Synergies|synerg/ })).toBeNull();
+        // The badge's words stay in the cell, for reading it in browse mode.
+        expect(screen.getByRole('rowheader', { name: 'Clara' })).toHaveTextContent('1 synergy');
+    });
+
+    it('a light cone row header is named by the name alone (not the path icon)', async () => {
+        await open('/costs?tab=lightcones');
+        expect(screen.getByRole('rowheader', { name: 'Nowhere to Run' })).toBeInTheDocument();
+        expect(screen.getByRole('img', { name: 'Destruction' })).toBeInTheDocument();
     });
 });
 
@@ -621,5 +652,184 @@ describe('errors', () => {
         seed();
         await act(async () => conn.applyAll());
         expect(rowNames()).toHaveLength(4);
+    });
+});
+
+/* T-COSTS-B (S14.2b): the archetype filter, the notice's other dismissals. */
+
+const AUDIT_ROW = {
+    createdById: 0,
+    createdDate: { microsSinceUnixEpoch: 0n },
+    lastModifiedById: 0,
+    lastModifiedDate: { microsSinceUnixEpoch: 0n },
+};
+const archetype = (id: number, name: string) =>
+    ({ id, name, description: '', ...AUDIT_ROW }) as unknown as Archetype;
+const link = (characterName: string, archetypeId: number) =>
+    ({ characterName, archetypeId, ...AUDIT_ROW }) as unknown as HsrCharacterArchetype;
+
+/** Acheron: Debuff. Clara: FuA. Pela: Debuff and Break (several). Huohuo: none. */
+function seedArchetypes() {
+    conn.db.archetype.seed(
+        archetype(1, 'Break'),
+        archetype(2, 'DoT'),
+        archetype(3, 'FuA'),
+        archetype(4, 'Debuff'),
+    );
+    conn.db.hsrCharacterArchetype.seed(
+        link('acheron', 4),
+        link('clara', 3),
+        link('pela', 4),
+        link('pela', 1),
+    );
+}
+
+async function openArch(path = '/costs', options?: { apply?: boolean }) {
+    seedArchetypes();
+    return open(path, options);
+}
+
+const archButton = () => screen.getByRole('button', { name: /^Archetype/ });
+
+describe('the archetype filter (S14.2b)', () => {
+    it('a dropdown of the archetypes, by name; picking two writes repeated arch params (OR within)', async () => {
+        const user = userEvent.setup();
+        const r = await openArch();
+        await user.click(archButton());
+        const group = screen.getByRole('group', { name: 'Filter by archetype' });
+        expect(
+            within(group)
+                .getAllByRole('checkbox')
+                .map((c) => c.closest('label')?.textContent),
+        ).toEqual(['Break', 'Debuff', 'DoT', 'FuA']);
+        await user.click(within(group).getByRole('checkbox', { name: 'FuA' }));
+        await settled(r, '/costs?arch=FuA');
+        expect(rowNames()).toEqual(['Clara']);
+        await user.click(within(group).getByRole('checkbox', { name: 'Debuff' }));
+        await settled(r, '/costs?arch=Debuff&arch=FuA');
+        expect(rowNames()).toEqual(['Acheron', 'Clara', 'Pela']);
+        // The panel stays open while picking; the closed button shows the count.
+        await user.keyboard('{Escape}');
+        expect(archButton()).toHaveAccessibleName('Archetype 2 selected');
+        expect(archButton()).toHaveFocus();
+    });
+
+    it('the element row takes the fit layout; the path, role and rarity rows keep the scroll layout', async () => {
+        await openArch();
+        const layout = (name: string) =>
+            screen.getByRole('group', { name }).getAttribute('data-layout');
+        expect(layout('Filter by element')).toBe('fit');
+        expect(layout('Filter by path')).toBe('scroll');
+        expect(layout('Filter by role')).toBe('scroll');
+        expect(layout('Filter by rarity')).toBe('scroll');
+    });
+
+    it('AND with the other groups; a character with several archetypes; one with none never matches', async () => {
+        await openArch('/costs?arch=Debuff&el=ice');
+        expect(rowNames()).toEqual(['Pela']);
+    });
+
+    it('a character with several archetypes matches each of them', async () => {
+        await openArch('/costs?arch=Break');
+        expect(rowNames()).toEqual(['Pela']);
+    });
+
+    it('a character with no archetype is listed only while no archetype is picked', async () => {
+        await openArch('/costs?arch=Break&arch=Debuff&arch=DoT&arch=FuA');
+        expect(rowNames()).toEqual(['Acheron', 'Clara', 'Pela']);
+    });
+
+    it('"Clear N" counts the archetypes and clears them', async () => {
+        const user = userEvent.setup();
+        const r = await openArch('/costs?arch=Debuff&arch=FuA&el=fire');
+        await user.click(screen.getByRole('button', { name: 'Clear 3 filters' }));
+        await settled(r, '/costs');
+        expect(archButton()).toHaveAccessibleName('Archetype');
+    });
+
+    it('switching to Light Cones clears it (and hides it); back on Characters it stays cleared', async () => {
+        const user = userEvent.setup();
+        const r = await openArch('/costs?arch=FuA');
+        await user.click(screen.getByRole('tab', { name: 'Light Cones' }));
+        await settled(r, '/costs?tab=lightcones');
+        expect(screen.queryByRole('button', { name: /^Archetype/ })).toBeNull();
+        await user.click(screen.getByRole('tab', { name: 'Characters' }));
+        await settled(r, '/costs');
+        expect(rowNames()).toHaveLength(4);
+    });
+
+    it('a Light Cones address drops arch', async () => {
+        const r = await openArch('/costs?tab=lightcones&arch=FuA');
+        await settled(r, '/costs?tab=lightcones');
+    });
+
+    it('back and forward restore the picks', async () => {
+        const user = userEvent.setup();
+        const r = await openArch();
+        await user.click(archButton());
+        await user.click(screen.getByRole('checkbox', { name: 'Break' }));
+        await settled(r, '/costs?arch=Break');
+        act(() => r.router.history.back());
+        await settled(r, '/costs');
+        expect(rowNames()).toHaveLength(4);
+        act(() => r.router.history.forward());
+        await settled(r, '/costs?arch=Break');
+        expect(rowNames()).toEqual(['Pela']);
+    });
+
+    it('unknown names leave the address once the list is ready (replaced), not before', async () => {
+        const r = await openArch('/costs?arch=Nope&arch=FuA', { apply: false });
+        await act(() => new Promise((done) => setTimeout(done, 50)));
+        expect(href(r)).toBe('/costs?arch=FuA&arch=Nope');
+        seed();
+        await act(async () => conn.applyAll());
+        await settled(r, '/costs?arch=FuA');
+        expect(r.router.history.length).toBe(1);
+        expect(rowNames()).toEqual(['Clara']);
+    });
+
+    it('needs no subscription of its own (the archetype tables are in the reference set)', async () => {
+        const user = userEvent.setup();
+        const r = await openArch();
+        const before = [...conn.liveQueries()].sort();
+        expect(before).toEqual(expect.arrayContaining(['SELECT * FROM "archetype"']));
+        await user.click(archButton());
+        await user.click(screen.getByRole('checkbox', { name: 'DoT' }));
+        await settled(r, '/costs?arch=DoT');
+        expect([...conn.liveQueries()].sort()).toEqual(before);
+        // DoT has no character: the empty state.
+        expect(screen.getByText('No characters match these filters.')).toBeInTheDocument();
+    });
+
+    it('archetype names are rendered as text', async () => {
+        const user = userEvent.setup();
+        await openArch();
+        act(() => conn.db.archetype.insert(archetype(9, '<b>x</b>')));
+        await user.click(archButton());
+        expect(await screen.findByRole('checkbox', { name: '<b>x</b>' })).toBeInTheDocument();
+        expect(document.querySelector('label b')).toBeNull();
+    });
+});
+
+describe('the unknown-set notice (S14.2b)', () => {
+    const NOTICE = 'Cost set 99 is not available. Showing the Default set.';
+    const visible = () => screen.queryByText(NOTICE, { selector: 'p:not([role])' });
+
+    it('goes with a use of the expander, and the status region is emptied', async () => {
+        const user = userEvent.setup();
+        await open('/costs?set=99');
+        await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(NOTICE));
+        await user.click(screen.getByRole('button', { name: 'Synergies for Clara' }));
+        expect(visible()).toBeNull();
+        expect(screen.getByRole('status')).toHaveTextContent('');
+    });
+
+    it('goes with the intro toggle', async () => {
+        const user = userEvent.setup();
+        await open('/costs?set=99');
+        expect(visible()).not.toBeNull();
+        await user.click(screen.getByRole('button', { name: 'Hide intro' }));
+        expect(visible()).toBeNull();
+        expect(screen.getByRole('status')).toHaveTextContent('');
     });
 });

@@ -1848,3 +1848,25 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Decision:** The orchestrator's three recommendations after M10 are accepted: push; no portrait warm-up for now, to be decided again when a page shows portraits and load times can be measured (settles A183 item 4 for now); the M10 choices stand (A183 items 2, 3, 5 and 6: fixed cache name, our own UploadThing host only, the fallback, the kill path, the image rule).
 - **Why:** user, 2026-11-16: "i agree with your 3 recommendations and we can push".
 - **Where implemented:** no code change
+
+### A185 — S14.2: the costs page
+
+- **Date:** 2026-11-16 · **Status:** items 1 to 11 decided; items 12 to 14 are the orchestrator's or implementers' choices, for the user to rule on; item 15 open
+- **Decision:**
+  1. The page offers the default cost set plus published sets. The default set is the sentinel id 0 (no `cost_set` row), so the page adds a "Default" entry. Picking a custom set fixes the game mode to that set's mode. (Recon option 1 B.)
+  2. The default set's cost rows load once per session; a picked set is a route subscription, dropped when the pick changes or the page is left.
+  3. Synergy pairs show under both characters, for the selected draft mode; a zero modifier is hidden; a negative one shows a real minus sign.
+  4. A 3-star rarity chip and badge are added for light cones.
+  5. Tab, draft mode, game mode, cost set, every filter, the search text and the sort live in the address; nothing of that is kept in browser storage.
+  6. The label is "Cost Set", not "Rule Set".
+  7. Aliases in the seed data stay searchable, joke aliases included.
+  8. The image cache worker's copies are preferred over calling UploadThing again: confirmed as the existing behaviour (cache-first in production builds).
+  9. Phone name column: the "scroll-linked collapse" ships at 560 px and below. The sticky first column's width follows the horizontal scroll one to one; the name, badge and header label are clipped by the edge and fade; collapsed it shows the expander slot and the portrait (portrait only for light cones). Chosen after three live iterations: a plain sticky column (rejected: its contents wrapped), a snap to the collapsed state (rejected: it left a wide gap and misplaced portraits), then the progressive version.
+  10. The archetype filter ships on the costs page now: a dropdown multi-select, Characters tab only.
+  11. The seven element chips fit one row on phones and shrink with the window; the path chips keep their sideways scroll. The collapse is kept as a reusable pattern.
+  12. Implementer, agreed by the orchestrator: `arch` in the address holds archetype names, not ids (names are unique and never renamed in the module; ids differ between the test and prod databases).
+  13. Implementer, agreed by the orchestrator: the default set's three queries are an opt-in group of the reference set, so a page that needs only characters does not load 1,494 cost rows.
+  14. Implementers' wording that is not in the mockup (for example "n/a", "Cost set N is not available. Showing the Default set.", "The cost table could not be loaded.", "Synergies for X") is tabled in `docs/frontend/pages.md`, awaiting the user.
+  15. Open: light cone images on UploadThing are about 230 kB each for 34 px thumbnails (a full scroll of that tab downloads about 36 MB once per visitor); smaller files are the real fix and are on the user's side.
+- **Why:** user, 2026-11-16: "go costs"; "for the rulings, #1 B is fine. For #2, A is fine. For #3, we can add it. For #4, weah we should go with A. For 5#, is fine to rename it to Cost Set. For #6, i want an A/B comparison. For #7, do some A/B testing for it as well. For #8, they should remain searchable"; on the name column: "I like the sticky name, but the issue is that the objects inside the character column wrap too aggresively ... if you get to scroll to the right, we hide the name and just keep the image only", then "B2b is the best one so far", then "My idea is that we progressively shrink the character/lightcone as we move to the right rather than snapingly instantaneously", then "This version works. Could we also add the archetype filter? ... is there a way squish the element icons a bit more? ... for paths its okay to leave that scrolling behavior"; "the animation of hiding the text when we shrank the character column was pretty nice, we can save up that pattern for future utilizations".
+- **Where implemented:** `web/src/pages/costs/`, `web/src/components/{SegmentedControl,FilterChips,RarityBadge,SearchField,MultiSelectDropdown,RemoteImage}/`, `web/src/lib/scrollCollapse.ts`, `web/src/styles/{scrollCollapse,visuallyHidden}.module.css`, `web/src/stdb/{referenceSet,costQueries,costLookup}.ts`, `web/src/routes/costs.tsx`, `web/src/shell/RouteAnnouncer.tsx`, `docs/frontend/{pages,subscriptions,component-hygiene}.md`, `docs/log/2026-11-16-s14-2.md`

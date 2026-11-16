@@ -34,8 +34,18 @@ export function useAnnouncement(
         return () => clearTimeout(timer);
     }, [text, enabled, delayMs]);
 
+    // The notice going away empties the region if it still holds the notice (a screen reader's
+    // review of the region then finds nothing stale); a count announced since stays.
+    const shownNotice = useRef('');
     useEffect(() => {
-        if (notice !== '') setMessage(notice);
+        if (notice !== '') {
+            shownNotice.current = notice;
+            setMessage(notice);
+        } else if (shownNotice.current !== '') {
+            const gone = shownNotice.current;
+            shownNotice.current = '';
+            setMessage((current) => (current === gone ? '' : current));
+        }
     }, [notice]);
 
     return message;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { type CSSProperties, useState } from 'react';
 import styles from './RemoteImage.module.css';
 
 /*
@@ -10,7 +10,8 @@ import styles from './RemoteImage.module.css';
  *
  * A failed load (offline, a removed file, a blocked host) shows a neutral box of the same size
  * and class instead of the browser's broken-image glyph: nothing moves, and an image with `alt`
- * text keeps it as the box's name. A new `src` tries again.
+ * text keeps it as the box's name. A new `src` tries again. The box takes `width` and `height`
+ * through a zero-specificity rule, so a caller's class that resizes the image resizes the box.
  */
 
 export type RemoteImageProps = {
@@ -38,7 +39,7 @@ export function RemoteImage({
         return (
             <span
                 className={className ? `${styles.fallback} ${className}` : styles.fallback}
-                style={{ inlineSize: width, blockSize: height }}
+                style={{ '--remote-w': `${width}px`, '--remote-h': `${height}px` } as CSSProperties}
                 data-image-failed=""
                 {...label}
             />

@@ -1,0 +1,89 @@
+/*
+ * Scroll-linked collapse (web/src/lib/scrollCollapse.ts; component-hygiene.md, "Patterns"): the
+ * values a collapsing element reads. The scroller declares `--collapse-start` and
+ * `--collapse-closed`; each collapsing element carries `.item`. In the script path the hook writes
+ * `--collapse-w`, `--collapse-fade`, `--collapse-reveal` and `--collapse-edge` on the scroller
+ * (inherited here); in the timeline path the rule below computes them from `--sl`, the scroll
+ * position a scroll-driven animation writes. 120, 30 and 24 are `FADE_PX`, `REVEAL_PX` and
+ * `EDGE_PX` in the hook: change them together.
+ */
+
+@property --sl {
+    syntax: "<number>";
+    inherits: true;
+    initial-value: 0;
+}
+
+/* Registered, so a script can read them as resolved px (`getComputedStyle`). */
+@property --collapse-start {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+}
+
+@property --collapse-closed {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+}
+
+/* Where the reveal starts (scroll px): 120px (`FADE_PX`) unless the scroller declares a later
+   point, such as where the real value has gone under the surface. */
+@property --collapse-reveal-at {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 120px;
+}
+
+@keyframes scroll-collapse {
+    from {
+        --sl: 0;
+    }
+
+    to {
+        --sl: 4000;
+    }
+}
+
+/* `--sl` equals `scrollLeft`: 4000 units over a 4000px range. */
+:global([data-scroll-collapse="timeline"]) .item {
+    --collapse-w: clamp(
+        var(--collapse-closed),
+        calc(var(--collapse-start) - var(--sl) * 1px),
+        var(--collapse-start)
+    );
+    --collapse-fade: clamp(0, calc(1 - var(--sl) / 120), 1);
+    /* (scroll - reveal-at) / 30px as a number: `tan(atan2(a, b))` is a / b for two lengths. */
+    --collapse-reveal: clamp(
+        0,
+        tan(atan2(calc(var(--sl) * 1px - var(--collapse-reveal-at)), 30px)),
+        1
+    );
+    --collapse-edge: clamp(
+        0px,
+        calc(var(--sl) * 1px - var(--collapse-start) + var(--collapse-closed)),
+        24px
+    );
+    animation: scroll-collapse linear both;
+    animation-timeline: scroll(nearest inline);
+    animation-range: 0px 4000px;
+
+    /* Reduced motion: the width still follows the scroll; the fade and the reveal are steps. */
+    @media (prefers-reduced-motion: reduce) {
+        --collapse-fade: clamp(0, calc((120 - var(--sl)) * 1000), 1);
+        --collapse-reveal: clamp(
+            0,
+            calc(tan(atan2(calc(var(--sl) * 1px - var(--collapse-reveal-at)), 30px)) * 1000),
+            1
+        );
+    }
+}
+
+/* Keyboard focus inside an item opens it fully (set by `reopenOnFocus`). */
+.item[data-reopen] {
+    --collapse-w: var(--collapse-start);
+    --collapse-fade: 1;
+    --collapse-reveal: 0;
+    --collapse-edge: 0px;
+    animation: none;
+}

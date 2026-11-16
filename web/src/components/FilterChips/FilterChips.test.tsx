@@ -57,3 +57,38 @@ describe('FilterChips', () => {
         expect(dps).toHaveAttribute('aria-pressed', 'true');
     });
 });
+
+describe('FilterChips layout (S14.2b)', () => {
+    it('scrolls by default; "fit" marks the set so its chips share the row instead', () => {
+        const { rerender } = render(
+            <FilterChips
+                label="Elements"
+                options={[{ value: 'fire', label: 'Fire' }]}
+                selected={[]}
+                onToggle={() => {}}
+            />,
+        );
+        expect(screen.getByRole('group', { name: 'Elements' })).toHaveAttribute(
+            'data-layout',
+            'scroll',
+        );
+        rerender(
+            <FilterChips
+                label="Elements"
+                layout="fit"
+                options={[{ value: 'fire', label: 'Fire' }]}
+                selected={[]}
+                onToggle={() => {}}
+            />,
+        );
+        expect(screen.getByRole('group', { name: 'Elements' })).toHaveAttribute(
+            'data-layout',
+            'fit',
+        );
+        // The chips stay toggle buttons in either layout.
+        expect(screen.getByRole('button', { name: 'Fire' })).toHaveAttribute(
+            'aria-pressed',
+            'false',
+        );
+    });
+});

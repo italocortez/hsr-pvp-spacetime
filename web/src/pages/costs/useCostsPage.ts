@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { retryReferenceSet, useReferenceSet } from '@/stdb/referenceSet';
 import {
     activeFilterCount,
+    archetypeNamesByCharacter,
+    archetypeOptions,
     buildCharacterRows,
     buildLightconeRows,
     type CharacterRow,
@@ -108,12 +110,34 @@ export function useCostsPage(search: CostsSearch) {
         [view.tab, ref.characterByName, ref.lightconeByName],
     );
 
+    // Archetypes (S14.2b): from the reference set's `archetype` and `hsr_character_archetype`,
+    // already subscribed; no query of their own.
+    const archetypesOf = useMemo(
+        () => archetypeNamesByCharacter(ref.archetypes, ref.characterArchetypes),
+        [ref.archetypes, ref.characterArchetypes],
+    );
+    const archetypeNames = useMemo(() => archetypeOptions(ref.archetypes), [ref.archetypes]);
+
+    // Unknown archetype names leave the address once the list is known (not before: a shared
+    // link must survive the page's loading), replaced so Back never returns to them.
+    const unknownArch = ref.ready && view.arch.some((a) => !archetypeNames.includes(a));
+    useEffect(() => {
+        if (!unknownArch) return;
+        go((v) => ({ ...v, arch: v.arch.filter((a) => archetypeNames.includes(a)) }), true);
+    }, [unknownArch, archetypeNames, go]);
+
     const characterRows = useMemo(
         () =>
             view.tab === 'characters'
-                ? buildCharacterRows(ref.characters, lookup, modes, ref.characterByName)
+                ? buildCharacterRows(
+                      ref.characters,
+                      lookup,
+                      modes,
+                      ref.characterByName,
+                      archetypesOf,
+                  )
                 : [],
-        [view.tab, ref.characters, lookup, modes, ref.characterByName],
+        [view.tab, ref.characters, lookup, modes, ref.characterByName, archetypesOf],
     );
     const lightconeRows = useMemo(
         () => (view.tab === 'lightcones' ? buildLightconeRows(ref.lightcones, lookup, modes) : []),
@@ -147,15 +171,19 @@ export function useCostsPage(search: CostsSearch) {
     if (expanded.scope !== scope) setExpanded({ scope, names: EMPTY_SET });
     const expandedNames = expanded.scope === scope ? expanded.names : EMPTY_SET;
     const toggleExpanded = useCallback(
-        (name: string) =>
+        (name: string) => {
+            setNotice(null);
             setExpanded((prev) => {
                 const names = new Set(prev.scope === scope ? prev.names : EMPTY_SET);
                 if (names.has(name)) names.delete(name);
                 else names.add(name);
                 return { scope, names };
-            }),
+            });
+        },
         [scope],
     );
+    /** Any other use of the page (the intro toggle): the notice goes too. */
+    const dismissNotice = useCallback(() => setNotice(null), []);
 
     // Each tab keeps its own sort; the address holds the shown tab's.
     const otherSort = useRef<Record<Tab, { sort: SortKey; dir: SortDir }>>({
@@ -171,8 +199,9 @@ export function useCostsPage(search: CostsSearch) {
                 otherSort.current[v.tab] = { sort: v.sort, dir: v.dir };
                 const kept = otherSort.current[tab];
                 // Light Cones have no element or role: those filters are cleared (the validator
-                // also drops them, and a 3-star rarity going back to Characters).
-                return { ...v, tab, el: [], role: [], sort: kept.sort, dir: kept.dir };
+                // also drops them, and a 3-star rarity going back to Characters). Archetypes
+                // classify characters only: cleared too.
+                return { ...v, tab, el: [], role: [], arch: [], sort: kept.sort, dir: kept.dir };
             });
         },
         setDraft(draft: CostsView['draft']) {
@@ -187,7 +216,10 @@ export function useCostsPage(search: CostsSearch) {
             if (id !== 0 && !picked) return;
             act((v) => ({ ...v, set: id, mode: picked ? MODE_PARAM[picked.gameMode.tag] : mode }));
         },
-        toggle<K extends 'el' | 'path' | 'role' | 'rarity'>(key: K, value: CostsView[K][number]) {
+        toggle<K extends 'el' | 'path' | 'role' | 'rarity' | 'arch'>(
+            key: K,
+            value: CostsView[K][number],
+        ) {
             act((v) => {
                 const list = v[key] as string[];
                 const nextList = list.includes(value)
@@ -202,7 +234,7 @@ export function useCostsPage(search: CostsSearch) {
             act((v) => ({ ...v, q: text }), true);
         },
         clearFilters() {
-            act((v) => ({ ...v, el: [], path: [], role: [], rarity: [], q: '' }));
+            act((v) => ({ ...v, el: [], path: [], role: [], rarity: [], arch: [], q: '' }));
         },
         sortBy(column: SortKey) {
             act((v) => ({ ...v, ...nextSort(v, column) }));
@@ -226,9 +258,11 @@ export function useCostsPage(search: CostsSearch) {
         costSet: publishedSet,
         setsForMode,
         setsReady: ref.ready,
+        archetypeNames,
         filterCount,
         expandedNames,
         toggleExpanded,
+        dismissNotice,
         actions,
     };
 }

@@ -1,5 +1,6 @@
 import { type RefObject, useEffect, useId, useRef, useState } from 'react';
 import { FilterChips } from '@/components/FilterChips/FilterChips';
+import { MultiSelectDropdown } from '@/components/MultiSelectDropdown/MultiSelectDropdown';
 import { SearchField } from '@/components/SearchField/SearchField';
 import {
     ControlSelect,
@@ -75,7 +76,7 @@ export function CostsPage({ search }: { search: CostsSearch }) {
 
     return (
         <div className={styles.page}>
-            <CostsIntro />
+            <CostsIntro onToggle={page.dismissNotice} />
             <div className={styles.workspace}>
                 <ControlBar page={page} tabsPrefix={tabsPrefix} />
 
@@ -231,6 +232,7 @@ function Filters({
                 <FilterChips
                     label="Filter by element"
                     wide
+                    layout="fit"
                     options={ELEMENTS.map((e) => ({
                         value: e,
                         label: ELEMENT_LABEL[e],
@@ -257,6 +259,16 @@ function Filters({
                     options={ROLES.map((r) => ({ value: r, label: ROLE_LABEL[r] }))}
                     selected={view.role}
                     onToggle={(v) => actions.toggle('role', v)}
+                />
+            )}
+            {isChars && (
+                <MultiSelectDropdown
+                    label="Archetype"
+                    listLabel="Filter by archetype"
+                    emptyText={page.setsReady ? 'No archetypes yet.' : 'Loading archetypes…'}
+                    options={page.archetypeNames.map((name) => ({ value: name, label: name }))}
+                    selected={view.arch}
+                    onToggle={(v) => actions.toggle('arch', v)}
                 />
             )}
             <FilterChips

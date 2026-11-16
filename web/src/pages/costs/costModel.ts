@@ -1,4 +1,11 @@
-import type { CostSet, HsrCharacter, HsrLightcone, HsrSynergyCost } from '@bindings/types';
+import type {
+    Archetype,
+    CostSet,
+    HsrCharacter,
+    HsrCharacterArchetype,
+    HsrLightcone,
+    HsrSynergyCost,
+} from '@bindings/types';
 import type { CostLookup, DraftModeTag, GameModeTag } from '@/stdb/costLookup';
 import type {
     CostsView,
@@ -93,6 +100,8 @@ export type CharacterRow = {
     element: ElementParam;
     path: PathParam;
     role: RoleParam;
+    /** The character's archetype names (none for a character without a link). */
+    archetypes: readonly string[];
     /** Undefined when the set has no row for this character in the selected modes. */
     costs: Record<EidolonKey, number> | undefined;
     synergies: SynergyPartner[];
@@ -169,6 +178,7 @@ export function buildCharacterRows(
     lookup: CostLookup,
     modes: Modes,
     characterByName: ReadonlyMap<string, HsrCharacter>,
+    archetypesOf: ReadonlyMap<string, readonly string[]> = new Map(),
 ): CharacterRow[] {
     const partners = synergyPartners(
         lookup.synergies(modes.gameMode, modes.draftMode),
@@ -185,6 +195,7 @@ export function buildCharacterRows(
             element: lower(c.element.tag) as ElementParam,
             path: lower(c.path.tag) as PathParam,
             role: lower(c.role.tag) as RoleParam,
+            archetypes: archetypesOf.get(c.name) ?? NO_NAMES,
             costs: cost
                 ? {
                       e0: cost.e0,
@@ -222,7 +233,35 @@ export function buildLightconeRows(
     });
 }
 
-export type Filters = Pick<CostsView, 'el' | 'path' | 'role' | 'rarity' | 'q'>;
+export type Filters = Pick<CostsView, 'el' | 'path' | 'role' | 'rarity' | 'arch' | 'q'>;
+
+const NO_NAMES: readonly string[] = [];
+
+/**
+ * Archetype names per character, from the archetype rows and the character links of the
+ * reference set. A link to an archetype that is not in the list is skipped; names are listed
+ * once each.
+ */
+export function archetypeNamesByCharacter(
+    archetypes: readonly Archetype[],
+    links: readonly HsrCharacterArchetype[],
+): Map<string, string[]> {
+    const nameById = new Map(archetypes.map((a) => [a.id, a.name] as const));
+    const map = new Map<string, string[]>();
+    for (const link of links) {
+        const name = nameById.get(link.archetypeId);
+        if (name === undefined) continue;
+        const list = map.get(link.characterName);
+        if (!list) map.set(link.characterName, [name]);
+        else if (!list.includes(name)) list.push(name);
+    }
+    return map;
+}
+
+/** The archetype filter's options: every archetype name, alphabetically. */
+export function archetypeOptions(archetypes: readonly Archetype[]): string[] {
+    return archetypes.map((a) => a.name).sort(compareText);
+}
 
 /**
  * Search: a case-insensitive substring of the display name or any alias, as the mockup's script
@@ -254,6 +293,8 @@ export function filterCharacterRows(
             has(filters.path, r.path) &&
             has(filters.role, r.role) &&
             has(filters.rarity, String(r.rarity) as RarityParam) &&
+            // OR within the group: a character with any picked archetype (none: no match).
+            (filters.arch.length === 0 || r.archetypes.some((a) => filters.arch.includes(a))) &&
             matchesSearch(r, aliasesOf(r.name), filters.q),
     );
 }
@@ -332,6 +373,7 @@ export function activeFilterCount(filters: Filters): number {
         filters.path.length +
         filters.role.length +
         filters.rarity.length +
+        filters.arch.length +
         (filters.q.trim() !== '' ? 1 : 0)
     );
 }

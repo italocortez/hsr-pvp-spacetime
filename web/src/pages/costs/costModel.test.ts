@@ -1,3 +1,4 @@
+import type { Archetype, HsrCharacterArchetype } from '@bindings/types';
 import { describe, expect, it } from 'vitest';
 import { buildCostLookup, rowsOfSet } from '@/stdb/costLookup';
 import {
@@ -11,6 +12,8 @@ import {
 } from '@/test/costFixtures';
 import {
     activeFilterCount,
+    archetypeNamesByCharacter,
+    archetypeOptions,
     buildCharacterRows,
     buildLightconeRows,
     costSetsForMode,
@@ -29,7 +32,7 @@ import {
 
 const AS_CLASSIC = { gameMode: 'ApocalypticShadow', draftMode: 'Classic' } as const;
 const byName = new Map(CHARACTERS.map((c) => [c.name, c] as const));
-const NO_FILTERS = { el: [], path: [], role: [], rarity: [], q: '' };
+const NO_FILTERS = { el: [], path: [], role: [], rarity: [], arch: [], q: '' };
 const aliasesOf = (name: string) =>
     byName.get(name)?.aliases ?? LIGHTCONES.find((l) => l.name === name)?.aliases ?? [];
 
@@ -305,5 +308,67 @@ describe('cost sets and wording', () => {
         expect(countNoun('characters', 2)).toBe('units');
         expect(countNoun('lightcones', 1)).toBe('light cone');
         expect(countNoun('lightcones', 0)).toBe('light cones');
+    });
+});
+
+describe('archetypes (S14.2b)', () => {
+    const arch = (id: number, name: string) => ({ id, name }) as unknown as Archetype;
+    const link = (characterName: string, archetypeId: number) =>
+        ({ characterName, archetypeId }) as unknown as HsrCharacterArchetype;
+    const ARCHETYPES = [arch(1, 'Break'), arch(2, 'DoT'), arch(3, 'FuA'), arch(4, 'Debuff')];
+    const LINKS = [link('acheron', 4), link('clara', 3), link('pela', 4), link('pela', 1)];
+    const map = archetypeNamesByCharacter(ARCHETYPES, LINKS);
+    const rows = buildCharacterRows(CHARACTERS, lookupOf({}), AS_CLASSIC, byName, map);
+    const names = (list: { name: string }[]) => list.map((r) => r.name).sort();
+    const only = (arch: string[]) =>
+        names(filterCharacterRows(rows, { ...NO_FILTERS, arch }, aliasesOf));
+
+    it('names per character from the links; a link to a missing archetype or a repeat is skipped', () => {
+        const m = archetypeNamesByCharacter(ARCHETYPES, [
+            ...LINKS,
+            link('pela', 99),
+            link('pela', 1),
+        ]);
+        expect(m.get('pela')).toEqual(['Debuff', 'Break']);
+        expect(m.has('huohuo')).toBe(false);
+        expect(rows.find((r) => r.name === 'huohuo')?.archetypes).toEqual([]);
+    });
+
+    it('the options: every name, alphabetically (case-insensitive)', () => {
+        expect(archetypeOptions([...ARCHETYPES, arch(5, 'basic ATK DMG')])).toEqual([
+            'basic ATK DMG',
+            'Break',
+            'Debuff',
+            'DoT',
+            'FuA',
+        ]);
+    });
+
+    it('OR within the group; a character with several archetypes; one with none never matches', () => {
+        expect(only([])).toEqual(['acheron', 'clara', 'huohuo', 'pela']);
+        expect(only(['Debuff'])).toEqual(['acheron', 'pela']);
+        expect(only(['Break'])).toEqual(['pela']);
+        expect(only(['FuA', 'Break'])).toEqual(['clara', 'pela']);
+        expect(only(['Break', 'Debuff', 'DoT', 'FuA'])).toEqual(['acheron', 'clara', 'pela']);
+    });
+
+    it('AND with the other groups', () => {
+        expect(
+            names(
+                filterCharacterRows(
+                    rows,
+                    { ...NO_FILTERS, arch: ['Debuff'], el: ['ice'] },
+                    aliasesOf,
+                ),
+            ),
+        ).toEqual(['pela']);
+    });
+
+    it('light cones ignore it; "Clear N" counts each name', () => {
+        const lcs = buildLightconeRows(LIGHTCONES, lookupOf({}), AS_CLASSIC);
+        expect(
+            filterLightconeRows(lcs, { ...NO_FILTERS, arch: ['Break'] }, aliasesOf),
+        ).toHaveLength(3);
+        expect(activeFilterCount({ ...NO_FILTERS, arch: ['Break', 'DoT'], q: 'x' })).toBe(3);
     });
 });

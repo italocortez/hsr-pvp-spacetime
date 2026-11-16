@@ -1,7 +1,11 @@
-/* The failed-load box: the image's own size (inline style) and class; a neutral fill under it. */
+/* The failed-load box: a neutral fill of the image's size (`width` and `height`, passed in as
+   custom properties). Zero specificity, so the caller's class wins, as it does for the `img`: a
+   class that sizes the image (28px at a breakpoint, say) sizes the box the same way. */
 
-.fallback {
+:where(.fallback) {
     display: inline-block;
     flex: 0 0 auto;
+    inline-size: var(--remote-w);
+    block-size: var(--remote-h);
     background: var(--color-graphite);
 }

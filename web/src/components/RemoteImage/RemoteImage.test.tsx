@@ -37,8 +37,13 @@ describe('T-M10 RemoteImage', () => {
         expect(box.tagName).toBe('SPAN');
         expect(box).toHaveClass('portrait');
         expect(box).toHaveAttribute('aria-hidden', 'true');
-        expect(box.style.inlineSize).toBe('34px');
-        expect(box.style.blockSize).toBe('34px');
+        // The size reaches the box as custom properties read by a zero-specificity rule, so the
+        // caller's class (28px at a breakpoint) still wins over it (S14.2b, C1): no fixed size is
+        // written inline.
+        expect(box.style.getPropertyValue('--remote-w')).toBe('34px');
+        expect(box.style.getPropertyValue('--remote-h')).toBe('34px');
+        expect(box.style.inlineSize).toBe('');
+        expect(box.style.blockSize).toBe('');
         // A new address tries again.
         rerender(
             <RemoteImage src={`${SRC}2`} alt="" width={34} height={34} className="portrait" />,

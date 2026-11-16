@@ -83,6 +83,32 @@ Page routes that render a full-screen splash say so in `staticData.splash` (`web
 
 An image from UploadThing (`*.ufs.sh`) is rendered with `crossorigin="anonymous"`, explicit `width` and `height`, and `loading="lazy"` when it is below the fold; `components/RemoteImage` does all three. Why, and the rule in full: `pages.md`, "Images from UploadThing (M10)".
 
+## Rule 6c: shared dropdowns
+
+A filter with many values (the archetypes) uses `components/MultiSelectDropdown`, not a row of chips and not a page-local panel (UI-DECISIONS.md). A panel that must escape a card's `overflow: hidden` goes in the top layer (`popover="manual"`) or `position: fixed`, never `position: absolute` inside the card. One placement rule on both paths (`placePanel`; anchor positioning, where supported, only tethers the panel to the button): the usable area is the viewport less 16px on every side and less the fixed bar (`--shell-offset`) at the top; the panel opens below when it fits, otherwise on the side with more room, its height is at most the CSS cap and at most the room on that side, and it scrolls inside itself, so every option is reachable on a short phone in landscape. A press anywhere on an option row toggles it and keeps the panel open (the rows are labels; the panel is focusable from script, `tabIndex={-1}`, so a press on text lands focus inside). Why and how: `pages.md`, "Costs (S14.2)", S14.2b.
+
+## Patterns
+
+### Scroll-linked collapse
+
+**What it is for:** a sticky label column or panel at the start edge of a sideways scroller that gives its room back as the viewer scrolls into the content: its visible width shrinks one pixel per pixel of scroll down to a collapsed width (an icon, a portrait), and the label on it fades under the moving edge. Reference implementation: the costs page's phone name column (`pages/costs/CostTable.tsx` and `CostTable.module.css`; `pages.md`, "Costs (S14.2)", S14.2b).
+
+**Rules that make it feel right:**
+
+- The width is tied one to one to the scroll, `clamp(collapsed, start - scrollLeft, start)`, with no transition on the width itself: it can neither lag nor overshoot, and the next column stays glued to the edge until the collapse.
+- The layout width never changes: the item keeps its full width and paints its surface with a `::before` of `--collapse-w`, with its content clipped at the same edge (`clip-path`). Nothing in the scroller moves or lurches; the transparent rest of the item lets presses through (`pointer-events`).
+- Fades are tied to the same scroll progress (`--collapse-fade`, over the first 120px) and finish before the collapsed width is reached. Content that belongs to the collapsed state (a short value standing in for a column that scrolled away) appears over 30px of scroll (`--collapse-reveal`) from `--collapse-reveal-at`, which the scroller declares as the scroll at which the real value has gone under the surface (the value never shows twice); without it the reveal follows the fade (120px). Past the collapse a soft edge grows in (`--collapse-edge`, up to 24px), so what slides under the surface fades instead of showing a cut sliver.
+- Content never wraps while collapsing (one line, ellipsis at the start width, the full text kept for assistive technology and in a `title`).
+- Reduced motion keeps the width link (it is the scroll itself, not an animation) and turns the fades into steps.
+- Keyboard focus inside a collapsed item reopens that item to full width (`reopenOnFocus`); pointer focus does not. Keyboard focus elsewhere in the scroller must not land under the surface: give the scroller `scroll-padding-inline-start` of the collapsed width plus the soft edge while the collapse is on.
+- Content that spans the scroller (an empty or error state in a full-width cell) stays in the visible box: sticky at the start edge with the scroller's width (`100cqi`, the scroller an inline-size container while it holds one).
+- Hidden content stays in the accessibility tree (opacity and clipping only); a header cell keeps its header semantics; a copy drawn for the eye has empty alternative text.
+- Phones only (the narrow step, 560px, and below) and only while the scroller can scroll sideways, unless a page argues otherwise.
+
+**How to use it:** call `useScrollCollapse(scrollerRef, query)` from `lib/scrollCollapse.ts` and put its result on the scroller as `data-scroll-collapse`; spread `reopenOnFocus` on the scroller; give every collapsing element the `collapseItem` class; declare `--collapse-start` and `--collapse-closed` (lengths, and `--collapse-reveal-at` when a revealed copy stands in for a real value) on the scroller under the same query; the scroller element must stay the same for the hook's lifetime (remount its owner with a `key` to change it); `measure` may be an inline function (the latest is read, nothing re-subscribes); in the page's CSS, under `[data-scroll-collapse]`, make the items sticky and read `--collapse-w`, `--collapse-fade`, `--collapse-reveal`, `--collapse-edge`. The formulas live in `styles/scrollCollapse.module.css` (timeline path) and `collapseValues()` (script path); 120, 30 and 24 appear in both and change together.
+
+**Browser support and fallback:** a browser with scroll-driven animations (`animation-timeline: scroll()`) takes the timeline path: each item runs a scroll-driven animation that writes `--sl` and the CSS computes the values, in step with scrolling and with no script per frame (Edge measured exact). The rest take the script path: a passive `scroll` listener writes the values on the scroller; it can trail a compositor-driven smooth scroll by up to one frame (in Edge with the path forced, one frame was up to 81px during a fast programmatic smooth scroll; a finger scroll and the wheel measured exact). Safari and Firefox were not run. The path is picked by feature detection (`CSS.supports`), never by the browser's name. jsdom tests drive the script path (stub `CSS.supports`, inject a measure, mock `matchMedia`).
+
 ## Rule 7: tests
 
 - **What gets a test:** every validator, guard and pure helper (a table of kept and dropped inputs, idempotence where the router re-runs it); route behaviour (redirects, not-found, no-access, search rewrites) through the real route tree; a page's landmarks and headline when it is added. Not every component: a component without logic is covered by the screenshot loop.

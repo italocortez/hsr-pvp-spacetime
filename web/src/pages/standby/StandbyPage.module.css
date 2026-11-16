@@ -34,14 +34,6 @@
 }
 
 /* ": " between label and name, for screen readers only; the look stays label + gap + name. */
-.separator:where(:not(:focus-within, :active)) {
-    position: absolute;
-    clip-path: inset(50%);
-    overflow: hidden;
-    inline-size: 1px;
-    block-size: 1px;
-    margin: -1px;
-    padding: 0;
-    border: 0;
-    white-space: nowrap;
+.separator {
+    composes: visuallyHidden from "../../styles/visuallyHidden.module.css";
 }

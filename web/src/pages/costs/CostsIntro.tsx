@@ -28,13 +28,14 @@ function writeHidden(hidden: boolean): void {
     }
 }
 
-export function CostsIntro() {
+export function CostsIntro({ onToggle }: { onToggle?: () => void }) {
     const [hidden, setHidden] = useState(readHidden);
     const innerId = useId();
     const toggle = () => {
         const next = !hidden;
         setHidden(next);
         writeHidden(next);
+        onToggle?.();
     };
     const action = hidden ? 'Show intro' : 'Hide intro';
 

@@ -116,7 +116,10 @@
 
 .clearChip {
     display: inline-flex;
-    flex: 1 1 auto;
+    /* Its own size, at the end of whichever line it lands on (S14.2b): with the archetype filter
+       the first line is full at 1440, and a growing chip stretched across a line of its own. */
+    flex: 0 0 auto;
+    margin-inline-start: auto;
     gap: 6px;
     align-items: center;
     justify-content: center;

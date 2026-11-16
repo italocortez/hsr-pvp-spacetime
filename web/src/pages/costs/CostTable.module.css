@@ -389,18 +389,30 @@
     font-weight: 600;
 }
 
+/* The empty and error states: the block keeps to the scroller's visible box (sticky at the start
+   edge, the scroller's width), so on a phone it is not centred in the 780px table, mostly off to
+   the side. The scroller is an inline-size container only while it holds one (`cqi` below). */
+.wrap:has(.emptyCell) {
+    container-type: inline-size;
+}
+
 .emptyCell {
-    padding: 56px 20px;
+    padding: 56px 0;
     color: var(--text-muted);
     font-size: 0.9375rem; /* 15px */
     text-align: center;
 }
 
 .emptyState {
+    position: sticky;
+    inset-inline-start: 0;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     gap: 14px;
     align-items: center;
+    inline-size: 100cqi;
+    padding-inline: 20px;
 
     & p {
         margin: 0;
@@ -483,5 +495,217 @@
 
     to {
         opacity: 0.9;
+    }
+}
+
+/*
+ * The phone name column (S14.2b, user decision 2026-11-16; the shared scroll-linked collapse,
+ * web/src/lib/scrollCollapse.ts and styles/scrollCollapse.module.css). At the narrow step and
+ * below, while the scroller can scroll sideways (`data-scroll-collapse`, set by the hook), the
+ * name column is sticky at the start edge (its header cell sticky both ways). Its cells keep
+ * their layout width and are transparent; each paints its surface with a `::before` box
+ * `--collapse-w` wide, so the box's edge moves exactly with the content (the Rarity column stays
+ * glued to it) until only the expander slot and the portrait are left; then the cost columns
+ * slide under it, past a short soft edge (`::after`, `--collapse-edge`). The content is clipped
+ * at the same edge; the name, the badge and the header label fade with `--collapse-fade`.
+ */
+
+/* A synergy sub-row's value, drawn again in the expander slot once the name has faded (for the
+   eye only: empty alternative text, the value cell keeps it for assistive technology). */
+.synTarget::after {
+    display: none;
+}
+
+@media (--bp-sm) {
+    .wrap[data-scroll-collapse] {
+        --sticky-pad: 14px;
+        /* Characters: the expander slot carries its own room, so the start padding is small. */
+        --sticky-pad-c: 6px;
+        /* The slot is the arrow's hit area: 24px, or the 44px touch target on coarse pointers. */
+        --sticky-slot: 24px;
+        --sticky-gap: 6px;
+        --sticky-thumb: 28px;
+        --sticky-end: 10px;
+        --sticky-cellpad: var(--sticky-pad);
+        --collapse-start: 15.375rem;
+        --collapse-closed: calc(var(--sticky-pad) + var(--sticky-thumb) + var(--sticky-end));
+        /* A synergy value's copy appears once the real value (centred in the 6rem Extra Cost
+           column, right after the name column) has gone under the collapsed surface: its end
+           edge sits about 3.75rem into the scroll past the name column. */
+        --collapse-reveal-at: calc(var(--collapse-start) + 3.75rem - var(--collapse-closed));
+        /* Keyboard focus scrolls a header or cell clear of the collapsed surface and its soft
+           edge (24px, `EDGE_PX`) instead of under it. */
+        scroll-padding-inline-start: calc(var(--collapse-closed) + 24px);
+
+        @media (pointer: coarse) {
+            --sticky-slot: 44px;
+        }
+
+        &[data-tab="characters"] {
+            --sticky-cellpad: var(--sticky-pad-c);
+            --collapse-closed: calc(
+                var(--sticky-pad-c) +
+                var(--sticky-slot) +
+                var(--sticky-gap) +
+                var(--sticky-thumb) +
+                var(--sticky-end)
+            );
+        }
+
+        .th[data-first],
+        .td[data-first] {
+            --sticky-bg: var(--bg-card);
+            position: sticky;
+            inset-inline-start: 0;
+            background: transparent;
+            box-shadow: none;
+            /* The transparent part lets presses through to the cells underneath. */
+            pointer-events: none;
+
+            /* The surface. */
+            &::before {
+                content: "";
+                position: absolute;
+                inset-block: 0;
+                inset-inline-start: 0;
+                z-index: -1;
+                inline-size: var(--collapse-w);
+                background: var(--sticky-bg);
+                box-shadow: inset -1px 0 0 var(--border-subtle);
+                pointer-events: auto;
+            }
+
+            /* The soft edge: a cost value sliding under the surface fades into it instead of
+               showing a cut sliver. */
+            &::after {
+                content: "";
+                position: absolute;
+                inset-block: 0;
+                inset-inline-start: var(--collapse-w);
+                inline-size: var(--collapse-edge);
+                background: linear-gradient(to right, var(--sticky-bg) 35%, transparent);
+                pointer-events: none;
+            }
+
+            & button {
+                pointer-events: auto;
+            }
+        }
+
+        .td[data-first] {
+            z-index: 2;
+            padding-inline-start: var(--sticky-cellpad);
+        }
+
+        .th[data-first] {
+            --sticky-bg: var(--color-space);
+            z-index: 7;
+
+            &::before {
+                box-shadow:
+                    inset 0 -1px 0 var(--border-strong),
+                    inset -1px 0 0 var(--border-subtle);
+            }
+
+            &[data-active] {
+                --sticky-bg: color-mix(in oklab, var(--color-iris) 12%, var(--color-space));
+            }
+
+            & .thBtn {
+                clip-path: inset(-4px calc(100% - var(--collapse-w)) -4px -4px);
+            }
+
+            & .thLabel,
+            & .sortIcon,
+            &[aria-sort] .sortIcon {
+                opacity: var(--collapse-fade);
+            }
+        }
+
+        .td[data-first][data-active] {
+            --sticky-bg: color-mix(in oklab, var(--color-iris) 5%, var(--bg-card));
+        }
+
+        .synHeadRow .td[data-first] {
+            --sticky-bg: color-mix(in oklab, var(--color-void) 55%, var(--bg-card));
+        }
+
+        .synRow .td[data-first] {
+            --sticky-bg: color-mix(in oklab, var(--color-void) 32%, var(--bg-card));
+        }
+
+        /* Last: a hovered row's tint wins over its kind's surface, as the rows' own hover does. */
+        .tr:hover .td[data-first],
+        .synRow:hover .td[data-first] {
+            --sticky-bg: color-mix(in oklab, var(--color-iris) 5.5%, var(--bg-card));
+        }
+
+        /* One line; everything past the moving edge is clipped (focus rings may reach out to the
+           start, top and bottom). */
+        .nameCell {
+            flex-wrap: nowrap;
+            gap: var(--sticky-gap);
+            min-inline-size: 0;
+            clip-path: inset(-4px calc(100% - var(--collapse-w) + var(--sticky-cellpad)) -4px -6px);
+        }
+
+        .portrait,
+        .lcMark {
+            margin-inline-end: 5px;
+        }
+
+        .nameText {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .nameText,
+        .synBadge {
+            opacity: var(--collapse-fade);
+        }
+
+        /* The expander and the empty slot of a row without one: the same width, so every
+           portrait sits on one vertical line. */
+        .expandBtn,
+        .expandSpacer {
+            inline-size: var(--sticky-slot);
+            min-inline-size: var(--sticky-slot);
+            margin-inline-end: 0;
+        }
+
+        /* Synergy sub-rows: the partner's thumbnail on the portraits' line, its name fading like
+           the names, and its value appearing in the expander slot once the name has gone. */
+        .synLabel[data-indent] {
+            display: inline-block;
+            padding-inline-start: calc(var(--sticky-slot) + var(--sticky-gap));
+            white-space: nowrap;
+            opacity: var(--collapse-fade);
+        }
+
+        .synTarget {
+            position: relative;
+            padding-inline-start: calc(var(--sticky-slot) + var(--sticky-gap) + 3px);
+            white-space: nowrap;
+            clip-path: inset(-4px calc(100% - var(--collapse-w) + var(--sticky-cellpad)) -4px -6px);
+
+            &::after {
+                content: attr(data-value) / "";
+                display: block;
+                position: absolute;
+                inset-inline-start: 0;
+                inline-size: var(--sticky-slot);
+                color: var(--color-amethyst);
+                font-size: 0.6875rem;
+                font-variant-numeric: tabular-nums;
+                font-weight: 600;
+                text-align: center;
+                opacity: var(--collapse-reveal);
+            }
+        }
+
+        .synName {
+            opacity: var(--collapse-fade);
+        }
     }
 }

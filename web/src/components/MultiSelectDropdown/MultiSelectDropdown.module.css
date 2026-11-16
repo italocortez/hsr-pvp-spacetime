@@ -1,0 +1,205 @@
+/*
+ * The dropdown multi-select (S14.2b): a button in the filter row's look (the costs mockup's chip
+ * frame: 42px, `--color-space`, the subtle border) and a panel on the elevated surface (DESIGN.md
+ * 11.3: popovers 12px). The selected state shows on the closed button: the iris "on" look and a
+ * count.
+ */
+
+/* The panel's height cap, registered so the script reads it as resolved px (`getComputedStyle`). */
+@property --ms-cap {
+    syntax: "<length>";
+    inherits: false;
+    initial-value: 0px;
+}
+
+.wrap {
+    /* The panel's width: at most 20rem, and never wider than the viewport less its margins. */
+    --ms-w: min(20rem, calc(100vw - 32px));
+
+    display: flex;
+    flex: 1 1 auto;
+}
+
+.button {
+    display: inline-flex;
+    flex: 1 1 auto;
+    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+    min-block-size: 42px;
+    padding: 0 12px 0 14px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--color-space);
+    color: var(--text-muted);
+    font-size: 0.75rem; /* 12px, the text chips' size */
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: normal;
+    white-space: nowrap;
+    cursor: pointer;
+    anchor-name: var(--ms-anchor);
+    transition:
+        color var(--duration-fast) var(--ease-out),
+        background var(--duration-fast) var(--ease-out),
+        border-color var(--duration-fast) var(--ease-out);
+
+    &:hover {
+        color: var(--text-heading);
+    }
+
+    &[aria-expanded="true"] {
+        border-color: var(--border-strong);
+        color: var(--text-heading);
+    }
+
+    &[data-on] {
+        border-color: color-mix(in srgb, var(--color-iris) 50%, transparent);
+        background: color-mix(in srgb, var(--color-iris) 18%, transparent);
+        color: var(--color-iris-hover);
+    }
+
+    @media (forced-colors: active) {
+        &[data-on] {
+            border-color: Highlight;
+        }
+    }
+}
+
+.label {
+    flex: 1 1 auto;
+    text-align: start;
+}
+
+.count {
+    display: inline-grid;
+    place-items: center;
+    min-inline-size: 18px;
+    block-size: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--color-iris);
+    color: var(--color-snow);
+    font-size: 0.6875rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.caret {
+    flex: none;
+    inline-size: 6px;
+    block-size: 6px;
+    border-block-end: 1.5px solid currentColor;
+    border-inline-end: 1.5px solid currentColor;
+    transform: translateY(-2px) rotate(45deg);
+
+    .button[aria-expanded="true"] & {
+        transform: translateY(1px) rotate(225deg);
+    }
+}
+
+/* Placed by script (`placePanel`: `left`, `top` or `bottom`, and `--ms-room`, the room on the
+   chosen side) unless anchor positioning is available (below). Fixed, so a clipping ancestor does
+   not cut it where the top layer is missing too. Its height: at most the cap, and at most the
+   room on its side. */
+.panel {
+    --ms-cap: min(22rem, 60dvh);
+
+    position: fixed;
+    inset: auto;
+    z-index: 50;
+    box-sizing: border-box;
+    inline-size: var(--ms-w);
+    max-block-size: min(var(--ms-cap), var(--ms-room, 100dvh));
+    margin: 0;
+    padding: 8px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-panel);
+    background: var(--bg-elevated);
+    color: var(--text-body);
+    box-shadow: 0 12px 32px rgb(0 0 0 / 0.5);
+    overflow: auto;
+    overscroll-behavior: contain;
+
+    /* Focused by a press on its padding or an option's text (never by Tab): no ring. */
+    &:focus {
+        outline: none;
+    }
+}
+
+/* viewport-aware-dropdowns.md: tethered to the button, its end edge on the button's, kept 16px
+   inside the viewport, so it follows the button while the page scrolls with no lag. The side is
+   the script's choice (`data-side`, `placePanel`), and so is the room (`--ms-room`) that bounds
+   its height: insets alone do not (Edge sizes a `fit-content` panel to its content past the
+   inset-modified box). Below: its top edge 6px under the button; above: its bottom edge 6px over
+   it. */
+@supports (anchor-name: --a) {
+    .panel[data-anchored] {
+        position-anchor: var(--ms-anchor);
+        inset-block: calc(anchor(bottom) + 6px) auto;
+        inset-inline-start: clamp(
+            16px,
+            calc(anchor(right) - var(--ms-w)),
+            calc(100% - 16px - var(--ms-w))
+        );
+
+        &[data-side="above"] {
+            inset-block: auto calc(anchor(top) + 6px);
+        }
+    }
+}
+
+.group {
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+/* Two columns where they fit (one at 320px), filled down the first column, then the second: the
+   reading order, so ArrowDown goes down the visible column and on to the next. */
+.columns {
+    columns: 2 8.5rem;
+    column-gap: 8px;
+}
+
+.option {
+    break-inside: avoid;
+    display: flex;
+    margin-block-end: 2px;
+    gap: 8px;
+    align-items: center;
+    min-block-size: 32px;
+    padding: 0 8px;
+    border-radius: 6px;
+    font-size: 0.8125rem;
+    cursor: pointer;
+
+    &:hover {
+        background: rgb(255 255 255 / 0.06);
+        color: var(--text-heading);
+    }
+
+    &:has(:checked) {
+        color: var(--color-iris-hover);
+    }
+
+    @media (pointer: coarse) {
+        min-block-size: 44px;
+    }
+}
+
+.check {
+    flex: none;
+    inline-size: 1rem;
+    block-size: 1rem;
+    margin: 0;
+    accent-color: var(--color-iris);
+    cursor: pointer;
+}
+
+.empty {
+    margin: 0;
+    padding: 8px;
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+}

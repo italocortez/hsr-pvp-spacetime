@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseSearch, stringifySearch } from '@/lib/searchParams';
-import { type CostsView, parseCostsSearch, parseSetId } from './costsSearch';
+import { ARCH_MAX, type CostsView, parseCostsSearch, parseSetId } from './costsSearch';
 import { toSearch, toView } from './costsView';
 
 /* T-COSTS: the `/costs` address validator (user ruling 2026-11-16 item 5). */
@@ -14,6 +14,7 @@ describe('costs search: each param', () => {
         const s = parse('');
         expect(Object.keys(s).sort()).toEqual(
             [
+                'arch',
                 'dir',
                 'draft',
                 'el',
@@ -37,6 +38,7 @@ describe('costs search: each param', () => {
             path: [],
             role: [],
             rarity: [],
+            arch: [],
             q: '',
             sort: 'name',
             dir: 'asc',
@@ -155,6 +157,7 @@ describe('costs search: defaults omitted, idempotent, round trip', () => {
             path: ['harmony'],
             role: [],
             rarity: ['3'],
+            arch: [],
             q: 'cogs',
             sort: 's5',
             dir: 'desc',
@@ -165,5 +168,52 @@ describe('costs search: defaults omitted, idempotent, round trip', () => {
 
     it('user text stays text: markup in q is kept as typed, never interpreted here', () => {
         expect(parse('q=%3Cimg%20src%3Dx%3E').q).toBe('<img src=x>');
+    });
+});
+
+describe('costs search: arch (S14.2b)', () => {
+    it('archetype names, repeated, each once, in code-point order', () => {
+        expect(parse('arch=FuA&arch=Debuff&arch=FuA').arch).toEqual(['Debuff', 'FuA']);
+        expect(parse('arch=Basic+ATK+DMG').arch).toEqual(['Basic ATK DMG']);
+    });
+
+    it('drops what an archetype name cannot be: blank, padded, too long, control characters', () => {
+        expect(parse('arch=&arch=%20FuA&arch=a%0Ab').arch).toBeUndefined();
+        expect(parse(`arch=${'x'.repeat(64)}`).arch).toEqual(['x'.repeat(64)]);
+        expect(parse(`arch=${'x'.repeat(65)}`).arch).toBeUndefined();
+    });
+
+    it('keeps at most ARCH_MAX names', () => {
+        const many = Array.from(
+            { length: ARCH_MAX + 5 },
+            (_, i) => `arch=a${String(i).padStart(2, '0')}`,
+        );
+        expect(parse(many.join('&')).arch).toHaveLength(ARCH_MAX);
+    });
+
+    it('the limit applies after sorting: the first ARCH_MAX names in code-point order are kept', () => {
+        const names = Array.from(
+            { length: ARCH_MAX + 5 },
+            (_, i) => `a${String(i).padStart(2, '0')}`,
+        );
+        // Given in reverse order: a limit taken before sorting would keep the last names.
+        const qs = [...names].reverse().map((n) => `arch=${n}`);
+        expect(parse(qs.join('&')).arch).toEqual(names.slice(0, ARCH_MAX));
+    });
+
+    it('characters only: the Light Cones tab drops it', () => {
+        expect(parse('tab=lightcones&arch=FuA').arch).toBeUndefined();
+    });
+
+    it('unknown names are kept here (the page drops them once the list is known)', () => {
+        expect(parse('arch=Nope').arch).toEqual(['Nope']);
+    });
+
+    it('round trip and idempotence', () => {
+        const qs = '?arch=Break&arch=Debuff&el=ice';
+        expect(roundTrip(qs)).toBe(qs);
+        const once = parse('arch=FuA&arch=Break');
+        expect(parseCostsSearch(once as Record<string, unknown>)).toEqual(once);
+        expect(toView(toSearch({ ...toView({}), arch: ['FuA'] })).arch).toEqual(['FuA']);
     });
 });

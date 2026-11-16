@@ -1,6 +1,14 @@
 import { Fragment, type RefObject, useEffect, useRef, useState } from 'react';
 import { RarityBadge } from '@/components/RarityBadge/RarityBadge';
 import { RemoteImage } from '@/components/RemoteImage/RemoteImage';
+import {
+    type CollapseMeasure,
+    collapseItem,
+    reopenOnFocus,
+    useScrollCollapse,
+} from '@/lib/scrollCollapse';
+import { customMediaQuery } from '@/shell/PhoneMenu';
+import mediaCss from '@/styles/media.css?raw';
 import hidden from '@/styles/visuallyHidden.module.css';
 import { ChevronRightIcon, ChevronUpIcon, NoResultsIcon } from './CostIcons';
 import styles from './CostTable.module.css';
@@ -22,10 +30,20 @@ import type { TableState } from './useCostsPage';
  * sideways overflow). Sortable headers follow web-guidance ui-behaviors/sortable-table.md: a
  * button inside each `th scope="col"`, `aria-sort` on the sorted column only, a decorative
  * direction icon, the caption as the table's name. Each row's name cell is its row header
- * (`th scope="row"`). Rows are keyed, so a sort moves the existing `tr` elements (focus inside
- * a row survives). The scroller is a named region and becomes a Tab stop when it can scroll
- * (responsive-table.md), so the keyboard can scroll it.
+ * (`th scope="row"`), named by the name alone (`aria-labelledby`), so a cell is announced with
+ * the character's or the cone's name and not with the expander's label or the badge's words.
+ * Rows are keyed, so a sort moves the existing `tr` elements (focus inside a row survives). The
+ * scroller is a named region and becomes a Tab stop when it can scroll (responsive-table.md),
+ * so the keyboard can scroll it.
+ *
+ * On phones (the narrow step, 560px, and below) while the table can scroll sideways, the first
+ * column is sticky and gives its room back as the viewer scrolls into the costs: the shared
+ * scroll-linked collapse (`lib/scrollCollapse.ts`), this page its first user. Collapsed it keeps
+ * the expander slot and the portrait (Characters) or the portrait (Light Cones).
  */
+
+/** The narrow rule (`--bp-sm`): the collapsing name column applies at this width and below. */
+export const NARROW_QUERY = customMediaQuery(mediaCss, '--bp-sm');
 
 type Column = { key: SortKey; label: string };
 
@@ -43,6 +61,9 @@ export const LIGHTCONE_COLUMNS: readonly Column[] = [
 /** Skeleton rows while loading: fixed height (the data row's), so nothing shifts. */
 const SKELETON_ROWS = 10;
 
+/** What the scroller's hooks read; injectable in tests (jsdom has no layout). */
+export type TableMeasure = CollapseMeasure & { scrollHeight: number; clientHeight: number };
+
 export type CostTableProps = {
     tab: Tab;
     rows: readonly CharacterRow[] | readonly LightconeRow[];
@@ -58,13 +79,21 @@ export type CostTableProps = {
     onClearFilters: () => void;
     onRetry: () => void;
     idPrefix: string;
+    /** Test seam: replaces the scroller's DOM measurements. */
+    measure?: (el: HTMLElement) => TableMeasure;
 };
 
+/** The table, remounted per tab: each tab is its own table (scroll start, collapsed width). */
 export function CostTable(props: CostTableProps) {
-    const { tab, state, sort, dir, onSort, captionId, caption } = props;
+    return <TableScroller key={props.tab} {...props} />;
+}
+
+function TableScroller(props: CostTableProps) {
+    const { tab, state, sort, dir, onSort, captionId, caption, measure } = props;
     const columns = tab === 'characters' ? CHARACTER_COLUMNS : LIGHTCONE_COLUMNS;
     const scroller = useRef<HTMLElement>(null);
-    const scrollable = useScrollable(scroller);
+    const scrollable = useScrollable(scroller, measure);
+    const collapse = useScrollCollapse(scroller, NARROW_QUERY, measure);
 
     return (
         // A named section is a region landmark (responsive-table.md: role="region").
@@ -74,6 +103,9 @@ export function CostTable(props: CostTableProps) {
             aria-labelledby={captionId}
             // A Tab stop while it can scroll; otherwise focusable from script only (after Retry).
             tabIndex={scrollable ? 0 : -1}
+            data-tab={tab}
+            data-scroll-collapse={collapse}
+            {...reopenOnFocus}
         >
             <table
                 className={styles.table}
@@ -91,7 +123,7 @@ export function CostTable(props: CostTableProps) {
                                 <th
                                     key={col.key}
                                     scope="col"
-                                    className={styles.th}
+                                    className={i === 0 ? `${styles.th} ${collapseItem}` : styles.th}
                                     data-first={i === 0 || undefined}
                                     data-active={active || undefined}
                                     aria-sort={
@@ -132,6 +164,9 @@ export function CostTable(props: CostTableProps) {
     );
 }
 
+/** A first-column cell's classes: the cell, and the collapsing item while the column collapses. */
+const FIRST = `${styles.td} ${collapseItem}`;
+
 function Body(props: CostTableProps & { columnCount: number }) {
     const { state, rows, tab, columnCount } = props;
     if (state === 'loading') {
@@ -140,7 +175,7 @@ function Body(props: CostTableProps & { columnCount: number }) {
                 {Array.from({ length: SKELETON_ROWS }, (_, i) => (
                     // biome-ignore lint/suspicious/noArrayIndexKey: fixed placeholder rows
                     <tr key={i} className={styles.skeletonRow}>
-                        <td className={styles.td} data-first>
+                        <td className={FIRST} data-first>
                             <span className={styles.nameCell}>
                                 <span className={styles.expandSpacer} />
                                 <span className={styles.skeletonThumb} />
@@ -203,7 +238,12 @@ function Body(props: CostTableProps & { columnCount: number }) {
               <CharacterRows key={row.name} row={row} {...props} />
           ))
         : (rows as readonly LightconeRow[]).map((row) => (
-              <LightconeTableRow key={row.name} row={row} sort={props.sort} />
+              <LightconeTableRow
+                  key={row.name}
+                  row={row}
+                  sort={props.sort}
+                  idPrefix={props.idPrefix}
+              />
           ));
 }
 
@@ -239,16 +279,18 @@ function CharacterRows({
 }: { row: CharacterRow } & CostTableProps) {
     const count = row.synergies.length;
     const open = count > 0 && expanded.has(row.name);
-    const subId = (i: number | 'head' | 'paired' | 'extra') => `${idPrefix}-syn-${row.name}-${i}`;
+    const id = (part: string | number) => `${idPrefix}-${row.name}-${part}`;
     const controls = open
-        ? [subId('head'), ...row.synergies.map((_s, i) => subId(i))].join(' ')
+        ? [id('syn-head'), ...row.synergies.map((_s, i) => id(`syn-${i}`))].join(' ')
         : undefined;
     return (
         <Fragment>
             <tr className={styles.tr}>
                 <th
                     scope="row"
-                    className={styles.td}
+                    id={id('row')}
+                    aria-labelledby={id('name')}
+                    className={FIRST}
                     data-first
                     data-active={sort === 'name' || undefined}
                 >
@@ -268,10 +310,12 @@ function CharacterRows({
                             <span className={styles.expandSpacer} />
                         )}
                         <Thumb src={row.imageUrl} className={styles.portrait} />
-                        <span className={styles.nameText}>{row.displayName}</span>
+                        <span id={id('name')} className={styles.nameText} title={row.displayName}>
+                            {row.displayName}
+                        </span>
                         {count > 0 && (
                             <span className={styles.synBadge}>
-                                <span aria-hidden="true">{'\u25C6'} </span>
+                                <span aria-hidden="true">{'◆'} </span>
                                 {count}
                                 <span className={hidden.visuallyHidden}>
                                     {count === 1 ? ' synergy' : ' synergies'}
@@ -287,51 +331,76 @@ function CharacterRows({
             </tr>
             {open && (
                 <>
-                    {/* The sub-rows' own headers: each sub-row cell names them in `headers`, so
-                        the value reads as "Extra Cost", not as the column's "Rarity". */}
-                    <tr className={styles.synHeadRow} id={subId('head')}>
-                        <th className={styles.td} data-first id={subId('paired')}>
+                    {/* The sub-rows' own headers. Each partner is a header of its sub-row, and
+                        its value names the character, the partner and "Extra Cost" in `headers`,
+                        so it reads as "Clara, Huohuo, Extra Cost: −1", not under "Rarity". */}
+                    <tr className={styles.synHeadRow} id={id('syn-head')}>
+                        <th className={FIRST} data-first id={id('paired')}>
                             <span className={styles.synLabel} data-indent>
                                 Paired Unit
                             </span>
                         </th>
-                        <th className={styles.td} id={subId('extra')}>
+                        <th className={styles.td} id={id('extra')}>
                             <span className={styles.synLabel}>Extra Cost</span>
                         </th>
                         <td colSpan={EIDOLON_KEYS.length} />
                     </tr>
-                    {row.synergies.map((partner, i) => (
-                        <tr key={partner.name} className={styles.synRow} id={subId(i)}>
-                            <td className={styles.td} data-first headers={subId('paired')}>
-                                <span className={styles.synTarget}>
-                                    <Thumb
-                                        src={partner.imageUrl}
-                                        className={styles.synThumb}
-                                        small
-                                    />
-                                    {partner.displayName}
-                                </span>
-                            </td>
-                            <td className={styles.td} headers={subId('extra')}>
-                                <span className={styles.synCost}>
-                                    {formatModifier(partner.modifier)}
-                                </span>
-                            </td>
-                            <td colSpan={EIDOLON_KEYS.length} />
-                        </tr>
-                    ))}
+                    {row.synergies.map((partner, i) => {
+                        const value = formatModifier(partner.modifier);
+                        return (
+                            <tr key={partner.name} className={styles.synRow} id={id(`syn-${i}`)}>
+                                <th
+                                    className={FIRST}
+                                    data-first
+                                    id={id(`partner-${i}`)}
+                                    headers={`${id('row')} ${id('paired')}`}
+                                >
+                                    {/* The value again in the collapsed column, drawn by CSS
+                                        from `data-value` with empty alternative text: for the
+                                        eye only, the value cell keeps it for AT. */}
+                                    <span className={styles.synTarget} data-value={value}>
+                                        <Thumb
+                                            src={partner.imageUrl}
+                                            className={styles.synThumb}
+                                            small
+                                        />
+                                        <span className={styles.synName}>
+                                            {partner.displayName}
+                                        </span>
+                                    </span>
+                                </th>
+                                <td
+                                    className={styles.td}
+                                    headers={`${id('row')} ${id(`partner-${i}`)} ${id('extra')}`}
+                                >
+                                    <span className={styles.synCost}>{value}</span>
+                                </td>
+                                <td colSpan={EIDOLON_KEYS.length} />
+                            </tr>
+                        );
+                    })}
                 </>
             )}
         </Fragment>
     );
 }
 
-function LightconeTableRow({ row, sort }: { row: LightconeRow; sort: SortKey }) {
+function LightconeTableRow({
+    row,
+    sort,
+    idPrefix,
+}: {
+    row: LightconeRow;
+    sort: SortKey;
+    idPrefix: string;
+}) {
+    const nameId = `${idPrefix}-${row.name}-name`;
     return (
         <tr className={styles.tr}>
             <th
                 scope="row"
-                className={styles.td}
+                aria-labelledby={nameId}
+                className={FIRST}
                 data-first
                 data-active={sort === 'name' || undefined}
             >
@@ -352,7 +421,9 @@ function LightconeTableRow({ row, sort }: { row: LightconeRow; sort: SortKey }) 
                             loading="lazy"
                         />
                     )}
-                    <span className={styles.nameText}>{row.displayName}</span>
+                    <span id={nameId} className={styles.nameText} title={row.displayName}>
+                        {row.displayName}
+                    </span>
                 </span>
             </th>
             <td className={styles.td} data-active={sort === 'rarity' || undefined}>
@@ -371,21 +442,25 @@ function Thumb({ src, className, small }: { src: string; className?: string; sma
 }
 
 /** True while the element's content overflows it in either direction. */
-function useScrollable(ref: RefObject<HTMLElement | null>): boolean {
+function useScrollable(
+    ref: RefObject<HTMLElement | null>,
+    measure?: (el: HTMLElement) => TableMeasure,
+): boolean {
     const [scrollable, setScrollable] = useState(false);
     useEffect(() => {
         const el = ref.current;
-        if (!el || typeof ResizeObserver === 'undefined') return;
-        const check = () =>
-            setScrollable(
-                el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1,
-            );
-        const observer = new ResizeObserver(check);
-        observer.observe(el);
+        if (!el) return;
+        const check = () => {
+            const m = measure ? measure(el) : el;
+            setScrollable(m.scrollWidth > m.clientWidth + 1 || m.scrollHeight > m.clientHeight + 1);
+        };
+        const observer =
+            typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(check);
+        observer?.observe(el);
         const table = el.firstElementChild;
-        if (table) observer.observe(table);
+        if (table) observer?.observe(table);
         check();
-        return () => observer.disconnect();
-    }, [ref]);
+        return () => observer?.disconnect();
+    }, [ref, measure]);
     return scrollable;
 }

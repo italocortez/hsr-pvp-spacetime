@@ -25,6 +25,13 @@ export type FilterChipsProps<V extends string> = {
     onToggle: (value: V) => void;
     /** Icon groups claim more room in a wrapping row (the mockup's `flex-grow: 3`). */
     wide?: boolean;
+    /**
+     * `scroll` (default): chips keep their size and the set scrolls sideways when it is short of
+     * room. `fit`: at the narrow step (560px) and below, the chips share the set's width equally
+     * and shrink with it (down to 24px wide, the minimum target), so a short set stays on one row
+     * without scrolling (the seven elements on a 320px phone); wider, it is the default layout.
+     */
+    layout?: 'scroll' | 'fit';
 };
 
 export function FilterChips<V extends string>({
@@ -33,9 +40,15 @@ export function FilterChips<V extends string>({
     selected,
     onToggle,
     wide = false,
+    layout = 'scroll',
 }: FilterChipsProps<V>) {
     return (
-        <fieldset aria-label={label} className={styles.set} data-wide={wide || undefined}>
+        <fieldset
+            aria-label={label}
+            className={styles.set}
+            data-wide={wide || undefined}
+            data-layout={layout}
+        >
             {options.map((option) => {
                 const on = selected.includes(option.value);
                 return (

@@ -15,6 +15,8 @@
  * | `path` | the nine paths | none |
  * | `role` | dps support sustain (Characters only) | none |
  * | `rarity` | 5 4 (Characters), 5 4 3 (Light Cones) | none |
+ * | `arch` | archetype names, as stored (Characters only; unknown names are dropped by the page
+ * |        | once the archetype list has loaded, not here) | none |
  * | `q` | search text, trimmed, at most 100 characters | empty |
  * | `sort` | name rarity e0..e6 (Characters), name rarity s1..s5 (Light Cones) | name |
  * | `dir` | `desc` | asc |
@@ -94,6 +96,7 @@ export type CostsSearch = {
     path?: PathParam[];
     role?: RoleParam[];
     rarity?: RarityParam[];
+    arch?: string[];
     q?: string;
     sort?: SortKey;
     dir?: 'desc';
@@ -109,10 +112,39 @@ export type CostsView = {
     path: PathParam[];
     role: RoleParam[];
     rarity: RarityParam[];
+    arch: string[];
     q: string;
     sort: SortKey;
     dir: SortDir;
 };
+
+/** The longest archetype name the address keeps, and the most names. */
+export const ARCH_NAME_MAX = 64;
+export const ARCH_MAX = 32;
+
+/**
+ * Archetype names: the address keeps the name (stable: the module upserts archetypes by their
+ * unique name and has no rename; readable in a shared link; the same on test and prod, where ids
+ * differ), each once, in code-point order. A name must be what the module can store: trimmed,
+ * not blank, no control characters. Whether it exists is the page's check (the list loads later).
+ */
+function archNames(value: unknown): string[] | undefined {
+    const names = [
+        ...new Set(
+            texts(value).filter(
+                (t) =>
+                    t !== '' &&
+                    t.length <= ARCH_NAME_MAX &&
+                    t === t.trim() &&
+                    // biome-ignore lint/suspicious/noControlCharactersInRegex: rejecting them is the point
+                    !/[\u0000-\u001f\u007f]/.test(t),
+            ),
+        ),
+    ]
+        .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+        .slice(0, ARCH_MAX);
+    return names.length > 0 ? names : undefined;
+}
 
 const U32_MAX = 4294967295;
 
@@ -174,6 +206,8 @@ export function parseCostsSearch(search: Record<string, unknown>): CostsSearch {
         path: setOf(search.path, PATHS),
         role: isLc ? undefined : setOf(search.role, ROLES),
         rarity: setOf(search.rarity, RARITIES_BY_TAB[isLc ? 'lightcones' : 'characters']),
+        // Archetypes classify characters only: the Light Cones tab drops them.
+        arch: isLc ? undefined : archNames(search.arch),
         q: q !== undefined && q !== '' && q.length <= SEARCH_MAX ? q : undefined,
         sort: sort === 'name' ? undefined : sort,
         dir: oneOf(search.dir, ['asc', 'desc'] as const) === 'desc' ? 'desc' : undefined,

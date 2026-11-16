@@ -1,3 +1,5 @@
+@import "@/styles/media.css";
+
 /* The mockup's `.chipSet`, `.iconChip`, `.textChip` (design/mockups/costs.html). */
 
 .set {
@@ -118,5 +120,31 @@
     .textChip {
         min-block-size: 44px;
         min-inline-size: 44px;
+    }
+}
+
+/* `layout="fit"`, at the narrow step (560px) and below only: the chips start from their usual
+   width (34px, 44px on touch) and share the set's width equally, shrinking with it down to 24px
+   wide (accessibility.md: a 24 by 24px target; the 3px gaps keep 24px circles apart once the
+   chips are 27px or wider, and the chips are 44px high on touch). The icon shrinks with a narrow
+   chip. Wider, the chips are sized as in the default layout. */
+@media (--bp-sm) {
+    .set[data-layout="fit"] {
+        .iconChip,
+        .textChip {
+            flex: 1 1 34px;
+            min-inline-size: 24px;
+
+            @media (pointer: coarse) {
+                flex-basis: 44px;
+                min-inline-size: 24px;
+            }
+        }
+
+        .iconChip img {
+            max-inline-size: calc(100% - 6px);
+            block-size: auto;
+            aspect-ratio: 1;
+        }
     }
 }
