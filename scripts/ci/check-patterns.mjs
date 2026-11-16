@@ -75,6 +75,8 @@ if (!existsSync(DIST)) {
             // M5b fix pass: the dev-only loopback rule of isFollowable (web/src/auth/signIn.ts),
             // the regex source as the minifier keeps it.
             String.raw`(?:localhost|127\.0\.0\.1)`,
+            // M10: the dev server's service worker reset (web/src/dev/devServiceWorkerReset.ts).
+            'hsr-dev-sw-reset',
         ]);
         // 4. Fonts are self-hosted (no Google Fonts requests).
         scan('google-fonts', file, ['fonts.googleapis.com', 'fonts.gstatic.com']);
@@ -184,6 +186,10 @@ const DEV_REFUSAL = 'Dev mode cannot run against the prod database. Set VITE_STD
 //    /status.json is served `no-store`; the rewrite to /index.html behaves as documented (a table
 //    of paths below); the built status file ships with maintenance off. Turning maintenance on is
 //    therefore a deliberate deploy from a commit this gate marks red (docs/frontend/hosting.md).
+//    M10: while web/dist/sw.js is the caching worker, connect-src (its refetch) and img-src (the
+//    page's images) allow every host on its allow-list (checked after gate 11 reads the worker).
+/** The CSP directives of the one CSP rule (gate 9), for the M10 check after gate 11. */
+let cspDirectives;
 {
     const hosting = (message) => hits.push(`[hosting] vercel.json: ${message}`);
     const isObject = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -246,6 +252,7 @@ const DEV_REFUSAL = 'Dev mode cannot run against the prod database. Set VITE_STD
                         sources.map((s) => s.toLowerCase()),
                     );
             }
+            cspDirectives = directives;
             if (!(directives.get('script-src') ?? []).includes("'unsafe-eval'")) {
                 hosting("script-src lacks 'unsafe-eval' (the SDK needs it)");
             }
@@ -513,9 +520,132 @@ const DEV_REFUSAL = 'Dev mode cannot run against the prod database. Set VITE_STD
     }
 }
 
+// 11. The image cache worker (M10, docs/frontend/hosting.md): the built web/dist/sw.js exists and
+//     is one of exactly two shapes. Comments are dropped first (string contents are kept), so a
+//     marker only in a comment neither satisfies a rule nor trips one. Both shapes: no other
+//     script loaded, no app file named (the app page or the hashed build folder). The caching
+//     worker: answers requests (`respondWith(`), keeps the same-origin early return ahead of its
+//     first respondWith, reads a non-empty exact host allow-list, and never unregisters itself.
+//     The kill worker (web/sw-kill.js copied over it): no `respondWith(`, no fetch listener, and
+//     calls `registration.unregister()`. Anything else (a mix, or neither) fails. While it is the
+//     caching worker, gate 9's CSP must allow its hosts. The page-side switch
+//     (`SERVICE_WORKER_ENABLED` in web/src/lib/serviceWorker.ts) must agree: true exactly for the
+//     caching worker. The shape rule and the comment stripper are duplicated in
+//     web/src/lib/serviceWorkerScript.test.ts (web/src may not import scripts/, gate 10).
+//     Limits (text checks, not a parser): regex literals and nested template expressions are not
+//     understood, and a marker inside a string literal counts; the unit tests run the real files.
+{
+    /** Drops `//` and block comments, keeping string and template literal contents. */
+    const stripComments = (src) => {
+        let out = '';
+        let i = 0;
+        while (i < src.length) {
+            const c = src[i];
+            const n = src[i + 1];
+            if (c === '/' && n === '/') {
+                while (i < src.length && src[i] !== '\n') i++;
+            } else if (c === '/' && n === '*') {
+                const end = src.indexOf('*/', i + 2);
+                i = end < 0 ? src.length : end + 2;
+                out += ' ';
+            } else if (c === "'" || c === '"' || c === '`') {
+                out += c;
+                i++;
+                while (i < src.length && src[i] !== c) {
+                    if (src[i] === '\\') out += src[i++] ?? '';
+                    out += src[i++] ?? '';
+                }
+                out += src[i++] ?? '';
+            } else {
+                out += c;
+                i++;
+            }
+        }
+        return out;
+    };
+    const workerPath = join(DIST, 'sw.js');
+    const worker = (message) => hits.push(`[service-worker] web/dist/sw.js: ${message}`);
+    let shape;
+    if (!existsSync(DIST)) {
+        // Reported once by the build check above.
+    } else if (!existsSync(workerPath)) {
+        worker('missing (web/public/sw.js is copied by the build)');
+    } else {
+        const code = stripComments(readFileSync(workerPath, 'utf8'));
+        for (const needle of ['importScripts', 'index.html', '/assets/']) {
+            if (code.includes(needle)) worker(`contains "${needle}"`);
+        }
+        const responds = code.includes('respondWith(');
+        const fetchListener = /addEventListener\(\s*['"]fetch['"]/.test(code);
+        const unregisters = code.includes('registration.unregister()');
+        if (responds && !unregisters) shape = 'caching';
+        else if (!responds && !fetchListener && unregisters) shape = 'kill';
+        if (responds) {
+            // The caching worker.
+            const SAME_ORIGIN = 'if (url.origin === self.location.origin) return;';
+            const early = code.indexOf(SAME_ORIGIN);
+            if (early < 0) worker(`no same-origin early return ("${SAME_ORIGIN}")`);
+            else if (code.indexOf('respondWith(') < early) {
+                worker('respondWith comes before the same-origin early return');
+            }
+            if (unregisters) {
+                worker('a caching worker that also unregisters itself (a mix of the two shapes)');
+            }
+            const list = code.match(/const ALLOWED_HOSTS = \[([^\]]*)\];/);
+            const hosts = list ? [...list[1].matchAll(/['"]([^'"]+)['"]/g)].map((m) => m[1]) : [];
+            if (hosts.length === 0)
+                worker('no "const ALLOWED_HOSTS = [...]" with at least one host');
+            // Gate 9, M10 part: the worker's refetch (connect-src) and the page's <img> (img-src).
+            if (cspDirectives) {
+                const allows = (sources, host) =>
+                    sources.some((s) => {
+                        if (s === `https://${host}`) return true;
+                        const wild = s.match(/^https:\/\/\*\.(.+)$/);
+                        return wild !== null && host.endsWith(`.${wild[1]}`);
+                    });
+                for (const directive of ['connect-src', 'img-src']) {
+                    const sources = cspDirectives.get(directive) ?? [];
+                    for (const host of hosts) {
+                        if (!allows(sources, host.toLowerCase())) {
+                            hits.push(
+                                `[hosting] vercel.json: ${directive} does not allow https://${host} (the image cache worker's host)`,
+                            );
+                        }
+                    }
+                }
+            }
+        } else if (fetchListener) {
+            worker(
+                'a fetch listener without respondWith (neither the caching nor the kill worker)',
+            );
+        } else if (!unregisters) {
+            worker('neither the caching worker nor the kill worker (no registration.unregister())');
+        }
+    }
+    // The page-side switch agrees with the worker that ships.
+    const switchPath = join(ROOT, 'web', 'src', 'lib', 'serviceWorker.ts');
+    const switchCode = existsSync(switchPath)
+        ? stripComments(readFileSync(switchPath, 'utf8'))
+        : '';
+    const flag = switchCode.match(/export const SERVICE_WORKER_ENABLED = (true|false);/);
+    if (!flag) {
+        hits.push(
+            '[service-worker] web/src/lib/serviceWorker.ts: no "export const SERVICE_WORKER_ENABLED = true|false;"',
+        );
+    } else if (shape === 'kill' && flag[1] === 'true') {
+        hits.push(
+            '[service-worker] web/dist/sw.js is the kill worker but SERVICE_WORKER_ENABLED is true: set it to false in web/src/lib/serviceWorker.ts (step 2 of "Switching the worker off")',
+        );
+    } else if (shape === 'caching' && flag[1] === 'false') {
+        hits.push(
+            '[service-worker] SERVICE_WORKER_ENABLED is false but web/dist/sw.js is the caching worker: copy web/sw-kill.js over web/public/sw.js and build (step 1 of "Switching the worker off")',
+        );
+    }
+}
+
 if (hits.length > 0) {
     console.error(`check:patterns: ${hits.length} hit(s)`);
     for (const hit of hits) console.error(`  ${hit}`);
     process.exit(1);
 }
-console.log('check:patterns: all ten gates pass');
+console.log('check:patterns: all eleven gates pass');

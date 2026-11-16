@@ -6,6 +6,7 @@ import { resolveBrowserEnv } from '@shared/stdb-targets';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from '@/App';
+import { registerServiceWorker } from '@/lib/serviceWorker';
 import { assertDevTarget } from '@/stdb/assertDevTarget';
 // The connection layer (SDK, bindings, StdbProvider) loads in its own chunk after the first
 // render (S14.1, A171 item 2); this entry imports none of it.
@@ -35,17 +36,23 @@ if (import.meta.env.DEV) {
     // window.__devAuth('member') etc. for the route guards; window.__devConnection('offline') etc.
     // for the connection splashes; window.__wireStats() and a panel for the egress meter, which
     // must wrap WebSocket before the provider builds the connection, so it loads before render.
+    // The dev server never registers the image cache worker and removes one left from earlier
+    // (M10); that runs in the background and does not hold the render.
     void Promise.all([
         import('@/auth/devAuth'),
         import('@/dev/devConnection'),
         import('@/dev/wireStats'),
+        import('@/dev/devServiceWorkerReset'),
     ])
-        .then(([devAuth, devConnection, wireStats]) => {
+        .then(([devAuth, devConnection, wireStats, devServiceWorkerReset]) => {
             devAuth.installDevAuth();
             devConnection.installDevConnection();
             wireStats.installWireStats(env.host);
+            void devServiceWorkerReset.resetDevServiceWorkers();
         })
         .finally(render);
 } else {
     render();
+    // The image cache worker (M10): production builds only, after the window load event.
+    registerServiceWorker(import.meta.env.PROD);
 }

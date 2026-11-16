@@ -77,7 +77,7 @@ The cache rules do not overlap, so no rule depends on which of two values wins.
 | `form-action` | `'self'` | forms post only to the site |
 | `object-src` | `'none'` | no plugins |
 
-`check:patterns` gate 9 fails when `vercel.json` does not parse or is not an object; when an entry of `headers` or `rewrites` is malformed; when no header rule, or more than one, sets a CSP, or the one that does is not `/(.*)` or carries a `has` or `missing` condition; when a CSP directive appears twice; when `script-src` lacks `'unsafe-eval'`; when `connect-src` lacks either maincloud origin (directives, keywords and origins compared without case); when `/status.json` is not served `no-store` or its rule has a `has` or `missing` condition; when a top-level `routes` key exists; when the index rewrite has a `has` or `missing` condition; when a rewrite before the index rewrite takes `/lobby/123`; and when the rewrites to `/index.html` do not behave as documented, tested as a RegExp against a table (`/` and `/lobby/123` must match; `/assets/x.js`, `/status.json`, `/foo.png`, `/.env`, `/api/x`, `/sw.js`, `/favicon.svg`, `/a/.b/c` must not). Gate 8 checks `<script>` tags only (not inline event handlers or `javascript:` URLs): HTML comments are dropped, each tag's attributes are parsed, and a script without a non-empty `src` is inline (so `<script title="a src=b">` and `src=""` count); `application/ld+json` data blocks, with or without parameters, are allowed. `vite dev` sends none of these headers.
+`check:patterns` gate 9 fails when `vercel.json` does not parse or is not an object; when an entry of `headers` or `rewrites` is malformed; when no header rule, or more than one, sets a CSP, or the one that does is not `/(.*)` or carries a `has` or `missing` condition; when a CSP directive appears twice; when `script-src` lacks `'unsafe-eval'`; when `connect-src` lacks either maincloud origin (directives, keywords and origins compared without case); when `/status.json` is not served `no-store` or its rule has a `has` or `missing` condition; when a top-level `routes` key exists; when the index rewrite has a `has` or `missing` condition; when a rewrite before the index rewrite takes `/lobby/123`; and when the rewrites to `/index.html` do not behave as documented, tested as a RegExp against a table (`/` and `/lobby/123` must match; `/assets/x.js`, `/status.json`, `/foo.png`, `/.env`, `/api/x`, `/sw.js`, `/favicon.svg`, `/a/.b/c` must not); and (M10) while `web/dist/sw.js` is the caching worker, when `connect-src` or `img-src` does not allow every host on its allow-list. Gate 8 checks `<script>` tags only (not inline event handlers or `javascript:` URLs): HTML comments are dropped, each tag's attributes are parsed, and a script without a non-empty `src` is inline (so `<script title="a src=b">` and `src=""` count); `application/ld+json` data blocks, with or without parameters, are allowed. `vite dev` sends none of these headers.
 
 Gate 9 does not check: rewrite sources with named parameters (`:id`, `:path*`), which its pattern reader does not support; later header rules overriding `Cache-Control` for a path; `redirects`; cleanUrls, trailingSlash and other top-level options.
 
@@ -113,7 +113,7 @@ Note for M8: the file only matters for deploys that upload sources. The standard
 - **Ignored fields:** `message` is not rendered yet (the fixed wording stays); unknown fields are ignored.
 - **Caching:** `no-store`. The reader counts any non-200 answer as "not in maintenance", so no conditional request or 304 may sit in the path, and no browser or proxy copy may outlive a switch.
 - **Format:** UTF-8 without a byte order mark (`check:patterns` gate 9 parses the built copy with `JSON.parse`, which rejects a BOM).
-- **Service worker (M10):** the worker must never cache `/status.json` (today's `sw.js` only intercepts UploadThing hosts; keep it that way for this file), or a tab could miss the switch.
+- **Service worker (M10):** the worker never caches `/status.json`: it returns on every request to the site's own origin before anything else (see "Service worker (M10)"), and a unit test pins that for this path.
 
 ### Switching maintenance on and off
 
@@ -131,6 +131,78 @@ Ending it (the reverse order: the module first, so tabs that connect find it ope
 ### Staff bypass
 
 `?maintenance=skip` on any URL sets a `sessionStorage` flag (`hsr-pvp:maintenance-skip`) and the tab then ignores the status file. The module stays the authority: during maintenance it still lets only Admins connect (B-8), so anyone else who uses the parameter gets the refused socket and the offline splash. There is no link to it in the UI. Orchestrator's choice, for the user to rule on.
+
+## Service worker (M10)
+
+`web/public/sw.js`: plain JavaScript, copied into the build as is (no build step, no Workbox). It keeps a copy of every UploadThing image the visitor has seen, so a later view downloads nothing. Image addresses on UploadThing are content keys (`https://<app>.ufs.sh/f/<key>`): an image at a given address never changes.
+
+**What it intercepts:** a request only when every condition holds: `GET`; `destination` is `image`; `https:`; the default port (no port in the address); no user name or password in the address; no `Range` header; the host is exactly one of `ALLOWED_HOSTS`. **Everything else goes to the network untouched**, without `respondWith`: the site's own origin first of all (the page, the hashed files, `/status.json`, `/api/*`, `/sw.js` itself; this is the listener's first check), the SpacetimeDB host, Discord, other UploadThing apps, any other host, `fetch()` calls from scripts (their destination is empty), media and byte-range requests. The socket is never seen by a worker. The worker does not precache, handle navigations or listen for messages.
+
+**The host allow-list:** `const ALLOWED_HOSTS` at the top of `web/public/sw.js`, today one entry: `zmvtaeh9bl.ufs.sh`, the UploadThing app of every `image_url` in `data/seed/characters.json` and `data/seed/lightcones.json`. A unit test reads both seed files and fails when an address there is on a host not in the list (or not `https:` on the default port). When the UploadThing app changes: add the new host to the list (keep the old one while old addresses are still in use), check that `connect-src` and `img-src` in `vercel.json` allow it (`https://*.ufs.sh` covers any UploadThing app; `check:patterns` gate 9 checks it), and deploy. Without the update the worker simply stops caching the new addresses; images still load.
+
+**How:** cache-first. A hit is answered from the cache with no network request. A miss is fetched again in CORS mode without credentials (an `<img>` request without `crossorigin` is `no-cors`, whose opaque answer cannot be checked and is padded heavily in the storage quota; UploadThing answers `Access-Control-Allow-Origin: *`) and returned to the page at once; a copy is stored in the background (`waitUntil`; if `waitUntil` throws, only the copy is lost, never the image) only when the answer is a full `200` with a `Content-Type` starting with `image/` and no `Content-Length: 0`, never a `206`, an opaque answer or an error. Cache keys are the image address as a string, query string included. **If the CORS refetch fails**, the worker answers with the page's own request (`fetch(event.request)`, in its own mode, never stored), so the worker never breaks an image that would load without it; only if that fails too does the page see a network error (no made-up answer). A failed store (quota) or an unusable Cache Storage (private browsing: `caches.open` throws) is swallowed: the image still comes from the network. Nothing is logged on the normal path; a failed trim logs one warning.
+
+**Cache name:** `hsr-assets-v1`, fixed in `sw.js` (orchestrator's choice; the plan's per-build name would throw the whole cache away on every deploy, although images never change). Bump the number by hand only when the caching rules change (what is stored, the key, the response kind). On `activate` the worker deletes every cache of this origin whose name starts with `hsr-assets-` or `hsrpvp-assets-` (the old site's worker) and is not the current one; other caches are left alone. `skipWaiting()` (on install) and `clients.claim()` take over open tabs at once, which is safe because the worker never serves the app itself.
+
+**Size cap:** 400 entries. After each successful store the worker reads `cache.keys()` and deletes the first stored entries (insertion order) down to 400. A hit never reads `keys()`; trims run one at a time (a store during a trim asks for one more pass).
+
+**Registration** (`web/src/lib/serviceWorker.ts`, called from `main.tsx`): production builds only (`import.meta.env.PROD`), only when `navigator.serviceWorker` exists and the page is a secure context, after the window `load` event, `register('/sw.js', { scope: '/' })`; a failure is one warning. While `SERVICE_WORKER_ENABLED` is `false` the same call removes the worker instead (see "Switching the worker off"). The module is a few lines in the entry chunk.
+
+**Dev server:** `npm run dev` never registers. On start it unregisters a worker of its origin whose script is `/sw.js` (other workers are left alone) and deletes the `hsr-assets-*` and `hsrpvp-assets-*` caches there (`web/src/dev/devServiceWorkerReset.ts`, loaded with the other dev helpers; it logs a line only when it removed something). The first dev load after a stale worker is still controlled by it (unregistering takes effect when the page unloads): reload once. Gate 3 of `check:patterns` keeps the marker `hsr-dev-sw-reset` out of `web/dist`.
+
+**Local preview:** `npm run preview` serves a production build on `127.0.0.1`, a secure context, so the worker registers there and stays registered for that origin after the server stops (harmless: it only answers the allowed image host). The server sends `/sw.js` as `text/javascript` with `public, max-age=0, must-revalidate` and the catch-all security headers, CSP included.
+
+**What a deploy does:** `/sw.js` is served `public, max-age=0, must-revalidate`, and the browser checks it for changes on navigation (and on other worker events when the last check is more than a day old). A deploy that does not change `sw.js` changes nothing for the worker or its cache. A changed `sw.js` installs and takes over at once; the cache survives unless the name was bumped, in which case the old one is deleted on activate.
+
+**CSP:** a worker's own fetches follow the CSP delivered with the worker script, and the catch-all `/(.*)` rule puts the CSP on `/sw.js` too. Its refetch is a `connect-src` request: `https://*.ufs.sh` is in `connect-src` (M7). The page's `<img>` needs `img-src` (there too). `worker-src 'self'` allows the registration. Nothing in `vercel.json` changes for M10.
+
+**Images in pages:** see the rule in `pages.md` ("Images from UploadThing (M10)"): `crossorigin="anonymous"`, explicit `width` and `height`, `loading="lazy"` below the fold.
+
+**No warm-up yet:** the plan's idle-time download of all character and light cone images (238 images, 15 to 25 MB per visitor) is not built: it is a bandwidth decision on UploadThing that the user has not taken, and no page shows portraits yet. The worker only stores what a page actually loads.
+
+**Known and accepted:**
+
+- After a cache name bump, a tab still controlled by the old worker (until the new one activates) can create the old cache again with a few entries; the next bump's `activate` deletes it.
+- A wrong image answered `200` stays cached until the cap evicts it or the name is bumped; an image deleted at UploadThing stays in visitors' caches the same way.
+- The refetch does not send the page's `Accept` header (no headers are copied, to avoid a preflight); UploadThing serves the stored file whatever the `Accept`.
+- The cap counts by first store, not last use: a hit does not move an image to the back, so a session that sees more than 400 images drops the first stored ones even if they are still in use; they are then downloaded once more.
+- An empty body without a `Content-Length: 0` header would be stored (the cheap guard reads the header only; UploadThing sends an accurate length).
+
+**Reset by hand in a browser:** DevTools, Application, Service workers, Unregister; then Storage, Clear site data (or Cache storage, delete `hsr-assets-v1`). From the console of the site's own tab:
+
+```js
+for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+for (const n of await caches.keys()) if (/^(hsr|hsrpvp)-assets-/.test(n)) await caches.delete(n);
+```
+
+### Switching the worker off
+
+An installed worker stays in visitors' browsers until a newer `/sw.js` replaces it. **Deleting `sw.js` from the site, or serving a 404 for it, does not remove an installed worker**: the browser keeps the one it has (a failed update check changes nothing) and it keeps answering image requests. To switch it off, ship a worker that removes itself, ready in the repo:
+
+1. Copy `web/sw-kill.js` over `web/public/sw.js` (`sw-kill.js` stays outside `web/public/`, so it is never served by accident).
+2. Set `SERVICE_WORKER_ENABLED` to `false` in `web/src/lib/serviceWorker.ts`.
+3. Build (`check:patterns` gate 11 accepts the kill worker as the second allowed shape of `web/dist/sw.js`) and deploy.
+
+What visitors' browsers do: on their next visit the browser sees a changed `/sw.js` and installs the kill worker; it skips waiting, and on activate deletes every `hsr-assets-*` and `hsrpvp-assets-*` cache and then unregisters itself (all inside `waitUntil`). It has no fetch listener, so from that moment requests go to the network; the tab open during that visit may stay controlled (by a worker that answers nothing) until it is reloaded or closed. The new page code also unregisters this origin's `/sw.js` and deletes the two cache families after `load`, which covers a browser where the kill worker did not run. A visitor who never comes back keeps the old worker and its cache; it touches nothing but the allowed image host.
+
+- **Only a navigation triggers the update** once the switch is false: the page no longer calls `register()`, so the browser's own update check on navigation (or on a worker event when the last check is a day old) is what fetches the kill worker.
+- **An in-flight store** of the old worker (an image stored in the moment of the switch) can leave an empty `hsr-assets-v1` behind after the deletes. Harmless: nothing reads it, and the page-side removal on the next load deletes it.
+- **The two half-states** (one step done, not the other):
+  - kill file only, switch still `true`: every page load registers `/sw.js` again, which is the kill worker; it installs, deletes and unregisters itself. One small registration round trip per page load; harmless.
+  - switch only (`false`), caching worker still shipped: the page removes the worker after `load`, but that page was still controlled by it and kept caching; the worker is gone from the next visit. It works with a one-visit lag; browsers that do not come back keep the worker.
+- **CI and tests:** in the full switched-off state (both steps) the unit tests and `check:patterns` stay green (the caching suites are skipped, the kill suite runs against `web/public/sw.js`); a half-state turns both red with a message that names the missing step (the agreement test in `serviceWorkerScript.test.ts` and gate 11).
+
+**What must stay deployed, and for how long:** keep **both** steps deployed for weeks (until returning visitors have come back). The kill file alone is enough to remove the worker from every browser that visits (it also deletes the caches); the switch alone is not enough by itself in practice, because it only acts after the page loads under the old worker and needs the visitor to come back once more. If one of them must go first, keep the kill file. Removing the kill file early (serving the caching worker again, or deleting `sw.js`) leaves returning visitors with the old worker.
+
+**Bringing it back later:** restore the caching worker in `web/public/sw.js`, bump the cache name (`hsr-assets-v2`) so no cache from before the switch-off is reused, set `SERVICE_WORKER_ENABLED` back to `true`, build and deploy.
+
+**Not yet shown in a real browser, needed before the first deploy to visitors:** the fallback (the page's own request) under the real CSP with the CORS refetch forced to fail; a full switch-off rehearsal with both steps (M10 only served the kill file through a scratch copy of `dist` with the switch still `true`); Firefox and Safari.
+
+**Gates and tests:** `check:patterns` gate 11 drops comments first (string contents are kept), then fails when `web/dist/sw.js` is missing, contains `importScripts`, names the app page (`index.html`) or the hashed build folder (`/assets/`), or is neither of two shapes: the caching worker (it calls `respondWith(`, has the same-origin early return `if (url.origin === self.location.origin) return;` ahead of its first `respondWith(`, a non-empty `const ALLOWED_HOSTS = [...]`, and no `registration.unregister()`) or the kill worker (no `respondWith(`, no fetch listener, calls `registration.unregister()`). It also fails when `SERVICE_WORKER_ENABLED` in `web/src/lib/serviceWorker.ts` does not agree with the shape (true exactly for the caching worker). While it is the caching worker, gate 9's CSP must allow each allowed host in `connect-src` and `img-src` (`https://<host>` or a `https://*.<suffix>` wildcard). Unit tests run the real `sw.js` and `sw-kill.js` in a fake worker scope (`web/src/lib/serviceWorkerScript.test.ts`); the shape rule and the comment stripper are duplicated there (`web/src` may not import `scripts/`).
+
+**Limits of gate 11** (text checks, not a parser; the unit tests cover the behaviour): a marker inside a string literal counts (a string `'registration.unregister()'` would satisfy the kill rule); regex literals and nested template expressions are not understood by the comment stripper; the same-origin return is matched as exact text, so it proves the line exists before the first `respondWith(`, not that it is the listener's first check (the unit test "the same-origin return is the first check of the fetch listener" does); the allow-list is read from the literal `const ALLOWED_HOSTS = [...]` (the seed test checks the real list the worker uses); an `addEventListener('fetch')` written another way (a variable for the event name, `onfetch =`) is not seen (the kill suite's "has no fetch listener" test checks the real listeners).
+
+**Safari notes (not checked):** Safari supports service workers and Cache Storage, but may evict script-writable storage of a site the visitor has not used for seven days (the images are then downloaded again), and private windows may refuse storage (swallowed). Firefox and Safari were not checked in a browser at M10; only Edge was.
 
 ## Local preview (M8)
 
@@ -181,7 +253,7 @@ The address must match the page's own origin exactly: opening the dev server as 
   - Cookies on `localhost` are shared across ports (cookies are scoped by host, not port): the dev server and the preview on the same host see each other's sign-in cookies. Local only.
   - A browser clock more than 2 minutes off breaks the confirm step: ahead, the pending row looks expired ("took too long"); behind, the page offers an expired row and the module refuses the confirmation.
   - The local env reader keeps quotes around a pasted value (`KEY="x"` reads `"x"` with the quotes); paste values bare (`.env.example` says so).
-- **M10:** the service worker never caches `/status.json`.
+- **M10 (resolved):** the service worker never caches `/status.json`: it never intercepts the site's own origin (see "Service worker (M10)"). Still open for the first real deploy: the worker on HTTPS under the production domain, and Vercel's real headers on `/sw.js`.
 - **First real Vercel deploy** (M8 moved the preview to this machine, see "Local preview"; the items below stay unproven until a deploy): `vercel link`, environment variables (`VITE_STDB_TARGET` per environment); confirm on the deploy with `curl -sI` and the browser: every header above, the rewrite and the 404s, `immutable` on `/assets/*`, `no-store` on `/status.json`, zero CSP violations; whether Vercel puts the `immutable` header on a 404 for a missing asset (the local imitation does); the 404s for missing extension paths and dot-paths; whether Vercel's source matcher treats the `(?:` and `(?!` groups of the index rewrite as JavaScript's RegExp does (the preview and gate 9 assume so; the 404 checks above would show a difference); the deployment file list (A50 done-check).
 
 ## Proposals (not applied)

@@ -239,6 +239,16 @@ The app shell: skip link, navigation bar, reconnecting banner and the one `main`
 - **Guides used:** `ui-components/navbar.md`, `ui-components/menu.md`, `ui-atoms/viewport-aware-dropdowns.md` (not applied: no top-layer popover), `ui-components/navigation-drawer.md` (not applied: the mockups use a scroller), `accessibility/accessibility.md` (skip links, visually hidden utility, focus management, live regions, target sizes), `ui-behaviors/motion.md`, `ui-atoms/scrollability-affordance-hints.md` (the chevrons stand in for its hints), `ui-atoms/icons.md`. Missing locally: `app-menus` (named by the menu guide; not needed, there is no menu bar), `declarative-dialog-popover-control` is present but not used. No dedicated guide for focus after SPA navigation; the accessibility guide's focus and live region rules were applied.
 - **Safari notes:** `color-mix()` needs Safari 16.2; `backdrop-filter` needs the `-webkit-` prefix before Safari 18 (lightningcss adds it); `100dvh` falls back as on standby; `mask-size` on the underline mark is prefixed by the build. Not checked in Safari.
 
+## Images from UploadThing (M10)
+
+A rule for every page that shows character, light cone or other media from UploadThing (`*.ufs.sh`); no page does yet.
+
+- **`crossorigin="anonymous"`** on every such `<img>`. The image cache worker (`hosting.md`, "Service worker (M10)") refetches in CORS mode. Without the attribute the page's request is `no-cors` and carries no `Origin` header; a copy the browser's HTTP cache keeps from such a request must not be the one reused for the worker's CORS request (a CDN may answer a request without `Origin` with no CORS headers, and that copy would then fail the CORS check). With the attribute, the page's request and the worker's are both CORS requests for the same address, so they share one kind of cache entry; a canvas or colour read of the image also stays allowed. **With `crossorigin`, an image host that sends no CORS headers fails to load**, so the attribute (and `RemoteImage`) is for UploadThing addresses only.
+- **Explicit `width` and `height`** (the rendered size, or the image's own size scaled by CSS), so the layout does not shift while images load.
+- **`loading="lazy"`** for images below the fold (grids, lists, the character pool); none on images visible on first paint, and never on the page's largest image (`performance/optimize-image-priority.md`: that one may take `fetchpriority="high"`).
+- **`web/src/components/RemoteImage/`** builds the rule in: `crossOrigin="anonymous"`, required `width` and `height`, lazy unless `aboveFold`. It lists `crossOrigin` and `loading` before `src`: React 18 sets a new element's attributes in prop order (checked in jsdom with `getAttributeNames()`), so no browser starts an eager or credentialed load before they are set. Use it for UploadThing images. Built at M10, not used by a page yet; tested in `RemoteImage.test.tsx`.
+- Images under `web/public/` (same origin) are not cached by the worker and need no `crossorigin`.
+
 ## Fonts (M3)
 
 - Self-hosted from `@fontsource-variable/inter` and `@fontsource-variable/jetbrains-mono` 5.3.0, latin subset only: Inter weight axis normal + italic, JetBrains Mono weight axis upright. Declared in `web/src/styles/fonts.css` under the token names `Inter` / `JetBrains Mono`.

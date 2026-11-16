@@ -79,6 +79,10 @@ Page routes that render a full-screen splash say so in `staticData.splash` (`web
 - Keyframes live in the module that uses them. Continuous animations are opted in under `@media (prefers-reduced-motion: no-preference)`.
 - One SVG source per graphic: the logo is `components/BrandLogo` (and `public/favicon.svg` mirrors it); never paste the same inline SVG twice.
 
+## Rule 6b: images from UploadThing
+
+An image from UploadThing (`*.ufs.sh`) is rendered with `crossorigin="anonymous"`, explicit `width` and `height`, and `loading="lazy"` when it is below the fold; `components/RemoteImage` does all three. Why, and the rule in full: `pages.md`, "Images from UploadThing (M10)".
+
 ## Rule 7: tests
 
 - **What gets a test:** every validator, guard and pure helper (a table of kept and dropped inputs, idempotence where the router re-runs it); route behaviour (redirects, not-found, no-access, search rewrites) through the real route tree; a page's landmarks and headline when it is added. Not every component: a component without logic is covered by the screenshot loop.
@@ -95,4 +99,5 @@ rg "from '\.\./.*\.module\.css'" web/src/components     # cross-module CSS impor
 rg "tailwind|className=\"[a-z]+-[0-9]" web/src          # Tailwind leftovers
 rg -c "<svg" web/src                                    # inline SVGs: each should be a component
 rg "<a [^>]*href=\"/" web/src                           # in-app string hrefs: use a typed Link
+rg "ufs\.sh" web/src --glob "*.tsx"                      # UploadThing images: RemoteImage, or the M10 attributes
 ```

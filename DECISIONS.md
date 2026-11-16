@@ -1828,3 +1828,16 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Decision:** The menu button replaces the item row at phone widths only. The switch point stays at 560 px (`--nav-menu` in `web/src/styles/media.css`). Tablets and narrow desktop windows keep the original bar with the scrolling item row. Settles A181 item 3; the orchestrator's and reviewer's recommendation of 1040 px is not taken.
 - **Why:** user, 2026-11-15: "i would like this menu mainly for mobile versions, i think the tablet versions can still use the original desktop version".
 - **Where implemented:** no code change; `web/src/styles/media.css` already holds 560 px
+
+### A183 — M10: the image cache worker
+
+- **Date:** 2026-11-16 · **Status:** item 1 decided; items 2, 3, 5 and 6 implemented as the orchestrator's choices, for the user to rule on; item 4 open
+- **Decision:**
+  1. M10 is built now.
+  2. Orchestrator: the cache has a fixed name, `hsr-assets-v1`, changed by hand only when the caching rules change. The plan's per-build name is not used: images never change at a given address, and a per-build name would discard every visitor's image cache on each deploy.
+  3. Orchestrator, after review: the worker handles only an exact list of hosts (today the one UploadThing host used by the seed data, pinned to it by a test), only image requests, only the default port; if its own fetch fails it lets the page's normal request through, so it can leave an image uncached but never broken.
+  4. Open: the portrait warm-up (downloading all 238 character and light cone images in idle time, 15 to 25 MB per visitor from UploadThing). Not built. Orchestrator recommends no warm-up until a page shows portraits and real load times can be measured; alternatives are members only, or everyone.
+  5. Orchestrator, after review: a kill worker (`web/sw-kill.js`) and a page-side switch (`SERVICE_WORKER_ENABLED`) are kept ready and tested; tests and gate 11 fail when the two disagree. Deleting `sw.js` does not remove an installed worker.
+  6. Orchestrator: UploadThing images render with `crossorigin="anonymous"`, explicit size, and lazy loading below the fold, through a shared `RemoteImage` component (built, not used yet).
+- **Why:** user, 2026-11-15: "lets gow with m10 after you are done".
+- **Where implemented:** `web/public/sw.js`, `web/sw-kill.js`, `web/src/lib/serviceWorker.ts`, `web/src/dev/devServiceWorkerReset.ts`, `web/src/components/RemoteImage/`, `scripts/ci/check-patterns.mjs` (gates 9 and 11), `docs/frontend/{hosting,pages,component-hygiene}.md`, `docs/log/2026-11-16-m10.md`
