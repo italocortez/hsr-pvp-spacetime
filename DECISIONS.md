@@ -1841,3 +1841,10 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   6. Orchestrator: UploadThing images render with `crossorigin="anonymous"`, explicit size, and lazy loading below the fold, through a shared `RemoteImage` component (built, not used yet).
 - **Why:** user, 2026-11-15: "lets gow with m10 after you are done".
 - **Where implemented:** `web/public/sw.js`, `web/sw-kill.js`, `web/src/lib/serviceWorker.ts`, `web/src/dev/devServiceWorkerReset.ts`, `web/src/components/RemoteImage/`, `scripts/ci/check-patterns.mjs` (gates 9 and 11), `docs/frontend/{hosting,pages,component-hygiene}.md`, `docs/log/2026-11-16-m10.md`
+
+### A184 — M10 choices confirmed; no portrait warm-up for now
+
+- **Date:** 2026-11-16 · **Status:** decided
+- **Decision:** The orchestrator's three recommendations after M10 are accepted: push; no portrait warm-up for now, to be decided again when a page shows portraits and load times can be measured (settles A183 item 4 for now); the M10 choices stand (A183 items 2, 3, 5 and 6: fixed cache name, our own UploadThing host only, the fallback, the kill path, the image rule).
+- **Why:** user, 2026-11-16: "i agree with your 3 recommendations and we can push".
+- **Where implemented:** no code change
