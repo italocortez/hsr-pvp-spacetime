@@ -22,6 +22,22 @@ Visitors open a SpacetimeDB WebSocket connection and subscribe directly to the p
 | `cost_set` (S11a: private; read through `view_published_cost_sets`, the published rows only) | <20 | 2 KB |
 | **Total** | | ~192 KB raw, ~70–100 KB on the wire |
 
+**Measured (S14.2, test1, 2026-11-16, dev egress meter, a cold visit to `/costs`):** the rows and sizes are the client cache (rows serialized with the SDK's BSATN serializer, uncompressed); the wire figure is what the socket received, Layer 0 included.
+
+| Source | Query | Rows | Cache size |
+|---|---|---|---|
+| `hsr_character` | whole table | 83 | 15.0 kB |
+| `hsr_lightcone` | whole table | 156 | 30.0 kB |
+| `archetype` | whole table | 12 | 0.5 kB |
+| `hsr_character_archetype` | whole table | 110 | 4.4 kB |
+| `view_published_cost_sets` | whole view | 0 (none published on test1) | 0 |
+| `hsr_character_cost` | `cost_set_id = 0` | 498 | 34.7 kB |
+| `hsr_lightcone_cost` | `cost_set_id = 0` | 936 | 65.9 kB |
+| `hsr_synergy_cost` | `cost_set_id = 0` | 60 | 3.9 kB |
+| **Total** | | 1,855 | 154.5 kB raw; **40.8 kB on the wire** (4 messages in, 1 out of 627 B) |
+
+**The cost tables (user ruling 2026-11-16, S14.2):** the reference set subscribes the **default cost set** only: the three cost tables filtered on `cost_set_id = 0` (the sentinel; it has no `cost_set` row), asked for by a route that needs costs (`useReferenceSet({ costs: true })`; the costs page today, the team builder next) and then kept for the session like the rest. A **published custom set** is never part of it: the page that shows it subscribes `cost_set_id = N` for the three tables as a route subscription, dropped when the pick changes or the route is left. The queries are always disjoint (never `0 OR N`), and every reader filters cached rows by `costSetId`, because one client table holds every subscribed set. The queries are plain SQL text in `web/src/stdb/costQueries.ts` (pinned to the SDK's query builder output by a test), so a page chunk does not pull the SDK in.
+
 **Why:** ~80 KB on the wire is smaller than one hero image; a second data plane for this volume would fragment the data model. Reference data changes only through admin reducers, rarely, and ordinary subscription updates propagate the changes with no bespoke cache invalidation.
 
 **Notes:** the subscription is created once per session and kept regardless of auth state. Current rule (PAGE-MAP D10, CLAUDE.md): the **first route that needs** the reference set subscribes it and keeps it for the session; `/` and `/profile` never trigger it.

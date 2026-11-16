@@ -1,0 +1,43 @@
+/* The mockup's `.searchWrap` / `.searchInput` (design/mockups/costs.html). */
+
+.wrap {
+    position: relative;
+    display: flex;
+    flex: 2 1 200px;
+    align-items: center;
+    min-inline-size: 160px;
+}
+
+.icon {
+    position: absolute;
+    inset-inline-start: 11px;
+    inline-size: 15px;
+    block-size: 15px;
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+.input {
+    inline-size: 100%;
+    block-size: 42px;
+    padding: 0 12px 0 32px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--color-space);
+    color: var(--text-heading);
+    font-size: 0.8125rem; /* 13px */
+    transition: border-color 150ms;
+
+    &::placeholder {
+        color: var(--text-disabled);
+    }
+
+    /* The mockup swaps the ring for the iris border; the base ring stays for keyboard focus. */
+    &:focus {
+        border-color: var(--color-iris);
+    }
+
+    @media (pointer: coarse) {
+        block-size: 44px;
+    }
+}

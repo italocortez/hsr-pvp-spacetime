@@ -1,0 +1,487 @@
+@import "@/styles/media.css";
+
+/* The mockup's `.tableWrap`, `table.cost` and row styles (design/mockups/costs.html). */
+
+.wrap {
+    /* The containing block of the visually hidden text inside it (captions, badge words): without
+       it those 1px boxes are placed against the page at their row's spot, and the rows scrolled
+       out of the box stretch the document by thousands of pixels. */
+    position: relative;
+    max-block-size: 74vh;
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-graphite) transparent;
+    /* CSS-only sideways scroll hint (the mockup's): edge shadows show while the grid overflows
+       and tuck away at each end (web-guidance scrollability-affordance-hints, background form). */
+    background:
+        linear-gradient(to right, var(--bg-card), transparent) 0 0 / 34px 100% no-repeat local,
+        linear-gradient(to left, var(--bg-card), transparent) 100% 0 / 34px 100% no-repeat local,
+        radial-gradient(farthest-side at 0 50%, rgba(0, 0, 0, 0.38), transparent) 0 0 / 16px 100%
+        no-repeat scroll,
+        radial-gradient(farthest-side at 100% 50%, rgba(0, 0, 0, 0.38), transparent) 100% 0 / 16px
+        100% no-repeat scroll;
+
+    /* A Tab stop only to scroll: the ring is drawn inside, so the card does not clip it. */
+    &:focus-visible {
+        outline-offset: -2px;
+    }
+}
+
+.table {
+    inline-size: 100%;
+    /* rem, like the two fixed columns below: at 200% text the table widens (and scrolls) instead
+       of squeezing the headers into each other. 48.75rem = 780px at the default 16px. */
+    min-inline-size: 48.75rem;
+    border-collapse: collapse;
+    /* The mockup's page leaves line-height at normal; row heights depend on it. */
+    line-height: normal;
+    /* Fixed layout so the name column cannot hog the row; the costs share the rest evenly. */
+    table-layout: fixed;
+}
+
+.th {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 5;
+    padding: 0;
+    background: var(--color-space);
+    box-shadow: inset 0 -1px 0 var(--border-strong);
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.65625rem; /* 10.5px */
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-align: center;
+    text-transform: uppercase;
+    white-space: nowrap;
+    transition:
+        background-color 150ms,
+        color 150ms;
+
+    &:hover {
+        background: var(--color-graphite);
+        color: var(--text-body);
+    }
+
+    /* The mockup's 246px and 96px, in rem so they follow the text size. */
+    &[data-first] {
+        inline-size: 15.375rem;
+        text-align: start;
+    }
+
+    &:nth-child(2) {
+        inline-size: 6rem;
+    }
+
+    &[data-active] {
+        background: color-mix(in oklab, var(--color-iris) 12%, var(--color-space));
+    }
+}
+
+/* The sort control fills the header cell (the guide: the button supplies the padding). */
+.thBtn {
+    display: inline-flex;
+    gap: 5px;
+    align-items: center;
+    justify-content: center;
+    inline-size: 100%;
+    margin: 0;
+    padding: 13px 14px;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    cursor: pointer;
+    transition: transform var(--duration-instant) var(--ease-out);
+
+    .th[data-first] & {
+        justify-content: flex-start;
+        padding-inline-start: 22px;
+    }
+
+    &:active {
+        transform: scale(0.94);
+    }
+
+    &:focus-visible {
+        outline-offset: -3px;
+        border-radius: 4px;
+    }
+
+    @media (--bp-md) {
+        padding: 10px 8px;
+
+        .th[data-first] & {
+            padding-inline-start: 14px;
+        }
+    }
+}
+
+.thLabel {
+    .th[data-active] & {
+        color: var(--color-iris-hover);
+    }
+}
+
+.sortIcon {
+    inline-size: 11px;
+    block-size: 11px;
+    opacity: 0.35;
+    transition:
+        opacity 150ms,
+        transform 150ms;
+
+    .th[aria-sort] & {
+        color: var(--color-iris-hover);
+        opacity: 1;
+    }
+
+    .th[aria-sort="descending"] & {
+        transform: rotate(180deg);
+    }
+}
+
+.tr {
+    border-block-end: 1px solid var(--border-subtle);
+    transition: background 140ms;
+
+    &:hover {
+        background: rgba(126, 112, 224, 0.055);
+    }
+}
+
+.td {
+    padding: 11px 14px;
+    color: var(--text-body);
+    font-size: 0.84375rem; /* 13.5px */
+    font-variant-numeric: tabular-nums;
+    font-weight: 400;
+    text-align: center;
+    transition: background 140ms;
+
+    &[data-first] {
+        padding-inline-start: 22px;
+        text-align: start;
+    }
+
+    /* Group the identity columns (name, rarity) apart from the cost grid. */
+    &:nth-child(2) {
+        border-inline-end: 1px solid var(--border-subtle);
+    }
+
+    /* Sorted-column emphasis for scanning. */
+    &[data-active] {
+        background: rgba(126, 112, 224, 0.05);
+
+        .tr:hover & {
+            background: rgba(126, 112, 224, 0.1);
+        }
+    }
+
+    @media (--bp-md) {
+        padding: 9px 8px;
+        font-size: 0.78125rem; /* 12.5px */
+
+        &[data-first] {
+            padding-inline-start: 14px;
+        }
+    }
+}
+
+.na {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.nameCell {
+    display: flex;
+    gap: 11px;
+    align-items: center;
+}
+
+.portrait {
+    flex: 0 0 auto;
+    inline-size: 34px;
+    block-size: 34px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    background: var(--color-graphite);
+    object-fit: cover;
+    object-position: center 15%;
+
+    .tr:hover & {
+        border-color: rgba(126, 112, 224, 0.5);
+    }
+
+    @media (--bp-md) {
+        inline-size: 28px;
+        block-size: 28px;
+    }
+}
+
+.lcThumb {
+    object-position: center;
+}
+
+.lcMark {
+    flex: 0 0 auto;
+    inline-size: 26px;
+    block-size: 26px;
+    object-fit: contain;
+    opacity: 0.9;
+
+    .tr:hover & {
+        opacity: 1;
+    }
+}
+
+.nameText {
+    min-inline-size: 0;
+    color: var(--text-heading);
+    font-size: 0.875rem; /* 14px */
+    font-weight: 600;
+    letter-spacing: -0.01em;
+
+    @media (--bp-md) {
+        font-size: 0.8125rem;
+    }
+}
+
+.expandBtn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-inline-end: -4px;
+    padding: 2px;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition:
+        color 150ms,
+        transform 200ms var(--ease-out);
+
+    &:hover {
+        color: var(--color-iris-hover);
+    }
+
+    &[aria-expanded="true"] {
+        color: var(--color-iris-hover);
+    }
+
+    &:active {
+        transform: scale(0.9);
+    }
+
+    /* The glyph's box is 17px; the hit area reaches 25px (web-guidance accessibility.md: at
+       least 24 x 24) without changing the look. Coarse pointers get 44px from base.css. */
+    &::before {
+        content: "";
+        position: absolute;
+        inset: -4px;
+    }
+}
+
+.expandIcon {
+    inline-size: 13px;
+    block-size: 13px;
+    transition: transform 200ms var(--ease-out);
+
+    .expandBtn[aria-expanded="true"] & {
+        transform: rotate(90deg);
+    }
+}
+
+.expandSpacer {
+    flex: 0 0 auto;
+    inline-size: 17px;
+
+    @media (pointer: coarse) {
+        inline-size: 40px;
+    }
+}
+
+.synBadge {
+    padding: 2px 6px;
+    border: 1px solid rgba(157, 126, 232, 0.28);
+    border-radius: 5px;
+    background: rgba(157, 126, 232, 0.14);
+    color: var(--color-amethyst);
+    font-family: var(--font-primary);
+    font-size: 0.5625rem; /* 9px */
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+}
+
+.synHeadRow,
+.synHeadRow:hover {
+    background: rgba(8, 9, 14, 0.55);
+}
+
+.synRow {
+    background: rgba(8, 9, 14, 0.32);
+
+    &:hover {
+        background: rgba(126, 112, 224, 0.06);
+    }
+}
+
+.synHeadRow,
+.synRow {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: row-fade-in 0.22s var(--ease-out) both;
+    }
+}
+
+@keyframes row-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(-3px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.synLabel {
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.59375rem; /* 9.5px */
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+
+    &[data-indent] {
+        padding-inline-start: 24px;
+    }
+}
+
+.synTarget {
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+    padding-inline-start: 24px;
+    color: var(--text-body);
+    font-size: 0.8125rem;
+}
+
+.synThumb {
+    flex: 0 0 auto;
+    inline-size: 22px;
+    block-size: 22px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    background: var(--color-graphite);
+    object-fit: cover;
+    object-position: center 15%;
+}
+
+.synCost {
+    color: var(--color-amethyst);
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.emptyCell {
+    padding: 56px 20px;
+    color: var(--text-muted);
+    font-size: 0.9375rem; /* 15px */
+    text-align: center;
+}
+
+.emptyState {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    align-items: center;
+
+    & p {
+        margin: 0;
+    }
+}
+
+.emptyIcon {
+    inline-size: 32px;
+    block-size: 32px;
+    color: var(--text-disabled);
+}
+
+.emptyClear {
+    padding: 8px 18px;
+    border: 1px solid rgba(126, 112, 224, 0.5);
+    border-radius: 7px;
+    background: rgba(126, 112, 224, 0.12);
+    color: var(--color-iris-hover);
+    font-size: 0.78125rem; /* 12.5px */
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition:
+        background 150ms,
+        transform 120ms var(--ease-out);
+
+    &:hover {
+        background: rgba(126, 112, 224, 0.2);
+    }
+
+    &:active {
+        transform: scale(0.96);
+    }
+}
+
+/* Loading: rows of the data row's height (34px thumb + 2 x 11px padding + 1px rule). */
+.skeletonRow {
+    border-block-end: 1px solid var(--border-subtle);
+}
+
+.skeletonThumb,
+.skeletonText,
+.skeletonCost {
+    display: inline-block;
+    border-radius: 4px;
+    background: var(--color-graphite);
+
+    @media (prefers-reduced-motion: no-preference) {
+        animation: skeleton-pulse 1.4s var(--ease-in-out) infinite alternate;
+    }
+}
+
+.skeletonThumb {
+    flex: 0 0 auto;
+    inline-size: 34px;
+    block-size: 34px;
+    border-radius: 6px;
+
+    @media (--bp-md) {
+        inline-size: 28px;
+        block-size: 28px;
+    }
+}
+
+.skeletonText {
+    inline-size: 96px;
+    block-size: 12px;
+}
+
+.skeletonCost {
+    inline-size: 22px;
+    block-size: 12px;
+    vertical-align: middle;
+}
+
+@keyframes skeleton-pulse {
+    from {
+        opacity: 0.45;
+    }
+
+    to {
+        opacity: 0.9;
+    }
+}

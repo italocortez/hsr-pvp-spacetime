@@ -1,0 +1,41 @@
+/* The mockup's `.rarityBadge` (design/mockups/costs.html). */
+
+.badge {
+    display: inline-flex;
+    gap: 2px;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 34px;
+    block-size: 22px;
+    padding: 0 7px;
+    border-radius: 5px;
+    font-size: 0.75rem; /* 12px */
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+
+    &[data-tier="5"] {
+        background: var(--lc-5star);
+        color: #12131a;
+    }
+
+    &[data-tier="4"] {
+        background: var(--lc-4star);
+        color: #0d0e14;
+    }
+
+    &[data-tier="3"] {
+        background: var(--lc-3star);
+        color: #0d0e14;
+    }
+
+    @media (forced-colors: active) {
+        border: 1px solid CanvasText;
+    }
+}
+
+.star {
+    inline-size: 10px;
+    block-size: 10px;
+    margin-block-start: -1px;
+}

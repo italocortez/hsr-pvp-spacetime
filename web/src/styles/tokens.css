@@ -118,6 +118,10 @@
        5★ var(--color-prestige), same value, and 4★ var(--color-iris-hover) #9484EB) ── */
     --lc-5star: #c9a961;
     --lc-4star: #7e70e0;
+    /* S14.2 (user ruling 2026-11-16 item 4): 3-star light cones. No mockup has one; the value
+       is --color-ash from DESIGN.md section 2.4, a quiet steel below iris and gold (DESIGN.md
+       section 11 delta). */
+    --lc-3star: #7c7f94;
 
     /* ── teambuilder.html: signature light-cone accent ── */
     --color-signature: #6fb7e8;

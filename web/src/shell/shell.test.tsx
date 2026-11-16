@@ -62,7 +62,8 @@ afterEach(() => {
 describe('which screens render inside the shell', () => {
     it.each([
         ['/', AUTH.visitor],
-        ['/costs', AUTH.visitor],
+        // S14.2: /costs is ported (its own test file covers it); /lobbies stands in as a visitor.
+        ['/lobbies', AUTH.visitor],
         ['/teambuilder', AUTH.visitor],
         ['/lobbies', GUEST],
         ['/profile', MEMBER],
@@ -240,7 +241,8 @@ describe('account area', () => {
     const slot = () => document.querySelector('[data-account-slot]') as HTMLElement;
 
     it('not ready: a hidden placeholder, no control; the slot keeps its class when ready', async () => {
-        renderWithRouter('/costs', AUTH.notReady);
+        // An unported page (S14.2: /costs now has buttons of its own).
+        renderWithRouter('/teambuilder', AUTH.notReady);
         await headline();
         const before = slot().className;
         const placeholder = slot().querySelector('[data-account="pending"]');
@@ -751,6 +753,31 @@ describe('focus and announcement after navigation', () => {
         act(() => r.router.history.push('/costs?el=fire#x'));
         await waitFor(() => expect(r.router.state.resolvedLocation?.hash).toBe('x'));
         await act(() => new Promise((r2) => setTimeout(r2, 100)));
+        expect(document.body).toHaveFocus();
+        expect(announcer()).toHaveTextContent('');
+    });
+
+    it('a search change in the first moments of the first page (after input) moves nothing', async () => {
+        // A page that rewrites its own address before it settled (the costs page dropping an
+        // unknown set id): the first page's key is recorded at once, so the new address is the
+        // same page with no title read yet, not a navigation.
+        const r = renderWithRouter('/costs', AUTH.visitor);
+        let pushed = false;
+        // A few ms after the first page resolved: the announcer has seen it, but its title is
+        // not read yet (that takes two checks 16 ms apart). Input first, so only the same-page
+        // rule can keep this quiet.
+        const off = r.router.subscribe('onResolved', () => {
+            if (pushed) return;
+            pushed = true;
+            setTimeout(() => {
+                fireEvent.keyDown(document.body, { key: 'Shift' });
+                r.router.history.replace('/costs?el=fire');
+            }, 4);
+        });
+        await resolved(r, '/costs?el=fire');
+        off();
+        await headline();
+        await act(() => new Promise((r2) => setTimeout(r2, 150)));
         expect(document.body).toHaveFocus();
         expect(announcer()).toHaveTextContent('');
     });

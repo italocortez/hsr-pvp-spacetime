@@ -1,0 +1,7 @@
+/* The failed-load box: the image's own size (inline style) and class; a neutral fill under it. */
+
+.fallback {
+    display: inline-block;
+    flex: 0 0 auto;
+    background: var(--color-graphite);
+}

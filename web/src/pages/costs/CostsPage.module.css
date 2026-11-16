@@ -1,0 +1,169 @@
+@import "@/styles/media.css";
+
+/*
+ * The costs page frame (design/mockups/costs.html): the workspace, the control bar, the table
+ * card with its head, filter row and footer. The mockup's single breakpoint (720px) snaps to
+ * --bp-md (768px).
+ */
+
+.page {
+    min-block-size: calc(100dvh - var(--shell-offset, 56px));
+}
+
+.workspace {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    max-inline-size: 1440px;
+    margin: 0 auto;
+    padding: clamp(24px, 4vh, 40px) clamp(20px, 4vw, 48px) clamp(48px, 8vh, 96px);
+}
+
+.controlBar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: stretch;
+
+    @media (--bp-md) {
+        gap: 8px;
+    }
+}
+
+.notice {
+    margin: 0;
+    padding: 10px 14px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--color-space);
+    color: var(--text-body);
+    font-size: 0.8125rem;
+}
+
+.card {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-panel);
+    background: var(--bg-card);
+    overflow: hidden;
+}
+
+.cardHead {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 22px 14px;
+    border-block-end: 1px solid var(--border-subtle);
+}
+
+.chapter {
+    display: inline-flex;
+    gap: 12px;
+    align-items: center;
+    margin: 0;
+    color: var(--color-prestige);
+    font-family: var(--font-primary);
+    font-size: 0.6875rem; /* 11px */
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+
+    &::before {
+        content: "";
+        display: inline-block;
+        flex: none;
+        inline-size: 16px;
+        block-size: 1px;
+        background: var(--color-prestige);
+        opacity: 0.6;
+    }
+
+    & strong {
+        color: var(--color-snow);
+        font-weight: 600;
+        letter-spacing: 0.16em;
+    }
+}
+
+.cardAside {
+    /* The mockup's paragraph keeps the browser's 1em margins, which set the head's height. */
+    margin: 1em 0;
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.65625rem; /* 10.5px */
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+
+    & b {
+        color: var(--color-snow);
+        font-weight: 600;
+    }
+}
+
+.filterRow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: stretch;
+    padding: 14px 22px;
+    border-block-end: 1px solid var(--border-subtle);
+}
+
+.clearChip {
+    display: inline-flex;
+    flex: 1 1 auto;
+    gap: 6px;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 104px;
+    min-block-size: 42px;
+    padding: 0 12px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--color-space);
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.65625rem; /* 10.5px */
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition:
+        color 150ms,
+        background 150ms,
+        border-color 150ms,
+        transform 120ms var(--ease-out);
+
+    &:hover {
+        border-color: rgba(126, 112, 224, 0.4);
+        background: rgba(126, 112, 224, 0.1);
+        color: var(--color-iris);
+    }
+
+    &:active {
+        transform: scale(0.97);
+    }
+}
+
+.foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    align-items: center;
+    padding: 12px 22px;
+    border-block-start: 1px solid var(--border-subtle);
+    color: var(--text-disabled);
+    font-family: var(--font-primary);
+    font-size: 0.625rem; /* 10px */
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.footSynergy {
+    color: var(--color-amethyst);
+}

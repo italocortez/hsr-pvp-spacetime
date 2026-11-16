@@ -1,6 +1,6 @@
 # Cost Tables (Game Data) -- Architecture
 
-Last updated: 2026-04-15
+Last updated: 2026-11-16 (S14.2: stale columns corrected, see Phase History)
 
 ## Overview
 
@@ -15,12 +15,13 @@ HsrCharacter (name: string PK)  [public: true]
   +-- displayName: string
   +-- aliases: string[]
   +-- rarity: u8
-  +-- path: Path (Destruction | Hunt | Erudition | Harmony | Nihility | Preservation | Abundance | Remembrance)
+  +-- path: Path (Abundance | Destruction | Erudition | Harmony | Hunt | Nihility | Preservation | Remembrance | Elation)
   +-- element: Element (Fire | Ice | Wind | Lightning | Physical | Quantum | Imaginary)
   +-- role: CharRole (Dps | Support | Sustain)
   +-- imageUrl: string
   +-- versionReleased: f64
   +-- treatAsVersion: f64 (override version for rating weight calculation)
+  +-- posX: i32, posY: i32, width: i32 (card positioning, Phase 15 D-05a)
   +-- audit columns
 
   +-- HsrCharacterCost (PK: [characterName, gameMode, draftMode, costSetId])  [public: true]
@@ -55,15 +56,15 @@ HsrLightcone (name: string PK)  [public: true]
                  by_lightcone_mode_and_set (btree 4-col: [lightconeName, gameMode, draftMode, costSetId])
 
 HsrSynergyCost (id: u32 autoInc PK)  [public: true]
-  +-- sourceName -> HsrCharacter.name
-  +-- targetName -> HsrCharacter.name
+  +-- characterA -> HsrCharacter.name  (A21: an unordered pair, stored with characterA < characterB)
+  +-- characterB -> HsrCharacter.name
   +-- gameMode: GameMode
   +-- draftMode: DraftMode
   +-- costModifier: f32
   +-- costSetId: u32 (0=default sentinel, or CostSet.id)
   +-- audit columns
   Indexes: cost_set_id (btree),
-           by_tuple (btree 5-col: [sourceName, targetName, gameMode, draftMode, costSetId])
+           by_tuple (btree 5-col: [characterA, characterB, gameMode, draftMode, costSetId])
 ```
 
 **PK declaration note (Phase 15.4 D-06):** The composite `primaryKey: [...]` arrays on HsrCharacterCost / HsrLightconeCost are decorative self-documentation -- SpacetimeDB v2.1.0 does not enforce multi-column PK uniqueness at the engine layer (live-probed via PkTest 2026-04-14). Only HsrSynergyCost's `id: t.u32().primaryKey().autoInc()` is engine-enforced. Tuple uniqueness on the composite tuples is reducer-enforced via tuple-match-before-insert.
@@ -93,7 +94,7 @@ All three readers use the `iter()`-equivalent fallback pattern (btree filter + i
    - **HsrLightcone**: validate path enum tag; upsert by `name` PK
    - **HsrCharacterCost**: validate gameMode + draftMode enum tags; iter-find by `(characterName, gameMode.tag, draftMode.tag, costSetId)` 4-tuple; delete+insert (Phase 15.4 D-19)
    - **HsrLightconeCost**: validate gameMode + draftMode enum tags; iter-find by `(lightconeName, gameMode.tag, draftMode.tag, costSetId)` 4-tuple; delete+insert
-   - **HsrSynergyCost**: validate gameMode + draftMode enum tags; iter-find by `(sourceName, targetName, gameMode.tag, draftMode.tag, costSetId)` 5-tuple; upsert via `id.update()` if exists, insert with `draftMode` if not
+   - **HsrSynergyCost**: validate gameMode + draftMode enum tags; find by `by_tuple` on `(characterA, characterB, gameMode, draftMode, costSetId)`, the pair matched in either order (A21); upsert via `id.update()` if it exists, insert in canonical order if not
    - **Archetype**: upsert by unique name (see archetypes/architecture.md)
 
 ### admin_delete_row(tableName, primaryKeyJson) -- for game data tables
@@ -129,6 +130,8 @@ execution". The live tables' columns and indexes are unchanged.
 | Normalized to standard template | Phase 13 normalization | 2026-04-09 |
 | `draftMode: DraftMode` added to all 3 live cost tables; `classicCosts` + `auctionBaseBid` collapsed to single `costs` struct on char/lc. PK tuples extended by `draftMode` (decorative); 4-col btrees on char/lc; 5-col `by_tuple` btree on synergy; `source_mode` extended to 3 cols. Reader helpers filter `draftMode.tag === 'Classic' | 'Auction'` explicitly. Admin bulk-upsert + postDraft LC lookup use iter()/predicate fallback per A2; btree indexes remain for downstream view/sub usage. First-ever synergy auction row shape. pk_test probe table removed via same publish (D-23). | Phase 15.4 execution | 2026-04-15 |
 | Readers use the lobby's set, game mode and draft mode with no fallback; a missing row rejects | Phase S10i execution (DECISIONS.md A101, A107) | 2026-11-10 |
+| Doc corrected against the module: synergy columns are `characterA` / `characterB` (not `sourceName` / `targetName`), `by_tuple` and the admin upsert use them; nine paths (Elation); `posX`, `posY`, `width` on HsrCharacter. No schema change | Phase S14.2 execution | 2026-11-16 |
+| The costs page reads the three cost tables by `cost_set_id`: the default set (0) in the session-long reference set, a published set as a page subscription; see [docs/frontend/pages.md](../frontend/pages.md) "Costs (S14.2)" | Phase S14.2 execution | 2026-11-16 |
 
 ---
 

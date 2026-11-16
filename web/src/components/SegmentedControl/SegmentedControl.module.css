@@ -1,0 +1,154 @@
+@import "@/styles/media.css";
+
+/* The mockup's `.segGroup` / `.segLabel` / `.segBtn` / `.selInput` (design/mockups/costs.html). */
+
+.frame {
+    display: flex;
+    flex: 1 1 auto;
+    gap: 3px;
+    align-items: center;
+    min-inline-size: 0;
+    min-block-size: 42px;
+    padding: 4px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--color-space);
+    /* Safety valve on very narrow widths, as the mockup. */
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &[data-tone="prestige"] {
+        border-color: color-mix(in srgb, var(--color-prestige) 28%, transparent);
+    }
+
+    &::-webkit-scrollbar {
+        display: none;
+    }
+}
+
+.label {
+    flex: 0 0 auto;
+    align-self: center;
+    margin-inline-end: 2px;
+    padding-inline-start: 6px;
+    color: var(--text-disabled);
+    font-family: var(--font-primary);
+    font-size: 0.59375rem; /* 9.5px */
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    white-space: nowrap;
+
+    @media (--bp-md) {
+        display: none;
+    }
+}
+
+.items {
+    /* A fieldset (or the tablist's div): no frame of its own. */
+    margin: 0;
+    padding: 0;
+    border: 0;
+    display: flex;
+    flex: 1 1 auto;
+    gap: 3px;
+    align-items: stretch;
+    align-self: stretch;
+    min-inline-size: 0;
+}
+
+.segment {
+    flex: 1 1 auto;
+    padding: 7px 14px;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.8125rem; /* 13px */
+    font-weight: 600;
+    /* The mockup's page leaves line-height at normal; the 42px pill depends on it. */
+    line-height: normal;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        color 150ms,
+        background-color 150ms,
+        border-color 150ms,
+        transform 120ms var(--ease-out);
+
+    &:hover {
+        color: var(--text-heading);
+    }
+
+    &:active {
+        transform: scale(0.96);
+    }
+
+    &[data-on] {
+        border-color: color-mix(in srgb, var(--color-iris) 50%, transparent);
+        background: color-mix(in srgb, var(--color-iris) 16%, transparent);
+        color: var(--color-iris-hover);
+    }
+
+    .frame[data-tone="prestige"] &[data-on] {
+        border-color: color-mix(in srgb, var(--color-prestige) 50%, transparent);
+        background: color-mix(in srgb, var(--color-prestige) 15%, transparent);
+        color: var(--color-prestige-hover);
+    }
+
+    &[aria-disabled="true"] {
+        opacity: 0.4;
+        cursor: not-allowed;
+
+        &:hover {
+            color: var(--text-muted);
+        }
+
+        &:active {
+            transform: none;
+        }
+    }
+
+    /* The selected segment keeps a visible edge where backgrounds are dropped. */
+    @media (forced-colors: active) {
+        &[data-on] {
+            border-color: Highlight;
+        }
+    }
+}
+
+.select {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    padding: 7px 30px 7px 12px;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    appearance: none;
+    background-color: transparent;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237C7F94' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
+    background-position: right 9px center;
+    background-repeat: no-repeat;
+    background-size: 12px;
+    color: var(--color-iris-hover);
+    font-family: var(--font-secondary);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: normal;
+    letter-spacing: 0.01em;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    transition:
+        color 150ms,
+        background-color 150ms;
+
+    &:hover {
+        background-color: color-mix(in srgb, var(--color-iris) 12%, transparent);
+        color: var(--color-snow);
+    }
+
+    & option {
+        background: var(--color-space);
+        color: var(--text-heading);
+    }
+}

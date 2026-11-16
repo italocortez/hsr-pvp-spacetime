@@ -26,12 +26,18 @@ const MAX_CHECKS = 60;
  * synthetic click and no key or pointer event): a guard's redirect that follows the profile's
  * arrival (a visitor's hard load of `/lobby/123` lands on the sign-in panel a moment later) is
  * part of loading the page, not a navigation the viewer made.
+ *
+ * The first page's key is recorded the moment the announcer first sees a resolved location,
+ * before its title is read. An address change in the first moments of that page (the page
+ * replacing its own search before it settled) resolves to the same key with no title read yet:
+ * that is not a navigation, so nothing is focused or announced.
  */
 export function RouteAnnouncer() {
     const router = useRouter();
     const href = useRouterState({ select: (s) => s.resolvedLocation?.href });
     const [message, setMessage] = useState('');
-    const seen = useRef<{ page: string; title: string } | null>(null);
+    // `title` is undefined while the first page is recorded but not read yet.
+    const seen = useRef<{ page: string; title: string | undefined } | null>(null);
     const interacted = useRef(false);
     const firstHref = useRef<string | undefined>(undefined);
     const leftFirst = useRef(false);
@@ -53,8 +59,13 @@ export function RouteAnnouncer() {
         if (href === undefined) return;
         // Still the first location (keyed by address, so StrictMode's second effect run in dev
         // counts as the same load), until the first resolved location that differs from it.
-        if (firstHref.current === undefined) firstHref.current = href;
-        else if (href !== firstHref.current) leftFirst.current = true;
+        if (firstHref.current === undefined) {
+            firstHref.current = href;
+            // The first page's key, recorded now: a search change in its first moments (a page
+            // that rewrites its own address before it settles) is then the same page, not a
+            // navigation.
+            seen.current = { page: pageOf(router.state), title: undefined };
+        } else if (href !== firstHref.current) leftFirst.current = true;
         const first = !leftFirst.current;
         let timer: ReturnType<typeof setTimeout> | undefined;
         let lastTitle: string | undefined;
@@ -89,7 +100,14 @@ export function RouteAnnouncer() {
             // The first load (and anything before the viewer's first input): no focus move, no
             // announcement. (A first page left before it settled was never recorded.)
             if (first || !interacted.current) return;
-            if (previous && previous.page === page && previous.title === title) return;
+            // The same page: unchanged title, or the first page whose title was never read.
+            if (
+                previous &&
+                previous.page === page &&
+                (previous.title === undefined || previous.title === title)
+            ) {
+                return;
+            }
             focusPageStart();
             setMessage(title);
         };

@@ -3,7 +3,10 @@ import type {
     CostSet,
     HsrCharacter,
     HsrCharacterArchetype,
+    HsrCharacterCost,
     HsrLightcone,
+    HsrLightconeCost,
+    HsrSynergyCost,
     MyLobbyListRow,
     MyProfileRow,
 } from '@bindings/types';
@@ -135,6 +138,10 @@ export class MockConnection implements StdbConnectionLike {
         archetype: new MockTable<Archetype>(),
         hsrCharacterArchetype: new MockTable<HsrCharacterArchetype>(),
         viewPublishedCostSets: new MockTable<CostSet>(),
+        // S14.2: the cost tables (one cache per table for every subscribed cost set).
+        hsrCharacterCost: new MockTable<HsrCharacterCost>(),
+        hsrLightconeCost: new MockTable<HsrLightconeCost>(),
+        hsrSynergyCost: new MockTable<HsrSynergyCost>(),
     };
 
     subscriptionBuilder(): SubscriptionBuilderLike {

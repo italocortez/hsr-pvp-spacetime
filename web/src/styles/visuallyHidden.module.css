@@ -1,0 +1,19 @@
+/*
+ * The one visually hidden utility (web-guidance accessibility.md, "Visually Hidden Utility"):
+ * text for assistive technology that takes no room on screen. Absolutely positioned, so the
+ * element's containing block must be near it: an ancestor that scrolls (a table scroller) has to
+ * be positioned, or the 1px box is placed against the page and can stretch the document.
+ * Import it where needed (`import hidden from '@/styles/visuallyHidden.module.css'`); do not copy it.
+ */
+
+.visuallyHidden {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}

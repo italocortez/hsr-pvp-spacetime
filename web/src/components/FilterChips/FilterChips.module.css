@@ -1,0 +1,122 @@
+/* The mockup's `.chipSet`, `.iconChip`, `.textChip` (design/mockups/costs.html). */
+
+.set {
+    margin: 0;
+    display: flex;
+    flex: 1 1 auto;
+    gap: 3px;
+    /* A fieldset's flex content box does not stretch its items reliably: size them instead. */
+    align-items: center;
+    min-inline-size: 0;
+    min-block-size: 42px;
+    padding: 4px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--color-space);
+    /* Safety valve on very narrow widths, as the mockup. */
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &[data-wide] {
+        flex-grow: 3;
+    }
+
+    &::-webkit-scrollbar {
+        display: none;
+    }
+}
+
+.iconChip,
+.textChip {
+    flex: 1 1 auto;
+    min-block-size: 32px;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    background: transparent;
+    cursor: pointer;
+    transition:
+        color 150ms,
+        background 150ms,
+        border-color 150ms,
+        filter 150ms,
+        transform 120ms var(--ease-out);
+
+    &:active {
+        transform: scale(0.96);
+    }
+
+    @media (forced-colors: active) {
+        &[aria-pressed="true"] {
+            border-color: Highlight;
+        }
+    }
+}
+
+.iconChip {
+    display: grid;
+    place-items: center;
+    min-inline-size: 34px;
+    padding: 0;
+    filter: saturate(0.6) opacity(0.62);
+
+    & img {
+        inline-size: 18px;
+        block-size: 18px;
+        object-fit: contain;
+    }
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.05);
+        filter: saturate(1) opacity(1);
+    }
+
+    &[aria-pressed="true"] {
+        border-color: color-mix(in srgb, var(--color-iris) 60%, transparent);
+        background: color-mix(in srgb, var(--color-iris) 18%, transparent);
+        filter: saturate(1.05) opacity(1);
+    }
+}
+
+.textChip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 44px;
+    padding: 0 10px;
+    color: var(--text-muted);
+    font-size: 0.75rem; /* 12px */
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--text-heading);
+    }
+
+    &[aria-pressed="true"] {
+        border-color: color-mix(in srgb, var(--color-iris) 50%, transparent);
+        background: color-mix(in srgb, var(--color-iris) 18%, transparent);
+        color: var(--color-iris-hover);
+    }
+
+    &[data-prestige][aria-pressed="true"] {
+        border-color: color-mix(in srgb, var(--color-prestige) 50%, transparent);
+        background: color-mix(in srgb, var(--color-prestige) 16%, transparent);
+        color: var(--color-prestige-hover);
+    }
+}
+
+/* DESIGN.md section 7: 44px targets on touch surfaces. The base rule (base.css) is layered, so
+   the 32px minimum above would win over it: the chips and their frame are raised here. */
+@media (pointer: coarse) {
+    .set {
+        min-block-size: 54px;
+    }
+
+    .iconChip,
+    .textChip {
+        min-block-size: 44px;
+        min-inline-size: 44px;
+    }
+}

@@ -3,7 +3,10 @@ import type {
     CostSet,
     HsrCharacter,
     HsrCharacterArchetype,
+    HsrCharacterCost,
     HsrLightcone,
+    HsrLightconeCost,
+    HsrSynergyCost,
     MyLinkRequestRow,
     MyLobbyListRow,
     MyProfileRow,
@@ -75,5 +78,14 @@ export interface StdbConnectionLike {
         viewPublishedCostSets: TableLike<CostSet>;
         /** M5b: keyless (no primary key): a replaced row arrives as an insert plus a delete. Optional as `reducers`. */
         viewMyLinkRequest?: KeylessTableLike<MyLinkRequestRow>;
+        /*
+         * S14.2: the three cost tables. Their composite primary keys are not engine keys (no
+         * constraint in the bindings), so they are typed keyless; `hsr_synergy_cost` has an `id`
+         * key, and readers also listen to `onUpdate` where the handle has it. Optional as
+         * `reducers`, so the test doubles of the earlier steps still fit.
+         */
+        hsrCharacterCost?: KeylessTableLike<HsrCharacterCost>;
+        hsrLightconeCost?: KeylessTableLike<HsrLightconeCost>;
+        hsrSynergyCost?: KeylessTableLike<HsrSynergyCost>;
     };
 }
