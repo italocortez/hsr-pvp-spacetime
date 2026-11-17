@@ -180,11 +180,11 @@ describe('edit_draft_*_cost (cost-sets contract §§ edit_draft_character_cost /
         const id = createSet(test, org, 'synergy');
         editSyn(test, org, id, 'kafka', 'blackswan', 'Auction', 2);
         expect(draftSyn(test, id)).toEqual([expect.objectContaining({ characterA: 'blackswan', characterB: 'kafka', costModifier: 2 })]);
-        editSyn(test, org, id, 'blackswan', 'kafka', 'Auction', -1.5);
+        editSyn(test, org, id, 'blackswan', 'kafka', 'Auction', 1.5); // T-S14.3-pairs (A199(2)): was -1.5, now refused
         editSyn(test, org, id, 'kafka', 'blackswan', 'Classic', 0.25);
         const rows = draftSyn(test, id);
         expect(rows).toHaveLength(2);
-        expect(rows.find((r) => r.draftMode.tag === 'Auction')!.costModifier).toBe(-1.5);
+        expect(rows.find((r) => r.draftMode.tag === 'Auction')!.costModifier).toBe(1.5);
         expect(rows.find((r) => r.draftMode.tag === 'Classic')!.costModifier).toBe(0.25);
     });
 

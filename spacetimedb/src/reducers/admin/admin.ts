@@ -25,6 +25,7 @@ import { hsrSynergyCostUpsertKeys } from '@module/tables/roster/hsrSynergyCost';
 import { archetypeColumns } from '@module/tables/roster/archetype';
 import { canonicalPair } from '@shared/scoring';
 import { ensureNoLiveGameOnCostSet } from '@module/helpers/draft/costSetGuards';
+import { ensurePairModifierNotNegative } from '@module/helpers/roster/pairModifierRules';
 
 // ─── Strict enum validator ───────────────────────────────────────────────────
 // Enum values must match exactly (case-sensitive). No coercion.
@@ -759,6 +760,8 @@ export const admin_bulk_upsert = spacetimedb.reducer(
                         if (!ctx.db.HsrCharacter.name.find(name)) throw new SenderError(`Character ${name} not found.`);
                     }
                     const r = { ...raw, characterA, characterB };
+                    // S14.3-pairs (A199(2)): a negative modifier is refused before any write (null keeps the stored value).
+                    ensurePairModifierNotNegative(r.costModifier);
                     validateEnumIfPresent('gameMode', r.gameMode, ctx, tableName);
                     validateEnumIfPresent('draftMode', r.draftMode, ctx, tableName);
                     const pairKey = `${characterA}|${characterB}|${r.gameMode}|${r.draftMode}|${csId}`;

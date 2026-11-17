@@ -12,6 +12,7 @@ import {
     missingCostEntries,
     missingCostText,
 } from '@module/helpers/roster/costSetCompleteness';
+import { ensurePairModifierNotNegative } from '@module/helpers/roster/pairModifierRules';
 import { readAbuseConfig } from '@module/helpers/lobby/abuseControls';
 import { BUDGET_MAX } from '@module/helpers/lobby/lobbyConfigBounds';
 import { canonicalPair } from '@shared/scoring';
@@ -25,8 +26,9 @@ const DEFAULT_COST_SET_ID = 0;
 // ─── edit_draft_*_cost input rules (S10f, roster audit #9) ──────────────────────
 // gameModeTag: one of the GameMode tags and equal to the set's own game mode (create_cost_set clones that mode only);
 // draftModeTag: Classic or Auction. Every cost value (e0..e6, s1..s5) is a finite number from 0 to BUDGET_MAX (100000,
-// the lobby budget ceiling: a higher price can never be paid); a synergy costModifier is finite with |value| <=
-// BUDGET_MAX (negative modifiers stay allowed). Character and light-cone names must be HsrCharacter / HsrLightcone rows
+// the lobby budget ceiling: a higher price can never be paid); a synergy costModifier is a finite number from 0 to
+// BUDGET_MAX (S14.3-pairs, A199(2): a negative one is refused with "A pairing's cost cannot be negative."; before that
+// S10f allowed |value| <= BUDGET_MAX). Character and light-cone names must be HsrCharacter / HsrLightcone rows
 // (the synergy names were already checked, S10c). The stored cost object holds the named fields only.
 
 const VALID_DRAFT_MODE_TAGS = ['Classic', 'Auction'];
@@ -150,9 +152,12 @@ export const create_cost_set = spacetimedb.reducer(
         }
 
         // 15.4 D-20: Clone synergy costs (draftMode passes through).
+        // S14.3-pairs (A199(2)): a source row with a negative modifier (written before the rule) refuses the copy rather
+        // than being clamped: the whole call rolls back, and the source's owner fixes the row and publishes it first.
         const sourceSynCosts = [...ctx.db.HsrSynergyCost.cost_set_id.filter(sourceSetId)];
         for (const row of sourceSynCosts) {
             if (row.gameMode.tag === gameModeTag) {
+                ensurePairModifierNotNegative(row.costModifier);
                 ctx.db.CostSetDraftSynergy.insert(insertWithAudit(ctx, {
                     costSetId: costSet.id,
                     characterA: row.characterA,
@@ -337,8 +342,10 @@ export const edit_draft_synergy_cost = spacetimedb.reducer(
             if (!ctx.db.HsrCharacter.name.find(name)) throw new SenderError(`Character ${name} not found.`);
         }
         // S10f (roster audit #9): the modifier is finite and bounded; the tags are checked like the cost rows'.
-        if (!Number.isFinite(costModifier) || Math.abs(costModifier) > BUDGET_MAX) {
-            throw new SenderError(`costModifier must be a number between -${BUDGET_MAX} and ${BUDGET_MAX}.`);
+        // S14.3-pairs (A199(2)): never negative (-Infinity included), checked first; then finite and at most BUDGET_MAX.
+        ensurePairModifierNotNegative(costModifier);
+        if (!Number.isFinite(costModifier) || costModifier > BUDGET_MAX) {
+            throw new SenderError(`costModifier must be a number between 0 and ${BUDGET_MAX}.`);
         }
         ensureDraftRowTags(costSet, gameModeTag, draftModeTag);
         ensureDraftCopy(ctx, costSet, user.id);
@@ -388,6 +395,8 @@ export const edit_draft_synergy_cost = spacetimedb.reducer(
 //      liveLobbiesOnCostSet: an index read (Lobby.stage per live stage, then costSetId). Waiting rooms, lobbies in
 //      AwaitingResult and tournaments between games do not block.
 //   3. A set published before S10i gets its draft rebuilt from its live rows (ensureDraftCopy).
+//      S14.3-pairs (A199(2)): a draft synergy row with a negative modifier refuses the publish ("A pairing's cost
+//      cannot be negative.").
 //   4. Completeness (missingCostEntries): per draft mode the draft prices at all, the HsrCharacter / HsrLightcone rows
 //      without a draft row. With gaps and no confirmFillMissing the call is refused with the counts (missingCostText);
 //      with it the gaps are written into the draft at cost 0 (fillMissingAtZero) and so reach the live copy.
@@ -423,6 +432,12 @@ export const publish_cost_set = spacetimedb.reducer(
         }
 
         ensureDraftCopy(ctx, costSet, user.id);
+
+        // S14.3-pairs (A199(2)): no negative pair modifier reaches the live rows. A draft row can hold one only if it was
+        // written before the rule (or copied into the draft from such a live row by ensureDraftCopy); the owner edits it.
+        for (const row of ctx.db.CostSetDraftSynergy.cost_set_id.filter(costSetId)) {
+            ensurePairModifierNotNegative(row.costModifier);
+        }
 
         const missing = missingCostEntries(ctx, costSet);
         if (missing.length > 0) {

@@ -183,7 +183,8 @@ draft-state checks:
 - The character name must be an `HsrCharacter` row ("Character X not found."), the light-cone name an `HsrLightcone`
   row ("Light cone X not found."); the synergy names were already checked (S10c).
 - `edit_draft_synergy_cost`: `costModifier` finite with |value| <= 100 000 ("costModifier must be a number between
-  -100000 and 100000."); negative modifiers stay allowed.
+  -100000 and 100000."); negative modifiers stay allowed. _Superseded in Phase S14.3-pairs execution (A199(2)): a
+  negative modifier is refused; see "Phase S14.3-pairs execution" below._
 
 **Seed (roster audit #10).** `scripts/stdb/_seed.ts` sends only the archetype names not yet in `Archetype`, so a re-seed
 keeps descriptions an admin wrote (the `Archetype` branch of `admin_bulk_upsert` has no keep-merge).
@@ -288,6 +289,37 @@ whole `HsrCharacter` / `HsrLightcone` reference tables (iter) after the permissi
   A107(4) refusal, `lock_cost_set`, `unpublish_cost_set`, `delete_cost_set` (`isCostSetInUse`, any lobby). No schema
   change. Tests: `spacetimedb/src/__tests__/cost-sets/cost-row-live-lock.test.ts`.
 
+## Phase S14.3-pairs execution (DECISIONS.md A199(2))
+
+A cost set's synergy pair modifier is always 0 or more. One helper, `ensurePairModifierNotNegative`
+(`helpers/roster/pairModifierRules.ts`), refuses a negative value with the `SenderError` "A pairing's cost cannot be
+negative." (`NEGATIVE_PAIR_MODIFIER`). `null` / `undefined` pass (the bulk upsert's "keep the stored value"). The
+whole call rolls back on a refusal. Callers, one per write path:
+
+| Path | What is checked | Where |
+|---|---|---|
+| `edit_draft_synergy_cost` | the edited `costModifier`, first (so `-Infinity` gets this text); then finite and at most 100 000: "costModifier must be a number between 0 and 100000." (was -100000..100000) | `reducers/roster/costSetManagement.ts` |
+| `create_cost_set` (copy) | each source `HsrSynergyCost` row of the game mode, before its draft row is written. A negative source row refuses the copy (no clamp): a silent change of a price is worse than a refusal, and the source's owner can fix the row and publish it | same file |
+| `publish_cost_set` | every `CostSetDraftSynergy` row of the set, after `ensureDraftCopy` and before completeness and `mirrorDraftToLive`, so no negative row reaches the live table | same file |
+| `admin_bulk_upsert` (`HsrSynergyCost`) | each incoming `costModifier`, before any write (insert or update); the seed runs through this path | `reducers/admin/admin.ts` |
+
+Paths that need no check: `ensureDraftCopy` (copies the live rows of a set published before S10i into its draft; it
+runs inside an edit or a publish, a negative row it copies is either replaced by the edit or refused by the publish,
+and checking there would leave the owner unable to fix the row); `mirrorDraftToLive` (only `publish_cost_set` calls it,
+after the check); `fillMissingAtZero` (character and light-cone rows only); `admin_delete_row`,
+`deleteCostSetRows` and `server_nuke_test_data` (they only delete). No other module code writes either synergy table.
+
+**Seed tooling.** `normalizePairings` (`scripts/stdb/seed-normalizers.ts`) throws a plain `Error` naming the pair, the
+game mode and the draft mode for a negative modifier ("synergies.json: pair A + B (memory_of_chaos, Auction) has a
+negative modifier (-0.5); a pairing's cost cannot be negative."). `_seed.ts` normalizes every table before its first
+reducer call, so nothing is sent. `data/seed/synergies.json` holds no negative modifier (60 modifiers, all 0 or more).
+
+**Existing rows.** A negative row written before this rule stays until it is edited; no migration. Prod holds none
+(the seed has none); test1's data is disposable. The scoring code still floors
+the team surcharge at 0 (`lineupCosts`, `helpers/results/scoringHelpers.ts`; `shared/teambuilder`), which stays as a
+safeguard (A199(3)). Such a row blocks a copy of its set and a publish of its draft until the pair is edited to 0 or
+more. No schema or bindings change. Tests: `spacetimedb/src/__tests__/cost-sets/pair-modifier-floor.test.ts`.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -308,10 +340,11 @@ whole `HsrCharacter` / `HsrLightcone` reference tables (iter) after the permissi
 | An Admin cost-row insert, change or deletion (`admin_bulk_upsert`, `admin_delete_row`; character, light-cone and synergy rows) is refused while a lobby on the set is in Drafting, Equipping or Scoring (`ensureNoLiveGameOnCostSet`, the A107(4) test, set 0 included); an upsert row equal to the stored one (f32) is skipped, so an identical re-seed passes | Phase S10w execution (DECISIONS.md A142) | 2026-11-10 |
 | Fix pass: a non-integer or out-of-range `costSetId` refused in the Admin cost paths; the per-call seed behaviour documented | Phase S10w execution (DECISIONS.md A142; S10w review F1, F2) | 2026-11-10 |
 | `CostSet` private (L91): `view_published_cost_sets` (anonymous, `is_published` index) lists the published sets for every caller, `view_my_cost_sets` stays the owner's list; the reference set subscribes the view instead of the table. The Admin cost upserts and deletes read the composite indexes instead of scanning every set (L92) | Phase S11a execution | 2026-11-11 |
+| A pair modifier is never negative: refused in `edit_draft_synergy_cost`, `create_cost_set` (copy), `publish_cost_set` and `admin_bulk_upsert` (`ensurePairModifierNotNegative`), and by the seed normalizer; the edit range is 0..100000 | Phase S14.3-pairs execution (DECISIONS.md A199) | 2026-11-17 |
 
 ---
 
-*Last updated: 2026-11-11 (S11a part 2)*
+*Last updated: 2026-11-17 (S14.3-pairs)*
 *Feature owner: Phase 03 (schema), Phase 15.4 (draftMode restructure)*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

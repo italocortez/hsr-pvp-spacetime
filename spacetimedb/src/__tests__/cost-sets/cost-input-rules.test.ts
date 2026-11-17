@@ -31,7 +31,8 @@ describe('Roster #9: edit_draft_*_cost input rules (cost-sets architecture S10f)
         return { test, org, id: costSetId(test, 'rules') };
     }
     const fieldMsg = (k: string) => `costsJson field "${k}" must be a number between 0 and 100000.`;
-    const MODIFIER = 'costModifier must be a number between -100000 and 100000.';
+    const MODIFIER = 'costModifier must be a number between 0 and 100000.'; // T-S14.3-pairs (A199(2)): was -100000..100000
+    const NEGATIVE = "A pairing's cost cannot be negative.";
     const WRONG_MODE = 'This cost set is for MemoryOfChaos; gameModeTag must be MemoryOfChaos.';
     const BAD_DRAFT_MODE = 'Invalid draftModeTag. Must be one of: Classic, Auction';
     const eJson = (over: Record<string, unknown>) => JSON.stringify({ e0: 1, e1: 1, e2: 1, e3: 1, e4: 1, e5: 1, e6: 1, ...over });
@@ -66,16 +67,18 @@ describe('Roster #9: edit_draft_*_cost input rules (cost-sets architecture S10f)
         expect(msgs).toEqual([fieldMsg('s1'), fieldMsg('s2'), fieldMsg('s5')]);
     });
 
-    it('synergy modifier: NaN, ±Infinity and |value| > 100000 rejected; -100000 and 100000 pass (roster audit #9)', () => {
+    // T-S14.3-pairs (A199(2)): a negative modifier (-Infinity and -100001 included) now gets the negative text, and the
+    // accepted low end is 0 instead of -100000.
+    it('synergy modifier: NaN, +Infinity and > 100000 rejected; a negative one refused; 0 and 100000 pass (roster audit #9, A199)', () => {
         const { test, org, id } = draftSet();
         const edit = (costModifier: number, draftModeTag = 'Classic') => (ctx: any) =>
             M.edit_draft_synergy_cost(ctx, { costSetId: id, sourceName: 'kafka', targetName: 'pela', gameModeTag: MOC, draftModeTag, costModifier });
         const msgs = [NaN, Infinity, -Infinity, 100_001, -100_001].map((v) => rejection(test, org, edit(v)));
         expect(draftSyn(test, id)).toHaveLength(0);
-        expect(msgs).toEqual(Array(5).fill(MODIFIER));
-        tx(test, org, edit(-100_000));
+        expect(msgs).toEqual([MODIFIER, MODIFIER, NEGATIVE, MODIFIER, NEGATIVE]);
+        tx(test, org, edit(0));
         tx(test, org, edit(100_000, 'Auction'));
-        expect(draftSyn(test, id).map((r) => [r.draftMode.tag, r.costModifier]).sort()).toEqual([['Auction', 100_000], ['Classic', -100_000]]);
+        expect(draftSyn(test, id).map((r) => [r.draftMode.tag, r.costModifier]).sort()).toEqual([['Auction', 100_000], ['Classic', 0]]);
     });
 
     it('unknown character / light-cone names are rejected (roster audit #9)', () => {

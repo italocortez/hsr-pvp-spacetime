@@ -296,9 +296,20 @@ export function canonicalPair(a: string, b: string): [string, string] {
     return a <= b ? [a, b] : [b, a];
 }
 
+/** S14.3-pairs (A199(2)): a pair modifier is 0 or more. Throws a plain error naming the pair, the game mode and the
+ *  draft mode before anything is sent; the module refuses a negative one too. */
+function pairModifier(value: unknown, characterA: string, characterB: string, rawMode: string, draftMode: string): number {
+    const modifier = Number(value);
+    if (modifier < 0) {
+        throw new Error(`synergies.json: pair ${characterA} + ${characterB} (${rawMode}, ${draftMode}) has a negative modifier `
+            + `(${modifier}); a pairing's cost cannot be negative.`);
+    }
+    return modifier;
+}
+
 /** Extract HsrSynergyCost rows from synergies.json (Phase 15.4 D-12 / D-14:
  *  sibling-block shape with classic + auction sub-blocks; one row per present sub-block).
- *  Emits characterA/characterB in canonical order (A21). */
+ *  Emits characterA/characterB in canonical order (A21). A negative modifier throws (A199(2)). */
 export function normalizePairings(raw: RawPairing[]): object[] {
     const rows: object[] = [];
     for (const p of raw) {
@@ -318,7 +329,7 @@ export function normalizePairings(raw: RawPairing[]): object[] {
                     characterB,
                     gameMode,
                     draftMode: 'Classic',
-                    costModifier: Number(modeBlock.classic.modifier),
+                    costModifier: pairModifier(modeBlock.classic.modifier, characterA, characterB, rawMode, 'Classic'),
                     costSetId: csId,
                 });
             }
@@ -328,7 +339,7 @@ export function normalizePairings(raw: RawPairing[]): object[] {
                     characterB,
                     gameMode,
                     draftMode: 'Auction',
-                    costModifier: Number(modeBlock.auction.modifier),
+                    costModifier: pairModifier(modeBlock.auction.modifier, characterA, characterB, rawMode, 'Auction'),
                     costSetId: csId,
                 });
             }
