@@ -19,7 +19,7 @@ Migration in progress: `ROADMAP.md` lists which steps have landed; a path or scr
 | `web/public/sw.js`, `web/sw-kill.js` | the image cache worker: images from our own UploadThing host only (exact host list, pinned to `data/seed/` by a test), never the app's own origin; registered in production builds after load. `web/sw-kill.js` and `SERVICE_WORKER_ENABLED` in `web/src/lib/serviceWorker.ts` switch it off; the procedure is in `docs/frontend/hosting.md` (M10) |
 | `web/src/pages/costs/`, shared controls | the costs page (S14.2). Shared pieces it introduced, for reuse: `web/src/components/{SegmentedControl,FilterChips,RarityBadge,SearchField,MultiSelectDropdown}`, and the scroll-linked collapse (`web/src/lib/scrollCollapse.ts`, `web/src/styles/scrollCollapse.module.css`; pattern in `docs/frontend/component-hygiene.md`) |
 | `data/seed/` | public reference data: characters, light cones, synergies, achievements (A18) |
-| `test/` | live residue + harness, `frontend/screenshots/<page>/`; frontend tests live next to the code as `web/src/**/*.test.ts(x)` (M9) |
+| `test/` | live residue + harness; `frontend/screenshots/<page>/` is local only, gitignored (A186); frontend tests live next to the code as `web/src/**/*.test.ts(x)` (M9) |
 | `.github/workflows/ci.yml`, `scripts/ci/` | signal-only CI (typecheck, `lint:ci`, `npm test`, web build, `check:patterns`); no secrets, no database, no deploy (M9) |
 | `vercel.json`, `.vercelignore` | hosting: CSP and headers, cache rules, SPA rewrite, upload ignore list; rules in `docs/frontend/hosting.md` (M7) |
 | `docs/` | `<feature>/{contract,architecture}.md`, `ERD.md`, `frontend/`, `research/`, `log/<date>-<step>.md` |
@@ -64,7 +64,7 @@ Two databases: `hsr-spacetimedb-test1` and `hsr-spacetimedb-prod`. The names liv
 **Screenshot loop (Playwright CLI).** Any edit that changes rendered output ends with a screenshot + Read before the task is reported complete: typechecks prove syntax, screenshots prove what the user sees. Use `playwright-cli` in its default mode only. Pages that show UploadThing images: block `*.ufs.sh` in every browser check that does not need real portraits, and load real ones for one first-screen screenshot run only (light cone images are about 230 kB each).
 1. Ensure `npm run dev` is running.
 2. `playwright-cli open http://localhost:<port>/<route>` (once per session).
-3. Screenshot at desktop width and at **390 px**: `playwright-cli screenshot --filename test/frontend/screenshots/<page>/<name>.png`. Throwaway shots go to `tmp/pw/`.
+3. Screenshot at desktop width and at **390 px**: `playwright-cli screenshot --filename test/frontend/screenshots/<page>/<name>.png`. Throwaway shots go to `tmp/pw/`. Neither folder is committed: every image file under `test/` is gitignored (A186), the step log names the shots that were checked.
 4. Read the PNG; compare it to the frozen mockup in `design/mockups/` or the task intent; iterate if wrong.
 5. `playwright-cli close` at the end of the session.
 
@@ -110,7 +110,7 @@ Skip it for backend-only edits, pure refactors with no visual delta, and utility
 
 - Commit only when asked. Branch per feature; commits land on the feature branch.
 - **Never `git add -f` / `--force`**, for any reason.
-- Never commit `notes/`, `tmp/`, `backups/`, `.env*`, or anything under `test/data/`. Transform scripts for gitignored data live in `tmp/` and run locally, never committed.
+- Never commit `notes/`, `tmp/`, `backups/`, `.env*`, anything under `test/data/`, or a screenshot or other picture made by a test or a browser check (A186). Transform scripts for gitignored data live in `tmp/` and run locally, never committed.
 - Test files change only under an explicit task (§6).
 - Worktrees spawn from the last commit: uncommitted changes are invisible to them.
 - Prod publish only through `stdb:publish:prod`, after the release checklist (ACCESS-SECURITY-OPS §C.5).

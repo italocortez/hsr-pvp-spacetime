@@ -33,5 +33,13 @@ test/data/
 .claude/worktrees/
 .mcp.json
 
+# pictures taken by tests and browser checks stay local (A186); the app's own images live in web/public/
+test/**/*.png
+test/**/*.jpg
+test/**/*.jpeg
+test/**/*.webp
+test/**/*.gif
+test/**/*.avif
+
 # os
 .DS_Store

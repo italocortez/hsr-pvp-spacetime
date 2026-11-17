@@ -2,6 +2,8 @@
 
 One entry per ported page: route, files, mockup, breakpoint snaps, guides used, Safari notes. Shared building blocks are listed once, under the first page that introduced them.
 
+The "Screenshots" lines below name files under `test/frontend/screenshots/`. That folder is local only since 2026-11-16 (A186): the files exist on the machine that took them, not in the repository.
+
 ## Standby (M3)
 
 - **Route:** `/` and `/standby`, plus the route placeholders listed under Routes (M4). Query `?module=<name>` on `/standby` (or the placeholder's `module` prop) shows the champagne module pill and sets the title to `<name> — Standby — IPC Battlegrounds`; the name is rendered as text only and cut to 40 code points (a surrogate pair is never split). The pill reads "Requested module: <name>" to screen readers through a visually hidden ": ".
