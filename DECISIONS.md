@@ -2116,3 +2116,17 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   3. A saved loadout from which every character is removed stays, empty, until it is deleted; it is not removed silently.
 - **Why:** user, 2026-11-17, on whether a mode switch alone should create a loadout: "for the question, no, the loadout is the characters and lightcones picked, switching to a new mode doesn't create a new loadout"; on items 2 and 3, proposed by the orchestrator: "I agree with these behaviors".
 - **Where implemented:** not yet.
+
+### A206 — S14.3d: the team picture export, as built
+
+- **Date:** 2026-11-17 · **Status:** item 1 implements A190 item 8 and A202 item 2; items 2 to 6 are the implementers' choices, agreed by the orchestrator, for the user to rule on; item 7 open
+- **Decision:**
+  1. The team builder exports a picture of the team, drawn with the Canvas 2D API from the team's data, with no library: 1200 by 675 at double sharpness, PNG, by "Copy image" and "Download". The code loads on first use.
+  2. The picture holds the site mark, the cost set and modes, the loadout name, the total, four slot cards in the page's look (portrait, element and path icons, cost pill, eidolon and superimposition, the light cone art in its slanted corner), captions with name, light cone and costs, the active pairings with their sum, and in Auction the two budgets. The note is never drawn.
+  3. In Auction a caption lists the parts of a unit's cost so they add up to its pill: "Unit 8.0 + bid 2.5 · LC 1.5", with the eidolon extra as its own part. Every amount on the picture is written exactly, to hundredths where needed.
+  4. "Hide who is on the team" hides names, portraits, element and path icons, light cone names and art, the names in the pairings, the pairing edge on the pills, and the loadout name (A204 item 3); it keeps costs, levels, bids, budgets and the total. A unit's cost with its eidolon level can still narrow a character down; that was the old tool's intent.
+  5. An image that fails to load becomes a blank and the picture is still made. An export in progress when the person leaves the page saves nothing.
+  6. Where the browser cannot copy an image, the page says so and offers the download.
+  7. Open: sharing the picture through the phone's share sheet, as the old tool did; Firefox, Safari and phones were not checked in a browser. Found on the way, to fix in the page: its slot pills and total round to one decimal while bids go to hundredths.
+- **Why:** user rulings A190 item 8, A202 item 2, A204 item 3; one review confirmed every figure on the picture against the page and the module.
+- **Where implemented:** `web/src/pages/teambuilder/` (`teamPictureLayout.ts`, the drawing layer, `PictureActions.tsx`), `shared/teambuilder/amount.ts` (the comma rule), `docs/frontend/pages.md`, `docs/log/2026-11-17-s14-3d.md`

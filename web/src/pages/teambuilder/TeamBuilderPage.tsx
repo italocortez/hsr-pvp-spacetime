@@ -13,10 +13,12 @@ import { CostChart } from './CostChart';
 import { GameModeTiles } from './GameModeTiles';
 import { LoadoutNote } from './LoadoutNote';
 import { LoadoutsPanel } from './LoadoutsPanel';
+import { PictureActions } from './PictureActions';
 import { RosterSlots } from './RosterSlots';
 import styles from './TeamBuilderPage.module.css';
 import { PairStrip, TeamTotal } from './TeamTotal';
 import type { TeamBuilderSearch } from './teambuilderSearch';
+import type { PictureRequest } from './teamPictureLayout';
 import { type TeamBuilderPageState, useTeamBuilderPage } from './useTeamBuilderPage';
 
 /*
@@ -192,6 +194,31 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
         ? `The cost set ${page.costSet.name} is for ${MODE_LABEL[page.mode]} only. Pick Default to change the game mode.`
         : undefined;
 
+    // S14.3d: what the team picture shows, read at the moment of a press.
+    const pictureRequest = (hideNames: boolean): PictureRequest => ({
+        title: loadouts.name,
+        slots: page.slots,
+        cost,
+        spend: page.spend,
+        draft: view.draft,
+        setLabel,
+        modeLabel: MODE_LABEL[page.mode],
+        hideNames,
+        character: (key) => {
+            const c = page.characterOf(key);
+            return c
+                ? {
+                      displayName: c.displayName,
+                      rarity: c.rarity,
+                      element: c.element.tag.toLowerCase(),
+                      path: c.path.tag.toLowerCase(),
+                      imageUrl: c.imageUrl,
+                  }
+                : undefined;
+        },
+        lightcone: (key) => page.lightconeOf(key),
+    });
+
     const line: PoolLine = page.fullHint
         ? { text: FULL_HINT, tone: 'full' }
         : target !== null
@@ -223,6 +250,9 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
                     announce={announce}
                     onLoaded={forget}
                     characterName={nameOf}
+                    picture={
+                        <PictureActions request={pictureRequest} disabled={!page.costsReady} />
+                    }
                 />
 
                 <section

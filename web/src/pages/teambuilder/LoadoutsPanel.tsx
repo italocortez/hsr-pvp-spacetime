@@ -10,6 +10,7 @@ import { Link, useRouterState } from '@tanstack/react-router';
 import {
     type KeyboardEvent,
     type MouseEvent,
+    type ReactNode,
     type RefObject,
     useCallback,
     useEffect,
@@ -64,6 +65,8 @@ type Props = {
     onLoaded: () => void;
     /** A character's display name from its key (the held choice lists team members). */
     characterName?: (key: string) => string;
+    /** S14.3d: the team picture's actions, under the share link. */
+    picture?: ReactNode;
 };
 
 /** A delete waiting for its confirmation; `again`: the account copy was newer, the person is asked again. */
@@ -82,6 +85,7 @@ export function LoadoutsPanel({
     announce,
     onLoaded,
     characterName = (key) => key,
+    picture,
 }: Props) {
     const ids = useId();
     const nameRef = useRef<HTMLInputElement>(null);
@@ -335,6 +339,7 @@ export function LoadoutsPanel({
                         />
                     </label>
                 )}
+                {picture}
 
                 {line && <p className={styles.line}>{line}</p>}
                 {loadouts.notice && (

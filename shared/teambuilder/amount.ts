@@ -9,7 +9,7 @@ export type AmountRead =
     | { kind: 'amount'; value: number; capped: boolean }
     /**
      * Not read: `ambiguous` for a comma followed by exactly three digits ("1,000": a thousand to one reader, one to
-     * another); `unreadable` for anything else that is not an amount (letters, a sign, "1e3", "1.2.3", "1,000.50").
+     * another; also ",500" and "0,500"); `unreadable` for anything else that is not an amount (letters, a sign, "1e3", "1.2.3", "1,000.50").
      */
     | { kind: 'refused'; reason: 'ambiguous' | 'unreadable' };
 
@@ -21,14 +21,16 @@ const CURRENCY = /^[$€£¥]\s*|\s*[$€£¥]$/g;
  * comma ("2", "2.5", "2,5", ".5", "2.", "2.25"); spaces around it and one currency sign at either end are dropped.
  * A comma is a decimal mark, because many players write decimals with one, except where it is followed by exactly
  * three digits ("1,000", "12,500"): that reads as a thousands separator to others, so it is refused rather than
- * guessed. A dot is always the decimal mark. More than two decimals round half up on the digits ("1.005" is 1.01,
+ * guessed. S14.3d, one rule whatever stands before the comma: a comma followed by exactly three digits is refused
+ * as unclear also with nothing or only zeros before it (",500" like "0,500"; ",5" and ",50" still read 0.5).
+ * A dot is always the decimal mark. More than two decimals round half up on the digits ("1.005" is 1.01,
  * "1.234" is 1.23), never through floating point. Above `max` the amount is `max`, marked `capped`.
  */
 export function readAmount(text: string, max: number): AmountRead {
     const t = text.trim().replace(CURRENCY, '').trim();
     const unreadable: AmountRead = { kind: 'refused', reason: 'unreadable' };
     if (t === '') return text.trim() === '' ? { kind: 'blank' } : unreadable;
-    if (/^\d+,\d{3}$/.test(t)) return { kind: 'refused', reason: 'ambiguous' };
+    if (/^\d*,\d{3}$/.test(t)) return { kind: 'refused', reason: 'ambiguous' };
     const m = /^(\d*)(?:[.,](\d*))?$/.exec(t);
     const whole = (m?.[1] ?? '').replace(/^0+(?=\d)/, '');
     const fraction = m?.[2] ?? '';
