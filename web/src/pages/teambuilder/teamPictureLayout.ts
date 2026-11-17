@@ -15,7 +15,8 @@ import { amountFixed } from './costChartModel';
  *
  * The picture: 1200 by 675 (16:9, a size Discord shows whole in a chat), the app's colours and fonts. Top: the
  * site mark and name, the modes (cost set, draft mode, game mode), the loadout's name and the team total. Middle:
- * the four slots as the page draws them (portrait, element and path, the slot's cost pill, eidolon and
+ * the four slots as the page draws them (portrait, element and path, the slot's cost pill with the link icon on a
+ * paired unit, eidolon and
  * superimposition, the light cone's art in its slanted corner), each with a caption (name, light cone, the
  * character and light cone costs; in Auction the character cost as its parts, so they add up to the pill:
  * "Unit 8.0 + bid 2.5 + E1 1.5 · LC 1.5"). Bottom: the active pairings with their sum, and in Auction the two
@@ -26,7 +27,7 @@ import { amountFixed } from './costChartModel';
  * "Hide who is on the team" (the old tool's "Hide Team", which covered the portraits and masked the names in its
  * cost chart, so a team's price could be posted before a draft without showing the team): no portrait (the
  * app's blank character instead), no element or path, no names, no light cone name or art, pairings without
- * names, no pairing edge on the pills, no loadout name (the title is "Hidden team", the file `team-hidden.png`;
+ * names, no link icon on the pills, no loadout name (the title is "Hidden team", the file `team-hidden.png`;
  * people name loadouts after the team); costs, eidolons, superimpositions, bids and budgets stay, and the header
  * says "TEAM HIDDEN".
  */
@@ -65,6 +66,10 @@ export const COLORS = {
     /** The chart's pairing segment (A201 item 9). */
     pairing: '#e3cf55',
 } as const;
+
+/** The link icon in a pill and its gap after the figure (the page's `.syn` and `.cost` gap). */
+const PILL_ICON = 15;
+const PILL_ICON_GAP = 6;
 
 const RARITY: Record<number, { tint: string; glow: string; line: string }> = {
     5: { tint: 'rgba(201, 169, 97, 0.1)', glow: '232, 198, 122', line: 'rgb(244, 213, 135)' },
@@ -179,7 +184,9 @@ export type Shape =
           remote: boolean;
           tag?: string;
       }
-    | { kind: 'logo'; x: number; y: number; size: number };
+    | { kind: 'logo'; x: number; y: number; size: number }
+    /** S14.3e: the page's link glyph (`LINK_ICON_PATHS`), filled, in a square of `size` at x, y. */
+    | { kind: 'link'; x: number; y: number; size: number; color: string; tag?: string };
 
 export type Scene = {
     width: number;
@@ -625,9 +632,13 @@ export function layoutTeamPicture(req: PictureRequest, measure: Measure): Scene 
             slotCost !== null && (slotCost.character === null || slotCost.lightcone === null);
         const pillText = slotCost === null || missingPart ? 'n/a' : cost(slotCost.total);
         const pillFont = mono(15, 700);
-        const pillW = Math.max(54, measure(pillText, pillFont) + 24);
-        // Hidden: no pairing edge, which would tell which slots pair (review S3).
+        // A paired unit: the page's link icon after the cost, as on the page (15px at a 15px figure, 6px apart,
+        // amethyst; S14.3e, replaces the S14.3d gold edge). Hidden: no mark, which would tell which slots pair
+        // (review S3).
         const paired = !hide && pairedKeys.has(slot.character);
+        const textW = measure(pillText, pillFont);
+        const groupW = textW + (paired ? PILL_ICON_GAP + PILL_ICON : 0);
+        const pillW = Math.max(54, groupW + 24);
         shapes.push({
             kind: 'rect',
             x: x + (w - pillW) / 2,
@@ -636,11 +647,26 @@ export function layoutTeamPicture(req: PictureRequest, measure: Measure): Scene 
             h: 28,
             r: 14,
             fill: 'rgba(8, 9, 14, 0.78)',
-            stroke: paired ? 'rgba(227, 207, 85, 0.75)' : 'rgba(255, 255, 255, 0.14)',
+            stroke: 'rgba(255, 255, 255, 0.14)',
             line: 1,
             tag: `slot-${index}-pill`,
         });
-        text(x + w / 2, y + 31, pillText, pillFont, COLORS.snow, 'center', `slot-${index}-pill`);
+        if (paired) {
+            // The figure and the icon as one group, centred on the card.
+            const gx = x + (w - groupW) / 2;
+            text(gx, y + 31, pillText, pillFont, COLORS.snow, 'left', `slot-${index}-pill`);
+            shapes.push({
+                kind: 'link',
+                x: gx + textW + PILL_ICON_GAP,
+                y: y + 12 + (28 - PILL_ICON) / 2,
+                size: PILL_ICON,
+                color: COLORS.amethyst,
+                tag: `slot-${index}-paired`,
+            });
+        } else {
+            const at = x + w / 2;
+            text(at, y + 31, pillText, pillFont, COLORS.snow, 'center', `slot-${index}-pill`);
+        }
 
         // Eidolon and superimposition (bottom left, the page's `.verticals` pill).
         const eText = `E${slot.eidolon}`;

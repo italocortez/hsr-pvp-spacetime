@@ -14,7 +14,6 @@ import {
     type Loadout,
     loadoutName,
     loadoutNote,
-    NEW_LOADOUT_NAME,
     type Row,
     removeLoadout,
     slotKey,
@@ -29,7 +28,13 @@ import { useRows } from '@/stdb/useRows';
 import { type Content, newBrowserKey, storageWorks } from './loadoutStorage';
 import { useAccountDrafts } from './useAccountDrafts';
 import { useAccountSync } from './useAccountSync';
-import { type ActiveRef, type Store, sameRef, useActiveLoadout } from './useActiveLoadout';
+import {
+    type ActiveRef,
+    holdsCharacter,
+    type Store,
+    sameRef,
+    useActiveLoadout,
+} from './useActiveLoadout';
 import { useBrowserLoadouts } from './useBrowserLoadouts';
 
 /*
@@ -62,7 +67,13 @@ export type LoadoutItem = Loadout & {
 };
 
 export type LoadoutStatus =
-    | { kind: 'working'; full: Store | null; loading: boolean }
+    | {
+          kind: 'working';
+          full: Store | null;
+          loading: boolean;
+          /** No character on the page: nothing to store yet (A205). */
+          empty: boolean;
+      }
     | { kind: 'browser' }
     | { kind: 'account'; autosave: AutosaveStatus };
 
@@ -250,27 +261,28 @@ export function useLoadouts({
         moved.current = active.onMoved;
     });
 
+    const accountFull =
+        accountLive &&
+        freeSlot(
+            account.map((l) => keySlot(l.key)).filter((s): s is number => s !== null),
+            ACCOUNT_LOADOUT_LIMIT,
+        ) === null;
+
     // ── Actions.
 
-    /** A new empty loadout in the visitor's store; a refusal text when it is full or not ready. */
+    /**
+     * "New Loadout": a fresh empty working loadout, stored with its first character (S14.3e, A205; it no longer
+     * stores an empty loadout at once); a refusal text when the visitor's store is full or not ready.
+     */
     const create = useCallback((): string | null => {
-        const c = emptyCode();
-        if (!c) return null;
         if (homeStore === null) return NOT_KNOWN_YET;
-        const content = { name: NEW_LOADOUT_NAME, note: '', code: c };
         if (homeStore === 'account') {
             if (!accountLive) return ACCOUNT_LOADING;
-            const key = sync.create(content);
-            if (key === null) return ACCOUNT_FULL;
-            active.enter({ kind: 'account', key }, c);
-            return null;
-        }
-        if (browser.read().length >= BROWSER_LOADOUT_LIMIT) return BROWSER_FULL;
-        const key = newBrowserKey();
-        browser.mutate((list) => [...list, { key, ...content }]);
-        active.enter({ kind: 'browser', key }, c);
+            if (accountFull) return ACCOUNT_FULL;
+        } else if (browser.read().length >= BROWSER_LOADOUT_LIMIT) return BROWSER_FULL;
+        active.startNew();
         return null;
-    }, [emptyCode, homeStore, accountLive, sync.create, browser, active.enter]);
+    }, [homeStore, accountLive, accountFull, browser.read, active.startNew]);
 
     /** A copy right after the source (browser) or in the lowest free slot (account); it becomes active. */
     const duplicate = useCallback(
@@ -371,12 +383,6 @@ export function useLoadouts({
             held: store === 'account' ? heldOf(l.key) : null,
         }));
 
-    const accountFull =
-        accountLive &&
-        freeSlot(
-            account.map((l) => keySlot(l.key)).filter((s): s is number => s !== null),
-            ACCOUNT_LOADOUT_LIMIT,
-        ) === null;
     let fullStore: Store | null = null;
     if (homeStore === 'account' && accountFull) fullStore = 'account';
     if (homeStore === 'browser' && browser.list.length >= BROWSER_LOADOUT_LIMIT)
@@ -389,6 +395,7 @@ export function useLoadouts({
             kind: 'working',
             full: fullStore,
             loading: homeStore === 'account' && !accountLive,
+            empty: !holdsCharacter(code),
         };
     else if (a.kind === 'browser') status = { kind: 'browser' };
     else status = { kind: 'account', autosave: sync.statusFor(a.key) };

@@ -10,9 +10,9 @@ import {
     useState,
 } from 'react';
 import { RemoteImage } from '@/components/RemoteImage/RemoteImage';
-import { formatCostFixed as formatCost } from '@/lib/rosterModel';
 import hidden from '@/styles/visuallyHidden.module.css';
 import { AmountField } from './AmountField';
+import { amountFixed } from './costChartModel';
 import { LightconePicker } from './LightconePicker';
 import styles from './RosterSlots.module.css';
 import { EmptyConeIcon, GripIcon, LinkIcon } from './TeamBuilderIcons';
@@ -462,9 +462,11 @@ function FilledSlot({
     const path = c?.path.tag.toLowerCase();
     const charCost = cost?.character;
     const coneCost = cost?.lightcone;
+    // S14.3e: exact amounts (`amountFixed`: one decimal, two when the hundredths need them), so the parts add up to
+    // the pill and the pills to the total, as on the chart and the picture.
     const costText = (v: number | null | undefined) =>
-        v === null || v === undefined ? 'n/a' : formatCost(v / 100);
-    const total = cost ? formatCost(cost.total / 100) : '';
+        v === null || v === undefined ? 'n/a' : amountFixed(v);
+    const total = cost ? amountFixed(cost.total) : '';
     const missing = costsReady && (charCost === null || coneCost === null);
     const inPair = paired.has(slot.character);
 
@@ -546,13 +548,13 @@ function FilledSlot({
                                 <b className={styles.costChar}>{costText(charCost)}</b>
                                 <i className={styles.costDivider} />
                                 <b className={styles.costCone}>
-                                    {slot.lightcone ? costText(coneCost) : formatCost(0)}
+                                    {slot.lightcone ? costText(coneCost) : amountFixed(0)}
                                 </b>
                             </span>
                             <span className={hidden.visuallyHidden}>
                                 {`Cost ${total}: character ${costText(charCost)}${
                                     draftAuction && cost.extra > 0
-                                        ? ` (eidolon extra ${formatCost(cost.extra / 100)})`
+                                        ? ` (eidolon extra ${amountFixed(cost.extra)})`
                                         : ''
                                 }, light cone ${slot.lightcone ? costText(coneCost) : 'none'}`}
                             </span>

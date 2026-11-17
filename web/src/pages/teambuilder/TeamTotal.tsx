@@ -1,14 +1,22 @@
 import type { ActivePair, Missing } from '@shared/teambuilder';
 import { formatModifier } from '@/lib/rosterModel';
 import hidden from '@/styles/visuallyHidden.module.css';
+import { amountFixed } from './costChartModel';
 import styles from './TeamTotal.module.css';
 
 /*
- * The team's total (the mockup's `.costTotal`, "Total Cost" and the Σ value with one decimal) and the missing-row
+ * The team's total (the mockup's `.costTotal`, "Total Cost" and the Σ value with one decimal, two when the
+ * hundredths need them: S14.3e, `amountFixed`, as the pills, the chart and the picture) and the missing-row
  * warning (A190 item 6), and the synergy strip under the slots (the mockup's `.synergyStrip`: "Active Pairings"
  * and one chip per pair, or "none"). Pairs follow the chosen draft mode: a zero modifier is not listed, a negative
  * one shows a real minus sign (A185 item 3).
  */
+
+/** A pair's modifier with its sign: as before ("+3", "+0.5"), exact when it has hundredths ("+0.25"). */
+function modifierText(hundredths: number): string {
+    if (hundredths % 10 === 0) return formatModifier(hundredths / 100);
+    return hundredths < 0 ? amountFixed(hundredths) : `+${amountFixed(hundredths)}`;
+}
 
 export function TeamTotal({
     total,
@@ -34,7 +42,7 @@ export function TeamTotal({
                         {'Σ '}
                     </span>
                     {ready ? (
-                        (total / 100).toFixed(1)
+                        amountFixed(total)
                     ) : (
                         <>
                             <span aria-hidden="true">{'–.–'}</span>
@@ -86,9 +94,7 @@ export function PairStrip({
                             </span>
                             <span className={hidden.visuallyHidden}> and </span>
                             <b>{nameOf(p.characterB)}</b>
-                            <span className={styles.modifier}>
-                                {formatModifier(p.modifier / 100)}
-                            </span>
+                            <span className={styles.modifier}>{modifierText(p.modifier)}</span>
                         </li>
                     ))}
                 </ul>

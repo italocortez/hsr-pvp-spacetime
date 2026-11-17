@@ -2130,3 +2130,15 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   7. Open: sharing the picture through the phone's share sheet, as the old tool did; Firefox, Safari and phones were not checked in a browser. Found on the way, to fix in the page: its slot pills and total round to one decimal while bids go to hundredths.
 - **Why:** user rulings A190 item 8, A202 item 2, A204 item 3; one review confirmed every figure on the picture against the page and the module.
 - **Where implemented:** `web/src/pages/teambuilder/` (`teamPictureLayout.ts`, the drawing layer, `PictureActions.tsx`), `shared/teambuilder/amount.ts` (the comma rule), `docs/frontend/pages.md`, `docs/log/2026-11-17-s14-3d.md`
+
+### A207 — S14.3e: loadout creation rule, exact amounts, link icon on the picture, as built
+
+- **Date:** 2026-11-17 · **Status:** item 1 implements A205; item 2 decided; items 3 to 5 are the implementer's choices, agreed by the orchestrator, for the user to rule on
+- **Decision:**
+  1. An unsaved working loadout is stored only once its team holds a character. Modes, cost set, budgets, name and note on an empty team store nothing and send nothing; the first pick creates the loadout with them. A stored loadout emptied of characters stays and saves as empty.
+  2. On the exported picture a paired unit is marked by the link icon inside its cost pill, in amethyst, as the mockup and the page do. The gold edge the screenshot builder had used is removed. The hidden picture shows no mark.
+  3. Implementer: an empty working loadout shows "Pick a character to start a loadout." and no ring; the empty menu reads "None yet. Your first character pick saves the team here."; "New Loadout" saves the loadout being left and shows one fresh empty working loadout, and pressing it again does not pile up empties.
+  4. Implementer: the name and note of an empty working loadout are kept in the browser's "active loadout" entry, never in the loadout list.
+  5. Implementer: every amount the page shows for a team is exact: two decimals when a hundredth is present, one otherwise, so pills, the split, the pairs strip, the Auction panel, the chart and the total agree. Classic looks as before.
+- **Why:** user, 2026-11-17: A205; on the picture: "why the cost of units at the character profile on picture 1 sometimes has a golden border for the first 3 characters and not the last one?" and "I believe the original mockup had like a link symbol that highlighted that they were paired, can you check the original page and the mockup?" (checked: the mockup's `.synIcon` and the page's `LinkIcon` are the same chain-link icon in the cost pill).
+- **Where implemented:** `web/src/pages/teambuilder/` (`useActiveLoadout.ts`, `useLoadouts.ts`, `LoadoutsPanel.tsx`, `RosterSlots.tsx`, `TeamTotal.tsx`, `teamPictureLayout.ts`, the drawing layer, `TeamBuilderIcons.tsx`), `docs/frontend/pages.md`, `docs/loadout/contract.md`, `docs/log/2026-11-17-s14-3e.md`

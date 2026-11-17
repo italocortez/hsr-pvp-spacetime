@@ -468,3 +468,84 @@ describe('fix pass: over-budget figures (S6) and bids kept in Classic (M7)', () 
         expect(screen.getByText(KEPT_BIDS)).toBeInTheDocument();
     });
 });
+
+// T-S14.3e: every amount the page shows for a team is exact (one decimal, two when the hundredths need them).
+describe('exact amounts on the page (S14.3e)', () => {
+    /** A slot's pill as shown: the total, then the hover split (character, light cone). */
+    const pill = (slot: number) => {
+        const p = document.querySelector(`article[aria-label^="Slot ${slot}:"] > p`) as HTMLElement;
+        const [total, parts] = p.querySelectorAll(':scope > span[aria-hidden="true"]');
+        return {
+            total: total?.textContent ?? null,
+            parts: [...(parts?.querySelectorAll('b') ?? [])].map((b) => b.textContent),
+            said: p.querySelector('span:not([aria-hidden])')?.textContent ?? null,
+        };
+    };
+    const sum = (texts: (string | null)[]) =>
+        texts.reduce((n, t) => n + Math.round(Number(t?.replace('+', '')) * 100), 0);
+
+    it('Auction bids 1.25 and 0.25 with a pair of 0.25: pills, split, strip, total, chart and panel add up', async () => {
+        renderWithConnection(
+            '/teambuilder?team=1.acheron-0-pastselfinmirror-1-125.pela-6-25._._.as-a-0-3000-1500',
+            conn,
+            { ready: true },
+        );
+        await screen.findByRole('heading', { level: 1 });
+        seed();
+        conn.db.hsrSynergyCost.seed(synergy('acheron', 'pela', 0.25, { draft: 'Auction' }));
+        await act(async () => conn.applyAll());
+        // Acheron: 8 + bid 1.25, cone 3 at S1. Pela: 1 + eidolon extra 6 + bid 0.25, no cone.
+        expect(pill(1)).toEqual({
+            total: '12.25',
+            parts: ['9.25', '3.0'],
+            said: 'Cost 12.25: character 9.25, light cone 3.0',
+        });
+        expect(pill(2)).toEqual({
+            total: '7.25',
+            parts: ['7.25', '0.0'],
+            said: 'Cost 7.25: character 7.25 (eidolon extra 6.0), light cone none',
+        });
+        for (const s of [1, 2]) expect(sum(pill(s).parts)).toBe(sum([pill(s).total]));
+        const strip = screen.getByRole('heading', { name: 'Active Pairings' }).parentElement;
+        expect(strip).toHaveTextContent('+0.25');
+        // The pills and the pairs strip add up to the total shown (19.75, not 19.8 or 19.7).
+        expect(total()).toHaveTextContent('19.75');
+        expect(sum([pill(1).total, pill(2).total, '0.25'])).toBe(1975);
+        // The chart: the pair split 0.13 / 0.12 (the odd hundredth to the earlier slot); columns add up too.
+        const [a, b] = columns();
+        expect(a).toMatch(
+            /^Acheron: total 12\.38\. .*extra bid 1\.25, pairing with Pela 0\.13 of 0\.25\.$/,
+        );
+        expect(b).toMatch(
+            /^Pela: total 7\.37\. .*extra bid 0\.25, pairing with Acheron 0\.12 of 0\.25\.$/,
+        );
+        expect(chart()).toHaveTextContent('Σ 12.38');
+        expect(chart()).toHaveTextContent('Σ 7.37');
+        // The panel: winning bids 8 + 1.25 + 1 + 0.25, eidolons 6; the light cones 3 and the pair 0.25 out of
+        // 15 + 13.5 rolled over.
+        const panel = screen.getByRole('region', { name: 'Auction budgets' });
+        expect(panel).toHaveTextContent('Winning bids 10.5');
+        expect(panel).toHaveTextContent('16.5 of 30.0');
+        expect(panel).toHaveTextContent('25.25 left');
+        expect(panel).toHaveTextContent('3.25 of 28.5');
+        expect(panel).toHaveTextContent('Pairings 0.25');
+    });
+
+    it('Classic amounts look as before (one decimal)', async () => {
+        await open('/teambuilder?team=1.acheron-0-pastselfinmirror-1.pela-6._._.as-c-0-3000-1500');
+        expect(pill(1)).toEqual({
+            total: '9.5',
+            parts: ['7.0', '2.5'],
+            said: 'Cost 9.5: character 7.0, light cone 2.5',
+        });
+        expect(pill(2)).toEqual({
+            total: '7.0',
+            parts: ['7.0', '0.0'],
+            said: 'Cost 7.0: character 7.0, light cone none',
+        });
+        expect(
+            screen.getByRole('heading', { name: 'Active Pairings' }).parentElement,
+        ).toHaveTextContent('+1.5');
+        expect(total()).toHaveTextContent('18.0');
+    });
+});

@@ -1,3 +1,4 @@
+import { LINK_ICON_PATHS } from './TeamBuilderIcons';
 import {
     BLANK_PORTRAIT,
     type Box,
@@ -235,6 +236,20 @@ export function paintScene(
             case 'logo':
                 drawLogo(ctx, s.x, s.y, s.size);
                 break;
+            case 'link': {
+                // The page's link glyph from its own path data, with the page's soft shadow (`.syn`). Every
+                // supported browser has Path2D; without it (jsdom) the icon is left out and the picture still made.
+                if (typeof Path2D !== 'function') break;
+                ctx.translate(s.x, s.y);
+                ctx.scale(s.size / 24, s.size / 24);
+                ctx.fillStyle = s.color;
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+                // Shadow sizes ignore the transform: canvas pixels, so 1px of the page is PICTURE_SCALE here.
+                ctx.shadowOffsetY = PICTURE_SCALE;
+                ctx.shadowBlur = PICTURE_SCALE;
+                for (const d of LINK_ICON_PATHS) ctx.fill(new Path2D(d));
+                break;
+            }
         }
         ctx.restore();
     }

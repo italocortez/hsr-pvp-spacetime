@@ -6,6 +6,7 @@ import {
     NEW_LOADOUT_NAME,
     sameContent,
 } from '@shared/loadouts';
+import { decodeTeam } from '@shared/teambuilder';
 import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
 import {
     type Content,
@@ -28,7 +29,9 @@ import {
  * - load: the active loadout's text goes onto the page when it changed and the page holds no edit not yet written;
  * - vanish: an active loadout that is gone (nothing on the account, no draft) leaves its team as the working one;
  * - edit: the page's text is written into the active loadout, or makes the working one a loadout once the store
- *   it belongs to is known (and, for an account, the list is live and the restore decided: second review N2);
+ *   it belongs to is known (and, for an account, the list is live and the restore decided: second review N2) and
+ *   its team holds a character (S14.3e, A205: a mode, cost set, budget, name or note change on an empty team
+ *   stores nothing; the name and note stay in the working state and the active key, the modes in the address);
  * - stored: the active key in storage follows the state (not while a restore is pending).
  *
  * The version a new draft is based on (A198) is the version of the account copy the page's team was loaded from
@@ -46,6 +49,13 @@ type Ref = { kind: Store; key: string };
 
 export const sameRef = (a: ActiveRef, b: ActiveRef) =>
     a.kind === b.kind && (a.kind === 'working' || (b.kind !== 'working' && a.key === b.key));
+
+/** The packed team holds at least one character: only then is a working loadout stored (A205). */
+export const holdsCharacter = (code: string | null): boolean => {
+    if (code === null) return false;
+    const d = decodeTeam(code);
+    return d.ok && d.team.slots.some((s) => s !== null);
+};
 
 type Options = {
     code: string | null;
@@ -93,10 +103,14 @@ export function useActiveLoadout(o: Options) {
         o.linkArrived || stored.kind !== 'browser' ? { kind: 'working' } : stored,
     );
     const activeRef = useRef(active);
-    const [working, setWorking] = useState(() => ({
-        name: shared.on ? SHARED_TEAM_NAME : NEW_LOADOUT_NAME,
-        note: '',
-    }));
+    const [working, setWorking] = useState(() => {
+        // S14.3e: a name or note kept for the working loadout comes back (not after a new link).
+        const kept = !o.linkArrived && stored.kind === 'working' ? stored : null;
+        return {
+            name: kept?.name ?? (shared.on ? SHARED_TEAM_NAME : NEW_LOADOUT_NAME),
+            note: kept?.note ?? '',
+        };
+    });
     const [notice, setNotice] = useState<string | null>(null);
     const lastBrowser = useRef(
         stored.browser ?? (stored.kind === 'browser' ? stored.key : undefined),
@@ -188,9 +202,14 @@ export function useActiveLoadout(o: Options) {
                 ...(shared.on
                     ? { shared: true, ...(shared.before ? { before: shared.before } : {}) }
                     : {}),
+                // S14.3e: the working name and note, when they are not the defaults (A205 item 2).
+                ...(working.name !== (shared.on ? SHARED_TEAM_NAME : NEW_LOADOUT_NAME)
+                    ? { name: working.name }
+                    : {}),
+                ...(working.note !== '' ? { note: working.note } : {}),
                 ...extra,
             });
-    }, [active, activeRev, shared, userId, wantsRestore]);
+    }, [active, activeRev, shared, userId, wantsRestore, working]);
 
     // A kept previous team with no shared team on the page (an older visit) has no notice to go with.
     // biome-ignore lint/correctness/useExhaustiveDependencies: once, on arrival
@@ -282,7 +301,10 @@ export function useActiveLoadout(o: Options) {
     const storeReady =
         homeStore === 'browser' || (homeStore === 'account' && accountLive && !wantsRestore);
 
-    /** Writes a change into the active loadout (the working one becomes a loadout on its first change). */
+    /**
+     * Writes a change into the active loadout. The working one becomes a loadout on its first change once its team
+     * holds a character (A205); before that a change only updates the working state.
+     */
     const apply = useCallback(
         (change: Partial<Content>) => {
             const a = activeRef.current;
@@ -295,10 +317,16 @@ export function useActiveLoadout(o: Options) {
                     // (the restored one, else the one made from this working loadout; review M5).
                     if (change.name !== undefined) early.current.name = change.name;
                     if (change.note !== undefined) early.current.note = change.note;
-                    if (c) wantCreate.current = true;
+                    if (holdsCharacter(c)) wantCreate.current = true;
                     return;
                 }
                 if (!c) return;
+                if (!holdsCharacter(c)) {
+                    // An empty team is not a loadout (A205): nothing is stored; the name and note wait in `working`.
+                    wantCreate.current = false;
+                    early.current = {};
+                    return;
+                }
                 wantCreate.current = false;
                 early.current = {};
                 const content = { name: loadoutName(w.name), note: loadoutNote(w.note), code: c };
@@ -343,7 +371,14 @@ export function useActiveLoadout(o: Options) {
         if (!code) return;
         const a = activeRef.current;
         if (a.kind === 'working') {
-            // The working loadout waits for its store (and the restore) before it becomes a loadout.
+            // The working loadout waits for its store (and the restore) before it becomes a loadout, and for a
+            // character (A205). An early rename or note on an empty team, once no restore takes it, stays in
+            // `working` only: it must not land on a loadout switched to later.
+            if (storeReady && !holdsCharacter(code)) {
+                wantCreate.current = false;
+                early.current = {};
+                return;
+            }
             if (storeReady && (tracking.current || wantCreate.current)) apply({ code });
             return;
         }
@@ -402,6 +437,25 @@ export function useActiveLoadout(o: Options) {
         [onLeave, leaveShared, setActive, loadRef],
     );
 
+    /**
+     * "New Loadout" (S14.3e, A205): the loadout being left is saved at once, and the page shows a fresh working
+     * loadout ("New Loadout", no note, an empty team under the current modes). It is stored with its first
+     * character, so pressing New again on it makes no second empty loadout.
+     */
+    const startNew = useCallback(() => {
+        onLeave(activeRef.current);
+        setNotice(null);
+        leaveShared();
+        tracking.current = false;
+        wantCreate.current = false;
+        early.current = {};
+        setWorking({ name: NEW_LOADOUT_NAME, note: '' });
+        setActive({ kind: 'working' });
+        loaded.current = { key: null, code: null, rev: null };
+        const c = emptyCode();
+        if (c) load(c);
+    }, [onLeave, leaveShared, setActive, emptyCode, load]);
+
     /** After the active loadout went: the one before it, else the working loadout (`clear`: an empty team). */
     const afterRemove = useCallback(
         (next: Ref | null, clear = false) => {
@@ -449,6 +503,7 @@ export function useActiveLoadout(o: Options) {
         setNote: useCallback((note: string) => apply({ note: loadoutNote(note) }), [apply]),
         switchTo,
         enter,
+        startNew,
         afterRemove,
         reload,
         onMoved,

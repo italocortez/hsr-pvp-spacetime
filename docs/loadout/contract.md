@@ -455,6 +455,30 @@ A verified (Discord-linked) member keeps up to 10 named team builder loadouts on
 **When:** the member deletes it here
 **Then:** `delete_loadout(slot, 2)` is refused "That loadout was changed on another device."; this browser's edits of it go, the newer copy is shown and the dialog asks again ("This loadout was changed on another device. The newer copy is on the page now."); a second Delete sends version 3 and removes it. A new loadout never sent is removed without a call; one already gone, or a slot now holding a different loadout, is removed here while the server changes nothing.
 
+### Client: a loadout comes into being with its first character
+
+*Phase S14.3e execution (DECISIONS.md A205).*
+
+**Given:** the team builder shows an unsaved working loadout with an empty team (a visitor, a guest or a verified member)
+**When:** the person changes the game mode, the draft mode, the cost set, an Auction budget, the name or the note; then picks a character
+**Then:** before the pick nothing is stored: no browser list entry, no account draft, no `save_loadout` call, no slot taken, nothing counted on the 6 per minute limit; the state line reads "Pick a character to start a loadout." and the menu does not list it. The modes stay in the address, the budgets in the team draft, the name and note in the page's active key, so a reload keeps them. The pick creates the loadout with that name, note, modes and budgets: in the browser at once, on the account as one `save_loadout` with `baseRev` 0 after the autosave wait.
+
+### Client: a loadout emptied of its characters
+
+*Phase S14.3e execution (A205 item 3).*
+
+**Given:** a stored loadout (browser or account)
+**When:** every character is removed from it
+**Then:** it stays stored and keeps saving as an empty team (one `save_loadout` on its version for an account loadout); it goes only when it is deleted.
+
+### Client: New Loadout
+
+*Phase S14.3e execution (A205; the implementer's choice).*
+
+**Given:** any loadout on the page
+**When:** the person presses "+ New Loadout", once or several times
+**Then:** the loadout being left is saved at once (as a switch); the page shows an empty unsaved working loadout named "New Loadout", stored by its first character. Nothing is stored and no call is made by the presses themselves, so empty loadouts never pile up. A full store or a store not yet known refuses as before.
+
 ## Edge Cases
 
 | Case | Expected Behavior | Notes |
@@ -511,6 +535,7 @@ A verified (Discord-linked) member keeps up to 10 named team builder loadouts on
 | Check order: caller, slot, version, content, unchanged, version top, save limit, write. An unchanged save writes nothing, keeps the version and does not count on the limit. At the u32 top a save is refused, never wrapped | Phase S14.3c-rev execution | 2026-11-17 |
 | Edited in place by S14.3c-rev (the text before it is in git at `97ffe17` plus the uncommitted S14.3c additions): `save_loadout` Parameters (the `isNew` row replaced by `baseRev`, old text quoted in the row); `save_loadout` Flow steps 3 and 5 (a tagged sentence appended), step 4 (marked superseded, old text quoted, new text after it), steps 4a and 4c added; `save_loadout` Expected State Changes (a tagged sentence appended to both lines, one line added); `save_loadout` Error Cases (the two `isNew` rows rewritten with the old condition and text quoted, two rows added); `delete_loadout` Parameters (`baseRev` row added), Flow step 4 (a tagged sentence appended), Expected State Changes (one line added), Error Cases (one row added); `view_my_loadouts` Purpose (a tagged sentence appended); scenarios "Save a new loadout", "Update in place", "Slot taken", "Delete", "Delete twice", "Other members" (a superseded note appended to each); scenario "Loadout gone" (marked superseded, original kept as a quote); Edge Cases (one row given a superseded note, two rows added); Integration Points (one row added). The client scenarios of S14.3c ("Client: …") were not touched; several of them name `isNew` and "That loadout no longer exists." and are for the frontend step to revise | Phase S14.3c-rev execution | 2026-11-17 |
 | Client sync on versions (S14.3c-sync): every draft records the version it was made from and every save and delete sends it; conflicts come from the server or from a row at another version, never from content guessing; Keep sends on the draft's own version first, so a reused slot is told as deleted; deleted elsewhere offers "Save as a new loadout" or "Discard my changes"; no send before the rows are fresh for the connection; one owner tab per draft with take-over on release or after 90 s; sends recorded in the draft to recognise its own save after a lost answer or a reload; `InternalError` retried at most 5 times in a row. Scenarios revised in place (this step's own entries, first versions in the S14.3c log and the step's history): "Client: slot taken, loadout gone" (renamed "slot taken, deleted, changed"), "a draft left from last time", "browser loadouts and the copy to the account" (`isNew` true became `baseRev` 0), "two devices create a loadout at the same time", "a stale draft", "a dropped connection during a save"; "autosave after the wait" given one appended sentence. Added: "reconnect and the list not yet loaded", "two tabs of one browser", "delete on a version" | DECISIONS.md A198 items 2 to 4; Phase S14.3c-sync execution | 2026-11-17 |
+| Client: a working loadout is stored only once its team holds a character; mode, cost set, budget, name and note changes on an empty team store and send nothing; a stored loadout emptied of characters stays and saves as empty; "New Loadout" shows an unsaved working loadout instead of storing an empty one. Scenarios added: "a loadout comes into being with its first character", "a loadout emptied of its characters", "New Loadout". No earlier client scenario of this contract said that a mode, name or note change alone stores a loadout (that rule was written in `docs/frontend/pages.md`, where it is now marked superseded, and in the S14.3c log) | DECISIONS.md A205; Phase S14.3e execution | 2026-11-17 |
 
 ---
 

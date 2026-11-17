@@ -52,6 +52,8 @@ import type { LoadoutItem, LoadoutsState, Store } from './useLoadouts';
 
 export const SIGN_IN_HINT = `Sign in with Discord to keep up to ${ACCOUNT_LOADOUT_LIMIT} loadouts on your account, on every device.`;
 export const SAVED_IN_BROWSER = 'Saved in this browser';
+/** S14.3e (A205): an empty team that is not a loadout yet; nothing waits to be saved. */
+export const EMPTY_WORKING = 'Pick a character to start a loadout.';
 export const LINK_COPIED = 'Link copied.';
 export const LINK_NOT_COPIED =
     'The link could not be copied. It is selected below: copy it from there.';
@@ -295,7 +297,9 @@ export function LoadoutsPanel({
                                   ? `Not saved: your account holds ${ACCOUNT_LOADOUT_LIMIT} loadouts. Delete one to save this team.`
                                   : status.loading
                                     ? 'Your account loadouts are loading.'
-                                    : 'Not saved yet. Your first change saves it as a loadout.'}
+                                    : status.empty
+                                      ? EMPTY_WORKING
+                                      : 'Not saved yet. Your first change saves it as a loadout.'}
                         </span>
                     )}
                 </div>
@@ -941,7 +945,7 @@ function LoadoutMenuBox({
                                 `${loadouts.browser.length} of ${BROWSER_LOADOUT_LIMIT}`,
                                 loadouts.browser,
                                 'browser',
-                                'None yet. Your first change to the team saves it here.',
+                                'None yet. Your first character pick saves the team here.',
                             )}
                     </>
                 )}

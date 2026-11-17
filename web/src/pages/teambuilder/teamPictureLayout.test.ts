@@ -229,13 +229,28 @@ describe('the picture', () => {
         expect(textOf(scene, 'slot-1-costs')).toBe('Unit 7.0 · LC –');
         expect(textOf(scene, 'pair-0-label')).toBe('Acheron × Pela');
         expect(textOf(scene, 'pair-0-modifier')).toBe('+1.5');
-        // Acheron and Pela are paired: their pills carry the pairing's gold edge.
-        expect(tagged(scene, 'slot-0-pill')[0]).toMatchObject({
-            stroke: 'rgba(227, 207, 85, 0.75)',
-        });
-        expect(tagged(scene, 'slot-2-pill')[0]).toMatchObject({
-            stroke: 'rgba(255, 255, 255, 0.14)',
-        });
+        // Acheron and Pela are paired: their pills carry the page's link icon after the cost (S14.3e; the S14.3d
+        // gold edge is gone), Clara's and Huohuo's do not.
+        for (const i of [0, 1])
+            expect(tagged(scene, `slot-${i}-paired`)).toEqual([
+                expect.objectContaining({ kind: 'link', size: 15, color: '#9d7ee8' }),
+            ]);
+        for (const i of [2, 3]) expect(tagged(scene, `slot-${i}-paired`)).toHaveLength(0);
+        for (let i = 0; i < 4; i += 1)
+            expect(tagged(scene, `slot-${i}-pill`)[0]).toMatchObject({
+                stroke: 'rgba(255, 255, 255, 0.14)',
+            });
+        // The figure and the icon fit inside the pill, centred on the card.
+        const [pill, figure] = tagged(scene, 'slot-0-pill') as [
+            Extract<Shape, { kind: 'rect' }>,
+            Extract<Shape, { kind: 'text' }>,
+        ];
+        const icon = tagged(scene, 'slot-0-paired')[0] as Extract<Shape, { kind: 'link' }>;
+        const left = figure.x - pill.x;
+        const right = pill.x + pill.w - (icon.x + icon.size);
+        expect(icon.x).toBeGreaterThan(figure.x + measure(figure.text, figure.font));
+        expect(Math.abs(left - right)).toBeLessThan(0.01);
+        expect(Math.abs(pill.x + pill.w / 2 - (cardX(0) + CARD.width / 2))).toBeLessThan(0.01);
     });
 
     it('a missing cost row reads n/a (the light cone, the character)', () => {
@@ -424,8 +439,9 @@ describe('hide who is on the team', () => {
         expect(allText(scene).join(' ')).not.toContain('core');
     });
 
-    it('no pairing edge on the pills, which would tell which slots pair (review S3)', () => {
+    it('no pairing mark on the pills, which would tell which slots pair (review S3; S14.3e: no link icon)', () => {
         const scene = layoutTeamPicture(request(FULL, { hideNames: true }), measure);
+        expect(scene.shapes.filter((s) => s.kind === 'link')).toHaveLength(0);
         for (let i = 0; i < 4; i += 1) {
             expect(tagged(scene, `slot-${i}-pill`)[0]).toMatchObject({
                 stroke: 'rgba(255, 255, 255, 0.14)',

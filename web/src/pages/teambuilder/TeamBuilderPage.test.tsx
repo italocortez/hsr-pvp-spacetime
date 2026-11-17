@@ -675,8 +675,9 @@ describe('the team in the address and in storage', () => {
         expect(localStorage.getItem(DRAFT_KEY)).toBe(LATER);
         // The mock connection was seeded twice (two opens): the pool lists each card twice.
         await user.click(screen.getAllByRole('button', { name: /^Clara,/ })[0] as HTMLElement);
-        // S14.3c: the Auction switch made a browser loadout, and a visit opens it with its modes (A190 item 15).
-        expect(localStorage.getItem(DRAFT_KEY)).toBe('1.clara-0._._._.as-a-0-3000-1500');
+        // S14.3e (A205): the Auction switch on an empty team made no loadout, so the second visit opens the working
+        // team under the address's modes (Classic); the S14.3c expectation was `as-a` (a mode switch made a loadout).
+        expect(localStorage.getItem(DRAFT_KEY)).toBe('1.clara-0._._._.as-c-0-3000-1500');
     });
 
     it('works with storage unavailable', async () => {

@@ -3,12 +3,15 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { INTRO_KEY } from '@/components/PageIntro/PageIntro';
 import { setConnectionStatus } from '@/stdb/connectionStatus';
+import { costSet } from '@/test/costFixtures';
 import { ACTIVE_KEY, BROWSER_KEY, DRAFTS_PREFIX, draftsKey } from './loadoutStorage';
 import {
     ACHERON,
+    CLARA,
     type Conn,
     draft,
     drop,
+    EMPTY,
     GUEST,
     installDialog,
     makeConn,
@@ -91,7 +94,8 @@ describe('browser loadouts (visitor)', () => {
     it('the first edit makes a loadout in this browser; a reload keeps it', async () => {
         const user = userEvent.setup();
         const first = await open();
-        expect(screen.getByText(/Your first change saves it as a loadout/)).toBeInTheDocument();
+        // S14.3e (A205): an empty team is not a loadout yet; nothing waits to be saved.
+        expect(screen.getByText('Pick a character to start a loadout.')).toBeInTheDocument();
         expect(nameField().value).toBe('New Loadout');
         await user.click(card('Acheron'));
         expect(stored()?.loadouts).toEqual([
@@ -176,8 +180,11 @@ describe('browser loadouts (visitor)', () => {
         const user = userEvent.setup();
         await open();
         await user.click(card('Pela'));
-        for (let i = 0; i < 4; i++)
+        // S14.3e (A205): a new loadout is stored with its first character.
+        for (let i = 0; i < 4; i++) {
             await user.click(screen.getByRole('button', { name: 'New Loadout' }));
+            await user.click(card('Pela'));
+        }
         expect(stored()?.loadouts).toHaveLength(5);
         await user.click(screen.getByRole('button', { name: 'New Loadout' }));
         expect(stored()?.loadouts).toHaveLength(5);
@@ -196,6 +203,8 @@ describe('browser loadouts (visitor)', () => {
         await user.type(nameField(), 'Bravo');
         await user.click(screen.getByRole('button', { name: 'New Loadout' }));
         await user.keyboard('Alpha{Enter}');
+        // S14.3e (A205): Alpha is listed once it holds a character.
+        await user.click(card('Clara'));
         caret().focus();
         await user.keyboard('{Enter}');
         expect(caret()).toHaveAttribute('aria-expanded', 'true');
@@ -238,6 +247,9 @@ describe('browser loadouts (visitor)', () => {
         expect(note).toHaveAccessibleDescription('0 / 1,000 characters');
         await user.type(note, 'Pela first.');
         expect(screen.getByText(/^11 \/ 1,000/)).toBeInTheDocument();
+        // S14.3e (A205): a note on an empty team is kept on the page, stored with the first character.
+        expect(stored()).toBeNull();
+        await user.click(card('Pela'));
         expect(stored()?.loadouts[0]?.note).toBe('Pela first.');
         fireEvent.change(note, { target: { value: 'n'.repeat(1000) } });
         expect(screen.getByText(/^1,000 \/ 1,000/)).toBeInTheDocument();
@@ -323,6 +335,8 @@ describe('storage unavailable', () => {
         await user.click(card('Acheron'));
         expect(screen.getByText(/kept for this visit only/)).toBeInTheDocument();
         await user.click(screen.getByRole('button', { name: 'New Loadout' }));
+        // S14.3e (A205): the new loadout is kept once it holds a character.
+        await user.click(card('Pela'));
         await user.click(caret());
         expect(screen.getAllByRole('menuitemradio')).toHaveLength(2);
     });
@@ -606,6 +620,161 @@ describe('Copy to my account', () => {
             }),
         ).toBeInTheDocument();
         expect(conn.reducers.saveLoadout).not.toHaveBeenCalled();
+    });
+});
+
+// T-S14.3e (A205): a loadout is the characters and light cones picked.
+describe('a loadout comes into being with its first character (S14.3e)', () => {
+    const EMPTY_TEXT = 'Pick a character to start a loadout.';
+    const seedSet = async () => {
+        conn.db.viewPublishedCostSets.seed(costSet(3, 'Yuji Tournament'));
+        await act(async () => conn.applyAll());
+    };
+    const newButton = () => screen.getByRole('button', { name: 'New Loadout' });
+
+    /** Draft mode, budget, cost set, game mode, name and note on the empty working loadout. */
+    async function editEmpty(user: ReturnType<typeof userEvent.setup>) {
+        await user.click(screen.getByRole('radio', { name: 'Memory of Chaos' }));
+        await user.click(screen.getByRole('radio', { name: 'Apocalyptic Shadow' }));
+        await user.click(screen.getByRole('button', { name: 'Auction' }));
+        await user.clear(screen.getByRole('textbox', { name: 'Character Budget' }));
+        await user.type(screen.getByRole('textbox', { name: 'Character Budget' }), '25');
+        await user.tab();
+        await user.selectOptions(screen.getByRole('combobox', { name: 'Cost Set' }), '3');
+        // The set's own rows (its route subscription).
+        await act(async () => conn.applyAll());
+        await user.clear(nameField());
+        await user.type(nameField(), 'Plan');
+        await user.tab();
+        await user.type(screen.getByRole('textbox', { name: 'Note' }), 'later');
+    }
+    const PLAN = '1.acheron-0._._._.as-a-3-2500-1500';
+
+    it('visitor: mode, cost set, budget, name and note on an empty team store nothing; the first pick stores them', async () => {
+        const user = userEvent.setup();
+        await open();
+        await seedSet();
+        await editEmpty(user);
+        expect(localStorage.getItem(BROWSER_KEY)).toBeNull();
+        expect(screen.getByText(EMPTY_TEXT)).toBeInTheDocument();
+        expect(screen.queryByText('Saved in this browser')).toBeNull();
+        expect(document.querySelector('[data-state]')).toBeNull();
+        await user.click(caret());
+        expect(screen.queryByRole('menuitemradio')).toBeNull();
+        expect(
+            screen.getByText('None yet. Your first character pick saves the team here.'),
+        ).toBeInTheDocument();
+        await user.keyboard('{Escape}');
+        await user.click(card('Acheron'));
+        expect(stored()?.loadouts).toEqual([
+            { key: expect.any(String), name: 'Plan', note: 'later', code: PLAN },
+        ]);
+        expect(screen.getByText('Saved in this browser')).toBeInTheDocument();
+    });
+
+    it('visitor: a reload keeps the name, note and modes of the empty working loadout without listing it', async () => {
+        const user = userEvent.setup();
+        const first = await open();
+        await seedSet();
+        await editEmpty(user);
+        const href = first.router.state.location.href;
+        expect(href).toMatch(/draft=auction/);
+        expect(href).toMatch(/set=3/);
+        first.unmount();
+        conn = makeConn();
+        // The published set is there with the first answer (else the page falls back to Default).
+        conn.db.viewPublishedCostSets.seed(costSet(3, 'Yuji Tournament'));
+        await open(href);
+        await act(async () => conn.applyAll());
+        expect(nameField().value).toBe('Plan');
+        expect(screen.getByRole('textbox', { name: 'Note' })).toHaveValue('later');
+        expect(screen.getByRole('textbox', { name: 'Character Budget' })).toHaveValue('25');
+        expect(localStorage.getItem(BROWSER_KEY)).toBeNull();
+        expect(screen.getByText(EMPTY_TEXT)).toBeInTheDocument();
+        await user.click(caret());
+        expect(screen.queryByRole('menuitemradio')).toBeNull();
+        await user.keyboard('{Escape}');
+        await user.click(card('Acheron'));
+        expect(stored()?.loadouts).toEqual([
+            { key: expect.any(String), name: 'Plan', note: 'later', code: PLAN },
+        ]);
+    });
+
+    it('member: the same edits send nothing and keep no draft; the first pick makes one save_loadout with them', async () => {
+        fakeTimers();
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        await open('/teambuilder', 'member');
+        await seedSet();
+        await editEmpty(user);
+        expect(screen.getByText(EMPTY_TEXT)).toBeInTheDocument();
+        expect(document.querySelector('[data-state]')).toBeNull();
+        await act(async () => vi.advanceTimersByTime(6 * 60_000));
+        expect(conn.reducers.saveLoadout).not.toHaveBeenCalled();
+        expect(localStorage.getItem(draftsKey(7))).toBeNull();
+        expect(localStorage.getItem(BROWSER_KEY)).toBeNull();
+        await user.click(card('Acheron'));
+        expect(JSON.parse(localStorage.getItem(draftsKey(7)) ?? '{}')['0']).toMatchObject({
+            name: 'Plan',
+            note: 'later',
+            code: PLAN,
+            baseRev: 0,
+        });
+        await act(async () => vi.advanceTimersByTime(61_000));
+        expect(conn.reducers.saveLoadout.mock.calls.map(([a]) => a)).toEqual([
+            { slot: 0, baseRev: 0, name: 'Plan', note: 'later', code: PLAN },
+        ]);
+    });
+
+    it('a stored loadout emptied of its characters stays and saves as empty (browser and account)', async () => {
+        fakeTimers();
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        const r = await open();
+        await user.click(card('Acheron'));
+        await user.click(card('Acheron'));
+        expect(stored()?.loadouts).toEqual([
+            { key: expect.any(String), name: 'New Loadout', note: '', code: EMPTY },
+        ]);
+        expect(screen.getByText('Saved in this browser')).toBeInTheDocument();
+        r.unmount();
+        clearStorage();
+        conn = makeConn();
+        putActive('0', 1);
+        await open('/teambuilder', 'member', [row(0, 'Hyper')]);
+        expect(slotNames()).toEqual(['Acheron', null, null, null]);
+        await user.click(card('Acheron'));
+        await act(async () => vi.advanceTimersByTime(61_000));
+        expect(conn.reducers.saveLoadout.mock.calls.map(([a]) => a)).toEqual([
+            { slot: 0, baseRev: 1, name: 'Hyper', note: '', code: EMPTY },
+        ]);
+        await waitFor(() =>
+            expect(conn.server.list()).toEqual([{ slot: 0, name: 'Hyper', code: EMPTY, rev: 2 }]),
+        );
+        await waitFor(() => expect(screen.getByText('Auto saved')).toBeInTheDocument());
+    });
+
+    it('New Loadout does not pile up empty loadouts (browser and account)', async () => {
+        fakeTimers();
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        const r = await open();
+        for (let i = 0; i < 3; i++) await user.click(newButton());
+        expect(localStorage.getItem(BROWSER_KEY)).toBeNull();
+        await user.click(card('Acheron'));
+        await user.click(newButton());
+        expect(slotNames()).toEqual([null, null, null, null]);
+        expect(nameField().value).toBe('New Loadout');
+        expect(screen.getByText(EMPTY_TEXT)).toBeInTheDocument();
+        await user.click(newButton());
+        expect(stored()?.loadouts.map((l) => l.code)).toEqual([ACHERON]);
+        await user.click(card('Clara'));
+        expect(stored()?.loadouts.map((l) => l.code)).toEqual([ACHERON, CLARA]);
+        r.unmount();
+        clearStorage();
+        conn = makeConn();
+        await open('/teambuilder', 'member');
+        for (let i = 0; i < 3; i++) await user.click(newButton());
+        await act(async () => vi.advanceTimersByTime(6 * 60_000));
+        expect(conn.reducers.saveLoadout).not.toHaveBeenCalled();
+        expect(localStorage.getItem(draftsKey(7))).toBeNull();
     });
 });
 

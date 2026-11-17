@@ -6,6 +6,7 @@ import {
     type Hold,
     isUnslottedKey,
     keySlot,
+    LOADOUT_NAME_MAX,
     type Loadout,
     loadoutName,
     loadoutNote,
@@ -26,7 +27,9 @@ import { decodeTeam } from '@shared/teambuilder';
  * - `hsrpvp.teambuilder.active.v1`: which loadout the page showed last (`{ kind, key, user, rev }`; `rev`, for an
  *   account loadout, the version the page's team was taken from), plus the browser loadout shown last (`browser`,
  *   what the page goes back to on sign-out) and, while a shared team is on the page, `shared: true` with the loadout
- *   the link replaced (`before`), so a reload keeps the shared team (fix pass S3, S5).
+ *   the link replaced (`before`), so a reload keeps the shared team (fix pass S3, S5). S14.3e (A205): while the
+ *   working loadout shows, also its `name` and `note` when they are not the defaults: a name or note typed on an
+ *   empty team is not a loadout yet, and a reload keeps it without listing it anywhere.
  * - `hsrpvp.teambuilder.account-drafts.v2.<user id>`: per account, the edits of account loadouts not yet in the
  *   account copy (`{ [slot]: Draft }`, `shared/loadouts/sync.ts`: content, `baseRev`, `at`, `tab`, `seen`, `sent`,
  *   `held`, `keep`, and `wait`: the owner's waiting state, S14.3c fix 3). One entry per loadout, shared by every tab of this browser: a tab writes its edits at once and
@@ -51,7 +54,14 @@ export type StoredRef =
     | { kind: 'account'; key: string; user: number; rev?: number };
 
 export type StoredActive = (
-    | { kind: 'working'; shared?: boolean; before?: StoredRef }
+    | {
+          kind: 'working';
+          shared?: boolean;
+          before?: StoredRef;
+          /** S14.3e (A205): the working loadout's name and note, kept while it is not a loadout (no character). */
+          name?: string;
+          note?: string;
+      }
     | StoredRef
 ) & {
     /** The browser loadout shown last on this browser (sign-out goes back to it). */
@@ -157,11 +167,25 @@ export function readActive(): StoredActive {
     const browser = isText(v?.browser) ? { browser: v.browser } : {};
     const ref = readRef(v);
     if (ref) return { ...ref, ...browser };
+    // S14.3e: the working loadout's name and note (a name over the field's cap or not text is dropped).
+    const meta =
+        v?.kind === 'working'
+            ? {
+                  ...(isText(v.name) && v.name.length <= LOADOUT_NAME_MAX ? { name: v.name } : {}),
+                  ...(isText(v.note) ? { note: loadoutNote(v.note) } : {}),
+              }
+            : {};
     if (v?.kind === 'working' && v.shared === true) {
         const before = readRef(v.before as Record<string, unknown> | undefined);
-        return { kind: 'working', shared: true, ...(before ? { before } : {}), ...browser };
+        return {
+            kind: 'working',
+            shared: true,
+            ...(before ? { before } : {}),
+            ...meta,
+            ...browser,
+        };
     }
-    return { kind: 'working', ...browser };
+    return { kind: 'working', ...meta, ...browser };
 }
 
 export function writeActive(active: StoredActive): void {
