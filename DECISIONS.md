@@ -1880,3 +1880,15 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   3. Orchestrator: the rewrite used git's built-in `filter-branch`, so no new tool was installed. A full copy of the repository as it was, with the 67 pictures, is kept outside the project folder.
 - **Why:** user, 2026-11-16: "are we sure we want to keep commting pngs from our test to github? wouldn't that make the git history very heavy?"; then "yeah lets do B, i dont want the git history to grow exponentially with all the images, maybe we should ignore images saved on our test folders as well in the future and dont commit them"; "i agree with your plan here". Measured: 67 pictures, 28 MB in the tree and 40.5 MB in history, close to 90% of the repository.
 - **Where implemented:** `.gitignore`, `CLAUDE.md` (sections 1, 4, 8), `docs/frontend/pages.md`, `docs/log/2026-11-16-a186.md`
+
+### A187 — S14.2c: costs filter row on phones, red Clear button
+
+- **Date:** 2026-11-16 · **Status:** items 1 to 3 decided; item 4 is the implementer's choice, agreed by the orchestrator; item 5 open
+- **Decision:**
+  1. At 560 px and below the Characters filter rows are fixed: search with Clear beside it, elements, paths, role alone, then Archetype beside rarity. Picking a filter no longer moves a control to another line, and the filter block keeps its height. (Variant C of an A/B comparison of three.)
+  2. On phones Clear is compact ("N ✕"); its name for screen readers stays "Clear N filter(s)". On the Light Cones tab it sits beside the search as well.
+  3. The Clear button has a dark red tint at every width. The empty state's "Clear filters" button keeps its look.
+  4. Implementer, agreed by the orchestrator: the Archetype button's count badge is always rendered and hidden while empty, so the button keeps its width; the red is mixed from the existing error colour, no new token (idle text contrast 6.03:1, hover 6.50:1); on phones Clear shows at the top but is reached last by keyboard.
+  5. Open: at 1440 px with a filter active, the full Clear button still lands alone on a second line at the right (unchanged from S14.2b).
+- **Why:** user, 2026-11-16: "the archetype on character selection drops down to the next row once something is selected ... making the 'clear' button an akward box shifted to the left on its own row. Couldn't we use a flex box for this? or maybe have the role on its own row alone and move archetype next to the star filter? The behavior on Lightcone for the clear icon is alright tho."; then "yeah I agree with C, and maybe we could make the clear buttom a dark red to indicate that its a 'clear' button, psychologically would let you think that by seeing the red tint".
+- **Where implemented:** `web/src/pages/costs/CostsPage.{tsx,module.css,test.tsx}`, `web/src/components/MultiSelectDropdown/`, `docs/frontend/pages.md`, `docs/log/2026-11-16-s14-2c.md`

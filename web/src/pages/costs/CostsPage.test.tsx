@@ -811,6 +811,51 @@ describe('the archetype filter (S14.2b)', () => {
     });
 });
 
+describe('the filter row (S14.2c)', () => {
+    // jsdom gives `<search>` no role yet, so the landmark is found by its element and label.
+    const filters = () => document.querySelector('search[aria-label="Filters"]');
+
+    it('Archetype and rarity share one wrapper on Characters; Light Cones keeps rarity and Clear', async () => {
+        const user = userEvent.setup();
+        const r = await openArch('/costs?rarity=5');
+        const rarity = screen.getByRole('group', { name: 'Filter by rarity' });
+        const pair = archButton().closest('search > *');
+        expect(pair).not.toBeNull();
+        expect(pair).not.toBe(archButton());
+        expect(pair).toContainElement(rarity);
+        expect(pair?.parentElement).toBe(filters());
+        await user.click(screen.getByRole('tab', { name: 'Light Cones' }));
+        await settled(r, '/costs?rarity=5&tab=lightcones');
+        const lcRarity = screen.getByRole('group', { name: 'Filter by rarity' });
+        expect(lcRarity.parentElement).toBe(filters());
+        expect(within(lcRarity).getByRole('button', { name: '5★' })).toHaveAttribute(
+            'aria-pressed',
+            'true',
+        );
+        expect(screen.getByRole('button', { name: 'Clear 1 filter' })).toBeInTheDocument();
+    });
+
+    it('the Archetype button keeps its name with and without a pick', async () => {
+        const user = userEvent.setup();
+        await openArch();
+        expect(archButton()).toHaveAccessibleName('Archetype');
+        await user.click(archButton());
+        await user.click(screen.getByRole('checkbox', { name: 'FuA' }));
+        await user.keyboard('{Escape}');
+        expect(archButton()).toHaveAccessibleName('Archetype 1 selected');
+    });
+
+    it('Clear is named "Clear N filter(s)"; the word is in the button for screen readers', async () => {
+        await openArch('/costs?arch=FuA&role=dps');
+        const clear = screen.getByRole('button', { name: 'Clear 2 filters' });
+        const word = within(clear).getByText('Clear');
+        expect(word.closest('[aria-hidden="true"]')).toBeNull();
+        expect(clear).toHaveTextContent(/^Clear\s*2\s*filters\s*✕$/);
+        // Still last in the filter row's source order (the keyboard reaches it after the filters).
+        expect(filters()?.lastElementChild).toBe(clear);
+    });
+});
+
 describe('the unknown-set notice (S14.2b)', () => {
     const NOTICE = 'Cost set 99 is not available. Showing the Default set.';
     const visible = () => screen.queryByText(NOTICE, { selector: 'p:not([role])' });

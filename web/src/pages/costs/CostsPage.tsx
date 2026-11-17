@@ -215,6 +215,20 @@ function Filters({
         setText((current) => (current.trim() === view.q.trim() ? current : view.q));
     }, [view.q]);
 
+    // Rendered in the archetype pair on Characters, on its own on Light Cones.
+    const rarity = (
+        <FilterChips
+            label="Filter by rarity"
+            options={RARITIES_BY_TAB[view.tab].map((r) => ({
+                value: r,
+                label: `${r}\u2605`,
+                prestige: r === '5',
+            }))}
+            selected={view.rarity}
+            onToggle={(v) => actions.toggle('rarity', v)}
+        />
+    );
+
     return (
         <search className={styles.filterRow} aria-label="Filters">
             <SearchField
@@ -261,29 +275,25 @@ function Filters({
                     onToggle={(v) => actions.toggle('role', v)}
                 />
             )}
-            {isChars && (
-                <MultiSelectDropdown
-                    label="Archetype"
-                    listLabel="Filter by archetype"
-                    emptyText={page.setsReady ? 'No archetypes yet.' : 'Loading archetypes…'}
-                    options={page.archetypeNames.map((name) => ({ value: name, label: name }))}
-                    selected={view.arch}
-                    onToggle={(v) => actions.toggle('arch', v)}
-                />
+            {isChars ? (
+                // Archetype and rarity share one line on phones, whatever is picked.
+                <div className={styles.pair}>
+                    <MultiSelectDropdown
+                        label="Archetype"
+                        listLabel="Filter by archetype"
+                        emptyText={page.setsReady ? 'No archetypes yet.' : 'Loading archetypes…'}
+                        options={page.archetypeNames.map((name) => ({ value: name, label: name }))}
+                        selected={view.arch}
+                        onToggle={(v) => actions.toggle('arch', v)}
+                    />
+                    {rarity}
+                </div>
+            ) : (
+                rarity
             )}
-            <FilterChips
-                label="Filter by rarity"
-                options={RARITIES_BY_TAB[view.tab].map((r) => ({
-                    value: r,
-                    label: `${r}\u2605`,
-                    prestige: r === '5',
-                }))}
-                selected={view.rarity}
-                onToggle={(v) => actions.toggle('rarity', v)}
-            />
             {page.filterCount > 0 && (
                 <button type="button" className={styles.clearChip} onClick={onClear}>
-                    Clear {page.filterCount}{' '}
+                    <span className={styles.clearWord}>Clear</span> {page.filterCount}{' '}
                     <span className={hidden.visuallyHidden}>
                         {page.filterCount === 1 ? 'filter' : 'filters'}
                     </span>

@@ -80,6 +80,26 @@ describe('MultiSelectDropdown', () => {
         expect(trigger()).toHaveAttribute('data-on');
     });
 
+    it('the count badge is always rendered: empty and hidden from assistive technology until a pick (S14.2c)', async () => {
+        const user = userEvent.setup();
+        render(<Harness />);
+        // Nothing picked: the badge keeps its room as an empty box that is not in the name.
+        const empty = trigger().querySelector('[data-empty]');
+        expect(empty).not.toBeNull();
+        expect(empty).toHaveAttribute('aria-hidden', 'true');
+        expect(empty).toBeEmptyDOMElement();
+        expect(trigger()).toHaveAccessibleName('Archetype');
+        // One pick: the same slot shows the count, and the name reads it.
+        await user.click(trigger());
+        await user.click(screen.getByRole('checkbox', { name: 'DoT' }));
+        await user.keyboard('{Escape}');
+        expect(trigger().querySelector('[data-empty]')).toBeNull();
+        // Only the caret stays hidden from assistive technology.
+        expect(trigger().querySelectorAll('[aria-hidden="true"]')).toHaveLength(1);
+        expect(trigger()).toHaveTextContent(/^Archetype\s*1\s*selected$/);
+        expect(trigger()).toHaveAccessibleName('Archetype 1 selected');
+    });
+
     it('a selected value that is not an option is not counted', () => {
         render(<Harness initial={['Gone', 'FuA']} />);
         expect(trigger()).toHaveAccessibleName('Archetype 1 selected');

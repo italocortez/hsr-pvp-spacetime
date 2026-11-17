@@ -112,9 +112,52 @@
     align-items: stretch;
     padding: 14px 22px;
     border-block-end: 1px solid var(--border-subtle);
+
+    /* Phones (S14.2c): fixed lines, so picking a filter never moves a control to another line and
+       the table below does not jump. A two-column grid: the search shares the first line with the
+       compact Clear (the field narrows while it shows), every other child spans the full width
+       (element, path, role, then archetype + rarity in `.pair`). The Clear stays last in the source,
+       so the keyboard reaches it after the filters it clears; the grid only lifts it visually. */
+    @media (--bp-sm) {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        column-gap: 0;
+
+        & > * {
+            grid-column: 1 / -1;
+        }
+
+        /* The search field (always the first child). */
+        & > :first-child {
+            grid-column: 1;
+        }
+    }
 }
 
+/* Archetype and rarity on the Characters tab: no box of their own above the phone step (the row
+   lays them out as before), one shared line below it. */
+.pair {
+    display: contents;
+
+    @media (--bp-sm) {
+        display: flex;
+        gap: 10px;
+    }
+}
+
+/* The Clear filters button (S14.2c): a restrained dark red tint marks it as the "remove" action.
+   Built from the one red token (`--color-error`) mixed into the page's own colours; no dedicated
+   danger-button token exists yet. Text on background: idle about 6.0:1, hover about 6.5:1. */
 .clearChip {
+    --clear-bg: color-mix(in srgb, var(--color-error) 14%, var(--color-space));
+    --clear-border: color-mix(in srgb, var(--color-error) 40%, var(--color-space));
+    --clear-text: color-mix(in srgb, var(--color-error) 70%, var(--color-snow));
+    --clear-bg-hover: color-mix(in srgb, var(--color-error) 22%, var(--color-space));
+    --clear-border-hover: color-mix(in srgb, var(--color-error) 60%, var(--color-space));
+    --clear-text-hover: color-mix(in srgb, var(--color-error) 55%, var(--color-snow));
+
+    /* The containing block for its visually hidden text (`visuallyHidden.module.css`). */
+    position: relative;
     display: inline-flex;
     /* Its own size, at the end of whichever line it lands on (S14.2b): with the archetype filter
        the first line is full at 1440, and a growing chip stretched across a line of its own. */
@@ -126,10 +169,10 @@
     min-inline-size: 104px;
     min-block-size: 42px;
     padding: 0 12px;
-    border: 1px solid var(--border-subtle);
+    border: 1px solid var(--clear-border);
     border-radius: 8px;
-    background: var(--color-space);
-    color: var(--text-muted);
+    background: var(--clear-bg);
+    color: var(--clear-text);
     font-family: var(--font-primary);
     font-size: 0.65625rem; /* 10.5px */
     font-weight: 600;
@@ -143,13 +186,42 @@
         transform 120ms var(--ease-out);
 
     &:hover {
-        border-color: rgba(126, 112, 224, 0.4);
-        background: rgba(126, 112, 224, 0.1);
-        color: var(--color-iris);
+        border-color: var(--clear-border-hover);
+        background: var(--clear-bg-hover);
+        color: var(--clear-text-hover);
     }
 
     &:active {
         transform: scale(0.97);
+    }
+
+    /* Phones: beside the search, compact "N ✕"; the word is only hidden visually (`.clearWord`),
+       so the accessible name stays "Clear N filter(s)". */
+    @media (--bp-sm) {
+        grid-row: 1;
+        grid-column: 2;
+        min-inline-size: 48px;
+        margin-inline-start: 8px;
+        padding: 0 10px;
+        gap: 5px;
+        letter-spacing: 0.04em;
+    }
+}
+
+/* The word "Clear": visible above the phone step, hidden visually below it. The rules mirror
+   `visuallyHidden.module.css`; they are repeated here only because that class cannot be applied
+   inside a media query (`composes` is unconditional). */
+.clearWord {
+    @media (--bp-sm) {
+        position: absolute;
+        inline-size: 1px;
+        block-size: 1px;
+        margin: -1px;
+        padding: 0;
+        border: 0;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
     }
 }
 

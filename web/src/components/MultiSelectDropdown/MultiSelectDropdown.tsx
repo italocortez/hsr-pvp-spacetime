@@ -287,10 +287,14 @@ export function MultiSelectDropdown({
             >
                 <span className={styles.label}>{label}</span>
                 {/* A space in the name ("Archetype 2 selected"); a flex container drops it on screen. */}{' '}
-                {count > 0 && (
+                {/* The badge's room is kept while nothing is picked: a pick does not widen the
+                    button, so it cannot re-wrap the row it sits in. */}
+                {count > 0 ? (
                     <span className={styles.count}>
                         {count} <span className={hidden.visuallyHidden}>selected</span>
                     </span>
+                ) : (
+                    <span className={styles.count} data-empty aria-hidden="true" />
                 )}
                 <span className={styles.caret} aria-hidden="true" />
             </button>
