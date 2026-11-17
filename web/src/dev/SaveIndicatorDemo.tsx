@@ -1,11 +1,21 @@
+import type { BlockReason } from '@shared/loadouts';
 import { useEffect, useState } from 'react';
+import { InfoPopover } from '@/components/InfoPopover/InfoPopover';
 import {
+    PILL_TEXT,
     RING_TEXT,
     reasonText,
     SAVE_TIP,
     SaveIndicator,
     type SaveView,
 } from '@/pages/teambuilder/AutosaveRing';
+import {
+    AUTO_SAVES,
+    EMPTY_WORKING,
+    FULL_PILL,
+    STORAGE_OFF,
+    STORAGE_OFF_PILL,
+} from '@/pages/teambuilder/LoadoutsPanel';
 import styles from './SaveIndicatorDemo.module.css';
 
 /*
@@ -16,6 +26,9 @@ import styles from './SaveIndicatorDemo.module.css';
  * Top: each state held still, enlarged, with its label. Below: the whole sequence on a short loop (a 4 s wait instead
  * of 60 s), at real size beside a mock name and enlarged, plus buttons that drive each transition by hand (a press
  * pauses the loop).
+ *
+ * S14.3i: a button per problem (its pill shows by itself, as on the page) and per quiet state; the shared info
+ * popover in both tones and both forms; and one trigger pinned to the viewport's bottom right corner (the edge case).
  */
 
 const DEMO_MARK = 'hsr-dev-save-demo';
@@ -35,12 +48,29 @@ const savedBrowser: SaveView = {
     said: 'Saved in this browser',
     tip: SAVE_TIP.browser,
 };
-const problemView = (id: string): SaveView => ({
+/** A blocked account save, as the page builds it (accountView). */
+const blockedView = (reason: BlockReason, id: string): SaveView => ({
     kind: 'problem',
     label: RING_TEXT.blocked,
-    reason: { id, text: reasonText('offline', null) },
+    pill: PILL_TEXT[reason],
+    reason: { id, text: reasonText(reason, null) },
 });
+const problemView = (id: string): SaveView => blockedView('offline', id);
 const problem = problemView('demo-reason-live');
+
+/** S14.3i: every problem and quiet state, as the page shows them. */
+const REASONS = Object.keys(PILL_TEXT) as BlockReason[];
+const OTHER_STATES: [string, SaveView][] = [
+    ['Storage off', { kind: 'problem', label: STORAGE_OFF, pill: STORAGE_OFF_PILL }],
+    ['Browser full (working)', { kind: 'problem', label: '', pill: FULL_PILL.browser }],
+    ['Account full (working)', { kind: 'problem', label: '', pill: FULL_PILL.account }],
+    ['Empty (quiet)', { kind: 'problem', label: EMPTY_WORKING, quiet: true }],
+    ['Not stored yet (quiet)', { kind: 'problem', label: AUTO_SAVES, quiet: true }],
+    [
+        'Loading (quiet)',
+        { kind: 'problem', label: 'Your account loadouts are loading.', quiet: true },
+    ],
+];
 
 const toWait: Change = (d) => ({ ...d, view: waiting() });
 const toSaving: Change = (d) => ({ ...d, view: saving });
@@ -157,11 +187,13 @@ export default function SaveIndicatorDemo() {
             </div>
 
             <div className={styles.live}>
+                {/* The enlarged copy first: of the two pills that open together, the real-size one stays
+                    (one open at a time; the later one wins). */}
+                <div className={styles.big}>{indicator}</div>
                 <div className={styles.real}>
                     <span className={styles.mockName}>Hyper Carry</span>
                     {indicator}
                 </div>
-                <div className={styles.big}>{indicator}</div>
                 <p className={styles.step}>
                     {looping ? 'Loop: ' : 'By hand: '}
                     {step}
@@ -197,6 +229,89 @@ export default function SaveIndicatorDemo() {
                     Switch loadout
                 </button>
             </div>
+
+            <div className={styles.buttons}>
+                <span className={styles.groupLabel}>Problems (the pill shows by itself):</span>
+                {REASONS.map((r) => (
+                    <button
+                        key={r}
+                        type="button"
+                        onClick={manual(`Problem: ${r}`, (d) => ({
+                            ...d,
+                            view: blockedView(r, 'demo-reason-live'),
+                        }))}
+                    >
+                        {r}
+                    </button>
+                ))}
+                {OTHER_STATES.map(([label, view]) => (
+                    <button
+                        key={label}
+                        type="button"
+                        onClick={manual(label, (d) => ({ ...d, view }))}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
+
+            <div className={styles.popovers}>
+                <span className={styles.groupLabel}>The shared info popover:</span>
+                <span className={styles.sample}>
+                    Quiet panel
+                    <InfoPopover
+                        label="About the quiet panel"
+                        heading="Character Budget"
+                        list={[
+                            <>
+                                <strong>Classic</strong>: picks and bans in turn.
+                            </>,
+                            <>
+                                <strong>Auction</strong>: the highest bid wins.
+                            </>,
+                        ]}
+                        foot="Ignored entirely in Classic mode."
+                    >
+                        In Auction draft mode, the spending allowance each team has for bidding on
+                        characters.
+                    </InfoPopover>
+                </span>
+                <span className={styles.sample}>
+                    Warning panel
+                    <InfoPopover
+                        label="About the warning panel"
+                        tone="warning"
+                        heading="Not saved yet"
+                        foot="Your changes are kept in this browser."
+                    >
+                        No connection. They are saved when the connection is back.
+                    </InfoPopover>
+                </span>
+                <span className={styles.sample}>
+                    Quiet pill
+                    <InfoPopover label="About the quiet pill" form="pill">
+                        Saved automatically
+                    </InfoPopover>
+                </span>
+                <span className={styles.sample}>
+                    Warning pill
+                    <InfoPopover label="About the warning pill" form="pill" tone="warning">
+                        Not saved: no connection
+                    </InfoPopover>
+                </span>
+            </div>
+
+            {/* The edge case: a trigger at the viewport's bottom right corner (the panel flips up and shifts left). */}
+            <span className={styles.corner}>
+                <InfoPopover
+                    label="About the corner"
+                    heading="At the corner"
+                    list={['Flips above: no room below.', 'Shifts left: 8px from the edge.']}
+                    foot="Bottom right of the viewport."
+                >
+                    This panel prefers below and start-aligned.
+                </InfoPopover>
+            </span>
         </section>
     );
 }

@@ -64,10 +64,11 @@
     align-items: center;
 }
 
-/* Like the card's name row: the name, then the state (its words wrap in their own column). */
+/* Like the card's name row: the name, then the state (S14.3i: the icon alone, its words in the popover). */
 .real {
     display: grid;
-    grid-template-columns: minmax(0, 12rem) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 12rem) auto;
+    justify-content: start;
     gap: 6px 14px;
     align-items: center;
     inline-size: min(26rem, 100%);
@@ -87,6 +88,40 @@
     flex-basis: 100%;
     margin: 0;
     color: var(--text-muted);
+}
+
+/* S14.3i: the problem buttons' and the popover samples' row labels. */
+.groupLabel {
+    flex-basis: 100%;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.popovers {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 24px;
+    align-items: center;
+}
+
+.sample {
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* The edge case: pinned to the viewport's bottom right corner while the demo is open. */
+.corner {
+    position: fixed;
+    inset-block-end: 12px;
+    inset-inline-end: 12px;
+    z-index: 50;
+    display: inline-grid;
+    place-items: center;
+    padding: 4px;
+    border: 1px dashed var(--color-warning);
+    border-radius: 50%;
+    background: var(--color-space);
 }
 
 .buttons {

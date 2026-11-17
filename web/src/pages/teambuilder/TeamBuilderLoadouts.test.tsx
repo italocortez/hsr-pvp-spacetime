@@ -666,7 +666,8 @@ describe('a loadout comes into being with its first character (S14.3e)', () => {
         expect(localStorage.getItem(BROWSER_KEY)).toBeNull();
         expect(screen.getByText(EMPTY_TEXT)).toBeInTheDocument();
         expect(screen.queryByText('Saved in this browser')).toBeNull();
-        expect(document.querySelector('[data-state]')).toBeNull();
+        // S14.3i: no save state, only the empty loadout's quiet hint (was: no indicator at all).
+        expect(document.querySelector('[data-state]')).toHaveAttribute('data-state', 'empty');
         await user.click(caret());
         expect(screen.queryByRole('menuitemradio')).toBeNull();
         expect(
@@ -715,7 +716,8 @@ describe('a loadout comes into being with its first character (S14.3e)', () => {
         await seedSet();
         await editEmpty(user);
         expect(screen.getByText(EMPTY_TEXT)).toBeInTheDocument();
-        expect(document.querySelector('[data-state]')).toBeNull();
+        // S14.3i: no save state, only the empty loadout's quiet hint (was: no indicator at all).
+        expect(document.querySelector('[data-state]')).toHaveAttribute('data-state', 'empty');
         await act(async () => vi.advanceTimersByTime(6 * 60_000));
         expect(conn.reducers.saveLoadout).not.toHaveBeenCalled();
         expect(localStorage.getItem(draftsKey(7))).toBeNull();

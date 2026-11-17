@@ -1,10 +1,10 @@
 import { type AuctionSpend, BUDGET_MAX, type Budgets } from '@shared/teambuilder';
-import { type CSSProperties, type ReactNode, useEffect, useId, useRef } from 'react';
+import { type CSSProperties, type ReactNode, useId } from 'react';
+import { InfoPopover } from '@/components/InfoPopover/InfoPopover';
 import hidden from '@/styles/visuallyHidden.module.css';
 import { AmountField } from './AmountField';
 import styles from './AuctionPanel.module.css';
 import { amountFixed } from './costChartModel';
-import { InfoIcon } from './TeamBuilderIcons';
 
 /*
  * The Auction simulator (S14.3b; the mockup's `.auctionPanel`): the two budgets, editable, starting at 30 and 15
@@ -16,12 +16,9 @@ import { InfoIcon } from './TeamBuilderIcons';
  *   the base), less the cones and any eidolon extra that spilled; the pairings slice (iris) must fit what is left.
  *
  * Over the limit: the meter turns red, its foot says "Over by X", and a line under the meters says what is over in
- * words (the page announces it). Each meter has an info button (a toggletip: a click, tap or Enter opens it; Escape,
- * a click elsewhere or Tab moving on closes it), built on the Popover API (web-guidance interest-triggered-tooltips.md,
- * without `interestfor`, which Firefox lacks and would need a polyfill). Its roles are the guide's for a hint whose
- * button only opens it: `role="tooltip"` on the hint (it holds text and a heading, nothing focusable) and
- * `aria-expanded` on the button, synced from the `toggle` event; no `aria-describedby`, which the guide keeps for a
- * hint whose trigger does something else.
+ * words (the page announces it). Each meter has an info button: since S14.3i the shared InfoPopover (the circled "!",
+ * quiet tone, the mockup's panel with its heading and foot line), a toggletip: hover, keyboard focus, a click or tap
+ * opens it; Escape, a press elsewhere or Tab moving on closes it (`@/components/InfoPopover`).
  */
 
 export type OverReason = { kind: 'character' | 'lightcone' | 'pairings'; text: string };
@@ -116,7 +113,11 @@ export function AuctionPanel({
                 <Meter
                     name="Characters"
                     info={
-                        <Info title="Character Budget" label="How the character budget works">
+                        <Info
+                            title="Character Budget"
+                            label="How the character budget works"
+                            foot="What is left when the draft ends rolls into the Light Cone budget."
+                        >
                             <p>
                                 Each character you win is paid from this budget at its{' '}
                                 <strong>winning bid</strong>: the opening bid, which is its E0 cost,
@@ -136,9 +137,6 @@ export function AuctionPanel({
                             <p>
                                 The builder assumes the best order of sales, so a real draft can
                                 refuse a last bid that fits here.
-                            </p>
-                            <p className={styles.infoFoot}>
-                                What is left when the draft ends rolls into the Light Cone budget.
                             </p>
                         </Info>
                     }
@@ -293,61 +291,21 @@ function Meter({
     );
 }
 
-const canPopover = () =>
-    typeof HTMLElement !== 'undefined' && Object.hasOwn(HTMLElement.prototype, 'popover');
-
-/** The mockup's info button and its explainer: a toggletip on the Popover API. */
-function Info({ title, label, children }: { title: string; label: string; children: ReactNode }) {
-    const id = useId();
-    const tipId = `${id}-tip`;
-    const buttonRef = useRef<HTMLButtonElement>(null);
-    const tipRef = useRef<HTMLDivElement>(null);
-    useEffect(() => {
-        const tip = tipRef.current;
-        const button = buttonRef.current;
-        if (!tip || !button) return;
-        const sync = (e: Event) =>
-            button.setAttribute('aria-expanded', String((e as ToggleEvent).newState === 'open'));
-        tip.addEventListener('toggle', sync);
-        return () => tip.removeEventListener('toggle', sync);
-    }, []);
-    const supported = canPopover();
+/** A meter's info button and its explainer: the shared info popover (S14.3i), in the mockup's panel form. */
+function Info({
+    title,
+    label,
+    foot,
+    children,
+}: {
+    title: string;
+    label: string;
+    foot?: string;
+    children: ReactNode;
+}) {
     return (
-        <>
-            <button
-                ref={buttonRef}
-                type="button"
-                className={styles.info}
-                aria-label={label}
-                aria-expanded="false"
-                onBlur={(e) => {
-                    // Tab moving on closes it (review M6); a click on its own text (no focus target) does not.
-                    const tip = tipRef.current;
-                    const next = e.relatedTarget as Node | null;
-                    if (!supported || !tip || !next || tip.contains(next)) return;
-                    if (tip.matches(':popover-open')) tip.hidePopover();
-                }}
-                {...(supported
-                    ? ({ popovertarget: tipId, popovertargetaction: 'toggle' } as Record<
-                          string,
-                          string
-                      >)
-                    : {})}
-            >
-                <InfoIcon className={styles.infoIcon} />
-            </button>
-            <div
-                ref={tipRef}
-                id={tipId}
-                role="tooltip"
-                className={styles.popover}
-                {...(supported
-                    ? ({ popover: 'auto' } as Record<string, string>)
-                    : { hidden: true })}
-            >
-                <h4>{title}</h4>
-                {children}
-            </div>
-        </>
+        <InfoPopover label={label} heading={title} foot={foot} className={styles.info}>
+            {children}
+        </InfoPopover>
     );
 }

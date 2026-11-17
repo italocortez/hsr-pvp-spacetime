@@ -22,21 +22,16 @@
     }
 }
 
-/* The name with the save state beside it; under it once the card is too narrow for both. */
+/*
+ * The name with the save state beside it. S14.3i: the save state is always its one 20px indicator (A210 item 6;
+ * its words are in its popover), so one layout for every state and width: the name keeps the same width whatever
+ * the save state does.
+ */
 .nameRow {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 6px 14px;
     align-items: center;
-
-    @container loadouts (min-width: 22rem) {
-        grid-template-columns: minmax(0, 3fr) minmax(8.5rem, 2fr);
-    }
-
-    /* S14.3g: the save state is only its 20px indicator (the words are hidden): beside the name at every width. */
-    &[data-quiet] {
-        grid-template-columns: minmax(0, 1fr) auto;
-    }
 }
 
 /* The sign-in line (visitor, guest): the card's last quiet row; one line at the card's full desktop width. */
@@ -388,22 +383,11 @@
     }
 }
 
-/*
- * The save state beside the name: two lines fit in the name's row, so the usual states move nothing. Under the name
- * (a narrow card) it keeps one line; a longer text (a full list, a save that waits with its reason) adds lines.
- * S14.3g: the good states are the indicator alone (`.nameRow[data-quiet]`); only problems keep words here.
- */
+/* The save state's fixed box beside the name (S14.3i: never any words here). */
 .status {
     display: flex;
     align-items: center;
-    min-block-size: 1.4em;
-    font-size: 0.75rem;
-    line-height: 1.4;
-}
-
-.workingState {
-    color: var(--text-muted);
-    font-family: var(--font-secondary);
+    inline-size: 20px;
 }
 
 /*

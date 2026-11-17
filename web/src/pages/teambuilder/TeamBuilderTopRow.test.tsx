@@ -270,7 +270,7 @@ describe('the keyboard order across the two cards (S14.3f)', () => {
         await user.click(card('Acheron'));
         nameField().focus();
         const seen: string[] = [];
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 11; i++) {
             const el = document.activeElement as HTMLElement;
             seen.push(
                 el.getAttribute('aria-label') ??
@@ -281,6 +281,8 @@ describe('the keyboard order across the two cards (S14.3f)', () => {
         expect(seen).toEqual([
             'Rename active loadout',
             'Switch loadout',
+            // S14.3i: the save spot is the info popover's button (one more stop in the name row).
+            'Save status',
             '+ New Loadout',
             'Copy link',
             'Copy image',

@@ -1,0 +1,212 @@
+/*
+ * The shared information popover (S14.3i; InfoPopover.tsx). Look from the mockups' `.infoDot` and `.infoPopover`
+ * (design/mockups/lobbies.html): the panel's surface, border, 12px radius (DESIGN.md: content panels and popovers),
+ * shadow, padding and type sizes are the mockup's; the trigger is the circled exclamation mark (A210 item 7).
+ *
+ * Tones (`data-tone`): quiet (muted, brightening to iris on hover, focus and while open, as the mockup's dot) and
+ * warning (the warning colour; the pill gets a warning edge and tint). A caller can set `--info-rest` and
+ * `--info-active` on its trigger class: the defaults below have no specificity (`:where`), so any class wins.
+ *
+ * The panel never sets `display`: the UA's `[popover]:not(:popover-open)` and `[hidden]` rules hide it. It is fixed
+ * in the top layer; the script writes `top`, `left` and the height cap. Motion: 160ms fade and a 4px slide from the
+ * trigger's side, in by `@starting-style`, out by `data-leaving` (the script hides it after the fade, so the exit
+ * animates in Firefox too); nothing moves under reduced motion.
+ */
+
+:where(.trigger) {
+    --info-rest: var(--text-muted);
+    --info-active: var(--color-iris-hover);
+}
+
+:where(.trigger[data-tone="warning"]) {
+    --info-rest: var(--color-warning);
+    --info-active: color-mix(in srgb, var(--color-warning) 65%, var(--color-snow));
+}
+
+.trigger {
+    position: relative;
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--info-size, 18px);
+    block-size: var(--info-size, 18px);
+    /* base.css gives every button a 44px minimum on touch: the drawn size stays, ::after is the hit area. */
+    min-inline-size: 0;
+    min-block-size: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--info-rest);
+    cursor: pointer;
+    transition: color var(--duration-fast) var(--ease-out);
+
+    /* 24px to aim at with a mouse, 44px on touch, the drawing unchanged. */
+    &::after {
+        content: "";
+        position: absolute;
+        inset: calc((var(--info-size, 18px) - 24px) / 2);
+        border-radius: 50%;
+    }
+
+    @media (pointer: coarse) {
+        &::after {
+            inset: calc((var(--info-size, 18px) - 44px) / 2);
+        }
+    }
+
+    &:hover,
+    &:focus-visible,
+    &[aria-expanded="true"] {
+        color: var(--info-active);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--border-focus);
+        outline-offset: 2px;
+    }
+}
+
+.icon {
+    inline-size: 100%;
+    block-size: 100%;
+}
+
+.panel {
+    position: fixed;
+    z-index: 300;
+    box-sizing: border-box;
+    inset: auto;
+    margin: 0;
+    overflow-y: auto;
+    border: 1px solid var(--border-strong);
+    background: var(--bg-elevated);
+    box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.85);
+    color: var(--text-body);
+    font-family: var(--font-secondary);
+    font-size: 0.78125rem;
+    font-weight: 400;
+    letter-spacing: normal;
+    line-height: 1.55;
+    text-align: start;
+    text-transform: none;
+    scrollbar-width: thin;
+
+    &[data-form="panel"] {
+        inline-size: min(340px, calc(100vw - 16px));
+        padding: 18px 18px 16px;
+        border-radius: var(--radius-panel);
+    }
+
+    /*
+     * The pill: one short line in a soft capsule (14px radius on a 28px line: fully round; a rare second line on a
+     * narrow phone reads as a rounded box). Snow on the elevated surface, smaller than the panel's text.
+     */
+    &[data-form="pill"] {
+        max-inline-size: min(22rem, calc(100vw - 16px));
+        padding: 5px 12px;
+        border-radius: 14px;
+        color: var(--color-snow);
+        font-size: 0.75rem;
+        font-weight: 600;
+        line-height: 1.4;
+        text-wrap: balance;
+        box-shadow: 0 10px 28px -12px rgba(0, 0, 0, 0.85);
+    }
+
+    &[data-form="pill"][data-tone="warning"] {
+        border-color: color-mix(in srgb, var(--color-warning) 55%, transparent);
+        background: color-mix(in srgb, var(--color-warning) 12%, var(--bg-elevated));
+    }
+
+    & p {
+        margin: 0 0 10px;
+    }
+
+    & p:last-child {
+        margin-block-end: 0;
+    }
+
+    & strong {
+        color: var(--text-heading);
+        font-weight: 600;
+    }
+
+    &[data-leaving] {
+        opacity: 0;
+    }
+}
+
+.panel .heading {
+    margin-block-end: 8px;
+    color: var(--text-heading);
+    font-size: 0.875rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.4;
+}
+
+.list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0 0 10px;
+    padding: 0;
+    list-style: none;
+
+    &:last-child {
+        margin-block-end: 0;
+    }
+
+    & li {
+        position: relative;
+        padding-inline-start: 15px;
+        line-height: 1.5;
+    }
+
+    & li::before {
+        content: "";
+        position: absolute;
+        inset-block-start: 7px;
+        inset-inline-start: 0;
+        inline-size: 5px;
+        block-size: 5px;
+        border-radius: 50%;
+        background: var(--color-iris);
+    }
+}
+
+.panel .foot {
+    color: var(--text-muted);
+    font-size: 0.71875rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .panel {
+        --info-from: -4px;
+        transition:
+            opacity 160ms var(--ease-out),
+            translate 160ms var(--ease-out);
+
+        &[data-side="above"] {
+            --info-from: 4px;
+        }
+
+        &[data-leaving] {
+            translate: 0 var(--info-from);
+        }
+    }
+
+    @starting-style {
+        .panel[data-open] {
+            opacity: 0;
+            translate: 0 var(--info-from);
+        }
+    }
+}
+
+@media (forced-colors: active) {
+    .panel {
+        border-color: CanvasText;
+    }
+}

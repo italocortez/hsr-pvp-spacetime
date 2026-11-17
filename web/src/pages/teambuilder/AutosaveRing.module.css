@@ -8,43 +8,39 @@
  *   rest: ring and check shrink away (--duration-base) as the floppy grows in (60 ms later).
  */
 
+/*
+ * S14.3i: always the one 20px box and never any words (A210 item 6): the box is the shared info popover's trigger;
+ * the words are visually hidden (the name field's description) and show in the popover's pill. The positioned wrap
+ * holds the hidden words' 1px box.
+ */
 .wrap {
+    position: relative;
     display: inline-flex;
-    flex-wrap: wrap;
-    gap: 2px 8px;
-    align-items: center;
-    min-inline-size: 0;
-    color: var(--text-muted);
-    font-family: var(--font-secondary);
-    font-size: 0.75rem;
-    font-weight: 600;
-    letter-spacing: 0.01em;
+    flex: none;
+    inline-size: 20px;
+    block-size: 20px;
+}
 
-    &[data-tone="warning"] {
-        color: var(--color-warning);
-    }
+/*
+ * The trigger (InfoPopover's button): 20px, no border or background. Its only hover reaction is the shared quiet
+ * brightening, toned down here (muted to the body colour, not iris) so the floppy never reads as a save button; the
+ * help cursor says it explains. The warning tone keeps the shared colours. The floppy and the "!" draw in its colour.
+ */
+.wrap .trigger {
+    --info-size: 20px;
+    cursor: help;
 
-    /*
-     * S14.3h: a state with words (`data-tone`): the icon in its own column, the words beside it in the next one, so
-     * wrapped lines hang under the words, never under the icon. The label's line box is the icon's 20px, so the
-     * icon sits centred on the first line. The icon-only states keep the flex box above (no empty column).
-     */
-    &[data-tone] {
-        display: inline-grid;
-        grid-template-columns: 20px minmax(0, 1fr);
-        align-items: start;
+    &[data-tone="quiet"] {
+        --info-active: var(--text-body);
     }
 }
 
-/* The box: fixed, decorative (aria-hidden), not a control: no border, hover style, cursor or focus. */
+/* The box: decorative (aria-hidden) inside the trigger; its layers share one cell. */
 .mark {
     display: inline-grid;
-    flex: none;
-    grid-area: 1 / 1;
     place-items: center;
     inline-size: 20px;
     block-size: 20px;
-    cursor: default;
 
     & > * {
         grid-area: 1 / 1;
@@ -68,17 +64,11 @@
 .floppy {
     inline-size: 15px;
     block-size: 15px;
-    color: var(--text-muted);
 }
 
 .warn {
     inline-size: 18px;
     block-size: 18px;
-    color: var(--color-warning);
-
-    .wrap[data-tone="quiet"] & {
-        color: var(--text-muted);
-    }
 }
 
 .mark[data-phase="ring"] .glyph,
@@ -230,20 +220,6 @@
     to {
         stroke-dashoffset: 0;
     }
-}
-
-.label {
-    grid-column: 2;
-    min-inline-size: 0;
-    line-height: 20px;
-    text-wrap: pretty;
-}
-
-.reason {
-    grid-column: 2;
-    color: var(--text-body);
-    font-weight: 400;
-    line-height: 1.4;
 }
 
 @media (forced-colors: active) {

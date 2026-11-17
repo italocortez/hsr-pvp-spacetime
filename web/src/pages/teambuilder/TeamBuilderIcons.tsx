@@ -1,6 +1,7 @@
 /*
  * The team builder's glyphs, one source each (component-hygiene Rule 6). Decorative: the control that holds one
- * carries the name.
+ * carries the name. S14.3i: the circled "!" moved to `@/components/ExclamationIcon` (the site's one information
+ * symbol, A210 item 7); the circled "i" of the Auction meters went with the shared info popover.
  */
 
 type IconProps = { className?: string };
@@ -30,26 +31,6 @@ export function EmptyConeIcon({ className }: IconProps) {
                 strokeLinejoin="round"
                 opacity="0.55"
             />
-        </svg>
-    );
-}
-
-/** A circled "i" (the mockup's `.auctionInfo` glyph): the Auction meters' info buttons (S14.3b). */
-export function InfoIcon({ className }: IconProps) {
-    return (
-        <svg
-            className={className}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-        >
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="16" x2="12" y2="12" />
-            <line x1="12" y1="8" x2="12.01" y2="8" />
         </svg>
     );
 }
@@ -143,26 +124,6 @@ export function FloppyIcon({ className }: IconProps) {
             aria-hidden="true"
         >
             <path d="M19 10c.552 0 1-.447 1-1V5c0-.553-.448-1-1-1s-1 .447-1 1v4c0 .553.448 1 1 1Zm11 18c0 1.104-.896 2-2 2H4c-1.104 0-2-.896-2-2V4c0-1.104.896-2 2-2h2v10c0 1.104.896 2 2 2h16c1.104 0 2-.896 2-2V2h2c1.104 0 2 .896 2 2v24ZM8 2h16v9c0 .553-.448 1-1 1H9c-.552 0-1-.447-1-1V2Zm20-2H4C1.791 0 0 1.791 0 4v24c0 2.209 1.791 4 4 4h24c2.209 0 4-1.791 4-4V4c0-2.209-1.791-4-4-4Z" />
-        </svg>
-    );
-}
-
-/** S14.3g: a circled "!" (the save indicator's problem states, always beside their words). */
-export function WarningIcon({ className }: IconProps) {
-    return (
-        <svg
-            className={className}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-        >
-            <circle cx="12" cy="12" r="9" />
-            <path d="M12 7.5v5.5" />
-            <path d="M12 16.5h.01" />
         </svg>
     );
 }

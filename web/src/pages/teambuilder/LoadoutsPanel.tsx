@@ -40,9 +40,10 @@ import type { LoadoutItem, LoadoutsState, Store } from './useLoadouts';
  * "+ New Loadout" and "Copy link". The mockup's Clear Team lives in the roster's head since S14.3a.
  *
  * S14.3f (the user's "balanced cards", variant C): a compact card beside Modes, both ending at the same height. Rows:
- * the name with the save state beside it (under it in a narrow card); the four actions; the hide option with one
- * reserved status line that the "Copy link" and picture confirmations share; then, only when they apply, the
- * failed-copy link field, the notices, and the sign-in line. A sometimes-row grows the card, and Modes grows with it.
+ * the name with the save state beside it (S14.3i: one icon at every width, its words in a popover); the four actions;
+ * the hide option with one reserved status line that the "Copy link" and picture confirmations share; then, only when
+ * they apply, the failed-copy link field, the notices (a full list among them since S14.3i), and the sign-in line. A
+ * sometimes-row grows the card, and Modes grows with it.
  *
  * The menu follows the web-guidance menu guide with the account menu's form (`shell/AccountArea.tsx`): React
  * state and explicit `menu` / `menuitem` / `menuitemradio` roles (the guide's fallback for browsers without
@@ -63,6 +64,18 @@ export const EMPTY_WORKING = 'Pick a character to start a loadout.';
 /** S14.3h: a working loadout with characters, not stored yet (the user's wording, 2026-11-17). */
 export const AUTO_SAVES = 'Auto saves after edits';
 export const STORAGE_OFF = 'Browser storage is off: kept for this visit only';
+/** S14.3i: the save spot's pill for it (the longer words stay the name field's description). */
+export const STORAGE_OFF_PILL = 'Not stored: browser storage is off';
+/** A working loadout that cannot be stored: the list is full (S14.3i: a visible notice in the card). */
+export const WORKING_FULL = {
+    browser: `Not saved: this browser holds ${BROWSER_LOADOUT_LIMIT} loadouts. Delete one to save this team.`,
+    account: `Not saved: your account holds ${ACCOUNT_LOADOUT_LIMIT} loadouts. Delete one to save this team.`,
+} as const;
+/** S14.3i: the save spot's pill for those, pointing at the notice. */
+export const FULL_PILL = {
+    browser: 'Not saved: this browser is full, see below',
+    account: 'Not saved: account full, see below',
+} as const;
 export const LINK_COPIED = 'Link copied.';
 export const LINK_NOT_COPIED =
     'The link could not be copied. It is selected below: copy it from there.';
@@ -244,39 +257,52 @@ export function LoadoutsPanel({
     const working = status.kind === 'working';
     const statusId = `${ids}-status`;
 
-    // ── The save indicator (S14.3g). What it shows: an account loadout's autosave state; a browser loadout saved
-    // (or kept for this visit only); a working loadout's line; nothing for an empty one (A205: only its words).
+    // ── The save indicator (S14.3g; icon-only since S14.3i). What it shows: an account loadout's autosave state; a
+    // browser loadout saved (or kept for this visit only); a working loadout's state, its words in the popover.
     // `shownEmpty`: the last committed render showed the empty working loadout. The first pick passes through one
-    // render of a working loadout with a character, just before it is stored: that render keeps showing nothing, so
-    // no warning flashes ahead of the check. (A team from a link starts there and says "Auto saves after edits".)
+    // render of a working loadout with a character, just before it is stored: that render keeps showing the empty
+    // state, so nothing changes ahead of the check. (A team from a link starts there and says "Auto saves after edits".)
     const shownEmpty = useRef(status.kind === 'working' && status.empty);
     const nowEmpty = status.kind === 'working' && status.empty;
     useEffect(() => {
         shownEmpty.current = nowEmpty;
     });
-    let view: SaveView | null;
+    // S14.3i: a full list needs a choice (delete one), so it keeps a visible notice in the card; the save spot shows
+    // the warning mark and a pill pointing at it. The notice is part of the name field's description, so the
+    // indicator's hidden words do not repeat it.
+    const fullText =
+        status.kind === 'account'
+            ? status.autosave.kind === 'blocked' && status.autosave.reason === 'full'
+                ? reasonText('full', status.autosave.message)
+                : null
+            : status.kind === 'working' && status.full === 'browser'
+              ? WORKING_FULL.browser
+              : status.kind === 'working' && status.full === 'account'
+                ? WORKING_FULL.account
+                : null;
+    const fullId = `${ids}-full`;
+    let view: SaveView;
     let stateAttr: string = status.kind;
     if (status.kind === 'account') {
-        view = accountView(status.autosave, `${ids}-reason`);
+        view = accountView(status.autosave, `${ids}-reason`, fullText !== null);
         stateAttr = status.autosave.kind;
     } else if (status.kind === 'browser') {
         view = loadouts.storageOk
             ? { kind: 'saved', said: SAVED_IN_BROWSER, tip: SAVE_TIP.browser }
-            : { kind: 'problem', label: STORAGE_OFF };
+            : { kind: 'problem', label: STORAGE_OFF, pill: STORAGE_OFF_PILL };
         stateAttr = loadouts.storageOk ? 'saved' : 'storage-off';
     } else if (status.full === 'browser')
-        view = {
-            kind: 'problem',
-            label: `Not saved: this browser holds ${BROWSER_LOADOUT_LIMIT} loadouts. Delete one to save this team.`,
-        };
+        view = { kind: 'problem', label: '', pill: FULL_PILL.browser };
     else if (status.full === 'account')
-        view = {
-            kind: 'problem',
-            label: `Not saved: your account holds ${ACCOUNT_LOADOUT_LIMIT} loadouts. Delete one to save this team.`,
-        };
+        view = { kind: 'problem', label: '', pill: FULL_PILL.account };
     else if (status.loading)
         view = { kind: 'problem', label: 'Your account loadouts are loading.', quiet: true };
-    else if (status.empty || shownEmpty.current) view = null;
+    else if (status.empty || shownEmpty.current) {
+        // S14.3i: the empty working loadout keeps its hint, now in the quiet "!"'s popover (no words beside the
+        // name). The first pick's in-between render keeps it too, so nothing flickers before the check.
+        view = { kind: 'problem', label: EMPTY_WORKING, quiet: true };
+        stateAttr = 'empty';
+    }
     // S14.3h: a team not stored yet (from a link, an older working draft, one deleted elsewhere) is not a problem:
     // the user's words, in the muted tone (`data-tone="quiet"`), not the warning one.
     else view = { kind: 'problem', label: AUTO_SAVES, quiet: true };
@@ -350,16 +376,13 @@ export function LoadoutsPanel({
                 </h2>
             </div>
             <div className={styles.body}>
-                <div
-                    className={styles.nameRow}
-                    data-quiet={view && view.kind !== 'problem' ? '' : undefined}
-                >
+                <div className={styles.nameRow}>
                     <LoadoutMenuBox
                         loadouts={loadouts}
                         field={field}
                         nameRef={nameRef}
                         caretRef={caretRef}
-                        statusId={statusId}
+                        statusId={fullText ? `${statusId} ${fullId}` : statusId}
                         onField={(v) => {
                             setField(v);
                             loadouts.rename(v);
@@ -393,15 +416,15 @@ export function LoadoutsPanel({
                         }}
                     />
 
-                    <div id={statusId} className={styles.status}>
-                        {/* Mounted while empty too (it then shows nothing): it sees the save of the first pick. */}
+                    <div className={styles.status}>
+                        {/* Mounted while empty too: it sees the save of the first pick. */}
                         <SaveIndicator
                             view={view}
                             loadoutId={activeId}
                             saves={saves}
                             state={stateAttr}
+                            wordsId={statusId}
                         />
-                        {!view && <span className={styles.workingState}>{EMPTY_WORKING}</span>}
                     </div>
                 </div>
 
@@ -443,6 +466,11 @@ export function LoadoutsPanel({
                 )}
 
                 {line && <p className={styles.line}>{line}</p>}
+                {fullText && (
+                    <p id={fullId} className={styles.line} data-full-notice="">
+                        {fullText}
+                    </p>
+                )}
                 {loadouts.notice && (
                     <p className={styles.notice}>
                         <span>{loadouts.notice}</span>

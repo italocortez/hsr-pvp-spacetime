@@ -178,8 +178,37 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-    .card:hover {
+    .card:not([aria-disabled="true"]):hover {
         transform: translateY(-2px);
+    }
+}
+
+/*
+ * S14.3i (the user's ruling of 2026-11-17, option A): a full team dims every unpicked card (`aria-disabled`, set by
+ * the pool while `data-team-full`): the portrait, icons, words and rarity glow fade to about half, the cursor is the
+ * default one, and the hover border and lift are off. The "Picked" stamp on the picked cards stays the stronger mark.
+ * Only opacity changes (no layout shift); it eases back when a slot frees, at once under reduced motion.
+ */
+.card[aria-disabled="true"] {
+    cursor: default;
+
+    &:hover {
+        border-color: var(--border-subtle);
+    }
+
+    & :is(.portrait, .element, .path, .meta) {
+        opacity: 0.55;
+    }
+
+    &::after {
+        opacity: 0.35;
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .card :is(.portrait, .element, .path, .meta),
+    .card::after {
+        transition: opacity var(--duration-base) var(--ease-out);
     }
 }
 

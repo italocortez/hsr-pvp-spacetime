@@ -1,3 +1,4 @@
+import { TEAM_SIZE } from '@shared/teambuilder';
 import { type RefObject, useEffect, useState } from 'react';
 import { FilterChips } from '@/components/FilterChips/FilterChips';
 import { FilterSearch } from '@/components/FilterSearch/FilterSearch';
@@ -17,6 +18,10 @@ import type { DataState, PoolCharacter } from './useTeamBuilderPage';
  * the roster (or the first empty slot), a press on a picked card removes it. Portraits load lazily through
  * `RemoteImage` (the pool is below the fold at every width). The filter lines follow the costs page's rule: at a
  * given width they do not change when a filter is picked or Clear appears.
+ *
+ * S14.3i (the user's ruling of 2026-11-17, "option A"): while the team holds TEAM_SIZE characters the grid carries
+ * `data-team-full` and every unpicked card `aria-disabled="true"`: dimmed, default cursor, no hover lift or glow. They
+ * stay real, focusable buttons with their names; a press still does nothing but the page's full-team announcement.
  */
 
 export type PoolProps = {
@@ -42,6 +47,7 @@ const SKELETONS = Array.from({ length: 12 }, (_, i) => i);
 
 export function CharacterPool(props: PoolProps) {
     const { view, pool, picked, dataState, filterCount } = props;
+    const full = picked.size >= TEAM_SIZE;
     const [text, setText] = useState(view.q);
     useEffect(() => {
         setText((current) => (current.trim() === view.q.trim() ? current : view.q));
@@ -160,9 +166,14 @@ export function CharacterPool(props: PoolProps) {
                         )}
                     </div>
                 ) : (
-                    <ul className={styles.grid} aria-label="Characters">
+                    <ul
+                        className={styles.grid}
+                        aria-label="Characters"
+                        data-team-full={full || undefined}
+                    >
                         {pool.map((c) => {
                             const on = picked.has(c.name);
+                            const unavailable = full && !on;
                             return (
                                 <li key={c.name} className={styles.gridItem}>
                                     <button
@@ -171,6 +182,7 @@ export function CharacterPool(props: PoolProps) {
                                         data-rarity={c.rarity}
                                         data-picked={on || undefined}
                                         aria-pressed={on}
+                                        aria-disabled={unavailable || undefined}
                                         aria-label={`${c.displayName}, ${ROLE_LABEL[c.role]}, ${c.rarity} star`}
                                         onClick={() => props.onPick(c.name)}
                                     >

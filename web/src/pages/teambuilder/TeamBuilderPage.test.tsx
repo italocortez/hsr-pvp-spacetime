@@ -188,6 +188,37 @@ describe('building a team', () => {
         );
     });
 
+    // T-S14.3i (the user's ruling of 2026-11-17, option A): a full team marks the unpicked cards unavailable.
+    it('a full team: unpicked cards are aria-disabled under data-team-full, still focusable; a slot freed clears it', async () => {
+        const user = userEvent.setup();
+        await open();
+        const grid = () => screen.getByRole('list', { name: 'Characters' });
+        for (const n of ['Acheron', 'Clara', 'Pela']) await user.click(card(n));
+        expect(grid()).not.toHaveAttribute('data-team-full');
+        expect(card('Huohuo')).not.toHaveAttribute('aria-disabled');
+        await user.click(card('Kafka'));
+        expect(grid()).toHaveAttribute('data-team-full');
+        expect(card('Huohuo')).toHaveAttribute('aria-disabled', 'true');
+        expect(card('Huohuo')).not.toBeDisabled();
+        expect(card('Huohuo')).toHaveAccessibleName(/^Huohuo,/);
+        for (const n of ['Acheron', 'Clara', 'Pela', 'Kafka']) {
+            expect(card(n)).not.toHaveAttribute('aria-disabled');
+            expect(card(n)).toHaveAttribute('aria-pressed', 'true');
+        }
+        card('Huohuo').focus();
+        expect(card('Huohuo')).toHaveFocus();
+        await user.keyboard('{Enter}');
+        expect(slotNames()).toEqual(['Acheron', 'Clara', 'Pela', 'Kafka']);
+        await waitFor(() =>
+            expect(status()).toHaveTextContent(
+                /^The team is full\. Remove a character to add another\.$/,
+            ),
+        );
+        await user.click(screen.getByRole('button', { name: 'Remove Pela' }));
+        expect(grid()).not.toHaveAttribute('data-team-full');
+        expect(card('Huohuo')).not.toHaveAttribute('aria-disabled');
+    });
+
     it('eidolon, light cone and superimposition changes update the total', async () => {
         const user = userEvent.setup();
         await open();
