@@ -5,12 +5,9 @@ import { ControlSelect, SegmentedControl } from '@/components/SegmentedControl/S
 import { MODE_LABEL } from '@/lib/rosterModel';
 import { useAnnouncement } from '@/lib/useAnnouncement';
 import { useDocumentTitle } from '@/lib/useDocumentTitle';
-import { customMediaQuery } from '@/shell/PhoneMenu';
-import mediaCss from '@/styles/media.css?raw';
 import hidden from '@/styles/visuallyHidden.module.css';
-import { CharacterPool } from './CharacterPool';
+import { CharacterPool, type PoolLine } from './CharacterPool';
 import { GameModeTiles } from './GameModeTiles';
-import { PoolSheet } from './PoolSheet';
 import { RosterSlots } from './RosterSlots';
 import styles from './TeamBuilderPage.module.css';
 import { PairStrip, TeamTotal } from './TeamTotal';
@@ -30,8 +27,17 @@ export const LOADED_FROM_LINK = 'Loaded a team from a link.';
 
 export const TEAMBUILDER_TITLE = 'Team Builder — IPC Battlegrounds';
 
-/** Where an empty slot opens the pool sheet instead of pointing at the pool below (the middle step). */
-export const SHEET_QUERY = customMediaQuery(mediaCss, '--bp-md');
+const FULL_HINT = 'The team is full. Remove a character to add another.';
+const slotsLeft = (n: number) => `${n} ${n === 1 ? 'slot' : 'slots'} left.`;
+
+/*
+ * Picking from an empty slot (S14.3a-pick, the user's ruling of 2026-11-17, at every width): the page scrolls to
+ * the Character Pool (unless its heading is already in view; a jump under reduced motion) and focus moves to the
+ * pool's heading, not its search field, so a phone does not open its keyboard over the cards; Tab goes on to the
+ * search. That slot is the target: the next pick fills it. The target lasts until a pick, Escape inside the pool,
+ * another empty slot, or any other change to the team (remove, swap, Clear Team, Restore). After a pick the page
+ * stays at the pool and the line under the filters says which slot was filled and how many are left.
+ */
 
 export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
     useDocumentTitle(TEAMBUILDER_TITLE);
@@ -40,7 +46,16 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
     const ids = useId();
     const searchRef = useRef<HTMLInputElement>(null);
     const poolRef = useRef<HTMLElement>(null);
-    const [sheetSlot, setSheetSlot] = useState<number | null>(null);
+    const poolHeadingRef = useRef<HTMLHeadingElement>(null);
+    /** The slot an empty-slot press chose (0-based), filled by the next pick. */
+    const [target, setTarget] = useState<number | null>(null);
+    /** What the last pick did, for the pool's line; cleared by any other change to the team. */
+    const [lastPick, setLastPick] = useState<PoolLine | null>(null);
+    /** Any team change other than a pick: the target and the last pick's line no longer hold. */
+    const forget = () => {
+        setTarget(null);
+        setLastPick(null);
+    };
     const ready = page.dataState === 'ready';
     const setLabel = page.costSet?.name ?? 'Default';
 
@@ -79,24 +94,46 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
         [page.characterOf],
     );
 
-    const pick = (name: string, target?: number) => {
-        const what = actions.pick(name, target);
+    const pick = (name: string) => {
+        const { what, index } = actions.pick(name, target ?? undefined);
         const n = nameOf(name);
-        if (what === 'added') announce(`${n} added to the team.`);
-        else if (what === 'removed') announce(`${n} removed from the team.`);
-        else if (what === 'full') announce('The team is full. Remove a character to add another.');
-        return what;
+        setTarget(null);
+        if (what === 'added') {
+            const left = page.slots.filter((s) => s === null).length - 1;
+            const line: PoolLine =
+                left === 0
+                    ? { text: FULL_HINT, tone: 'full' }
+                    : { text: `Slot ${index + 1} filled. ${slotsLeft(left)}`, tone: 'done' };
+            setLastPick(line);
+            announce(`${n} added to the team. ${line.text}`);
+        } else if (what === 'removed') {
+            const left = page.slots.filter((s) => s === null).length + 1;
+            const line = `Slot ${index + 1} emptied. ${slotsLeft(left)}`;
+            setLastPick({ text: line, tone: 'done' });
+            announce(`${n} removed from the team. ${line}`);
+        } else if (what === 'full') {
+            setLastPick(null);
+            announce(FULL_HINT);
+        }
     };
 
     const onEmpty = (index: number) => {
-        if (globalThis.matchMedia?.(SHEET_QUERY).matches) {
-            setSheetSlot(index);
-            return;
+        setTarget(index);
+        setLastPick(null);
+        const pool = poolRef.current;
+        const heading = poolHeadingRef.current;
+        if (!pool || !heading) return;
+        // Scroll only when the pool is not already in view: its heading below the fixed bar (which the pool's scroll
+        // margin clears) and in the upper half of the screen, so cards show under it. No animated scroll under
+        // reduced motion (review 2 M6).
+        const top = heading.getBoundingClientRect().top;
+        const clear = Number.parseFloat(getComputedStyle(pool).scrollMarginBlockStart) || 0;
+        const inView = top > clear && top < window.innerHeight / 2;
+        if (!inView) {
+            const still = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+            pool.scrollIntoView?.({ block: 'start', behavior: still ? 'auto' : 'smooth' });
         }
-        // No animated scroll under reduced motion (review 2 M6).
-        const still = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-        poolRef.current?.scrollIntoView?.({ block: 'start', behavior: still ? 'auto' : 'smooth' });
-        searchRef.current?.focus({ preventScroll: true });
+        heading.focus({ preventScroll: true });
     };
 
     const focusSlot = (index: number) => {
@@ -111,20 +148,11 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
         ? `The cost set ${page.costSet.name} is for ${MODE_LABEL[page.mode]} only. Pick Default to change the game mode.`
         : undefined;
 
-    const poolProps = {
-        view,
-        pool: page.pool,
-        picked,
-        dataState: page.dataState,
-        filterCount: page.filterCount,
-        archetypeNames: page.archetypeNames,
-        archetypesReady: page.refReady,
-        fullHint: page.fullHint,
-        onToggle: actions.toggle,
-        onQuery: actions.setQuery,
-        onClearFilters: actions.clearFilters,
-        onRetry: actions.retry,
-    };
+    const line: PoolLine = page.fullHint
+        ? { text: FULL_HINT, tone: 'full' }
+        : target !== null
+          ? { text: `Picking for slot ${target + 1}.`, tone: 'target' }
+          : (lastPick ?? { text: '', tone: 'none' });
 
     return (
         <div className={styles.page}>
@@ -189,6 +217,7 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
                                     data-primary=""
                                     onClick={() => {
                                         actions.restorePrevious();
+                                        forget();
                                         announce('Your previous team is back.');
                                         requestAnimationFrame(() => focusSlot(0));
                                     }}
@@ -228,6 +257,7 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
                                 className={styles.clearTeam}
                                 onClick={() => {
                                     actions.clearTeam();
+                                    forget();
                                     announce('Team cleared.');
                                 }}
                             >
@@ -249,6 +279,7 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
                             onRemove={(i) => {
                                 const s = page.slots[i];
                                 actions.remove(i);
+                                forget();
                                 if (s) announce(`${nameOf(s.character)} removed from the team.`);
                                 // The remove button went with the slot: focus the empty slot.
                                 requestAnimationFrame(() => focusSlot(i));
@@ -256,7 +287,10 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
                             onEidolon={actions.setEidolon}
                             onSuperimposition={actions.setSuperimposition}
                             onEquip={actions.equip}
-                            onSwap={actions.swap}
+                            onSwap={(a, b) => {
+                                actions.swap(a, b);
+                                forget();
+                            }}
                             onEmpty={onEmpty}
                             announce={announce}
                             draftAuction={view.draft === 'auction'}
@@ -297,9 +331,18 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
                     ref={poolRef}
                     className={`${styles.section} ${styles.pool}`}
                     aria-labelledby={`${ids}-pool`}
+                    onKeyDown={(e) => {
+                        // Escape inside the pool lets go of the target slot.
+                        if (e.key === 'Escape' && target !== null) setTarget(null);
+                    }}
                 >
                     <div className={styles.sectionHead}>
-                        <h2 id={`${ids}-pool`} className={styles.chapter}>
+                        <h2
+                            id={`${ids}-pool`}
+                            ref={poolHeadingRef}
+                            className={styles.chapter}
+                            tabIndex={-1}
+                        >
                             <strong>Character Pool</strong>
                         </h2>
                         <p className={styles.aside}>
@@ -314,21 +357,24 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
                             )}
                         </p>
                     </div>
-                    <CharacterPool {...poolProps} searchRef={searchRef} onPick={(n) => pick(n)} />
+                    <CharacterPool
+                        view={view}
+                        pool={page.pool}
+                        picked={picked}
+                        dataState={page.dataState}
+                        filterCount={page.filterCount}
+                        archetypeNames={page.archetypeNames}
+                        archetypesReady={page.refReady}
+                        line={line}
+                        searchRef={searchRef}
+                        onToggle={actions.toggle}
+                        onQuery={actions.setQuery}
+                        onClearFilters={actions.clearFilters}
+                        onPick={pick}
+                        onRetry={actions.retry}
+                    />
                 </section>
             </div>
-
-            <PoolSheet
-                {...poolProps}
-                slot={sheetSlot}
-                onPick={(n) => {
-                    const target = sheetSlot ?? undefined;
-                    const what = pick(n, target);
-                    if (what === 'added') setSheetSlot(null);
-                }}
-                onClose={() => setSheetSlot(null)}
-                onClosed={(i) => requestAnimationFrame(() => focusSlot(i))}
-            />
 
             <p role="status" className={hidden.visuallyHidden}>
                 {said}

@@ -13,11 +13,13 @@ import type { DataState, PoolCharacter } from './useTeamBuilderPage';
 /*
  * The character pool (S14.3a; the mockup's `.poolBody`, `.filters`, `.poolGrid`, `.charCard`): the costs page's
  * filter row (search with Clear, element, path, role, then Archetype with rarity; A190 item 7) and a grid of cards.
- * A card is a toggle button (`aria-pressed` = on the team): a press adds the character to the first empty slot (or
- * the slot the sheet was opened from), a press on a picked card removes it. Portraits load lazily through
+ * A card is a toggle button (`aria-pressed` = on the team): a press adds the character to the slot last chosen on
+ * the roster (or the first empty slot), a press on a picked card removes it. Portraits load lazily through
  * `RemoteImage` (the pool is below the fold at every width). The filter lines follow the costs page's rule: at a
  * given width they do not change when a filter is picked or Clear appears.
  */
+
+export type PoolLine = { text: string; tone: 'none' | 'target' | 'done' | 'full' };
 
 export type PoolProps = {
     view: TeamBuilderView;
@@ -27,7 +29,8 @@ export type PoolProps = {
     filterCount: number;
     archetypeNames: readonly string[];
     archetypesReady: boolean;
-    fullHint: boolean;
+    /** The line under the filters: the slot being picked for, the last pick, or the full-team hint. */
+    line: PoolLine;
     searchRef?: RefObject<HTMLInputElement>;
     onToggle: <K extends 'el' | 'path' | 'role' | 'rarity' | 'arch'>(
         key: K,
@@ -123,11 +126,11 @@ export function CharacterPool(props: PoolProps) {
                 </div>
             </search>
 
-            {props.fullHint && (
-                <p className={styles.fullHint}>
-                    The team is full. Remove a character to add another.
-                </p>
-            )}
+            {/* The pool's line (S14.3a-pick): its space is always kept, so the cards never move when it changes. The
+                page's status region announces it. */}
+            <p className={styles.line} data-tone={props.line.tone}>
+                {props.line.text}
+            </p>
 
             {/* The grid's own size container (the mockup's @container pool), kept apart from the filter row: a
                 container around the row as well (nested in the search box's own) collapsed the search field to

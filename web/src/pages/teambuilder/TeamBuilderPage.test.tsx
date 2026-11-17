@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 import { INTRO_KEY } from '@/components/PageIntro/PageIntro';
 import { costQueryList } from '@/stdb/costQueries';
 import { DEFAULT_COST_QUERIES } from '@/stdb/referenceSet';
@@ -21,7 +21,7 @@ import { DRAFT_KEY, PREVIOUS_KEY } from './teamStorage';
  * T-S14.3a: the team builder through the real router and app shell with the mock connection: adding and removing,
  * the full-team hint, default eidolons, eidolon / cone / superimposition changes in the total, pairs and the
  * missing-row warning, the modes and cost sets, filters in the address, a team arriving in the address, browser
- * storage (kept and unavailable), the keyboard swap, the phone sheet's focus, and the loading and error states.
+ * storage (kept and unavailable), the keyboard swap, picking from an empty slot (S14.3a-pick), and the loading and error states.
  */
 
 let conn: MockConnection;
@@ -805,47 +805,140 @@ describe('the team in the address and in storage', () => {
     });
 });
 
-describe('picking on phones (variant A, the sheet)', () => {
-    function phone(matches: boolean) {
-        Object.defineProperty(window, 'matchMedia', {
-            configurable: true,
-            value: (query: string) => ({
-                matches,
-                media: query,
-                addEventListener() {},
-                removeEventListener() {},
-                addListener() {},
-                removeListener() {},
-            }),
-        });
-    }
+// T-S14.3a-pick (the user's ruling of 2026-11-17): no sheet; an empty slot points at the pool below, at every width.
+describe('picking from an empty slot', () => {
+    let scroll: Mock<(arg?: boolean | ScrollIntoViewOptions) => void>;
+    let windowScroll: Mock<(x?: number | ScrollToOptions, y?: number) => void>;
+    beforeEach(() => {
+        scroll = vi.fn();
+        Element.prototype.scrollIntoView = scroll;
+        windowScroll = vi.fn();
+        vi.spyOn(window, 'scrollTo').mockImplementation(windowScroll as typeof window.scrollTo);
+    });
+    afterEach(() => {
+        delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    });
 
-    it('an empty slot opens the sheet with focus inside; a pick fills that slot and focus returns to it', async () => {
-        phone(true);
+    const emptySlot = (n: number) =>
+        screen.getByRole('button', { name: new RegExp(`^Slot ${n}, empty`) });
+    const poolHeading = () => screen.getByRole('heading', { name: 'Character Pool' });
+    const line = (text: string) => screen.getByText(text, { selector: 'p:not([role])' });
+
+    it('an empty slot scrolls to the pool and moves focus to its heading, not the search field', async () => {
         const user = userEvent.setup();
         await open();
-        await user.click(screen.getByRole('button', { name: /^Slot 3, empty/ }));
-        const dialog = await screen.findByRole('dialog', { name: 'Pick a character for slot 3' });
-        expect(within(dialog).getByRole('searchbox', { name: 'Search characters' })).toHaveFocus();
-        await user.click(within(dialog).getByRole('button', { name: /^Clara,/ }));
-        expect(slotNames()).toEqual([null, null, 'Clara', null]);
-        expect(screen.queryByRole('dialog')).toBeNull();
+        scroll.mockClear();
+        await user.click(emptySlot(3));
+        expect(scroll).toHaveBeenCalledTimes(1);
+        expect(scroll.mock.contexts[0]).toBe(poolHeading().closest('section'));
+        expect(poolHeading()).toHaveFocus();
+        expect(line('Picking for slot 3.')).toBeInTheDocument();
+        // Tab goes on to the pool's search.
+        await user.tab();
+        expect(screen.getByRole('searchbox', { name: 'Search characters' })).toHaveFocus();
+    });
+
+    it('the next pick fills the targeted slot; the line names the slot and the count and is announced; no scroll back', async () => {
+        const user = userEvent.setup();
+        await open();
+        await user.click(card('Acheron'));
+        await user.click(emptySlot(3));
+        scroll.mockClear();
+        windowScroll.mockClear();
+        await user.click(card('Clara'));
+        expect(slotNames()).toEqual(['Acheron', null, 'Clara', null]);
+        expect(line('Slot 3 filled. 2 slots left.')).toBeInTheDocument();
         await waitFor(() =>
-            expect(screen.getByRole('combobox', { name: 'Eidolon for Clara' })).toHaveFocus(),
+            expect(status()).toHaveTextContent(
+                'Clara added to the team. Slot 3 filled. 2 slots left.',
+            ),
+        );
+        // The page stays at the pool: nothing scrolls and focus stays on the card.
+        expect(scroll).not.toHaveBeenCalled();
+        expect(windowScroll).not.toHaveBeenCalled();
+        expect(card('Clara')).toHaveFocus();
+        // The target was used up: the next pick goes to the first empty slot.
+        await user.click(card('Pela'));
+        expect(slotNames()).toEqual(['Acheron', 'Pela', 'Clara', null]);
+        expect(line('Slot 2 filled. 1 slot left.')).toBeInTheDocument();
+    });
+
+    it('when the team becomes full the full-team hint takes over the line', async () => {
+        const user = userEvent.setup();
+        await open();
+        for (const n of ['Acheron', 'Clara', 'Pela']) await user.click(card(n));
+        await user.click(emptySlot(4));
+        await user.click(card('Kafka'));
+        expect(slotNames()).toEqual(['Acheron', 'Clara', 'Pela', 'Kafka']);
+        expect(line('The team is full. Remove a character to add another.')).toBeInTheDocument();
+        await waitFor(() =>
+            expect(status()).toHaveTextContent(
+                'Kafka added to the team. The team is full. Remove a character to add another.',
+            ),
         );
     });
 
-    it('Close shuts the sheet and focus goes back to the empty slot', async () => {
-        phone(true);
+    it('by keyboard: Enter on an empty slot moves focus to the pool; a card picked with Enter fills that slot', async () => {
         const user = userEvent.setup();
         await open();
-        await user.click(screen.getByRole('button', { name: /^Slot 2, empty/ }));
-        const dialog = await screen.findByRole('dialog');
-        await user.click(within(dialog).getByRole('button', { name: 'Close' }));
-        expect(screen.queryByRole('dialog')).toBeNull();
-        await waitFor(() =>
-            expect(screen.getByRole('button', { name: /^Slot 2, empty/ })).toHaveFocus(),
-        );
+        emptySlot(2).focus();
+        await user.keyboard('{Enter}');
+        expect(poolHeading()).toHaveFocus();
+        card('Clara').focus();
+        await user.keyboard('{Enter}');
+        expect(slotNames()).toEqual([null, 'Clara', null, null]);
+        expect(card('Clara')).toHaveFocus();
+    });
+
+    it('Escape inside the pool lets go of the target; the next pick goes to the first empty slot', async () => {
+        const user = userEvent.setup();
+        await open();
+        await user.click(emptySlot(3));
+        await user.keyboard('{Escape}');
+        expect(screen.queryByText('Picking for slot 3.')).toBeNull();
+        await user.click(card('Clara'));
+        expect(slotNames()).toEqual(['Clara', null, null, null]);
+    });
+
+    it('another empty slot changes the target', async () => {
+        const user = userEvent.setup();
+        await open();
+        await user.click(emptySlot(2));
+        await user.click(emptySlot(4));
+        expect(line('Picking for slot 4.')).toBeInTheDocument();
+        await user.click(card('Clara'));
+        expect(slotNames()).toEqual([null, null, null, 'Clara']);
+    });
+
+    it('removing a character lets go of the target and clears the line', async () => {
+        const user = userEvent.setup();
+        await open();
+        await user.click(card('Acheron'));
+        await user.click(emptySlot(3));
+        await user.click(screen.getByRole('button', { name: 'Remove Acheron' }));
+        expect(screen.queryByText('Picking for slot 3.')).toBeNull();
+        await user.click(card('Clara'));
+        expect(slotNames()).toEqual(['Clara', null, null, null]);
+    });
+
+    it('with the pool heading already in view, focus moves without a scroll', async () => {
+        vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
+            top: 300,
+            bottom: 320,
+            left: 0,
+            right: 100,
+            width: 100,
+            height: 20,
+            x: 0,
+            y: 300,
+            toJSON() {},
+        } as DOMRect);
+        const user = userEvent.setup();
+        await open();
+        scroll.mockClear();
+        await user.click(emptySlot(1));
+        expect(scroll).not.toHaveBeenCalled();
+        expect(poolHeading()).toHaveFocus();
     });
 
     // T-S14.3a-fix2 (review 2 M6): no animated scroll under reduced motion.
@@ -864,25 +957,10 @@ describe('picking on phones (variant A, the sheet)', () => {
                 removeListener() {},
             }),
         });
-        const scroll = vi.fn();
-        Element.prototype.scrollIntoView = scroll;
-        try {
-            const user = userEvent.setup();
-            await open();
-            scroll.mockClear();
-            await user.click(screen.getByRole('button', { name: /^Slot 1, empty/ }));
-            expect(scroll).toHaveBeenCalledWith({ block: 'start', behavior });
-        } finally {
-            delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
-        }
-    });
-
-    it('wider than the phone step, an empty slot points at the pool instead', async () => {
-        phone(false);
         const user = userEvent.setup();
         await open();
-        await user.click(screen.getByRole('button', { name: /^Slot 1, empty/ }));
-        expect(screen.queryByRole('dialog')).toBeNull();
-        expect(screen.getByRole('searchbox', { name: 'Search characters' })).toHaveFocus();
+        scroll.mockClear();
+        await user.click(emptySlot(1));
+        expect(scroll).toHaveBeenCalledWith({ block: 'start', behavior });
     });
 });

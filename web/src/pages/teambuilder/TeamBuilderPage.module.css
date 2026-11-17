@@ -93,6 +93,12 @@
     letter-spacing: 0.22em;
     text-transform: uppercase;
 
+    /* The pool's heading takes focus from an empty slot (S14.3a-pick). */
+    &:focus-visible {
+        outline: 2px solid var(--border-focus);
+        outline-offset: 4px;
+    }
+
     &::before,
     &::after {
         content: "";

@@ -43,6 +43,9 @@ import { useWorkingTeam } from './useWorkingTeam';
 
 export type DataState = 'loading' | 'error' | 'ready';
 
+/** What a press on a pool card did. */
+export type PickResult = 'added' | 'removed' | 'full' | 'unknown';
+
 /** A pool card: the character as the filters see it, plus what the card shows. */
 export type PoolCharacter = FilterableCharacter & { imageUrl: string };
 
@@ -255,25 +258,26 @@ export function useTeamBuilderPage(search: TeamBuilderSearch) {
         },
         /**
          * A pool card: a picked character leaves the team; another joins slot `target` when given and empty,
-         * else the first empty slot. Returns what happened, for the page's announcement.
+         * else the first empty slot. Returns what happened and the slot it happened in (-1 for none), for the page's
+         * status line and announcement.
          */
-        pick(name: string, target?: number): 'added' | 'removed' | 'full' | 'unknown' {
+        pick(name: string, target?: number): { what: PickResult; index: number } {
             dismissNotices();
             const at = slotOf(team.slots, name);
             if (at >= 0) {
                 team.setSlot(at, null);
                 setFullHint(false);
-                return 'removed';
+                return { what: 'removed', index: at };
             }
             const c = ref.characterByName.get(name);
-            if (!c) return 'unknown';
+            if (!c) return { what: 'unknown', index: -1 };
             const index =
                 target !== undefined && team.slots[target] === null
                     ? target
                     : firstEmptySlot(team.slots);
             if (index < 0) {
                 setFullHint(true);
-                return 'full';
+                return { what: 'full', index: -1 };
             }
             team.setSlot(index, {
                 character: name,
@@ -282,7 +286,7 @@ export function useTeamBuilderPage(search: TeamBuilderSearch) {
                 superimposition: 1,
             });
             setFullHint(false);
-            return 'added';
+            return { what: 'added', index };
         },
         remove(index: number) {
             dismissNotices();

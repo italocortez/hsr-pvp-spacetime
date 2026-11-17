@@ -721,13 +721,14 @@
     text-align: center;
 }
 
-/* One hint per form factor (the button's name says it for screen readers): "Click a character below" where the
-   pool shows below, "Tap to pick a character" where an empty slot opens the pool sheet. */
+/* The pool is below the roster at every width; the button's name says it for screen readers. The mockup's "Click a
+   character below" with a mouse above the middle step, "Pick a character below" at the middle step and below and
+   with a touch screen at any width (S14.3a-pick). */
 .emptyHint[data-narrow-hint] {
     display: none;
 }
 
-@media (--bp-md) {
+@media (--bp-md), (pointer: coarse) {
     .emptyHint[data-wide-hint] {
         display: none;
     }

@@ -344,7 +344,7 @@ export function RosterSlots(props: SlotsProps) {
                                     Click a character below
                                 </span>
                                 <span className={styles.emptyHint} data-narrow-hint="">
-                                    Tap to pick a character
+                                    Pick a character below
                                 </span>
                             </button>
                         )}

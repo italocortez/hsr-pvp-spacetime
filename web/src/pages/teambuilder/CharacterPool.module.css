@@ -57,17 +57,33 @@
     gap: 10px;
 }
 
-.fullHint {
+/* The pool's line (S14.3a-pick): one line of space kept at every width, two on phones (the full-team hint wraps
+   there), so nothing under it moves when it appears, changes or empties. Empty, it draws nothing. */
+.line {
+    box-sizing: border-box;
+    min-block-size: calc(1lh + 18px);
     margin: 14px 22px 0;
     padding: 8px 12px;
-    border: 1px solid color-mix(in srgb, var(--color-warning) 45%, transparent);
+    border: 1px solid transparent;
     border-radius: 8px;
-    background: color-mix(in srgb, var(--color-warning) 10%, var(--color-space));
     color: var(--color-snow);
     font-size: 0.8125rem;
+    line-height: 1.4;
 
     @media (--bp-sm) {
+        min-block-size: calc(2lh + 18px);
         margin-inline: 16px;
+    }
+
+    &[data-tone="target"],
+    &[data-tone="done"] {
+        border-color: color-mix(in srgb, var(--color-iris) 45%, transparent);
+        background: color-mix(in srgb, var(--color-iris) 10%, var(--color-space));
+    }
+
+    &[data-tone="full"] {
+        border-color: color-mix(in srgb, var(--color-warning) 45%, transparent);
+        background: color-mix(in srgb, var(--color-warning) 10%, var(--color-space));
     }
 }
 
