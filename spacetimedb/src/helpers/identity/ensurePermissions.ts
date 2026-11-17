@@ -104,11 +104,15 @@ export function ensureTournamentHost(ctx: any) {
 /**
  * Ensures the sender is a verified (non-guest) user.
  * Guests can browse public data but cannot modify roster.
+ * S14.3s: `message` replaces the guest refusal text (the loadout reducers); every other caller keeps the roster text.
  */
-export function ensureVerifiedUser(ctx: any) {
+export function ensureVerifiedUser(
+    ctx: any,
+    message = "Roster management requires a verified account. Link your Discord first.",
+) {
     const user = getAuthenticatedUser(ctx);
     if (user.isGuest) {
-        throw new SenderError("Roster management requires a verified account. Link your Discord first.");
+        throw new SenderError(message);
     }
     return user;
 }

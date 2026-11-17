@@ -570,6 +570,15 @@ strings, about 30 B (4 + about 12 for the name, 4 + about 10 for the avatar): at
 - Size: `view_event_attendees` adds at most 9 rows (about 45 B each) per event an Admin opens; a former-staff creator
   loses the rows. `view_my_calendar_invites` rows only shrink (a former-staff creator's match-event rows go).
 
+## Phase S14.3s execution (DECISIONS.md A190 items 1, 3, 15)
+
+New file `views/loadoutViews.ts` (exported from `index.ts`). Table, reducers, sizes and lifecycle:
+[../loadout/architecture.md](../loadout/architecture.md).
+
+| View | File | Scope | Row | Anonymity | Indexes |
+|---|---|---|---|---|---|
+| `view_my_loadouts` (new) | loadoutViews | per-sender (a guest or an unmapped identity gets `[]`) | `MyLoadoutRow` (PK `slot`): name, note, code | own; no id, user id or audit columns | `UserIdentity.identity`, `User.id`, `UserLoadout.user_id` |
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -613,9 +622,10 @@ strings, about 30 B (4 + about 12 for the name, 4 + about 10 for the avatar): at
 | `User` private (A77): new `view_admin_users` (Moderator+); `view_my_profile` / `view_admin_user_private` read the merged `User` row (shapes kept, `hasDiscordLinked` derived); `Leaderboard` carries `displayName` / `avatarCharacterName`; exposure review | Phase S11a execution (DECISIONS.md A77) | 2026-11-11 |
 | `view_published_cost_sets` (anonymous, `CostSet.is_published`; `CostSet` private, L91); `view_my_match_result` gains `staffOverrideReason` (L49); `view_my_match_result_games` loses `validationStatus` / `validatedByUserId` (L60); `view_my_match_steps` no longer reads a stored step label (L39) | Phase S11a execution (part 2) | 2026-11-11 |
 | A match event's organizer reads the attendee list and the organizer rows of `view_my_calendar_invites` only with the bracket permission; an Admin reads every attendee list | Phase S11a execution (DECISIONS.md A162) | 2026-11-11 |
+| `view_my_loadouts` (new, `loadoutViews.ts`): the caller's team builder loadouts from the private `UserLoadout` | Phase S14.3s execution (DECISIONS.md A190 items 1, 3, 15) | 2026-11-17 |
 ---
 
-*Last updated: 2026-11-11 (S11a)*
+*Last updated: 2026-11-17 (S14.3s)*
 *Feature owner: Phase 03 / Phase 06 / Phase 08 / Phase 09 / Phase 10.4 / Phase 15*
 
 **Behavior specification** (acceptance scenarios, edge cases, phase history): See [contract.md](contract.md)

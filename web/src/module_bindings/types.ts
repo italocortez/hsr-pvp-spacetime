@@ -2014,6 +2014,14 @@ export const MyLinkRequestRow = __t.object("MyLinkRequestRow", {
 });
 export type MyLinkRequestRow = __Infer<typeof MyLinkRequestRow>;
 
+export const MyLoadoutRow = __t.object("MyLoadoutRow", {
+  slot: __t.u8(),
+  name: __t.string(),
+  note: __t.string(),
+  code: __t.string(),
+});
+export type MyLoadoutRow = __Infer<typeof MyLoadoutRow>;
+
 export const MyLobbyListRow = __t.object("MyLobbyListRow", {
   id: __t.u32(),
   joinCode: __t.string(),
@@ -2917,6 +2925,20 @@ export const UserIdentity = __t.object("UserIdentity", {
 });
 export type UserIdentity = __Infer<typeof UserIdentity>;
 
+export const UserLoadout = __t.object("UserLoadout", {
+  id: __t.u32(),
+  userId: __t.u32(),
+  slot: __t.u8(),
+  name: __t.string(),
+  note: __t.string(),
+  code: __t.string(),
+  createdById: __t.u32(),
+  createdDate: __t.timestamp(),
+  lastModifiedById: __t.u32(),
+  lastModifiedDate: __t.timestamp(),
+});
+export type UserLoadout = __Infer<typeof UserLoadout>;
+
 export const UserPresence = __t.object("UserPresence", {
   identity: __t.identity(),
   userId: __t.u32(),
@@ -3059,6 +3081,9 @@ export type ViewMyLineups = __Infer<typeof ViewMyLineups>;
 
 export const ViewMyLinkRequest = __t.object("ViewMyLinkRequest", {});
 export type ViewMyLinkRequest = __Infer<typeof ViewMyLinkRequest>;
+
+export const ViewMyLoadouts = __t.object("ViewMyLoadouts", {});
+export type ViewMyLoadouts = __Infer<typeof ViewMyLoadouts>;
 
 export const ViewMyLobbies = __t.object("ViewMyLobbies", {});
 export type ViewMyLobbies = __Infer<typeof ViewMyLobbies>;

@@ -223,7 +223,7 @@ performUserDeletion
   │   or lobby gone → removeMemberRow (as a leave); a player row in Drafting / Equipping / Scoring → flags
   │   transferred, row kept as away + abandoned (offline for the forfeit test, never a flag candidate).
   │   See docs/lobby/architecture.md "User deletion".
-  ├─ Cascade: hard-delete calendar data, UserIdentity rows, HsrAccount + characters (the provider link goes with the User row, S11a)
+  ├─ Cascade: hard-delete calendar data, UserIdentity rows, HsrAccount + characters, UserLoadout rows (S14.3s; docs/loadout/architecture.md) (the provider link goes with the User row, S11a)
   ├─ S10r (A122(6)): the user's unreferenced lobby presets and unpublished cost sets (deleteOwnedPresetsAndCostSets)
   │
   ├─ [isGuest && !hasHistoryReferences(ctx, userId)]

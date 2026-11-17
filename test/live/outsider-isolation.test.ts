@@ -21,7 +21,7 @@
  * Maincloud calls (one run): 5 connections (+3 short linker connections for linker_present_code, T-M5a3); about 25 reducer
  * calls (4 login_as_guest, 3 request_link_code + 3 linker_present_code + 3 confirm_link, 2 create_hsr_account, create_lobby, 2 set_team_slot, 2 confirm_ready,
  * 2 join_lobby, select_match_account, start_draft, concede_match); about 30 subscribe calls, the largest being U's one
- * call over the 38 per-sender views without arguments (0 rows expected). No reference table is subscribed.
+ * call over the 39 per-sender views without arguments (0 rows expected). No reference table is subscribed.
  *
  * Estimated runtime: ~60 s.
  */
@@ -56,7 +56,7 @@ const MATCH_VIEWS = [
 const PER_SENDER_VIEWS = [
     'view_my_availability', 'view_my_calendar_events', 'view_my_calendar_invites', 'view_my_character_stats',
     'view_my_cost_sets', 'view_my_draft_character_costs', 'view_my_draft_lightcone_costs', 'view_my_draft_synergy_costs',
-    'view_my_identity', 'view_my_lineups', 'view_my_lobbies', 'view_my_lobby', 'view_my_lobby_bans', 'view_my_lobby_chat',
+    'view_my_identity', 'view_my_lineups', 'view_my_loadouts', 'view_my_lobbies', 'view_my_lobby', 'view_my_lobby_bans', 'view_my_lobby_chat',
     'view_my_lobby_members', 'view_my_match_participants', 'view_my_match_result', 'view_my_match_result_games',
     'view_my_match_session', 'view_my_match_steps', 'view_my_mmr_ratings', 'view_my_player_stats', 'view_my_profile',
     'view_my_relationships', 'view_my_roster', 'view_my_roster_visibility', 'view_my_saved_calendars', 'view_my_stand_ins',

@@ -96,6 +96,10 @@ function afterEdit(ctx: any, lobby: any, window: EditWindow, actorId: number): v
 // CH-S6 / D.8.7: the superimposition argument stands even under requireOwnership; light cones have no
 // ownership data yet, so there is nothing to resolve it from. Once they do, resolve it like the pick eidolon.
 
+const EMPTY_PICK = 'EMPTY';
+/** A191 item 4: the refusal of a light cone on an EMPTY pick or sale. */
+export const EMPTY_LIGHTCONE_TEXT = 'A light cone cannot be equipped on an empty pick.';
+
 /** A78: the character must be in the `side` team's draft of the game (open and Admin paths alike). */
 function ensureInTeamDraft(ctx: any, lobbyId: number, side: TeamTag, characterName: string): void {
     if (!teamDraft(ctx, lobbyId, side).characters.includes(characterName)) {
@@ -126,6 +130,10 @@ export const equip_lightcone = spacetimedb.reducer(
             ensureLineupThrottle(ctx, member);
             ensureEditStepRoom(ctx, lobbyId, side, 'edit');
         }
+        // A191 item 4 (S14.3s): EMPTY is the no-pick placeholder, not a character, so it takes no light cone (Classic
+        // pick or Auction sale alike). unequip_lightcone stays open on EMPTY, so a cone equipped before this rule
+        // can still be removed and refunded.
+        if (characterName === EMPTY_PICK) throw new SenderError(EMPTY_LIGHTCONE_TEXT);
         ensureInTeamDraft(ctx, lobbyId, side, characterName);
         if (superimposition < 1 || superimposition > 5) throw new SenderError('superimposition must be between 1 and 5.');
 

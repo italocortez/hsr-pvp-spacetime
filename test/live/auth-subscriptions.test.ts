@@ -27,7 +27,7 @@ import {
     waitFor,
 } from './_helpers';
 
-const PRIVATE_TABLES = ['user', 'user_identity', 'hsr_account', 'lobby_member'] as const; // A77: user (user_private merged)
+const PRIVATE_TABLES = ['user', 'user_identity', 'hsr_account', 'lobby_member', 'user_loadout'] as const; // A77: user (user_private merged)
 
 /**
  * S11a (review L10): `applied === false` alone would also pass on a malformed query. The server's refusal text (the part
@@ -100,7 +100,7 @@ describe('Auth subscriptions over the wire (§D.5)', () => {
         // Runtime: the client cache has no such table, under any spelling.
         expect(typeProbe(c.conn).every((accessor) => accessor === undefined)).toBe(true);
         const cached = Object.keys(c.conn.db).map((k) => k.toLowerCase().replace(/_/g, ''));
-        for (const name of ['user', 'useridentity', 'hsraccount', 'lobbymember']) {
+        for (const name of ['user', 'useridentity', 'hsraccount', 'lobbymember', 'userloadout']) {
             expect(cached).not.toContain(name);
         }
 

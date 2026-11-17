@@ -207,6 +207,17 @@ for their roster while the rows stay for the match (`docs/lobby/architecture.md`
   The first is the remaining route the S10u sale fallback covers ([../match-session/architecture.md](../match-session/architecture.md)).
 - No schema change. Tests: `spacetimedb/src/__tests__/roster/account-edit-lock.test.ts`.
 
+## Phase S14.3s execution (DECISIONS.md A190 items 1, 3, 15)
+
+- The roster folders also hold the team builder loadouts: the private table `UserLoadout`
+  (`tables/roster/userLoadout.ts`), `save_loadout` / `delete_loadout` (`reducers/roster/userLoadouts.ts`, the file kept
+  empty since S10j) and their rules (`helpers/roster/loadoutRules.ts`). Documented in
+  [../loadout/architecture.md](../loadout/architecture.md); behaviour in [../loadout/contract.md](../loadout/contract.md).
+- `ensureVerifiedUser(ctx, message?)` takes an optional guest refusal text; every roster caller passes none and keeps
+  "Roster management requires a verified account. Link your Discord first."
+- The user deletion cascade (`performUserDeletion`) deletes the user's `UserLoadout` rows after the HSR accounts, and
+  `server_nuke_test_data` clears the table next to `HsrAccount`.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -229,6 +240,7 @@ for their roster while the rows stay for the match (`docs/lobby/architecture.md`
 | Player roster writes count on the per-user membership allowance (20 calls per 10 s) | Phase S10s execution (DECISIONS.md A122) | 2026-11-10 |
 | `admin_batch_upsert_characters` / `admin_batch_remove_characters` refuse an account selected in an active lobby (`ensureAccountRosterEditable` over `accountLobbyLocks`, the owner's test; abandoned memberships still skipped) | Phase S10w execution (DECISIONS.md A142) | 2026-11-10 |
 | Fix pass: the Admin roster refusal says the lock lasts until the membership ends or the lobby closes (an away player stays locked) | Phase S10w execution (DECISIONS.md A142; S10w review F3) | 2026-11-10 |
+| Team builder loadouts in the roster folders (`UserLoadout`, docs/loadout); `ensureVerifiedUser` optional message; deletion cascade and wipe include `UserLoadout` | Phase S14.3s execution (DECISIONS.md A190) | 2026-11-17 |
 
 ---
 

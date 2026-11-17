@@ -2,6 +2,8 @@
 
 76 tables. Updated 2026-11-06 (S3 backend reset: 27 tables public → private per A37 / ACCESS-SECURITY-OPS Appendix A, 10 new, `group_phase_record` dropped per A23). Visibility: **21 public** (reference data, aggregates, `user`, `tournament`, `bracket_match`, `admin_alert`, the `lobby_cursor_event` event table); every other table is PRIVATE and read through views (S9). Paste into [mermaid.live](https://mermaid.live) to preview. **Since S11a: `user` is private and `user_private` is merged into it; 78 table files in `spacetimedb/src/tables/`, 20 of them public (the 76 / 21 above predate later additions).**
 
+Phase S14.3s execution (DECISIONS.md A190 items 1, 3, 15): new PRIVATE table `user_loadout` (`id` autoInc PK, `userId`, `slot` u8 0-9, `name`, `note`, `code` (the packed team text), audit columns; btree `user_id` and `by_user_and_slot`), a verified member's team builder loadouts, read through the new view `view_my_loadouts`; deleted with the user (`performUserDeletion`) and cleared by `server_nuke_test_data`. Additive: no wipe (docs/loadout/architecture.md).
+
 Phase S11a execution, part 2 (closing-triage items "fix at S11"): `cost_set` is PRIVATE (L91; the published sets are read through the new anonymous view `view_published_cost_sets`) and gains an `is_published` btree index. New PRIVATE table `lobby_cursor_stamp` (`lobbyId`, `userId`, `lastCursorAt`, audit columns; btree `lobby_id` and `by_lobby_and_user`; the `broadcast_cursor` throttle stamp, L19) and `lobby_member` loses `lastCursorAt`. `match_session_step` loses `anonymousLabel`; the enum `ActionType` and the struct enum `StepPayload` lose `ArrangeLineup`, and the struct `ArrangeLineupPayload` is removed (L39). `match_result_game` loses `validationStatus` and `validatedByUserId`, and the enum `ValidationStatus` is removed (L60). `match_result_record` gains `staffOverrideReason?` (string) after `settledAt` (L49). `tournament` loses `seasonId` and `tournament_finalize_job` loses `cursor` (L84). `leaderboard` and `mmr_rating` gain a `season_id` btree index (S10j review F3). `lobby_password.passwordHash` now holds a salted SHA-256 (L24; data rule, no column change). Clear-publish (docs/admin, docs/lobby, docs/chat, docs/match-session, docs/match-results, docs/tournament, docs/cost-sets, docs/mmr, docs/views architecture "Phase S11a execution, part 2"). Table count: 79 table files, 19 public.
 
 Phase S11a execution (DECISIONS.md A77, A143): `user` is PRIVATE (`public: false`) and absorbs `user_private`, which is removed: `user` loses `hasDiscordLinked` and gains, after `deletedAt`, `loginMethod?`, `providerId?`, `providerUsername?` (strings) and `linkedAt?` (timestamp), with the btree indexes `provider_id` and `by_method_and_provider` moved from `user_private`. `leaderboard` gains `displayName` and `avatarCharacterName` (strings) after `userId` (the public top 20 carries the card, A77(1)). `tournament_player_account` gains `origin` (the new enum `AccountLockOrigin` = Entry | StandIn) after `hsrAccountId` and a `tournament_id` btree index (A143). New view `view_admin_users`. Clear-publish (docs/auth, docs/views, docs/tournament, docs/mmr architecture "Phase S11a execution").
@@ -27,7 +29,7 @@ Phase S7b execution (DECISIONS.md A60): `match_result_game` gains `blueConfirmed
 |-------|--------|
 | blue | user (PRIVATE since S11a, A77), user_presence (PRIVATE, new S3 A48), user_identity (PRIVATE), ~~user_private~~ (merged into user, S11a), ban_record (PRIVATE), link_request (PRIVATE, new S3 A46), deleted_user (PRIVATE), server_identity (PRIVATE), user_deletion_job, identity_gc_job, gc_result (PRIVATE) |
 | green | hsr_character, hsr_lightcone, archetype, hsr_character_archetype, season |
-| orange | hsr_account (PRIVATE), hsr_account_character (PRIVATE), cost_set (PRIVATE since S11a), hsr_character_cost, hsr_lightcone_cost, hsr_synergy_cost (characterA/characterB, A21), cost_set_draft_character (PRIVATE), cost_set_draft_lightcone (PRIVATE), cost_set_draft_synergy (PRIVATE) |
+| orange | hsr_account (PRIVATE), hsr_account_character (PRIVATE), user_loadout (PRIVATE, new S14.3s), cost_set (PRIVATE since S11a), hsr_character_cost, hsr_lightcone_cost, hsr_synergy_cost (characterA/characterB, A21), cost_set_draft_character (PRIVATE), cost_set_draft_lightcone (PRIVATE), cost_set_draft_synergy (PRIVATE) |
 | purple | tournament, bracket_match, tournament_enrolled (PRIVATE), tournament_team_member (PRIVATE), tournament_assistant (PRIVATE), tournament_team (PRIVATE), tournament_team_request (PRIVATE), tournament_stand_in (PRIVATE), tournament_player_account (PRIVATE), tournament_finalize_job (scheduled, new S3 A24) |
 | cyan | lobby (PRIVATE), lobby_member_account (PRIVATE), lobby_member (PRIVATE), lobby_ban (PRIVATE), lobby_preset (PRIVATE), lobby_password (PRIVATE), lobby_cursor_stamp (PRIVATE, new S11a), lobby_cursor_event (public event, no audit columns A19), lobby_gc_job, referee_transfer_check (scheduled, new S3 A22a), match_session (PRIVATE), match_session_step (PRIVATE), match_lineup (PRIVATE, new S3 A21), chat_message (PRIVATE), elo_config |
 | red | match_result_record (PRIVATE), match_result_game (PRIVATE), match_result_participant (PRIVATE), match_result_group_score (PRIVATE, new S3 A21), match_result_adjustment (PRIVATE, new S3 A21) |
@@ -117,6 +119,11 @@ erDiagram
     hsr_account_lightcone {
         u32 hsrAccountId PK_FK
         string lightconeName PK_FK
+    }
+    user_loadout {
+        u32 id PK
+        u32 userId FK
+        u8 slot "0-9, unique per user (reducer check)"
     }
     cost_set {
         bool isPublished "S11a L91: PRIVATE table; view_published_cost_sets lists isPublished rows"
@@ -487,6 +494,7 @@ erDiagram
     %% orange: roster/costs (one user has many accounts, many-to-many char ownership)
     hsr_account }o--|| user : "userId (many-to-one)"
     hsr_account_character }o--|| hsr_account : "hsrAccountId (many-to-one)"
+    user_loadout }o--|| user : "userId (many-to-one, at most 10)"
     hsr_account_character }o--|| hsr_character : "characterName (many-to-one)"
     hsr_account_lightcone }o--|| hsr_account : "hsrAccountId (many-to-one)"
     hsr_account_lightcone }o--|| hsr_lightcone : "lightconeName (many-to-one)"

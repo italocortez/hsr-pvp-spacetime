@@ -980,6 +980,21 @@ keeps the earlier text, and the A98 away / abandoned texts still come first. Man
   offline, a returning opponent can neither resume, claim nor close. It ends when the referee or a player of the paused
   team returns, through staff, or through the lobby clean-up once everyone has been offline for 30 min.
 
+## Phase S14.3s execution (DECISIONS.md A191 item 4)
+
+- **`equip_lightcone` refuses `EMPTY`.** After the caller, window, throttle and step-room checks and before the draft
+  check, `characterName === 'EMPTY'` is refused with "A light cone cannot be equipped on an empty pick."
+  (`EMPTY_LIGHTCONE_TEXT`, `reducers/draft/postDraft.ts`). It covers a Classic `EMPTY` pick (manual or by the timer)
+  and an Auction `EMPTY` sale, on the open path and the Admin path alike. Nothing is written and no budget moves.
+- **Sibling paths checked.** `equip_lightcone` is the only writer of an `EquipLightcone` step (Classic and Auction share
+  it; the Auction draft has no light-cone path of its own). `set_eidolon` already refuses `EMPTY` ("EMPTY has no
+  eidolon."). `arrange_lineup` places `EMPTY` like any drafted name and takes no light cone. `SKIP` is a ban, never in a
+  team's draft, so the existing draft check refuses it.
+- **`unequip_lightcone` is unchanged on purpose:** a light cone equipped on `EMPTY` before this rule (test1 only; none
+  on prod) can still be removed, and its `costPaid` goes back to the light-cone budget. No data migration: the old step
+  stays in the log and counts in the roster cost until it is unequipped or the game ends.
+- Tests: `spacetimedb/src/__tests__/match-session/empty-pick-lightcone.test.ts`.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -1042,6 +1057,7 @@ keeps the earlier text, and the A98 away / abandoned texts still come first. Man
 | Reserve time: the on-clock team's reserve drains after its turn time and pays the overtime at each turn end; expiry needs turn time and reserve at 0; pause freezes both (`TimerState.reserveUsedMs`, `inReserve`); undo restores the reserves of the turn it returns to (`TimerState.reserveMarks`); turn actions refused more than 1 s after the end ("Time is up for this turn."); no automatic lift of an auto-pause on return | Phase S10aa execution (DECISIONS.md A148, A149, A150, A151) | 2026-11-11 |
 | Fix pass: `resume_draft` on an auto-pause accepts a referee or a present seated player of the team named by the Pause step's `actorSlot` (the dropped player's team); the other team gets "Only the paused team or a referee can resume this pause."; a pause on a spent turn stays allowed (1 ms frozen, the tolerance counts again after the resume) | Phase S10aa execution (DECISIONS.md A153, A154) | 2026-11-11 |
 | Removed (closing triage L39): the `ArrangeLineup` step kind (`ActionType`, `StepPayload`, `ArrangeLineupPayload`; `arrange_lineup` never logged a step) and `MatchSessionStep.anonymousLabel` (always empty; `view_my_match_steps` computes the actor's seat label at read time, falling back to "<side> player" for a leaver). `run_referee_transfer_check` (the auto-pause writer) refuses any caller but the scheduler (L11) | Phase S11a execution | 2026-11-11 |
+| `equip_lightcone` refuses `EMPTY` ("A light cone cannot be equipped on an empty pick."); `unequip_lightcone` stays open on `EMPTY` for cones equipped before the rule; no migration | Phase S14.3s execution (DECISIONS.md A191 item 4) | 2026-11-17 |
 
 ---
 

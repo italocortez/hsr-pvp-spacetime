@@ -1966,3 +1966,18 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   9. Open, on the user's side: `design/mockups/lc-data.js` is missing locally, and all 156 light cones share one position value, so the art is framed the same for every cone (3 of 7 sampled read as a subject).
 - **Why:** user, 2026-11-16: "you can continue with the next steps unless you need rulings from me"; on the first build: "it was build wrong ... the mockup has its own special look and feel when it comes to selecting eidolons and lightcones and also lightcones have special sphapes, are we fixing that or that comes later?".
 - **Where implemented:** `web/src/pages/teambuilder/`, `shared/teambuilder/`, `shared/scoring/auction.ts`, `web/src/lib/{rosterModel,rosterSearch,useAnnouncement}.ts`, `web/src/stdb/useCustomCostSet.ts`, `web/src/components/{PageIntro,FilterSearch}/`, `web/src/routes/teambuilder.tsx`, `docs/frontend/{pages,subscriptions,component-hygiene}.md`, `docs/log/2026-11-16-s14-3a.md`
+
+### A193 — S14.3s: loadout backend and the empty-pick rule, as built
+
+- **Date:** 2026-11-17 · **Status:** items 1 and 2 implement A190 and A191; items 3 to 7 are the implementer's choices, agreed by the orchestrator, for the user to rule on; item 8 open; not published yet
+- **Decision:**
+  1. Loadouts: a private table `user_loadout` (owner, slot 0 to 9, name, note, the packed team text), reducers `save_loadout` and `delete_loadout` for verified accounts only, and `view_my_loadouts`, which returns the caller's rows only (slot, name, note, team text). Account deletion removes them. Limits: 10 per account, name 40, note 1,000, team text 400, counted in UTF-16 units.
+  2. `equip_lightcone` refuses an `EMPTY` pick or sale: "A light cone cannot be equipped on an empty pick."
+  3. Implementer: a blank name is refused ("Loadout name cannot be empty.") rather than saved as "Untitled". The page must therefore never send an empty name (S14.3c).
+  4. Implementer: an eidolon or superimposition out of range gets the general text "This team could not be read. Reload the page and try again.", because the shared decoder reports both as a bad slot.
+  5. Implementer: loadout writes count on the allowance the roster writes already use (20 calls per 10 s), shared with them.
+  6. Implementer: `unequip_lightcone` stays open on an `EMPTY` slot, so a light cone equipped before the rule can still be removed and refunded. No migration.
+  7. Implementer: saving unknown character or light cone names is refused; `ensureVerifiedUser` takes an optional message so loadouts have their own guest text ("Saving loadouts to your account needs a Discord-linked account. Your loadouts stay in this browser.").
+  8. Open, before the first prod publish: a slower allowance of its own for loadout saves. The review estimates one scripted verified account at the shared allowance at about 8% of the monthly energy budget (about half of it not new).
+- **Why:** user rulings in A190 (items 1, 3, 15) and A191 (item 4); user, 2026-11-16: "you can continue with the next steps unless you need rulings from me".
+- **Where implemented:** `spacetimedb/src/tables/roster/userLoadout.ts`, `reducers/roster/userLoadouts.ts`, `helpers/roster/loadoutRules.ts`, `views/loadoutViews.ts`, `helpers/identity/{ensurePermissions,userDeletionHelper}.ts`, `reducers/identity/server.ts`, `reducers/draft/postDraft.ts`, `schema.ts`, `web/src/module_bindings/` (generated), `test/live/{auth-subscriptions,outsider-isolation}.test.ts`, `docs/loadout/`, `docs/{match-session,roster,auth,views}/`, `docs/ERD.md`, `docs/log/2026-11-17-s14-3s.md`

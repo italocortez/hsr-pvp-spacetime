@@ -108,6 +108,7 @@ import DeleteCalendarEventReducer from "./delete_calendar_event_reducer";
 import DeleteChatMessageReducer from "./delete_chat_message_reducer";
 import DeleteCostSetReducer from "./delete_cost_set_reducer";
 import DeleteHsrAccountReducer from "./delete_hsr_account_reducer";
+import DeleteLoadoutReducer from "./delete_loadout_reducer";
 import DeleteLobbyPresetReducer from "./delete_lobby_preset_reducer";
 import DeleteMyAccountReducer from "./delete_my_account_reducer";
 import DeselectMatchAccountReducer from "./deselect_match_account_reducer";
@@ -157,6 +158,7 @@ import ResumeDraftReducer from "./resume_draft_reducer";
 import RevokeStandInReducer from "./revoke_stand_in_reducer";
 import RollbackBracketMatchReducer from "./rollback_bracket_match_reducer";
 import SaveCalendarReducer from "./save_calendar_reducer";
+import SaveLoadoutReducer from "./save_loadout_reducer";
 import SeedBracketReducer from "./seed_bracket_reducer";
 import SeedIdentityGcJobReducer from "./seed_identity_gc_job_reducer";
 import SeedLobbyGcJobReducer from "./seed_lobby_gc_job_reducer";
@@ -265,6 +267,7 @@ import ViewMyDraftSynergyCostsRow from "./view_my_draft_synergy_costs_table";
 import ViewMyIdentityRow from "./view_my_identity_table";
 import ViewMyLineupsRow from "./view_my_lineups_table";
 import ViewMyLinkRequestRow from "./view_my_link_request_table";
+import ViewMyLoadoutsRow from "./view_my_loadouts_table";
 import ViewMyLobbiesRow from "./view_my_lobbies_table";
 import ViewMyLobbyRow from "./view_my_lobby_table";
 import ViewMyLobbyBansRow from "./view_my_lobby_bans_table";
@@ -797,6 +800,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, ViewMyLinkRequestRow),
+  viewMyLoadouts: __table({
+    name: 'view_my_loadouts',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, ViewMyLoadoutsRow),
   viewMyLobbies: __table({
     name: 'view_my_lobbies',
     indexes: [
@@ -1197,6 +1207,7 @@ const reducersSchema = __reducers(
   __reducerSchema("delete_chat_message", DeleteChatMessageReducer),
   __reducerSchema("delete_cost_set", DeleteCostSetReducer),
   __reducerSchema("delete_hsr_account", DeleteHsrAccountReducer),
+  __reducerSchema("delete_loadout", DeleteLoadoutReducer),
   __reducerSchema("delete_lobby_preset", DeleteLobbyPresetReducer),
   __reducerSchema("delete_my_account", DeleteMyAccountReducer),
   __reducerSchema("deselect_match_account", DeselectMatchAccountReducer),
@@ -1246,6 +1257,7 @@ const reducersSchema = __reducers(
   __reducerSchema("revoke_stand_in", RevokeStandInReducer),
   __reducerSchema("rollback_bracket_match", RollbackBracketMatchReducer),
   __reducerSchema("save_calendar", SaveCalendarReducer),
+  __reducerSchema("save_loadout", SaveLoadoutReducer),
   __reducerSchema("seed_bracket", SeedBracketReducer),
   __reducerSchema("seed_identity_gc_job", SeedIdentityGcJobReducer),
   __reducerSchema("seed_lobby_gc_job", SeedLobbyGcJobReducer),
@@ -1408,6 +1420,8 @@ type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "ta
     readonly "view_my_lineups": Omit<typeof tablesSchema.schemaType.tables["viewMyLineups"], "accessorName"> & { readonly accessorName: "view_my_lineups" };
     /** @deprecated Use `viewMyLinkRequest` instead. This alias will be removed in the next major version. */
     readonly "view_my_link_request": Omit<typeof tablesSchema.schemaType.tables["viewMyLinkRequest"], "accessorName"> & { readonly accessorName: "view_my_link_request" };
+    /** @deprecated Use `viewMyLoadouts` instead. This alias will be removed in the next major version. */
+    readonly "view_my_loadouts": Omit<typeof tablesSchema.schemaType.tables["viewMyLoadouts"], "accessorName"> & { readonly accessorName: "view_my_loadouts" };
     /** @deprecated Use `viewMyLobbies` instead. This alias will be removed in the next major version. */
     readonly "view_my_lobbies": Omit<typeof tablesSchema.schemaType.tables["viewMyLobbies"], "accessorName"> & { readonly accessorName: "view_my_lobbies" };
     /** @deprecated Use `viewMyLobby` instead. This alias will be removed in the next major version. */
@@ -1569,6 +1583,7 @@ const tableAccessorAliases = {
   "view_my_identity": "viewMyIdentity",
   "view_my_lineups": "viewMyLineups",
   "view_my_link_request": "viewMyLinkRequest",
+  "view_my_loadouts": "viewMyLoadouts",
   "view_my_lobbies": "viewMyLobbies",
   "view_my_lobby": "viewMyLobby",
   "view_my_lobby_bans": "viewMyLobbyBans",
@@ -1737,6 +1752,8 @@ export type Tables = __TablesBase & {
   readonly "view_my_lineups": __TablesBase["viewMyLineups"];
   /** @deprecated Use `viewMyLinkRequest` instead. This alias will be removed in the next major version. */
   readonly "view_my_link_request": __TablesBase["viewMyLinkRequest"];
+  /** @deprecated Use `viewMyLoadouts` instead. This alias will be removed in the next major version. */
+  readonly "view_my_loadouts": __TablesBase["viewMyLoadouts"];
   /** @deprecated Use `viewMyLobbies` instead. This alias will be removed in the next major version. */
   readonly "view_my_lobbies": __TablesBase["viewMyLobbies"];
   /** @deprecated Use `viewMyLobby` instead. This alias will be removed in the next major version. */

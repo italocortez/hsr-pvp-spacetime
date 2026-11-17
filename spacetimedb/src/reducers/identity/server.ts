@@ -634,6 +634,7 @@ export const server_nuke_test_data = spacetimedb.reducer({
     // ── Rosters
     ctx.db.HsrAccountCharacter.clear();
     ctx.db.HsrAccount.clear();
+    ctx.db.UserLoadout.clear(); // S14.3s
 
     // ── User achievements (keep Achievement/AchievementCriteria seed data)
     ctx.db.UserAchievement.clear();
