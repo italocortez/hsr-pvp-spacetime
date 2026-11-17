@@ -1,5 +1,9 @@
 import type { CostSet, HsrCharacter, HsrLightcone } from '@bindings/types';
 import {
+    auctionSpend,
+    BID_MAX,
+    BUDGET_MAX,
+    type Budgets,
     defaultEidolon,
     defaultSuperimposition,
     firstEmptySlot,
@@ -204,6 +208,13 @@ export function useTeamBuilderPage(search: TeamBuilderSearch) {
         [computed, costsReady],
     );
 
+    // S14.3b: the Auction simulator, from the same figures as the total; null in Classic, where the figures are
+    // Classic costs and a winning amount means nothing (review M11).
+    const spend = useMemo(
+        () => (view.draft === 'auction' ? auctionSpend(team.slots, cost, team.budgets) : null),
+        [view.draft, team.slots, cost, team.budgets],
+    );
+
     const sortedLightcones = useMemo(
         () => [...ref.lightcones].sort((a, b) => compareText(a.displayName, b.displayName)),
         [ref.lightcones],
@@ -318,6 +329,19 @@ export function useTeamBuilderPage(search: TeamBuilderSearch) {
                 superimposition: defaultSuperimposition(l),
             });
         },
+        /** S14.3b: a slot's Auction extra bid, hundredths (0 clears it; the packed text then writes nothing). */
+        setBid(index: number, hundredths: number) {
+            const s = team.slots[index];
+            if (!s) return;
+            const bid = Math.min(BID_MAX, Math.max(0, Math.round(hundredths)));
+            const { bid: _old, ...rest } = s;
+            team.setSlot(index, bid > 0 ? { ...rest, bid } : rest);
+        },
+        /** S14.3b: one of the two Auction budgets, hundredths. */
+        setBudget(kind: keyof Budgets, hundredths: number) {
+            const v = Math.min(BUDGET_MAX, Math.max(0, Math.round(hundredths)));
+            team.setBudgets((b) => (b[kind] === v ? b : { ...b, [kind]: v }));
+        },
         swap(a: number, b: number) {
             dismissNotices();
             team.swap(a, b);
@@ -349,6 +373,8 @@ export function useTeamBuilderPage(search: TeamBuilderSearch) {
         slots: team.slots,
         filled,
         cost,
+        budgets: team.budgets,
+        spend,
         costsReady,
         source,
         dataState,

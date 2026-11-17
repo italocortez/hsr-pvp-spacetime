@@ -1,0 +1,23 @@
+/*
+ * The message under an Auction amount field (S14.3b fix pass, review S3 and S4): while the text is refused or above
+ * the cap (red edge, as the field's), and for a few seconds after leaving the field (what was kept or set). Text in
+ * body ink (mist), never the edge colour, so it stays readable on the card and on the bid pill.
+ */
+
+.message {
+    display: block;
+    padding-inline-start: 7px;
+    border-inline-start: 2px solid var(--color-error);
+    color: var(--text-body);
+    font-family: var(--font-secondary);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: normal;
+    line-height: 1.35;
+    text-transform: none;
+    overflow-wrap: anywhere;
+
+    &[data-tone="note"] {
+        border-inline-start-color: var(--color-prestige);
+    }
+}

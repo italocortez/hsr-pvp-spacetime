@@ -1,0 +1,353 @@
+/*
+ * The CSS stacked column chart (S14.3b). Look from design/mockups/teambuilder.html's Chart.js chart: faint grid
+ * (rgba(255, 255, 255, 0.06), no tick labels), the axis line in --border-strong, columns at most 70px wide (72% of
+ * their slot), square ends, the "Σ total" label in gold mono bold 13px above each column, names in snow mono 11px,
+ * the value axis title in mist mono 11px, the tooltip on graphite with a --border-strong edge.
+ *
+ * Settable on an ancestor: --chart-tone-1..4 (the series colours), --chart-plot-h (the plot's height, 220px).
+ */
+
+.chart {
+    --plot-h: var(--chart-plot-h, 220px);
+    --plot-pad: 24px;
+    --chart-grid: rgba(255, 255, 255, 0.06); /* the mockup's CHART_COL.grid; no token */
+
+    display: grid;
+    grid-template-areas:
+        "axis plot"
+        ". legend";
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 8px;
+}
+
+.axisTitle {
+    grid-area: axis;
+    align-self: start;
+    /* Vertical text: its inline size is the plot's height. */
+    inline-size: var(--plot-h);
+    margin: 0;
+    color: var(--color-mist);
+    font-family: var(--font-primary);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-align: center;
+    white-space: nowrap;
+    writing-mode: vertical-rl;
+    rotate: 180deg;
+}
+
+.empty {
+    display: flex;
+    grid-area: plot;
+    align-items: center;
+    justify-content: center;
+    block-size: var(--plot-h);
+    margin: 0;
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.columns {
+    position: relative;
+    display: grid;
+    grid-area: plot;
+    grid-template-columns: repeat(var(--columns), minmax(0, 1fr));
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.column {
+    display: grid;
+    grid-template-rows: var(--plot-h) auto;
+    min-inline-size: 0;
+}
+
+/* The plot part of a column: the focus and hover target, as tall as the plot (never only the painted bar). */
+.plot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    box-sizing: border-box;
+    min-inline-size: 0;
+    margin: 0;
+    padding: var(--plot-pad) 0 0;
+    border: 0;
+    border-block-end: 1px solid var(--border-strong);
+    background-color: transparent;
+    /* One grid line on top of each step, counted from the baseline. */
+    background-image: linear-gradient(var(--chart-grid) 1px, transparent 1px);
+    background-position: bottom;
+    background-repeat: repeat-y;
+    background-size: 100% var(--grid-tile);
+    background-origin: content-box;
+    background-clip: content-box;
+    color: inherit;
+    font: inherit;
+    cursor: default;
+
+    &:focus-visible {
+        outline: none;
+    }
+}
+
+.column[data-apart] .plot {
+    box-shadow: inset 1px 0 0 var(--border-subtle);
+}
+
+.stack {
+    position: relative;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 2px; /* the surface gap between parts */
+    box-sizing: border-box;
+    inline-size: min(70px, 72%);
+    block-size: calc(var(--share) * 100%);
+    transition:
+        block-size var(--duration-slow) var(--ease-out),
+        filter var(--duration-fast) var(--ease-out);
+}
+
+.column:hover .stack,
+.plot:focus-visible .stack {
+    filter: brightness(1.18);
+}
+
+.plot:focus-visible .stack {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 3px;
+}
+
+.segment {
+    flex: 0 1 0;
+    min-block-size: 2px; /* a very small part stays visible */
+    transition: flex-grow var(--duration-slow) var(--ease-out);
+}
+
+.totalText {
+    position: absolute;
+    inset-block-end: calc(100% + 4px);
+    inset-inline: -24px;
+    color: var(--color-prestige);
+    font-family: var(--font-primary);
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    line-height: 1.2;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.name {
+    display: -webkit-box;
+    overflow: hidden;
+    padding: 8px 2px 0;
+    color: var(--color-snow);
+    font-family: var(--font-primary);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.3;
+    text-align: center;
+    /* Break between words (review M3: "Pairing / s" at 360 with `anywhere`); a word wider than its column is
+       hyphenated where the browser can, and cut only when it cannot. */
+    overflow-wrap: break-word;
+    hyphens: auto;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+}
+
+.column[data-apart] .name {
+    /* No side padding: "Pairings" (52.8px in 11px mono) fits a 54px column at 360 with five columns (review M3). */
+    padding-inline: 0;
+    color: var(--color-mist);
+}
+
+/* The tooltip: above the column's total label, kept inside the chart's width. */
+.tip {
+    --tip-w: min(13rem, 100%);
+
+    position: absolute;
+    z-index: 20;
+    inset-block-start: calc(
+        var(--plot-pad) +
+        (1 - var(--share)) *
+        (var(--plot-h) - var(--plot-pad)) -
+        24px
+    );
+    inset-inline-start: clamp(
+        0px,
+        calc(var(--center) - var(--tip-w) / 2),
+        calc(100% - var(--tip-w))
+    );
+    display: grid;
+    gap: 4px;
+    box-sizing: border-box;
+    inline-size: var(--tip-w);
+    padding: 11px;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    background: var(--color-graphite);
+    box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.85);
+    translate: 0 -100%;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+        opacity var(--duration-fast) var(--ease-out),
+        visibility var(--duration-fast) allow-discrete;
+}
+
+.column:is(:hover, :focus-within):not([data-dismissed]) .tip {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.tipTitle {
+    margin-block-end: 2px;
+    color: var(--color-snow);
+    font-family: var(--font-secondary);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.tipRow {
+    display: grid;
+    grid-template-columns: 10px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    color: var(--color-mist);
+    font-family: var(--font-primary);
+    font-size: 0.6875rem;
+
+    & b {
+        color: var(--color-snow);
+        font-variant-numeric: tabular-nums;
+        font-weight: 700;
+    }
+}
+
+/* A short stroke of the series colour (dataviz: line keys in tooltips). */
+.tipKey {
+    display: block;
+    inline-size: 10px;
+    block-size: 3px;
+}
+
+.tipTotal {
+    margin-block-start: 2px;
+    color: var(--color-prestige);
+    font-family: var(--font-primary);
+    font-size: 0.6875rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+}
+
+.legend {
+    display: flex;
+    flex-wrap: wrap;
+    grid-area: legend;
+    gap: 8px 14px;
+    margin: 18px 0 0;
+    padding: 14px 0 0;
+    border-block-start: 1px solid var(--border-subtle);
+    list-style: none;
+
+    & li {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        color: var(--text-body);
+        font-family: var(--font-primary);
+        font-size: 0.625rem;
+        font-weight: 500;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+    }
+}
+
+.swatch {
+    display: block;
+    flex: none;
+    inline-size: 10px;
+    block-size: 10px;
+}
+
+:is(.segment, .swatch, .tipKey)[data-tone="1"] {
+    background: var(--chart-tone-1, var(--color-periwinkle));
+}
+
+:is(.segment, .swatch, .tipKey)[data-tone="2"] {
+    background: var(--chart-tone-2, var(--color-mist));
+}
+
+:is(.segment, .swatch, .tipKey)[data-tone="3"] {
+    background: var(--chart-tone-3, var(--color-iris-pressed));
+}
+
+:is(.segment, .swatch, .tipKey)[data-tone="4"] {
+    background: var(--chart-tone-4, var(--color-iris));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    @starting-style {
+        .stack {
+            block-size: 0;
+        }
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .stack,
+    .segment,
+    .tip {
+        transition: none;
+    }
+}
+
+/* Forced colours: the parts keep apart without hue (solid, outlined, highlight, hatched). */
+@media (forced-colors: active) {
+    .segment,
+    .swatch,
+    .tipKey {
+        forced-color-adjust: none;
+    }
+
+    :is(.segment, .swatch, .tipKey)[data-tone="1"] {
+        background: CanvasText;
+    }
+
+    :is(.segment, .swatch, .tipKey)[data-tone="2"] {
+        background: Canvas;
+        box-shadow: inset 0 0 0 1px CanvasText;
+    }
+
+    :is(.segment, .swatch, .tipKey)[data-tone="3"] {
+        background: Highlight;
+    }
+
+    :is(.segment, .swatch, .tipKey)[data-tone="4"] {
+        background: repeating-linear-gradient(45deg, CanvasText 0 2px, Canvas 2px 5px);
+    }
+
+    .plot {
+        background-image: none;
+        border-block-end-color: CanvasText;
+    }
+
+    .plot:focus-visible .stack {
+        outline-color: Highlight;
+    }
+
+    .tip {
+        border-color: CanvasText;
+    }
+}

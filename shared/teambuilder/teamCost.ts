@@ -6,7 +6,8 @@ import {
     synergySurcharge,
     toHundredths,
 } from '@shared/scoring';
-import { type DraftMode, type Slots, teamCharacters } from './team';
+import { type DraftMode, type Slots, type TeamSlot, teamCharacters } from './team';
+import { BID_MAX } from './teamCode';
 
 // S14.3a: what a team costs, by the module's own rules (research section 5.1), in integer hundredths like
 // `shared/scoring` (A21: floats only at the boundary, `toHundredths` once per stored f32).
@@ -24,8 +25,13 @@ import { type DraftMode, type Slots, teamCharacters } from './team';
 //
 // Rows are the chosen cost set's for the chosen game mode and draft mode (A101); the caller picks them through the
 // `TeamCostSource`. A character or light cone without a row costs 0 here and is flagged (`missing`), so the page
-// can show "n/a" and a warning (A190 item 6); a lobby would refuse it. In Auction the bid is assumed to be the base:
-// the simulator's extra bids are S14.3b.
+// can show "n/a" and a warning (A190 item 6); a lobby would refuse it.
+//
+// S14.3b: in Auction the character costs what the module records for a sale (scoringHelpers `teamDraft`): the
+// winning amount plus the eidolon extra. The winning amount is the base (the nomination's opening bid) plus the
+// slot's extra bid (`TeamSlot.bid`, clamped to 0..BID_MAX); Classic ignores bids. A character without a row is
+// "n/a" and its bid is not counted either (a lobby could not sell it). `auctionSpend` (auctionSpend.ts) splits the
+// same figures over the two Auction budgets.
 
 /** The cost rows of one cost set for the chosen game mode and draft mode, as stored (f32 values). */
 export type TeamCostSource = {
@@ -38,7 +44,7 @@ export type TeamCostSource = {
 };
 
 export type SlotCost = {
-    /** Hundredths; null when the set has no row (counted as 0). Auction: base + `extra`. */
+    /** Hundredths; null when the set has no row (counted as 0). Auction: base + the slot's bid + `extra`. */
     character: number | null;
     /** Auction only: the eidolon extra inside `character` (0 in Classic and at E0). */
     extra: number;
@@ -64,6 +70,13 @@ export type TeamCost = {
     missing: Missing[];
 };
 
+/** A slot's Auction extra bid in hundredths, 0..BID_MAX (absent, negative or not a whole number of hundredths: 0). */
+export function slotBid(slot: Pick<TeamSlot, 'bid'>): number {
+    const bid = slot.bid;
+    if (typeof bid !== 'number' || !Number.isInteger(bid) || bid <= 0) return 0;
+    return Math.min(bid, BID_MAX);
+}
+
 export function teamCost(slots: Slots, draftMode: DraftMode, source: TeamCostSource): TeamCost {
     const missing: Missing[] = [];
     const characterCosts: number[] = [];
@@ -80,7 +93,7 @@ export function teamCost(slots: Slots, draftMode: DraftMode, source: TeamCostSou
             if (draftMode === 'auction') {
                 // The module's order: the extra is the difference of the stored values, rounded once.
                 extra = auctionEidolonExtra(row[0] ?? 0, row[slot.eidolon] ?? 0);
-                character = toHundredths(row[0] ?? 0) + extra;
+                character = toHundredths(row[0] ?? 0) + slotBid(slot) + extra;
             } else {
                 character = toHundredths(row[slot.eidolon] ?? 0);
             }

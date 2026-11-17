@@ -2015,3 +2015,19 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   3. Orchestrator: the team builder hides the pairings part of its Auction budget meter while the surcharge is 0, and says in one sentence that pairs cost nothing in Auction unless the cost set prices them.
 - **Why:** user, 2026-11-17: "was synergy cost planned for auction? I remember that I decided that the bid war is what compensates for synergy cost but I don't remember if I changed my mind on that"; then, on allowing a custom set to price them: "I agree on keeping the door open for that".
 - **Where implemented:** `data/seed/synergies.json` (item 1, since before A108); `spacetimedb/src/helpers/results/scoringHelpers.ts` `ensureAuctionSurchargeFits` (item 2); item 3 in S14.3b.
+
+### A197 — S14.3b: cost chart and Auction simulator, as built
+
+- **Date:** 2026-11-17 · **Status:** item 1 implements A190 items 5 and 11; items 2 to 7 are the implementers' choices, agreed by the orchestrator, for the user to rule on; items 8 and 9 open
+- **Decision:**
+  1. The cost chart is CSS and plain markup, a shared component (`StackedBarChart`), with no chart library. The Auction simulator follows the module: the character budget pays each sale's winning amount (the E0 cost as the opening bid plus the team's extra bid); eidolons above the default are paid from the character budget first, then the light cone budget; the leftover character budget rolls into the light cone budget; light cones are paid from the light cone budget; a synergy surcharge is never subtracted, must fit what is left, and counts in the total.
+  2. Known differences from a real draft, stated on the page: the simulator assumes the best order of sales, so a lobby can refuse a last bid that fits here; a lobby's minimum raise is not known to the team builder and is named without a number.
+  3. Amount fields: a comma is read as the decimal mark ("2,5" is 2.5), a dot always is; "1,000" is refused as unclear; a leading or trailing currency sign and spaces are ignored; letters, a minus sign, exponent forms and two marks are refused. A refused entry restores the amount the field held before, with "Not read. Kept N.". A value above the cap is stored as the cap and the field says so.
+  4. "Over budget" is announced once when the state changes and has held still for 600 ms, and "Back within budget." once when it fits again; a team that opens over budget is shown, not announced.
+  5. Extra bids are kept when the draft mode is switched to Classic, with a line saying so, because the team link carries them.
+  6. The chart on phones is shown in full, not behind a disclosure. The Pairings column appears only while the surcharge is above 0.
+  7. The chart colours keep each game mode's hue family from the mockup, shifted by the smallest amount that gives every segment at least 3:1 against the card and clear separation between segments. The mockup's own values measured as low as 1.89:1. The AA ramp moved the most, from garnet toward coral.
+  8. Open, for the user by look: the adjusted colours against the mockup's, and the Pairings column against pairs in the total only (A190 item 12); both at `tmp/pw/ab-chart/compare.html` (local).
+  9. Open: the wording the implementers wrote, tabled in `docs/frontend/pages.md`.
+- **Why:** user rulings A190 (items 5, 11, 12) and A196; user, 2026-11-16: "you can continue with the next steps unless you need rulings from me".
+- **Where implemented:** `web/src/components/StackedBarChart/`, `web/src/pages/teambuilder/` (`CostChart`, `AuctionPanel`, `AmountField`, `costChartModel.ts`), `shared/teambuilder/{auctionSpend,amount}.ts`, `docs/frontend/{pages,component-hygiene}.md`, `docs/log/2026-11-17-s14-3b.md`

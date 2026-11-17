@@ -1,16 +1,18 @@
 import type { HsrCharacter, HsrLightcone } from '@bindings/types';
-import type { SlotCost, Slots } from '@shared/teambuilder';
+import { BID_MAX, type SlotCost, type Slots } from '@shared/teambuilder';
 import {
     type CSSProperties,
     type KeyboardEvent,
     type PointerEvent,
     useEffect,
+    useId,
     useRef,
     useState,
 } from 'react';
 import { RemoteImage } from '@/components/RemoteImage/RemoteImage';
 import { formatCostFixed as formatCost } from '@/lib/rosterModel';
 import hidden from '@/styles/visuallyHidden.module.css';
+import { AmountField } from './AmountField';
 import { LightconePicker } from './LightconePicker';
 import styles from './RosterSlots.module.css';
 import { EmptyConeIcon, GripIcon, LinkIcon } from './TeamBuilderIcons';
@@ -59,6 +61,8 @@ export type SlotsProps = {
     onEmpty: (index: number) => void;
     announce: (text: string) => void;
     draftAuction: boolean;
+    /** S14.3b: a slot's Auction extra bid changed (hundredths). */
+    onBid: (index: number, hundredths: number) => void;
 };
 
 const EIDOLONS = [0, 1, 2, 3, 4, 5, 6] as const;
@@ -348,10 +352,60 @@ export function RosterSlots(props: SlotsProps) {
                                 </span>
                             </button>
                         )}
+                        {slot && props.draftAuction && (
+                            <SlotBid
+                                index={index}
+                                name={nameAt(index)}
+                                value={slot.bid ?? 0}
+                                onBid={props.onBid}
+                                announce={announce}
+                            />
+                        )}
                     </li>
                 );
             })}
         </ol>
+    );
+}
+
+/**
+ * S14.3b: the Auction "Extra bid" under a filled card (the mockup's `.slotBid`): what the team bids on top of the
+ * base, step 0.5 by the arrow keys, at least 0, at most 99.99 (the packed team text's limit); a blank snaps back to 0.
+ */
+function SlotBid({
+    index,
+    name,
+    value,
+    onBid,
+    announce,
+}: {
+    index: number;
+    name: string;
+    value: number;
+    onBid: (index: number, hundredths: number) => void;
+    announce: (text: string) => void;
+}) {
+    const id = useId();
+    return (
+        <div className={styles.bid}>
+            <label className={styles.bidLabel} htmlFor={id}>
+                Extra bid
+            </label>
+            <span className={styles.bidPlus} aria-hidden="true">
+                +
+            </span>
+            {/* The name says whose bid it is: the visible label is the same on all four cards. */}
+            <AmountField
+                id={id}
+                aria-label={`Extra bid for ${name}`}
+                className={styles.bidInput}
+                messageClassName={styles.bidMessage}
+                value={value}
+                max={BID_MAX}
+                onChange={(v) => onBid(index, v)}
+                announce={announce}
+            />
+        </div>
     );
 }
 

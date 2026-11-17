@@ -185,6 +185,15 @@
     }
 }
 
+/* S14.3b fix pass (review M7): in Classic, while the team holds Auction bids, one quiet line that they are kept. */
+.modeNote {
+    flex: 1 1 100%;
+    margin: 0;
+    color: var(--text-body);
+    font-size: 0.75rem;
+    line-height: 1.45;
+}
+
 .notice {
     flex: 1 1 100%;
     margin: 0;

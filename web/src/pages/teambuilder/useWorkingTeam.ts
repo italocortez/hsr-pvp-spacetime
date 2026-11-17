@@ -119,6 +119,12 @@ export function useWorkingTeam(
         ),
         swap: useCallback((a: number, b: number) => update((s) => swapSlots(s, a, b)), [update]),
         clear: useCallback(() => update(() => [null, null, null, null]), [update]),
+        /** S14.3b: the Auction budgets (hundredths); written to storage with the slots. */
+        setBudgets: useCallback(
+            (next: (budgets: Budgets) => Budgets) =>
+                setState((s) => ({ ...s, budgets: next(s.budgets) })),
+            [],
+        ),
         /** The arrival has been handled (its notice shown, the address cleaned). */
         settleArrival: useCallback(
             () => setState((s) => ({ ...s, arrival: { kind: 'none' } })),

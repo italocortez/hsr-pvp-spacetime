@@ -33,6 +33,8 @@
 .cell {
     position: relative;
     display: flex;
+    /* S14.3b: the card, then (Auction) the extra bid under it; the card keeps its 3:4 shape. */
+    flex-direction: column;
     min-inline-size: 0;
     scroll-margin: 16px;
 
@@ -63,7 +65,7 @@
     --bar: 30px;
 
     position: relative;
-    flex: 1;
+    flex: none; /* S14.3b: the cell is a column (card, then the bid); the card keeps 3:4 */
     aspect-ratio: 3 / 4;
     min-inline-size: 0;
     overflow: hidden;
@@ -679,7 +681,7 @@
 
 .empty {
     display: flex;
-    flex: 1;
+    flex: none;
     flex-direction: column;
     gap: 8px;
     align-items: center;
@@ -738,7 +740,101 @@
     }
 }
 
+/* ── Auction extra bid (S14.3b; the mockup's .slotBid, flush under the card, sharing its border) ── */
+
+.bid {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    gap: 7px;
+    align-items: center;
+    padding: 7px 9px;
+    border: 1px solid var(--border-subtle);
+    border-block-start: none;
+    background:
+        linear-gradient(180deg, rgba(201, 169, 97, 0.08), transparent 60%), var(--bg-elevated);
+    transition: border-color var(--duration-base) var(--ease-out);
+
+    .cell:hover > & {
+        border-color: rgba(201, 169, 97, 0.45);
+    }
+}
+
+.bidLabel {
+    /* review M8: --text-muted was 3.74:1 on the pill at 8.5px (the mockup's colour) */
+    color: var(--text-body);
+    font-family: var(--font-primary);
+    font-size: 0.53125rem;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.bidPlus {
+    color: var(--color-prestige);
+    font-family: var(--font-primary);
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.bidInput {
+    box-sizing: border-box;
+    inline-size: 100%;
+    min-inline-size: 0;
+    block-size: 28px;
+    padding: 0 4px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    background: rgba(8, 9, 14, 0.6);
+    color: var(--color-snow);
+    font-family: var(--font-primary);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    text-align: center;
+    transition:
+        border-color var(--duration-fast),
+        box-shadow var(--duration-fast);
+
+    @media (pointer: coarse) {
+        block-size: 44px;
+        font-size: 1rem; /* no zoom on focus on phones */
+    }
+
+    &:focus {
+        outline: none;
+        border-color: var(--color-prestige);
+        box-shadow: 0 0 0 3px rgba(201, 169, 97, 0.16);
+    }
+
+    &[aria-invalid="true"] {
+        border-color: var(--color-error);
+    }
+}
+
+/* The field's message (AmountField) on its own row under the label and the field. */
+.bidMessage {
+    grid-column: 1 / -1;
+}
+
+/* Two cards a row on narrow phones: the label goes above the field. */
+@media (--bp-xs) {
+    .bid {
+        grid-template-columns: auto minmax(0, 1fr);
+        padding: 6px 7px;
+    }
+
+    .bidLabel {
+        grid-column: 1 / -1;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
+    .bid,
+    .bidInput {
+        transition: none;
+    }
+
     .cell[data-lifted] {
         scale: none;
     }

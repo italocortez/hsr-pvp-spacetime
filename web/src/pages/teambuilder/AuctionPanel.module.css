@@ -1,0 +1,403 @@
+/*
+ * The Auction simulator (design/mockups/teambuilder.html: `.auctionPanel`, `.auctionBudgets`, `.auctionInput`,
+ * `.auctionMeter*`, `.auctionBar*`, `.auctionBreak*`, `.auctionCarry`, `.auctionInfo`, `.auctionPopover`). Values
+ * are the mockup's; rgba() values without a token are the mockup's own.
+ */
+
+.panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding-block-end: 4px;
+}
+
+.budgets {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.budget {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-inline-size: 0;
+}
+
+.budgetLabel {
+    /* review M8: --text-muted was 4.25:1 at 9px (the mockup's colour) */
+    color: var(--text-body);
+    font-family: var(--font-primary);
+    font-size: 0.5625rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+}
+
+.input {
+    box-sizing: border-box;
+    inline-size: 100%;
+    block-size: 38px;
+    padding: 0 12px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--color-void);
+    color: var(--color-snow);
+    font-family: var(--font-primary);
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    transition:
+        border-color var(--duration-fast),
+        box-shadow var(--duration-fast);
+
+    @media (pointer: coarse) {
+        block-size: 44px;
+        font-size: 1rem; /* no zoom on focus on phones */
+    }
+
+    &:focus {
+        outline: none;
+        border-color: var(--color-prestige);
+        box-shadow: 0 0 0 3px rgba(201, 169, 97, 0.16);
+    }
+
+    &[aria-invalid="true"] {
+        border-color: var(--color-error);
+    }
+}
+
+.meters {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.meter {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.meterHead {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    justify-content: space-between;
+}
+
+.meterName {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    color: var(--color-snow);
+    font-family: var(--font-primary);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.meterValue {
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+
+    & b {
+        color: var(--color-snow);
+        font-weight: 700;
+    }
+}
+
+.bar {
+    position: relative;
+    block-size: 6px;
+    overflow: hidden;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    border-radius: 4px;
+    background: var(--color-prestige);
+    transition:
+        inline-size var(--duration-base) var(--ease-out),
+        background var(--duration-fast);
+}
+
+.meter[data-over] .fill {
+    background: var(--color-error);
+}
+
+/* The slice the pairings must fit, pinned to the drained (right) end. */
+.pair {
+    position: absolute;
+    inset: 0 0 0 auto;
+    border-radius: 4px;
+    background: var(--color-iris);
+    transition: inline-size var(--duration-base) var(--ease-out);
+}
+
+/* The base light cone budget, when character budget rolled over. */
+.tick {
+    position: absolute;
+    inset-block: -2px;
+    inline-size: 2px;
+    border-radius: 1px;
+    background: var(--color-snow);
+    opacity: 0.85;
+    translate: -1px 0;
+    pointer-events: none;
+}
+
+.foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    align-items: center;
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.65625rem;
+    letter-spacing: 0.04em;
+}
+
+.footItem {
+    display: inline-flex;
+    gap: 5px;
+    align-items: center;
+
+    & b {
+        color: var(--color-snow);
+        font-variant-numeric: tabular-nums;
+        font-weight: 700;
+    }
+}
+
+.dot {
+    flex: none;
+    inline-size: 7px;
+    block-size: 7px;
+    border-radius: 2px;
+
+    &[data-dot="cone"] {
+        background: var(--color-prestige);
+    }
+
+    &[data-dot="pair"] {
+        background: var(--color-iris);
+    }
+}
+
+.carry {
+    color: var(--color-prestige);
+    font-weight: 600;
+
+    & b {
+        color: var(--color-prestige);
+    }
+}
+
+.footTotal {
+    margin-inline-start: auto;
+    font-variant-numeric: tabular-nums;
+}
+
+.meter[data-over] .footTotal {
+    color: var(--color-error);
+    font-weight: 600;
+}
+
+.meter[data-over] .meterValue b {
+    color: var(--color-error);
+}
+
+/* The over-budget line, under the meters (above the chart, never above the field being typed in). */
+.over {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    color: var(--text-body);
+    font-family: var(--font-secondary);
+    font-size: 0.75rem;
+    line-height: 1.45;
+
+    & p {
+        margin: 0;
+    }
+
+    & strong {
+        color: var(--color-error);
+    }
+
+    &[data-active] {
+        padding: 8px 10px;
+        border: 1px solid color-mix(in srgb, var(--color-error) 45%, transparent);
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--color-error) 8%, var(--color-space));
+    }
+}
+
+.overMark {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    inline-size: 16px;
+    block-size: 16px;
+    border-radius: 50%;
+    background: var(--color-error);
+    color: var(--color-void);
+    font-family: var(--font-primary);
+    font-size: 0.625rem;
+    font-weight: 800;
+}
+
+.info {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    inline-size: 15px;
+    block-size: 15px;
+    /* base.css gives every button a 44px minimum on touch; the drawn circle stays 15px (review S2), and the
+       ::after below gives the hit area instead. */
+    min-inline-size: 0;
+    min-block-size: 0;
+    padding: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition:
+        color var(--duration-fast) var(--ease-out),
+        border-color var(--duration-fast) var(--ease-out);
+
+    /* The 15px circle keeps its look; the hit area is 24px around it (44px on touch). */
+    position: relative;
+
+    &::after {
+        content: "";
+        position: absolute;
+        inset: -4.5px; /* (24 - 15) / 2 */
+    }
+
+    @media (pointer: coarse) {
+        &::after {
+            inset: -14.5px; /* (44 - 15) / 2 */
+        }
+    }
+
+    &:hover,
+    &:focus-visible,
+    &[aria-expanded="true"] {
+        border-color: rgba(126, 112, 224, 0.6);
+        color: var(--color-iris-hover);
+        outline: none;
+    }
+
+    &:focus-visible {
+        box-shadow: 0 0 0 2px var(--border-focus);
+    }
+}
+
+.infoIcon {
+    inline-size: 10px;
+    block-size: 10px;
+}
+
+.popover {
+    box-sizing: border-box;
+    inline-size: min(320px, calc(100vw - 32px));
+    padding: 18px 18px 16px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-panel);
+    background: var(--bg-elevated);
+    box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.85);
+    color: var(--text-body);
+    font-family: var(--font-secondary);
+    letter-spacing: normal;
+    text-transform: none;
+
+    & h4 {
+        margin: 0 0 8px;
+        color: var(--text-heading);
+        font-size: 0.875rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+    }
+
+    & p {
+        margin: 0 0 10px;
+        font-size: 0.78125rem;
+        line-height: 1.55;
+    }
+
+    & p:last-child {
+        margin-block-end: 0;
+    }
+
+    & strong {
+        color: var(--text-heading);
+        font-weight: 600;
+    }
+}
+
+.popover .infoFoot {
+    color: var(--text-muted);
+    font-size: 0.71875rem;
+}
+
+/* Under the info button where anchor positioning exists; centred on the screen (the browser's default) elsewhere. */
+@supports (position-area: block-end) {
+    .popover {
+        inset: auto;
+        /* 8px from the screen's sides on a phone (review M6: it sat flush with the right edge at 390). */
+        margin: 6px 8px;
+        position-area: block-end span-inline-end;
+        position-try-fallbacks:
+            block-end span-inline-start,
+            flip-block,
+            block-start span-inline-start;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fill,
+    .pair,
+    .info {
+        transition: none;
+    }
+}
+
+@media (forced-colors: active) {
+    .fill,
+    .pair,
+    .dot {
+        forced-color-adjust: none;
+    }
+
+    .bar {
+        border: 1px solid CanvasText;
+    }
+
+    .fill {
+        background: CanvasText;
+    }
+
+    .meter[data-over] .fill {
+        background: Mark;
+    }
+
+    .pair,
+    .dot[data-dot="pair"] {
+        background: repeating-linear-gradient(45deg, Highlight 0 2px, Canvas 2px 4px);
+    }
+
+    .dot[data-dot="cone"] {
+        background: CanvasText;
+    }
+}

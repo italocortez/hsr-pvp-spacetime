@@ -94,6 +94,10 @@ A filter with many values (the archetypes) uses `components/MultiSelectDropdown`
 - Roster value lists, address readers, labels, cost format and the character filters live in `lib/rosterSearch.ts` and `lib/rosterModel.ts`; a custom cost set's subscription is `stdb/useCustomCostSet.ts`; the status text hook is `lib/useAnnouncement.ts`. Pages import these, never each other.
 - Do not nest a size container (`container-type: inline-size`) around another one that is a flex child: in Edge the inner flex child collapsed to 0px after a window resize (the pool's container around the search box, S14.3a). Put the outer container on the element that needs it only.
 
+## Rule 6e: charts are markup (S14.3b)
+
+A chart is plain markup and CSS, never a chart library or a canvas (A190 item 11). A stacked column chart uses `components/StackedBarChart`: the caller passes the columns (name, segments, total label, the accessible sentence, tooltip rows), the series (label and tone 1 to 4) and the axis title, and sets `--chart-tone-1..4` (and `--chart-plot-h` if 220px does not suit) on an ancestor. The scale (`chartScale.ts`) picks round steps for at most four grid lines. Each column is a focusable button whose accessible name carries every value, so the tooltip, legend and labels stay hidden from assistive technology; forced colours and reduced motion are handled inside. Keep the page's mapping from its data to columns a pure function with its own tests (the team builder's is `pages/teambuilder/costChartModel.ts`). The profile and stats pages are expected to reuse it; a line or scatter chart would be a new component on the same rules.
+
 ## Patterns
 
 ### Scroll-linked collapse

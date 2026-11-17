@@ -6,7 +6,9 @@ import { MODE_LABEL } from '@/lib/rosterModel';
 import { useAnnouncement } from '@/lib/useAnnouncement';
 import { useDocumentTitle } from '@/lib/useDocumentTitle';
 import hidden from '@/styles/visuallyHidden.module.css';
+import { AuctionPanel, overReasons } from './AuctionPanel';
 import { CharacterPool, type PoolLine } from './CharacterPool';
+import { CostChart } from './CostChart';
 import { GameModeTiles } from './GameModeTiles';
 import { RosterSlots } from './RosterSlots';
 import styles from './TeamBuilderPage.module.css';
@@ -16,9 +18,9 @@ import { type TeamBuilderPageState, useTeamBuilderPage } from './useTeamBuilderP
 
 /*
  * The team builder (S14.3a), a port of design/mockups/teambuilder.html: the intro, the Modes card (cost set, draft
- * mode, game mode), the Active Roster (four slots, the pairs strip), the total, and the Character Pool. Loadouts,
- * the cost chart, the Auction simulator, the share link and the footer come in S14.3b and S14.3c: the grid keeps
- * their places (the Loadouts card beside Modes, the chart under the total). State and rules live in
+ * mode, game mode), the Active Roster (four slots, the pairs strip, in Auction an extra bid under each card), the
+ * Cost Breakdown (the total, in Auction the simulator, the cost chart; S14.3b), and the Character Pool. Loadouts,
+ * the share link and the footer come in S14.3c: the grid keeps the Loadouts card's place beside Modes. State and rules live in
  * `useTeamBuilderPage`; the cost model in `shared/teambuilder`.
  */
 
@@ -26,6 +28,15 @@ import { type TeamBuilderPageState, useTeamBuilderPage } from './useTeamBuilderP
 export const LOADED_FROM_LINK = 'Loaded a team from a link.';
 
 export const TEAMBUILDER_TITLE = 'Team Builder — IPC Battlegrounds';
+
+/** S14.3b: said when an Auction team that was over budget fits again. */
+export const BACK_WITHIN = 'Back within budget.';
+
+/** S14.3b fix pass (review S1): how long the over-budget state must hold still before it is announced. */
+export const OVER_DELAY_MS = 600;
+
+/** S14.3b fix pass (review M7): shown in Classic while the team holds Auction bids. */
+export const KEPT_BIDS = 'Your Auction extra bids are kept for when you switch back.';
 
 const FULL_HINT = 'The team is full. Remove a character to add another.';
 const slotsLeft = (n: number) => `${n} ${n === 1 ? 'slot' : 'slots'} left.`;
@@ -82,6 +93,35 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
     useEffect(() => {
         if (page.replacedTeam) announce(LOADED_FROM_LINK);
     }, [page.replacedTeam, announce]);
+
+    // S14.3b: going over an Auction budget is announced once, and coming back within it once (review S1): only a
+    // change between over and within counts, never a change of the amounts while over; and the change is said once
+    // the text has held still for OVER_DELAY_MS, so typing "45.75" says one line with the final amounts. The state a
+    // visit opens with is shown, not announced (the ref stays null until the cost rows are here).
+    const auction = view.draft === 'auction';
+    const overText =
+        auction && page.costsReady && page.spend
+            ? overReasons(page.spend)
+                  .map((r) => r.text)
+                  .join(' ')
+            : '';
+    const isOver = overText !== '';
+    const saidOver = useRef<boolean | null>(null);
+    useEffect(() => {
+        if (!page.costsReady) return;
+        if (saidOver.current === null) {
+            saidOver.current = isOver;
+            return;
+        }
+        if (isOver === saidOver.current) return;
+        const timer = setTimeout(() => {
+            saidOver.current = isOver;
+            if (isOver) announce(`Over budget. ${overText}`);
+            else if (auction) announce(BACK_WITHIN);
+        }, OVER_DELAY_MS);
+        return () => clearTimeout(timer);
+    }, [isOver, overText, auction, announce, page.costsReady]);
+    const keptBids = !auction && page.slots.some((s) => (s?.bid ?? 0) > 0);
 
     const paired = useMemo(
         () => new Set(cost.pairs.flatMap((p) => [p.characterA, p.characterB])),
@@ -207,6 +247,7 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
                             onChange={actions.setMode}
                             lockedReason={lockedReason}
                         />
+                        {keptBids && <p className={styles.modeNote}>{KEPT_BIDS}</p>}
                         {notice && <p className={styles.notice}>{notice}</p>}
                         {page.replacedTeam && (
                             <p className={`${styles.notice} ${styles.linkNotice}`}>
@@ -293,7 +334,8 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
                             }}
                             onEmpty={onEmpty}
                             announce={announce}
-                            draftAuction={view.draft === 'auction'}
+                            draftAuction={auction}
+                            onBid={actions.setBid}
                         />
                         <PairStrip pairs={cost.pairs} nameOf={nameOf} />
                     </div>
@@ -320,9 +362,25 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
                                     : (page.lightconeOf(key)?.displayName ?? key)
                             }
                         />
+                        {auction && page.spend && (
+                            <AuctionPanel
+                                spend={page.spend}
+                                budgets={page.budgets}
+                                onBudget={actions.setBudget}
+                                announce={announce}
+                            />
+                        )}
+                        <CostChart
+                            slots={page.slots}
+                            cost={cost}
+                            auction={auction}
+                            mode={page.mode}
+                            ready={page.costsReady}
+                            nameOf={nameOf}
+                        />
                         <p className={styles.costFoot}>
-                            {setLabel} {'·'} {view.draft === 'auction' ? 'Auction' : 'Classic'}{' '}
-                            Draft {'·'} {MODE_LABEL[page.mode]}
+                            {setLabel} {'·'} {auction ? 'Auction' : 'Classic'} Draft {'·'}{' '}
+                            {MODE_LABEL[page.mode]}
                         </p>
                     </div>
                 </aside>

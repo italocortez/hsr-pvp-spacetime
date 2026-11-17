@@ -49,7 +49,8 @@ export const TEAM_CODE_MAX = 400;
 export const TEAM_NAME_MAX = 40;
 /** The largest per-slot extra bid, in hundredths (99.99). */
 export const BID_MAX = 9_999;
-const BUDGET_MAX = 99_999_999;
+/** The largest Auction budget, in hundredths (999,999.99). */
+export const BUDGET_MAX = 99_999_999;
 const U32_MAX = 4_294_967_295;
 
 const N = `[a-z0-9]{1,${TEAM_NAME_MAX}}`;
