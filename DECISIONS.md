@@ -2106,3 +2106,13 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   3. The team builder's exported picture with "Hide who is on the team" ticked does not show the loadout name: it carries a neutral title and the file gets a neutral name. The orchestrator had built a hint line instead.
 - **Why:** user, 2026-11-17: "the positions for most of the lightcones is here \"D:\GitsWork\hsr_draft_nath\src\components\LightconeSelector.tsx\" there will be more missing tho that I can edit and gift a final number once we build the admin tool (mockup has an edit view for putting the lightcone on the best position"; "we can hide the loadout name on the hidden team feature"; "we can push the new seed test data".
 - **Where implemented:** `data/seed/lightcones.json` (item 1); item 3 in S14.3d.
+
+### A205 — A loadout is the characters and light cones picked
+
+- **Date:** 2026-11-17 · **Status:** decided; not built yet
+- **Decision:**
+  1. A loadout is the characters and light cones picked. Switching the game mode, draft mode or cost set on an empty team does not create a loadout, in the browser list or on the account. A loadout comes into being with the first character picked. Settles the open point in A201 item 10.
+  2. A name or a note typed on an empty team is kept on the page but not stored as a loadout until a character is picked.
+  3. A saved loadout from which every character is removed stays, empty, until it is deleted; it is not removed silently.
+- **Why:** user, 2026-11-17, on whether a mode switch alone should create a loadout: "for the question, no, the loadout is the characters and lightcones picked, switching to a new mode doesn't create a new loadout"; on items 2 and 3, proposed by the orchestrator: "I agree with these behaviors".
+- **Where implemented:** not yet.
