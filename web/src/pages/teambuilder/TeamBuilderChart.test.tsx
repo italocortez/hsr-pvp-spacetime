@@ -7,6 +7,7 @@ import { CHARACTERS, characterCost, LIGHTCONES, lightconeCost, synergy } from '@
 import { MockConnection } from '@/test/mockConnection';
 import { renderWithConnection } from '@/test/renderWithConnection';
 import { overReasons } from './AuctionPanel';
+import { ACTIVE_KEY, BROWSER_KEY } from './loadoutStorage';
 import { KEPT_BIDS, OVER_DELAY_MS } from './TeamBuilderPage';
 import { DRAFT_KEY, PREVIOUS_KEY } from './teamStorage';
 
@@ -26,7 +27,7 @@ function recordStatus(): string[] {
 
 /*
  * T-S14.3b: the Cost Breakdown chart and the Auction simulator through the real router with the mock connection: the
- * chart's accessible text (columns, n/a, Pairings, empty), the per-slot extra bid (hidden in Classic, typing, a blank
+ * chart's accessible text (columns, n/a, pairings stacked on the columns (A199), empty), the per-slot extra bid (hidden in Classic, typing, a blank
  * snapping back to 0, invalid text, the arrow step, the cap), the two budgets, the over-budget state and its
  * announcement, and the round trip of bids and budgets through browser storage and the `team=` link.
  */
@@ -38,6 +39,9 @@ beforeEach(() => {
         localStorage.removeItem(INTRO_KEY);
         localStorage.removeItem(DRAFT_KEY);
         localStorage.removeItem(PREVIOUS_KEY);
+        // S14.3c: the loadout keys (a team edit now also saves a browser loadout).
+        localStorage.removeItem(BROWSER_KEY);
+        localStorage.removeItem(ACTIVE_KEY);
     } catch {}
 });
 afterEach(() => {
@@ -92,19 +96,22 @@ describe('the cost chart', () => {
         expect(screen.queryByRole('list', { name: /^Cost per character/ })).toBeNull();
     });
 
-    it('one column per character with every value as text, then the Pairings column', async () => {
+    it('one column per character with every value as text; a pair split evenly on both columns (A199)', async () => {
         const user = userEvent.setup();
         await open();
         await user.click(card('Acheron'));
         expect(columns()).toEqual(['Acheron: total 7.0. Character 7.0, light cone none.']);
+        const legend = () => chart().parentElement?.querySelector('ul[aria-hidden="true"]');
+        expect(legend()).toHaveTextContent(/^Character$/);
         await user.click(card('Pela'));
         expect(chart()).toHaveAccessibleName('Cost per character, AS, Classic draft');
+        // No column of its own: each column carries half of the pair, and the columns add up to the total.
         expect(columns()).toEqual([
-            'Acheron: total 7.0. Character 7.0, light cone none.',
-            'Pela: total 7.0. Character 7.0, light cone none.',
-            'Pairings: total 1.5, the synergy surcharge of 1 pair: Acheron and Pela +1.5.',
+            'Acheron: total 7.75. Character 7.0, light cone none, pairing with Pela 0.75 of 1.5.',
+            'Pela: total 7.75. Character 7.0, light cone none, pairing with Acheron 0.75 of 1.5.',
         ]);
         expect(total()).toHaveTextContent('15.5');
+        expect(legend()).toHaveTextContent(/^CharacterPairing$/);
     });
 
     it('a character without a cost row is n/a, counted as 0', async () => {

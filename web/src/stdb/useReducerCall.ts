@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { useStdbConnection } from './connectionContext';
 import { connectionStatusStore } from './connectionStatus';
-import type { ReducersLike } from './types';
+import type { AppReducersLike } from './types';
 
 /** A reducer call made while there is no open connection. Nothing is queued. */
 export class NotConnectedError extends Error {
@@ -22,7 +22,7 @@ export class NotConnectedError extends Error {
  * The returned function changes only when the connection object does.
  */
 export function useReducerCall<A extends unknown[]>(
-    call: (reducers: ReducersLike, ...args: A) => Promise<void>,
+    call: (reducers: AppReducersLike, ...args: A) => Promise<void>,
 ): (...args: A) => Promise<void> {
     const conn = useStdbConnection();
     const latest = useRef(call);

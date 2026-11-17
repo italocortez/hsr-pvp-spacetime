@@ -1,0 +1,661 @@
+@import "@/styles/media.css";
+
+/*
+ * The Loadouts card (S14.3c), from the mockup's `.controlsBody`, `.loadoutName`, `.loadoutBox`, `.loadoutMenu*`
+ * and `.btn`. Touch targets grow to 44px on coarse pointers.
+ */
+
+.body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 12px;
+    padding: 18px 22px 22px;
+
+    @media (--bp-sm) {
+        padding: 16px;
+    }
+}
+
+/* The combined control: pencil, name, caret; the menu hangs under it. */
+.box {
+    position: relative;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    min-inline-size: 0;
+    block-size: 44px;
+    padding: 0 6px 0 14px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--color-space);
+    transition:
+        border-color var(--duration-fast),
+        background var(--duration-fast);
+
+    &:hover {
+        border-color: var(--border-strong);
+    }
+
+    &:focus-within {
+        border-color: var(--color-iris);
+        background: rgba(126, 112, 224, 0.08);
+    }
+}
+
+.pencil {
+    flex: none;
+    inline-size: 15px;
+    block-size: 15px;
+    color: var(--text-muted);
+
+    .box:focus-within & {
+        color: var(--color-iris);
+    }
+}
+
+.nameInput {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: var(--color-snow);
+    font-family: var(--font-secondary);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+
+    /* iOS zooms the page into a field under 16px on focus (review M8). */
+    @media (pointer: coarse) {
+        font-size: 1rem;
+    }
+
+    &::placeholder {
+        color: var(--text-muted);
+        font-weight: 500;
+    }
+}
+
+.caret {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    inline-size: 32px;
+    block-size: 32px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition:
+        color var(--duration-fast),
+        background var(--duration-fast),
+        border-color var(--duration-fast);
+
+    @media (pointer: coarse) {
+        inline-size: 40px;
+        block-size: 40px;
+    }
+
+    &:hover {
+        border-color: var(--border-subtle);
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--color-snow);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-iris);
+        outline-offset: 1px;
+    }
+
+    &[aria-expanded="true"] {
+        border-color: var(--color-iris);
+        background: rgba(126, 112, 224, 0.12);
+        color: var(--color-iris);
+    }
+}
+
+.caretIcon {
+    inline-size: 14px;
+    block-size: 14px;
+    transition: transform var(--duration-fast);
+
+    .caret[aria-expanded="true"] & {
+        transform: rotate(180deg);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        transition: none;
+    }
+}
+
+.menu {
+    position: absolute;
+    inset-block-start: calc(100% + 6px);
+    inset-inline: 0;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-block-size: min(420px, 70dvh);
+    padding: 6px;
+    overflow-y: auto;
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    background: var(--color-graphite);
+    box-shadow:
+        0 20px 44px -14px rgba(8, 9, 14, 0.85),
+        0 0 0 1px rgba(0, 0, 0, 0.35);
+
+    &[hidden] {
+        display: none;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+        animation: menu-in var(--duration-fast) var(--ease-out);
+    }
+}
+
+@keyframes menu-in {
+    from {
+        opacity: 0;
+        translate: 0 -4px;
+    }
+}
+
+.menuGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    & + & {
+        padding-block-start: 6px;
+        border-block-start: 1px solid var(--border-subtle);
+    }
+}
+
+.menuLabel {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 10px 6px;
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.59375rem;
+    font-weight: 600;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+}
+
+.menuCount {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.08em;
+}
+
+.menuEmpty {
+    margin: 0;
+    padding: 4px 10px 8px;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.menuRow {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+    border-radius: 6px;
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.04);
+    }
+
+    &[data-active] {
+        background: rgba(126, 112, 224, 0.12);
+    }
+}
+
+.menuPick {
+    display: flex;
+    flex: 1 1 auto;
+    gap: 9px;
+    align-items: center;
+    min-inline-size: 0;
+    block-size: 38px;
+    padding: 0 6px 0 10px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-body);
+    font-family: var(--font-secondary);
+    font-size: 0.84375rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    text-align: start;
+    cursor: pointer;
+
+    @media (pointer: coarse) {
+        block-size: 44px;
+    }
+
+    &:hover,
+    .menuRow[data-active] & {
+        color: var(--color-snow);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-iris);
+        outline-offset: -2px;
+    }
+}
+
+.menuCheck {
+    flex: none;
+    inline-size: 14px;
+    block-size: 14px;
+    color: var(--color-iris);
+    opacity: 0;
+
+    .menuRow[data-active] & {
+        opacity: 1;
+    }
+}
+
+.menuName {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* A loadout held by a conflict (fix pass B2): a small warning badge; the words are in the row's hidden text. */
+.menuMark {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    inline-size: 16px;
+    block-size: 16px;
+    border-radius: 50%;
+    background: var(--color-warning);
+    color: var(--color-space);
+    font-family: var(--font-primary);
+    font-size: 0.625rem;
+    font-weight: 700;
+    line-height: 1;
+
+    @media (forced-colors: active) {
+        border: 1px solid CanvasText;
+    }
+}
+
+.menuMeta {
+    flex: none;
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.625rem;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.06em;
+}
+
+/* Row actions: shown on hover and focus where hover exists; always on touch (nothing hover-only). */
+.menuAct {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    inline-size: 32px;
+    block-size: 32px;
+    margin-inline-end: 2px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+
+    & svg {
+        inline-size: 14px;
+        block-size: 14px;
+    }
+
+    @media (pointer: coarse) {
+        inline-size: 44px;
+        block-size: 44px;
+    }
+
+    @media (hover: hover) {
+        opacity: 0.35;
+        transition: opacity var(--duration-fast);
+
+        .menuRow:hover &,
+        .menuRow:focus-within & {
+            opacity: 1;
+        }
+    }
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.07);
+        color: var(--color-snow);
+    }
+
+    &[data-danger]:hover {
+        background: rgba(216, 90, 90, 0.14);
+        color: var(--color-error);
+    }
+
+    &:focus-visible {
+        opacity: 1;
+        outline: 2px solid var(--color-iris);
+        outline-offset: -2px;
+    }
+}
+
+/* The save state: a fixed height, so no state moves what is under it. */
+.status {
+    display: flex;
+    align-items: flex-start;
+    min-block-size: 2.9em;
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
+.browserSaved {
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+    color: var(--text-body);
+    font-family: var(--font-secondary);
+    font-weight: 600;
+}
+
+.browserCheck {
+    flex: none;
+    inline-size: 14px;
+    block-size: 14px;
+    color: var(--color-success);
+}
+
+.workingState {
+    color: var(--text-muted);
+    font-family: var(--font-secondary);
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+.button {
+    display: inline-flex;
+    flex: 1 1 0;
+    white-space: nowrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    min-block-size: 36px;
+    padding: 0 16px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--bg-elevated);
+    color: var(--color-snow);
+    font-family: var(--font-primary);
+    font-size: 0.65625rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: pointer;
+
+    @media (pointer: coarse) {
+        min-block-size: 44px;
+    }
+
+    &:hover:not(:disabled) {
+        border-color: var(--color-iris);
+        background: rgba(126, 112, 224, 0.18);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-iris);
+        outline-offset: 2px;
+    }
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    &[data-copied] {
+        border-color: color-mix(in srgb, var(--color-success) 60%, transparent);
+    }
+}
+
+.buttonIcon {
+    flex: none;
+    inline-size: 14px;
+    block-size: 14px;
+}
+
+/* The copy confirmation (the copy-button guide's bubble: the live region itself, hidden by opacity). */
+.copyStatus {
+    min-block-size: 1.4em;
+    margin: -4px 0 0;
+    color: var(--color-success);
+    font-size: 0.75rem;
+    line-height: 1.4;
+    opacity: 0;
+
+    &[data-show] {
+        opacity: 1;
+    }
+
+    &[data-failed] {
+        color: var(--color-warning);
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+        transition: opacity var(--duration-fast);
+    }
+}
+
+.linkField {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+
+    & input {
+        inline-size: 100%;
+        min-block-size: 36px;
+        padding: 0 10px;
+        border: 1px solid var(--border-strong);
+        border-radius: 6px;
+        background: var(--color-space);
+        color: var(--color-snow);
+        font-family: var(--font-secondary);
+        font-size: 0.75rem;
+    }
+
+    & input:focus-visible {
+        outline: 2px solid var(--color-iris);
+        outline-offset: 1px;
+    }
+}
+
+.line {
+    margin: 0;
+    color: var(--color-warning);
+    font-size: 0.75rem;
+    line-height: 1.45;
+}
+
+.notice {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: center;
+    margin: 0;
+    padding: 10px 14px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--color-space);
+    color: var(--text-body);
+    font-size: 0.8125rem;
+
+    & > span {
+        flex: 1 1 12rem;
+    }
+}
+
+/* The choice for a held loadout (fix pass B2, S8). */
+.conflict {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 10px 14px;
+    border: 1px solid var(--color-warning);
+    border-radius: 8px;
+    background: var(--color-space);
+    color: var(--text-body);
+    font-size: 0.8125rem;
+    line-height: 1.45;
+}
+
+.conflictTitle {
+    margin: 0;
+    color: var(--color-snow);
+    font-weight: 600;
+}
+
+.conflictList {
+    display: grid;
+    gap: 4px;
+    margin: 0;
+    padding-inline-start: 1.1em;
+    overflow-wrap: anywhere;
+}
+
+.conflictHint {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.conflictActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.noticeButton {
+    min-block-size: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--color-snow);
+    font-family: var(--font-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+
+    @media (pointer: coarse) {
+        min-block-size: 44px;
+    }
+
+    &:hover {
+        border-color: var(--color-iris);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-iris);
+        outline-offset: 2px;
+    }
+}
+
+.quiet {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    line-height: 1.5;
+}
+
+.signIn {
+    color: var(--color-iris-hover);
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+
+    &:focus-visible {
+        outline: 2px solid var(--color-iris);
+        outline-offset: 2px;
+        border-radius: 2px;
+    }
+}
+
+/* The delete confirmation (dialog guide rule 1). */
+.dialog {
+    inline-size: min(26rem, calc(100vw - 32px));
+    padding: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-modal);
+    background: var(--color-graphite);
+    color: var(--text-body);
+    box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.8);
+
+    &:modal {
+        overscroll-behavior: contain;
+    }
+
+    &::backdrop {
+        overflow: hidden;
+        overscroll-behavior: contain;
+        background: rgba(8, 9, 14, 0.7);
+    }
+}
+
+.dialogBody {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 22px;
+}
+
+.dialogTitle {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--color-snow);
+    font-family: var(--font-secondary);
+    font-size: 1.0625rem;
+    font-weight: 600;
+}
+
+.dialogText {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+}
+
+.dialogActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-block-start: 6px;
+
+    & > button {
+        flex: 0 1 8rem;
+    }
+}
+
+.danger {
+    border-color: color-mix(in srgb, var(--color-error) 50%, var(--color-space));
+    background: color-mix(in srgb, var(--color-error) 22%, var(--color-space));
+
+    &:hover:not(:disabled) {
+        border-color: var(--color-error);
+        background: color-mix(in srgb, var(--color-error) 32%, var(--color-space));
+    }
+}

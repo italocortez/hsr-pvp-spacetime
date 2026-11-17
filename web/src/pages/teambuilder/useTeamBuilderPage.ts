@@ -4,8 +4,12 @@ import {
     BID_MAX,
     BUDGET_MAX,
     type Budgets,
+    DEFAULT_BUDGETS,
+    decodeTeam,
     defaultEidolon,
     defaultSuperimposition,
+    EMPTY_SLOTS,
+    encodeTeam,
     firstEmptySlot,
     type GameMode,
     type Superimposition,
@@ -36,6 +40,7 @@ import {
     type TeamBuilderView,
 } from './teambuilderSearch';
 import { toSearch, toView } from './teambuilderView';
+import { useLoadouts } from './useLoadouts';
 import { useWorkingTeam } from './useWorkingTeam';
 
 /*
@@ -111,6 +116,51 @@ export function useTeamBuilderPage(search: TeamBuilderSearch) {
         gameMode: mode as GameMode,
         costSetId: publishedSet?.id ?? 0,
     });
+
+    // S14.3c: the page's team as packed text, for the active loadout. While the published sets load, the address's
+    // set stands (a loadout's set must not read as Default before the list is here).
+    const loadoutSet = publishedSet?.id ?? (ref.ready ? 0 : view.set);
+    const code = useMemo(() => {
+        const e = encodeTeam({
+            slots: team.slots,
+            budgets: team.budgets,
+            draftMode: view.draft,
+            gameMode: mode as GameMode,
+            costSetId: loadoutSet,
+        });
+        return e.ok ? e.code : null;
+    }, [team.slots, team.budgets, view.draft, mode, loadoutSet]);
+    const teamLoad = team.load;
+    const loadCode = useCallback(
+        (text: string) => {
+            const d = decodeTeam(text);
+            if (!d.ok) return;
+            const t = d.team;
+            teamLoad({ slots: t.slots, budgets: t.budgets });
+            go((v) => ({ ...v, draft: t.draftMode, mode: t.gameMode, set: t.costSetId }), true);
+        },
+        [teamLoad, go],
+    );
+    const emptyCode = useCallback(() => {
+        const e = encodeTeam({
+            slots: EMPTY_SLOTS,
+            budgets: DEFAULT_BUDGETS,
+            draftMode: view.draft,
+            gameMode: mode as GameMode,
+            costSetId: loadoutSet,
+        });
+        return e.ok ? e.code : null;
+    }, [view.draft, mode, loadoutSet]);
+    const [linkArrived] = useState(() => team.arrival.kind === 'loaded');
+    const loadouts = useLoadouts({
+        code,
+        emptyCode,
+        load: loadCode,
+        linkArrived,
+        hasPrevious: team.previous !== null,
+        forgetPrevious: team.dismissPrevious,
+    });
+    const edited = loadouts.edited;
 
     // A packed team in the address (a shared link): loaded once by `useWorkingTeam`; its settings move into the
     // address and `team` leaves it (replaced, so Back never loads it again over later edits).
@@ -234,15 +284,18 @@ export function useTeamBuilderPage(search: TeamBuilderSearch) {
 
     const actions = {
         setDraft(draft: TeamBuilderView['draft']) {
+            edited();
             act((v) => ({ ...v, draft }));
         },
         setMode(next: ModeParam) {
             if (publishedSet) return;
+            edited();
             act((v) => ({ ...v, mode: next, set: 0 }));
         },
         setCostSet(id: number) {
             const picked = ref.costSets.find((s) => s.id === id);
             if (id !== 0 && !picked) return;
+            edited();
             act((v) => ({ ...v, set: id, mode: picked ? MODE_PARAM[picked.gameMode.tag] : mode }));
         },
         toggle<K extends 'el' | 'path' | 'role' | 'rarity' | 'arch'>(
@@ -276,6 +329,7 @@ export function useTeamBuilderPage(search: TeamBuilderSearch) {
             dismissNotices();
             const at = slotOf(team.slots, name);
             if (at >= 0) {
+                edited();
                 team.setSlot(at, null);
                 setFullHint(false);
                 return { what: 'removed', index: at };
@@ -290,6 +344,7 @@ export function useTeamBuilderPage(search: TeamBuilderSearch) {
                 setFullHint(true);
                 return { what: 'full', index: -1 };
             }
+            edited();
             team.setSlot(index, {
                 character: name,
                 eidolon: defaultEidolon(c),
@@ -301,22 +356,26 @@ export function useTeamBuilderPage(search: TeamBuilderSearch) {
         },
         remove(index: number) {
             dismissNotices();
+            edited();
             team.setSlot(index, null);
             setFullHint(false);
         },
         setEidolon(index: number, eidolon: number) {
             const s = team.slots[index];
             if (!s || eidolon < 0 || eidolon > 6) return;
+            edited();
             team.setSlot(index, { ...s, eidolon: eidolon as typeof s.eidolon });
         },
         setSuperimposition(index: number, value: number) {
             const s = team.slots[index];
             if (!s?.lightcone || value < 1 || value > 5) return;
+            edited();
             team.setSlot(index, { ...s, superimposition: value as Superimposition });
         },
         equip(index: number, lightcone: string | null) {
             const s = team.slots[index];
             if (!s) return;
+            edited();
             if (lightcone === null) {
                 team.setSlot(index, { ...s, lightcone: null, superimposition: 1 });
                 return;
@@ -333,6 +392,7 @@ export function useTeamBuilderPage(search: TeamBuilderSearch) {
         setBid(index: number, hundredths: number) {
             const s = team.slots[index];
             if (!s) return;
+            edited();
             const bid = Math.min(BID_MAX, Math.max(0, Math.round(hundredths)));
             const { bid: _old, ...rest } = s;
             team.setSlot(index, bid > 0 ? { ...rest, bid } : rest);
@@ -340,14 +400,17 @@ export function useTeamBuilderPage(search: TeamBuilderSearch) {
         /** S14.3b: one of the two Auction budgets, hundredths. */
         setBudget(kind: keyof Budgets, hundredths: number) {
             const v = Math.min(BUDGET_MAX, Math.max(0, Math.round(hundredths)));
+            edited();
             team.setBudgets((b) => (b[kind] === v ? b : { ...b, [kind]: v }));
         },
         swap(a: number, b: number) {
             dismissNotices();
+            edited();
             team.swap(a, b);
         },
         clearTeam() {
             dismissNotices();
+            edited();
             team.clear();
             setFullHint(false);
         },
@@ -355,6 +418,7 @@ export function useTeamBuilderPage(search: TeamBuilderSearch) {
         restorePrevious() {
             const prev = team.previous;
             if (!prev) return;
+            edited();
             team.restorePrevious();
             setFullHint(false);
             go((v) => ({ ...v, draft: prev.draftMode, mode: prev.gameMode, set: prev.costSetId }));
@@ -395,6 +459,10 @@ export function useTeamBuilderPage(search: TeamBuilderSearch) {
         lightconeOf,
         dismissNotices,
         actions,
+        /** S14.3c: the loadouts (browser and account), the active one, autosave. */
+        loadouts,
+        /** S14.3c: the page's team as packed text (the share link). */
+        code,
     };
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStdbConnection } from './connectionContext';
+import { connectionStatusStore } from './connectionStatus';
 import type { SubscriptionHandleLike } from './types';
 
 /*
@@ -23,6 +24,16 @@ export type RouteSubscriptionState = {
     error?: string;
 };
 
+/**
+ * S14.3c-sync (second review N1): `fresh` is true while every query has had a result since the connection was last
+ * not open. The SDK reports a reconnect (status `connected`) before it replays the subscriptions, and keeps the old
+ * rows until the replay lands; `ready` stays true through that gap, `fresh` does not. A page that writes on the
+ * strength of what it reads (the team builder's loadout sync) waits for `fresh`.
+ */
+export type FreshRouteSubscriptionState = RouteSubscriptionState & { fresh: boolean };
+
+const isOpen = () => connectionStatusStore.getSnapshot().status.state === 'connected';
+
 /** Duplicates dropped, order kept: one subscription per query. */
 function unique(queries: readonly string[]): { list: string[]; dropped: string[] } {
     const seen = new Set<string>();
@@ -39,6 +50,14 @@ function unique(queries: readonly string[]): { list: string[]; dropped: string[]
 }
 
 export function useRouteSubscriptions(queries: readonly string[]): RouteSubscriptionState {
+    const { ready, error } = useFreshRouteSubscriptions(queries);
+    return { ready, error };
+}
+
+/** `useRouteSubscriptions` plus `fresh` (above). */
+export function useFreshRouteSubscriptions(
+    queries: readonly string[],
+): FreshRouteSubscriptionState {
     const conn = useStdbConnection();
     // A stable key (JSON, so any character in a query is safe): a new array with the same
     // queries does not resubscribe.
@@ -52,40 +71,52 @@ export function useRouteSubscriptions(queries: readonly string[]): RouteSubscrip
         warned.current = true;
         console.warn(`[stdb] duplicate route subscription dropped: ${firstDropped}`);
     }, [firstDropped]);
-    const [state, setState] = useState<RouteSubscriptionState & { key: string }>({
+    const [state, setState] = useState<FreshRouteSubscriptionState & { key: string }>({
         key,
         ready: false,
+        fresh: false,
     });
 
     useEffect(() => {
         const list = JSON.parse(key) as string[];
         // A new list starts clean: no error, not ready (ready at once when there is nothing).
-        setState({ key, ready: list.length === 0 });
+        setState({ key, ready: list.length === 0, fresh: list.length === 0 });
         if (!conn || list.length === 0) return;
 
         let active = true;
         const applied = new Set<string>();
         const failed = new Set<string>();
+        // Results since the connection was last not open (N1).
+        let fresh = new Set<string>();
+        const stopWatch = connectionStatusStore.subscribe(() => {
+            if (!active || isOpen() || fresh.size === 0) return;
+            fresh = new Set();
+            setState((s) => (s.fresh ? { ...s, fresh: false } : s));
+        });
         const handles: SubscriptionHandleLike[] = list.map((query) =>
             conn
                 .subscriptionBuilder()
                 .onApplied(() => {
-                    // Fires again after each replay (reconnect); the set makes that harmless.
+                    // Fires again after each replay (reconnect); the sets make that harmless.
                     if (!active) return;
                     applied.add(query);
+                    fresh.add(query);
                     failed.delete(query);
                     if (applied.size === list.length && failed.size === 0) {
-                        setState((s) => ({ ...s, key, ready: true }));
+                        const all = fresh.size === list.length;
+                        setState((s) => ({ ...s, key, ready: true, fresh: all }));
                     }
                 })
                 .onError((_ctx, error) => {
                     // Also after a replay: the query is no longer live, so the route is not ready.
                     if (!active) return;
                     applied.delete(query);
+                    fresh.delete(query);
                     failed.add(query);
                     setState((s) => ({
                         key,
                         ready: false,
+                        fresh: false,
                         error: s.error ?? `${query}: ${error?.message ?? 'subscription failed'}`,
                     }));
                 })
@@ -94,11 +125,12 @@ export function useRouteSubscriptions(queries: readonly string[]): RouteSubscrip
 
         return () => {
             active = false;
+            stopWatch();
             for (const handle of handles) if (!handle.isEnded()) handle.unsubscribe();
         };
     }, [conn, key]);
 
     // Until the effect has run for a new list, report the new list as not ready.
-    if (state.key !== key) return { ready: key === '[]' };
-    return { ready: state.ready, error: state.error };
+    if (state.key !== key) return { ready: key === '[]', fresh: key === '[]' };
+    return { ready: state.ready, error: state.error, fresh: state.fresh };
 }

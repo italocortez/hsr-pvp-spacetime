@@ -2,8 +2,14 @@
 
 /*
  * The cost chart's colours (design/mockups/teambuilder.html `COST_RAMP`: one hue family per game mode, mapped to
- * Character (mid), Lightcone (light) and the third series (deep), which is the Extra bid in Auction). The Pairings
- * column takes --color-iris, the mockup's colour for the pairings slice of the light cone meter.
+ * Character (mid), Lightcone (light) and the third series (deep), which is the Extra bid in Auction).
+ *
+ * The Pairing segment (A199 item 1: on top of each character's column) is one gold for every mode, #e3cf55. It sits
+ * on any of the three ramp colours, so it must stand apart from all of them in every mode: --color-iris did not
+ * (OKLab delta E x100 4.9 from the MoC character, 4.0 for deutan vision). Measured with the dataviz validator against
+ * all nine ramp colours: 10.63:1 against the card; at least 15.6 apart for normal vision (AS light cone), 12.2 for
+ * protan and deutan (AA light cone), 7.8 for tritan (AA light cone). Its own hue: no ramp is yellow, and it is
+ * lighter and greener than the warning status amber (#e0a040).
  *
  * S14.3b fix pass (review S7): each mode keeps the mockup's hue (within 6 degrees of OKLCH hue) and moves lightness
  * and chroma by the least that makes every part at least 3:1 against the card (--bg-card #1a1d2a) and every pair of
@@ -19,7 +25,7 @@
 
 .wrap {
     --chart-plot-h: 220px;
-    --chart-tone-4: var(--color-iris);
+    --chart-tone-4: #e3cf55; /* local: Pairing, every mode, 10.63:1 */
 
     @media (--bp-sm) {
         --chart-plot-h: 180px;

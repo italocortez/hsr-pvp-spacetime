@@ -3,8 +3,8 @@
 /*
  * The team builder's frame (design/mockups/teambuilder.html, `.workspace` and `.section`). The mockup's grid is
  * three columns, 380px | 1fr | 380px: Loadouts beside Modes, the Roster beside the Cost Breakdown, the Pool across.
- * S14.3a has no Loadouts card yet, so Modes spans the first row; the grid keeps the columns for S14.3c. The
- * mockup's 1100px breakpoint snaps to --bp-xl (1120px): one column, in reading order Modes, Roster, Cost, Pool.
+ * S14.3c adds the Loadouts card in the first column of the first row. The mockup's 1100px breakpoint snaps to
+ * --bp-xl (1120px): one column, in reading order Loadouts, Modes, Roster, Cost, Pool.
  */
 
 .page {
@@ -14,9 +14,9 @@
 .workspace {
     display: grid;
     grid-template-areas:
-        "modes  modes  modes"
-        "roster roster cost"
-        "pool   pool   pool";
+        "loadouts modes  modes"
+        "roster   roster cost"
+        "pool     pool   pool";
     grid-template-columns: minmax(0, 380px) minmax(0, 1fr) minmax(0, 380px);
     gap: clamp(16px, 1.6vw, 24px);
     align-items: stretch;
@@ -26,6 +26,7 @@
 
     @media (--bp-xl) {
         grid-template-areas:
+            "loadouts"
             "modes"
             "roster"
             "cost"
@@ -40,6 +41,12 @@
 
 .modes {
     grid-area: modes;
+}
+
+.loadouts {
+    grid-area: loadouts;
+    /* Above the cards after it, so its open menu is not painted under Modes on one column. */
+    z-index: 2;
 }
 
 .roster {

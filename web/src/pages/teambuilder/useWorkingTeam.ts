@@ -125,6 +125,15 @@ export function useWorkingTeam(
                 setState((s) => ({ ...s, budgets: next(s.budgets) })),
             [],
         ),
+        /** S14.3c: a loadout's team replaces the working team (switching loadout; the caller sets the modes). */
+        load: useCallback(
+            (t: Pick<Team, 'slots' | 'budgets'>) =>
+                // The same team keeps its state: nothing is written (an unreadable stored draft stays, M7).
+                setState((s) =>
+                    sameTeam(s, t) ? s : { ...s, slots: t.slots, budgets: t.budgets },
+                ),
+            [],
+        ),
         /** The arrival has been handled (its notice shown, the address cleaned). */
         settleArrival: useCallback(
             () => setState((s) => ({ ...s, arrival: { kind: 'none' } })),

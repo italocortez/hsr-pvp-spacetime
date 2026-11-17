@@ -119,15 +119,6 @@
     font-size: 0.625rem;
 }
 
-/* The pair sum is floored at 0 (the module's rule): said when it applied, so the chips and the total agree. */
-.floor {
-    flex-basis: 100%;
-    margin: 0;
-    color: var(--text-muted);
-    font-family: var(--font-secondary);
-    font-size: 0.6875rem;
-}
-
 .modifier {
     color: var(--color-prestige);
     font-family: var(--font-primary);

@@ -2,6 +2,7 @@ import { teamCharacters } from '@shared/teambuilder';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { PageIntro } from '@/components/PageIntro/PageIntro';
 import { ControlSelect, SegmentedControl } from '@/components/SegmentedControl/SegmentedControl';
+import { SiteFooter } from '@/components/SiteFooter/SiteFooter';
 import { MODE_LABEL } from '@/lib/rosterModel';
 import { useAnnouncement } from '@/lib/useAnnouncement';
 import { useDocumentTitle } from '@/lib/useDocumentTitle';
@@ -10,6 +11,8 @@ import { AuctionPanel, overReasons } from './AuctionPanel';
 import { CharacterPool, type PoolLine } from './CharacterPool';
 import { CostChart } from './CostChart';
 import { GameModeTiles } from './GameModeTiles';
+import { LoadoutNote } from './LoadoutNote';
+import { LoadoutsPanel } from './LoadoutsPanel';
 import { RosterSlots } from './RosterSlots';
 import styles from './TeamBuilderPage.module.css';
 import { PairStrip, TeamTotal } from './TeamTotal';
@@ -19,9 +22,10 @@ import { type TeamBuilderPageState, useTeamBuilderPage } from './useTeamBuilderP
 /*
  * The team builder (S14.3a), a port of design/mockups/teambuilder.html: the intro, the Modes card (cost set, draft
  * mode, game mode), the Active Roster (four slots, the pairs strip, in Auction an extra bid under each card), the
- * Cost Breakdown (the total, in Auction the simulator, the cost chart; S14.3b), and the Character Pool. Loadouts,
- * the share link and the footer come in S14.3c: the grid keeps the Loadouts card's place beside Modes. State and rules live in
- * `useTeamBuilderPage`; the cost model in `shared/teambuilder`.
+ * Cost Breakdown (the total, in Auction the simulator, the cost chart; S14.3b), and the Character Pool. S14.3c: the
+ * Loadouts card beside Modes (saved loadouts in the browser and on the account, the share link), the note under the
+ * pairs strip, and the footer. State and rules live in `useTeamBuilderPage` and `useLoadouts`; the cost model in
+ * `shared/teambuilder`, the loadout rules in `shared/loadouts`.
  */
 
 /** The notice after a link replaced a different saved team (review S3). */
@@ -53,7 +57,7 @@ const slotsLeft = (n: number) => `${n} ${n === 1 ? 'slot' : 'slots'} left.`;
 export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
     useDocumentTitle(TEAMBUILDER_TITLE);
     const page = useTeamBuilderPage(search);
-    const { view, actions, cost } = page;
+    const { view, actions, cost, loadouts } = page;
     const ids = useId();
     const searchRef = useRef<HTMLInputElement>(null);
     const poolRef = useRef<HTMLElement>(null);
@@ -205,12 +209,22 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
                 collapsedTitle="Team Builder"
                 onToggle={page.dismissNotices}
             >
-                Build any team and see what it costs. Your team stays in this browser while you work
-                on it. Don&apos;t forget to flip the <strong>cost set</strong>,{' '}
-                <strong>draft mode</strong> and <strong>game mode</strong> as you need it.
+                Build any team and see what it costs. Keep up to <strong>5 loadouts</strong> in this
+                browser; sign in with Discord to keep up to <strong>10</strong> on your account, on
+                every device. Share a team with <strong>Copy link</strong>. Don&apos;t forget to
+                flip the <strong>cost set</strong>, <strong>draft mode</strong> and{' '}
+                <strong>game mode</strong> as you need it.
             </PageIntro>
 
             <div className={styles.workspace}>
+                <LoadoutsPanel
+                    loadouts={loadouts}
+                    code={page.code}
+                    announce={announce}
+                    onLoaded={forget}
+                    characterName={nameOf}
+                />
+
                 <section
                     className={`${styles.section} ${styles.modes}`}
                     aria-labelledby={`${ids}-modes`}
@@ -257,7 +271,12 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
                                     className={styles.noticeButton}
                                     data-primary=""
                                     onClick={() => {
-                                        actions.restorePrevious();
+                                        // S14.3c: a link opened over a saved loadout goes back to that loadout.
+                                        const back = loadouts.beforeLink;
+                                        if (back) {
+                                            actions.dismissPrevious();
+                                            loadouts.switchTo(back);
+                                        } else actions.restorePrevious();
                                         forget();
                                         announce('Your previous team is back.');
                                         requestAnimationFrame(() => focusSlot(0));
@@ -270,6 +289,7 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
                                     className={styles.noticeButton}
                                     onClick={() => {
                                         actions.dismissPrevious();
+                                        loadouts.forgetBeforeLink();
                                         announce('Notice dismissed. The team from the link stays.');
                                         requestAnimationFrame(() => focusSlot(0));
                                     }}
@@ -338,6 +358,7 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
                             onBid={actions.setBid}
                         />
                         <PairStrip pairs={cost.pairs} nameOf={nameOf} />
+                        <LoadoutNote value={loadouts.note} onChange={loadouts.setNote} />
                     </div>
                 </section>
 
@@ -433,6 +454,8 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
                     />
                 </section>
             </div>
+
+            <SiteFooter />
 
             <p role="status" className={hidden.visuallyHidden}>
                 {said}

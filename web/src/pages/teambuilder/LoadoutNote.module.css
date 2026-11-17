@@ -1,0 +1,89 @@
+/* The loadout note (S14.3c), from the mockup's `.rosterNote`, `.rosterNoteHead`, `.rosterNoteField`. */
+
+.note {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 10px;
+    min-block-size: 120px;
+    padding-block-start: 16px;
+    border-block-start: 1px solid var(--border-subtle);
+}
+
+.head {
+    display: flex;
+    gap: 12px;
+    align-items: baseline;
+    justify-content: space-between;
+}
+
+.label {
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+}
+
+.hint {
+    color: var(--text-muted);
+    font-family: var(--font-secondary);
+    font-size: 0.6875rem;
+    font-style: italic;
+    letter-spacing: 0.01em;
+}
+
+.field {
+    flex: 1;
+    inline-size: 100%;
+    min-block-size: 96px;
+    padding: 12px 14px;
+    border: 1px solid var(--border-subtle);
+    outline: none;
+    background: var(--bg-elevated);
+    color: var(--text-body);
+    font-family: var(--font-secondary);
+    font-size: 0.8125rem;
+    letter-spacing: 0.005em;
+    line-height: 1.55;
+    resize: vertical;
+
+    /* iOS zooms the page into a field under 16px on focus (review M8). */
+    @media (pointer: coarse) {
+        font-size: 1rem;
+    }
+
+    &::placeholder {
+        color: var(--text-muted);
+        font-style: italic;
+    }
+
+    &:hover {
+        border-color: var(--border-strong);
+    }
+
+    &:focus {
+        border-color: var(--color-iris);
+        background: rgba(126, 112, 224, 0.04);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-iris);
+        outline-offset: 1px;
+    }
+}
+
+.count {
+    margin: 0;
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.625rem;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.08em;
+    text-align: end;
+
+    &[data-near] {
+        color: var(--color-warning);
+    }
+}

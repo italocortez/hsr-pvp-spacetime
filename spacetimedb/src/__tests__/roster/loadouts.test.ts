@@ -660,6 +660,30 @@ describe('versions (S14.3c-rev, A198)', () => {
         expect(LOADOUT_REV_MAX).toBe(4_294_967_295);
         expect(LOADOUT_REV_MAX_TEXT).toBe('This loadout cannot be saved again. Save it as a new loadout.');
     });
+
+    it('V13. the account\'s version floor only grows: a low-version save after a higher one keeps it; a stale save from the earlier loadout of a reused slot is refused', () => {
+        const { test, a } = world();
+        save(test, a, { slot: 0, name: 'Low' }); // slot 0 at 1
+        save(test, a, { slot: 1, name: 'High' }); // slot 1 at 2
+        for (const base of [2, 3, 4]) save(test, a, { slot: 1, baseRev: base, name: 'High', note: `v${base + 1}` });
+        expect(revOf(test, a, 1)).toBe(5);
+        expect(rateRow(test, a)!.revFloor).toBe(5);
+        // A save of the low-version loadout writes version 2: the floor stays at 5, it does not fall to 2.
+        save(test, a, { slot: 0, baseRev: 1, name: 'Low', note: 'edited' });
+        expect(revOf(test, a, 0)).toBe(2);
+        expect(rateRow(test, a)!.revFloor).toBe(5);
+        // Slot 1 is deleted and reused; the new loadout starts above every version slot 1 ever held, and is saved once.
+        tx(test, a, deleteBody(1, 5));
+        save(test, a, { slot: 1, name: 'Reused' });
+        expect(rows(test, a).find((r) => r.slot === 1)).toMatchObject({ rev: 6, firstRev: 6 });
+        save(test, a, { slot: 1, baseRev: 6, name: 'Reused', note: 'saved again' });
+        expect(revOf(test, a, 1)).toBe(7);
+        // An old page still holds version 4 of the deleted loadout. Had the floor fallen to 2, the reused slot would
+        // have started at 3 and be at 4 now: this save would overwrite it. It is told the loadout was deleted.
+        expect(refusedSave(test, a, { slot: 1, baseRev: 4, name: 'High', note: 'unsent' })).toBe(LOADOUT_GONE_TEXT);
+        expect(rows(test, a).find((r) => r.slot === 1)).toMatchObject({ rev: 7, name: 'Reused', note: 'saved again' });
+        expect(rateRow(test, a)!.revFloor).toBe(7);
+    });
 });
 
 // ─── Maintenance ─────────────────────────────────────────────────────────────

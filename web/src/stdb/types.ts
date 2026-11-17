@@ -8,6 +8,7 @@ import type {
     HsrLightconeCost,
     HsrSynergyCost,
     MyLinkRequestRow,
+    MyLoadoutRow,
     MyLobbyListRow,
     MyProfileRow,
 } from '@bindings/types';
@@ -59,13 +60,33 @@ export interface ReducersLike {
     confirmLink(args: { confirmToken: string }): Promise<void>;
 }
 
+/**
+ * S14.3c: the team builder's loadout reducers (docs/loadout/contract.md). Kept apart from
+ * `ReducersLike` and optional on the connection, so the test doubles of the earlier steps
+ * (`test/mockSignIn.ts` maps every `ReducersLike` key) still fit. S14.3c-rev (A198): both
+ * state the version they are based on (`baseRev`, 0 creates).
+ */
+export interface LoadoutReducersLike {
+    saveLoadout(args: {
+        slot: number;
+        baseRev: number;
+        name: string;
+        note: string;
+        code: string;
+    }): Promise<void>;
+    deleteLoadout(args: { slot: number; baseRev: number }): Promise<void>;
+}
+
+/** Every reducer the app may find on the connection. */
+export type AppReducersLike = ReducersLike & Partial<LoadoutReducersLike>;
+
 export interface StdbConnectionLike {
     subscriptionBuilder(): SubscriptionBuilderLike;
     /**
      * Optional so the test double of the earlier steps (`test/mockConnection.ts`) still fits; the
      * generated connection always has it. `useReducerCall` treats a missing one as not connected.
      */
-    reducers?: ReducersLike;
+    reducers?: AppReducersLike;
     /** Closes the connection for good (the provider's manager then waits for a Retry). */
     disconnect(): void;
     db: {
@@ -87,5 +108,7 @@ export interface StdbConnectionLike {
         hsrCharacterCost?: KeylessTableLike<HsrCharacterCost>;
         hsrLightconeCost?: KeylessTableLike<HsrLightconeCost>;
         hsrSynergyCost?: KeylessTableLike<HsrSynergyCost>;
+        /** S14.3c: the member's own loadouts; keyed by `slot` (so `onUpdate`). Optional as `reducers`. */
+        viewMyLoadouts?: TableLike<MyLoadoutRow>;
     };
 }

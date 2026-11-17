@@ -1,0 +1,107 @@
+/*
+ * The autosave ring (S14.3c). The fill is a registered custom property animated from 0% to 100% over the whole
+ * wait (--ring-ms), started where the wait stands by a negative delay (--ring-delay; fix pass S2); the mask cuts
+ * the disc into a ring. No fill motion under reduced motion.
+ */
+
+@property --ring-fill {
+    syntax: "<percentage>";
+    inherits: false;
+    initial-value: 0%;
+}
+
+.wrap {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 2px 8px;
+    align-items: center;
+    min-inline-size: 0;
+    color: var(--text-muted);
+    font-family: var(--font-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+
+    &[data-state="saved"] {
+        color: var(--text-body);
+    }
+
+    &[data-state="blocked"] {
+        color: var(--color-warning);
+    }
+}
+
+.ring {
+    --ring-fill: 0%;
+    flex: none;
+    inline-size: 14px;
+    block-size: 14px;
+    border-radius: 50%;
+    background: conic-gradient(
+        var(--color-snow) var(--ring-fill),
+        rgba(255, 255, 255, 0.16) var(--ring-fill)
+    );
+    mask: radial-gradient(circle, transparent 3.5px, #000 4px);
+
+    &[data-full] {
+        --ring-fill: 100%;
+    }
+
+    .wrap[data-state="blocked"] & {
+        background: color-mix(in srgb, var(--color-warning) 55%, transparent);
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+        &[data-fill] {
+            animation: ring-fill var(--ring-ms, 60s) linear var(--ring-delay, 0ms) forwards;
+        }
+
+        .wrap[data-state="saving"] & {
+            animation: ring-pulse 1.2s ease-in-out infinite alternate;
+        }
+    }
+}
+
+@keyframes ring-fill {
+    from {
+        --ring-fill: 0%;
+    }
+
+    to {
+        --ring-fill: 100%;
+    }
+}
+
+@keyframes ring-pulse {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0.45;
+    }
+}
+
+.check {
+    flex: none;
+    inline-size: 14px;
+    block-size: 14px;
+    color: var(--color-success);
+}
+
+.label {
+    white-space: nowrap;
+}
+
+.reason {
+    flex: 1 1 100%;
+    color: var(--text-body);
+    font-weight: 400;
+    line-height: 1.4;
+}
+
+@media (forced-colors: active) {
+    .ring {
+        background: CanvasText;
+    }
+}

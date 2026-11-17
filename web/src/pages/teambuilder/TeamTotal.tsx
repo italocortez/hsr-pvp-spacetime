@@ -93,9 +93,6 @@ export function PairStrip({
                     ))}
                 </ul>
             )}
-            {pairs.reduce((sum, p) => sum + p.modifier, 0) < 0 && (
-                <p className={styles.floor}>Pairings cannot lower the cost below 0.</p>
-            )}
         </div>
     );
 }

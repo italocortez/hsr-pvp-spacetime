@@ -1,0 +1,119 @@
+@import "@/styles/media.css";
+
+/*
+ * The mockups' `.footerStrip` (teambuilder.html, "verbatim from landing"). One change: the label and the build line
+ * use --text-muted, not --text-disabled (pewter on the page background is about 2.3:1, under the 4.5:1 for text).
+ */
+
+.strip {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    align-items: center;
+    padding: 36px 40px 28px;
+    border-block-start: 1px solid var(--border-subtle);
+    background: var(--bg-page);
+
+    @media (--bp-sm) {
+        padding: 28px 16px 24px;
+    }
+}
+
+.stack {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px 24px;
+    align-items: center;
+    justify-content: center;
+}
+
+.stackLabel {
+    position: relative;
+    padding-inline-end: 22px;
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+
+    &::after {
+        content: "";
+        position: absolute;
+        inset-block-start: 50%;
+        inset-inline-end: 0;
+        inline-size: 12px;
+        block-size: 1px;
+        background: var(--border-strong);
+    }
+}
+
+.list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 22px;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.tech {
+    display: flex;
+    gap: 9px;
+    align-items: center;
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+}
+
+.mark {
+    flex: none;
+    inline-size: 18px;
+    block-size: 18px;
+    background: currentColor;
+    mask: var(--mark) center / contain no-repeat;
+
+    &[data-icon="react"] {
+        --mark: url("/footer/react-icon.svg");
+    }
+
+    &[data-icon="spacetimedb"] {
+        --mark: url("/footer/spacetimedb-icon.svg");
+    }
+
+    &[data-icon="typescript"] {
+        --mark: url("/footer/typescript-icon.svg");
+    }
+
+    @media (forced-colors: active) {
+        background: CanvasText;
+    }
+}
+
+.divider {
+    inline-size: 100%;
+    max-inline-size: 280px;
+    block-size: 1px;
+    background: var(--border-subtle);
+}
+
+.line {
+    margin: 0;
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    text-align: center;
+    text-transform: uppercase;
+
+    & strong {
+        color: var(--color-prestige);
+        font-weight: 600;
+        letter-spacing: 0.18em;
+    }
+}
