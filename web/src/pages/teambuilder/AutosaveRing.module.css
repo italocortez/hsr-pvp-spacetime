@@ -1,14 +1,12 @@
 /*
- * The autosave ring (S14.3c). The fill is a registered custom property animated from 0% to 100% over the whole
- * wait (--ring-ms), started where the wait stands by a negative delay (--ring-delay; fix pass S2); the mask cuts
- * the disc into a ring. No fill motion under reduced motion.
+ * The save indicator (S14.3c ring, S14.3g sequence; phases in AutosaveRing.tsx). One 20px box; its layers (the
+ * ring with its check, the floppy, the warning glyph) share one grid cell and cross-fade. Only `opacity`, `scale`
+ * and stroke properties move, and only with `data-motion` inside the matching media query. `data-instant` (a
+ * switch of loadout) shows the new state without a transition. Timings from the tokens:
+ *   saving: the ring completes in --duration-base; it breathes only after 700 ms (a fast save never flickers);
+ *   check: the ring turns green and pops (--duration-slow), the tick draws (420 ms, after 120 ms);
+ *   rest: ring and check shrink away (--duration-base) as the floppy grows in (60 ms later).
  */
-
-@property --ring-fill {
-    syntax: "<percentage>";
-    inherits: false;
-    initial-value: 0%;
-}
 
 .wrap {
     display: inline-flex;
@@ -22,57 +20,173 @@
     font-weight: 600;
     letter-spacing: 0.01em;
 
-    &[data-state="saved"] {
-        color: var(--text-body);
-    }
-
-    &[data-state="blocked"] {
+    &[data-tone="warning"] {
         color: var(--color-warning);
     }
 }
 
-.ring {
-    --ring-fill: 0%;
+/* The box: fixed, decorative (aria-hidden), not a control: no border, hover style, cursor or focus. */
+.mark {
+    display: inline-grid;
     flex: none;
-    inline-size: 14px;
-    block-size: 14px;
-    border-radius: 50%;
-    background: conic-gradient(
-        var(--color-snow) var(--ring-fill),
-        rgba(255, 255, 255, 0.16) var(--ring-fill)
-    );
-    mask: radial-gradient(circle, transparent 3.5px, #000 4px);
+    place-items: center;
+    inline-size: 20px;
+    block-size: 20px;
+    cursor: default;
 
+    & > * {
+        grid-area: 1 / 1;
+    }
+}
+
+.glyph,
+.floppy,
+.warn {
+    opacity: 0;
+    scale: 0.6;
+}
+
+.glyph {
+    inline-size: 20px;
+    block-size: 20px;
+    overflow: visible;
+}
+
+/* The floppy is a filled 32-unit icon: a little smaller than the ring, so the two read at the same weight. */
+.floppy {
+    inline-size: 15px;
+    block-size: 15px;
+    color: var(--text-muted);
+}
+
+.warn {
+    inline-size: 18px;
+    block-size: 18px;
+    color: var(--color-warning);
+
+    .wrap[data-tone="quiet"] & {
+        color: var(--text-muted);
+    }
+}
+
+.mark[data-phase="ring"] .glyph,
+.mark[data-phase="saving"] .glyph,
+.mark[data-phase="check"] .glyph,
+.mark[data-phase="rest"] .floppy,
+.mark[data-phase="problem"] .warn {
+    opacity: 1;
+    scale: 1;
+}
+
+.track {
+    stroke: rgba(255, 255, 255, 0.16);
+    stroke-width: 2.25;
+}
+
+/* The arc: path length 100; its dash offset is how much is still empty. */
+.arc {
+    stroke: var(--color-snow);
+    stroke-width: 2.25;
+    stroke-dasharray: 100;
+    stroke-dashoffset: 0;
+
+    &[data-fill] {
+        stroke-dashoffset: var(--ring-at, 100);
+    }
+
+    /* A full ring has no dash: no seam where the dash would meet its own start. */
     &[data-full] {
-        --ring-fill: 100%;
+        stroke-dasharray: none;
     }
 
-    .wrap[data-state="blocked"] & {
-        background: color-mix(in srgb, var(--color-warning) 55%, transparent);
+    .mark[data-phase="check"] &,
+    .mark[data-phase="rest"] & {
+        stroke: var(--color-success);
     }
+}
 
-    @media (prefers-reduced-motion: no-preference) {
-        &[data-fill] {
-            animation: ring-fill var(--ring-ms, 60s) linear var(--ring-delay, 0ms) forwards;
+.tick {
+    stroke: var(--color-success);
+    stroke-width: 2.25;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+
+    .mark[data-phase="check"] &,
+    .mark[data-phase="rest"] & {
+        stroke-dashoffset: 0;
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .mark[data-motion] {
+        & .glyph,
+        & .floppy,
+        & .warn {
+            transition:
+                opacity var(--duration-base) var(--ease-out),
+                scale var(--duration-base) var(--ease-out);
         }
 
-        .wrap[data-state="saving"] & {
-            animation: ring-pulse 1.2s ease-in-out infinite alternate;
+        /* The floppy grows in just after the check starts to leave: one motion, not a swap. */
+        &[data-phase="rest"] .floppy {
+            transition-delay: 60ms;
+        }
+
+        & .arc {
+            transition: stroke var(--duration-base) var(--ease-out);
+        }
+
+        & .arc[data-fill] {
+            animation: ring-fill var(--ring-ms, 60s) linear var(--ring-delay, 0ms) both;
+        }
+
+        &[data-phase="saving"] .arc {
+            animation:
+                ring-complete var(--duration-base) var(--ease-out) backwards,
+                ring-breathe 1.1s var(--ease-in-out) 700ms infinite alternate;
+        }
+
+        &[data-phase="check"] .glyph {
+            animation: check-pop var(--duration-slow) var(--ease-out);
+        }
+
+        &[data-phase="check"] .tick {
+            animation: tick-draw 420ms var(--ease-out) 120ms both;
+        }
+
+        &[data-instant] :is(.glyph, .floppy, .warn, .arc:not([data-fill]), .tick) {
+            transition: none;
+            animation: none;
         }
     }
 }
 
 @keyframes ring-fill {
     from {
-        --ring-fill: 0%;
+        stroke-dashoffset: 100;
     }
 
     to {
-        --ring-fill: 100%;
+        stroke-dashoffset: 0;
     }
 }
 
-@keyframes ring-pulse {
+/* Dashed while it completes; the full ring after it is undashed (`[data-full]`). */
+@keyframes ring-complete {
+    from {
+        stroke-dasharray: 100;
+        stroke-dashoffset: var(--ring-from, 0);
+    }
+
+    to {
+        stroke-dasharray: 100;
+        stroke-dashoffset: 0;
+    }
+}
+
+@keyframes ring-breathe {
     from {
         opacity: 1;
     }
@@ -82,15 +196,33 @@
     }
 }
 
-.check {
-    flex: none;
-    inline-size: 14px;
-    block-size: 14px;
-    color: var(--color-success);
+@keyframes check-pop {
+    0% {
+        scale: 1;
+    }
+
+    40% {
+        scale: 1.12;
+    }
+
+    100% {
+        scale: 1;
+    }
+}
+
+@keyframes tick-draw {
+    from {
+        stroke-dashoffset: 1;
+    }
+
+    to {
+        stroke-dashoffset: 0;
+    }
 }
 
 .label {
-    white-space: nowrap;
+    flex: 0 1 auto;
+    min-inline-size: 0;
 }
 
 .reason {
@@ -101,7 +233,12 @@
 }
 
 @media (forced-colors: active) {
-    .ring {
-        background: CanvasText;
+    .track {
+        stroke: GrayText;
+    }
+
+    .arc,
+    .tick {
+        stroke: CanvasText;
     }
 }

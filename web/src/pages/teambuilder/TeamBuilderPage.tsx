@@ -1,5 +1,5 @@
 import { teamCharacters } from '@shared/teambuilder';
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { PageIntro } from '@/components/PageIntro/PageIntro';
 import { ControlSelect, SegmentedControl } from '@/components/SegmentedControl/SegmentedControl';
 import { SiteFooter } from '@/components/SiteFooter/SiteFooter';
@@ -45,6 +45,14 @@ export const OVER_DELAY_MS = 600;
 /** S14.3b fix pass (review M7): shown in Classic while the team holds Auction bids. */
 export const KEPT_BIDS = 'Your Auction extra bids are kept for when you switch back.';
 
+/**
+ * S14.3g: the save indicator's demo, dev server only (`/teambuilder#save-demo`: a hash, since the address's search
+ * keeps only the page's own params). Behind `import.meta.env.DEV`, so a production build drops the import and the
+ * demo with it.
+ */
+const SaveDemo = import.meta.env.DEV ? lazy(() => import('@/dev/SaveIndicatorDemo')) : null;
+const askedForSaveDemo = () => SaveDemo !== null && window.location.hash === '#save-demo';
+
 const FULL_HINT = 'The team is full. Remove a character to add another.';
 const slotsLeft = (n: number) => `${n} ${n === 1 ? 'slot' : 'slots'} left.`;
 
@@ -65,6 +73,7 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
     const searchRef = useRef<HTMLInputElement>(null);
     const poolRef = useRef<HTMLElement>(null);
     const poolHeadingRef = useRef<HTMLHeadingElement>(null);
+    const [saveDemo] = useState(askedForSaveDemo);
     /** The slot an empty-slot press chose (0-based), filled by the next pick. */
     const [target, setTarget] = useState<number | null>(null);
     /** What the last pick did, for the pool's line; cleared by any other change to the team. */
@@ -243,6 +252,12 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
                 flip the <strong>cost set</strong>, <strong>draft mode</strong> and{' '}
                 <strong>game mode</strong> as you need it.
             </PageIntro>
+
+            {SaveDemo && saveDemo && (
+                <Suspense fallback={null}>
+                    <SaveDemo />
+                </Suspense>
+            )}
 
             <div className={styles.workspace}>
                 <div className={styles.top}>

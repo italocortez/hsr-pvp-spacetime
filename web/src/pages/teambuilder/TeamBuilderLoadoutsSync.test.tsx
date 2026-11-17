@@ -36,6 +36,7 @@ import {
     reload,
     removeDialog,
     ringText,
+    said,
     saves,
     seedReference,
     slotNames,
@@ -290,7 +291,7 @@ describe('a stale draft (A198): the database refuses it; the person chooses', ()
         expect(storedDrafts()).toBeNull();
         await later(600_000);
         expect(saves(conn)).toEqual([]);
-        expect(screen.getByText('Saved to your account')).toBeInTheDocument();
+        expect(said('Saved to your account')).toBeInTheDocument();
     });
 
     it('a loadout that is not active: nothing is sent, the menu marks it, the choice shows when opened', async () => {
@@ -637,7 +638,7 @@ describe('this page’s own save is never a conflict (second review N7)', () => 
         conn.server.holdView = true;
         fireEvent.click(card('Pela'));
         await later(61_000);
-        await waitFor(() => expect(screen.getByText('Auto saved')).toBeInTheDocument());
+        await waitFor(() => expect(said('Auto saved')).toBeInTheDocument());
         expect(choice()).toBeNull();
         await act(async () => {
             conn.server.holdView = false;
@@ -717,7 +718,7 @@ describe('this page’s own save is never a conflict (second review N7)', () => 
         expect(choice()).toBeNull();
         await waitFor(() => expect(storedDrafts()).toBeNull());
         expect(conn.server.list()).toEqual([{ slot: 0, name: 'Hyper', code: T2, rev: 2 }]);
-        expect(screen.getByText('Auto saved')).toBeInTheDocument();
+        expect(said('Auto saved')).toBeInTheDocument();
     });
 });
 
@@ -1039,9 +1040,9 @@ describe('an edit taken back (review S6)', () => {
         putActive('0');
         await openMember(conn, [{ slot: 0, name: 'Hyper' }]);
         fireEvent.click(card('Pela'));
-        expect(screen.getByText('Saving soon')).toBeInTheDocument();
+        expect(said('Saving soon')).toBeInTheDocument();
         fireEvent.click(card('Pela'));
-        await waitFor(() => expect(screen.getByText('Saved to your account')).toBeInTheDocument());
+        await waitFor(() => expect(said('Saved to your account')).toBeInTheDocument());
         await later(120_000);
         expect(saves(conn)).toEqual([]);
         expect(storedDrafts()).toBeNull();

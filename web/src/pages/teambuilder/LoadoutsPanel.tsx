@@ -20,7 +20,7 @@ import {
 } from 'react';
 import { loginSearchFor } from '@/auth/loginSearch';
 import hidden from '@/styles/visuallyHidden.module.css';
-import { AutosaveRing, reasonText } from './AutosaveRing';
+import { accountView, reasonText, SAVE_TIP, SaveIndicator, type SaveView } from './AutosaveRing';
 import styles from './LoadoutsPanel.module.css';
 import {
     CaretIcon,
@@ -60,6 +60,7 @@ export const SIGN_IN_HINT = `${SIGN_IN_LINK} to keep up to ${ACCOUNT_LOADOUT_LIM
 export const SAVED_IN_BROWSER = 'Saved in this browser';
 /** S14.3e (A205): an empty team that is not a loadout yet; nothing waits to be saved. */
 export const EMPTY_WORKING = 'Pick a character to start a loadout.';
+export const STORAGE_OFF = 'Browser storage is off: kept for this visit only';
 export const LINK_COPIED = 'Link copied.';
 export const LINK_NOT_COPIED =
     'The link could not be copied. It is selected below: copy it from there.';
@@ -241,6 +242,92 @@ export function LoadoutsPanel({
     const working = status.kind === 'working';
     const statusId = `${ids}-status`;
 
+    // ── The save indicator (S14.3g). What it shows: an account loadout's autosave state; a browser loadout saved
+    // (or kept for this visit only); a working loadout's line; nothing for an empty one (A205: only its words).
+    // `shownEmpty`: the last committed render showed the empty working loadout. The first pick passes through one
+    // render of a working loadout with a character, just before it is stored: that render keeps showing nothing, so
+    // no warning flashes ahead of the check. (A team from a link starts there and says "Not saved yet".)
+    const shownEmpty = useRef(status.kind === 'working' && status.empty);
+    const nowEmpty = status.kind === 'working' && status.empty;
+    useEffect(() => {
+        shownEmpty.current = nowEmpty;
+    });
+    let view: SaveView | null;
+    let stateAttr: string = status.kind;
+    if (status.kind === 'account') {
+        view = accountView(status.autosave, `${ids}-reason`);
+        stateAttr = status.autosave.kind;
+    } else if (status.kind === 'browser') {
+        view = loadouts.storageOk
+            ? { kind: 'saved', said: SAVED_IN_BROWSER, tip: SAVE_TIP.browser }
+            : { kind: 'problem', label: STORAGE_OFF };
+        stateAttr = loadouts.storageOk ? 'saved' : 'storage-off';
+    } else if (status.full === 'browser')
+        view = {
+            kind: 'problem',
+            label: `Not saved: this browser holds ${BROWSER_LOADOUT_LIMIT} loadouts. Delete one to save this team.`,
+        };
+    else if (status.full === 'account')
+        view = {
+            kind: 'problem',
+            label: `Not saved: your account holds ${ACCOUNT_LOADOUT_LIMIT} loadouts. Delete one to save this team.`,
+        };
+    else if (status.loading)
+        view = { kind: 'problem', label: 'Your account loadouts are loading.', quiet: true };
+    else if (status.empty || shownEmpty.current) view = null;
+    else
+        view = {
+            kind: 'problem',
+            label: 'Not saved yet. Your first change saves it as a loadout.',
+        };
+
+    // Each save that lands for the active loadout bumps `saves` (the indicator's check). Worked out while rendering
+    // (React's "adjust state on a change of props"), so the frame that shows "saved" already shows the check.
+    // A browser loadout: its stored content changed under the same key, or it was just made (the first pick, a
+    // copy: a key the list did not hold). An account loadout: a save that was in flight came back saved.
+    // A switch to another loadout, a reload, or a pool search or filter (no change of these) bumps nothing.
+    const activeRef = loadouts.active;
+    const activeBrowser =
+        activeRef.kind === 'browser'
+            ? loadouts.browser.find((i) => i.key === activeRef.key)
+            : undefined;
+    const content = activeBrowser
+        ? `${activeBrowser.name}\n${activeBrowser.note}\n${activeBrowser.code}`
+        : null;
+    const browserKeys = loadouts.browser.map((i) => i.key).join('\n');
+    const [seen, setSeen] = useState({
+        id: activeId,
+        content,
+        state: stateKey,
+        keys: browserKeys,
+        saves: 0,
+    });
+    if (
+        seen.id !== activeId ||
+        seen.content !== content ||
+        seen.state !== stateKey ||
+        seen.keys !== browserKeys
+    ) {
+        let landed = false;
+        if (status.kind === 'browser' && loadouts.storageOk) {
+            if (seen.id === activeId) landed = seen.content !== null && content !== seen.content;
+            else
+                landed =
+                    activeBrowser !== undefined &&
+                    !seen.keys.split('\n').includes(activeBrowser.key);
+        } else if (status.kind === 'account')
+            landed =
+                seen.id === activeId && seen.state === 'saving' && status.autosave.kind === 'saved';
+        setSeen({
+            id: activeId,
+            content,
+            state: stateKey,
+            keys: browserKeys,
+            saves: seen.saves + (landed ? 1 : 0),
+        });
+    }
+    const saves = seen.saves;
+
     // The "Copy link" confirmation. It shares one reserved line beside the hide option with the picture's (S14.3f),
     // so a confirmation neither covers the name nor moves the card. A div, not a p: the page's own status region
     // is the last `p[role="status"]`.
@@ -263,7 +350,10 @@ export function LoadoutsPanel({
                 </h2>
             </div>
             <div className={styles.body}>
-                <div className={styles.nameRow}>
+                <div
+                    className={styles.nameRow}
+                    data-quiet={view && view.kind !== 'problem' ? '' : undefined}
+                >
                     <LoadoutMenuBox
                         loadouts={loadouts}
                         field={field}
@@ -304,28 +394,14 @@ export function LoadoutsPanel({
                     />
 
                     <div id={statusId} className={styles.status}>
-                        {status.kind === 'account' ? (
-                            <AutosaveRing status={status.autosave} reasonId={`${ids}-reason`} />
-                        ) : status.kind === 'browser' ? (
-                            <span className={styles.browserSaved}>
-                                <CheckIcon className={styles.browserCheck} />
-                                {loadouts.storageOk
-                                    ? SAVED_IN_BROWSER
-                                    : 'Browser storage is off: kept for this visit only'}
-                            </span>
-                        ) : (
-                            <span className={styles.workingState}>
-                                {status.full === 'browser'
-                                    ? `Not saved: this browser holds ${BROWSER_LOADOUT_LIMIT} loadouts. Delete one to save this team.`
-                                    : status.full === 'account'
-                                      ? `Not saved: your account holds ${ACCOUNT_LOADOUT_LIMIT} loadouts. Delete one to save this team.`
-                                      : status.loading
-                                        ? 'Your account loadouts are loading.'
-                                        : status.empty
-                                          ? EMPTY_WORKING
-                                          : 'Not saved yet. Your first change saves it as a loadout.'}
-                            </span>
-                        )}
+                        {/* Mounted while empty too (it then shows nothing): it sees the save of the first pick. */}
+                        <SaveIndicator
+                            view={view}
+                            loadoutId={activeId}
+                            saves={saves}
+                            state={stateAttr}
+                        />
+                        {!view && <span className={styles.workingState}>{EMPTY_WORKING}</span>}
                     </div>
                 </div>
 

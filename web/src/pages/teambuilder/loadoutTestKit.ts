@@ -373,6 +373,17 @@ export const slotNames = () =>
         (li) => li.querySelector('h3')?.textContent ?? null,
     );
 export const ringText = () => document.querySelector('[data-state]')?.textContent ?? null;
+/**
+ * S14.3g: the save indicator's words for a good state (saved, waiting, saving): visually hidden text, read with the
+ * name field (its description), never shown. `saidText`: what it says now (null: no such text). `said`: finds the
+ * hidden text with these words (throws when they are missing or only visible elsewhere).
+ */
+export const saidText = (root: ParentNode = document) =>
+    root.querySelector('[data-save-said]')?.textContent ?? null;
+export const said = (text: string) => screen.getByText(text, { selector: '[data-save-said]' });
+/** The indicator's icon (`ring`, `ring-full`, `check`, `floppy`, `warning`), or null when there is none. */
+export const saveIcon = () =>
+    document.querySelector('[data-save-icon]')?.getAttribute('data-save-icon') ?? null;
 export const choice = () => screen.queryByRole('button', { name: 'Keep my changes' });
 export const deletedChoice = () => screen.queryByRole('button', { name: 'Save as a new loadout' });
 

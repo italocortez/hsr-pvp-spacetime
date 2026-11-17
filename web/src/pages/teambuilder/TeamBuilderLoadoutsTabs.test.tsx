@@ -28,6 +28,7 @@ import {
     putDrafts,
     removeDialog,
     ringText,
+    saidText,
     saves,
     seedReference,
     storedDrafts,
@@ -148,7 +149,7 @@ describe('two tabs: a live tab keeps its draft however long it waits (review S1)
     it('leaving with the other tab open: the save sent on the way out is not sent again (review M4)', async () => {
         fakeTimers();
         bridgeStorage();
-        const { one, two, ring, pick } = await openTwoTabs();
+        const { one, two, pick } = await openTwoTabs();
         pick(one.container, 'Pela');
         await later(5_000);
         expect(saves(conn)).toEqual([]);
@@ -165,7 +166,7 @@ describe('two tabs: a live tab keeps its draft however long it waits (review S1)
         expect(saves(conn)).toHaveLength(1);
         await waitFor(() => expect(storedDrafts()).toBeNull());
         expect(conn.server.list()).toEqual([{ slot: 0, name: 'Hyper', code: T2, rev: 2 }]);
-        expect(ring(two.container)).toMatch(/Auto saved/);
+        expect(saidText(two.container)).toBe('Auto saved');
     });
 });
 
@@ -238,7 +239,7 @@ describe('the ring never says saved over an unsent draft (review S2)', () => {
     it('another tab’s draft of the active loadout is released while this tab is offline: "Not saved yet", no connection', async () => {
         putActive('0', 1);
         await openMember(conn, [{ slot: 0, name: 'Hyper' }]);
-        expect(ringText()).toMatch(/Saved to your account/);
+        expect(saidText()).toBe('Saved to your account');
         drop();
         putDrafts({ 0: draft({ name: 'Hyper', code: PELA, baseRev: 1, tab: null }) });
         act(() => {

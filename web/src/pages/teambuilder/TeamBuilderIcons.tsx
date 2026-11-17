@@ -129,6 +129,44 @@ export function CheckIcon({ className }: IconProps) {
     );
 }
 
+/**
+ * S14.3g: a floppy disk, the save indicator's resting state (saved). save-floppy from SVG Repo, supplied by the user;
+ * the source's group translation (-152, -515) is applied to the coordinates, so the path sits in 0 0 32 32 as is.
+ */
+export function FloppyIcon({ className }: IconProps) {
+    return (
+        <svg
+            className={className}
+            viewBox="0 0 32 32"
+            fill="currentColor"
+            fillRule="evenodd"
+            aria-hidden="true"
+        >
+            <path d="M19 10c.552 0 1-.447 1-1V5c0-.553-.448-1-1-1s-1 .447-1 1v4c0 .553.448 1 1 1Zm11 18c0 1.104-.896 2-2 2H4c-1.104 0-2-.896-2-2V4c0-1.104.896-2 2-2h2v10c0 1.104.896 2 2 2h16c1.104 0 2-.896 2-2V2h2c1.104 0 2 .896 2 2v24ZM8 2h16v9c0 .553-.448 1-1 1H9c-.552 0-1-.447-1-1V2Zm20-2H4C1.791 0 0 1.791 0 4v24c0 2.209 1.791 4 4 4h24c2.209 0 4-1.791 4-4V4c0-2.209-1.791-4-4-4Z" />
+        </svg>
+    );
+}
+
+/** S14.3g: a circled "!" (the save indicator's problem states, always beside their words). */
+export function WarningIcon({ className }: IconProps) {
+    return (
+        <svg
+            className={className}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+        >
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 7.5v5.5" />
+            <path d="M12 16.5h.01" />
+        </svg>
+    );
+}
+
 /** S14.3c: two sheets (the mockup's Duplicate). */
 export function DuplicateIcon({ className }: IconProps) {
     return (

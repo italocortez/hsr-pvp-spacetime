@@ -21,6 +21,7 @@ import {
     putDrafts,
     reconnect,
     removeDialog,
+    said,
 } from './loadoutTestKit';
 import { DRAFT_KEY, PREVIOUS_KEY } from './teamStorage';
 import { LOADOUTS_QUERY } from './useLoadouts';
@@ -101,13 +102,13 @@ describe('browser loadouts (visitor)', () => {
         expect(stored()?.loadouts).toEqual([
             { key: expect.any(String), name: 'New Loadout', note: '', code: ACHERON },
         ]);
-        expect(screen.getByText('Saved in this browser')).toBeInTheDocument();
+        expect(said('Saved in this browser')).toBeInTheDocument();
         first.unmount();
         conn = makeConn();
         await open();
         expect(slotNames()).toEqual(['Acheron', null, null, null]);
         expect(nameField().value).toBe('New Loadout');
-        expect(screen.getByText('Saved in this browser')).toBeInTheDocument();
+        expect(said('Saved in this browser')).toBeInTheDocument();
     });
 
     it('rename; a blank name becomes Untitled on blur', async () => {
@@ -362,7 +363,7 @@ describe('account loadouts (verified member)', () => {
         );
         await user.click(within(group).getByRole('menuitemradio', { name: /Clara/ }));
         expect(slotNames()).toEqual(['Clara', null, null, null]);
-        expect(screen.getByText('Saved to your account')).toBeInTheDocument();
+        expect(said('Saved to your account')).toBeInTheDocument();
         r.unmount();
         expect(conn.liveQueries()).not.toContain(LOADOUTS_QUERY);
     });
@@ -380,7 +381,7 @@ describe('account loadouts (verified member)', () => {
         const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
         await open('/teambuilder', 'member');
         await user.click(card('Acheron'));
-        expect(screen.getByText('Saving soon')).toBeInTheDocument();
+        expect(said('Saving soon')).toBeInTheDocument();
         const drafts = JSON.parse(localStorage.getItem(draftsKey(7)) ?? '{}');
         expect(drafts['0']).toMatchObject({ name: 'New Loadout', code: ACHERON });
         expect(conn.reducers.saveLoadout).not.toHaveBeenCalled();
@@ -399,7 +400,7 @@ describe('account loadouts (verified member)', () => {
             note: '',
             code,
         });
-        await waitFor(() => expect(screen.getByText('Auto saved')).toBeInTheDocument());
+        await waitFor(() => expect(said('Auto saved')).toBeInTheDocument());
         // The row arrived with the server's version; the draft goes once it holds it.
         expect(conn.server.list()).toEqual([{ slot: 0, name: 'New Loadout', code, rev: 1 }]);
         await waitFor(() => expect(localStorage.getItem(draftsKey(7))).toBeNull());
@@ -434,7 +435,7 @@ describe('account loadouts (verified member)', () => {
         expect(localStorage.getItem(draftsKey(7))).not.toBeNull();
         await act(async () => vi.advanceTimersByTime(10_000));
         expect(conn.reducers.saveLoadout).toHaveBeenCalledTimes(2);
-        await waitFor(() => expect(screen.getByText('Auto saved')).toBeInTheDocument());
+        await waitFor(() => expect(said('Auto saved')).toBeInTheDocument());
     });
 
     it('slot taken (another device): saved again in the next free slot', async () => {
@@ -508,13 +509,13 @@ describe('account loadouts (verified member)', () => {
         fireEvent.click(card('Pela'));
         // The account list has one loadout; the first edit of the working loadout makes slot 1.
         await act(async () => vi.advanceTimersByTime(60_000));
-        expect(screen.getByText('Saving…')).toBeInTheDocument();
+        expect(said('Saving…')).toBeInTheDocument();
         expect(conn.reducers.saveLoadout.mock.calls[0]?.[0]).toMatchObject({
             slot: 1,
             baseRev: 0,
         });
         await act(async () => land());
-        await waitFor(() => expect(screen.getByText('Auto saved')).toBeInTheDocument());
+        await waitFor(() => expect(said('Auto saved')).toBeInTheDocument());
         await waitFor(() =>
             expect(
                 screen.getByText('Auto saved.', { selector: '[role="status"]' }),
@@ -669,7 +670,7 @@ describe('a loadout comes into being with its first character (S14.3e)', () => {
         expect(stored()?.loadouts).toEqual([
             { key: expect.any(String), name: 'Plan', note: 'later', code: PLAN },
         ]);
-        expect(screen.getByText('Saved in this browser')).toBeInTheDocument();
+        expect(said('Saved in this browser')).toBeInTheDocument();
     });
 
     it('visitor: a reload keeps the name, note and modes of the empty working loadout without listing it', async () => {
@@ -734,7 +735,7 @@ describe('a loadout comes into being with its first character (S14.3e)', () => {
         expect(stored()?.loadouts).toEqual([
             { key: expect.any(String), name: 'New Loadout', note: '', code: EMPTY },
         ]);
-        expect(screen.getByText('Saved in this browser')).toBeInTheDocument();
+        expect(said('Saved in this browser')).toBeInTheDocument();
         r.unmount();
         clearStorage();
         conn = makeConn();
@@ -749,7 +750,7 @@ describe('a loadout comes into being with its first character (S14.3e)', () => {
         await waitFor(() =>
             expect(conn.server.list()).toEqual([{ slot: 0, name: 'Hyper', code: EMPTY, rev: 2 }]),
         );
-        await waitFor(() => expect(screen.getByText('Auto saved')).toBeInTheDocument());
+        await waitFor(() => expect(said('Auto saved')).toBeInTheDocument());
     });
 
     it('New Loadout does not pile up empty loadouts (browser and account)', async () => {

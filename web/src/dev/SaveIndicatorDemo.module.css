@@ -1,0 +1,107 @@
+/* Dev only (S14.3g): the save indicator demo on /teambuilder#save-demo. */
+
+.demo {
+    display: grid;
+    gap: 18px;
+    margin-block-end: 24px;
+    padding: 18px;
+    border: 1px dashed var(--color-warning);
+    border-radius: 10px;
+    background: var(--color-space);
+    color: var(--text-body);
+    font-size: 0.8125rem;
+}
+
+.title {
+    margin: 0;
+    color: var(--color-warning);
+    font-family: var(--font-primary);
+    font-size: 0.6875rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+}
+
+.tiles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.tile {
+    display: grid;
+    gap: 8px;
+    justify-items: center;
+    min-inline-size: 9rem;
+    margin: 0;
+    padding: 12px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+
+    & figcaption {
+        color: var(--text-muted);
+        font-size: 0.75rem;
+    }
+}
+
+/* Enlarged: zoom keeps the SVG sharp and the layout honest (the real box, four times). */
+.big {
+    display: flex;
+    align-items: center;
+    min-block-size: 24px;
+    max-inline-size: 16rem;
+    zoom: 4;
+
+    .tile & {
+        zoom: 2.5;
+        max-inline-size: 11rem;
+    }
+}
+
+.live {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    align-items: center;
+}
+
+/* Like the card's name row: the name, then the state (its words wrap in their own column). */
+.real {
+    display: grid;
+    grid-template-columns: minmax(0, 12rem) minmax(0, 1fr);
+    gap: 6px 14px;
+    align-items: center;
+    inline-size: min(26rem, 100%);
+}
+
+.mockName {
+    padding: 9px 14px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    color: var(--color-snow);
+    font-family: var(--font-secondary);
+    font-size: 0.9375rem;
+    font-weight: 600;
+}
+
+.step {
+    flex-basis: 100%;
+    margin: 0;
+    color: var(--text-muted);
+}
+
+.buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+
+    & button {
+        min-block-size: 34px;
+        padding: 0 12px;
+        border: 1px solid var(--border-strong);
+        border-radius: 8px;
+        background: var(--bg-elevated);
+        color: var(--color-snow);
+        font: inherit;
+        cursor: pointer;
+    }
+}

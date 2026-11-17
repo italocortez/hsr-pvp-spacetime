@@ -32,6 +32,11 @@
     @container loadouts (min-width: 22rem) {
         grid-template-columns: minmax(0, 3fr) minmax(8.5rem, 2fr);
     }
+
+    /* S14.3g: the save state is only its 20px indicator (the words are hidden): beside the name at every width. */
+    &[data-quiet] {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
 }
 
 /* The sign-in line (visitor, guest): the card's last quiet row; one line at the card's full desktop width. */
@@ -386,6 +391,7 @@
 /*
  * The save state beside the name: two lines fit in the name's row, so the usual states move nothing. Under the name
  * (a narrow card) it keeps one line; a longer text (a full list, a save that waits with its reason) adds lines.
+ * S14.3g: the good states are the indicator alone (`.nameRow[data-quiet]`); only problems keep words here.
  */
 .status {
     display: flex;
@@ -393,22 +399,6 @@
     min-block-size: 1.4em;
     font-size: 0.75rem;
     line-height: 1.4;
-}
-
-.browserSaved {
-    display: inline-flex;
-    gap: 8px;
-    align-items: center;
-    color: var(--text-body);
-    font-family: var(--font-secondary);
-    font-weight: 600;
-}
-
-.browserCheck {
-    flex: none;
-    inline-size: 14px;
-    block-size: 14px;
-    color: var(--color-success);
 }
 
 .workingState {
