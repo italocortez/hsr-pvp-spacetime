@@ -2052,3 +2052,13 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   3. Orchestrator: the mockup stacked a pair on one unit because its made-up data gave each pair an "owner". The real data has none (the two names of a pair are in alphabetical order, the module treats a pair as unordered), so an even split is the rule; real owners would need a new field and can be added later without changing the chart. The floor at 0 in the shared scoring code stays as a safeguard.
 - **Why:** user, 2026-11-17: "why is the pairing not stacked in the same bar as the mockup tho? it was clear that way what was causing the price of a given unit to increase, why put it on a separate column?"; then "we can split the pair evently yeah that's fine! lets go with your recommendation. In detail, a cost set should not allow negative pairings, that breaks many things, so lets assume its always 0 or more".
 - **Where implemented:** not yet.
+
+### A200 — Chart colours kept; charts are our own code
+
+- **Date:** 2026-11-17 · **Status:** item 1 decided; items 2 and 3 are the orchestrator's notes for the profile step
+- **Decision:**
+  1. The adjusted chart colours of the team builder are kept (A197 item 7): each game mode's hue family from the mockup, shifted to pass the measured contrast check. Closes A197 item 8 for colours.
+  2. Orchestrator: the team builder's chart is our own shared component (`web/src/components/StackedBarChart/`, CSS and plain markup, about 570 lines with its styles), not Chart.js, and no chart library is installed (A190 item 11).
+  3. Orchestrator, for the profile port (S14.5): the profile mockup draws six Chart.js charts: five bar charts (one vertical, four horizontal) and one line chart (rating over time, four smoothed lines with a fill). The bars can be built from the shared piece or plain CSS. The line chart needs a small SVG component of our own. Whether that is good enough, or whether Chart.js is installed for the profile page, is a ruling for that step, after a comparison against the mockup as was done here.
+- **Why:** user, 2026-11-17: "I like our new colors for the charts, are we using our own code to replace charts.js? charts.js is also being used at the profile page I believe for stats".
+- **Where implemented:** `web/src/pages/teambuilder/CostChart.module.css` (item 1), `web/src/components/StackedBarChart/` (item 2).
