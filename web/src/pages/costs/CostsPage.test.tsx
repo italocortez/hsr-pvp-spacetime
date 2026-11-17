@@ -851,8 +851,12 @@ describe('the filter row (S14.2c)', () => {
         const word = within(clear).getByText('Clear');
         expect(word.closest('[aria-hidden="true"]')).toBeNull();
         expect(clear).toHaveTextContent(/^Clear\s*2\s*filters\s*✕$/);
-        // Still last in the filter row's source order (the keyboard reaches it after the filters).
-        expect(filters()?.lastElementChild).toBe(clear);
+        // S14.2d: right after the search, in one box that leads the filter row, so the keyboard
+        // reaches it where it shows, before the filters.
+        const search = screen.getByRole('searchbox', { name: 'Search' });
+        expect(clear.previousElementSibling).toContainElement(search);
+        expect(clear.parentElement?.parentElement).toBe(filters());
+        expect(filters()?.firstElementChild).toBe(clear.parentElement);
     });
 });
 

@@ -1892,3 +1892,14 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   5. Open: at 1440 px with a filter active, the full Clear button still lands alone on a second line at the right (unchanged from S14.2b).
 - **Why:** user, 2026-11-16: "the archetype on character selection drops down to the next row once something is selected ... making the 'clear' button an akward box shifted to the left on its own row. Couldn't we use a flex box for this? or maybe have the role on its own row alone and move archetype next to the star filter? The behavior on Lightcone for the clear icon is alright tho."; then "yeah I agree with C, and maybe we could make the clear buttom a dark red to indicate that its a 'clear' button, psychologically would let you think that by seeing the red tint".
 - **Where implemented:** `web/src/pages/costs/CostsPage.{tsx,module.css,test.tsx}`, `web/src/components/MultiSelectDropdown/`, `docs/frontend/pages.md`, `docs/log/2026-11-16-s14-2c.md`
+
+### A188 — S14.2d: Clear beside the search at every width
+
+- **Date:** 2026-11-16 · **Status:** item 1 decided; items 2 and 3 are the implementer's choices, agreed by the orchestrator; item 4 open
+- **Decision:**
+  1. The costs page Clear button sits right after the search field at every width, on both tabs. This closes A187 item 5.
+  2. Implementer, agreed by the orchestrator: the search field and Clear share one box sized as the search field was alone, so Clear takes its room from the search and nothing else in the row moves or changes line. Clear is the full "Clear N ✕" when that leaves the search at least 160 px, otherwise the compact "N ✕".
+  3. Implementer, agreed by the orchestrator: Clear also follows the search in the source, so the Tab order matches what is seen (this replaces the keyboard point in A187 item 4).
+  4. Open: on the Characters tab at 1320 px and wider the search field is about 145 px while a filter is active (the placeholder is cut to "Search by nam"), because that line is full.
+- **Why:** user, 2026-11-16: "lets apply that A recommendation on the issue you nottice" (option A: "Clear goes beside the search on every width, same place as on phones. One rule everywhere, no second line.").
+- **Where implemented:** `web/src/pages/costs/CostsPage.{tsx,module.css,test.tsx}`, `docs/frontend/pages.md`, `docs/log/2026-11-16-s14-2c.md`

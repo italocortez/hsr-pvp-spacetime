@@ -231,17 +231,33 @@ function Filters({
 
     return (
         <search className={styles.filterRow} aria-label="Filters">
-            <SearchField
-                label="Search"
-                inputRef={searchRef}
-                value={text}
-                maxLength={SEARCH_MAX}
-                placeholder={isChars ? 'Search by name or alias\u2026' : 'Search light cones\u2026'}
-                onChange={(value) => {
-                    setText(value);
-                    actions.setQuery(value);
-                }}
-            />
+            {/* The search and Clear share one box at every width (S14.2d): Clear takes its room
+                from the search, so it never adds a line or moves another control. Clear comes
+                right after the search in the source too, so focus order matches what is seen. */}
+            <div className={styles.searchGroup}>
+                <SearchField
+                    label="Search"
+                    inputRef={searchRef}
+                    value={text}
+                    maxLength={SEARCH_MAX}
+                    placeholder={
+                        isChars ? 'Search by name or alias\u2026' : 'Search light cones\u2026'
+                    }
+                    onChange={(value) => {
+                        setText(value);
+                        actions.setQuery(value);
+                    }}
+                />
+                {page.filterCount > 0 && (
+                    <button type="button" className={styles.clearChip} onClick={onClear}>
+                        <span className={styles.clearWord}>Clear</span> {page.filterCount}{' '}
+                        <span className={hidden.visuallyHidden}>
+                            {page.filterCount === 1 ? 'filter' : 'filters'}
+                        </span>
+                        <span aria-hidden="true"> {'\u2715'}</span>
+                    </button>
+                )}
+            </div>
             {isChars && (
                 <FilterChips
                     label="Filter by element"
@@ -290,15 +306,6 @@ function Filters({
                 </div>
             ) : (
                 rarity
-            )}
-            {page.filterCount > 0 && (
-                <button type="button" className={styles.clearChip} onClick={onClear}>
-                    <span className={styles.clearWord}>Clear</span> {page.filterCount}{' '}
-                    <span className={hidden.visuallyHidden}>
-                        {page.filterCount === 1 ? 'filter' : 'filters'}
-                    </span>
-                    <span aria-hidden="true"> {'\u2715'}</span>
-                </button>
             )}
         </search>
     );

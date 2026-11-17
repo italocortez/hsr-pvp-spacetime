@@ -114,23 +114,29 @@
     border-block-end: 1px solid var(--border-subtle);
 
     /* Phones (S14.2c): fixed lines, so picking a filter never moves a control to another line and
-       the table below does not jump. A two-column grid: the search shares the first line with the
-       compact Clear (the field narrows while it shows), every other child spans the full width
-       (element, path, role, then archetype + rarity in `.pair`). The Clear stays last in the source,
-       so the keyboard reaches it after the filters it clears; the grid only lifts it visually. */
+       the table below does not jump. One column, one control per line: the search with Clear
+       beside it (`.searchGroup`), element, path, role, then archetype + rarity in `.pair`. */
     @media (--bp-sm) {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        column-gap: 0;
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
 
-        & > * {
-            grid-column: 1 / -1;
-        }
+/* The search and the Clear button in one box (S14.2d). The box is sized exactly as the search
+   alone was (the field's own `flex: 2 1 200px` and 160px minimum), and as a size container its
+   width never depends on what it holds: Clear appearing narrows the search and changes nothing
+   else in the row, at every width. Its width also picks Clear's form (below). */
+.searchGroup {
+    container: filter-search / inline-size;
+    display: flex;
+    flex: 2 1 200px;
+    min-inline-size: 160px;
+    align-items: stretch;
 
-        /* The search field (always the first child). */
-        & > :first-child {
-            grid-column: 1;
-        }
+    /* The search field fills what Clear leaves. */
+    & > :first-child {
+        flex: 1 1 0;
+        min-inline-size: 0;
     }
 }
 
@@ -159,10 +165,9 @@
     /* The containing block for its visually hidden text (`visuallyHidden.module.css`). */
     position: relative;
     display: inline-flex;
-    /* Its own size, at the end of whichever line it lands on (S14.2b): with the archetype filter
-       the first line is full at 1440, and a growing chip stretched across a line of its own. */
+    /* Its own size, right after the search (S14.2d). */
     flex: 0 0 auto;
-    margin-inline-start: auto;
+    margin-inline-start: 8px;
     gap: 6px;
     align-items: center;
     justify-content: center;
@@ -195,24 +200,42 @@
         transform: scale(0.97);
     }
 
-    /* Phones: beside the search, compact "N ✕"; the word is only hidden visually (`.clearWord`),
-       so the accessible name stays "Clear N filter(s)". */
+    /* Compact "N ✕" on phones, and wider wherever the full button would leave the search under
+       160px (the field's own minimum): the box is under 272px = 160 + 8 + 104. The word is only
+       hidden visually (`.clearWord`), so the accessible name stays "Clear N filter(s)". A media
+       query and a container query cannot share one condition, hence the two identical blocks. */
     @media (--bp-sm) {
-        grid-row: 1;
-        grid-column: 2;
         min-inline-size: 48px;
-        margin-inline-start: 8px;
+        padding: 0 10px;
+        gap: 5px;
+        letter-spacing: 0.04em;
+    }
+
+    @container filter-search (max-width: 271.98px) {
+        min-inline-size: 48px;
         padding: 0 10px;
         gap: 5px;
         letter-spacing: 0.04em;
     }
 }
 
-/* The word "Clear": visible above the phone step, hidden visually below it. The rules mirror
-   `visuallyHidden.module.css`; they are repeated here only because that class cannot be applied
-   inside a media query (`composes` is unconditional). */
+/* The word "Clear": hidden visually wherever Clear is compact (the conditions above). The rules
+   mirror `visuallyHidden.module.css`; they are repeated here only because that class cannot be
+   applied inside a media or container query (`composes` is unconditional). */
 .clearWord {
     @media (--bp-sm) {
+        position: absolute;
+        inline-size: 1px;
+        block-size: 1px;
+        margin: -1px;
+        padding: 0;
+        border: 0;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    @container filter-search (max-width: 271.98px) {
         position: absolute;
         inline-size: 1px;
         block-size: 1px;
