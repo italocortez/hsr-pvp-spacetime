@@ -1914,3 +1914,27 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   4. Known trade-offs: Characters between 561 and about 596 px has four lines where it had three; on Light Cones Clear is compact between about 1121 and 1335 px where it was full.
 - **Why:** user, 2026-11-16: "what if we make it so that if the rarity filter drops, it drags archetype with itself? shouldn't that also work exactly as we have planned for phones as well? or maybe just an exclusive view for the pixel width range you saw".
 - **Where implemented:** `web/src/pages/costs/CostsPage.module.css`, `docs/frontend/pages.md`, `docs/log/2026-11-16-s14-2c.md`
+
+### A190 — S14.3: team builder rulings
+
+- **Date:** 2026-11-16 · **Status:** decided, except item 16 (open) and the look comparisons in items 11 to 14 (to be picked from A/B pages)
+- **Decision:**
+  1. Saved loadouts sync to the backend for verified accounts. Guests and visitors without an account keep loadouts in browser storage. This replaces the 2026-11-10 ruling that kept `reducers/roster/userLoadouts.ts` for guests' saved rosters.
+  2. A team is shared with a "Copy link" button that writes the team into the address.
+  3. Limits: 5 loadouts in browser storage, 10 on the account.
+  4. Default eidolon when a character is added: E6 for 4-star characters and the Trailblazers, E0 for 5-star.
+  5. The Auction simulator follows the module's rules (eidolon extra charged, pairs in the total); budgets start at 30 and 15 and can be edited.
+  6. A character with no cost row in the chosen set can be picked: it shows "n/a", counts as 0, and a warning is shown.
+  7. The pool has rarity and archetype filters; filters live in the address as on the costs page.
+  8. From the old apps: drag to swap slots and a screenshot export are added. Presets are not.
+  9. The default game mode is AS, as on the costs page.
+  10. Deleting a loadout asks for confirmation in a dialog (the orchestrator had recommended an Undo message).
+  11. Cost chart: CSS bars are built first and compared against the mockup's Chart.js rendering; Chart.js is not installed unless the user asks for it after the comparison. Copying a part of Chart.js into the repo was checked and set aside (its bar chart needs the library's core, scales, animation and tooltip code).
+  12. Synergy pairs in the chart: an A/B comparison (their own "Pairings" bar against the total only).
+  13. Picking on phones: an A/B comparison tried live (a full-screen sheet from the empty slot against the pool placed under the slots).
+  14. Game mode control: an A/B comparison (the mockup's image tiles against the costs page's buttons).
+  15. Backend shape, as recommended by the orchestrator and agreed: a loadout remembers its team, game mode, draft mode, cost set and Auction budgets; it saves automatically 2 s after the last edit, at most once per 10 s per loadout, and on switching loadout or leaving; after sign-in the browser list and the account list both stay, with "Copy to my account" per browser loadout; the note is capped at 1,000 characters with a visible counter; the backend is its own step (S14.3s) built beside the chart and Auction step, before the loadout part of the page.
+  16. Open: where the "blank character" image the user uploaded lives, and whether any reducer needs a fake character entry (research under way).
+  17. Light cone images stay as they are for now; smaller files are on the user's list (`notes/user-todo.md`, local).
+- **Why:** user, 2026-11-16: "go team builder"; "#1 -> Loadout storage was something I was supposed to have thought about while making the backend but forgot. So it would be a good idea to have it integrated with the backend now. So I suggest doing B. Remember that storage is only for verified accounts, guest and no accounts use local storage. #2 -> Agree on your copy link for sharing #3 -> Limit to 5 for local storage and 10 for account sync #4 -> Option A #5 -> Option A #6 -> Option A #7 -> Option A #8 -> Lets add the drag to swap, screenshot exports only #9 -> AS as the cost page ... #11 -> Check if its possible to copy only the things we use for Chart.js so we don't depend on it before we do A/B #12 -> Agree on checking our own pairing bar, A/B test is fine. ... #14 -> yeah A/B here is fine"; then "for #10 dialog, for #11 agree on comparison first, for #13 lets do an A/B to see whats best. For blank image , lets check the reducers that would pick this empty character, do we need it as a 'Fake' entry or not? send a researcher for it. I agree with your recomendations on backend rulings"; on light cones: "lets keep the lightcones as is for now, I'll eventually add smaller version".
+- **Where implemented:** not yet; research in `tmp/teambuilder/` (local). Sub-steps: S14.3a (page core), S14.3b (chart, Auction), S14.3s (backend), S14.3c (loadouts, share link, screenshot export).
