@@ -2031,3 +2031,14 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   9. Open: the wording the implementers wrote, tabled in `docs/frontend/pages.md`.
 - **Why:** user rulings A190 (items 5, 11, 12) and A196; user, 2026-11-16: "you can continue with the next steps unless you need rulings from me".
 - **Where implemented:** `web/src/components/StackedBarChart/`, `web/src/pages/teambuilder/` (`CostChart`, `AuctionPanel`, `AmountField`, `costChartModel.ts`), `shared/teambuilder/{auctionSpend,amount}.ts`, `docs/frontend/{pages,component-hygiene}.md`, `docs/log/2026-11-17-s14-3b.md`
+
+### A198 — Loadouts carry a version number; a stale save is refused by the database
+
+- **Date:** 2026-11-17 · **Status:** decided; changes the shape of A193 item 1 before its first publish
+- **Decision:**
+  1. Each account loadout carries a version number that rises by one on every save. The view sends it. A save states the version it is based on; the database refuses a save based on an older version ("changed on another device") instead of the page guessing by comparing contents.
+  2. The page's account sync logic is split into smaller parts (drafts and their storage; sync; the active and working loadout; a thin action layer) and rebuilt on that refusal.
+  3. A loadout deleted on another device while this page holds unsent edits: the person is told "This loadout was deleted on another device" and chooses "Save as a new loadout" or "Discard my changes". It is neither brought back silently nor dropped silently.
+  4. Orchestrator: the conflict choice "Keep my changes" / "Use the account copy" stays. The backend change is made before the first publish of the loadout table, while its shape can still change freely; the publish waits for it.
+- **Why:** two reviews of S14.3c found seven ways for an older draft to overwrite a newer account copy (two devices creating at once, a stale draft on load, on reconnect, before the list has loaded, across two tabs), all with one root: the database did not know which version a save was based on. Two were fixed in the page and four more were found. User, 2026-11-17, on the orchestrator's two recommendations (the version number with the split; telling the person about a deletion elsewhere): "I agree on your recomendations".
+- **Where implemented:** not yet (S14.3c-rev).
