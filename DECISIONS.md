@@ -2079,3 +2079,13 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   10. Open: the hand check with a real signed-in account (two browsers, offline edits, a delete elsewhere, two tabs, the limit, sign-out), listed in `docs/log/2026-11-17-s14-3c.md`; the wording the implementers wrote, tabled in `docs/frontend/pages.md`; whether a mode switch alone should create a browser loadout; "New Loadout" focusing the name field on phones.
 - **Why:** user rulings A190, A194, A198, A199; three reviews found and closed seven ways for an older draft to overwrite a newer account copy before the design moved to version numbers.
 - **Where implemented:** `web/src/pages/teambuilder/` (`useLoadouts`, `useAccountDrafts`, `useAccountSync`, `useActiveLoadout`, `useBrowserLoadouts`, `tabPresence`, `loadoutStorage`, `LoadoutsPanel`, `AutosaveRing`, `LoadoutNote`, `costChartModel`), `shared/loadouts/`, `web/src/components/SiteFooter/`, `web/src/stdb/{types,useReducerCall,useRouteSubscriptions}.ts`, `docs/frontend/{pages,subscriptions}.md`, `docs/loadout/contract.md`, `docs/log/2026-11-17-s14-3c.md`
+
+### A202 — Chart.js is the chart library; the screenshot export is our own code
+
+- **Date:** 2026-11-17 · **Status:** items 1 and 2 decided; item 3 open; nothing installed yet
+- **Decision:**
+  1. Chart.js is approved as the app's chart library, for the profile page's charts and the stats pages to come. This replaces the plan in A200 item 3 to build our own line chart first and compare. It is a new dependency, approved by the user; it is installed, pinned and loaded only on pages that draw a chart when the first such page is ported (S14.5).
+  2. The team builder's screenshot export is built with our own code, without an external library. The old site used one.
+  3. Open: whether the team builder's own CSS chart (A190 item 11, A197, A199, A200 items 1 and 2) stays, or is moved to Chart.js when the library arrives so the app has one chart system.
+- **Why:** user, 2026-11-17: "did we conclude that it was worth not using chart.js even when profile view also used its other diagrams?"; then "i dont really care much about the accessibility feature when it comes to chart.js and its less code to maintain in our end, the library is also widely use and work just as fine when we used it in the previous site, i think is worth keeping it. For the screenshot, i think we also use an external library but that one should be much easier to recreate in my opinion".
+- **Where implemented:** not yet.
