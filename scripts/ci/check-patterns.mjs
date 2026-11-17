@@ -77,6 +77,8 @@ if (!existsSync(DIST)) {
             String.raw`(?:localhost|127\.0\.0\.1)`,
             // M10: the dev server's service worker reset (web/src/dev/devServiceWorkerReset.ts).
             'hsr-dev-sw-reset',
+            // S14.3g: the save indicator demo at /teambuilder#save-demo (web/src/dev/SaveIndicatorDemo.tsx).
+            'hsr-dev-save-demo',
         ]);
         // 4. Fonts are self-hosted (no Google Fonts requests).
         scan('google-fonts', file, ['fonts.googleapis.com', 'fonts.gstatic.com']);

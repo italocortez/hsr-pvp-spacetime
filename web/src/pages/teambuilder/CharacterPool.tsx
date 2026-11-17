@@ -19,8 +19,6 @@ import type { DataState, PoolCharacter } from './useTeamBuilderPage';
  * given width they do not change when a filter is picked or Clear appears.
  */
 
-export type PoolLine = { text: string; tone: 'none' | 'target' | 'done' | 'full' };
-
 export type PoolProps = {
     view: TeamBuilderView;
     pool: readonly PoolCharacter[];
@@ -29,8 +27,6 @@ export type PoolProps = {
     filterCount: number;
     archetypeNames: readonly string[];
     archetypesReady: boolean;
-    /** The line under the filters: the slot being picked for, the last pick, or the full-team hint. */
-    line: PoolLine;
     searchRef?: RefObject<HTMLInputElement>;
     onToggle: <K extends 'el' | 'path' | 'role' | 'rarity' | 'arch'>(
         key: K,
@@ -126,12 +122,8 @@ export function CharacterPool(props: PoolProps) {
                 </div>
             </search>
 
-            {/* The pool's line (S14.3a-pick): its space is always kept, so the cards never move when it changes. The
-                page's status region announces it. */}
-            <p className={styles.line} data-tone={props.line.tone}>
-                {props.line.text}
-            </p>
-
+            {/* S14.3h (the user's ruling of 2026-11-17): no visible line between the filters and the cards; the
+                page's status region says what a pick did. */}
             {/* The grid's own size container (the mockup's @container pool), kept apart from the filter row: a
                 container around the row as well (nested in the search box's own) collapsed the search field to
                 0px in Edge after a window resize. */}

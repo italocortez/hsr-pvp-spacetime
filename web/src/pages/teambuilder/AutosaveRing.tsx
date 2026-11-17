@@ -78,7 +78,7 @@ export type SaveView =
           kind: 'problem';
           label: string;
           reason?: { id: string; text: string };
-          /** A state that is not a fault (loading): the glyph in the muted tone. */
+          /** A state that is not a fault (loading; a team not stored yet, S14.3h): the glyph and words muted. */
           quiet?: boolean;
       };
 

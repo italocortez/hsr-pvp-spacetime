@@ -57,36 +57,9 @@
     gap: 10px;
 }
 
-/* The pool's line (S14.3a-pick): one line of space kept at every width, two on phones (the full-team hint wraps
-   there), so nothing under it moves when it appears, changes or empties. Empty, it draws nothing. */
-.line {
-    box-sizing: border-box;
-    min-block-size: calc(1lh + 18px);
-    margin: 14px 22px 0;
-    padding: 8px 12px;
-    border: 1px solid transparent;
-    border-radius: 8px;
-    color: var(--color-snow);
-    font-size: 0.8125rem;
-    line-height: 1.4;
-
-    @media (--bp-sm) {
-        min-block-size: calc(2lh + 18px);
-        margin-inline: 16px;
-    }
-
-    &[data-tone="target"],
-    &[data-tone="done"] {
-        border-color: color-mix(in srgb, var(--color-iris) 45%, transparent);
-        background: color-mix(in srgb, var(--color-iris) 10%, var(--color-space));
-    }
-
-    &[data-tone="full"] {
-        border-color: color-mix(in srgb, var(--color-warning) 45%, transparent);
-        background: color-mix(in srgb, var(--color-warning) 10%, var(--color-space));
-    }
-}
-
+/* S14.3h (the user's ruling of 2026-11-17): the pick line that sat between the filters and the cards is gone; the
+   cards start under the filter row's border at the grid's own 22px (the mockup's 22px between `.filters` and
+   `.poolGrid`). What a pick did is said by the page's status region only. */
 .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));

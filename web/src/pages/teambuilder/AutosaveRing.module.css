@@ -23,12 +23,24 @@
     &[data-tone="warning"] {
         color: var(--color-warning);
     }
+
+    /*
+     * S14.3h: a state with words (`data-tone`): the icon in its own column, the words beside it in the next one, so
+     * wrapped lines hang under the words, never under the icon. The label's line box is the icon's 20px, so the
+     * icon sits centred on the first line. The icon-only states keep the flex box above (no empty column).
+     */
+    &[data-tone] {
+        display: inline-grid;
+        grid-template-columns: 20px minmax(0, 1fr);
+        align-items: start;
+    }
 }
 
 /* The box: fixed, decorative (aria-hidden), not a control: no border, hover style, cursor or focus. */
 .mark {
     display: inline-grid;
     flex: none;
+    grid-area: 1 / 1;
     place-items: center;
     inline-size: 20px;
     block-size: 20px;
@@ -221,12 +233,14 @@
 }
 
 .label {
-    flex: 0 1 auto;
+    grid-column: 2;
     min-inline-size: 0;
+    line-height: 20px;
+    text-wrap: pretty;
 }
 
 .reason {
-    flex: 1 1 100%;
+    grid-column: 2;
     color: var(--text-body);
     font-weight: 400;
     line-height: 1.4;

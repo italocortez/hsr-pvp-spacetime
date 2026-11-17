@@ -170,17 +170,17 @@ describe('building a team', () => {
         expect(total()).toHaveTextContent('0.0');
     });
 
-    it('a full team: a fifth card shows and announces the hint, and changes nothing', async () => {
+    it('a full team: a fifth card announces the hint (S14.3h: nothing visible), and changes nothing', async () => {
         const user = userEvent.setup();
         await open();
         for (const n of ['Acheron', 'Clara', 'Pela', 'Kafka']) await user.click(card(n));
         await user.click(card('Huohuo'));
         expect(slotNames()).toEqual(['Acheron', 'Clara', 'Pela', 'Kafka']);
         expect(
-            screen.getByText('The team is full. Remove a character to add another.', {
+            screen.queryByText('The team is full. Remove a character to add another.', {
                 selector: 'p:not([role])',
             }),
-        ).toBeInTheDocument();
+        ).toBeNull();
         await waitFor(() =>
             expect(status()).toHaveTextContent(
                 'The team is full. Remove a character to add another.',
@@ -828,7 +828,16 @@ describe('picking from an empty slot', () => {
     const emptySlot = (n: number) =>
         screen.getByRole('button', { name: new RegExp(`^Slot ${n}, empty`) });
     const poolHeading = () => screen.getByRole('heading', { name: 'Character Pool' });
-    const line = (text: string) => screen.getByText(text, { selector: 'p:not([role])' });
+    // S14.3h (the user's ruling of 2026-11-17): no visible line between the filters and the cards; its words are
+    // said by the status region only.
+    const said = (text: string) => waitFor(() => expect(status()).toHaveTextContent(text));
+    const noVisibleLine = () => {
+        const filters = document.querySelector('search[aria-label="Pool filters"]');
+        expect(filters).not.toBeNull();
+        // The element right after the filters is the cards' box: nothing sits between them.
+        const next = filters?.nextElementSibling;
+        expect(next?.firstElementChild).toBe(screen.getByRole('list', { name: 'Characters' }));
+    };
 
     it('an empty slot scrolls to the pool and moves focus to its heading, not the search field', async () => {
         const user = userEvent.setup();
@@ -838,7 +847,9 @@ describe('picking from an empty slot', () => {
         expect(scroll).toHaveBeenCalledTimes(1);
         expect(scroll.mock.contexts[0]).toBe(poolHeading().closest('section'));
         expect(poolHeading()).toHaveFocus();
-        expect(line('Picking for slot 3.')).toBeInTheDocument();
+        await said('Picking for slot 3.');
+        expect(screen.queryByText('Picking for slot 3.', { selector: 'p:not([role])' })).toBeNull();
+        noVisibleLine();
         // Tab goes on to the pool's search.
         await user.tab();
         expect(screen.getByRole('searchbox', { name: 'Search characters' })).toHaveFocus();
@@ -853,12 +864,8 @@ describe('picking from an empty slot', () => {
         windowScroll.mockClear();
         await user.click(card('Clara'));
         expect(slotNames()).toEqual(['Acheron', null, 'Clara', null]);
-        expect(line('Slot 3 filled. 2 slots left.')).toBeInTheDocument();
-        await waitFor(() =>
-            expect(status()).toHaveTextContent(
-                'Clara added to the team. Slot 3 filled. 2 slots left.',
-            ),
-        );
+        await said('Clara added to the team. Slot 3 filled. 2 slots left.');
+        noVisibleLine();
         // The page stays at the pool: nothing scrolls and focus stays on the card.
         expect(scroll).not.toHaveBeenCalled();
         expect(windowScroll).not.toHaveBeenCalled();
@@ -866,22 +873,18 @@ describe('picking from an empty slot', () => {
         // The target was used up: the next pick goes to the first empty slot.
         await user.click(card('Pela'));
         expect(slotNames()).toEqual(['Acheron', 'Pela', 'Clara', null]);
-        expect(line('Slot 2 filled. 1 slot left.')).toBeInTheDocument();
+        await said('Pela added to the team. Slot 2 filled. 1 slot left.');
     });
 
-    it('when the team becomes full the full-team hint takes over the line', async () => {
+    it('when the team becomes full the full-team hint is announced, nothing visible', async () => {
         const user = userEvent.setup();
         await open();
         for (const n of ['Acheron', 'Clara', 'Pela']) await user.click(card(n));
         await user.click(emptySlot(4));
         await user.click(card('Kafka'));
         expect(slotNames()).toEqual(['Acheron', 'Clara', 'Pela', 'Kafka']);
-        expect(line('The team is full. Remove a character to add another.')).toBeInTheDocument();
-        await waitFor(() =>
-            expect(status()).toHaveTextContent(
-                'Kafka added to the team. The team is full. Remove a character to add another.',
-            ),
-        );
+        await said('Kafka added to the team. The team is full. Remove a character to add another.');
+        noVisibleLine();
     });
 
     it('by keyboard: Enter on an empty slot moves focus to the pool; a card picked with Enter fills that slot', async () => {
@@ -901,7 +904,8 @@ describe('picking from an empty slot', () => {
         await open();
         await user.click(emptySlot(3));
         await user.keyboard('{Escape}');
-        expect(screen.queryByText('Picking for slot 3.')).toBeNull();
+        // S14.3h: the words were only announced (the status region keeps its last text); nothing visible.
+        expect(screen.queryByText('Picking for slot 3.', { selector: 'p:not([role])' })).toBeNull();
         await user.click(card('Clara'));
         expect(slotNames()).toEqual(['Clara', null, null, null]);
     });
@@ -911,7 +915,7 @@ describe('picking from an empty slot', () => {
         await open();
         await user.click(emptySlot(2));
         await user.click(emptySlot(4));
-        expect(line('Picking for slot 4.')).toBeInTheDocument();
+        await said('Picking for slot 4.');
         await user.click(card('Clara'));
         expect(slotNames()).toEqual([null, null, null, 'Clara']);
     });
@@ -922,7 +926,7 @@ describe('picking from an empty slot', () => {
         await user.click(card('Acheron'));
         await user.click(emptySlot(3));
         await user.click(screen.getByRole('button', { name: 'Remove Acheron' }));
-        expect(screen.queryByText('Picking for slot 3.')).toBeNull();
+        expect(screen.queryByText('Picking for slot 3.', { selector: 'p:not([role])' })).toBeNull();
         await user.click(card('Clara'));
         expect(slotNames()).toEqual(['Clara', null, null, null]);
     });

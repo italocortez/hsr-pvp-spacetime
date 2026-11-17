@@ -9,7 +9,7 @@ import type { PictureRequest } from './teamPictureLayout';
 /*
  * The team picture's two actions in the Loadouts card (S14.3d, A190 item 8, A202 item 2), under "Copy link":
  * "Copy image" (the Async Clipboard API with a `ClipboardItem` of type image/png) and "Download" (a PNG named from
- * the loadout), and the option "Hide who is on the team". The drawing code (`teamPicture.ts`) is a dynamic import
+ * the loadout), and the option `PICTURE_HIDE` (both). The drawing code (`teamPicture.ts`) is a dynamic import
  * on the first press, so the team builder's chunk does not carry it.
  *
  * S14.3f (the balanced top row): the root takes no box of its own (`display: contents`), so the two buttons sit in
@@ -36,7 +36,8 @@ export const PICTURE_BLANKS = 'Some pictures could not be loaded and show as bla
 export const PICTURE_NO_COPY = 'This browser cannot copy images. Download it instead.';
 export const PICTURE_COPY_REFUSED = 'The image could not be copied. Download it instead.';
 export const PICTURE_FAILED = 'The image could not be made. Try again.';
-export const PICTURE_HIDE = 'Hide who is on the team';
+/** S14.3h: the user's wording (2026-11-17). It still applies to both Copy image and Download. */
+export const PICTURE_HIDE = 'Hide team on "Copy Image"';
 /**
  * How long the downloaded file's blob address stays valid. No event says the browser has started the download,
  * so it is a timer; long enough for a slow "Download?" answer (iOS Safari asks first; review M3).

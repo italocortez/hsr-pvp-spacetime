@@ -8,7 +8,7 @@ import { useAnnouncement } from '@/lib/useAnnouncement';
 import { useDocumentTitle } from '@/lib/useDocumentTitle';
 import hidden from '@/styles/visuallyHidden.module.css';
 import { AuctionPanel, overReasons } from './AuctionPanel';
-import { CharacterPool, type PoolLine } from './CharacterPool';
+import { CharacterPool } from './CharacterPool';
 import { CostChart } from './CostChart';
 import { GameModeTiles } from './GameModeTiles';
 import { LoadoutNote } from './LoadoutNote';
@@ -62,7 +62,8 @@ const slotsLeft = (n: number) => `${n} ${n === 1 ? 'slot' : 'slots'} left.`;
  * pool's heading, not its search field, so a phone does not open its keyboard over the cards; Tab goes on to the
  * search. That slot is the target: the next pick fills it. The target lasts until a pick, Escape inside the pool,
  * another empty slot, or any other change to the team (remove, swap, Clear Team, Restore). After a pick the page
- * stays at the pool and the line under the filters says which slot was filled and how many are left.
+ * stays at the pool and the status region says which slot was filled and how many are left (S14.3h, the user's
+ * ruling of 2026-11-17: no visible line under the filters any more).
  */
 
 export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
@@ -76,13 +77,8 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
     const [saveDemo] = useState(askedForSaveDemo);
     /** The slot an empty-slot press chose (0-based), filled by the next pick. */
     const [target, setTarget] = useState<number | null>(null);
-    /** What the last pick did, for the pool's line; cleared by any other change to the team. */
-    const [lastPick, setLastPick] = useState<PoolLine | null>(null);
-    /** Any team change other than a pick: the target and the last pick's line no longer hold. */
-    const forget = () => {
-        setTarget(null);
-        setLastPick(null);
-    };
+    /** Any team change other than a pick: the target no longer holds. */
+    const forget = () => setTarget(null);
     const ready = page.dataState === 'ready';
     const setLabel = page.costSet?.name ?? 'Default';
 
@@ -156,26 +152,20 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
         setTarget(null);
         if (what === 'added') {
             const left = page.slots.filter((s) => s === null).length - 1;
-            const line: PoolLine =
-                left === 0
-                    ? { text: FULL_HINT, tone: 'full' }
-                    : { text: `Slot ${index + 1} filled. ${slotsLeft(left)}`, tone: 'done' };
-            setLastPick(line);
-            announce(`${n} added to the team. ${line.text}`);
+            const line = left === 0 ? FULL_HINT : `Slot ${index + 1} filled. ${slotsLeft(left)}`;
+            announce(`${n} added to the team. ${line}`);
         } else if (what === 'removed') {
             const left = page.slots.filter((s) => s === null).length + 1;
-            const line = `Slot ${index + 1} emptied. ${slotsLeft(left)}`;
-            setLastPick({ text: line, tone: 'done' });
-            announce(`${n} removed from the team. ${line}`);
+            announce(`${n} removed from the team. Slot ${index + 1} emptied. ${slotsLeft(left)}`);
         } else if (what === 'full') {
-            setLastPick(null);
             announce(FULL_HINT);
         }
     };
 
     const onEmpty = (index: number) => {
         setTarget(index);
-        setLastPick(null);
+        // S14.3h: the visible "Picking for slot N." line is gone; the status region says it instead.
+        announce(`Picking for slot ${index + 1}.`);
         const pool = poolRef.current;
         const heading = poolHeadingRef.current;
         if (!pool || !heading) return;
@@ -228,12 +218,6 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
         },
         lightcone: (key) => page.lightconeOf(key),
     });
-
-    const line: PoolLine = page.fullHint
-        ? { text: FULL_HINT, tone: 'full' }
-        : target !== null
-          ? { text: `Picking for slot ${target + 1}.`, tone: 'target' }
-          : (lastPick ?? { text: '', tone: 'none' });
 
     return (
         <div className={styles.page}>
@@ -495,7 +479,6 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
                         filterCount={page.filterCount}
                         archetypeNames={page.archetypeNames}
                         archetypesReady={page.refReady}
-                        line={line}
                         searchRef={searchRef}
                         onToggle={actions.toggle}
                         onQuery={actions.setQuery}

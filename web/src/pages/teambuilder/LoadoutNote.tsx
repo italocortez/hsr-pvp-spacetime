@@ -11,6 +11,9 @@ import styles from './LoadoutNote.module.css';
 
 const NUMBER = new Intl.NumberFormat('en-US');
 
+/** S14.3h: the user's wording (2026-11-17). */
+export const NOTE_PLACEHOLDER = 'Write any note you want for this loadout!';
+
 export function LoadoutNote({
     value,
     onChange,
@@ -35,7 +38,7 @@ export function LoadoutNote({
                 maxLength={LOADOUT_NOTE_MAX}
                 spellCheck
                 aria-describedby={`${id}-count`}
-                placeholder="Sub-DPS rotation, Genesis Rails opener, what to swap if the enemy brings cleanse… anything you want next-you to read."
+                placeholder={NOTE_PLACEHOLDER}
                 onChange={(e) => onChange(e.currentTarget.value)}
             />
             <p id={`${id}-count`} className={styles.count} data-near={left <= 100 ? '' : undefined}>

@@ -256,6 +256,13 @@ describe('browser loadouts (visitor)', () => {
         expect(screen.getByText(/^1,000 \/ 1,000/)).toBeInTheDocument();
     });
 
+    it('T-S14.3h: the note placeholder is the user’s wording; label and hint unchanged', async () => {
+        await open();
+        const note = screen.getByRole('textbox', { name: 'Note' });
+        expect(note).toHaveAttribute('placeholder', 'Write any note you want for this loadout!');
+        expect(screen.getByText('Saves with the loadout')).toBeInTheDocument();
+    });
+
     it('a shared link opens as its own unsaved loadout; Restore goes back to the saved one', async () => {
         const user = userEvent.setup();
         const first = await open();

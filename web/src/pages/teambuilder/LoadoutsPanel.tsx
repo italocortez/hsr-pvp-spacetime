@@ -60,6 +60,8 @@ export const SIGN_IN_HINT = `${SIGN_IN_LINK} to keep up to ${ACCOUNT_LOADOUT_LIM
 export const SAVED_IN_BROWSER = 'Saved in this browser';
 /** S14.3e (A205): an empty team that is not a loadout yet; nothing waits to be saved. */
 export const EMPTY_WORKING = 'Pick a character to start a loadout.';
+/** S14.3h: a working loadout with characters, not stored yet (the user's wording, 2026-11-17). */
+export const AUTO_SAVES = 'Auto saves after edits';
 export const STORAGE_OFF = 'Browser storage is off: kept for this visit only';
 export const LINK_COPIED = 'Link copied.';
 export const LINK_NOT_COPIED =
@@ -246,7 +248,7 @@ export function LoadoutsPanel({
     // (or kept for this visit only); a working loadout's line; nothing for an empty one (A205: only its words).
     // `shownEmpty`: the last committed render showed the empty working loadout. The first pick passes through one
     // render of a working loadout with a character, just before it is stored: that render keeps showing nothing, so
-    // no warning flashes ahead of the check. (A team from a link starts there and says "Not saved yet".)
+    // no warning flashes ahead of the check. (A team from a link starts there and says "Auto saves after edits".)
     const shownEmpty = useRef(status.kind === 'working' && status.empty);
     const nowEmpty = status.kind === 'working' && status.empty;
     useEffect(() => {
@@ -275,11 +277,9 @@ export function LoadoutsPanel({
     else if (status.loading)
         view = { kind: 'problem', label: 'Your account loadouts are loading.', quiet: true };
     else if (status.empty || shownEmpty.current) view = null;
-    else
-        view = {
-            kind: 'problem',
-            label: 'Not saved yet. Your first change saves it as a loadout.',
-        };
+    // S14.3h: a team not stored yet (from a link, an older working draft, one deleted elsewhere) is not a problem:
+    // the user's words, in the muted tone (`data-tone="quiet"`), not the warning one.
+    else view = { kind: 'problem', label: AUTO_SAVES, quiet: true };
 
     // Each save that lands for the active loadout bumps `saves` (the indicator's check). Worked out while rendering
     // (React's "adjust state on a change of props"), so the frame that shows "saved" already shows the check.

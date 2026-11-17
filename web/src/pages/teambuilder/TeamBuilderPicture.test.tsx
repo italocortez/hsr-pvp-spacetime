@@ -162,7 +162,7 @@ async function open(path = `/teambuilder?team=${TEAM}`) {
 
 const copyButton = () => screen.getByRole('button', { name: 'Copy image' });
 const downloadButton = () => screen.getByRole('button', { name: 'Download' });
-const hideBox = () => screen.getByRole('checkbox', { name: 'Hide who is on the team' });
+const hideBox = () => screen.getByRole('checkbox', { name: 'Hide team on "Copy Image"' });
 const line = () =>
     screen
         .getAllByRole('status')

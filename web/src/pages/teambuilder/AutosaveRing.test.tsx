@@ -367,12 +367,38 @@ describe('LoadoutsPanel: the indicator and its announcements', () => {
         expect(visibleText(container)).toBe('Your account loadouts are loading.');
     });
 
-    it('a team from a link, not stored yet: the warning glyph and its words', () => {
+    it('a team from a link, not stored yet: the glyph and its words', () => {
         const { container } = render(panel(working({ empty: false })));
         expect(icon(container)).toBe('warning');
-        expect(visibleText(container)).toBe(
-            'Not saved yet. Your first change saves it as a loadout.',
+        expect(visibleText(container)).toBe('Auto saves after edits');
+    });
+
+    it('T-S14.3h: a team not stored yet is in the quiet tone; real problems keep the warning tone', () => {
+        const tone = (c: HTMLElement) => c.querySelector('[data-tone]')?.getAttribute('data-tone');
+        const unsaved = render(panel(working({ empty: false })));
+        expect(tone(unsaved.container)).toBe('quiet');
+        unsaved.unmount();
+        const off = state({ kind: 'browser' }, { kind: 'browser', key: 'a' }, [item('a')]);
+        const storageOff = render(panel({ ...off, storageOk: false }));
+        expect(tone(storageOff.container)).toBe('warning');
+        storageOff.unmount();
+        const full = render(
+            panel(
+                state(
+                    { kind: 'working', full: 'browser', loading: false, empty: false },
+                    { kind: 'working' },
+                ),
+            ),
         );
+        expect(tone(full.container)).toBe('warning');
+        full.unmount();
+        const offline = render(
+            <AutosaveRing
+                status={{ kind: 'blocked', reason: 'offline', message: null }}
+                reasonId="r"
+            />,
+        );
+        expect(tone(offline.container)).toBe('warning');
     });
 
     it('the first pick: the in-between render (a character, not stored yet) flashes no warning', () => {
