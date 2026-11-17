@@ -9,9 +9,9 @@
     "path": "erudition",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmSLDJ0I3WwLJmk0yB1IEfzFu2hoGbYjisKa74",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 130,
+      "x": -25,
+      "y": -30
     },
     "cost": {
       "cost_set_id": 0,
@@ -76,9 +76,9 @@
     "path": "harmony",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmw7CtAXBgaNp72y9WeLQsIitx1o4XFhvGj0KY",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 114,
+      "x": -40,
+      "y": -28
     },
     "cost": {
       "cost_set_id": 0,
@@ -142,9 +142,9 @@
     "path": "destruction",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmh73ElboX9K0WJdhgTsoDAerzp2YtRL1OnQ5i",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 125,
+      "x": -29,
+      "y": -25
     },
     "cost": {
       "cost_set_id": 0,
@@ -209,9 +209,9 @@
     "path": "destruction",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmzTH4sZ6y2qswvoUEVZajknbdXDJQl8TS1KhL",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 130,
+      "x": -12,
+      "y": -26
     },
     "cost": {
       "cost_set_id": 0,
@@ -275,9 +275,9 @@
     "path": "destruction",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmbDXEzPOJ0RkK3cdoehTU4l5xut1rbBEgmvWN",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 141,
+      "x": -12,
+      "y": -24
     },
     "cost": {
       "cost_set_id": 0,
@@ -341,9 +341,9 @@
     "path": "hunt",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmDMGAqK4f0YloA8dVXqr7cBIjuPTbzOh1giL2",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 80,
+      "x": -31,
+      "y": -40
     },
     "cost": {
       "cost_set_id": 0,
@@ -407,9 +407,9 @@
     "path": "erudition",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmVcd6Sg5yCHwopEcB1WsdtURTqMz9fe2SxOJL",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 155,
+      "x": -49,
+      "y": -22
     },
     "cost": {
       "cost_set_id": 0,
@@ -474,9 +474,9 @@
     "path": "nihility",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm2uUpq23SAZqfk4pUnvT0wBMrui1Ch6D7dxHR",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 160,
+      "x": -32,
+      "y": -68
     },
     "cost": {
       "cost_set_id": 0,
@@ -540,9 +540,9 @@
     "path": "preservation",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmX2HutMFnicmFZD8OgdI2f364b1zThpGWBRkY",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 80,
+      "x": -25,
+      "y": -45
     },
     "cost": {
       "cost_set_id": 0,
@@ -607,8 +607,8 @@
     "path": "erudition",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmIp537NQmYPnrNbvzRxWKTSisoFtAw8f62adE",
     "positioning": {
-      "width": 120,
-      "x": -48,
+      "width": 103,
+      "x": -29,
       "y": -32
     },
     "cost": {
@@ -673,9 +673,9 @@
     "path": "hunt",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm21B6Wa3SAZqfk4pUnvT0wBMrui1Ch6D7dxHR",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 88,
+      "x": -18,
+      "y": -40
     },
     "cost": {
       "cost_set_id": 0,
@@ -741,9 +741,9 @@
     "path": "hunt",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmrzvgsH92JrCTMBUAevKHop4Qu37iXIRdfysE",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 115,
+      "x": -28,
+      "y": -35
     },
     "cost": {
       "cost_set_id": 0,
@@ -809,9 +809,9 @@
     "path": "erudition",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmWbtljd4mPm04Se8z6h7VGFOXC9DltEUruj3K",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 115,
+      "x": -38,
+      "y": -30
     },
     "cost": {
       "cost_set_id": 0,
@@ -876,7 +876,7 @@
     "path": "nihility",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmthhZOTkqaE6GTg9rc2w8sVJ0ROlYMmuDfC5d",
     "positioning": {
-      "width": 120,
+      "width": 100,
       "x": -48,
       "y": -32
     },
@@ -942,9 +942,9 @@
     "path": "nihility",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmJFXLJZs5B86oJnSiHfbzWIedp4YKuag1Q7mZ",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 115,
+      "x": -35,
+      "y": -35
     },
     "cost": {
       "cost_set_id": 0,
@@ -1011,9 +1011,9 @@
     "path": "destruction",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmRA9yVc789fzvV5gYcBk2JTMxS4bU8w6P0tlH",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 110,
+      "x": -18,
+      "y": -30
     },
     "cost": {
       "cost_set_id": 0,
@@ -1079,8 +1079,8 @@
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm5OFcVydYHdGFs9jtel6ZUbgXJT7Ck2aMP8IL",
     "positioning": {
       "width": 120,
-      "x": -48,
-      "y": -32
+      "x": -25,
+      "y": -37
     },
     "cost": {
       "cost_set_id": 0,
@@ -1144,9 +1144,9 @@
     "path": "harmony",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmm30AAQLmqFhbaVfE8RYjNWSB3X0P5wZrD7IC",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 90,
+      "x": -26,
+      "y": -40
     },
     "cost": {
       "cost_set_id": 0,
@@ -1210,9 +1210,9 @@
     "path": "harmony",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmweNy6dGBgaNp72y9WeLQsIitx1o4XFhvGj0K",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 100,
+      "x": -18,
+      "y": -38
     },
     "cost": {
       "cost_set_id": 0,
@@ -1276,9 +1276,9 @@
     "path": "destruction",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmweLshT9BgaNp72y9WeLQsIitx1o4XFhvGj0K",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 110,
+      "x": -18,
+      "y": -33
     },
     "cost": {
       "cost_set_id": 0,
@@ -1342,9 +1342,9 @@
     "path": "preservation",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmtD5QwnqaE6GTg9rc2w8sVJ0ROlYMmuDfC5dU",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 88,
+      "x": -14,
+      "y": -41
     },
     "cost": {
       "cost_set_id": 0,
@@ -1408,9 +1408,9 @@
     "path": "abundance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm35yHdaNQW63HAplfyN4uUbtrcVsPakBowx1G",
     "positioning": {
-      "width": 120,
+      "width": 100,
       "x": -48,
-      "y": -32
+      "y": -36
     },
     "cost": {
       "cost_set_id": 0,
@@ -1475,9 +1475,9 @@
     "path": "hunt",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmf6nFnih6z2I1lmoXH5cuF8stRxTG9EYZpVLh",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 70,
+      "x": -18,
+      "y": -48
     },
     "cost": {
       "cost_set_id": 0,
@@ -1542,9 +1542,9 @@
     "path": "destruction",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmIB23ecQmYPnrNbvzRxWKTSisoFtAw8f62adE",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 100,
+      "x": -28,
+      "y": -36
     },
     "cost": {
       "cost_set_id": 0,
@@ -1609,9 +1609,9 @@
     "path": "harmony",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmpLN81sgmGiY8n47VLsJ3Ikch9HvfCTtberRa",
     "positioning": {
-      "width": 120,
+      "width": 105,
       "x": -48,
-      "y": -32
+      "y": -34
     },
     "cost": {
       "cost_set_id": 0,
@@ -1675,9 +1675,9 @@
     "path": "hunt",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmJ8DZJNs5B86oJnSiHfbzWIedp4YKuag1Q7mZ",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 88,
+      "x": -30,
+      "y": -60
     },
     "cost": {
       "cost_set_id": 0,
@@ -1741,9 +1741,9 @@
     "path": "hunt",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmJgJVmJs5B86oJnSiHfbzWIedp4YKuag1Q7mZ",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 89,
+      "x": -40,
+      "y": -39
     },
     "cost": {
       "cost_set_id": 0,
@@ -1807,9 +1807,9 @@
     "path": "preservation",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmLs8Bdl8bhVXAsiymWvPEd6Tx8znquDR9rMlH",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 168,
+      "x": -32,
+      "y": -21
     },
     "cost": {
       "cost_set_id": 0,
@@ -1873,9 +1873,9 @@
     "path": "preservation",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmoRfU0MXdCvbWHORl9jceqB3Zs7tJVMA04nTI",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 100,
+      "x": -42,
+      "y": -49
     },
     "cost": {
       "cost_set_id": 0,
@@ -1939,9 +1939,9 @@
     "path": "preservation",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmSR9EwtWwLJmk0yB1IEfzFu2hoGbYjisKa74p",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 80,
+      "x": -25,
+      "y": -45
     },
     "cost": {
       "cost_set_id": 0,
@@ -2005,9 +2005,9 @@
     "path": "abundance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmSLDsPoqWwLJmk0yB1IEfzFu2hoGbYjisKa74",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 100,
+      "x": -22,
+      "y": -35
     },
     "cost": {
       "cost_set_id": 0,
@@ -2071,9 +2071,9 @@
     "path": "harmony",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmY6wjUNHstkMRmd3pPDZGEcwzHaQlBxL1bngC",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 85,
+      "x": -22,
+      "y": -41
     },
     "cost": {
       "cost_set_id": 0,
@@ -2139,9 +2139,9 @@
     "path": "harmony",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmWaeKr0mPm04Se8z6h7VGFOXC9DltEUruj3KT",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 135,
+      "x": -18,
+      "y": -27
     },
     "cost": {
       "cost_set_id": 0,
@@ -2206,9 +2206,9 @@
     "path": "abundance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmDOmFhe4f0YloA8dVXqr7cBIjuPTbzOh1giL2",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 140,
+      "x": -15,
+      "y": -25
     },
     "cost": {
       "cost_set_id": 0,
@@ -2276,8 +2276,8 @@
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm59sXaAdYHdGFs9jtel6ZUbgXJT7Ck2aMP8IL",
     "positioning": {
       "width": 120,
-      "x": -48,
-      "y": -32
+      "x": -30,
+      "y": -30
     },
     "cost": {
       "cost_set_id": 0,
@@ -2342,9 +2342,9 @@
     "path": "erudition",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmDflIPH4f0YloA8dVXqr7cBIjuPTbzOh1giL2",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 80,
+      "x": -22,
+      "y": -50
     },
     "cost": {
       "cost_set_id": 0,
@@ -2408,9 +2408,9 @@
     "path": "nihility",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm4fovnAitaVE708MIA5rmbtHFZfRvhDdTGeC6",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 150,
+      "x": -25,
+      "y": -24
     },
     "cost": {
       "cost_set_id": 0,
@@ -2474,9 +2474,9 @@
     "path": "nihility",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmmrDMxjLmqFhbaVfE8RYjNWSB3X0P5wZrD7IC",
     "positioning": {
-      "width": 120,
+      "width": 100,
       "x": -48,
-      "y": -32
+      "y": -36
     },
     "cost": {
       "cost_set_id": 0,
@@ -2541,8 +2541,8 @@
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmI7w5XTQmYPnrNbvzRxWKTSisoFtAw8f62adE",
     "positioning": {
       "width": 120,
-      "x": -48,
-      "y": -32
+      "x": -12,
+      "y": -29
     },
     "cost": {
       "cost_set_id": 0,
@@ -2606,9 +2606,9 @@
     "path": "abundance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmYsg0knHstkMRmd3pPDZGEcwzHaQlBxL1bngC",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 80,
+      "x": -15,
+      "y": -45
     },
     "cost": {
       "cost_set_id": 0,
@@ -2673,9 +2673,9 @@
     "path": "destruction",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmrFGsxz92JrCTMBUAevKHop4Qu37iXIRdfysE",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 150,
+      "x": -30,
+      "y": -25
     },
     "cost": {
       "cost_set_id": 0,
@@ -2740,8 +2740,8 @@
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmggS05t7cFbBJ0WiDyRr2wsaI1mzeQ5j8KgfH",
     "positioning": {
       "width": 120,
-      "x": -48,
-      "y": -32
+      "x": -30,
+      "y": -29
     },
     "cost": {
       "cost_set_id": 0,
@@ -2807,8 +2807,8 @@
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm9ro2oP6ADHJsBgSXdMw6eqfthPkUVLNWiIQ1",
     "positioning": {
       "width": 120,
-      "x": -48,
-      "y": -32
+      "x": -23,
+      "y": -29
     },
     "cost": {
       "cost_set_id": 0,
@@ -2872,9 +2872,9 @@
     "path": "remembrance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmypRZahx0IkdESXzc2H3gZ1spCA9DTWBmMito",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 108,
+      "x": -36,
+      "y": -38
     },
     "cost": {
       "cost_set_id": 0,
@@ -2939,8 +2939,8 @@
     "path": "harmony",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm8iKXB3AMZGWgIvhCcYsLe2EKx01HAynVB7TR",
     "positioning": {
-      "width": 120,
-      "x": -48,
+      "width": 105,
+      "x": -28,
       "y": -32
     },
     "cost": {
@@ -3005,9 +3005,9 @@
     "path": "remembrance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm7K6FFcuwONpsIr6fJvY8chTBCFXo2AimLqSe",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 136,
+      "x": -40,
+      "y": -26
     },
     "cost": {
       "cost_set_id": 0,
@@ -3071,8 +3071,8 @@
     "path": "erudition",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmr1CDFdM92JrCTMBUAevKHop4Qu37iXIRdfys",
     "positioning": {
-      "width": 120,
-      "x": -48,
+      "width": 110,
+      "x": -12,
       "y": -32
     },
     "cost": {
@@ -3137,9 +3137,9 @@
     "path": "nihility",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmBNwyvPn4AkISVCsmgviYPQL9yeqOfKc26GMu",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 90,
+      "x": -16,
+      "y": -38
     },
     "cost": {
       "cost_set_id": 0,
@@ -3205,8 +3205,8 @@
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmBtbteln4AkISVCsmgviYPQL9yeqOfKc26GMu",
     "positioning": {
       "width": 120,
-      "x": -48,
-      "y": -32
+      "x": -16,
+      "y": -29
     },
     "cost": {
       "cost_set_id": 0,
@@ -3270,9 +3270,9 @@
     "path": "nihility",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmygWdH1x0IkdESXzc2H3gZ1spCA9DTWBmMito",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 90,
+      "x": -16,
+      "y": -34
     },
     "cost": {
       "cost_set_id": 0,
@@ -3336,9 +3336,9 @@
     "path": "nihility",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmgFCgQS7cFbBJ0WiDyRr2wsaI1mzeQ5j8KgfH",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 110,
+      "x": -42,
+      "y": -29
     },
     "cost": {
       "cost_set_id": 0,
@@ -3404,9 +3404,9 @@
     "path": "destruction",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmjs3nh6Vl45upOxGfUCiBPQFcKsdr3YDSZE20",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 189,
+      "x": -35,
+      "y": -20
     },
     "cost": {
       "cost_set_id": 0,
@@ -3473,9 +3473,9 @@
     "path": "hunt",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmWNkhZdmPm04Se8z6h7VGFOXC9DltEUruj3KT",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 164,
+      "x": -18,
+      "y": -22
     },
     "cost": {
       "cost_set_id": 0,
@@ -3541,9 +3541,9 @@
     "path": "harmony",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm7qHpLkuwONpsIr6fJvY8chTBCFXo2AimLqSe",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 110,
+      "x": -28,
+      "y": -29
     },
     "cost": {
       "cost_set_id": 0,
@@ -3607,9 +3607,9 @@
     "path": "harmony",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmX8Pez9NFnicmFZD8OgdI2f364b1zThpGWBRk",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 125,
+      "x": -22,
+      "y": -29
     },
     "cost": {
       "cost_set_id": 0,
@@ -3674,9 +3674,9 @@
     "path": "nihility",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmcEfl4XUkvBRwZFY8NJKCelUa9pDoh1rSTQMz",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 160,
+      "x": -38,
+      "y": -20
     },
     "cost": {
       "cost_set_id": 0,
@@ -3741,9 +3741,9 @@
     "path": "hunt",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmNoJ7icYW2da6p81jlC5KwfVODrFZI4LgM0oi",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 148,
+      "x": -18,
+      "y": -24
     },
     "cost": {
       "cost_set_id": 0,
@@ -3809,9 +3809,9 @@
     "path": "nihility",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmUn3fksJwDrIlbZEpQP7OuysSnMKtioLwGz0x",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 112,
+      "x": -40,
+      "y": -28
     },
     "cost": {
       "cost_set_id": 0,
@@ -3875,8 +3875,8 @@
     "path": "destruction",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmjdlzzTgVl45upOxGfUCiBPQFcKsdr3YDSZE2",
     "positioning": {
-      "width": 120,
-      "x": -48,
+      "width": 110,
+      "x": -31,
       "y": -32
     },
     "cost": {
@@ -3942,9 +3942,9 @@
     "path": "preservation",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmWbLveiumPm04Se8z6h7VGFOXC9DltEUruj3K",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 186,
+      "x": -23,
+      "y": -19
     },
     "cost": {
       "cost_set_id": 0,
@@ -4012,8 +4012,8 @@
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmr1gebxp92JrCTMBUAevKHop4Qu37iXIRdfys",
     "positioning": {
       "width": 120,
-      "x": -48,
-      "y": -32
+      "x": -25,
+      "y": -37
     },
     "cost": {
       "cost_set_id": 0,
@@ -4077,9 +4077,9 @@
     "path": "nihility",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmm8pGEALmqFhbaVfE8RYjNWSB3X0P5wZrD7IC",
     "positioning": {
-      "width": 120,
+      "width": 100,
       "x": -48,
-      "y": -32
+      "y": -36
     },
     "cost": {
       "cost_set_id": 0,
@@ -4143,9 +4143,9 @@
     "path": "preservation",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmZg1uDcIRJrdIn25bFCj06vyTEpV7QAMhzBxt",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 124,
+      "x": -28,
+      "y": -29
     },
     "cost": {
       "cost_set_id": 0,
@@ -4209,9 +4209,9 @@
     "path": "preservation",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmcQ1SszUkvBRwZFY8NJKCelUa9pDoh1rSTQMz",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 168,
+      "x": -43,
+      "y": -21
     },
     "cost": {
       "cost_set_id": 0,
@@ -4277,9 +4277,9 @@
     "path": "nihility",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmgQsYRg7cFbBJ0WiDyRr2wsaI1mzeQ5j8KgfH",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 100,
+      "x": -30,
+      "y": -54
     },
     "cost": {
       "cost_set_id": 0,
@@ -4344,9 +4344,9 @@
     "path": "erudition",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmgt8iHa7cFbBJ0WiDyRr2wsaI1mzeQ5j8KgfH",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 124,
+      "x": -28,
+      "y": -29
     },
     "cost": {
       "cost_set_id": 0,
@@ -4411,9 +4411,9 @@
     "path": "remembrance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmLT6F2abhVXAsiymWvPEd6Tx8znquDR9rMlHp",
     "positioning": {
-      "width": 120,
+      "width": 114,
       "x": -48,
-      "y": -32
+      "y": -27
     },
     "cost": {
       "cost_set_id": 0,
@@ -4480,9 +4480,9 @@
     "path": "nihility",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm7VcKqTuwONpsIr6fJvY8chTBCFXo2AimLqSe",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 124,
+      "x": -30,
+      "y": -29
     },
     "cost": {
       "cost_set_id": 0,
@@ -4546,9 +4546,9 @@
     "path": "nihility",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm2vxR0Q3SAZqfk4pUnvT0wBMrui1Ch6D7dxHR",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 64,
+      "x": -18,
+      "y": -48
     },
     "cost": {
       "cost_set_id": 0,
@@ -4613,9 +4613,9 @@
     "path": "remembrance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmQmm68ZGSupWMTIRbFLE75HZ41hA8xUryonCq",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 124,
+      "x": -26,
+      "y": -27
     },
     "cost": {
       "cost_set_id": 0,
@@ -4679,9 +4679,9 @@
     "path": "erudition",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmfUEetCh6z2I1lmoXH5cuF8stRxTG9EYZpVLh",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 124,
+      "x": -15,
+      "y": -25
     },
     "cost": {
       "cost_set_id": 0,
@@ -4745,9 +4745,9 @@
     "path": "harmony",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm17eeAMdptLpYTrPwUnuXCN8qEbHIvGShyem6",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 90,
+      "x": -28,
+      "y": -35
     },
     "cost": {
       "cost_set_id": 0,
@@ -4813,8 +4813,8 @@
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmEO5HvIG3yT8GH5eXAIkjJtxnwFLQRfz7aovY",
     "positioning": {
       "width": 120,
-      "x": -48,
-      "y": -32
+      "x": -29,
+      "y": -27
     },
     "cost": {
       "cost_set_id": 0,
@@ -4879,9 +4879,9 @@
     "path": "remembrance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmxsCXNYTeQqWNcgSD31vrkmTYHFJjX25ZKlRV",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 103,
+      "x": -29,
+      "y": -35
     },
     "cost": {
       "cost_set_id": 0,
@@ -4945,9 +4945,9 @@
     "path": "harmony",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmsKcSwzD7nQIR6O1NifyBTe3WwXUS2GzHxroh",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 64,
+      "x": -18,
+      "y": -48
     },
     "cost": {
       "cost_set_id": 0,
@@ -5012,9 +5012,9 @@
     "path": "preservation",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm5TNT6DdYHdGFs9jtel6ZUbgXJT7Ck2aMP8IL",
     "positioning": {
-      "width": 120,
+      "width": 158,
       "x": -48,
-      "y": -32
+      "y": -23
     },
     "cost": {
       "cost_set_id": 0,
@@ -5078,9 +5078,9 @@
     "path": "abundance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmfvIwiyh6z2I1lmoXH5cuF8stRxTG9EYZpVLh",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 64,
+      "x": -18,
+      "y": -48
     },
     "cost": {
       "cost_set_id": 0,
@@ -5144,8 +5144,8 @@
     "path": "destruction",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmQRnvCzSupWMTIRbFLE75HZ41hA8xUryonCq6",
     "positioning": {
-      "width": 120,
-      "x": -48,
+      "width": 100,
+      "x": -23,
       "y": -32
     },
     "cost": {
@@ -5212,9 +5212,9 @@
     "path": "nihility",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmhFPYsF1oX9K0WJdhgTsoDAerzp2YtRL1OnQ5",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 160,
+      "x": -50,
+      "y": -25
     },
     "cost": {
       "cost_set_id": 0,
@@ -5280,8 +5280,8 @@
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmpmViWLgmGiY8n47VLsJ3Ikch9HvfCTtberRa",
     "positioning": {
       "width": 120,
-      "x": -48,
-      "y": -32
+      "x": -25,
+      "y": -26
     },
     "cost": {
       "cost_set_id": 0,
@@ -5346,9 +5346,9 @@
     "path": "erudition",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm7nEYHVuwONpsIr6fJvY8chTBCFXo2AimLqSe",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 160,
+      "x": -32,
+      "y": -20
     },
     "cost": {
       "cost_set_id": 0,
@@ -5413,9 +5413,9 @@
     "path": "erudition",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm4QcyLwtaVE708MIA5rmbtHFZfRvhDdTGeC62",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 135,
+      "x": -18,
+      "y": -22
     },
     "cost": {
       "cost_set_id": 0,
@@ -5480,9 +5480,9 @@
     "path": "erudition",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmPWLhtYl93FDl2yLjfJ7ZrwmReV8uWqh0UpEX",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 124,
+      "x": -20,
+      "y": -25
     },
     "cost": {
       "cost_set_id": 0,
@@ -5546,9 +5546,9 @@
     "path": "destruction",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmZKQta7IRJrdIn25bFCj06vyTEpV7QAMhzBxt",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 166,
+      "x": -18,
+      "y": -24
     },
     "cost": {
       "cost_set_id": 0,
@@ -5613,9 +5613,9 @@
     "path": "destruction",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmLsq9c0abhVXAsiymWvPEd6Tx8znquDR9rMlH",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 70,
+      "x": -20,
+      "y": -48
     },
     "cost": {
       "cost_set_id": 0,
@@ -5679,9 +5679,9 @@
     "path": "hunt",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmmSqQ5zLmqFhbaVfE8RYjNWSB3X0P5wZrD7IC",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 118,
+      "x": -38,
+      "y": -29
     },
     "cost": {
       "cost_set_id": 0,
@@ -5745,9 +5745,9 @@
     "path": "erudition",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmnD2nzQeXEi1leGFw5x96qCufVa0DSyzPdo8A",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 80,
+      "x": -18,
+      "y": -40
     },
     "cost": {
       "cost_set_id": 0,
@@ -5811,9 +5811,9 @@
     "path": "harmony",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmRD04Sy89fzvV5gYcBk2JTMxS4bU8w6P0tlHK",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 170,
+      "x": -15,
+      "y": -19
     },
     "cost": {
       "cost_set_id": 0,
@@ -5879,9 +5879,9 @@
     "path": "harmony",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm3BBZduNQW63HAplfyN4uUbtrcVsPakBowx1G",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 90,
+      "x": -18,
+      "y": -38
     },
     "cost": {
       "cost_set_id": 0,
@@ -5947,8 +5947,8 @@
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmjPhFmaVl45upOxGfUCiBPQFcKsdr3YDSZE20",
     "positioning": {
       "width": 120,
-      "x": -48,
-      "y": -32
+      "x": -28,
+      "y": -26
     },
     "cost": {
       "cost_set_id": 0,
@@ -6012,9 +6012,9 @@
     "path": "abundance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmDzT2vC4f0YloA8dVXqr7cBIjuPTbzOh1giL2",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 135,
+      "x": -35,
+      "y": -23
     },
     "cost": {
       "cost_set_id": 0,
@@ -6078,8 +6078,8 @@
     "path": "preservation",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm7GxaW3GuwONpsIr6fJvY8chTBCFXo2AimLqS",
     "positioning": {
-      "width": 120,
-      "x": -48,
+      "width": 100,
+      "x": -24,
       "y": -32
     },
     "cost": {
@@ -6144,9 +6144,9 @@
     "path": "harmony",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmrpVah292JrCTMBUAevKHop4Qu37iXIRdfysE",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 140,
+      "x": -19,
+      "y": -22
     },
     "cost": {
       "cost_set_id": 0,
@@ -6210,9 +6210,9 @@
     "path": "harmony",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmwJeZe6BgaNp72y9WeLQsIitx1o4XFhvGj0KY",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 140,
+      "x": -25,
+      "y": -22
     },
     "cost": {
       "cost_set_id": 0,
@@ -6276,9 +6276,9 @@
     "path": "abundance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmmk52aHLmqFhbaVfE8RYjNWSB3X0P5wZrD7IC",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 156,
+      "x": -26,
+      "y": -20
     },
     "cost": {
       "cost_set_id": 0,
@@ -6342,9 +6342,9 @@
     "path": "abundance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm1XfgsYptLpYTrPwUnuXCN8qEbHIvGShyem6F",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 122,
+      "x": -25,
+      "y": -28
     },
     "cost": {
       "cost_set_id": 0,
@@ -6410,9 +6410,9 @@
     "path": "nihility",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmxlFGJaTeQqWNcgSD31vrkmTYHFJjX25ZKlRV",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 122,
+      "x": -25,
+      "y": -28
     },
     "cost": {
       "cost_set_id": 0,
@@ -6476,9 +6476,9 @@
     "path": "remembrance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmywsATAx0IkdESXzc2H3gZ1spCA9DTWBmMito",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 100,
+      "x": -44,
+      "y": -41
     },
     "cost": {
       "cost_set_id": 0,
@@ -6542,9 +6542,9 @@
     "path": "nihility",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmYaNdbQHstkMRmd3pPDZGEcwzHaQlBxL1bngC",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 160,
+      "x": -35,
+      "y": -20
     },
     "cost": {
       "cost_set_id": 0,
@@ -6608,9 +6608,9 @@
     "path": "hunt",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmSyNzQQWwLJmk0yB1IEfzFu2hoGbYjisKa74p",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 138,
+      "x": -35,
+      "y": -25
     },
     "cost": {
       "cost_set_id": 0,
@@ -6674,9 +6674,9 @@
     "path": "hunt",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmuuCwowEG3LaSKHlTI6DFy2fXxVOZwvgm9bYP",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 189,
+      "x": -22,
+      "y": -19
     },
     "cost": {
       "cost_set_id": 0,
@@ -6740,9 +6740,9 @@
     "path": "erudition",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmNNzIbZYW2da6p81jlC5KwfVODrFZI4LgM0oi",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 90,
+      "x": -18,
+      "y": -35
     },
     "cost": {
       "cost_set_id": 0,
@@ -6808,9 +6808,9 @@
     "path": "hunt",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmnRmNf5eXEi1leGFw5x96qCufVa0DSyzPdo8A",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 145,
+      "x": -23,
+      "y": -25
     },
     "cost": {
       "cost_set_id": 0,
@@ -6876,9 +6876,9 @@
     "path": "abundance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmVtq3Il5yCHwopEcB1WsdtURTqMz9fe2SxOJL",
     "positioning": {
-      "width": 120,
+      "width": 140,
       "x": -48,
-      "y": -32
+      "y": -23
     },
     "cost": {
       "cost_set_id": 0,
@@ -6942,9 +6942,9 @@
     "path": "hunt",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm2uqHau3SAZqfk4pUnvT0wBMrui1Ch6D7dxHR",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 133,
+      "x": -42,
+      "y": -28
     },
     "cost": {
       "cost_set_id": 0,
@@ -7008,9 +7008,9 @@
     "path": "remembrance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmYIWqNVCHstkMRmd3pPDZGEcwzHaQlBxL1bng",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 75,
+      "x": -20,
+      "y": -47
     },
     "cost": {
       "cost_set_id": 0,
@@ -7074,9 +7074,9 @@
     "path": "hunt",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm7c0EstuwONpsIr6fJvY8chTBCFXo2AimLqSe",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 164,
+      "x": -35,
+      "y": -22
     },
     "cost": {
       "cost_set_id": 0,
@@ -7140,7 +7140,7 @@
     "path": "abundance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmmYn5aKLmqFhbaVfE8RYjNWSB3X0P5wZrD7IC",
     "positioning": {
-      "width": 120,
+      "width": 100,
       "x": -48,
       "y": -32
     },
@@ -7206,9 +7206,9 @@
     "path": "destruction",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmxtzDcUTeQqWNcgSD31vrkmTYHFJjX25ZKlRV",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 80,
+      "x": -25,
+      "y": -44
     },
     "cost": {
       "cost_set_id": 0,
@@ -7273,9 +7273,9 @@
     "path": "preservation",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmg08tRx7cFbBJ0WiDyRr2wsaI1mzeQ5j8KgfH",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 119,
+      "x": -32,
+      "y": -29
     },
     "cost": {
       "cost_set_id": 0,
@@ -7340,9 +7340,9 @@
     "path": "hunt",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmSLR8NPOWwLJmk0yB1IEfzFu2hoGbYjisKa74",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 85,
+      "x": -28,
+      "y": -35
     },
     "cost": {
       "cost_set_id": 0,
@@ -7407,9 +7407,9 @@
     "path": "nihility",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmf8AYkPh6z2I1lmoXH5cuF8stRxTG9EYZpVLh",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 85,
+      "x": -18,
+      "y": -36
     },
     "cost": {
       "cost_set_id": 0,
@@ -7475,9 +7475,9 @@
     "path": "destruction",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmHkpFBTZgQ5YkANqasmRydMiXcIfJBtDK2b9F",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 141,
+      "x": -38,
+      "y": -25
     },
     "cost": {
       "cost_set_id": 0,
@@ -7541,9 +7541,9 @@
     "path": "hunt",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmHnEeW7ZgQ5YkANqasmRydMiXcIfJBtDK2b9F",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 163,
+      "x": -34,
+      "y": -22
     },
     "cost": {
       "cost_set_id": 0,
@@ -7607,9 +7607,9 @@
     "path": "remembrance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJml6cmslAriF9HKxpACmjWBXOJRVUnvcwLP20d",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 139,
+      "x": -12,
+      "y": -26
     },
     "cost": {
       "cost_set_id": 0,
@@ -7673,9 +7673,9 @@
     "path": "hunt",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmt0kt4CqaE6GTg9rc2w8sVJ0ROlYMmuDfC5dU",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 126,
+      "x": -33,
+      "y": -27
     },
     "cost": {
       "cost_set_id": 0,
@@ -7740,9 +7740,9 @@
     "path": "preservation",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmXQqnd9FnicmFZD8OgdI2f364b1zThpGWBRkY",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 90,
+      "x": -26,
+      "y": -39
     },
     "cost": {
       "cost_set_id": 0,
@@ -7806,9 +7806,9 @@
     "path": "erudition",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmSLqBlZ2WwLJmk0yB1IEfzFu2hoGbYjisKa74",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 110,
+      "x": -15,
+      "y": -29
     },
     "cost": {
       "cost_set_id": 0,
@@ -7872,9 +7872,9 @@
     "path": "erudition",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmjdPugN0Vl45upOxGfUCiBPQFcKsdr3YDSZE2",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 80,
+      "x": -15,
+      "y": -42
     },
     "cost": {
       "cost_set_id": 0,
@@ -7938,9 +7938,9 @@
     "path": "remembrance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmqcGtCifzTvgpCXx0AWeMdyFLr3B7sjm98EnO",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 122,
+      "x": -28,
+      "y": -39
     },
     "cost": {
       "cost_set_id": 0,
@@ -8005,9 +8005,9 @@
     "path": "harmony",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmWJybdImPm04Se8z6h7VGFOXC9DltEUruj3KT",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 80,
+      "x": -28,
+      "y": -39
     },
     "cost": {
       "cost_set_id": 0,
@@ -8072,9 +8072,9 @@
     "path": "erudition",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmwrRjyQBgaNp72y9WeLQsIitx1o4XFhvGj0KY",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 70,
+      "x": -18,
+      "y": -50
     },
     "cost": {
       "cost_set_id": 0,
@@ -8139,9 +8139,9 @@
     "path": "hunt",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmqdZOhXfzTvgpCXx0AWeMdyFLr3B7sjm98EnO",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 133,
+      "x": -32,
+      "y": -26
     },
     "cost": {
       "cost_set_id": 0,
@@ -8205,8 +8205,8 @@
     "path": "destruction",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm9fM7tb6ADHJsBgSXdMw6eqfthPkUVLNWiIQ1",
     "positioning": {
-      "width": 120,
-      "x": -48,
+      "width": 100,
+      "x": -23,
       "y": -32
     },
     "cost": {
@@ -8271,8 +8271,8 @@
     "path": "erudition",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmwb6mVwBgaNp72y9WeLQsIitx1o4XFhvGj0KY",
     "positioning": {
-      "width": 120,
-      "x": -48,
+      "width": 100,
+      "x": -12,
       "y": -32
     },
     "cost": {
@@ -8337,9 +8337,9 @@
     "path": "remembrance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmcasBrZUkvBRwZFY8NJKCelUa9pDoh1rSTQMz",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 158,
+      "x": -29,
+      "y": -23
     },
     "cost": {
       "cost_set_id": 0,
@@ -8404,9 +8404,9 @@
     "path": "destruction",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmLYfpMcbhVXAsiymWvPEd6Tx8znquDR9rMlHp",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 205,
+      "x": -63,
+      "y": -19
     },
     "cost": {
       "cost_set_id": 0,
@@ -8471,9 +8471,9 @@
     "path": "remembrance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmSMjnKbWwLJmk0yB1IEfzFu2hoGbYjisKa74p",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 132,
+      "x": -45,
+      "y": -24
     },
     "cost": {
       "cost_set_id": 0,
@@ -8537,9 +8537,9 @@
     "path": "preservation",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmPbOPaEl93FDl2yLjfJ7ZrwmReV8uWqh0UpEX",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 102,
+      "x": -43,
+      "y": -39
     },
     "cost": {
       "cost_set_id": 0,
@@ -8605,9 +8605,9 @@
     "path": "nihility",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmp20YmLgmGiY8n47VLsJ3Ikch9HvfCTtberRa",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 150,
+      "x": -22,
+      "y": -22
     },
     "cost": {
       "cost_set_id": 0,
@@ -8675,9 +8675,9 @@
     "path": "preservation",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmLstn4nLbhVXAsiymWvPEd6Tx8znquDR9rMlH",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 174,
+      "x": -14,
+      "y": -22
     },
     "cost": {
       "cost_set_id": 0,
@@ -8742,9 +8742,9 @@
     "path": "destruction",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmtTgkt3qaE6GTg9rc2w8sVJ0ROlYMmuDfC5dU",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 113,
+      "x": -12,
+      "y": -29
     },
     "cost": {
       "cost_set_id": 0,
@@ -8809,9 +8809,9 @@
     "path": "abundance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmCwHBk5ncVO8hluHDc5Lz6QsJwevgdrpf3AoR",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 153,
+      "x": -19,
+      "y": -26
     },
     "cost": {
       "cost_set_id": 0,
@@ -8876,9 +8876,9 @@
     "path": "remembrance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmBQfvf3n4AkISVCsmgviYPQL9yeqOfKc26GMu",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 130,
+      "x": -32,
+      "y": -28
     },
     "cost": {
       "cost_set_id": 0,
@@ -8944,9 +8944,9 @@
     "path": "remembrance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmz9wiGWy2qswvoUEVZajknbdXDJQl8TS1KhLg",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 128,
+      "x": -14,
+      "y": -46
     },
     "cost": {
       "cost_set_id": 0,
@@ -9010,8 +9010,8 @@
     "path": "erudition",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmmewplFLmqFhbaVfE8RYjNWSB3X0P5wZrD7IC",
     "positioning": {
-      "width": 120,
-      "x": -48,
+      "width": 100,
+      "x": -29,
       "y": -32
     },
     "cost": {
@@ -9076,9 +9076,9 @@
     "path": "preservation",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmZfmHeQIRJrdIn25bFCj06vyTEpV7QAMhzBxt",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 129,
+      "x": -33,
+      "y": -27
     },
     "cost": {
       "cost_set_id": 0,
@@ -9142,9 +9142,9 @@
     "path": "destruction",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm7c03EjuwONpsIr6fJvY8chTBCFXo2AimLqSe",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 100,
+      "x": -19,
+      "y": -38
     },
     "cost": {
       "cost_set_id": 0,
@@ -9208,9 +9208,9 @@
     "path": "abundance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmIWt6Em6QmYPnrNbvzRxWKTSisoFtAw8f62ad",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 115,
+      "x": -41,
+      "y": -30
     },
     "cost": {
       "cost_set_id": 0,
@@ -9274,8 +9274,8 @@
     "path": "remembrance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmjk4whLVl45upOxGfUCiBPQFcKsdr3YDSZE20",
     "positioning": {
-      "width": 120,
-      "x": -48,
+      "width": 119,
+      "x": -30,
       "y": -32
     },
     "cost": {
@@ -9340,8 +9340,8 @@
     "path": "nihility",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmB27VtOn4AkISVCsmgviYPQL9yeqOfKc26GMu",
     "positioning": {
-      "width": 120,
-      "x": -48,
+      "width": 100,
+      "x": -25,
       "y": -32
     },
     "cost": {
@@ -9406,9 +9406,9 @@
     "path": "abundance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmzkMPmry2qswvoUEVZajknbdXDJQl8TS1KhLg",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 118,
+      "x": -33,
+      "y": -29
     },
     "cost": {
       "cost_set_id": 0,
@@ -9472,9 +9472,9 @@
     "path": "preservation",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmuOxbb1EG3LaSKHlTI6DFy2fXxVOZwvgm9bYP",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 105,
+      "x": -31,
+      "y": -33
     },
     "cost": {
       "cost_set_id": 0,
@@ -9539,8 +9539,8 @@
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmLuuy03bhVXAsiymWvPEd6Tx8znquDR9rMlHp",
     "positioning": {
       "width": 120,
-      "x": -48,
-      "y": -32
+      "x": -50,
+      "y": -31
     },
     "cost": {
       "cost_set_id": 0,
@@ -9604,9 +9604,9 @@
     "path": "abundance",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmsNWmdmD7nQIR6O1NifyBTe3WwXUS2GzHxroh",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 118,
+      "x": -36,
+      "y": -40
     },
     "cost": {
       "cost_set_id": 0,
@@ -9673,9 +9673,9 @@
     "path": "destruction",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmSLRGiUoWwLJmk0yB1IEfzFu2hoGbYjisKa74",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 153,
+      "x": -42,
+      "y": -23
     },
     "cost": {
       "cost_set_id": 0,
@@ -9743,9 +9743,9 @@
     "path": "nihility",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmnkmO8ZveXEi1leGFw5x96qCufVa0DSyzPdo8",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 165,
+      "x": -34,
+      "y": -26
     },
     "cost": {
       "cost_set_id": 0,
@@ -9809,9 +9809,9 @@
     "path": "destruction",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmL88L3FbhVXAsiymWvPEd6Tx8znquDR9rMlHp",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 127,
+      "x": -38,
+      "y": -28
     },
     "cost": {
       "cost_set_id": 0,
@@ -9876,9 +9876,9 @@
     "path": "hunt",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmqoME8K8fzTvgpCXx0AWeMdyFLr3B7sjm98En",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 146,
+      "x": -36,
+      "y": -24
     },
     "cost": {
       "cost_set_id": 0,
@@ -9943,9 +9943,9 @@
     "path": "erudition",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmm6r09TLmqFhbaVfE8RYjNWSB3X0P5wZrD7IC",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 143,
+      "x": -26,
+      "y": -27
     },
     "cost": {
       "cost_set_id": 0,
@@ -10009,9 +10009,9 @@
     "path": "elation",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmVhxYsm5yCHwopEcB1WsdtURTqMz9fe2SxOJL",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 80,
+      "x": -26,
+      "y": -45
     },
     "cost": {
       "cost_set_id": 0,
@@ -10075,9 +10075,9 @@
     "path": "elation",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJm5QZ1rSdYHdGFs9jtel6ZUbgXJT7Ck2aMP8IL",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 130,
+      "x": -25,
+      "y": -27
     },
     "cost": {
       "cost_set_id": 0,
@@ -10141,8 +10141,8 @@
     "path": "elation",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmSPjY0uWwLJmk0yB1IEfzFu2hoGbYjisKa74p",
     "positioning": {
-      "width": 120,
-      "x": -48,
+      "width": 110,
+      "x": -23,
       "y": -32
     },
     "cost": {
@@ -10207,9 +10207,9 @@
     "path": "elation",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmTVVOheCdeqVuD9kaG18iCSmnZPB7cKIQ3vL5",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 90,
+      "x": -23,
+      "y": -38
     },
     "cost": {
       "cost_set_id": 0,
@@ -10274,9 +10274,9 @@
     "path": "elation",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmoEU848XdCvbWHORl9jceqB3Zs7tJVMA04nTI",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 100,
+      "x": -25,
+      "y": -35
     },
     "cost": {
       "cost_set_id": 0,
@@ -10341,9 +10341,9 @@
     "path": "elation",
     "image_url": "https://zmvtaeh9bl.ufs.sh/f/SLmv6eLWwLJmLuRa35bhVXAsiymWvPEd6Tx8znquDR9rMlHp",
     "positioning": {
-      "width": 120,
-      "x": -48,
-      "y": -32
+      "width": 100,
+      "x": -27,
+      "y": -31
     },
     "cost": {
       "cost_set_id": 0,

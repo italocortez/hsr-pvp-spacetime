@@ -2096,3 +2096,13 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Decision:** when Chart.js is installed for the profile page (A202 item 1, S14.5), the team builder's cost chart is moved onto it in the same step, so the app has one chart system. The approved look carries over: the adjusted colours per game mode (A200 item 1), pairings stacked on both units' bars and split evenly in gold (A199 item 1, A201 item 9), the totals above the bars. The shared `StackedBarChart` component and its styles are then removed. Closes A202 item 3.
 - **Why:** user, 2026-11-17, on the orchestrator's recommendation (option A, one chart system and less of our own code): "yeah I agree on your recommendation for chart.js".
 - **Where implemented:** not yet (S14.5).
+
+### A204 — Light cone art positions come from the old selector; hidden pictures carry no loadout name
+
+- **Date:** 2026-11-17 · **Status:** items 1 and 3 decided; item 2 is the orchestrator's note
+- **Decision:**
+  1. The per-light-cone art positions (width, x, y) in `data/seed/lightcones.json` are taken from the old tool's `LightconeSelector.tsx` (`D:\GitsWork\hsr_draft_nath`), which holds a value for all 156 light cones of the seed. They replace the single shared value every cone had. The seed was run on the test database on 2026-11-17. Closes A192 item 9.
+  2. Orchestrator: two cones still sit at the old tool's default ("Before the Tutorial Mission Starts", "Shared Feeling"). The user will set the missing and imperfect ones later through the admin tool, whose mockup has an edit view for placing the art; the fields already exist per light cone.
+  3. The team builder's exported picture with "Hide who is on the team" ticked does not show the loadout name: it carries a neutral title and the file gets a neutral name. The orchestrator had built a hint line instead.
+- **Why:** user, 2026-11-17: "the positions for most of the lightcones is here \"D:\GitsWork\hsr_draft_nath\src\components\LightconeSelector.tsx\" there will be more missing tho that I can edit and gift a final number once we build the admin tool (mockup has an edit view for putting the lightcone on the best position"; "we can hide the loadout name on the hidden team feature"; "we can push the new seed test data".
+- **Where implemented:** `data/seed/lightcones.json` (item 1); item 3 in S14.3d.
