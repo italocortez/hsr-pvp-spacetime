@@ -122,16 +122,21 @@
     }
 }
 
-/* The search and the Clear button in one box (S14.2d). The box is sized exactly as the search
-   alone was (the field's own `flex: 2 1 200px` and 160px minimum), and as a size container its
-   width never depends on what it holds: Clear appearing narrows the search and changes nothing
-   else in the row, at every width. Its width also picks Clear's form (below). */
+/* The search and the Clear button in one box (S14.2d). As a size container its width never
+   depends on what it holds: Clear appearing narrows the search and changes nothing else in the
+   row, at every width. Its width also picks Clear's form (below). Above the phone step the box
+   is at least 216px wide (S14.2e), so even the compact Clear (48px + 8px gap) leaves the field
+   160px, its own minimum. */
 .searchGroup {
     container: filter-search / inline-size;
     display: flex;
     flex: 2 1 200px;
-    min-inline-size: 160px;
+    min-inline-size: 216px;
     align-items: stretch;
+
+    @media (--bp-sm) {
+        min-inline-size: 160px;
+    }
 
     /* The search field fills what Clear leaves. */
     & > :first-child {
@@ -140,15 +145,36 @@
     }
 }
 
-/* Archetype and rarity on the Characters tab: no box of their own above the phone step (the row
-   lays them out as before), one shared line below it. */
-.pair {
-    display: contents;
+/* Characters above the phone step (S14.2e): two lines, search + element + path, then role +
+   archetype + rarity, from about 1070px up to the widest page. The search's basis is the line
+   less 720px: that leaves room for element and path at their natural sizes (about 266 + 340px
+   plus gaps) but never also for role (about 200px), so role and the pair always start the second
+   line, and the line count depends on the width only, never on what is picked. The box is at
+   least 304px above the middle step, a 248px field beside the compact Clear, enough for the
+   whole placeholder; narrower than about 1070px, path moves to the second line instead of the
+   search shrinking. At the middle step and below (561 to 768px) the search keeps the shared
+   200px basis and 216px minimum, so element still fits beside it at 600px. */
+.filterRow:has(.pair) > .searchGroup {
+    flex-basis: max(304px, 100% - 720px);
+    min-inline-size: 304px;
+
+    @media (--bp-md) {
+        flex-basis: 200px;
+        min-inline-size: 216px;
+    }
 
     @media (--bp-sm) {
-        display: flex;
-        gap: 10px;
+        min-inline-size: 160px;
     }
+}
+
+/* Archetype and rarity on the Characters tab (S14.2e): one unit at every width, so they always
+   share a line and wrap together. On phones the unit has a line of its own; wider, it shares the
+   second line with role. */
+.pair {
+    display: flex;
+    flex: 1 1 auto;
+    gap: 10px;
 }
 
 /* The Clear filters button (S14.2c): a restrained dark red tint marks it as the "remove" action.
@@ -200,8 +226,9 @@
         transform: scale(0.97);
     }
 
-    /* Compact "N ✕" on phones, and wider wherever the full button would leave the search under
-       160px (the field's own minimum): the box is under 272px = 160 + 8 + 104. The word is only
+    /* Compact "N ✕" on phones, and wider wherever the full button would leave the search too
+       narrow for its whole placeholder (S14.2e; "Search by name or alias…" needs a 248px field in
+       Edge): the box is under 360px = 248 + 8 + 104. The word is only
        hidden visually (`.clearWord`), so the accessible name stays "Clear N filter(s)". A media
        query and a container query cannot share one condition, hence the two identical blocks. */
     @media (--bp-sm) {
@@ -211,7 +238,7 @@
         letter-spacing: 0.04em;
     }
 
-    @container filter-search (max-width: 271.98px) {
+    @container filter-search (max-width: 359.98px) {
         min-inline-size: 48px;
         padding: 0 10px;
         gap: 5px;
@@ -235,7 +262,7 @@
         white-space: nowrap;
     }
 
-    @container filter-search (max-width: 271.98px) {
+    @container filter-search (max-width: 359.98px) {
         position: absolute;
         inline-size: 1px;
         block-size: 1px;

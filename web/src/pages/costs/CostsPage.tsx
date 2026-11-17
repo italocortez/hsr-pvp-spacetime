@@ -292,7 +292,7 @@ function Filters({
                 />
             )}
             {isChars ? (
-                // Archetype and rarity share one line on phones, whatever is picked.
+                // Archetype and rarity: one unit that always shares a line and wraps together.
                 <div className={styles.pair}>
                     <MultiSelectDropdown
                         label="Archetype"

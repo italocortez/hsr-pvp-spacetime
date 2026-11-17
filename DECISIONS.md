@@ -1903,3 +1903,14 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   4. Open: on the Characters tab at 1320 px and wider the search field is about 145 px while a filter is active (the placeholder is cut to "Search by nam"), because that line is full.
 - **Why:** user, 2026-11-16: "lets apply that A recommendation on the issue you nottice" (option A: "Clear goes beside the search on every width, same place as on phones. One rule everywhere, no second line.").
 - **Where implemented:** `web/src/pages/costs/CostsPage.{tsx,module.css,test.tsx}`, `docs/frontend/pages.md`, `docs/log/2026-11-16-s14-2c.md`
+
+### A189 — S14.2e: Archetype and rarity wrap together; a wide search at desktop width
+
+- **Date:** 2026-11-16 · **Status:** item 1 decided; items 2 to 4 are the implementer's choices, agreed by the orchestrator, for the user to confirm by look
+- **Decision:**
+  1. On the costs page Characters tab, Archetype and rarity are one unit at every width: when one wraps, both do. This closes A188 item 4.
+  2. Implementer, agreed by the orchestrator: above about 1070 px the Characters filters are always two lines, with or without filters: search, Clear, elements and paths on the first; role, Archetype and rarity on the second, each line filling the card. The wrap depends on the window width only, so nothing changes line when a filter is picked. One line at 1920 px is not possible because the card stops growing at about 1440 px.
+  3. Implementer, agreed by the orchestrator: the search keeps at least 160 px beside Clear at every width, and on Characters shows its whole placeholder from 769 px up. The full "Clear N ✕" shows only when the search keeps 248 px, otherwise the compact form.
+  4. Known trade-offs: Characters between 561 and about 596 px has four lines where it had three; on Light Cones Clear is compact between about 1121 and 1335 px where it was full.
+- **Why:** user, 2026-11-16: "what if we make it so that if the rarity filter drops, it drags archetype with itself? shouldn't that also work exactly as we have planned for phones as well? or maybe just an exclusive view for the pixel width range you saw".
+- **Where implemented:** `web/src/pages/costs/CostsPage.module.css`, `docs/frontend/pages.md`, `docs/log/2026-11-16-s14-2c.md`
