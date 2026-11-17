@@ -2005,3 +2005,13 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   3. Orchestrator: the proposal on the table is a small new private table (user, until, reason, who, when), admin and server reducers to set and lift it, the check in the central permission helper, an end time that needs no timer, and no data deleted. To settle in the step's research: how "cannot read" is enforced (views that depend on the caller can return nothing and sign-in can be refused, but public reference tables are readable by any connection, including a fresh anonymous one), what happens to a suspended player inside a running lobby or match, and whether the person may still use the site as a guest.
 - **Why:** user, 2026-11-17: "now that we are talking about limits for specific accounts, do we have a way to temporarily 'shut down' a user through server or admin user reducers ? If i were to detect bad behavior from a user?"; then "we need it as is own step after we are done with team builder. The suspended should log them out and cannot read or write anything."
 - **Where implemented:** not yet.
+
+### A196 — Synergy pairs in Auction: free by default, a cost set may price them
+
+- **Date:** 2026-11-17 · **Status:** decided
+- **Decision:**
+  1. In Auction the bid war is what compensates for synergy. The default cost set therefore prices every synergy pair at 0 for Auction, in all three game modes (the explicit zeros in `data/seed/synergies.json`, kept by A108). This entry writes the reason down; the data already said so.
+  2. The door stays open: a custom cost set may price pairs for Auction. The module's rule for that case stays as built: the surcharge is never subtracted from a budget, it must fit the team's remaining budget, and it counts in the roster total.
+  3. Orchestrator: the team builder hides the pairings part of its Auction budget meter while the surcharge is 0, and says in one sentence that pairs cost nothing in Auction unless the cost set prices them.
+- **Why:** user, 2026-11-17: "was synergy cost planned for auction? I remember that I decided that the bid war is what compensates for synergy cost but I don't remember if I changed my mind on that"; then, on allowing a custom set to price them: "I agree on keeping the door open for that".
+- **Where implemented:** `data/seed/synergies.json` (item 1, since before A108); `spacetimedb/src/helpers/results/scoringHelpers.ts` `ensureAuctionSurchargeFits` (item 2); item 3 in S14.3b.
