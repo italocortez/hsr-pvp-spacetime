@@ -39,6 +39,11 @@ import type { LoadoutItem, LoadoutsState, Store } from './useLoadouts';
  * active loadout's name, always editable, and the caret that opens the switch menu), the save state under it, then
  * "+ New Loadout" and "Copy link". The mockup's Clear Team lives in the roster's head since S14.3a.
  *
+ * S14.3f (the user's "balanced cards", variant C): a compact card beside Modes, both ending at the same height. Rows:
+ * the name with the save state beside it (under it in a narrow card); the four actions; the hide option with one
+ * reserved status line that the "Copy link" and picture confirmations share; then, only when they apply, the
+ * failed-copy link field, the notices, and the sign-in line. A sometimes-row grows the card, and Modes grows with it.
+ *
  * The menu follows the web-guidance menu guide with the account menu's form (`shell/AccountArea.tsx`): React
  * state and explicit `menu` / `menuitem` / `menuitemradio` roles (the guide's fallback for browsers without
  * focusgroup), positioned under the box by CSS, not a popover. One Tab stop (the caret); Enter, Space or ArrowDown
@@ -50,7 +55,8 @@ import type { LoadoutItem, LoadoutsState, Store } from './useLoadouts';
  * cancels; focus goes back to the caret, since the menu item that opened it has gone.
  */
 
-export const SIGN_IN_HINT = `Sign in with Discord to keep up to ${ACCOUNT_LOADOUT_LIMIT} loadouts on your account, on every device.`;
+const SIGN_IN_LINK = 'Sign in with Discord';
+export const SIGN_IN_HINT = `${SIGN_IN_LINK} to keep up to ${ACCOUNT_LOADOUT_LIMIT} loadouts on your account, on every device.`;
 export const SAVED_IN_BROWSER = 'Saved in this browser';
 /** S14.3e (A205): an empty team that is not a loadout yet; nothing waits to be saved. */
 export const EMPTY_WORKING = 'Pick a character to start a loadout.';
@@ -67,8 +73,11 @@ type Props = {
     onLoaded: () => void;
     /** A character's display name from its key (the held choice lists team members). */
     characterName?: (key: string) => string;
-    /** S14.3d: the team picture's actions, under the share link. */
-    picture?: ReactNode;
+    /**
+     * S14.3d: the team picture's actions, after the share link. S14.3f: given the card's "Copy link" confirmation,
+     * so both confirmations share one place beside the hide option.
+     */
+    picture?: (linkStatus: ReactNode) => ReactNode;
 };
 
 /** A delete waiting for its confirmation; `again`: the account copy was newer, the person is asked again. */
@@ -232,6 +241,20 @@ export function LoadoutsPanel({
     const working = status.kind === 'working';
     const statusId = `${ids}-status`;
 
+    // The "Copy link" confirmation. It shares one reserved line beside the hide option with the picture's (S14.3f),
+    // so a confirmation neither covers the name nor moves the card. A div, not a p: the page's own status region
+    // is the last `p[role="status"]`.
+    const linkStatus = (
+        <div
+            role="status"
+            className={styles.copyStatus}
+            data-show={copied ? '' : undefined}
+            data-tone={copied === 'ok' ? 'ok' : copied === 'failed' ? 'failed' : undefined}
+        >
+            {copied === 'ok' ? LINK_COPIED : copied === 'failed' ? LINK_NOT_COPIED : ''}
+        </div>
+    );
+
     return (
         <section className={`${page.section} ${page.loadouts}`} aria-labelledby={`${ids}-head`}>
             <div className={page.sectionHead}>
@@ -240,68 +263,70 @@ export function LoadoutsPanel({
                 </h2>
             </div>
             <div className={styles.body}>
-                <LoadoutMenuBox
-                    loadouts={loadouts}
-                    field={field}
-                    nameRef={nameRef}
-                    caretRef={caretRef}
-                    statusId={statusId}
-                    onField={(v) => {
-                        setField(v);
-                        loadouts.rename(v);
-                    }}
-                    onFocus={() => setFocused(true)}
-                    onBlur={() => {
-                        setFocused(false);
-                        const clean = loadoutName(field);
-                        setField(clean);
-                        if (clean !== field) loadouts.rename(clean);
-                    }}
-                    onPick={(item) => {
-                        loadouts.switchTo({ kind: item.store, key: item.key });
-                        onLoaded();
-                        setLine(null);
-                        announce(`${item.name} loaded.`);
-                    }}
-                    onDuplicate={(item) => {
-                        const refused = loadouts.duplicate({ kind: item.store, key: item.key });
-                        if (refused) say(refused, true);
-                        else {
+                <div className={styles.nameRow}>
+                    <LoadoutMenuBox
+                        loadouts={loadouts}
+                        field={field}
+                        nameRef={nameRef}
+                        caretRef={caretRef}
+                        statusId={statusId}
+                        onField={(v) => {
+                            setField(v);
+                            loadouts.rename(v);
+                        }}
+                        onFocus={() => setFocused(true)}
+                        onBlur={() => {
+                            setFocused(false);
+                            const clean = loadoutName(field);
+                            setField(clean);
+                            if (clean !== field) loadouts.rename(clean);
+                        }}
+                        onPick={(item) => {
+                            loadouts.switchTo({ kind: item.store, key: item.key });
                             onLoaded();
-                            say('Copy made. It is the active loadout now.');
-                            focusName();
-                        }
-                    }}
-                    onDelete={askDelete}
-                    onCopyToAccount={(item) => {
-                        const r = loadouts.copyToAccount(item.key);
-                        say(r.text, !r.ok);
-                    }}
-                />
+                            setLine(null);
+                            announce(`${item.name} loaded.`);
+                        }}
+                        onDuplicate={(item) => {
+                            const refused = loadouts.duplicate({ kind: item.store, key: item.key });
+                            if (refused) say(refused, true);
+                            else {
+                                onLoaded();
+                                say('Copy made. It is the active loadout now.');
+                                focusName();
+                            }
+                        }}
+                        onDelete={askDelete}
+                        onCopyToAccount={(item) => {
+                            const r = loadouts.copyToAccount(item.key);
+                            say(r.text, !r.ok);
+                        }}
+                    />
 
-                <div id={statusId} className={styles.status}>
-                    {status.kind === 'account' ? (
-                        <AutosaveRing status={status.autosave} reasonId={`${ids}-reason`} />
-                    ) : status.kind === 'browser' ? (
-                        <span className={styles.browserSaved}>
-                            <CheckIcon className={styles.browserCheck} />
-                            {loadouts.storageOk
-                                ? SAVED_IN_BROWSER
-                                : 'Browser storage is off: kept for this visit only'}
-                        </span>
-                    ) : (
-                        <span className={styles.workingState}>
-                            {status.full === 'browser'
-                                ? `Not saved: this browser holds ${BROWSER_LOADOUT_LIMIT} loadouts. Delete one to save this team.`
-                                : status.full === 'account'
-                                  ? `Not saved: your account holds ${ACCOUNT_LOADOUT_LIMIT} loadouts. Delete one to save this team.`
-                                  : status.loading
-                                    ? 'Your account loadouts are loading.'
-                                    : status.empty
-                                      ? EMPTY_WORKING
-                                      : 'Not saved yet. Your first change saves it as a loadout.'}
-                        </span>
-                    )}
+                    <div id={statusId} className={styles.status}>
+                        {status.kind === 'account' ? (
+                            <AutosaveRing status={status.autosave} reasonId={`${ids}-reason`} />
+                        ) : status.kind === 'browser' ? (
+                            <span className={styles.browserSaved}>
+                                <CheckIcon className={styles.browserCheck} />
+                                {loadouts.storageOk
+                                    ? SAVED_IN_BROWSER
+                                    : 'Browser storage is off: kept for this visit only'}
+                            </span>
+                        ) : (
+                            <span className={styles.workingState}>
+                                {status.full === 'browser'
+                                    ? `Not saved: this browser holds ${BROWSER_LOADOUT_LIMIT} loadouts. Delete one to save this team.`
+                                    : status.full === 'account'
+                                      ? `Not saved: your account holds ${ACCOUNT_LOADOUT_LIMIT} loadouts. Delete one to save this team.`
+                                      : status.loading
+                                        ? 'Your account loadouts are loading.'
+                                        : status.empty
+                                          ? EMPTY_WORKING
+                                          : 'Not saved yet. Your first change saves it as a loadout.'}
+                            </span>
+                        )}
+                    </div>
                 </div>
 
                 <div className={styles.actions}>
@@ -322,15 +347,12 @@ export function LoadoutsPanel({
                         )}
                         Copy link
                     </button>
+                    {picture ? (
+                        picture(linkStatus)
+                    ) : (
+                        <div className={styles.under}>{linkStatus}</div>
+                    )}
                 </div>
-                <p
-                    role="status"
-                    className={styles.copyStatus}
-                    data-show={copied ? '' : undefined}
-                    data-failed={copied === 'failed' ? '' : undefined}
-                >
-                    {copied === 'ok' ? LINK_COPIED : copied === 'failed' ? LINK_NOT_COPIED : ''}
-                </p>
                 {copied === 'failed' && shareUrl && (
                     <label className={styles.linkField}>
                         <span>Link to this team</span>
@@ -343,7 +365,6 @@ export function LoadoutsPanel({
                         />
                     </label>
                 )}
-                {picture}
 
                 {line && <p className={styles.line}>{line}</p>}
                 {loadouts.notice && (
@@ -613,14 +634,19 @@ function HeldChoice({
     );
 }
 
+/**
+ * The sign-in line for a visitor or a guest: the whole sentence, its first words the link (S14.3f: the sentence used
+ * to be followed by a second "Sign in with Discord" link; one is enough, and the line stays short enough for one
+ * quiet row at the card's full width).
+ */
 function SignInHint() {
     const href = useRouterState({ select: (s) => s.location.href });
     return (
-        <p className={styles.quiet}>
-            {SIGN_IN_HINT}{' '}
+        <p className={styles.signInLine}>
             <Link to="/" search={loginSearchFor(href)} className={styles.signIn}>
-                Sign in with Discord
+                {SIGN_IN_LINK}
             </Link>
+            {SIGN_IN_HINT.slice(SIGN_IN_LINK.length)}
         </p>
     );
 }

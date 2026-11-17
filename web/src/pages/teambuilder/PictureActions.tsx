@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { downloadBlob } from '@/lib/downloadBlob';
 import loadoutStyles from './LoadoutsPanel.module.css';
 import styles from './PictureActions.module.css';
@@ -11,6 +11,10 @@ import type { PictureRequest } from './teamPictureLayout';
  * "Copy image" (the Async Clipboard API with a `ClipboardItem` of type image/png) and "Download" (a PNG named from
  * the loadout), and the option "Hide who is on the team". The drawing code (`teamPicture.ts`) is a dynamic import
  * on the first press, so the team builder's chunk does not carry it.
+ *
+ * S14.3f (the balanced top row): the root takes no box of its own (`display: contents`), so the two buttons sit in
+ * the card's one row of actions after "Copy link", and the next row holds the hide option and the status place that
+ * this confirmation shares with the card's "Copy link" one. DOM order is the visual order, so Tab follows the eye.
  *
  * The confirmation is a visible line that is also the live region (the copy-button guide's bubble): "Making the
  * image…" while it is made, then the outcome. While an image is being made both buttons ignore presses (they stay
@@ -61,11 +65,14 @@ export function canCopyImage(): boolean {
 export function PictureActions({
     request,
     disabled = false,
+    linkStatus,
 }: {
     /** The picture's content at the moment of the press. */
     request: (hideNames: boolean) => PictureRequest;
     /** The cost rows are not here yet. */
     disabled?: boolean;
+    /** The card's "Copy link" confirmation: it shares the status place beside the hide option (S14.3f). */
+    linkStatus?: ReactNode;
 }) {
     const id = useId();
     const [hide, setHide] = useState(false);
@@ -172,60 +179,61 @@ export function PictureActions({
     const offer = line?.offer === true;
     return (
         <div className={styles.picture}>
-            <div className={loadoutStyles.actions}>
-                <button
-                    type="button"
-                    className={`${loadoutStyles.button} ${styles.button}`}
-                    onClick={onCopy}
-                    disabled={disabled}
-                    aria-disabled={busy !== null ? true : undefined}
-                    data-busy={busy === 'copy' ? '' : undefined}
-                >
-                    {busy === 'copy' ? (
-                        <span className={styles.spinner} aria-hidden="true" />
-                    ) : line?.tone === 'ok' && line.what === 'copy' ? (
-                        <CheckIcon className={loadoutStyles.buttonIcon} />
-                    ) : (
-                        <ImageIcon className={loadoutStyles.buttonIcon} />
-                    )}
-                    Copy image
-                </button>
-                <button
-                    ref={downloadRef}
-                    type="button"
-                    className={`${loadoutStyles.button} ${styles.button}`}
-                    onClick={onDownload}
-                    disabled={disabled}
-                    aria-disabled={busy !== null ? true : undefined}
-                    data-busy={busy === 'download' ? '' : undefined}
-                >
-                    {busy === 'download' ? (
-                        <span className={styles.spinner} aria-hidden="true" />
-                    ) : line?.tone === 'ok' && line.what === 'download' ? (
-                        <CheckIcon className={loadoutStyles.buttonIcon} />
-                    ) : (
-                        <DownloadIcon className={loadoutStyles.buttonIcon} />
-                    )}
-                    Download
-                </button>
-            </div>
-            <label className={styles.hide} htmlFor={`${id}-hide`}>
-                <input
-                    id={`${id}-hide`}
-                    type="checkbox"
-                    checked={hide}
-                    onChange={(e) => setHide(e.currentTarget.checked)}
-                />
-                {PICTURE_HIDE}
-            </label>
-            {/* A div, not a p: the page's own status region is the last `p[role="status"]`. */}
-            <div
-                role="status"
-                className={styles.status}
-                data-tone={line?.tone}
-                data-show={line ? '' : undefined}
+            <button
+                type="button"
+                className={`${loadoutStyles.button} ${styles.button}`}
+                onClick={onCopy}
+                disabled={disabled}
+                aria-disabled={busy !== null ? true : undefined}
+                data-busy={busy === 'copy' ? '' : undefined}
             >
-                {line?.text ?? ''}
+                {busy === 'copy' ? (
+                    <span className={styles.spinner} aria-hidden="true" />
+                ) : line?.tone === 'ok' && line.what === 'copy' ? (
+                    <CheckIcon className={loadoutStyles.buttonIcon} />
+                ) : (
+                    <ImageIcon className={loadoutStyles.buttonIcon} />
+                )}
+                Copy image
+            </button>
+            <button
+                ref={downloadRef}
+                type="button"
+                className={`${loadoutStyles.button} ${styles.button}`}
+                onClick={onDownload}
+                disabled={disabled}
+                aria-disabled={busy !== null ? true : undefined}
+                data-busy={busy === 'download' ? '' : undefined}
+            >
+                {busy === 'download' ? (
+                    <span className={styles.spinner} aria-hidden="true" />
+                ) : line?.tone === 'ok' && line.what === 'download' ? (
+                    <CheckIcon className={loadoutStyles.buttonIcon} />
+                ) : (
+                    <DownloadIcon className={loadoutStyles.buttonIcon} />
+                )}
+                Download
+            </button>
+            <div className={loadoutStyles.under}>
+                <label className={styles.hide} htmlFor={`${id}-hide`}>
+                    <input
+                        id={`${id}-hide`}
+                        type="checkbox"
+                        checked={hide}
+                        onChange={(e) => setHide(e.currentTarget.checked)}
+                    />
+                    {PICTURE_HIDE}
+                </label>
+                {/* A div, not a p: the page's own status region is the last `p[role="status"]`. */}
+                <div
+                    role="status"
+                    className={loadoutStyles.copyStatus}
+                    data-tone={line?.tone}
+                    data-show={line ? '' : undefined}
+                >
+                    {line?.text ?? ''}
+                </div>
+                {linkStatus}
             </div>
             {offer && (
                 <button

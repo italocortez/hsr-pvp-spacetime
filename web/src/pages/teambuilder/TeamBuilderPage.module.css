@@ -3,8 +3,9 @@
 /*
  * The team builder's frame (design/mockups/teambuilder.html, `.workspace` and `.section`). The mockup's grid is
  * three columns, 380px | 1fr | 380px: Loadouts beside Modes, the Roster beside the Cost Breakdown, the Pool across.
- * S14.3c adds the Loadouts card in the first column of the first row. The mockup's 1100px breakpoint snaps to
- * --bp-xl (1120px): one column, in reading order Loadouts, Modes, Roster, Cost, Pool.
+ * S14.3c adds the Loadouts card in the first column of the first row; S14.3f gives Loadouts and Modes a row of
+ * their own (`.top`). The mockup's 1100px breakpoint snaps to --bp-xl (1120px): one column, in reading order the
+ * top row, Roster, Cost, Pool.
  */
 
 .page {
@@ -14,9 +15,9 @@
 .workspace {
     display: grid;
     grid-template-areas:
-        "loadouts modes  modes"
-        "roster   roster cost"
-        "pool     pool   pool";
+        "top    top    top"
+        "roster roster cost"
+        "pool   pool   pool";
     grid-template-columns: minmax(0, 380px) minmax(0, 1fr) minmax(0, 380px);
     gap: clamp(16px, 1.6vw, 24px);
     align-items: stretch;
@@ -26,8 +27,7 @@
 
     @media (--bp-xl) {
         grid-template-areas:
-            "loadouts"
-            "modes"
+            "top"
             "roster"
             "cost"
             "pool";
@@ -39,12 +39,25 @@
     }
 }
 
-.modes {
-    grid-area: modes;
+/*
+ * S14.3f, the user's "balanced cards" (variant C of the top-area A/B): Loadouts and Modes in a row of their own,
+ * 5 : 7, stretched to one height, with slimmer heads and bodies than the cards under them, so the roster's four
+ * cards fit on a 900px-tall first screen from 1120px up. They keep the two columns down to --bp-lg (1040px) and
+ * stack below it, in reading order. A notice that shows in one card grows both.
+ */
+.top {
+    grid-area: top;
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: clamp(16px, 1.6vw, 24px);
+    align-items: stretch;
+
+    @media (--bp-lg) {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }
 
 .loadouts {
-    grid-area: loadouts;
     /* Above the cards after it, so its open menu is not painted under Modes on one column. */
     z-index: 2;
 }
@@ -82,6 +95,16 @@
     justify-content: space-between;
     padding: 18px 22px 14px;
     border-block-end: 1px solid var(--border-subtle);
+
+    @media (--bp-sm) {
+        padding-inline: 16px;
+    }
+}
+
+/* The top row's slimmer heads (S14.3f). */
+.top .sectionHead {
+    min-block-size: 44px;
+    padding: 10px 18px;
 
     @media (--bp-sm) {
         padding-inline: 16px;
@@ -180,15 +203,38 @@
     }
 }
 
+/*
+ * The three controls. When the Loadouts card is the taller one (the sign-in line, a notice), the body fills the card
+ * and spreads its rows evenly, so the extra height reads as rhythm, not as an empty block.
+ */
 .modesBody {
     display: flex;
+    flex: 1;
     flex-wrap: wrap;
     gap: 14px 18px;
     align-items: center;
-    padding: 18px 22px 22px;
+    align-content: space-evenly;
+    padding: 14px 18px 16px;
 
     @media (--bp-sm) {
         padding: 16px;
+    }
+
+    /*
+     * 1041 to 1120px: Modes is too narrow to be worth its two-control row, and the Loadouts card has wrapped its
+     * actions into two rows: one control per row (cost set, draft mode; the game mode row is full width already)
+     * keeps the two cards level.
+     */
+    @media (--bp-xl) {
+        & > :nth-child(-n + 2) {
+            flex-basis: 100%;
+        }
+    }
+
+    @media (--bp-lg) {
+        & > :nth-child(-n + 2) {
+            flex-basis: auto;
+        }
     }
 }
 

@@ -1,12 +1,12 @@
 /*
- * The team picture's actions (S14.3d) under "Copy link" in the Loadouts card: the buttons take the card's
- * `.button` look (LoadoutsPanel.module.css); this file adds the busy state, the option and the status line.
+ * The team picture's actions (S14.3d) in the Loadouts card: the buttons take the card's `.button` look and the
+ * status takes the card's `.copyStatus` place (LoadoutsPanel.module.css); this file adds the busy state and the
+ * hide option.
  */
 
+/* No box of its own (S14.3f): the buttons join the card's row of actions, the option row and the offer follow. */
 .picture {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+    display: contents;
 }
 
 .button {
@@ -55,11 +55,11 @@
     display: inline-flex;
     gap: 8px;
     align-items: center;
-    align-self: flex-start;
     min-block-size: 24px;
     color: var(--text-body);
     font-family: var(--font-secondary);
     font-size: 0.75rem;
+    white-space: nowrap;
     cursor: pointer;
 
     @media (pointer: coarse) {
@@ -80,32 +80,8 @@
     }
 }
 
-/* The confirmation: the live region itself, shown by opacity (copy-button guide). */
-.status {
-    min-block-size: 1.4em;
-    margin: -4px 0 0;
-    color: var(--text-muted);
-    font-size: 0.75rem;
-    line-height: 1.4;
-    opacity: 0;
-
-    &[data-show] {
-        opacity: 1;
-    }
-
-    &[data-tone="ok"] {
-        color: var(--color-success);
-    }
-
-    &[data-tone="failed"] {
-        color: var(--color-warning);
-    }
-
-    @media (prefers-reduced-motion: no-preference) {
-        transition: opacity var(--duration-fast);
-    }
-}
-
+/* "Download instead": a row of its own under the option row, only after a refused copy. */
 .offer {
-    align-self: flex-start;
+    flex: none;
+    margin-inline-end: auto;
 }

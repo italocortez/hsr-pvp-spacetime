@@ -2,19 +2,45 @@
 
 /*
  * The Loadouts card (S14.3c), from the mockup's `.controlsBody`, `.loadoutName`, `.loadoutBox`, `.loadoutMenu*`
- * and `.btn`. Touch targets grow to 44px on coarse pointers.
+ * and `.btn`. Touch targets grow to 44px on coarse pointers. S14.3f: the compact card of the balanced top row
+ * (rows in LoadoutsPanel.tsx); the rows follow the card's own width (container queries), since the card is 5/12 of
+ * the row on a desktop and the full width on a phone.
  */
 
 .body {
+    container: loadouts / inline-size;
     display: flex;
     flex: 1;
     flex-direction: column;
-    gap: 12px;
-    padding: 18px 22px 22px;
+    gap: 10px;
+    /* When Modes is the taller card (a notice there), the rows stay together in the middle. */
+    justify-content: center;
+    padding: 14px 18px 16px;
 
     @media (--bp-sm) {
         padding: 16px;
     }
+}
+
+/* The name with the save state beside it; under it once the card is too narrow for both. */
+.nameRow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px 14px;
+    align-items: center;
+
+    @container loadouts (min-width: 22rem) {
+        grid-template-columns: minmax(0, 3fr) minmax(8.5rem, 2fr);
+    }
+}
+
+/* The sign-in line (visitor, guest): the card's last quiet row; one line at the card's full desktop width. */
+.signInLine {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.71875rem;
+    line-height: 1.4;
+    text-wrap: pretty;
 }
 
 /* The combined control: pencil, name, caret; the menu hangs under it. */
@@ -24,7 +50,8 @@
     gap: 10px;
     align-items: center;
     min-inline-size: 0;
-    block-size: 44px;
+    /* 40px in the compact card (S14.3f), 44px for a finger. */
+    block-size: 40px;
     padding: 0 6px 0 14px;
     border: 1px solid var(--border-subtle);
     border-radius: 8px;
@@ -32,6 +59,10 @@
     transition:
         border-color var(--duration-fast),
         background var(--duration-fast);
+
+    @media (pointer: coarse) {
+        block-size: 44px;
+    }
 
     &:hover {
         border-color: var(--border-strong);
@@ -65,6 +96,8 @@
     font-size: 0.9375rem;
     font-weight: 600;
     letter-spacing: 0.01em;
+    /* A long name (up to 40 characters) ends in an ellipsis until the field is focused. */
+    text-overflow: ellipsis;
 
     /* iOS zooms the page into a field under 16px on focus (review M8). */
     @media (pointer: coarse) {
@@ -350,11 +383,14 @@
     }
 }
 
-/* The save state: a fixed height, so no state moves what is under it. */
+/*
+ * The save state beside the name: two lines fit in the name's row, so the usual states move nothing. Under the name
+ * (a narrow card) it keeps one line; a longer text (a full list, a save that waits with its reason) adds lines.
+ */
 .status {
     display: flex;
-    align-items: flex-start;
-    min-block-size: 2.9em;
+    align-items: center;
+    min-block-size: 1.4em;
     font-size: 0.75rem;
     line-height: 1.4;
 }
@@ -380,22 +416,34 @@
     font-family: var(--font-secondary);
 }
 
+/*
+ * The four actions in one row (two rows of two when the card is narrow), then the hide option row (`.under`), then
+ * "Download instead" after a refused copy. The picture's own buttons and rows join this box (PictureActions).
+ */
 .actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
-    align-items: center;
-}
-
-.button {
-    display: inline-flex;
-    flex: 1 1 0;
-    white-space: nowrap;
     gap: 8px;
     align-items: center;
+
+    /* Narrower than the four labels in a row (the card at 1320px, a phone): two rows of two, never three and one. */
+    @container loadouts (width < 32rem) {
+        & .button {
+            flex-basis: calc(50% - 4px);
+        }
+    }
+}
+
+/* The `.button` rule is shared with the delete dialog's buttons, whose flex `.dialogActions` sets. */
+.button {
+    display: inline-flex;
+    flex: 1 1 auto;
+    white-space: nowrap;
+    gap: 7px;
+    align-items: center;
     justify-content: center;
-    min-block-size: 36px;
-    padding: 0 16px;
+    min-block-size: 34px;
+    padding: 0 12px;
     border: 1px solid var(--border-subtle);
     border-radius: 8px;
     background: var(--bg-elevated);
@@ -437,20 +485,55 @@
     block-size: 14px;
 }
 
-/* The copy confirmation (the copy-button guide's bubble: the live region itself, hidden by opacity). */
+/*
+ * The hide option and the status place beside it: one line kept free for the confirmations of Copy link, Copy image
+ * and Download, so a confirmation moves nothing and covers nothing. In a narrow card the place is a line of its own
+ * under the option, reserved there too. A longer confirmation wraps, and two at once (Copy link, then Copy image
+ * within seconds) stack in the same column; the card grows for as long as they show.
+ */
+.under {
+    position: relative;
+    display: grid;
+    flex: 1 1 100%;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 4px 14px;
+    align-items: center;
+    justify-items: start;
+
+    @container loadouts (max-width: 23rem) {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(calc(1.4 * 0.75rem), auto);
+    }
+}
+
+/*
+ * A confirmation: the live region itself, shown by opacity (copy-button guide). Always the last column (beside the
+ * option, or under it in a narrow card). An empty one leaves the flow (positioned, still in the accessibility tree),
+ * so the one that speaks takes the reserved line.
+ */
 .copyStatus {
-    min-block-size: 1.4em;
-    margin: -4px 0 0;
-    color: var(--color-success);
+    grid-column: -2;
+    min-inline-size: 0;
+    margin: 0;
+    color: var(--text-muted);
     font-size: 0.75rem;
     line-height: 1.4;
     opacity: 0;
+
+    &:not([data-show]) {
+        position: absolute;
+        pointer-events: none;
+    }
 
     &[data-show] {
         opacity: 1;
     }
 
-    &[data-failed] {
+    &[data-tone="ok"] {
+        color: var(--color-success);
+    }
+
+    &[data-tone="failed"] {
         color: var(--color-warning);
     }
 

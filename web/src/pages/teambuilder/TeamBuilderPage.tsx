@@ -27,7 +27,8 @@ import { type TeamBuilderPageState, useTeamBuilderPage } from './useTeamBuilderP
  * Cost Breakdown (the total, in Auction the simulator, the cost chart; S14.3b), and the Character Pool. S14.3c: the
  * Loadouts card beside Modes (saved loadouts in the browser and on the account, the share link), the note under the
  * pairs strip, and the footer. State and rules live in `useTeamBuilderPage` and `useLoadouts`; the cost model in
- * `shared/teambuilder`, the loadout rules in `shared/loadouts`.
+ * `shared/teambuilder`, the loadout rules in `shared/loadouts`. S14.3f: Loadouts and Modes share a top row of
+ * their own, two balanced cards (5 : 7) that end at the same height.
  */
 
 /** The notice after a link replaced a different saved team (review S3). */
@@ -244,92 +245,97 @@ export function TeamBuilderPage({ search }: { search: TeamBuilderSearch }) {
             </PageIntro>
 
             <div className={styles.workspace}>
-                <LoadoutsPanel
-                    loadouts={loadouts}
-                    code={page.code}
-                    announce={announce}
-                    onLoaded={forget}
-                    characterName={nameOf}
-                    picture={
-                        <PictureActions request={pictureRequest} disabled={!page.costsReady} />
-                    }
-                />
-
-                <section
-                    className={`${styles.section} ${styles.modes}`}
-                    aria-labelledby={`${ids}-modes`}
-                >
-                    <div className={styles.sectionHead}>
-                        <h2 id={`${ids}-modes`} className={styles.chapter}>
-                            <strong>Modes</strong>
-                        </h2>
-                    </div>
-                    <div className={styles.modesBody}>
-                        <ControlSelect
-                            label="Cost Set"
-                            value={String(page.costSet?.id ?? 0)}
-                            onChange={(e) => actions.setCostSet(Number(e.currentTarget.value))}
-                        >
-                            <option value="0">Default</option>
-                            {page.setsForMode.map((s) => (
-                                <option key={s.id} value={String(s.id)}>
-                                    {s.isLocked ? `${s.name} (locked)` : s.name}
-                                </option>
-                            ))}
-                        </ControlSelect>
-                        <SegmentedControl
-                            label="Draft Mode"
-                            value={view.draft}
-                            onChange={actions.setDraft}
-                            options={[
-                                { value: 'classic', label: 'Classic' },
-                                { value: 'auction', label: 'Auction' },
-                            ]}
-                        />
-                        <GameModeTiles
-                            value={page.mode}
-                            onChange={actions.setMode}
-                            lockedReason={lockedReason}
-                        />
-                        {keptBids && <p className={styles.modeNote}>{KEPT_BIDS}</p>}
-                        {notice && <p className={styles.notice}>{notice}</p>}
-                        {page.replacedTeam && (
-                            <p className={`${styles.notice} ${styles.linkNotice}`}>
-                                <span>{LOADED_FROM_LINK}</span>
-                                <button
-                                    type="button"
-                                    className={styles.noticeButton}
-                                    data-primary=""
-                                    onClick={() => {
-                                        // S14.3c: a link opened over a saved loadout goes back to that loadout.
-                                        const back = loadouts.beforeLink;
-                                        if (back) {
-                                            actions.dismissPrevious();
-                                            loadouts.switchTo(back);
-                                        } else actions.restorePrevious();
-                                        forget();
-                                        announce('Your previous team is back.');
-                                        requestAnimationFrame(() => focusSlot(0));
-                                    }}
-                                >
-                                    Restore my previous team
-                                </button>
-                                <button
-                                    type="button"
-                                    className={styles.noticeButton}
-                                    onClick={() => {
-                                        actions.dismissPrevious();
-                                        loadouts.forgetBeforeLink();
-                                        announce('Notice dismissed. The team from the link stays.');
-                                        requestAnimationFrame(() => focusSlot(0));
-                                    }}
-                                >
-                                    Dismiss
-                                </button>
-                            </p>
+                <div className={styles.top}>
+                    <LoadoutsPanel
+                        loadouts={loadouts}
+                        code={page.code}
+                        announce={announce}
+                        onLoaded={forget}
+                        characterName={nameOf}
+                        picture={(linkStatus) => (
+                            <PictureActions
+                                request={pictureRequest}
+                                disabled={!page.costsReady}
+                                linkStatus={linkStatus}
+                            />
                         )}
-                    </div>
-                </section>
+                    />
+
+                    <section className={styles.section} aria-labelledby={`${ids}-modes`}>
+                        <div className={styles.sectionHead}>
+                            <h2 id={`${ids}-modes`} className={styles.chapter}>
+                                <strong>Modes</strong>
+                            </h2>
+                        </div>
+                        <div className={styles.modesBody}>
+                            <ControlSelect
+                                label="Cost Set"
+                                value={String(page.costSet?.id ?? 0)}
+                                onChange={(e) => actions.setCostSet(Number(e.currentTarget.value))}
+                            >
+                                <option value="0">Default</option>
+                                {page.setsForMode.map((s) => (
+                                    <option key={s.id} value={String(s.id)}>
+                                        {s.isLocked ? `${s.name} (locked)` : s.name}
+                                    </option>
+                                ))}
+                            </ControlSelect>
+                            <SegmentedControl
+                                label="Draft Mode"
+                                value={view.draft}
+                                onChange={actions.setDraft}
+                                options={[
+                                    { value: 'classic', label: 'Classic' },
+                                    { value: 'auction', label: 'Auction' },
+                                ]}
+                            />
+                            <GameModeTiles
+                                value={page.mode}
+                                onChange={actions.setMode}
+                                lockedReason={lockedReason}
+                            />
+                            {keptBids && <p className={styles.modeNote}>{KEPT_BIDS}</p>}
+                            {notice && <p className={styles.notice}>{notice}</p>}
+                            {page.replacedTeam && (
+                                <p className={`${styles.notice} ${styles.linkNotice}`}>
+                                    <span>{LOADED_FROM_LINK}</span>
+                                    <button
+                                        type="button"
+                                        className={styles.noticeButton}
+                                        data-primary=""
+                                        onClick={() => {
+                                            // S14.3c: a link opened over a saved loadout goes back to it.
+                                            const back = loadouts.beforeLink;
+                                            if (back) {
+                                                actions.dismissPrevious();
+                                                loadouts.switchTo(back);
+                                            } else actions.restorePrevious();
+                                            forget();
+                                            announce('Your previous team is back.');
+                                            requestAnimationFrame(() => focusSlot(0));
+                                        }}
+                                    >
+                                        Restore my previous team
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={styles.noticeButton}
+                                        onClick={() => {
+                                            actions.dismissPrevious();
+                                            loadouts.forgetBeforeLink();
+                                            announce(
+                                                'Notice dismissed. The team from the link stays.',
+                                            );
+                                            requestAnimationFrame(() => focusSlot(0));
+                                        }}
+                                    >
+                                        Dismiss
+                                    </button>
+                                </p>
+                            )}
+                        </div>
+                    </section>
+                </div>
 
                 <section
                     className={`${styles.section} ${styles.roster}`}
