@@ -217,6 +217,10 @@ for their roster while the rows stay for the match (`docs/lobby/architecture.md`
   "Roster management requires a verified account. Link your Discord first."
 - The user deletion cascade (`performUserDeletion`) deletes the user's `UserLoadout` rows after the HSR accounts, and
   `server_nuke_test_data` clears the table next to `HsrAccount`.
+- S14.3s-limit (DECISIONS.md A194 item 6): the private table `UserLoadoutRate` (`tables/roster/userLoadoutRate.ts`,
+  one row per user: the loadout save window) joins them. `performUserDeletion` deletes the user's row with the
+  `UserLoadout` rows, and `server_nuke_test_data` clears it too. Documented in
+  [../loadout/architecture.md](../loadout/architecture.md).
 
 ## Phase History
 

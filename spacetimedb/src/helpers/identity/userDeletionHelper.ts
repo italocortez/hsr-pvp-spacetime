@@ -164,7 +164,7 @@ export interface UserDeletionOptions {
  *
  * Cascade: the organizer hand-over of a staff deletion (S10s, A121, handOverOrganizedTournaments), tournament ties
  * (A94(2), settleTournamentTiesForDeletion), lobby memberships (below), calendar data, UserPresence, UserRateState, UserIdentity,
- * HsrAccount, HsrAccountCharacter, UserLoadout (S14.3s), then (S10r, A122(6)) the user's unreferenced lobby presets and unpublished cost sets.
+ * HsrAccount, HsrAccountCharacter, UserLoadout (S14.3s) and UserLoadoutRate (S14.3s-limit), then (S10r, A122(6)) the user's unreferenced lobby presets and unpublished cost sets.
  * Guest users with no history references → hard-delete (row removed entirely).
  * All others → the User row is hard-deleted and archived to DeletedUser (id, displayName, isGuest, deletedAt), which
  * resolveUserLabel reads for history rows (Phase 15.2 D-09).
@@ -248,6 +248,8 @@ export function performUserDeletion(ctx: any, userId: number, actorId: number, o
     }
     // S14.3s: the user's team builder loadouts go with them.
     for (const loadout of [...ctx.db.UserLoadout.user_id.filter(userId)]) ctx.db.UserLoadout.id.delete(loadout.id);
+    // S14.3s-limit: and their loadout save window.
+    if (ctx.db.UserLoadoutRate.userId.find(userId)) ctx.db.UserLoadoutRate.userId.delete(userId);
     // Roster audit #6 (S10f): the other holders of a deleted account's UID get their isDuplicateUid recomputed, as the
     // two delete reducers do (a UID left with one account reverts to false).
     for (const uid of new Set(hsrAccounts.map((a: any) => a.uid))) {

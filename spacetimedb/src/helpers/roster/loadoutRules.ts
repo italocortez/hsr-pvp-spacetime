@@ -2,6 +2,7 @@
 // team text is checked with the same codec the page, the share link and browser storage use (`@shared/teambuilder`).
 import { SenderError } from 'spacetimedb/server';
 import { decodeTeam, encodeTeam, TEAM_CODE_MAX } from '@shared/teambuilder';
+import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 
 /** A190 item 3: 10 loadouts on the account, slots 0 to 9 (the page shows 1 to 10). */
 export const LOADOUT_SLOTS = 10;
@@ -65,4 +66,37 @@ export function ensureLoadoutCode(ctx: any, code: string): void {
 /** The caller's row in `slot`, or undefined (the by_user_and_slot index; the reducer keeps the pair unique). */
 export function loadoutAt(ctx: any, userId: number, slot: number): any | undefined {
     return [...ctx.db.UserLoadout.by_user_and_slot.filter([userId, slot])][0];
+}
+
+/**
+ * S14.3s-limit (A194 item 6, user ruling 2026-11-17: "6 saves per minute per account"): accepted save_loadout calls per
+ * account per fixed window, counted in UserLoadoutRate and on nothing else (not the membership allowance of the lobby,
+ * roster and calendar writes). Constants, not AbuseConfig columns: an admin-editable value would change AbuseConfig's
+ * shape on a live database. A fixed window like the UserRateState neighbours: one row read and one write per save. Its
+ * worst burst is 12 saves within a few seconds across a window edge; the monthly bound stays 6 per minute on average.
+ */
+export const LOADOUT_SAVES_PER_WINDOW = 6;
+export const LOADOUT_SAVE_WINDOW_MS = 60_000;
+export const LOADOUT_TOO_FAST_TEXT =
+    'Your loadout was not saved yet: too many saves in a short time. It will be saved in a moment.';
+
+/**
+ * Counts one accepted save of the user, refusing it once the current window holds LOADOUT_SAVES_PER_WINDOW saves.
+ * save_loadout calls it after every other check, right before the write, so the refusal only ever reaches a save that
+ * would otherwise succeed (the page retries it from its draft). A refused call rolls back and writes nothing.
+ */
+export function consumeLoadoutSaveAllowance(ctx: any, userId: number): void {
+    const now: bigint = ctx.timestamp.microsSinceUnixEpoch;
+    const state = ctx.db.UserLoadoutRate.userId.find(userId);
+    if (!state) {
+        ctx.db.UserLoadoutRate.insert(insertWithAudit(ctx, { userId, windowStart: ctx.timestamp, saveCount: 1 }, userId));
+        return;
+    }
+    const windowOpen = now - state.windowStart.microsSinceUnixEpoch < BigInt(LOADOUT_SAVE_WINDOW_MS) * 1000n;
+    if (!windowOpen) {
+        ctx.db.UserLoadoutRate.userId.update(updateWithAudit(ctx, state, { windowStart: ctx.timestamp, saveCount: 1 }, userId));
+        return;
+    }
+    if (state.saveCount >= LOADOUT_SAVES_PER_WINDOW) throw new SenderError(LOADOUT_TOO_FAST_TEXT);
+    ctx.db.UserLoadoutRate.userId.update(updateWithAudit(ctx, state, { saveCount: state.saveCount + 1 }, userId));
 }

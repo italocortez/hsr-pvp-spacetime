@@ -25,14 +25,15 @@ A verified (Discord-linked) member keeps up to 10 named team builder loadouts on
 
 **Flow:**
 1. Resolve the caller from `ctx.sender`; refuse a guest with the loadout text.
-2. Count one write on the caller's membership allowance (shared with the roster and lobby writes: 20 calls per 10 s).
+2. (Superseded in S14.3s-limit, see Phase History: the save no longer counts on the membership allowance.)
 3. Check the slot range, the name, the note and the packed text (it must read as a version 1 team, be the one text that team encodes to, and name only characters and light cones of the reference tables).
 4. `isNew` and the slot is taken: refuse. Not `isNew` and the slot is empty: refuse.
+4b. Count one save on the caller's loadout save limit (6 accepted saves per account per fixed 60 s window, its own count); refuse when the window is full.
 5. Insert the row, or update the row in that slot (name, note, code).
 
 **Expected State Changes:**
 - `UserLoadout`: one row inserted (userId = caller, slot, trimmed name, note, code) or the slot's row updated.
-- `UserRateState`: the caller's membership window counts one more call.
+- `UserLoadoutRate`: the caller's save window counts one more save (or a new window opens with 1). *(Phase S14.3s execution, S14.3s-limit: replaces "`UserRateState`: the caller's membership window counts one more call.")*
 
 **Error Cases:**
 | Condition | Error Message |
@@ -41,7 +42,7 @@ A verified (Discord-linked) member keeps up to 10 named team builder loadouts on
 | Account deleted (pending deletion) | "Unauthorized: This account has been deleted." |
 | Maintenance mode, caller not Admin | "The site is in maintenance. Please try again later." |
 | Guest | "Saving loadouts to your account needs a Discord-linked account. Your loadouts stay in this browser." |
-| More than 20 roster, lobby or loadout writes in 10 s | "You are doing that too quickly. Please wait a moment." |
+| A seventh accepted save inside the caller's 60 s save window (S14.3s-limit) | "Your loadout was not saved yet: too many saves in a short time. It will be saved in a moment." |
 | slot above 9 | "Loadout slot must be between 1 and 10." |
 | name blank after trimming | "Loadout name cannot be empty." |
 | name over 40 after trimming | "Loadout name cannot exceed 40 characters." |
@@ -66,7 +67,7 @@ A verified (Discord-linked) member keeps up to 10 named team builder loadouts on
 
 **Flow:**
 1. Resolve the caller; refuse a guest with the loadout text.
-2. Count one write on the membership allowance.
+2. (Superseded in S14.3s-limit: a delete counts on no allowance.)
 3. Check the slot range.
 4. Delete the caller's row in that slot; an empty slot is a no-op.
 
@@ -78,7 +79,7 @@ A verified (Discord-linked) member keeps up to 10 named team builder loadouts on
 |-----------|--------------|
 | Guest | "Saving loadouts to your account needs a Discord-linked account. Your loadouts stay in this browser." |
 | slot above 9 | "Loadout slot must be between 1 and 10." |
-| Allowance used up, no user, deleted account, maintenance | as `save_loadout` |
+| No user, deleted account, maintenance | as `save_loadout` (no rate limit since S14.3s-limit) |
 
 ### view_my_loadouts
 
@@ -186,9 +187,35 @@ A verified (Discord-linked) member keeps up to 10 named team builder loadouts on
 
 ### Too fast
 
-**Given:** a member has made 20 roster, lobby or loadout writes in the current 10 s window
-**When:** a 21st `save_loadout` or `delete_loadout`
-**Then:** refused "You are doing that too quickly. Please wait a moment."; nothing is written; accepted again once the window has passed.
+**Superseded in S14.3s-limit** (see Phase History) by "Too many saves", "Separate from the lobby and roster allowance" and "Delete has no rate limit" below: loadout writes no longer count on the 20-per-10-s membership allowance. The original scenario, kept for the record:
+
+> **Given:** a member has made 20 roster, lobby or loadout writes in the current 10 s window
+> **When:** a 21st `save_loadout` or `delete_loadout`
+> **Then:** refused "You are doing that too quickly. Please wait a moment."; nothing is written; accepted again once the window has passed.
+
+### Too many saves
+
+*Phase S14.3s execution (S14.3s-limit; DECISIONS.md A194 item 6, closing A193 item 8; user ruling 2026-11-17).*
+
+**Given:** a verified member whose save window is fresh
+**When:** six accepted saves (new loadouts and updates alike) inside 60 s, then a seventh
+**Then:** the six are written; the seventh is refused "Your loadout was not saved yet: too many saves in a short time. It will be saved in a moment." and writes nothing (neither the loadout nor the window). 60 s after the window opened, the next save is accepted and opens a new window. A save refused for another reason (slot taken, bad name) does not count. Another member's saves do not count on this member's window.
+
+### Separate from the lobby and roster allowance
+
+*Phase S14.3s execution (S14.3s-limit; DECISIONS.md A194 item 6).*
+
+**Given:** a verified member
+**When:** six saves, then twenty roster writes in the same 10 s; or twenty roster writes, then six saves
+**Then:** all are accepted: saves do not count on the membership allowance (lobby, roster and calendar writes), and those writes do not count on the save limit. Each limit refuses with its own text.
+
+### Delete has no rate limit
+
+*Phase S14.3s execution (S14.3s-limit; DECISIONS.md A194 item 6).*
+
+**Given:** a verified member whose save window is full
+**When:** more than twenty `delete_loadout` calls at once, on full and empty slots
+**Then:** all are accepted; the full slots are emptied; no window counts anything. A new save in a freed slot is still refused until the save window reopens, so a save, delete, save loop is held by its saves.
 
 ### Maintenance
 
@@ -200,13 +227,13 @@ A verified (Discord-linked) member keeps up to 10 named team builder loadouts on
 
 **Given:** the member has loadouts
 **When:** `delete_my_account`, `server_delete_user`, or a ban followed by the scheduled `run_user_deletion`
-**Then:** no `UserLoadout` row of that user remains; other users keep theirs. Between the ban and the job, saves are refused "Unauthorized: This account has been deleted."
+**Then:** no `UserLoadout` row of that user remains; other users keep theirs. Between the ban and the job, saves are refused "Unauthorized: This account has been deleted." Since S14.3s-limit (Phase S14.3s execution) the user's `UserLoadoutRate` row goes too.
 
 ### Test wipe
 
 **Given:** loadouts exist on the test database
 **When:** `server_nuke_test_data`
-**Then:** the table is empty.
+**Then:** the table is empty; since S14.3s-limit (Phase S14.3s execution) `UserLoadoutRate` is empty too.
 
 ### Reference removed later
 
@@ -232,10 +259,11 @@ A verified (Discord-linked) member keeps up to 10 named team builder loadouts on
 |-------------|------------|-----|-----------|
 | `save_loadout`, `delete_loadout` | `User`, `UserIdentity` (identity) | caller from `ctx.sender`; guest and deleted refusal | reads |
 | `save_loadout` | `HsrCharacter`, `HsrLightcone` (roster reference) | name lookups of the packed text | reads |
-| `save_loadout`, `delete_loadout` | `UserRateState` (lobby abuse controls) | the shared membership allowance | both |
+| `save_loadout` | `UserLoadoutRate` (this feature, S14.3s-limit) | the save limit, 6 per account per 60 s; replaces the shared membership allowance on `UserRateState`, which loadouts no longer touch | both |
 | `save_loadout`, `delete_loadout` | `AbuseConfig.maintenanceMode` (admin) | Admin only while on | reads |
 | `UserLoadout` | `performUserDeletion` (identity) | the user's rows are deleted with the account | writes |
 | `UserLoadout` | `server_nuke_test_data` (identity) | the table is cleared | writes |
+| `UserLoadoutRate` | `performUserDeletion`, `server_nuke_test_data` (identity) | the user's row deleted; the table cleared | writes |
 | `code` column | `shared/teambuilder` (`decodeTeam`, `encodeTeam`) | one codec for the module, the share link and browser storage | reads |
 
 ## Phase History
@@ -253,6 +281,11 @@ A verified (Discord-linked) member keeps up to 10 named team builder loadouts on
 | `delete_loadout` refuses a slot above 9 and is a no-op on an empty slot | Phase S14.3s execution | 2026-11-17 |
 | `view_my_loadouts` returns no rows to a guest (checked on the User row) and to an identity with no user | Phase S14.3s execution | 2026-11-17 |
 | A character or light cone deleted later is not cascaded into loadouts | Phase S14.3s execution | 2026-11-17 |
+| Supersedes "The loadout writes share the membership allowance (20 per 10 s)" and the scenario "Too fast": saves get a limit of their own, 6 accepted saves per account per fixed 60 s window (`UserLoadoutRate`), refusal "Your loadout was not saved yet: too many saves in a short time. It will be saved in a moment."; loadout writes no longer count on the membership allowance, and lobby, roster and calendar writes do not count on the save limit | DECISIONS.md A194 item 6 (closes A193 item 8; user ruling 2026-11-17: "6 saves per minute per account"); Phase S14.3s execution (S14.3s-limit) | 2026-11-17 |
+| `delete_loadout` counts on no limit (a delete only removes a row a counted save made; an empty-slot delete writes nothing; a refused call costs the same as a no-op) | Phase S14.3s execution (S14.3s-limit) | 2026-11-17 |
+| The save limit is the last check before the write, so its refusal reaches only a save that would otherwise succeed; a save refused for another reason does not count | Phase S14.3s execution (S14.3s-limit) | 2026-11-17 |
+| The user's `UserLoadoutRate` row goes with the account; the test wipe clears the table | Phase S14.3s execution (S14.3s-limit) | 2026-11-17 |
+| Edited in place by S14.3s-limit, after the first version of this contract (the original text is in git at `2d07e39`): `save_loadout` flow step 2 (was "Count one write on the caller's membership allowance (shared with the roster and lobby writes: 20 calls per 10 s)", now a superseded note) and step 4b added; `save_loadout` Expected State Changes (the `UserRateState` line replaced by the `UserLoadoutRate` line, tagged); `save_loadout` error table (the row "More than 20 roster, lobby or loadout writes in 10 s / You are doing that too quickly. Please wait a moment." replaced by the seventh-save row); `delete_loadout` flow step 2 (was "Count one write on the membership allowance", now a superseded note); `delete_loadout` error table (was "Allowance used up, no user, deleted account, maintenance / as `save_loadout`"); scenario "Too fast" (marked superseded, original text kept under it); scenarios "Account deleted" and "Test wipe" (one tagged sentence appended to each Then); Integration Points (the `UserRateState` row "the shared membership allowance" replaced by the `UserLoadoutRate` row, one row added) | Phase S14.3s execution (S14.3s-limit; review should-fix S2) | 2026-11-17 |
 
 ---
 

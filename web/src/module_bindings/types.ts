@@ -2939,6 +2939,17 @@ export const UserLoadout = __t.object("UserLoadout", {
 });
 export type UserLoadout = __Infer<typeof UserLoadout>;
 
+export const UserLoadoutRate = __t.object("UserLoadoutRate", {
+  userId: __t.u32(),
+  windowStart: __t.timestamp(),
+  saveCount: __t.u32(),
+  createdById: __t.u32(),
+  createdDate: __t.timestamp(),
+  lastModifiedById: __t.u32(),
+  lastModifiedDate: __t.timestamp(),
+});
+export type UserLoadoutRate = __Infer<typeof UserLoadoutRate>;
+
 export const UserPresence = __t.object("UserPresence", {
   identity: __t.identity(),
   userId: __t.u32(),

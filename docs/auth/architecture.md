@@ -223,7 +223,7 @@ performUserDeletion
   │   or lobby gone → removeMemberRow (as a leave); a player row in Drafting / Equipping / Scoring → flags
   │   transferred, row kept as away + abandoned (offline for the forfeit test, never a flag candidate).
   │   See docs/lobby/architecture.md "User deletion".
-  ├─ Cascade: hard-delete calendar data, UserIdentity rows, HsrAccount + characters, UserLoadout rows (S14.3s; docs/loadout/architecture.md) (the provider link goes with the User row, S11a)
+  ├─ Cascade: hard-delete calendar data, UserIdentity rows, HsrAccount + characters, UserLoadout rows (S14.3s; docs/loadout/architecture.md), the UserLoadoutRate row (S14.3s-limit) (the provider link goes with the User row, S11a)
   ├─ S10r (A122(6)): the user's unreferenced lobby presets and unpublished cost sets (deleteOwnedPresetsAndCostSets)
   │
   ├─ [isGuest && !hasHistoryReferences(ctx, userId)]
@@ -632,6 +632,7 @@ The function maps 2xx to `confirm`; 530 to `refused` with the text only when the
 | Last pass: `https:` required besides Discord's origin; 10 s limit on the start POST; refusal texts with control or separator characters, and "forbidden" in any case or behind zero-width characters, are `failed`; gate 10 reads imports with comments and strings masked, follows literal `import()`, `require()`, `import.meta.glob` and the `@/`, `@shared/`, `@bindings/` aliases; the residual two-tab window on the confirm click recorded as known (to be confirmed by the user) | Phase M5b execution | 2026-11-14 |
 | The scheduled `run_user_deletion` and `run_identity_gc` refuse any caller but the scheduler (`ensureScheduler`, `ctx.senderAuth.isInternal`; L11); `admin_gc_identities` restarts a stopped `IdentityGcJob` chain (L6); a user deletion also removes the user's `LobbyCursorStamp` rows (L19) | Phase S11a execution (part 2, closing-triage items) | 2026-11-11 |
 | `performUserDeletion` ends with `removeDeletedUserFromLeaderboard` (the user's `Leaderboard` rows of every season go; the active season is rebuilt when it held one); `client_connected` admits a live Admin under maintenance mode; `login_as_guest` and the profile reducers (`resolveUser`) refuse a non-Admin under maintenance mode | Phase S11a execution (DECISIONS.md A163(1), A163(3)) | 2026-11-12 |
+| `performUserDeletion` also deletes the user's `UserLoadoutRate` row (the loadout save window; docs/loadout/architecture.md) | Phase S14.3s execution, S14.3s-limit (DECISIONS.md A194 item 6) | 2026-11-17 |
 
 ---
 

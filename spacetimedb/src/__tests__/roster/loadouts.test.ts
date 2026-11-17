@@ -7,10 +7,18 @@
 // canonical-text rule, the unknown-name refusals, the guest text, the shared allowance, the deletion cascade and the
 // view for owner, other member, guest and an identity with no user. Every `it` cites its scenario of
 // docs/loadout/contract.md. In-memory datastore on the TestClock; nothing reaches maincloud.
+// T-S14.3s-limit (A194 item 6): the save limit of its own (6 per account per minute, UserLoadoutRate) replaces the
+// shared membership allowance; the former tests 14 ("Too fast", 20 per 10 s) and 14b (shared with the roster writes)
+// asserted that allowance for loadouts and are replaced by the "save limit" block below.
+// T-S14.3s-limit2 (review of S14.3s-limit): L7 to L10 add the limit as the last check, the unchanged window row on a
+// too-fast refusal, no window row for a guest, and one window for two identities of one account.
 import { describe, expect, it } from 'vitest';
 import { MAINTENANCE_TEXT } from '@module/helpers/identity/ensurePermissions';
-import { MEMBERSHIP_ACTION_TEXT } from '@module/helpers/lobby/abuseControls';
+import { MEMBERSHIP_ACTION_TEXT, MEMBERSHIP_CHANGES_PER_WINDOW } from '@module/helpers/lobby/abuseControls';
 import {
+    LOADOUT_SAVES_PER_WINDOW,
+    LOADOUT_SAVE_WINDOW_MS,
+    LOADOUT_TOO_FAST_TEXT,
     LOADOUT_CODE_TEXT,
     LOADOUT_DUPLICATE_TEXT,
     LOADOUT_GONE_TEXT,
@@ -33,7 +41,7 @@ import {
     type Ctx,
     type Harness,
 } from '../fixtures/harness';
-import { admin, fireDeletionJob, providerOf, verified } from '../fixtures/identity';
+import { addSecondIdentity, admin, fireDeletionJob, providerOf, verified } from '../fixtures/identity';
 import { seedReferenceNames } from '../fixtures/roster';
 import { makeGhost, view } from '../fixtures/views';
 
@@ -62,10 +70,29 @@ const args = (o: Partial<SaveArgs> = {}): SaveArgs => ({ slot: 0, isNew: true, n
 const saveBody = (o: Partial<SaveArgs> = {}) => (ctx: Ctx) => M.save_loadout(ctx, args(o));
 const deleteBody = (slot: number) => (ctx: Ctx) => M.delete_loadout(ctx, { slot });
 
-/** One accepted save; the clock moves 600 ms first so a long test stays inside the shared allowance (20 per 10 s). */
+const rateRow = (test: Harness, who: Actor) => test.db.UserLoadoutRate.userId.find(who.userId) ?? undefined;
+const allRateRows = (test: Harness) => [...test.db.UserLoadoutRate.iter()];
+const membershipCount = (test: Harness, who: Actor) => test.db.UserRateState.userId.find(who.userId)?.membershipCount;
+
+/** One accepted save; the clock moves 10 s first so a long test stays inside the save limit (6 per 60 s). */
 function save(test: Harness, who: Actor, o: Partial<SaveArgs> = {}) {
-    advance(test, 600);
+    advance(test, 10_000);
     tx(test, who, saveBody(o));
+}
+
+/** Fills the caller's save window: a fresh window, then six accepted saves at the same instant (slots 0 to 5, new). */
+function fillWindow(test: Harness, who: Actor) {
+    advance(test, LOADOUT_SAVE_WINDOW_MS);
+    for (let slot = 0; slot < LOADOUT_SAVES_PER_WINDOW; slot++) tx(test, who, saveBody({ slot, name: `T${slot}` }));
+}
+
+/** Twenty roster writes at the current instant: one account created, then nineteen updates (the membership cap). */
+function twentyRosterWrites(test: Harness, who: Actor) {
+    tx(test, who, (ctx) => M.create_hsr_account(ctx, { uid: '800000001', displayLabel: 'Main' }));
+    const hsrAccountId = [...test.db.HsrAccount.user_id.filter(who.userId)][0].id;
+    for (let i = 0; i < MEMBERSHIP_CHANGES_PER_WINDOW - 1; i++) {
+        tx(test, who, (ctx) => M.update_hsr_account(ctx, { hsrAccountId, displayLabel: `Main ${i}`, isRosterPublic: false, isRatingPublic: false }));
+    }
 }
 
 /** Refused save: the state is unchanged and the message is returned (checked last). */
@@ -289,34 +316,157 @@ describe('view_my_loadouts and ownership', () => {
     });
 });
 
-// ─── Allowance and maintenance ───────────────────────────────────────────────
+// ─── Save limit (T-S14.3s-limit) ─────────────────────────────────────────────
 
-describe('allowance and maintenance', () => {
-    it('14. scenario "Too fast": the 21st write inside 10 s is refused with the shared text; nothing is written; then accepted again', () => {
+describe('save limit (S14.3s-limit, A194 item 6)', () => {
+    it('L1. scenario "Too many saves": six saves (new and updates) pass, the seventh is refused with the loadout text and writes nothing', () => {
         const { test, a } = world();
-        advance(test, 10_000); // a fresh window (the sign-in may have used some of it)
-        for (let i = 0; i < 20; i++) tx(test, a, saveBody({ slot: i % 10, isNew: i < 10, name: `T${i}` }));
-        const before = snap(allRows(test));
-        expect(rejection(test, a, saveBody({ slot: 0, isNew: false, name: 'late' }))).toBe(MEMBERSHIP_ACTION_TEXT);
-        expect(rejection(test, a, deleteBody(0))).toBe(MEMBERSHIP_ACTION_TEXT);
-        expect(snap(allRows(test))).toBe(before);
-        advance(test, 10_000);
-        tx(test, a, saveBody({ slot: 0, isNew: false, name: 'late' }));
-        expect(rows(test, a).find((r) => r.slot === 0)!.name).toBe('late');
+        advance(test, LOADOUT_SAVE_WINDOW_MS);
+        for (let slot = 0; slot < 3; slot++) tx(test, a, saveBody({ slot, name: `New ${slot}` }));
+        for (let i = 0; i < 3; i++) tx(test, a, saveBody({ slot: 0, isNew: false, name: `Update ${i}` }));
+        expect(rateRow(test, a)).toMatchObject({ saveCount: LOADOUT_SAVES_PER_WINDOW });
+        const before = snap(allRows(test), allRateRows(test));
+        expect(rejection(test, a, saveBody({ slot: 5, name: 'Seventh new' }))).toBe(LOADOUT_TOO_FAST_TEXT);
+        expect(rejection(test, a, saveBody({ slot: 0, isNew: false, name: 'Seventh update' }))).toBe(LOADOUT_TOO_FAST_TEXT);
+        expect(snap(allRows(test), allRateRows(test))).toBe(before);
+        expect(rows(test, a).find((r) => r.slot === 0)!.name).toBe('Update 2');
+        expect(LOADOUT_SAVES_PER_WINDOW).toBe(6);
+        expect(LOADOUT_SAVE_WINDOW_MS).toBe(60_000);
+        expect(LOADOUT_TOO_FAST_TEXT).toBe(
+            'Your loadout was not saved yet: too many saves in a short time. It will be saved in a moment.');
     });
 
-    it('14b. the allowance is shared with the roster writes: 20 roster writes leave no room for a save', () => {
+    it('L2. scenario "Too many saves": the window reopens 60 s after it opened; the save then counts as the first of a new window', () => {
+        const { test, a } = world();
+        fillWindow(test, a);
+        const opened = rateRow(test, a)!.windowStart.microsSinceUnixEpoch;
+        advance(test, LOADOUT_SAVE_WINDOW_MS - 1);
+        expect(rejection(test, a, saveBody({ slot: 6 }))).toBe(LOADOUT_TOO_FAST_TEXT);
+        advance(test, 1);
+        tx(test, a, saveBody({ slot: 6 }));
+        const row = rateRow(test, a)!;
+        expect(row.saveCount).toBe(1);
+        expect(row.windowStart.microsSinceUnixEpoch).toBe(opened + BigInt(LOADOUT_SAVE_WINDOW_MS) * 1000n);
+        expect(rows(test, a)).toHaveLength(7);
+    });
+
+    it('L3. scenario "Too many saves": two accounts have separate limits', () => {
+        const { test, a } = world();
+        const b = verified(test, 'loadoutlimitb');
+        fillWindow(test, a);
+        expect(rejection(test, a, saveBody({ slot: 6 }))).toBe(LOADOUT_TOO_FAST_TEXT);
+        for (let slot = 0; slot < LOADOUT_SAVES_PER_WINDOW; slot++) tx(test, b, saveBody({ slot }));
+        expect(rows(test, b)).toHaveLength(6);
+        expect(rateRow(test, a)!.saveCount).toBe(6);
+        expect(rateRow(test, b)!.saveCount).toBe(6);
+        expect(rejection(test, b, saveBody({ slot: 6 }))).toBe(LOADOUT_TOO_FAST_TEXT);
+    });
+
+    it('L4. scenario "Separate from the lobby and roster allowance": saves do not count on the membership allowance', () => {
+        const { test, a } = world();
+        advance(test, 10_000); // a fresh membership window (the sign-in may have used some of it)
+        const membershipBefore = membershipCount(test, a);
+        fillWindow(test, a); // moves the clock 60 s: a fresh membership window too
+        expect(membershipCount(test, a)).toBe(membershipBefore);
+        // All twenty roster writes still fit in the membership window the six saves fell in.
+        twentyRosterWrites(test, a);
+        expect(membershipCount(test, a)).toBe(MEMBERSHIP_CHANGES_PER_WINDOW);
+    });
+
+    it('L4b. scenario "Separate from the lobby and roster allowance": a full membership window leaves the six saves untouched', () => {
+        const { test, a } = world();
+        advance(test, LOADOUT_SAVE_WINDOW_MS);
+        twentyRosterWrites(test, a);
+        expect(rateRow(test, a)).toBeUndefined();
+        for (let slot = 0; slot < LOADOUT_SAVES_PER_WINDOW; slot++) tx(test, a, saveBody({ slot }));
+        expect(rows(test, a)).toHaveLength(6);
+        expect(rejection(test, a, saveBody({ slot: 6 }))).toBe(LOADOUT_TOO_FAST_TEXT);
+        // The roster write is refused by its own allowance, with its own text.
+        expect(rejection(test, a, (ctx) => M.create_hsr_account(ctx, { uid: '800000002', displayLabel: 'Alt' })))
+            .toBe(MEMBERSHIP_ACTION_TEXT);
+    });
+
+    it('L5. scenario "Delete has no rate limit": deletes count on nothing, pass at the save limit, and a no-op delete writes nothing', () => {
         const { test, a } = world();
         advance(test, 10_000);
-        tx(test, a, (ctx) => M.create_hsr_account(ctx, { uid: '800000001', displayLabel: 'Main' }));
-        const hsrAccountId = [...test.db.HsrAccount.user_id.filter(a.userId)][0].id;
-        for (let i = 0; i < 19; i++) {
-            tx(test, a, (ctx) => M.update_hsr_account(ctx, { hsrAccountId, displayLabel: `Main ${i}`, isRosterPublic: false, isRatingPublic: false }));
-        }
-        expect(rejection(test, a, saveBody())).toBe(MEMBERSHIP_ACTION_TEXT);
+        fillWindow(test, a);
+        const membershipBefore = membershipCount(test, a);
+        const rateBefore = snap(allRateRows(test));
+        // More deletes than either allowance holds, at one instant: real ones first, then no-ops.
+        for (let i = 0; i < MEMBERSHIP_CHANGES_PER_WINDOW + 5; i++) tx(test, a, deleteBody(i % 10));
         expect(rows(test, a)).toHaveLength(0);
+        expect(snap(allRateRows(test))).toBe(rateBefore);
+        expect(membershipCount(test, a)).toBe(membershipBefore);
+        // A save, delete, save loop is held by its saves: the freed slot cannot be refilled in this window.
+        expect(rejection(test, a, saveBody({ slot: 0 }))).toBe(LOADOUT_TOO_FAST_TEXT);
+        // Slot range still checked.
+        expect(rejection(test, a, deleteBody(10))).toBe(LOADOUT_SLOT_TEXT);
     });
 
+    it('L6. scenario "Too many saves": a save refused for another reason does not count', () => {
+        const { test, a } = world();
+        advance(test, LOADOUT_SAVE_WINDOW_MS);
+        tx(test, a, saveBody({ slot: 0 }));
+        expect(rejection(test, a, saveBody({ slot: 0 }))).toBe(LOADOUT_SLOT_TAKEN_TEXT);
+        expect(rejection(test, a, saveBody({ slot: 1, name: '' }))).toBe(LOADOUT_NAME_EMPTY_TEXT);
+        expect(rateRow(test, a)!.saveCount).toBe(1);
+    });
+
+    // T-S14.3s-limit2: the review's should-fix S1 and minor M2, M3.
+
+    it('L7. scenario "Too many saves": with a full window, a save wrong for another reason gets its own text, never the too-fast text (the limit is the last check)', () => {
+        const { test, a } = world();
+        fillWindow(test, a);
+        const before = snap(allRows(test), allRateRows(test));
+        const taken = rejection(test, a, saveBody({ slot: 0, name: 'Taken' }));
+        const gone = rejection(test, a, saveBody({ slot: 6, isNew: false }));
+        const blank = rejection(test, a, saveBody({ slot: 6, name: '   ' }));
+        expect(snap(allRows(test), allRateRows(test))).toBe(before);
+        // A save that is right in every other way meets the limit.
+        expect(rejection(test, a, saveBody({ slot: 6 }))).toBe(LOADOUT_TOO_FAST_TEXT);
+        expect(taken).toBe(LOADOUT_SLOT_TAKEN_TEXT);
+        expect(gone).toBe(LOADOUT_GONE_TEXT);
+        expect(blank).toBe(LOADOUT_NAME_EMPTY_TEXT);
+    });
+
+    it('L8. scenario "Too many saves": a save refused as too fast leaves the save window row unchanged', () => {
+        const { test, a } = world();
+        fillWindow(test, a);
+        const rateBefore = snap(allRateRows(test));
+        const row = rateRow(test, a)!;
+        advance(test, 1_000);
+        expect(rejection(test, a, saveBody({ slot: 6 }))).toBe(LOADOUT_TOO_FAST_TEXT);
+        expect(snap(allRateRows(test))).toBe(rateBefore);
+        expect(rateRow(test, a)).toMatchObject({ saveCount: LOADOUT_SAVES_PER_WINDOW, windowStart: row.windowStart });
+    });
+
+    it('L9. scenario "Guest": a guest\'s refused save creates no save window row', () => {
+        const { test } = world();
+        const g = guest(test, 'loadoutlimitguest');
+        expect(refusedSave(test, g, {})).toBe(LOADOUT_VERIFIED_TEXT);
+        expect(rateRow(test, g)).toBeUndefined();
+        expect(allRateRows(test)).toHaveLength(0);
+    });
+
+    it('L10. scenario "Too many saves": two identities of one account share one window', () => {
+        const { test, a } = world();
+        const extra = addSecondIdentity(test, a.userId, 'loadoutlimit-second-device');
+        const second: Actor = { sub: 'loadoutlimit-second-device', auth: extra.auth, identity: extra.identity, userId: a.userId };
+        advance(test, LOADOUT_SAVE_WINDOW_MS);
+        for (let slot = 0; slot < LOADOUT_SAVES_PER_WINDOW; slot++) {
+            tx(test, slot % 2 === 0 ? a : second, saveBody({ slot, name: `T${slot}` }));
+        }
+        expect(allRateRows(test)).toHaveLength(1);
+        expect(rateRow(test, a)!.saveCount).toBe(LOADOUT_SAVES_PER_WINDOW);
+        expect(rejection(test, second, saveBody({ slot: 6 }))).toBe(LOADOUT_TOO_FAST_TEXT);
+        expect(rejection(test, a, saveBody({ slot: 6 }))).toBe(LOADOUT_TOO_FAST_TEXT);
+        expect(rows(test, a)).toHaveLength(LOADOUT_SAVES_PER_WINDOW);
+    });
+});
+
+// ─── Maintenance ─────────────────────────────────────────────────────────────
+
+describe('maintenance', () => {
     it('15. scenario "Maintenance": a non-Admin is refused with the maintenance text; an Admin may save', () => {
         const { test, a } = world();
         const boss = admin(test, 'loadoutboss');
@@ -341,9 +491,13 @@ describe('lifecycle', () => {
         withLoadouts(test, a);
         withLoadouts(test, b, 1);
         const userId = a.userId;
+        expect(rateRow(test, a)).toBeDefined();
         tx(test, a, (ctx) => M.delete_my_account(ctx, {}));
         expect([...test.db.UserLoadout.user_id.filter(userId)]).toHaveLength(0);
         expect(rows(test, b)).toHaveLength(1);
+        // S14.3s-limit: the save window goes with the account; the other user's stays.
+        expect(test.db.UserLoadoutRate.userId.find(userId) ?? undefined).toBeUndefined();
+        expect(rateRow(test, b)).toBeDefined();
     });
 
     it('16. scenario "Account deleted": server_delete_user removes every loadout of the user', () => {
@@ -352,6 +506,7 @@ describe('lifecycle', () => {
         const username = test.db.User.id.find(a.userId)!.username;
         tx(test, 'internal', (ctx) => M.server_delete_user(ctx, { username }));
         expect([...test.db.UserLoadout.user_id.filter(a.userId)]).toHaveLength(0);
+        expect(rateRow(test, a)).toBeUndefined(); // S14.3s-limit
     });
 
     it('16. scenario "Account deleted": a ban, through the scheduled run_user_deletion, removes every loadout of the user', () => {
@@ -364,13 +519,16 @@ describe('lifecycle', () => {
         expect(refusedSave(test, a, { slot: 9 })).toBe('Unauthorized: This account has been deleted.');
         fireDeletionJob(test, a.userId);
         expect([...test.db.UserLoadout.user_id.filter(a.userId)]).toHaveLength(0);
+        expect(rateRow(test, a)).toBeUndefined(); // S14.3s-limit
     });
 
-    it('17. scenario "Test wipe": server_nuke_test_data clears the table', () => {
+    it('17. scenario "Test wipe": server_nuke_test_data clears the table and the save windows', () => {
         const { test, a } = world();
         withLoadouts(test, a, 2);
+        expect(allRateRows(test)).toHaveLength(1);
         tx(test, 'internal', (ctx) => M.server_nuke_test_data(onTestDatabase(ctx), { confirmation: 'NUKE_TEST_DATA' }));
         expect(allRows(test)).toHaveLength(0);
+        expect(allRateRows(test)).toHaveLength(0);
     });
 
     it('18. scenario "Reference removed later": deleting a character through admin_delete_row leaves the loadout unchanged and readable', () => {

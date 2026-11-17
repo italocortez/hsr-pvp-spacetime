@@ -20,6 +20,7 @@ import { Archetype } from '@module/tables/roster/archetype';
 import { HsrCharacterArchetype } from '@module/tables/roster/hsrCharacterArchetype';
 // Team builder loadouts (S14.3s)
 import { UserLoadout } from '@module/tables/roster/userLoadout';
+import { UserLoadoutRate } from '@module/tables/roster/userLoadoutRate';
 
 // Tournament System
 import { Tournament } from '@module/tables/tournament/tournament';
@@ -155,6 +156,7 @@ const spacetimedb = schema({
     HsrCharacterArchetype,
     // Team builder loadouts (S14.3s)
     UserLoadout,
+    UserLoadoutRate,        // S14.3s-limit (A194 item 6): the loadout save window; private
 
     // Tournament System
     Tournament,
