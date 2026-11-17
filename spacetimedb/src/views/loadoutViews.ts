@@ -1,6 +1,7 @@
 // ─── Loadout views (S14.3s; A190 items 1, 3, 15) ─────────────────────────────
 // view_my_loadouts: the caller's own team builder loadouts (private table UserLoadout). Modelled on view_my_roster.
-// Sends slot, name, note and the packed team text only: no id, no userId, no audit columns. A guest (who cannot save)
+// Sends slot, version (S14.3c-rev, A198), name, note and the packed team text only: no id, no userId, no firstRev, no
+// audit columns. A guest (who cannot save)
 // or an identity with no user gets no rows. Index-only: UserIdentity.identity, User.id, UserLoadout.user_id.
 
 import spacetimedb from '@module/schema';
@@ -9,6 +10,7 @@ import { callerUserId } from '@module/helpers/identity/viewAnonymity';
 
 const MyLoadoutRow = t.row('MyLoadoutRow', {
     slot: t.u8().primaryKey(), // unique per caller, so the client gets onUpdate on a save
+    rev: t.u32(), // S14.3c-rev (A198): the version a save or delete of this loadout states as its base
     name: t.string(),
     note: t.string(),
     code: t.string(),
@@ -22,6 +24,6 @@ export const view_my_loadouts = spacetimedb.view(
         if (userId === undefined) return [];
         const user = ctx.db.User.id.find(userId);
         if (!user || user.isGuest) return [];
-        return [...ctx.db.UserLoadout.user_id.filter(userId)].map(({ slot, name, note, code }) => ({ slot, name, note, code }));
+        return [...ctx.db.UserLoadout.user_id.filter(userId)].map(({ slot, rev, name, note, code }) => ({ slot, rev, name, note, code }));
     }
 );

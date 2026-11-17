@@ -12,7 +12,7 @@ import {
 
 export default {
   slot: __t.u8(),
-  isNew: __t.bool(),
+  baseRev: __t.u32(),
   name: __t.string(),
   note: __t.string(),
   code: __t.string(),

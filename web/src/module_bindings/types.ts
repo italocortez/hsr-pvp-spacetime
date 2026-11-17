@@ -2016,6 +2016,7 @@ export type MyLinkRequestRow = __Infer<typeof MyLinkRequestRow>;
 
 export const MyLoadoutRow = __t.object("MyLoadoutRow", {
   slot: __t.u8(),
+  rev: __t.u32(),
   name: __t.string(),
   note: __t.string(),
   code: __t.string(),
@@ -2929,6 +2930,8 @@ export const UserLoadout = __t.object("UserLoadout", {
   id: __t.u32(),
   userId: __t.u32(),
   slot: __t.u8(),
+  rev: __t.u32(),
+  firstRev: __t.u32(),
   name: __t.string(),
   note: __t.string(),
   code: __t.string(),
@@ -2943,6 +2946,7 @@ export const UserLoadoutRate = __t.object("UserLoadoutRate", {
   userId: __t.u32(),
   windowStart: __t.timestamp(),
   saveCount: __t.u32(),
+  revFloor: __t.u32(),
   createdById: __t.u32(),
   createdDate: __t.timestamp(),
   lastModifiedById: __t.u32(),

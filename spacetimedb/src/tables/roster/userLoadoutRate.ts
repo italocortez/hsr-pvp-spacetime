@@ -4,10 +4,14 @@ import { table, t } from 'spacetimedb/server';
 // created on the first accepted save_loadout (consumeLoadoutSaveAllowance, helpers/roster/loadoutRules.ts). A table of
 // its own instead of two more columns on UserRateState, so the change stays additive on a live database. Private, no
 // view reads it; deleted with the user (performUserDeletion) and cleared by server_nuke_test_data.
+// S14.3c-rev (A198): `revFloor` is the highest loadout version the account was ever given, in any slot. It only grows,
+// and it is set in the same write that counts the save, so it costs no extra write and deletes never touch this row. A
+// new loadout starts at revFloor + 1, so a slot that is emptied and filled again never repeats a version an old page holds.
 export const userLoadoutRateColumns = {
     userId: t.u32().primaryKey(),
     windowStart: t.timestamp(),
     saveCount: t.u32(),
+    revFloor: t.u32(),
     createdById: t.u32(),
     createdDate: t.timestamp(),
     lastModifiedById: t.u32(),

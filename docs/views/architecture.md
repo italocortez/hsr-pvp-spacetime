@@ -577,7 +577,7 @@ New file `views/loadoutViews.ts` (exported from `index.ts`). Table, reducers, si
 
 | View | File | Scope | Row | Anonymity | Indexes |
 |---|---|---|---|---|---|
-| `view_my_loadouts` (new) | loadoutViews | per-sender (a guest or an unmapped identity gets `[]`) | `MyLoadoutRow` (PK `slot`): name, note, code | own; no id, user id or audit columns | `UserIdentity.identity`, `User.id`, `UserLoadout.user_id` |
+| `view_my_loadouts` (new) | loadoutViews | per-sender (a guest or an unmapped identity gets `[]`) | `MyLoadoutRow` (PK `slot`): rev (S14.3c-rev), name, note, code | own; no id, user id or audit columns | `UserIdentity.identity`, `User.id`, `UserLoadout.user_id` |
 
 ## Phase History
 
@@ -623,6 +623,7 @@ New file `views/loadoutViews.ts` (exported from `index.ts`). Table, reducers, si
 | `view_published_cost_sets` (anonymous, `CostSet.is_published`; `CostSet` private, L91); `view_my_match_result` gains `staffOverrideReason` (L49); `view_my_match_result_games` loses `validationStatus` / `validatedByUserId` (L60); `view_my_match_steps` no longer reads a stored step label (L39) | Phase S11a execution (part 2) | 2026-11-11 |
 | A match event's organizer reads the attendee list and the organizer rows of `view_my_calendar_invites` only with the bracket permission; an Admin reads every attendee list | Phase S11a execution (DECISIONS.md A162) | 2026-11-11 |
 | `view_my_loadouts` (new, `loadoutViews.ts`): the caller's team builder loadouts from the private `UserLoadout` | Phase S14.3s execution (DECISIONS.md A190 items 1, 3, 15) | 2026-11-17 |
+| `view_my_loadouts` rows gain `rev` (u32, the loadout's version, 4 B a row); `firstRev` stays private | Phase S14.3c-rev execution (DECISIONS.md A198) | 2026-11-17 |
 ---
 
 *Last updated: 2026-11-17 (S14.3s)*

@@ -12,4 +12,5 @@ import {
 
 export default {
   slot: __t.u8(),
+  baseRev: __t.u32(),
 };

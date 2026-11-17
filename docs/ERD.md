@@ -2,6 +2,8 @@
 
 76 tables. Updated 2026-11-06 (S3 backend reset: 27 tables public → private per A37 / ACCESS-SECURITY-OPS Appendix A, 10 new, `group_phase_record` dropped per A23). Visibility: **21 public** (reference data, aggregates, `user`, `tournament`, `bracket_match`, `admin_alert`, the `lobby_cursor_event` event table); every other table is PRIVATE and read through views (S9). Paste into [mermaid.live](https://mermaid.live) to preview. **Since S11a: `user` is private and `user_private` is merged into it; 78 table files in `spacetimedb/src/tables/`, 20 of them public (the 76 / 21 above predate later additions).**
 
+Phase S14.3c-rev execution (DECISIONS.md A198): `user_loadout` gains `rev` (u32, the loadout's version, sent by `view_my_loadouts`) and `firstRev` (u32, private), after `slot`; `user_loadout_rate` gains `revFloor` (u32, the highest version the account was ever given) after `saveCount`. Both tables were never published, so their shape changed freely; no other table changes (docs/loadout/architecture.md).
+
 Phase S14.3s execution, S14.3s-limit (DECISIONS.md A194 item 6): new PRIVATE table `user_loadout_rate` (`userId` PK, `windowStart`, `saveCount`, audit columns), the fixed 60 s window of a member's loadout saves (at most 6), off the membership allowance of `user_rate_state` (unchanged); deleted with the user and cleared by `server_nuke_test_data`. Additive: no existing table changes shape (docs/loadout/architecture.md).
 
 Phase S14.3s execution (DECISIONS.md A190 items 1, 3, 15): new PRIVATE table `user_loadout` (`id` autoInc PK, `userId`, `slot` u8 0-9, `name`, `note`, `code` (the packed team text), audit columns; btree `user_id` and `by_user_and_slot`), a verified member's team builder loadouts, read through the new view `view_my_loadouts`; deleted with the user (`performUserDeletion`) and cleared by `server_nuke_test_data`. Additive: no wipe (docs/loadout/architecture.md).
@@ -126,11 +128,14 @@ erDiagram
         u32 id PK
         u32 userId FK
         u8 slot "0-9, unique per user (reducer check)"
+        u32 rev "version, +1 per save that writes (S14.3c-rev)"
+        u32 firstRev "version at creation, private (S14.3c-rev)"
     }
     user_loadout_rate {
         u32 userId PK_FK
         timestamp windowStart "start of the current 60 s save window"
         u32 saveCount "fixed 60 s window, at most 6 (S14.3s-limit)"
+        u32 revFloor "highest loadout version given, only grows (S14.3c-rev)"
     }
     cost_set {
         bool isPublished "S11a L91: PRIVATE table; view_published_cost_sets lists isPublished rows"

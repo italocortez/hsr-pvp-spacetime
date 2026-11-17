@@ -221,6 +221,9 @@ for their roster while the rows stay for the match (`docs/lobby/architecture.md`
   one row per user: the loadout save window) joins them. `performUserDeletion` deletes the user's row with the
   `UserLoadout` rows, and `server_nuke_test_data` clears it too. Documented in
   [../loadout/architecture.md](../loadout/architecture.md).
+- S14.3c-rev (DECISIONS.md A198): `UserLoadout` gains `rev` and `firstRev`, `UserLoadoutRate` gains `revFloor`;
+  `save_loadout` and `delete_loadout` take the base version `baseRev` (replacing `isNew`). Documented in
+  [../loadout/architecture.md](../loadout/architecture.md).
 
 ## Phase History
 
@@ -245,6 +248,7 @@ for their roster while the rows stay for the match (`docs/lobby/architecture.md`
 | `admin_batch_upsert_characters` / `admin_batch_remove_characters` refuse an account selected in an active lobby (`ensureAccountRosterEditable` over `accountLobbyLocks`, the owner's test; abandoned memberships still skipped) | Phase S10w execution (DECISIONS.md A142) | 2026-11-10 |
 | Fix pass: the Admin roster refusal says the lock lasts until the membership ends or the lobby closes (an away player stays locked) | Phase S10w execution (DECISIONS.md A142; S10w review F3) | 2026-11-10 |
 | Team builder loadouts in the roster folders (`UserLoadout`, docs/loadout); `ensureVerifiedUser` optional message; deletion cascade and wipe include `UserLoadout` | Phase S14.3s execution (DECISIONS.md A190) | 2026-11-17 |
+| Loadout versions: `rev`/`firstRev` on `UserLoadout`, `revFloor` on `UserLoadoutRate`, `baseRev` on both loadout reducers (docs/loadout) | Phase S14.3c-rev execution (DECISIONS.md A198) | 2026-11-17 |
 
 ---
 

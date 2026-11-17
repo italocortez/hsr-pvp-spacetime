@@ -12,6 +12,7 @@ import {
 
 export default __t.row({
   slot: __t.u8().primaryKey(),
+  rev: __t.u32(),
   name: __t.string(),
   note: __t.string(),
   code: __t.string(),
