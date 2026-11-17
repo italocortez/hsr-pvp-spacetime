@@ -2089,3 +2089,10 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   3. Open: whether the team builder's own CSS chart (A190 item 11, A197, A199, A200 items 1 and 2) stays, or is moved to Chart.js when the library arrives so the app has one chart system.
 - **Why:** user, 2026-11-17: "did we conclude that it was worth not using chart.js even when profile view also used its other diagrams?"; then "i dont really care much about the accessibility feature when it comes to chart.js and its less code to maintain in our end, the library is also widely use and work just as fine when we used it in the previous site, i think is worth keeping it. For the screenshot, i think we also use an external library but that one should be much easier to recreate in my opinion".
 - **Where implemented:** not yet.
+
+### A203 — One chart system: the team builder's chart moves to Chart.js with the profile step
+
+- **Date:** 2026-11-17 · **Status:** decided; not built
+- **Decision:** when Chart.js is installed for the profile page (A202 item 1, S14.5), the team builder's cost chart is moved onto it in the same step, so the app has one chart system. The approved look carries over: the adjusted colours per game mode (A200 item 1), pairings stacked on both units' bars and split evenly in gold (A199 item 1, A201 item 9), the totals above the bars. The shared `StackedBarChart` component and its styles are then removed. Closes A202 item 3.
+- **Why:** user, 2026-11-17, on the orchestrator's recommendation (option A, one chart system and less of our own code): "yeah I agree on your recommendation for chart.js".
+- **Where implemented:** not yet (S14.5).
