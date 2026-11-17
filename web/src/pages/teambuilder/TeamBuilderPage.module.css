@@ -1,0 +1,270 @@
+@import "@/styles/media.css";
+
+/*
+ * The team builder's frame (design/mockups/teambuilder.html, `.workspace` and `.section`). The mockup's grid is
+ * three columns, 380px | 1fr | 380px: Loadouts beside Modes, the Roster beside the Cost Breakdown, the Pool across.
+ * S14.3a has no Loadouts card yet, so Modes spans the first row; the grid keeps the columns for S14.3c. The
+ * mockup's 1100px breakpoint snaps to --bp-xl (1120px): one column, in reading order Modes, Roster, Cost, Pool.
+ */
+
+.page {
+    min-block-size: calc(100dvh - var(--shell-offset, 56px));
+}
+
+.workspace {
+    display: grid;
+    grid-template-areas:
+        "modes  modes  modes"
+        "roster roster cost"
+        "pool   pool   pool";
+    grid-template-columns: minmax(0, 380px) minmax(0, 1fr) minmax(0, 380px);
+    gap: clamp(16px, 1.6vw, 24px);
+    align-items: stretch;
+    max-inline-size: 1440px;
+    margin: 0 auto;
+    padding: clamp(28px, 4vh, 48px) clamp(20px, 4vw, 48px) clamp(48px, 8vh, 96px);
+
+    @media (--bp-xl) {
+        grid-template-areas:
+            "modes"
+            "roster"
+            "cost"
+            "pool";
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    @media (--bp-sm) {
+        padding-inline: 16px;
+    }
+}
+
+.modes {
+    grid-area: modes;
+}
+
+.roster {
+    grid-area: roster;
+}
+
+.cost {
+    grid-area: cost;
+}
+
+.pool {
+    grid-area: pool;
+    /* An empty slot scrolls the pool into view: clear of the fixed bar. */
+    scroll-margin-block-start: calc(var(--shell-offset, 56px) + 12px);
+}
+
+/* The card (the mockup's `.section`; no `overflow: hidden`, DESIGN.md 11.3, so popovers are not clipped). */
+.section {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-panel);
+    background: var(--bg-card);
+}
+
+.sectionHead {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 16px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 22px 14px;
+    border-block-end: 1px solid var(--border-subtle);
+
+    @media (--bp-sm) {
+        padding-inline: 16px;
+    }
+}
+
+.chapter {
+    display: inline-flex;
+    gap: 12px;
+    align-items: center;
+    margin: 0;
+    color: var(--color-prestige);
+    font-family: var(--font-primary);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+
+    &::before,
+    &::after {
+        content: "";
+        display: inline-block;
+        flex: none;
+        inline-size: 16px;
+        block-size: 1px;
+        background: var(--color-prestige);
+        opacity: 0.6;
+    }
+
+    & strong {
+        color: var(--color-snow);
+        font-weight: 600;
+        letter-spacing: 0.18em;
+    }
+}
+
+.aside {
+    margin: 0;
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.65625rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+
+    & b {
+        color: var(--color-snow);
+        font-weight: 600;
+    }
+}
+
+.headActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+}
+
+/* The mockup's `.btn.danger` "Clear Team" (it sat in the Loadouts card, which comes in S14.3c). */
+.clearTeam {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    min-block-size: 32px;
+    padding: 0 12px;
+    border: 1px solid color-mix(in srgb, var(--color-error) 40%, var(--color-space));
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--color-error) 14%, var(--color-space));
+    color: color-mix(in srgb, var(--color-error) 70%, var(--color-snow));
+    font-family: var(--font-primary);
+    font-size: 0.65625rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: pointer;
+
+    @media (pointer: coarse) {
+        min-block-size: 44px;
+    }
+
+    &:hover {
+        border-color: color-mix(in srgb, var(--color-error) 60%, var(--color-space));
+        background: color-mix(in srgb, var(--color-error) 22%, var(--color-space));
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-iris);
+        outline-offset: 2px;
+    }
+}
+
+.modesBody {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px 18px;
+    align-items: center;
+    padding: 18px 22px 22px;
+
+    @media (--bp-sm) {
+        padding: 16px;
+    }
+}
+
+.notice {
+    flex: 1 1 100%;
+    margin: 0;
+    padding: 10px 14px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--color-space);
+    color: var(--text-body);
+    font-size: 0.8125rem;
+}
+
+/* The link notice (review S3): the text, then Restore and Dismiss. */
+.linkNotice {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: center;
+
+    & > span {
+        flex: 1 1 14rem;
+    }
+}
+
+.noticeButton {
+    min-block-size: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--color-snow);
+    font-family: var(--font-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+
+    @media (pointer: coarse) {
+        min-block-size: 44px;
+    }
+
+    &:hover {
+        border-color: var(--color-iris);
+        background: rgba(126, 112, 224, 0.18);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-iris);
+        outline-offset: 2px;
+    }
+
+    &[data-primary] {
+        border-color: var(--color-iris);
+        background: rgba(126, 112, 224, 0.22);
+    }
+}
+
+.rosterBody {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 18px;
+    padding: 22px;
+
+    @media (--bp-sm) {
+        padding: 16px;
+    }
+}
+
+.costBody {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 16px;
+    padding: 18px 22px 22px;
+
+    @media (--bp-sm) {
+        padding: 16px;
+    }
+}
+
+.costFoot {
+    margin: auto 0 0;
+    padding-block-start: 14px;
+    border-block-start: 1px solid var(--border-subtle);
+    color: var(--text-disabled);
+    font-family: var(--font-primary);
+    font-size: 0.625rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}

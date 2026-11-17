@@ -1,0 +1,159 @@
+/*
+ * The light cone results panel (the mockup's `.lcResults`, `.lcOpt`, `.lcUnequip`, `.lcSig`, `.lcInfo`;
+ * design/mockups/teambuilder.html). The search bar itself is laid out by the slot (RosterSlots.module.css): its
+ * hover and focus rules belong to the slot card.
+ */
+
+.panel {
+    position: fixed;
+    inset: auto;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    max-block-size: min(260px, var(--lc-room, 260px));
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    background: rgba(8, 9, 14, 0.96);
+    box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.75);
+    color: var(--color-snow);
+    overflow: hidden;
+}
+
+.unequip {
+    flex: none;
+    padding: 8px 11px;
+    border: 0;
+    border-block-end: 1px solid var(--border-subtle);
+    background: rgba(126, 112, 224, 0.1);
+    color: var(--text-body);
+    font-family: var(--font-primary);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-align: center;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition:
+        background var(--duration-fast),
+        color var(--duration-fast);
+
+    &:hover {
+        background: rgba(126, 112, 224, 0.22);
+        color: var(--color-snow);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-iris);
+        outline-offset: -2px;
+    }
+
+    @media (pointer: coarse) {
+        min-block-size: 44px;
+    }
+}
+
+.list {
+    flex: 1 1 auto;
+    min-block-size: 0;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+    scrollbar-color: var(--color-graphite) transparent;
+    scrollbar-width: thin;
+
+    &:empty {
+        display: none;
+    }
+}
+
+.option {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 11px;
+    cursor: pointer;
+    transition: background var(--duration-fast);
+
+    &:hover,
+    &[aria-selected="true"] {
+        background: rgba(126, 112, 224, 0.16);
+    }
+
+    &[aria-selected="true"] {
+        box-shadow: inset 2px 0 0 var(--color-iris);
+    }
+
+    &[data-signature] {
+        border-block-start: 1px solid color-mix(in srgb, var(--color-signature) 42%, transparent);
+        background: color-mix(in srgb, rgba(8, 9, 14, 0.9) 74%, var(--color-signature) 26%);
+
+        &:hover,
+        &[aria-selected="true"] {
+            background: color-mix(in srgb, rgba(8, 9, 14, 0.9) 60%, var(--color-signature) 40%);
+        }
+    }
+
+    @media (pointer: coarse) {
+        min-block-size: 44px;
+    }
+}
+
+.optionName {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-inline-size: 0;
+    font-family: var(--font-secondary);
+    font-size: 0.78125rem; /* 12.5px */
+    line-height: 1.25;
+
+    [data-tier="5"] > & {
+        color: var(--lc-5star);
+    }
+
+    [data-tier="4"] > & {
+        color: var(--color-iris-hover);
+    }
+
+    [data-tier="3"] > & {
+        color: var(--color-mist);
+    }
+
+    [data-signature] > & {
+        color: var(--color-signature);
+        font-size: 0.8125rem;
+        line-height: 1.2;
+    }
+}
+
+.hint {
+    color: var(--text-muted);
+    font-size: 0.65625rem; /* 10.5px */
+    font-style: italic;
+}
+
+.optionCost {
+    flex-shrink: 0;
+    padding-inline-start: 8px;
+    border-inline-start: 1px solid var(--border-subtle);
+    color: var(--color-prestige);
+    font-family: var(--font-primary);
+    font-size: 0.78125rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    line-height: 17px; /* rows 33px as the mockup, not 34.8 (review 2, slot-card difference 9; measured) */
+}
+
+.info {
+    margin: 0;
+    padding: 12px 11px;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    text-align: center;
+    user-select: none;
+}

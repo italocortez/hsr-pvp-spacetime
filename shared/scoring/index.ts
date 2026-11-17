@@ -2,6 +2,7 @@
 // bundler resolves the tsconfig alias only one segment deep (`@shared/scoring`), so consumers import this
 // index. Pure TypeScript: nothing here imports `spacetimedb` or `react`, and all arithmetic is integer
 // hundredths (floats only in toHundredths / fromHundredths at the boundary).
+export * from './auction';
 export * from './fixedPoint';
 export * from './game';
 export * from './groups';

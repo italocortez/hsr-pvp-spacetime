@@ -1,0 +1,763 @@
+@import "@/styles/media.css";
+
+/*
+ * The four roster slots (design/mockups/teambuilder.html: `.rosterSlots`, `.slot`, and the "reference-style slot
+ * display": `.lcSlot`, `.lcSlotDivider`, `.lcArt`, `.lcEmpty`, `.slotCost`, `.verticals`, `.lcPick`, `.lcSearch`,
+ * `.slotRemove`, `.slot.empty`). Square corners (DESIGN.md 11.3). Four in a row, two by two at the middle step
+ * (the mockup's 760px snapped to --bp-md, 768px). Each card is 3:4 at every width, as the mockup.
+ *
+ * What the mockup shows on hover is also shown on keyboard focus inside the card (`data-pointer-focus`), and where
+ * there is no hover (`(hover: none)`) Remove and the move handle stay visible and a tap on the cone area opens the
+ * search bar. With a coarse pointer every control is at least 44px.
+ */
+
+.slots {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+
+    @media (--bp-md) {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    &[data-dragging] {
+        cursor: grabbing;
+        user-select: none;
+    }
+}
+
+.cell {
+    position: relative;
+    display: flex;
+    min-inline-size: 0;
+    scroll-margin: 16px;
+
+    &[data-lifted] {
+        z-index: 5;
+        translate: var(--drag-x, 0) var(--drag-y, 0);
+        scale: 1.02;
+        opacity: 0.92;
+        box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.8);
+        pointer-events: none;
+    }
+
+    &[data-drop-target]::after {
+        content: "";
+        position: absolute;
+        inset: -4px;
+        z-index: 4;
+        border: 2px dashed var(--color-iris);
+        pointer-events: none;
+    }
+}
+
+/* ── The card ───────────────────────────────────────────────────────── */
+
+.slot {
+    --rarity-glow: 163, 144, 252;
+    --rarity-line: 184, 168, 255;
+    --bar: 30px;
+
+    position: relative;
+    flex: 1;
+    aspect-ratio: 3 / 4;
+    min-inline-size: 0;
+    overflow: hidden;
+    isolation: isolate;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-elevated);
+    transition:
+        border-color var(--duration-base) var(--ease-out),
+        box-shadow var(--duration-base) var(--ease-out);
+
+    @media (pointer: coarse) {
+        --bar: 44px;
+    }
+
+    &[data-rarity="5"] {
+        --rarity-glow: 232, 198, 122;
+        --rarity-line: 244, 213, 135;
+
+        background:
+            linear-gradient(180deg, rgba(201, 169, 97, 0.1) 0%, transparent 38%), var(--bg-elevated);
+    }
+
+    &[data-rarity="4"] {
+        background:
+            linear-gradient(180deg, rgba(126, 112, 224, 0.1) 0%, transparent 38%),
+            var(--bg-elevated);
+    }
+
+    &[data-unavailable] {
+        border-style: dashed;
+    }
+
+    /* The bottom scrim (the mockup's ::before) and the rarity bar with its glow (::after). */
+    &::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        background: linear-gradient(
+            180deg,
+            rgba(8, 9, 14, 0) 0%,
+            rgba(8, 9, 14, 0) 32%,
+            rgba(8, 9, 14, 0.4) 56%,
+            rgba(8, 9, 14, 0.92) 100%
+        );
+        pointer-events: none;
+    }
+
+    &::after {
+        content: "";
+        position: absolute;
+        inset: auto 0 0;
+        z-index: 3;
+        block-size: 50%;
+        background:
+            linear-gradient(
+                180deg,
+                transparent 0%,
+                transparent 26%,
+                rgba(var(--rarity-glow), 0.22) 70%,
+                rgba(var(--rarity-glow), 0.55) 100%
+            ),
+            linear-gradient(
+                180deg,
+                transparent calc(100% - 3px),
+                rgb(var(--rarity-line)) calc(100% - 3px)
+            );
+        pointer-events: none;
+    }
+}
+
+/* Hover, or keyboard focus inside (review 2 S3): after a mouse click on a select the look goes when the pointer
+   leaves. `:focus-visible` alone is not enough: Edge matches it on a select and on the text field also after a
+   click (measured), so the card is marked `data-pointer-focus` when focus came from a pointer (RosterSlots.tsx). */
+.slot:is(:hover, :not([data-pointer-focus]):has(:focus-visible)) {
+    border-color: rgba(var(--rarity-line), 0.7);
+    box-shadow:
+        0 0 0 1px rgba(var(--rarity-line), 0.16),
+        0 10px 28px -12px rgba(var(--rarity-glow), 0.32);
+}
+
+.cell[data-grabbed] > .slot {
+    outline: 2px solid var(--color-prestige);
+    outline-offset: 3px;
+}
+
+.portrait,
+.portraitPlaceholder {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+    object-position: center 18%;
+    background: var(--color-graphite);
+}
+
+.portrait {
+    filter: saturate(0.95) contrast(1.02);
+    transition: scale var(--duration-slow) var(--ease-out);
+}
+
+.element,
+.path {
+    position: absolute;
+    inset-block-start: 10px;
+    z-index: 4;
+    inline-size: 32px;
+    block-size: 32px;
+    object-fit: contain;
+    filter: drop-shadow(0 1px 4px rgba(8, 9, 14, 0.9));
+    pointer-events: none;
+}
+
+.element {
+    inset-inline-start: 10px;
+}
+
+.path {
+    inset-inline-end: 10px;
+
+    /* Remove and the handle stay up in the top right where there is no hover: the path moves under the element. */
+    @media (hover: none) {
+        inset-block-start: 46px;
+        inset-inline: 10px auto;
+    }
+}
+
+/* ── The light cone's place (the mockup's .lcSlot pair) ─────────────── */
+
+.lcSlot {
+    position: absolute;
+    inset-block-end: 8px;
+    inset-inline-start: 0;
+    z-index: 5;
+    inline-size: 100%;
+    block-size: 56%;
+    overflow: hidden;
+    clip-path: polygon(100% 0, 100% 100%, 45% 100%, 45% 50%);
+    pointer-events: none;
+    transition:
+        opacity var(--duration-base) var(--ease-out),
+        filter var(--duration-base) var(--ease-out);
+}
+
+/* The dark divider behind the art: a slightly larger slanted shape, so a thin edge frames the art. */
+.lcDivider {
+    background: rgba(20, 21, 30, 0.92);
+    clip-path: polygon(100% 0, 100% 100%, 43.5% 100%, 43.5% 48.5%, 98.5% 0);
+}
+
+.slot:not([data-cone]) .lcDivider {
+    background: rgba(20, 21, 30, 0.5);
+}
+
+/* The art, sized and placed by the cone's own values (percent of the shape; the mockup's defaults when unset).
+   A failed load keeps the box (RemoteImage's fallback, same class): the shape stays, filled with graphite. */
+.lcArt {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 50%;
+    display: block;
+    inline-size: calc(var(--lcw, 100) * 1%);
+    max-inline-size: none;
+    block-size: auto;
+    aspect-ratio: 904 / 1260;
+    translate: calc(var(--lcx, -48) * 1%) calc(var(--lcy, -32) * 1%);
+    filter: brightness(0.96) saturate(1.02);
+}
+
+.lcEmpty {
+    position: absolute;
+    inset-block-start: 66%;
+    inset-inline-start: 74%;
+    inline-size: 44px;
+    block-size: 44px;
+    translate: -50% -50%;
+    color: var(--text-muted);
+    opacity: 0.6;
+}
+
+/* A tap or click on the cone area opens the search (touch has no hover). Under the pill, Remove and the handle. */
+.lcTap {
+    position: absolute;
+    inset-block-end: 8px;
+    inset-inline-end: 0;
+    z-index: 6;
+    inline-size: 55%;
+    block-size: 56%;
+    cursor: pointer;
+}
+
+/* ── The cost pill (the mockup's .slotCost) ─────────────────────────── */
+
+.cost {
+    position: absolute;
+    inset-block-start: 8px;
+    inset-inline-start: 50%;
+    z-index: 7;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin: 0;
+    padding: 5px 8px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 7px;
+    background: rgba(8, 9, 14, 0.78);
+    color: var(--color-prestige);
+    font-family: var(--font-primary);
+    font-size: 0.9375rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+    translate: -50% 0;
+    cursor: help;
+}
+
+.cost[data-missing] {
+    border-color: color-mix(in srgb, var(--color-warning) 60%, transparent);
+}
+
+/* The character | cone split: on hover over the pill (the mockup) or focus inside the card (keyboard, touch). */
+.costParts {
+    display: none;
+    gap: 6px;
+    align-items: center;
+
+    & b {
+        font-weight: 700;
+    }
+}
+
+.cost:hover .costParts,
+.slot:not([data-pointer-focus]):has(:focus-visible) .costParts {
+    display: flex;
+}
+
+.cost:hover .costTotal,
+.slot:not([data-pointer-focus]):has(:focus-visible) .costTotal {
+    display: none;
+}
+
+.costChar {
+    color: var(--color-iris-hover);
+}
+
+.costCone {
+    color: var(--color-periwinkle);
+}
+
+.costDivider {
+    inline-size: 1px;
+    block-size: 13px;
+    background: rgba(255, 255, 255, 0.28);
+}
+
+.syn {
+    inline-size: 15px;
+    block-size: 15px;
+    color: var(--color-amethyst);
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.6));
+}
+
+/* ── Unavailable or loading: the key and the reason, over the placeholder ─ */
+
+.status {
+    position: absolute;
+    inset: 46px 10px auto;
+    z-index: 4;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    text-align: center;
+}
+
+.statusName {
+    overflow: hidden;
+    color: var(--color-snow);
+    font-family: var(--font-secondary);
+    font-size: 0.875rem;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.statusText {
+    color: var(--color-mist);
+    font-family: var(--font-primary);
+    font-size: 0.5625rem;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+}
+
+/* ── Eidolon and Superimposition (the mockup's .verticals) ──────────── */
+
+.verticals {
+    position: absolute;
+    inset-block-end: 6px;
+    inset-inline-start: 8px;
+    z-index: 7;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    align-items: flex-start;
+    padding: 4px 6px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 7px;
+    background: rgba(8, 9, 14, 0.78);
+    transition: inset-block-end var(--duration-base) var(--ease-out);
+
+    /* With a coarse pointer (review 2 S1): stacked in the left column as on desktop, so the pill never reaches the
+       cone shape (it starts at 45% of the card). Each select is a 44 by 44px target, the stack 88px; the visible pill
+       is drawn by ::before around the two values only, which sit next to each other at the stack's middle (the
+       Eidolon value at the bottom of its target, Superimposition's at the top of its own). The targets touch and
+       never overlap, nor the bar's: open, the stack sits right on the bar. */
+    @media (pointer: coarse) {
+        inset-block-end: 0;
+        gap: 0;
+        padding: 0;
+        border: 0;
+        background: none;
+
+        &::before {
+            content: "";
+            position: absolute;
+            inset: 20px 0;
+            z-index: -1;
+            border: 1px solid var(--border-subtle);
+            border-radius: 7px;
+            background: rgba(8, 9, 14, 0.78);
+            pointer-events: none;
+        }
+
+        /* Eidolon alone (no cone): its value centred, the pill around it. */
+        &:not(:has([data-imposition]))::before {
+            inset-block: 8px;
+        }
+    }
+}
+
+.select {
+    display: block;
+}
+
+/* The page's line height made each select 23.5px tall and the pill 62px (review 2 S5). `normal` gives 21px with
+   JetBrains Mono (pill 53px); 16px gives 20px and the mockup's 51px pill (measured in Edge). */
+.select select {
+    display: block;
+    padding: 2px 5px;
+    line-height: 16px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--color-snow);
+    font-family: var(--font-primary);
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    appearance: none;
+    transition: background var(--duration-fast);
+
+    @media (pointer: coarse) {
+        box-sizing: border-box;
+        inline-size: 44px;
+        min-block-size: 0;
+        block-size: 44px;
+        padding: 26px 0 2px;
+        text-align: center;
+    }
+
+    @media (hover: hover) {
+        &:hover:not(:disabled) {
+            background: rgba(126, 112, 224, 0.28);
+        }
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-iris);
+        outline-offset: 1px;
+    }
+
+    &:disabled {
+        color: var(--text-disabled);
+        cursor: not-allowed;
+    }
+
+    & option {
+        background: #fff;
+        color: #12131a;
+    }
+}
+
+.select[data-imposition] select {
+    color: var(--color-prestige);
+
+    @media (pointer: coarse) {
+        padding-block: 2px 26px;
+    }
+}
+
+/* Eidolon alone: its value at the middle of its target. */
+@media (pointer: coarse) {
+    .verticals:not(:has([data-imposition])) select {
+        padding-block: 14px;
+    }
+}
+
+/* ── The light cone search bar (the mockup's .lcPick / .lcSearch) ───── */
+
+.lcPick {
+    position: absolute;
+    inset: auto 0 0;
+    z-index: 8;
+}
+
+.lcSearch {
+    display: block;
+    box-sizing: border-box;
+    inline-size: 100%;
+    block-size: 0;
+    max-block-size: 0;
+    padding: 0 10px;
+    border: 0;
+    border-block-start: 1px solid var(--border-subtle);
+    border-radius: 0;
+    background: rgba(8, 9, 14, 0.9);
+    color: var(--color-snow);
+    font-family: var(--font-secondary);
+    font-size: 0.78125rem;
+    opacity: 0;
+    transition:
+        max-block-size var(--duration-base) var(--ease-out),
+        block-size var(--duration-base) var(--ease-out),
+        opacity var(--duration-fast);
+
+    &::placeholder {
+        color: var(--text-muted);
+    }
+
+    &:focus {
+        outline: none;
+    }
+
+    /* The keyboard focus mark: the bar's top edge in iris (the field itself has no outline, as the mockup). */
+    &:focus-visible {
+        border-block-start-color: var(--color-iris);
+        box-shadow: inset 0 0 0 1px var(--color-iris);
+    }
+}
+
+/* Open: on hover (where there is hover), with focus in the bar, or while its results are open (`data-open`: focus
+   on "Unequip Lightcone" sits in the top layer, out of `:focus-within`'s reach). The art fades and blurs, the pill
+   rides up. */
+.lcPick:is(:focus-within, [data-open]) .lcSearch {
+    block-size: var(--bar);
+    max-block-size: var(--bar);
+    opacity: 1;
+}
+
+.slot:has(.lcPick:is(:focus-within, [data-open])) .lcSlot {
+    opacity: 0;
+    filter: blur(4px);
+}
+
+.slot:has(.lcPick:is(:focus-within, [data-open])) .verticals {
+    inset-block-end: calc(var(--bar) + 4px);
+
+    /* With a coarse pointer the stack sits right on the bar: the targets meet, never overlap. */
+    @media (pointer: coarse) {
+        inset-block-end: var(--bar);
+    }
+}
+
+@media (hover: hover) {
+    .slot:hover .lcSearch {
+        block-size: var(--bar);
+        max-block-size: var(--bar);
+        opacity: 1;
+    }
+
+    .slot:hover .lcSlot {
+        opacity: 0;
+        filter: blur(4px);
+    }
+
+    .slot:hover .verticals {
+        inset-block-end: calc(var(--bar) + 4px);
+    }
+
+    .slot:hover .portrait {
+        scale: 1.03;
+    }
+}
+
+/* ── Remove and the move handle (top right) ─────────────────────────── */
+
+.remove,
+.handle {
+    position: absolute;
+    inset-inline-end: 10px;
+    z-index: 9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 26px;
+    block-size: 26px;
+    padding: 0;
+    border: 1px solid var(--border-subtle);
+    background: rgba(8, 9, 14, 0.7);
+    color: var(--color-mist);
+    font-family: var(--font-secondary);
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0;
+    backdrop-filter: blur(4px);
+    transition:
+        opacity var(--duration-fast),
+        color var(--duration-fast),
+        background var(--duration-fast),
+        border-color var(--duration-fast);
+
+    &:focus-visible {
+        opacity: 1;
+        outline: 2px solid var(--color-iris);
+        outline-offset: 2px;
+    }
+}
+
+.remove {
+    inset-block-start: 10px;
+
+    &:hover {
+        border-color: rgba(216, 90, 90, 0.5);
+        background: rgba(216, 90, 90, 0.15);
+        color: var(--color-error);
+    }
+}
+
+/* Ours (not in the mockup): under Remove, so neither covers the cost pill. */
+.handle {
+    inset-block-start: 42px;
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: none;
+    cursor: grab;
+
+    &:hover {
+        background: rgba(126, 112, 224, 0.28);
+        color: var(--color-snow);
+    }
+
+    &[aria-pressed="true"] {
+        border-color: var(--color-prestige);
+        background: color-mix(in srgb, var(--color-prestige) 30%, rgba(8, 9, 14, 0.7));
+        color: var(--color-snow);
+        opacity: 1;
+    }
+}
+
+.slot:is(:hover, :not([data-pointer-focus]):has(:focus-visible)) :is(.remove, .handle) {
+    opacity: 1;
+}
+
+@media (hover: none) {
+    .remove,
+    .handle {
+        opacity: 1;
+    }
+}
+
+/* With a coarse pointer: the mockup's 26px look, a 44px target (a transparent ring around each button), and the
+   handle far enough below Remove that the two targets never overlap (review M4). The cost pill sits above the
+   rings, so a tap on the pill's edge never lands on Remove. */
+@media (pointer: coarse) {
+    /* base.css gives every button 44px on touch; here the ring gives the 44px instead of the box. */
+    .remove,
+    .handle {
+        min-inline-size: 0;
+        min-block-size: 0;
+    }
+
+    .remove::before,
+    .handle::before {
+        content: "";
+        position: absolute;
+        inset: -9px;
+    }
+
+    .handle {
+        inset-block-start: 54px;
+    }
+
+    .cost {
+        z-index: 10;
+    }
+}
+
+.grip {
+    inline-size: 16px;
+    block-size: 16px;
+}
+
+/* ── Empty slot (the mockup's .slot.empty) ──────────────────────────── */
+
+.empty {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 3 / 4;
+    min-inline-size: 0;
+    padding: 12px;
+    border: 1px dashed rgba(124, 127, 148, 0.35);
+    background: var(--bg-elevated);
+    color: inherit;
+    cursor: pointer;
+    transition: border-color var(--duration-base) var(--ease-out);
+
+    &:hover {
+        border-color: var(--color-iris);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-iris);
+        outline-offset: 2px;
+    }
+}
+
+.emptyMark {
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+}
+
+.emptyHint {
+    max-inline-size: 16ch;
+    color: var(--text-disabled);
+    font-family: var(--font-secondary);
+    font-size: 0.6875rem;
+    line-height: 1.4;
+    text-align: center;
+}
+
+/* One hint per form factor (the button's name says it for screen readers): "Click a character below" where the
+   pool shows below, "Tap to pick a character" where an empty slot opens the pool sheet. */
+.emptyHint[data-narrow-hint] {
+    display: none;
+}
+
+@media (--bp-md) {
+    .emptyHint[data-wide-hint] {
+        display: none;
+    }
+
+    .emptyHint[data-narrow-hint] {
+        display: block;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cell[data-lifted] {
+        scale: none;
+    }
+
+    .slot,
+    .portrait,
+    .lcSlot,
+    .lcSearch,
+    .verticals,
+    .remove,
+    .handle {
+        transition: none;
+    }
+
+    .slot:hover .portrait {
+        scale: none;
+    }
+
+    .slot:hover .lcSlot,
+    .slot:has(.lcPick:is(:focus-within, [data-open])) .lcSlot {
+        filter: none;
+    }
+}

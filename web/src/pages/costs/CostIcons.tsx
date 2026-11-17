@@ -7,23 +7,8 @@ import { MagnifierIcon } from '@/components/SearchField/SearchField';
 
 type IconProps = { className?: string };
 
-/** An upward chevron: the sort direction (rotated for descending) and the intro toggle. */
-export function ChevronUpIcon({ className }: IconProps) {
-    return (
-        <svg
-            className={className}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-        >
-            <path d="m18 15-6-6-6 6" />
-        </svg>
-    );
-}
+/** An upward chevron: the sort direction (rotated for descending); its one copy is the intro's (S14.3a). */
+export { ChevronUpIcon } from '@/components/PageIntro/PageIntro';
 
 /** A right chevron: the synergy expander (rotated when open). */
 export function ChevronRightIcon({ className }: IconProps) {

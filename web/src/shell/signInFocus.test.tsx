@@ -12,9 +12,9 @@ import { AUTH, renderWithRouter } from '@/test/renderWithRouter';
  */
 
 describe('first navigation to the sign-in panel (cold chunk)', () => {
-    it('the first click on "Sign in" from /teambuilder focuses the panel h1 and announces its title', async () => {
+    it('the first click on "Sign in" from /lobbies focuses the panel h1 and announces its title', async () => {
         const user = userEvent.setup();
-        const r = renderWithRouter('/teambuilder', AUTH.visitor);
+        const r = renderWithRouter('/lobbies', AUTH.visitor);
         expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent(
             'Module offline.',
         );
@@ -23,8 +23,7 @@ describe('first navigation to the sign-in panel (cold chunk)', () => {
         await user.click(screen.getByRole('link', { name: 'Sign in' }));
         // The router waits on the chunk: a cold module transform can take over a second.
         await waitFor(
-            () =>
-                expect(r.router.state.resolvedLocation?.href).toBe('/?login=1&next=%2Fteambuilder'),
+            () => expect(r.router.state.resolvedLocation?.href).toBe('/?login=1&next=%2Flobbies'),
             { timeout: CHUNK_WAIT_MS },
         );
         // Resolved means loaded: the panel itself renders, not its frame.
@@ -35,7 +34,7 @@ describe('first navigation to the sign-in panel (cold chunk)', () => {
         expect(h1).toHaveTextContent('Sign in.');
         expect(h1).toHaveFocus();
         expect(h1.isConnected).toBe(true);
-        expect(announcer).not.toHaveTextContent('Team Builder');
+        expect(announcer).not.toHaveTextContent('Lobbies');
     }, 30_000);
 });
 

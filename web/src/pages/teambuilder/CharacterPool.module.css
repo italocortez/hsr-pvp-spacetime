@@ -1,0 +1,376 @@
+@import "@/styles/media.css";
+
+/*
+ * The character pool (the mockup's `.poolBody`, `.poolGrid`, `.charCard`; design/mockups/teambuilder.html). The
+ * filter row follows the costs page's Characters tab (pages/costs/CostsPage.module.css, S14.2c to S14.2e): the
+ * line count depends on the width only, never on what is picked, and Clear takes its room from the search. The
+ * grid's columns follow the pool's own width (the mockup's container queries, kept page-local).
+ */
+
+.body {
+    padding: 0 0 22px;
+}
+
+/* The pool's size container: the grid's columns follow its width. Not on .body: nested around the search
+   box (itself a size container) it collapsed the field to 0px after a resize in Edge. */
+.results {
+    container: pool / inline-size;
+}
+
+.filterRow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: stretch;
+    padding: 14px 22px;
+    border-block-end: 1px solid var(--border-subtle);
+
+    /* Phones: one control per line (the costs page's S14.2c rule): search with Clear, element, path, role,
+       then Archetype + rarity. Picking a filter never moves a control to another line. */
+    @media (--bp-sm) {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        padding: 14px 16px;
+    }
+}
+
+/* The search box's size in the row (the costs page's Characters rule, S14.2e): above about 1070px two lines,
+   search + element + path, then role + Archetype + rarity; the basis is the line less 720px, at least 304px. */
+.searchGroup {
+    flex: 2 1 max(304px, 100% - 720px);
+    min-inline-size: 304px;
+
+    @media (--bp-md) {
+        flex-basis: 200px;
+        min-inline-size: 216px;
+    }
+
+    @media (--bp-sm) {
+        min-inline-size: 160px;
+    }
+}
+
+/* Archetype and rarity: one unit that always shares a line and wraps together (A189 item 1). */
+.pair {
+    display: flex;
+    flex: 1 1 auto;
+    gap: 10px;
+}
+
+.fullHint {
+    margin: 14px 22px 0;
+    padding: 8px 12px;
+    border: 1px solid color-mix(in srgb, var(--color-warning) 45%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--color-warning) 10%, var(--color-space));
+    color: var(--color-snow);
+    font-size: 0.8125rem;
+
+    @media (--bp-sm) {
+        margin-inline: 16px;
+    }
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+    margin: 0;
+    padding: 22px 22px 0;
+    list-style: none;
+}
+
+@container pool (max-width: 880px) {
+    .grid {
+        grid-template-columns: repeat(auto-fill, minmax(126px, 1fr));
+        gap: 10px;
+    }
+}
+
+@container pool (max-width: 600px) {
+    .grid {
+        grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+        gap: 8px;
+        padding-inline: 16px;
+    }
+}
+
+@container pool (max-width: 420px) {
+    .grid {
+        grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+        gap: 7px;
+    }
+}
+
+.gridItem {
+    min-inline-size: 0;
+}
+
+.skeleton {
+    aspect-ratio: 3 / 4;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-elevated);
+}
+
+.card {
+    --rarity-line: 184, 168, 255;
+    --rarity-glow: 163, 144, 252;
+
+    position: relative;
+    display: block;
+    inline-size: 100%;
+    aspect-ratio: 3 / 4;
+    padding: 0;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-elevated);
+    color: inherit;
+    overflow: hidden;
+    isolation: isolate;
+    container-type: inline-size;
+    cursor: pointer;
+    text-align: start;
+    transition:
+        border-color var(--duration-base) var(--ease-out),
+        transform var(--duration-base) var(--ease-out);
+
+    &[data-rarity="5"] {
+        --rarity-line: 244, 213, 135;
+        --rarity-glow: 232, 198, 122;
+    }
+
+    &::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        background: linear-gradient(
+            180deg,
+            rgba(8, 9, 14, 0) 0%,
+            rgba(8, 9, 14, 0) 34%,
+            rgba(8, 9, 14, 0.45) 60%,
+            rgba(8, 9, 14, 0.94) 100%
+        );
+        pointer-events: none;
+    }
+
+    &::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        background:
+            linear-gradient(
+                180deg,
+                transparent 0%,
+                transparent 62%,
+                rgba(var(--rarity-glow), 0.22) 84%,
+                rgba(var(--rarity-glow), 0.55) 100%
+            ),
+            linear-gradient(
+                180deg,
+                transparent calc(100% - 2.5px),
+                rgb(var(--rarity-line)) calc(100% - 2.5px)
+            );
+        pointer-events: none;
+    }
+
+    &:hover {
+        border-color: rgba(var(--rarity-line), 0.75);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-iris);
+        outline-offset: 2px;
+    }
+
+    &[data-picked]::before {
+        background: linear-gradient(180deg, rgba(8, 9, 14, 0.55), rgba(8, 9, 14, 0.92));
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .card:hover {
+        transform: translateY(-2px);
+    }
+}
+
+.portrait {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+    object-position: center 12%;
+    filter: saturate(0.92) brightness(0.92);
+}
+
+.card[data-picked] .portrait {
+    filter: saturate(0.4) brightness(0.55);
+}
+
+.element,
+.path {
+    position: absolute;
+    inset-block-start: 7px;
+    z-index: 3;
+    inline-size: 26px;
+    block-size: 26px;
+    object-fit: contain;
+    filter: drop-shadow(0 1px 3px rgba(8, 9, 14, 0.85));
+}
+
+.element {
+    inset-inline-start: 7px;
+}
+
+.path {
+    inset-inline-end: 7px;
+}
+
+.pickedTag {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 50%;
+    z-index: 4;
+    padding: 6px 14px;
+    border: 1px solid var(--color-prestige);
+    background: rgba(8, 9, 14, 0.5);
+    color: var(--color-prestige);
+    font-family: var(--font-primary);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 0.32em;
+    transform: translate(-50%, -50%) rotate(calc(-1 * var(--diagonal-angle)));
+}
+
+.meta {
+    position: absolute;
+    inset: auto 0 0;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 12px 12px 11px;
+}
+
+.name {
+    color: var(--color-snow);
+    font-family: var(--font-secondary);
+    font-size: 0.875rem;
+    font-weight: 700;
+    letter-spacing: -0.005em;
+    line-height: 1.1;
+    text-shadow: 0 1px 8px rgba(8, 9, 14, 0.85);
+}
+
+.role {
+    color: var(--color-mist);
+    font-family: var(--font-primary);
+    font-size: 0.5625rem;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-shadow: 0 1px 4px rgba(8, 9, 14, 0.9);
+    text-transform: uppercase;
+}
+
+.dot {
+    display: inline-block;
+    inline-size: 4px;
+    block-size: 4px;
+    margin: 0 8px 1px;
+    border-radius: 50%;
+    background: var(--color-iris);
+    vertical-align: middle;
+
+    [data-rarity="5"] & {
+        background: var(--color-prestige);
+    }
+}
+
+/* As each card shrinks, shed clutter and keep the name legible (the mockup's card container queries). */
+@container (max-width: 138px) {
+    .element,
+    .path {
+        display: none;
+    }
+
+    .meta {
+        padding: 9px 9px 8px;
+    }
+
+    .name {
+        font-size: 0.78125rem;
+    }
+
+    .pickedTag {
+        padding: 4px 9px;
+        font-size: 0.625rem;
+        letter-spacing: 0.2em;
+    }
+}
+
+@container (max-width: 112px) {
+    .role {
+        display: none;
+    }
+
+    .meta {
+        padding: 7px;
+    }
+
+    .name {
+        font-size: 0.6875rem;
+        letter-spacing: -0.01em;
+    }
+
+    .pickedTag {
+        padding: 3px 7px;
+        font-size: 0.53125rem;
+        letter-spacing: 0.14em;
+    }
+}
+
+.state {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+    padding: 56px 20px 34px;
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.22em;
+    text-align: center;
+    text-transform: uppercase;
+
+    & p {
+        margin: 0;
+    }
+}
+
+.stateIcon {
+    inline-size: 28px;
+    block-size: 28px;
+}
+
+.stateButton {
+    min-block-size: 36px;
+    padding: 0 16px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--color-space);
+    color: var(--color-snow);
+    font-family: var(--font-primary);
+    font-size: 0.65625rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    cursor: pointer;
+
+    &:hover {
+        border-color: var(--color-iris);
+    }
+}

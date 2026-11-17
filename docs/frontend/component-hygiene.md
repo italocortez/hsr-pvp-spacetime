@@ -87,6 +87,13 @@ An image from UploadThing (`*.ufs.sh`) is rendered with `crossorigin="anonymous"
 
 A filter with many values (the archetypes) uses `components/MultiSelectDropdown`, not a row of chips and not a page-local panel (UI-DECISIONS.md). A panel that must escape a card's `overflow: hidden` goes in the top layer (`popover="manual"`) or `position: fixed`, never `position: absolute` inside the card. One placement rule on both paths (`placePanel`; anchor positioning, where supported, only tethers the panel to the button): the usable area is the viewport less 16px on every side and less the fixed bar (`--shell-offset`) at the top; the panel opens below when it fits, otherwise on the side with more room, its height is at most the CSS cap and at most the room on that side, and it scrolls inside itself, so every option is reachable on a short phone in landscape. A press anywhere on an option row toggles it and keeps the panel open (the rows are labels; the panel is focusable from script, `tabIndex={-1}`, so a press on text lands focus inside). Why and how: `pages.md`, "Costs (S14.2)", S14.2b.
 
+## Rule 6d: shared page pieces (S14.3a)
+
+- A page's intro band is `components/PageIntro` (title, collapsed title, deck; the shared `hsr_intro_hidden` key).
+- A filter row's search with its red "Clear N" is `components/FilterSearch`; the caller sizes the box in its row through `className`.
+- Roster value lists, address readers, labels, cost format and the character filters live in `lib/rosterSearch.ts` and `lib/rosterModel.ts`; a custom cost set's subscription is `stdb/useCustomCostSet.ts`; the status text hook is `lib/useAnnouncement.ts`. Pages import these, never each other.
+- Do not nest a size container (`container-type: inline-size`) around another one that is a flex child: in Edge the inner flex child collapsed to 0px after a window resize (the pool's container around the search box, S14.3a). Put the outer container on the element that needs it only.
+
 ## Patterns
 
 ### Scroll-linked collapse

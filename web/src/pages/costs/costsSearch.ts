@@ -27,47 +27,52 @@
  * (`routes/costs.tsx`) runs this validator on the final search, which leaves only these keys.
  */
 
+// The value lists and readers are shared with the team builder (S14.3a): `lib/rosterSearch.ts`.
+import {
+    archNames,
+    CHARACTER_RARITIES,
+    DRAFT_MODES,
+    type DraftParam,
+    ELEMENTS,
+    type ElementParam,
+    GAME_MODES,
+    type ModeParam,
+    oneOf,
+    PATHS,
+    type PathParam,
+    parseSetId,
+    type RarityParam,
+    ROLES,
+    type RoleParam,
+    searchText,
+    setOf,
+} from '@/lib/rosterSearch';
+
+export {
+    ARCH_MAX,
+    ARCH_NAME_MAX,
+    DRAFT_MODES,
+    type DraftParam,
+    ELEMENTS,
+    type ElementParam,
+    GAME_MODES,
+    type ModeParam,
+    PATHS,
+    type PathParam,
+    parseSetId,
+    type RarityParam,
+    ROLES,
+    type RoleParam,
+    SEARCH_MAX,
+} from '@/lib/rosterSearch';
+
 export const TABS = ['characters', 'lightcones'] as const;
 export type Tab = (typeof TABS)[number];
 
-export const DRAFT_MODES = ['classic', 'auction'] as const;
-export type DraftParam = (typeof DRAFT_MODES)[number];
-
-export const GAME_MODES = ['as', 'moc', 'aa'] as const;
-export type ModeParam = (typeof GAME_MODES)[number];
-
-export const ELEMENTS = [
-    'fire',
-    'ice',
-    'imaginary',
-    'lightning',
-    'physical',
-    'quantum',
-    'wind',
-] as const;
-export type ElementParam = (typeof ELEMENTS)[number];
-
-export const PATHS = [
-    'destruction',
-    'hunt',
-    'erudition',
-    'harmony',
-    'nihility',
-    'preservation',
-    'abundance',
-    'remembrance',
-    'elation',
-] as const;
-export type PathParam = (typeof PATHS)[number];
-
-export const ROLES = ['dps', 'support', 'sustain'] as const;
-export type RoleParam = (typeof ROLES)[number];
-
 export const RARITIES_BY_TAB: Record<Tab, readonly RarityParam[]> = {
-    characters: ['5', '4'],
+    characters: CHARACTER_RARITIES,
     lightcones: ['5', '4', '3'],
 };
-export type RarityParam = '5' | '4' | '3';
 
 export const CHARACTER_SORTS = [
     'name',
@@ -83,8 +88,6 @@ export const CHARACTER_SORTS = [
 export const LIGHTCONE_SORTS = ['name', 'rarity', 's1', 's2', 's3', 's4', 's5'] as const;
 export type SortKey = (typeof CHARACTER_SORTS)[number] | (typeof LIGHTCONE_SORTS)[number];
 export type SortDir = 'asc' | 'desc';
-
-export const SEARCH_MAX = 100;
 
 /** The validated search (`undefined` = the default, left out of the address). */
 export type CostsSearch = {
@@ -118,81 +121,12 @@ export type CostsView = {
     dir: SortDir;
 };
 
-/** The longest archetype name the address keeps, and the most names. */
-export const ARCH_NAME_MAX = 64;
-export const ARCH_MAX = 32;
-
-/**
- * Archetype names: the address keeps the name (stable: the module upserts archetypes by their
- * unique name and has no rename; readable in a shared link; the same on test and prod, where ids
- * differ), each once, in code-point order. A name must be what the module can store: trimmed,
- * not blank, no control characters. Whether it exists is the page's check (the list loads later).
- */
-function archNames(value: unknown): string[] | undefined {
-    const names = [
-        ...new Set(
-            texts(value).filter(
-                (t) =>
-                    t !== '' &&
-                    t.length <= ARCH_NAME_MAX &&
-                    t === t.trim() &&
-                    // biome-ignore lint/suspicious/noControlCharactersInRegex: rejecting them is the point
-                    !/[\u0000-\u001f\u007f]/.test(t),
-            ),
-        ),
-    ]
-        .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
-        .slice(0, ARCH_MAX);
-    return names.length > 0 ? names : undefined;
-}
-
-const U32_MAX = 4294967295;
-
-/** Every value of a key as text (a repeated key arrives as an array). */
-function texts(value: unknown): string[] {
-    if (typeof value === 'string') return [value];
-    if (typeof value === 'number' && Number.isFinite(value)) return [String(value)];
-    if (Array.isArray(value)) return value.flatMap(texts);
-    return [];
-}
-
-/** A single value: a repeated key or a non-text value is dropped. */
-function single(value: unknown): string | undefined {
-    if (typeof value === 'string') return value;
-    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
-    return undefined;
-}
-
-function oneOf<T extends string>(value: unknown, allowed: readonly T[]): T | undefined {
-    const text = single(value);
-    return text !== undefined && (allowed as readonly string[]).includes(text)
-        ? (text as T)
-        : undefined;
-}
-
-/** The allowed values present, each once, in the canonical order; undefined when none. */
-function setOf<T extends string>(value: unknown, allowed: readonly T[]): T[] | undefined {
-    const present = new Set(texts(value));
-    const out = allowed.filter((v) => present.has(v));
-    return out.length > 0 ? out : undefined;
-}
-
-/** A cost set id: 1 to 4294967295 written in canonical decimal (no sign, no leading zero). */
-export function parseSetId(value: unknown): number | undefined {
-    const text = single(value);
-    if (text === undefined || !/^[1-9][0-9]{0,9}$/.test(text)) return undefined;
-    const id = Number(text);
-    return id <= U32_MAX ? id : undefined;
-}
-
 /** `validateSearch` for `/costs`. */
 export function parseCostsSearch(search: Record<string, unknown>): CostsSearch {
     const tab = oneOf(search.tab, TABS);
     const isLc = tab === 'lightcones';
     const sorts: readonly SortKey[] = isLc ? LIGHTCONE_SORTS : CHARACTER_SORTS;
     const sort = oneOf(search.sort, sorts);
-    // The search is stored trimmed: "  pel " and "pel" are one address.
-    const q = single(search.q)?.trim();
     return {
         tab: isLc ? 'lightcones' : undefined,
         draft: oneOf(search.draft, DRAFT_MODES) === 'auction' ? 'auction' : undefined,
@@ -208,7 +142,8 @@ export function parseCostsSearch(search: Record<string, unknown>): CostsSearch {
         rarity: setOf(search.rarity, RARITIES_BY_TAB[isLc ? 'lightcones' : 'characters']),
         // Archetypes classify characters only: the Light Cones tab drops them.
         arch: isLc ? undefined : archNames(search.arch),
-        q: q !== undefined && q !== '' && q.length <= SEARCH_MAX ? q : undefined,
+        // The search is stored trimmed: "  pel " and "pel" are one address.
+        q: searchText(search.q),
         sort: sort === 'name' ? undefined : sort,
         dir: oneOf(search.dir, ['asc', 'desc'] as const) === 'desc' ? 'desc' : undefined,
     };

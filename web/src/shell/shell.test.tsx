@@ -62,9 +62,9 @@ afterEach(() => {
 describe('which screens render inside the shell', () => {
     it.each([
         ['/', AUTH.visitor],
-        // S14.2: /costs is ported (its own test file covers it); /lobbies stands in as a visitor.
+        // S14.2: /costs is ported (its own test file covers it); /lobbies stands in as a visitor. S14.3a: so is
+        // /teambuilder, and no other public route is unported, so its visitor row went (not duplicated).
         ['/lobbies', AUTH.visitor],
-        ['/teambuilder', AUTH.visitor],
         ['/lobbies', GUEST],
         ['/profile', MEMBER],
         ['/calendar', MEMBER],
@@ -242,7 +242,7 @@ describe('account area', () => {
 
     it('not ready: a hidden placeholder, no control; the slot keeps its class when ready', async () => {
         // An unported page (S14.2: /costs now has buttons of its own).
-        renderWithRouter('/teambuilder', AUTH.notReady);
+        renderWithRouter('/lobbies', AUTH.notReady);
         await headline();
         const before = slot().className;
         const placeholder = slot().querySelector('[data-account="pending"]');

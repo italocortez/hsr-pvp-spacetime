@@ -1,0 +1,129 @@
+/*
+ * The mockup's game mode field (`.rulesetField--mode .modePicker` and `.modeTile`, design/mockups/teambuilder.html):
+ * the label, then a native radio group of three landscape tiles (30px art, short name, a dot that turns gold when on). Below 336px of
+ * room the tiles show the art only (the mockup's container query); the name stays the tile's accessible name.
+ */
+
+.field {
+    display: flex;
+    flex: 1 1 100%;
+    gap: 10px;
+    align-items: center;
+    min-inline-size: 0;
+}
+
+.label {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.625rem; /* 10px */
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+}
+
+.tiles {
+    container: modepicker / inline-size;
+    display: grid;
+    flex: 1;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.tile {
+    position: relative;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    block-size: 44px;
+    min-inline-size: 0;
+    padding: 0 12px 0 8px;
+    border: 1px solid var(--border-subtle);
+    background: color-mix(in srgb, var(--color-iris) 6%, transparent);
+    color: var(--color-snow);
+    cursor: pointer;
+    text-align: start;
+    transition:
+        border-color var(--duration-base) var(--ease-out),
+        box-shadow var(--duration-base) var(--ease-out);
+
+    & img {
+        flex: 0 0 auto;
+        inline-size: 30px;
+        block-size: 30px;
+        object-fit: contain;
+        filter: saturate(0.8) brightness(0.95) contrast(1.02);
+    }
+
+    &:hover {
+        border-color: var(--border-strong);
+
+        & img {
+            filter: saturate(1) brightness(1) contrast(1.03);
+        }
+    }
+
+    &[data-on] {
+        border-color: var(--color-iris);
+        box-shadow:
+            0 0 0 1px var(--color-iris),
+            0 0 24px rgba(126, 112, 224, 0.28);
+
+        & img {
+            filter: saturate(1.05) brightness(1) contrast(1.05);
+        }
+    }
+
+    &[data-disabled] {
+        cursor: not-allowed;
+        opacity: 0.45;
+    }
+
+    &:has(:focus-visible) {
+        outline: 2px solid var(--color-iris);
+        outline-offset: 2px;
+    }
+}
+
+.name {
+    flex: 1;
+    min-inline-size: 0;
+    font-family: var(--font-primary);
+    font-size: 0.6875rem; /* 11px */
+    font-weight: 600;
+    line-height: 1.18;
+}
+
+.mark {
+    flex: 0 0 auto;
+    inline-size: 8px;
+    block-size: 8px;
+    border-radius: 50%;
+    background: var(--color-ash);
+    transition:
+        background var(--duration-base) var(--ease-out),
+        box-shadow var(--duration-base) var(--ease-out);
+
+    [data-on] > & {
+        background: var(--color-prestige);
+        box-shadow: 0 0 8px var(--color-prestige);
+    }
+}
+
+/* Too narrow for the label: icon only, centred; the on state is carried by the border and glow. */
+@container modepicker (max-width: 336px) {
+    .tile {
+        justify-content: center;
+        gap: 0;
+        padding: 0;
+    }
+
+    .name,
+    .mark {
+        display: none;
+    }
+}

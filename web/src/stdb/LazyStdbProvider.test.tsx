@@ -62,7 +62,7 @@ describe('LazyStdbProvider', () => {
         const load = vi.fn(() => new Promise<ProviderModule>(() => {}));
         render(
             <StrictMode>
-                <LazyStdbProvider load={load}>{appAt('/teambuilder')}</LazyStdbProvider>
+                <LazyStdbProvider load={load}>{appAt('/lobbies')}</LazyStdbProvider>
             </StrictMode>,
         );
         expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent(

@@ -122,26 +122,15 @@
     }
 }
 
-/* The search and the Clear button in one box (S14.2d). As a size container its width never
-   depends on what it holds: Clear appearing narrows the search and changes nothing else in the
-   row, at every width. Its width also picks Clear's form (below). Above the phone step the box
-   is at least 216px wide (S14.2e), so even the compact Clear (48px + 8px gap) leaves the field
-   160px, its own minimum. */
+/* The search + Clear box (`components/FilterSearch`, S14.2d; shared since S14.3a): its size in the row.
+   Above the phone step the box is at least 216px wide (S14.2e), so even the compact Clear (48px + 8px
+   gap) leaves the field 160px, its own minimum. */
 .searchGroup {
-    container: filter-search / inline-size;
-    display: flex;
     flex: 2 1 200px;
     min-inline-size: 216px;
-    align-items: stretch;
 
     @media (--bp-sm) {
         min-inline-size: 160px;
-    }
-
-    /* The search field fills what Clear leaves. */
-    & > :first-child {
-        flex: 1 1 0;
-        min-inline-size: 0;
     }
 }
 
@@ -175,104 +164,6 @@
     display: flex;
     flex: 1 1 auto;
     gap: 10px;
-}
-
-/* The Clear filters button (S14.2c): a restrained dark red tint marks it as the "remove" action.
-   Built from the one red token (`--color-error`) mixed into the page's own colours; no dedicated
-   danger-button token exists yet. Text on background: idle about 6.0:1, hover about 6.5:1. */
-.clearChip {
-    --clear-bg: color-mix(in srgb, var(--color-error) 14%, var(--color-space));
-    --clear-border: color-mix(in srgb, var(--color-error) 40%, var(--color-space));
-    --clear-text: color-mix(in srgb, var(--color-error) 70%, var(--color-snow));
-    --clear-bg-hover: color-mix(in srgb, var(--color-error) 22%, var(--color-space));
-    --clear-border-hover: color-mix(in srgb, var(--color-error) 60%, var(--color-space));
-    --clear-text-hover: color-mix(in srgb, var(--color-error) 55%, var(--color-snow));
-
-    /* The containing block for its visually hidden text (`visuallyHidden.module.css`). */
-    position: relative;
-    display: inline-flex;
-    /* Its own size, right after the search (S14.2d). */
-    flex: 0 0 auto;
-    margin-inline-start: 8px;
-    gap: 6px;
-    align-items: center;
-    justify-content: center;
-    min-inline-size: 104px;
-    min-block-size: 42px;
-    padding: 0 12px;
-    border: 1px solid var(--clear-border);
-    border-radius: 8px;
-    background: var(--clear-bg);
-    color: var(--clear-text);
-    font-family: var(--font-primary);
-    font-size: 0.65625rem; /* 10.5px */
-    font-weight: 600;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition:
-        color 150ms,
-        background 150ms,
-        border-color 150ms,
-        transform 120ms var(--ease-out);
-
-    &:hover {
-        border-color: var(--clear-border-hover);
-        background: var(--clear-bg-hover);
-        color: var(--clear-text-hover);
-    }
-
-    &:active {
-        transform: scale(0.97);
-    }
-
-    /* Compact "N ✕" on phones, and wider wherever the full button would leave the search too
-       narrow for its whole placeholder (S14.2e; "Search by name or alias…" needs a 248px field in
-       Edge): the box is under 360px = 248 + 8 + 104. The word is only
-       hidden visually (`.clearWord`), so the accessible name stays "Clear N filter(s)". A media
-       query and a container query cannot share one condition, hence the two identical blocks. */
-    @media (--bp-sm) {
-        min-inline-size: 48px;
-        padding: 0 10px;
-        gap: 5px;
-        letter-spacing: 0.04em;
-    }
-
-    @container filter-search (max-width: 359.98px) {
-        min-inline-size: 48px;
-        padding: 0 10px;
-        gap: 5px;
-        letter-spacing: 0.04em;
-    }
-}
-
-/* The word "Clear": hidden visually wherever Clear is compact (the conditions above). The rules
-   mirror `visuallyHidden.module.css`; they are repeated here only because that class cannot be
-   applied inside a media or container query (`composes` is unconditional). */
-.clearWord {
-    @media (--bp-sm) {
-        position: absolute;
-        inline-size: 1px;
-        block-size: 1px;
-        margin: -1px;
-        padding: 0;
-        border: 0;
-        overflow: hidden;
-        clip-path: inset(50%);
-        white-space: nowrap;
-    }
-
-    @container filter-search (max-width: 359.98px) {
-        position: absolute;
-        inline-size: 1px;
-        block-size: 1px;
-        margin: -1px;
-        padding: 0;
-        border: 0;
-        overflow: hidden;
-        clip-path: inset(50%);
-        white-space: nowrap;
-    }
 }
 
 .foot {

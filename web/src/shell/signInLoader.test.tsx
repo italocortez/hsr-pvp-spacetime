@@ -53,20 +53,20 @@ afterEach(() => {
 });
 
 describe('the sign-in panel chunk loads (pendingMs: 0)', () => {
-    it('a click from /teambuilder commits the frame before the chunk resolves, then the panel', async () => {
+    it('a click from /lobbies commits the frame before the chunk resolves, then the panel', async () => {
         const user = userEvent.setup();
         const pending = deferredChunk();
-        const r = renderWithRouter('/teambuilder', AUTH.visitor);
+        const r = renderWithRouter('/lobbies', AUTH.visitor);
         await screen.findByRole('heading', { level: 1, name: /Module/ });
         await user.click(screen.getByRole('link', { name: 'Sign in' }));
         // Still loading: the frame (its h1 and the disabled button), outside the shell.
         expect(await screen.findByRole('heading', { level: 1, name: 'Sign in.' })).toBeVisible();
         expect(screen.getByRole('button', { name: 'Sign in with Discord' })).toBeDisabled();
         expect(screen.queryByRole('navigation', { name: 'Primary' })).toBeNull();
-        expect(r.router.state.resolvedLocation?.href).toBe('/teambuilder');
+        expect(r.router.state.resolvedLocation?.href).toBe('/lobbies');
         act(() => pending.resolve());
         await waitFor(() =>
-            expect(r.router.state.resolvedLocation?.href).toBe('/?login=1&next=%2Fteambuilder'),
+            expect(r.router.state.resolvedLocation?.href).toBe('/?login=1&next=%2Flobbies'),
         );
         expect(
             await screen.findByRole('heading', { level: 1, name: 'Panel loaded.' }),
@@ -88,11 +88,11 @@ describe('the sign-in panel chunk fails to load', () => {
         await waitFor(() => expect(document.title).toBe('Connection lost — IPC Battlegrounds'));
     }
 
-    it('on a click from /teambuilder: the offline splash, and Retry reloads the page', async () => {
+    it('on a click from /lobbies: the offline splash, and Retry reloads the page', async () => {
         const user = userEvent.setup();
         const reload = vi.spyOn(pageReload, 'run').mockImplementation(() => {});
         failingChunk();
-        renderWithRouter('/teambuilder', AUTH.visitor);
+        renderWithRouter('/lobbies', AUTH.visitor);
         await screen.findByRole('heading', { level: 1, name: /Module/ });
         await user.click(screen.getByRole('link', { name: 'Sign in' }));
         await expectLoadFailed();

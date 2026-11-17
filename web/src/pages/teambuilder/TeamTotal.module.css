@@ -1,0 +1,137 @@
+/* The total (the mockup's `.costTotal`), the missing-row warning, and the synergy strip (`.synergyStrip`). */
+
+.total {
+    display: flex;
+    gap: 14px;
+    align-items: baseline;
+    margin: 0;
+}
+
+.label {
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+}
+
+.sigma {
+    margin-inline-start: auto;
+    color: var(--color-snow);
+    font-family: var(--font-secondary);
+    font-size: 2.375rem;
+    font-style: italic;
+    font-variant-numeric: tabular-nums;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1;
+}
+
+.sigmaMark {
+    color: var(--color-prestige);
+    font-style: normal;
+    font-weight: 600;
+}
+
+.warning {
+    margin-block-start: 16px;
+    padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--color-warning) 45%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--color-warning) 8%, var(--color-space));
+    color: var(--text-body);
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    /* An unknown key from a link can be 40 characters with no break (review 2 M5). */
+    overflow-wrap: anywhere;
+
+    & p {
+        margin: 0;
+    }
+
+    & strong {
+        color: var(--color-warning);
+    }
+
+    & ul {
+        margin: 6px 0 0;
+        padding-inline-start: 18px;
+    }
+}
+
+.strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    padding-block-start: 16px;
+    border-block-start: 1px solid var(--border-subtle);
+}
+
+.stripLabel {
+    margin: 0 4px 0 0;
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+}
+
+.none {
+    margin: 0;
+    color: var(--text-disabled);
+    font-family: var(--font-primary);
+    font-size: 0.6875rem;
+}
+
+.chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.chip {
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+    padding: 6px 12px;
+    border: 1px solid rgba(126, 112, 224, 0.3);
+    background: rgba(126, 112, 224, 0.1);
+    color: var(--color-mist);
+    font-family: var(--font-secondary);
+    font-size: 0.6875rem;
+    font-weight: 500;
+
+    & b {
+        color: var(--color-snow);
+        font-weight: 600;
+    }
+}
+
+.x {
+    color: var(--color-iris);
+    font-family: var(--font-primary);
+    font-size: 0.625rem;
+}
+
+/* The pair sum is floored at 0 (the module's rule): said when it applied, so the chips and the total agree. */
+.floor {
+    flex-basis: 100%;
+    margin: 0;
+    color: var(--text-muted);
+    font-family: var(--font-secondary);
+    font-size: 0.6875rem;
+}
+
+.modifier {
+    color: var(--color-prestige);
+    font-family: var(--font-primary);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+}
