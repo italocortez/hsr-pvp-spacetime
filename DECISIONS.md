@@ -2042,3 +2042,13 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   4. Orchestrator: the conflict choice "Keep my changes" / "Use the account copy" stays. The backend change is made before the first publish of the loadout table, while its shape can still change freely; the publish waits for it.
 - **Why:** two reviews of S14.3c found seven ways for an older draft to overwrite a newer account copy (two devices creating at once, a stale draft on load, on reconnect, before the list has loaded, across two tabs), all with one root: the database did not know which version a save was based on. Two were fixed in the page and four more were found. User, 2026-11-17, on the orchestrator's two recommendations (the version number with the split; telling the person about a deletion elsewhere): "I agree on your recomendations".
 - **Where implemented:** not yet (S14.3c-rev).
+
+### A199 — Pairings stacked on each unit's bar, split evenly; no negative pair modifiers
+
+- **Date:** 2026-11-17 · **Status:** decided; not built yet
+- **Decision:**
+  1. In the team builder's cost chart a synergy pair is stacked on the bars of its two characters, half of the modifier on each, as a "Pairing" segment on top; the tooltip names the partner and the full amount. The separate "Pairings" column and the "total only" variant are both dropped. Closes A190 item 12 and A197 item 8 for pairs.
+  2. A cost set must not hold a negative pair modifier: a modifier is always 0 or more. The module refuses a negative one wherever a cost set's pair modifiers are written. The orchestrator had noted that a custom set could hold one and that the team's surcharge is floored at 0; the user ruled that negative pairings "break many things".
+  3. Orchestrator: the mockup stacked a pair on one unit because its made-up data gave each pair an "owner". The real data has none (the two names of a pair are in alphabetical order, the module treats a pair as unordered), so an even split is the rule; real owners would need a new field and can be added later without changing the chart. The floor at 0 in the shared scoring code stays as a safeguard.
+- **Why:** user, 2026-11-17: "why is the pairing not stacked in the same bar as the mockup tho? it was clear that way what was causing the price of a given unit to increase, why put it on a separate column?"; then "we can split the pair evently yeah that's fine! lets go with your recommendation. In detail, a cost set should not allow negative pairings, that breaks many things, so lets assume its always 0 or more".
+- **Where implemented:** not yet.
