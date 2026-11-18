@@ -42,7 +42,14 @@
         max-block-size: calc(100dvh - 32px);
     }
 
+    /*
+     * Only the body scrolls (S14.4v). The dialog is a scroll container that cannot be scrolled (`hidden`, not the
+     * browser's `auto`, and not `clip`, which is no scroll container): a drag or wheel on the title or the actions never
+     * moves the panel, and `contain` keeps the gesture from chaining to the page behind (web-guidance
+     * prevent-page-scroll-under-modal-dialog.md).
+     */
     &:modal {
+        overflow: hidden;
         overscroll-behavior: contain;
     }
 
@@ -125,10 +132,15 @@
  * The body: scrolls inside the panel when the screen is short (the title and the footer stay). A scroll box clips
  * what is drawn outside it, so it keeps room for a focus ring around a control at its edge (an outline with an
  * offset, the slanted buttons' 4px ring) and gives the room back with a negative margin: nothing moves.
+ *
+ * `position: relative` (S14.4v): the body is the containing block of everything absolutely positioned in it (the
+ * visually hidden labels). Without it their containing block is the form (positioned for the close button), the
+ * body's overflow does not clip them, and they stretched the dialog's own scroll area far below the actions.
  */
 .body {
     --dialog-ring-room: 4px;
 
+    position: relative;
     display: flex;
     flex: 0 1 auto;
     flex-direction: column;

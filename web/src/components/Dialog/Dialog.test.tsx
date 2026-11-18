@@ -535,6 +535,78 @@ describe('Dialog: S14.4b-fix (review B)', () => {
     });
 });
 
+/*
+ * T-S14.4v: only the body scrolls. On a phone the Advanced Settings sheet scrolled as a whole (title, body and Done
+ * together) past its end: visually hidden labels in the body had the form as their containing block, so the body's
+ * overflow did not clip them and they stretched the dialog's own scroll area. jsdom has no layout, so these tests pin
+ * the structure and the CSS that keep it from coming back; that nothing but the body moves under a wheel or a drag is
+ * proven in a real browser only (the step's screenshot loop).
+ */
+describe('Dialog: only the body scrolls (S14.4v)', () => {
+    const css = () => {
+        const root = [join(process.cwd(), 'web'), process.cwd()].find((d) =>
+            existsSync(join(d, 'vite.config.ts')),
+        ) as string;
+        return readFileSync(join(root, 'src/components/Dialog/Dialog.module.css'), 'utf8');
+    };
+
+    it('the body is the scroll box and the containing block of what is positioned in it', () => {
+        const body = /\.body\s*\{([^}]*)\}/.exec(css())?.[1] ?? '';
+        expect(body).toMatch(/position:\s*relative/);
+        expect(body).toMatch(/overflow-y:\s*auto/);
+        expect(body).toMatch(/overscroll-behavior:\s*contain/);
+        expect(body).toMatch(/min-block-size:\s*0/);
+    });
+
+    it('the dialog itself cannot be scrolled and does not chain a scroll to the page', () => {
+        const sheet = css();
+        const modal = /&:modal\s*\{([^}]*)\}/.exec(sheet)?.[1] ?? '';
+        // `hidden`, not `clip`: a scroll container that cannot be scrolled, so `overscroll-behavior` applies.
+        expect(modal).toMatch(/overflow:\s*hidden/);
+        expect(modal).not.toMatch(/overflow:\s*clip/);
+        expect(modal).toMatch(/overscroll-behavior:\s*contain/);
+        const backdrop = /&::backdrop\s*\{([^}]*)\}/.exec(sheet)?.[1] ?? '';
+        expect(backdrop).toMatch(/overflow:\s*hidden/);
+        expect(backdrop).toMatch(/overscroll-behavior:\s*contain/);
+        // The page behind is never locked by hand (the platform's inert page and `contain` do it).
+        expect(sheet).not.toMatch(/:root|(^|[\s,}])(html|body)\s*\{/);
+    });
+
+    it('the title, the error and the actions sit outside the body; the content and its hidden labels inside', () => {
+        renderDialog({
+            size: 'sheet',
+            error: null,
+            children: (
+                <label>
+                    <span data-testid="hidden-label" style={{ position: 'absolute' }}>
+                        Ban restriction
+                    </span>
+                    <input />
+                </label>
+            ),
+        });
+        const d = dialog();
+        const form = d.querySelector(':scope > form') as HTMLFormElement;
+        const parts = [...form.children];
+        const body = parts.find((el) => /body/.test(el.className)) as HTMLElement;
+        expect(body).toBeDefined();
+        // Exactly one scroll box in the form.
+        expect(parts.filter((el) => /body/.test(el.className))).toHaveLength(1);
+        expect(body.contains(screen.getByTestId('hidden-label'))).toBe(true);
+        expect(body.contains(screen.getByRole('textbox'))).toBe(true);
+        const title = screen.getByRole('heading', { name: 'Delete Hyper?' });
+        const done = screen.getByRole('button', { name: 'Delete' });
+        const error = d.querySelector('[data-dialog-error]') as HTMLElement;
+        for (const fixed of [title, done, error]) {
+            expect(body.contains(fixed)).toBe(false);
+            expect(form.contains(fixed)).toBe(true);
+        }
+        // Order: title, body, error, actions (the body grows between them).
+        expect(parts.indexOf(body)).toBeGreaterThan(parts.indexOf(title));
+        expect(parts.indexOf(body)).toBeLessThan(parts.indexOf(error));
+    });
+});
+
 describe('dialogInTurn: one dialog at a time', () => {
     const order = ['delete', 'held', 'notice'] as const;
     it('the first wanted in the order', () => {
