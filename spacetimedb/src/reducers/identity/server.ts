@@ -20,6 +20,7 @@ import {
     isBase64Url32,
 } from '@module/helpers/identity/linkCode';
 import { DISCORD_LOGIN_METHOD } from '@module/helpers/lobby/banHelper';
+import { liftSuspension, suspendUser } from '@module/helpers/identity/suspensionActions';
 
 /**
  * Guard: the caller is a trusted server identity (Owner or Delegate, §C.4). A Linker (M5a3) is refused with the same
@@ -306,6 +307,45 @@ export const server_delete_user = spacetimedb.reducer({
 });
 
 /**
+ * suspension-s1 (A195, A213(8), A214): server-only suspension by username, the server twin of admin_suspend_user.
+ * Called via: npm run stdb:manage-user -- --target <test|prod> suspend <username> [--reason "<text>"]
+ * Accepts any verified user except SYSTEM, an Admin included (user ruling 2026-11-17: the app cannot suspend an Admin,
+ * the server can). Audit actor and suspendedById: SYSTEM (SYSTEM_USER_ID). Checks and side effects: suspendUser.
+ */
+export const server_suspend_user = spacetimedb.reducer({
+    username: t.string(),
+    reason: t.string(),
+}, (ctx, { username, reason }) => {
+    requireServer(ctx);
+    if (!username || username.length === 0) {
+        throw new SenderError('username is required');
+    }
+    const targetUser = ctx.db.User.username.find(username);
+    if (!targetUser) {
+        throw new SenderError(`User "${username}" not found`);
+    }
+    suspendUser(ctx, targetUser, reason, SYSTEM_USER_ID, { fromApp: false });
+});
+
+/**
+ * suspension-s1: server-only lift by username, the server twin of admin_lift_suspension.
+ * Called via: npm run stdb:manage-user -- --target <test|prod> unsuspend <username>
+ */
+export const server_lift_suspension = spacetimedb.reducer({
+    username: t.string(),
+}, (ctx, { username }) => {
+    requireServer(ctx);
+    if (!username || username.length === 0) {
+        throw new SenderError('username is required');
+    }
+    const targetUser = ctx.db.User.username.find(username);
+    if (!targetUser) {
+        throw new SenderError(`User "${username}" not found`);
+    }
+    liftSuspension(ctx, targetUser, SYSTEM_USER_ID);
+});
+
+/**
  * A109(3): server-only switch of the guest creation breaker (login_as_guest for a new identity), the server-side twin of
  * admin_set_guest_creation, for when no Admin can sign in (while the switch is off a new browser cannot start a session).
  * Re-enabling drops the breaker's window counter. Audit actor: SYSTEM.
@@ -518,7 +558,7 @@ export const server_set_mmr = spacetimedb.reducer({
  *
  * Deletes everything else: users (except SYSTEM), rosters, lobbies, tournaments,
  * match sessions + history, chat, stats, cost sets, calendar events, leaderboards,
- * pending user deletion jobs, bans, gc audit logs, link codes.
+ * pending user deletion jobs, bans, gc audit logs, link codes, suspensions.
  *
  * Safety:
  *   - Gated by requireTestDatabase() (STDB_TARGET must be 'test') and requireServer()
@@ -588,6 +628,8 @@ export const server_nuke_test_data = spacetimedb.reducer({
     ctx.db.TournamentFinalizeJob.clear();
     // ── Link codes (M5a): every pending code goes with the users below.
     ctx.db.LinkRequest.clear();
+    // ── Suspensions (suspension-s1): every row goes with the users below.
+    ctx.db.UserSuspension.clear();
 
     // ── Abuse controls (A42, B-7, A57): rate windows, the inline breaker's counters and alerts. AbuseConfig is
     // seeded by init and survives the nuke.

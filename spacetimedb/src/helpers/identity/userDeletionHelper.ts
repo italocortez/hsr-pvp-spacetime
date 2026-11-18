@@ -164,7 +164,7 @@ export interface UserDeletionOptions {
  *
  * Cascade: the organizer hand-over of a staff deletion (S10s, A121, handOverOrganizedTournaments), tournament ties
  * (A94(2), settleTournamentTiesForDeletion), lobby memberships (below), calendar data, UserPresence, UserRateState, UserIdentity,
- * HsrAccount, HsrAccountCharacter, UserLoadout (S14.3s) and UserLoadoutRate (S14.3s-limit), then (S10r, A122(6)) the user's unreferenced lobby presets and unpublished cost sets.
+ * UserSuspension (suspension-s1), HsrAccount, HsrAccountCharacter, UserLoadout (S14.3s) and UserLoadoutRate (S14.3s-limit), then (S10r, A122(6)) the user's unreferenced lobby presets and unpublished cost sets.
  * Guest users with no history references → hard-delete (row removed entirely).
  * All others → the User row is hard-deleted and archived to DeletedUser (id, displayName, isGuest, deletedAt), which
  * resolveUserLabel reads for history rows (Phase 15.2 D-09).
@@ -232,6 +232,8 @@ export function performUserDeletion(ctx: any, userId: number, actorId: number, o
     if (ctx.db.UserRateState.userId.find(userId)) ctx.db.UserRateState.userId.delete(userId);
     // M5a: the user's pending one-time link codes (LinkRequest.user_id)
     deleteLinkRequestsOfUser(ctx, userId);
+    // suspension-s1 (A214(6)): a ban or a deletion removes the suspension
+    if (ctx.db.UserSuspension.userId.find(userId)) ctx.db.UserSuspension.userId.delete(userId);
     const identities = [...ctx.db.UserIdentity.user_id.filter(userId)];
     for (const ui of identities) {
         ctx.db.UserIdentity.identity.delete(ui.identity);

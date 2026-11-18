@@ -759,6 +759,12 @@ Stand-ins in tournament lobbies; the full rule set is in [../tournament/architec
 - The 15 s check (`run_referee_transfer_check`) and the clock freeze are unchanged apart from the reserve
   (`pausedTimerState(ctx, lobby, session)`, docs/match-session/architecture.md "Phase S10aa execution").
 
+## Phase suspension-s1 execution (DECISIONS.md A213(2), A214(6))
+
+- The body of `leave_lobby` moved unchanged to `leaveMembership(ctx, lobby, member, user, actorId)` (`helpers/lobby/memberLeave.ts`), which returns what it did (`away`, `alreadyAway`, `removed`, `lobbyDeleted`); `leave_lobby` calls it with the caller as actor and keeps its log lines. Behaviour unchanged.
+- A suspension ([suspension architecture](../suspension/architecture.md)) runs `leaveMembership` for every seat of the suspended user that is not abandoned, with the suspending Admin (or SYSTEM) as actor: Waiting / AwaitingResult and every spectator or coach seat are removed as a Leave; a player in Drafting / Equipping / Scoring is kept and marked away, and then, unlike a Leave, `transferFlagsOnRemoval` hands host, captain and referee over at once and the cursor stamp is dropped. No automatic forfeit (A68(3)); the 15 s check, the forfeit clock and the pause rules run unchanged; after a lift the player returns through `join_lobby`.
+- `broadcast_cursor` drops a suspended member's call silently (before the maintenance drop).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -821,6 +827,7 @@ Stand-ins in tournament lobbies; the full rule set is in [../tournament/architec
 | Fix pass: an auto-pause is resumed by a referee or a present seated player of the paused team (the Pause step's `actorSlot`), not by the opponent; a pause on a spent turn stays allowed | Phase S10aa execution (DECISIONS.md A153, A154) | 2026-11-11 |
 | S11a part 2 (closing-triage items): `broadcast_cursor` only in Drafting / Equipping / Scoring and its throttle stamp in the new private `LobbyCursorStamp` (`LobbyMember.lastCursorAt` removed; L19); `LobbyPassword.passwordHash` holds the salted SHA-256 `hashLobbyPassword(lobbyId, password)`, `join_lobby` compares hashes, `create_lobby` / `update_lobby_settings` refuse a password over 64 characters ("The lobby password can be at most 64 characters."; L24; attempts are still not counted, a failed join rolls back); `run_lobby_gc` refuses any caller but the scheduler (L11); `admin_gc_lobbies` restarts a stopped `LobbyGcJob` chain (L6) | Phase S11a execution | 2026-11-11 |
 | Lobby password rule: only A to Z, a to z, 0 to 9, at most 20 characters (`ensureLobbyPasswordRule` in `create_lobby` / `update_lobby_settings`: "The lobby password can have at most 20 characters." / "The lobby password can contain only letters A to Z and a to z and digits 0 to 9."; the empty string stays "no password" / "keep the current one"); `join_lobby` refuses an attempt that breaks the rule as `Incorrect lobby password.` without hashing; replaces the 64-character cap and the 256-unit pre-check; no guess limit. `broadcast_cursor` drops a non-Admin's call under maintenance mode | Phase S11a execution (DECISIONS.md A163(3), A163(4)) | 2026-11-12 |
+| `leave_lobby`'s body shared as `leaveMembership`; a suspension leaves every seat as a Leave and hands a kept player's flags over at once; `broadcast_cursor` drops a suspended member | Phase suspension-s1 execution (DECISIONS.md A213(2), A214(6)) | 2026-11-17 |
 
 ---
 

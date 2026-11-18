@@ -209,6 +209,7 @@ Admin and server operations handle privileged actions: server identity registrat
 | Not admin | ensureAdmin throws |
 | User not found | "User not found" |
 | Username taken | "Username \"{username}\" is already taken" |
+| Role change of another Admin (A216; the caller's own role and an Admin's other fields stay editable) | "Only the server can change an Admin's role." |
 
 ### run_user_deletion (scheduled)
 
@@ -438,3 +439,4 @@ _Superseded in Phase S8e execution (S8e review, DECISIONS.md A67(4), TD-13/14): 
 | The Admin roster tools (`admin_batch_upsert_characters`, `admin_batch_remove_characters`) are refused while the account is selected in an active lobby, as the owner's own edits are ("This account is selected in active lobby <code>; its roster cannot be edited until the player's membership in that lobby ends or the lobby closes."). An Admin insert, change or delete of a character, light-cone or synergy cost row is refused while a lobby on that cost set is in Drafting, Equipping or Scoring. In `admin_bulk_upsert` a cost row equal to the stored row is skipped (no write, no refusal); `costSetId` must be absent or a whole number from 0 to 4294967295 | Phase S10w execution (DECISIONS.md A142) | 2026-11-10 |
 | `view_admin_users` (Moderator and above) lists every user with id, username, display name, guest flag, role, Discord-linked flag, avatar, displayed achievement, deletion time and audit columns; it replaces the read of the public `User` table | Phase S11a execution (DECISIONS.md A77) | 2026-11-12 |
 | `server_set_mmr` (test database only) writes the rating row of the active season (season 0 when none is active). Admin cost upserts and deletes find rows through indexes; behaviour is unchanged. A role change from Moderator or Admin to below Moderator hands the match events that user organizes to the tournament organizers | Phase S11a execution (DECISIONS.md A163(2); triage L5, L92) | 2026-11-12 |
+| An Admin cannot change another Admin's role from the app: `admin_update_user` refuses it with "Only the server can change an Admin's role."; only `server_set_role` (the script, as SYSTEM) can. An Admin's own role change and every other edit of an Admin stay as before | DECISIONS.md A216 (user ruling 2026-11-17) | 2026-11-17 |

@@ -826,6 +826,9 @@ export const admin_bulk_upsert = spacetimedb.reducer(
 
 // ─── Update user (inline edit from admin panel) ──────────────────────────────
 
+/** A216: the refusal of admin_update_user for a role change of another Admin. */
+export const ADMIN_ROLE_SERVER_ONLY_TEXT = "Only the server can change an Admin's role.";
+
 export const admin_update_user = spacetimedb.reducer(
     { userId: t.u32(), displayName: t.string(), username: t.string(), roleTag: t.string() },
     (ctx, { userId, displayName, username, roleTag }) => {
@@ -844,6 +847,12 @@ export const admin_update_user = spacetimedb.reducer(
 
         // Validate role tag
         validateEnum('userRole', roleTag, ctx, 'User');
+
+        // A216: another Admin's role is changed only by the server (server_set_role, the manage-user script). Their
+        // other fields, and an Admin's own role, stay editable here.
+        if (user.id !== admin.id && isRoleAtLeast(user.role, 'Admin') && roleTag !== user.role.tag) {
+            throw new SenderError(ADMIN_ROLE_SERVER_ONLY_TEXT);
+        }
 
         // Check username uniqueness if changed
         if (newUsername !== user.username) {

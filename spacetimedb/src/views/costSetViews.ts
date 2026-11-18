@@ -18,6 +18,7 @@ import { CostSetDraftSynergy } from '@module/tables/roster/costSetDraftSynergy';
 import { DraftMode } from '@module/types/enums';
 import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { missingCostEntries } from '@module/helpers/roster/costSetCompleteness';
+import { callerUserId } from '@module/helpers/identity/viewAnonymity';
 
 // ---------------------------------------------------------------------------
 // 1. My Cost Sets (per-user view) — CostSet rows owned by the requesting user
@@ -28,9 +29,9 @@ export const view_my_cost_sets = spacetimedb.view(
     { name: 'view_my_cost_sets', public: true },
     t.array(CostSet.rowType),
     (ctx) => {
-        const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
-        if (!mapping) return [];
-        const user = ctx.db.User.id.find(mapping.userId);
+        const userId = callerUserId(ctx); // suspension-s1: none for a suspended caller
+        if (userId === undefined) return [];
+        const user = ctx.db.User.id.find(userId);
         if (!user) return [];
         return [...ctx.db.CostSet.creator_id.filter(user.id)];
     }
@@ -58,9 +59,9 @@ export const view_my_draft_character_costs = spacetimedb.view(
     { name: 'view_my_draft_character_costs', public: true },
     t.array(CostSetDraftCharacter.rowType),
     (ctx) => {
-        const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
-        if (!mapping) return [];
-        const user = ctx.db.User.id.find(mapping.userId);
+        const userId = callerUserId(ctx); // suspension-s1: none for a suspended caller
+        if (userId === undefined) return [];
+        const user = ctx.db.User.id.find(userId);
         if (!user) return [];
         // Collect all cost set ids owned by this user, then use cost_set_id index on each
         const mySets = [...ctx.db.CostSet.creator_id.filter(user.id)];
@@ -83,9 +84,9 @@ export const view_my_draft_lightcone_costs = spacetimedb.view(
     { name: 'view_my_draft_lightcone_costs', public: true },
     t.array(CostSetDraftLightcone.rowType),
     (ctx) => {
-        const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
-        if (!mapping) return [];
-        const user = ctx.db.User.id.find(mapping.userId);
+        const userId = callerUserId(ctx); // suspension-s1: none for a suspended caller
+        if (userId === undefined) return [];
+        const user = ctx.db.User.id.find(userId);
         if (!user) return [];
         const mySets = [...ctx.db.CostSet.creator_id.filter(user.id)];
         const results: any[] = [];
@@ -117,9 +118,9 @@ export const view_cost_set_missing = spacetimedb.view(
     { costSetId: t.u32() },
     t.array(CostSetMissingRow),
     (ctx, { costSetId }) => {
-        const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
-        if (!mapping) return [];
-        const user = ctx.db.User.id.find(mapping.userId);
+        const userId = callerUserId(ctx); // suspension-s1: none for a suspended caller
+        if (userId === undefined) return [];
+        const user = ctx.db.User.id.find(userId);
         if (!user) return [];
         const costSet = ctx.db.CostSet.id.find(costSetId);
         if (!costSet) return [];
@@ -142,9 +143,9 @@ export const view_my_draft_synergy_costs = spacetimedb.view(
     { name: 'view_my_draft_synergy_costs', public: true },
     t.array(CostSetDraftSynergy.rowType),
     (ctx) => {
-        const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
-        if (!mapping) return [];
-        const user = ctx.db.User.id.find(mapping.userId);
+        const userId = callerUserId(ctx); // suspension-s1: none for a suspended caller
+        if (userId === undefined) return [];
+        const user = ctx.db.User.id.find(userId);
         if (!user) return [];
         const mySets = [...ctx.db.CostSet.creator_id.filter(user.id)];
         const results: any[] = [];

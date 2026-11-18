@@ -3,6 +3,7 @@ import { t } from 'spacetimedb/server';
 import { LIVE_STAGES, memberHasLeft } from '@module/helpers/lobby/lobbyHelpers';
 import { readAbuseConfig } from '@module/helpers/lobby/abuseControls';
 import { isMaintenanceOn, isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
+import { isSuspended } from '@module/helpers/identity/suspension';
 
 export const broadcast_cursor = spacetimedb.reducer({
     lobbyId: t.u32(),
@@ -12,6 +13,9 @@ export const broadcast_cursor = spacetimedb.reducer({
     // Resolve identity → userId
     const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
     if (!mapping) return; // Not registered, ignore
+
+    // suspension-s1: a suspended account cannot act; the cursor stream is dropped silently, as maintenance does below.
+    if (isSuspended(ctx, mapping.userId)) return;
 
     // A163(3) (S11a): while maintenance mode is on only an Admin acts. The cursor stream is fire-and-forget at up to
     // 20 Hz, so a non-Admin's call is dropped silently (the A98 rule for calls that cannot act), not thrown.

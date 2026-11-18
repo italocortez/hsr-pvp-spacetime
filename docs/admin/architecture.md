@@ -115,6 +115,7 @@ Phase S10e execution (identity audit #9): rejects the SYSTEM user ("The SYSTEM u
 1. `ensureAdmin(ctx)` -- requires Admin role
 2. Find user by id -- reject if not found
 3. Validate `roleTag` against Role enum variants
+   - A216 (suspension-s1 fix pass): when the target is another Admin (not the caller) and `roleTag` differs from their current role, refused with "Only the server can change an Admin's role." (`ADMIN_ROLE_SERVER_ONLY_TEXT`). Every other field of an Admin, and an Admin's own role, stay editable here. Another Admin's role changes only through `server_set_role` (the `manage-user set-role` script, as SYSTEM), which accepts any user but SYSTEM. `mod_promote_to_host` / `mod_demote_from_host` already refuse any target that is not User / TournamentHost, so no other app reducer can change an Admin's role
 4. If username changing: check uniqueness via `User.username.find()`
 5. `User.id.update()` with new display name, username, role
 6. Phase S10r execution (A122(1)): before step 3 a user pending deletion is refused and both names go through the rename rules; after step 5 the solo team names are synced. Details in "Phase S10r execution" below
@@ -319,6 +320,14 @@ execution (A77):** `User` is private; the Users tab reads `view_admin_users`.
 - `server_nuke_test_data` has no `UserPrivate` block left; the SYSTEM-preserving blocks are `UserPresence`,
   `UserIdentity`, `User`.
 
+## Phase suspension-s1 execution (DECISIONS.md A195, A213(3), A214)
+
+New file `reducers/admin/suspensionAdmin.ts` ([suspension architecture](../suspension/architecture.md), [contract](../suspension/contract.md)):
+
+- `admin_suspend_user(userId: u32, reason: string)`: `ensureAdmin`; the target by id; `suspendUser` (`helpers/identity/suspensionActions.ts`) with `fromApp: true`, which refuses an Admin target ("An Admin cannot be suspended from the app."; user ruling 2026-11-17). Reason optional, 0 to 500 characters, never shown to the person.
+- `admin_lift_suspension(userId: u32)`: `ensureAdmin`; deletes the row of any suspended user, an Admin's included.
+- A suspended Admin is refused on every Admin tool ("Your account is suspended."), during maintenance too. The server twins (`server_suspend_user`, `server_lift_suspension`) are in the [auth architecture](../auth/architecture.md).
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -357,6 +366,8 @@ execution (A77):** `User` is private; the Users tab reads `view_admin_users`.
 | Users tab on `view_admin_users` (`User` private); `admin_ban_user` finds the user through `User.provider_id`; `admin_update_user` rewrites the leaderboard card | Phase S11a execution (DECISIONS.md A77) | 2026-11-11 |
 | S11a part 2 (closing-triage items): the five scheduled reducers refuse any caller but the scheduler (`ensureScheduler`, `helpers/admin/schedulerGuard.ts`: `ctx.senderAuth.isInternal`, SDK 2.14 `AuthCtx`; "Forbidden: <name> is a scheduled reducer and runs only from the scheduler."; L11); `admin_gc_identities` / `admin_gc_lobbies` restart a stopped job chain (L6); `admin_bulk_upsert` and `admin_delete_row` find character, light-cone and synergy cost rows through `by_character_mode_and_set`, `by_lightcone_mode_and_set` and `by_tuple` (both pair orders) instead of scanning every set (L92; a key with an unknown enum tag or a non-string name matches nothing, "Row not found" on delete); `server_set_mmr` writes the active season (L5); `stdb:guest-switch` wraps the two server guest switches (L12) | Phase S11a execution | 2026-11-11 |
 | Maintenance mode: a live Admin connects and acts; a connected non-Admin is refused on every state-changing reducer (`ensureNotInMaintenance` in `getAuthenticatedUser`, `login_as_guest`, the profile reducers; the cursor is dropped); server and scheduled reducers keep running (triage L9). `admin_update_user` and `server_set_role` hand a demoted Moderator's match events to the tournament organizers | Phase S11a execution (DECISIONS.md A163(2), A163(3)) | 2026-11-12 |
+| `admin_update_user` refuses a role change of another Admin ("Only the server can change an Admin's role."); self-changes and non-role edits unchanged; `server_set_role` unchanged | Phase suspension-s1 execution (DECISIONS.md A216) | 2026-11-17 |
+| `admin_suspend_user` / `admin_lift_suspension` (Admin only; an Admin target refused from the app, user ruling 2026-11-17) | Phase suspension-s1 execution (DECISIONS.md A195, A213(3), A214) | 2026-11-17 |
 
 ---
 

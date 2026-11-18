@@ -2,6 +2,7 @@ import { schema, t } from 'spacetimedb/server';
 import { User } from '@module/tables/identity/user';
 import { UserPresence } from '@module/tables/identity/userPresence';
 import { LinkRequest } from '@module/tables/identity/linkRequest';
+import { UserSuspension } from '@module/tables/identity/userSuspension';
 import { DeletedUser } from '@module/tables/identity/deletedUser';
 import { BanRecord } from '@module/tables/admin/banRecord';
 import { UserIdentity } from '@module/tables/identity/userIdentity';
@@ -138,6 +139,7 @@ const spacetimedb = schema({
     UserIdentity,
     ServerIdentity,
     LinkRequest,
+    UserSuspension,         // suspension-s1 (A195, A213, A214): the suspended accounts; private
 
     // Static Assets
     HsrCharacter,

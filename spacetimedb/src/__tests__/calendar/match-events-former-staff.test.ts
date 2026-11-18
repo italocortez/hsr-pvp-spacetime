@@ -98,7 +98,7 @@ describe('A163(2): each trigger hands the match event to the tournament organize
         const exAdmin = admin(test, 'mefexadmin');
         const id = createTitledEvent(test, exAdmin, 'Final', [], m.id);
         const u2 = test.db.User.id.find(exAdmin.userId)!;
-        tx(test, boss, (ctx) => M.admin_update_user(ctx, { userId: u2.id, displayName: u2.displayName, username: u2.username, roleTag: 'Moderator' }));
+        tx(test, 'internal', (ctx) => M.server_set_role(ctx, { username: u2.username, roleTag: 'Moderator' })); // A216: only the server demotes an Admin
         expect(event(test, id)!.organizerId).toBe(exAdmin.userId);
     });
 

@@ -24,7 +24,7 @@ import { computeAnonymousLabel } from '@module/helpers/identity/anonymousLabels'
 import { resolveUserLabel } from '@module/helpers/identity/userLabel';
 import { hasLivePresence } from '@module/helpers/identity/presenceHelpers';
 import {
-    callerMemberships, hideUserId, maskLobbyRow, lobbyAnonymousFor, ratingVisible, renderSystemChat, anonymousLabelOr, storedOrLiveLabel,
+    callerMemberships, callerUserId, hideUserId, maskLobbyRow, lobbyAnonymousFor, ratingVisible, renderSystemChat, anonymousLabelOr, storedOrLiveLabel,
 } from '@module/helpers/identity/viewAnonymity';
 import { isSeatedPlayer, LIVE_STAGES, slotIsSpectator } from '@module/helpers/lobby/lobbyHelpers';
 import { disconnectThresholdMicros, isMemberRowAway } from '@module/helpers/lobby/disconnectHelpers';
@@ -427,14 +427,14 @@ export const view_lobby_presets = spacetimedb.view(
     { name: 'view_lobby_presets', public: true },
     t.array(LobbyPresetViewRow),
     (ctx) => {
-        const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
-        if (!mapping) return [];
+        const me = callerUserId(ctx); // suspension-s1: none for a suspended caller
+        if (me === undefined) return [];
         const results: any[] = [];
         for (const preset of ctx.db.LobbyPreset.creator_user_id.filter(SYSTEM_USER_ID)) {
             if (preset.isSystemPreset) results.push(presetViewRow(preset));
         }
-        if (mapping.userId !== SYSTEM_USER_ID) {
-            for (const preset of ctx.db.LobbyPreset.creator_user_id.filter(mapping.userId)) {
+        if (me !== SYSTEM_USER_ID) {
+            for (const preset of ctx.db.LobbyPreset.creator_user_id.filter(me)) {
                 results.push(presetViewRow(preset));
             }
         }

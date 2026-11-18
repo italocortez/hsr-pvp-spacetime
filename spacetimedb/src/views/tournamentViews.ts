@@ -34,6 +34,7 @@ import { ParticipantStatus, TeamStatus, BracketMatchState, BracketSide } from '@
 import { matchSides } from '@module/helpers/tournament/matchSides';
 import { resolveUserLabel } from '@module/helpers/identity/userLabel';
 import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
+import { callerUserId } from '@module/helpers/identity/viewAnonymity';
 import { BracketMatch } from '@module/tables/tournament/bracketMatch';
 import { MatchResultRecord } from '@module/tables/results/matchResult';
 import { TournamentEnrolled } from '@module/tables/tournament/tournamentEnrolled';
@@ -54,10 +55,7 @@ const STAFF_STAGES = ['Draft', 'Registration', 'CheckIn', 'Seeding', 'InProgress
 const isLiveTournament = (tournament: any): boolean =>
     tournament.stage.tag !== 'Completed' && tournament.stage.tag !== 'Cancelled';
 
-/** The caller's user id from ctx.sender, or undefined. */
-function callerUserId(ctx: any): number | undefined {
-    return ctx.db.UserIdentity.identity.find(ctx.sender)?.userId;
-}
+// The caller's user id: callerUserId (helpers/identity/viewAnonymity.ts; undefined for a suspended caller, suspension-s1).
 
 /**
  * A105(1): the non-terminal tournaments the caller organizes or assists (no role path). S10s (A122(21), L71): an
@@ -572,9 +570,9 @@ export const view_my_tournament_enrollment = spacetimedb.view(
     { name: 'view_my_tournament_enrollment', public: true },
     t.array(TournamentEnrolled.rowType),
     (ctx) => {
-        const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
-        if (!mapping) return [];
-        return [...ctx.db.TournamentEnrolled.user_id.filter(mapping.userId)];
+        const me = callerUserId(ctx);
+        if (me === undefined) return [];
+        return [...ctx.db.TournamentEnrolled.user_id.filter(me)];
     }
 );
 
@@ -599,9 +597,8 @@ export const view_my_team_requests = spacetimedb.view(
     { name: 'view_my_team_requests', public: true },
     t.array(TeamRequestViewRow),
     (ctx) => {
-        const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
-        if (!mapping) return [];
-        const me = mapping.userId;
+        const me = callerUserId(ctx);
+        if (me === undefined) return [];
         const rows: any[] = [];
         const push = (req: any, team: any) => {
             const tournament = ctx.db.Tournament.id.find(team.tournamentId);
@@ -647,9 +644,8 @@ export const view_my_stand_ins = spacetimedb.view(
     { name: 'view_my_stand_ins', public: true },
     t.array(StandInViewRow),
     (ctx) => {
-        const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
-        if (!mapping) return [];
-        const me = mapping.userId;
+        const me = callerUserId(ctx);
+        if (me === undefined) return [];
         const byId = new Map<number, any>();
         for (const s of ctx.db.TournamentStandIn.user_id.filter(me)) byId.set(s.id, s);
         for (const enrolled of ctx.db.TournamentEnrolled.user_id.filter(me)) {
@@ -700,9 +696,8 @@ export const view_tournament_matches_for_me = spacetimedb.view(
     { name: 'view_tournament_matches_for_me', public: true },
     t.array(MatchForMeRow),
     (ctx) => {
-        const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
-        if (!mapping) return [];
-        const me = mapping.userId;
+        const me = callerUserId(ctx);
+        if (me === undefined) return [];
         const rows: any[] = [];
         const listed = new Set<number>();
         const push = (match: any, myTeamId: number) => {

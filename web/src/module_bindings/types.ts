@@ -214,6 +214,17 @@ export const AdminPresenceRow = __t.object("AdminPresenceRow", {
 });
 export type AdminPresenceRow = __Infer<typeof AdminPresenceRow>;
 
+export const AdminSuspensionRow = __t.object("AdminSuspensionRow", {
+  userId: __t.u32(),
+  username: __t.string(),
+  displayName: __t.string(),
+  reason: __t.string(),
+  suspendedById: __t.u32(),
+  suspendedByUsername: __t.option(__t.string()),
+  suspendedAt: __t.timestamp(),
+});
+export type AdminSuspensionRow = __Infer<typeof AdminSuspensionRow>;
+
 export const AdminUserIdentityRow = __t.object("AdminUserIdentityRow", {
   identity: __t.identity(),
   userId: __t.u32(),
@@ -2129,6 +2140,11 @@ export const MySavedCalendarRow = __t.object("MySavedCalendarRow", {
 });
 export type MySavedCalendarRow = __Infer<typeof MySavedCalendarRow>;
 
+export const MySuspensionRow = __t.object("MySuspensionRow", {
+  userId: __t.u32(),
+});
+export type MySuspensionRow = __Infer<typeof MySuspensionRow>;
+
 export const NominatePayload = __t.object("NominatePayload", {
   characterName: __t.string(),
 });
@@ -2986,6 +3002,17 @@ export const UserRateState = __t.object("UserRateState", {
 });
 export type UserRateState = __Infer<typeof UserRateState>;
 
+export const UserSuspension = __t.object("UserSuspension", {
+  userId: __t.u32(),
+  reason: __t.string(),
+  suspendedById: __t.u32(),
+  createdById: __t.u32(),
+  createdDate: __t.timestamp(),
+  lastModifiedById: __t.u32(),
+  lastModifiedDate: __t.timestamp(),
+});
+export type UserSuspension = __Infer<typeof UserSuspension>;
+
 export const ViewAdminAbuseConfig = __t.object("ViewAdminAbuseConfig", {});
 export type ViewAdminAbuseConfig = __Infer<typeof ViewAdminAbuseConfig>;
 
@@ -3003,6 +3030,9 @@ export type ViewAdminPresence = __Infer<typeof ViewAdminPresence>;
 
 export const ViewAdminStuckGames = __t.object("ViewAdminStuckGames", {});
 export type ViewAdminStuckGames = __Infer<typeof ViewAdminStuckGames>;
+
+export const ViewAdminSuspensions = __t.object("ViewAdminSuspensions", {});
+export type ViewAdminSuspensions = __Infer<typeof ViewAdminSuspensions>;
 
 export const ViewAdminTournament = __t.object("ViewAdminTournament", {
   tournamentId: __t.u32(),
@@ -3194,6 +3224,9 @@ export type ViewMySavedCalendars = __Infer<typeof ViewMySavedCalendars>;
 
 export const ViewMyStandIns = __t.object("ViewMyStandIns", {});
 export type ViewMyStandIns = __Infer<typeof ViewMyStandIns>;
+
+export const ViewMySuspension = __t.object("ViewMySuspension", {});
+export type ViewMySuspension = __Infer<typeof ViewMySuspension>;
 
 export const ViewMyTeamRequests = __t.object("ViewMyTeamRequests", {});
 export type ViewMyTeamRequests = __Infer<typeof ViewMyTeamRequests>;

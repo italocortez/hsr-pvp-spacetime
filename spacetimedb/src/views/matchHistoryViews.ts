@@ -42,13 +42,11 @@ import { MatchResultGameHistory } from '@module/tables/results/matchResultGameHi
 import { MmrHistory } from '@module/tables/stats/mmrHistory';
 import { DraftMode, GameMode, MatchEndReason, MatchType, TeamSide } from '@module/types/enums';
 import { LobbyConfigSnapshot } from '@module/types/structs';
+import { callerUserId } from '@module/helpers/identity/viewAnonymity';
 
 export const MATCH_HISTORY_PAGE_SIZE = 10;
 
-/** The caller's user id from ctx.sender, or undefined. */
-function callerUserId(ctx: any): number | undefined {
-    return ctx.db.UserIdentity.identity.find(ctx.sender)?.userId;
-}
+// The caller's user id: callerUserId (helpers/identity/viewAnonymity.ts; undefined for a suspended caller, suspension-s1).
 
 /** Newest first by time; the id only breaks a tie between equal times (never the order itself, CLAUDE.md §3.4). */
 function newestFirst(timeOf: (r: any) => bigint, idOf: (r: any) => number) {

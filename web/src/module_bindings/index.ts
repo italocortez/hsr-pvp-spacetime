@@ -52,6 +52,7 @@ import AdminDeleteRowReducer from "./admin_delete_row_reducer";
 import AdminForceFinalizeReducer from "./admin_force_finalize_reducer";
 import AdminGcIdentitiesReducer from "./admin_gc_identities_reducer";
 import AdminGcLobbiesReducer from "./admin_gc_lobbies_reducer";
+import AdminLiftSuspensionReducer from "./admin_lift_suspension_reducer";
 import AdminRecalculateAllRatingsReducer from "./admin_recalculate_all_ratings_reducer";
 import AdminRemoveCharacterArchetypesReducer from "./admin_remove_character_archetypes_reducer";
 import AdminRestartTournamentFinalizeReducer from "./admin_restart_tournament_finalize_reducer";
@@ -59,6 +60,7 @@ import AdminSeedEloConfigReducer from "./admin_seed_elo_config_reducer";
 import AdminSeedRatingConfigReducer from "./admin_seed_rating_config_reducer";
 import AdminSetGuestCreationReducer from "./admin_set_guest_creation_reducer";
 import AdminSetGuestLobbyCreationReducer from "./admin_set_guest_lobby_creation_reducer";
+import AdminSuspendUserReducer from "./admin_suspend_user_reducer";
 import AdminUnbanUserReducer from "./admin_unban_user_reducer";
 import AdminUpdateAbuseConfigReducer from "./admin_update_abuse_config_reducer";
 import AdminUpdateEloConfigReducer from "./admin_update_elo_config_reducer";
@@ -165,6 +167,7 @@ import SeedLobbyGcJobReducer from "./seed_lobby_gc_job_reducer";
 import SelectMatchAccountReducer from "./select_match_account_reducer";
 import SendChatMessageReducer from "./send_chat_message_reducer";
 import ServerDeleteUserReducer from "./server_delete_user_reducer";
+import ServerLiftSuspensionReducer from "./server_lift_suspension_reducer";
 import ServerNukeTestDataReducer from "./server_nuke_test_data_reducer";
 import ServerRegisterDelegateReducer from "./server_register_delegate_reducer";
 import ServerRegisterLinkerReducer from "./server_register_linker_reducer";
@@ -176,6 +179,7 @@ import ServerSetGuestLobbyCreationReducer from "./server_set_guest_lobby_creatio
 import ServerSetMmrReducer from "./server_set_mmr_reducer";
 import ServerSetOnlineReducer from "./server_set_online_reducer";
 import ServerSetRoleReducer from "./server_set_role_reducer";
+import ServerSuspendUserReducer from "./server_suspend_user_reducer";
 import SetActiveHsrAccountReducer from "./set_active_hsr_account_reducer";
 import SetActiveSeasonReducer from "./set_active_season_reducer";
 import SetAnonymousAliasReducer from "./set_anonymous_alias_reducer";
@@ -242,6 +246,7 @@ import ViewAdminDeletedUsersRow from "./view_admin_deleted_users_table";
 import ViewAdminLobbyBansRow from "./view_admin_lobby_bans_table";
 import ViewAdminPresenceRow from "./view_admin_presence_table";
 import ViewAdminStuckGamesRow from "./view_admin_stuck_games_table";
+import ViewAdminSuspensionsRow from "./view_admin_suspensions_table";
 import ViewAdminTournamentRow from "./view_admin_tournament_table";
 import ViewAdminTournamentEnrolledRow from "./view_admin_tournament_enrolled_table";
 import ViewAdminTournamentLobbiesRow from "./view_admin_tournament_lobbies_table";
@@ -293,6 +298,7 @@ import ViewMyRosterRow from "./view_my_roster_table";
 import ViewMyRosterVisibilityRow from "./view_my_roster_visibility_table";
 import ViewMySavedCalendarsRow from "./view_my_saved_calendars_table";
 import ViewMyStandInsRow from "./view_my_stand_ins_table";
+import ViewMySuspensionRow from "./view_my_suspension_table";
 import ViewMyTeamRequestsRow from "./view_my_team_requests_table";
 import ViewMyTournamentEnrolledRow from "./view_my_tournament_enrolled_table";
 import ViewMyTournamentEnrollmentRow from "./view_my_tournament_enrollment_table";
@@ -625,6 +631,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, ViewAdminStuckGamesRow),
+  viewAdminSuspensions: __table({
+    name: 'view_admin_suspensions',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, ViewAdminSuspensionsRow),
   viewAdminTournament: __table({
     name: 'view_admin_tournament',
     indexes: [
@@ -982,6 +995,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, ViewMyStandInsRow),
+  viewMySuspension: __table({
+    name: 'view_my_suspension',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, ViewMySuspensionRow),
   viewMyTeamRequests: __table({
     name: 'view_my_team_requests',
     indexes: [
@@ -1151,6 +1171,7 @@ const reducersSchema = __reducers(
   __reducerSchema("admin_force_finalize", AdminForceFinalizeReducer),
   __reducerSchema("admin_gc_identities", AdminGcIdentitiesReducer),
   __reducerSchema("admin_gc_lobbies", AdminGcLobbiesReducer),
+  __reducerSchema("admin_lift_suspension", AdminLiftSuspensionReducer),
   __reducerSchema("admin_recalculate_all_ratings", AdminRecalculateAllRatingsReducer),
   __reducerSchema("admin_remove_character_archetypes", AdminRemoveCharacterArchetypesReducer),
   __reducerSchema("admin_restart_tournament_finalize", AdminRestartTournamentFinalizeReducer),
@@ -1158,6 +1179,7 @@ const reducersSchema = __reducers(
   __reducerSchema("admin_seed_rating_config", AdminSeedRatingConfigReducer),
   __reducerSchema("admin_set_guest_creation", AdminSetGuestCreationReducer),
   __reducerSchema("admin_set_guest_lobby_creation", AdminSetGuestLobbyCreationReducer),
+  __reducerSchema("admin_suspend_user", AdminSuspendUserReducer),
   __reducerSchema("admin_unban_user", AdminUnbanUserReducer),
   __reducerSchema("admin_update_abuse_config", AdminUpdateAbuseConfigReducer),
   __reducerSchema("admin_update_elo_config", AdminUpdateEloConfigReducer),
@@ -1264,6 +1286,7 @@ const reducersSchema = __reducers(
   __reducerSchema("select_match_account", SelectMatchAccountReducer),
   __reducerSchema("send_chat_message", SendChatMessageReducer),
   __reducerSchema("server_delete_user", ServerDeleteUserReducer),
+  __reducerSchema("server_lift_suspension", ServerLiftSuspensionReducer),
   __reducerSchema("server_nuke_test_data", ServerNukeTestDataReducer),
   __reducerSchema("server_register_delegate", ServerRegisterDelegateReducer),
   __reducerSchema("server_register_linker", ServerRegisterLinkerReducer),
@@ -1275,6 +1298,7 @@ const reducersSchema = __reducers(
   __reducerSchema("server_set_mmr", ServerSetMmrReducer),
   __reducerSchema("server_set_online", ServerSetOnlineReducer),
   __reducerSchema("server_set_role", ServerSetRoleReducer),
+  __reducerSchema("server_suspend_user", ServerSuspendUserReducer),
   __reducerSchema("set_active_hsr_account", SetActiveHsrAccountReducer),
   __reducerSchema("set_active_season", SetActiveSeasonReducer),
   __reducerSchema("set_anonymous_alias", SetAnonymousAliasReducer),
@@ -1370,6 +1394,8 @@ type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "ta
     readonly "view_admin_presence": Omit<typeof tablesSchema.schemaType.tables["viewAdminPresence"], "accessorName"> & { readonly accessorName: "view_admin_presence" };
     /** @deprecated Use `viewAdminStuckGames` instead. This alias will be removed in the next major version. */
     readonly "view_admin_stuck_games": Omit<typeof tablesSchema.schemaType.tables["viewAdminStuckGames"], "accessorName"> & { readonly accessorName: "view_admin_stuck_games" };
+    /** @deprecated Use `viewAdminSuspensions` instead. This alias will be removed in the next major version. */
+    readonly "view_admin_suspensions": Omit<typeof tablesSchema.schemaType.tables["viewAdminSuspensions"], "accessorName"> & { readonly accessorName: "view_admin_suspensions" };
     /** @deprecated Use `viewAdminTournament` instead. This alias will be removed in the next major version. */
     readonly "view_admin_tournament": Omit<typeof tablesSchema.schemaType.tables["viewAdminTournament"], "accessorName"> & { readonly accessorName: "view_admin_tournament" };
     /** @deprecated Use `viewAdminTournamentEnrolled` instead. This alias will be removed in the next major version. */
@@ -1472,6 +1498,8 @@ type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "ta
     readonly "view_my_saved_calendars": Omit<typeof tablesSchema.schemaType.tables["viewMySavedCalendars"], "accessorName"> & { readonly accessorName: "view_my_saved_calendars" };
     /** @deprecated Use `viewMyStandIns` instead. This alias will be removed in the next major version. */
     readonly "view_my_stand_ins": Omit<typeof tablesSchema.schemaType.tables["viewMyStandIns"], "accessorName"> & { readonly accessorName: "view_my_stand_ins" };
+    /** @deprecated Use `viewMySuspension` instead. This alias will be removed in the next major version. */
+    readonly "view_my_suspension": Omit<typeof tablesSchema.schemaType.tables["viewMySuspension"], "accessorName"> & { readonly accessorName: "view_my_suspension" };
     /** @deprecated Use `viewMyTeamRequests` instead. This alias will be removed in the next major version. */
     readonly "view_my_team_requests": Omit<typeof tablesSchema.schemaType.tables["viewMyTeamRequests"], "accessorName"> & { readonly accessorName: "view_my_team_requests" };
     /** @deprecated Use `viewMyTournamentEnrolled` instead. This alias will be removed in the next major version. */
@@ -1558,6 +1586,7 @@ const tableAccessorAliases = {
   "view_admin_lobby_bans": "viewAdminLobbyBans",
   "view_admin_presence": "viewAdminPresence",
   "view_admin_stuck_games": "viewAdminStuckGames",
+  "view_admin_suspensions": "viewAdminSuspensions",
   "view_admin_tournament": "viewAdminTournament",
   "view_admin_tournament_enrolled": "viewAdminTournamentEnrolled",
   "view_admin_tournament_lobbies": "viewAdminTournamentLobbies",
@@ -1609,6 +1638,7 @@ const tableAccessorAliases = {
   "view_my_roster_visibility": "viewMyRosterVisibility",
   "view_my_saved_calendars": "viewMySavedCalendars",
   "view_my_stand_ins": "viewMyStandIns",
+  "view_my_suspension": "viewMySuspension",
   "view_my_team_requests": "viewMyTeamRequests",
   "view_my_tournament_enrolled": "viewMyTournamentEnrolled",
   "view_my_tournament_enrollment": "viewMyTournamentEnrollment",
@@ -1702,6 +1732,8 @@ export type Tables = __TablesBase & {
   readonly "view_admin_presence": __TablesBase["viewAdminPresence"];
   /** @deprecated Use `viewAdminStuckGames` instead. This alias will be removed in the next major version. */
   readonly "view_admin_stuck_games": __TablesBase["viewAdminStuckGames"];
+  /** @deprecated Use `viewAdminSuspensions` instead. This alias will be removed in the next major version. */
+  readonly "view_admin_suspensions": __TablesBase["viewAdminSuspensions"];
   /** @deprecated Use `viewAdminTournament` instead. This alias will be removed in the next major version. */
   readonly "view_admin_tournament": __TablesBase["viewAdminTournament"];
   /** @deprecated Use `viewAdminTournamentEnrolled` instead. This alias will be removed in the next major version. */
@@ -1804,6 +1836,8 @@ export type Tables = __TablesBase & {
   readonly "view_my_saved_calendars": __TablesBase["viewMySavedCalendars"];
   /** @deprecated Use `viewMyStandIns` instead. This alias will be removed in the next major version. */
   readonly "view_my_stand_ins": __TablesBase["viewMyStandIns"];
+  /** @deprecated Use `viewMySuspension` instead. This alias will be removed in the next major version. */
+  readonly "view_my_suspension": __TablesBase["viewMySuspension"];
   /** @deprecated Use `viewMyTeamRequests` instead. This alias will be removed in the next major version. */
   readonly "view_my_team_requests": __TablesBase["viewMyTeamRequests"];
   /** @deprecated Use `viewMyTournamentEnrolled` instead. This alias will be removed in the next major version. */

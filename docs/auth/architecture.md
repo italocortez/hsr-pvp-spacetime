@@ -584,6 +584,17 @@ The function maps 2xx to `confirm`; 530 to `refused` with the text only when the
 
 **Other notes (fix pass).** The page leaves only for `https:` on `https://discord.com` (a `blob:https://discord.com/…` address has Discord's origin and is refused); the dev-only loopback rule requires `http:`. The start POST gives up after 10 s (aborted; "failed"), so a hung function cannot leave the panel disabled. A 530 text is shown only without any C0 / C1 control character, U+2028 or U+2029, and a text starting with "forbidden" in any case, after whitespace or zero-width characters, counts as the guard refusal (`failed`).
 
+## Phase suspension-s1 execution (DECISIONS.md A195, A213, A214)
+
+Account suspension; the feature's own docs are [suspension architecture](../suspension/architecture.md) and [contract](../suspension/contract.md). What changed here:
+
+- New private table `user_suspension` (`userId` PK, `reason`, `suspendedById`, audit columns).
+- `getAuthenticatedUser`: after the `deletedAt` check and before the maintenance check, a suspended user is refused with "Your account is suspended." (`ensureNotSuspended`, `helpers/identity/suspension.ts`). The same check in `resolveUser` (`profile.ts`: the four profile reducers, `delete_my_account` included), `login_as_guest` (an existing mapping), `request_link_code` and `confirm_link` (after their `deletedAt` checks).
+- `planProviderLink`: after the ban check, "This account is suspended." when the Discord account's user or the requesting user is suspended (covers `linker_present_code` and `confirm_link`).
+- `performUserDeletion` deletes the user's `UserSuspension` row; `server_nuke_test_data` clears the table.
+- New server reducers `server_suspend_user(username, reason)` and `server_lift_suspension(username)` (`requireServer`, actor SYSTEM; `manage-user suspend` / `unsuspend`).
+- `client_connected` is unchanged: a suspended identity connects and reads as a visitor.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -633,6 +644,7 @@ The function maps 2xx to `confirm`; 530 to `refused` with the text only when the
 | The scheduled `run_user_deletion` and `run_identity_gc` refuse any caller but the scheduler (`ensureScheduler`, `ctx.senderAuth.isInternal`; L11); `admin_gc_identities` restarts a stopped `IdentityGcJob` chain (L6); a user deletion also removes the user's `LobbyCursorStamp` rows (L19) | Phase S11a execution (part 2, closing-triage items) | 2026-11-11 |
 | `performUserDeletion` ends with `removeDeletedUserFromLeaderboard` (the user's `Leaderboard` rows of every season go; the active season is rebuilt when it held one); `client_connected` admits a live Admin under maintenance mode; `login_as_guest` and the profile reducers (`resolveUser`) refuse a non-Admin under maintenance mode | Phase S11a execution (DECISIONS.md A163(1), A163(3)) | 2026-11-12 |
 | `performUserDeletion` also deletes the user's `UserLoadoutRate` row (the loadout save window; docs/loadout/architecture.md) | Phase S14.3s execution, S14.3s-limit (DECISIONS.md A194 item 6) | 2026-11-17 |
+| Account suspension: `user_suspension`; the check in `getAuthenticatedUser`, `resolveUser`, `login_as_guest`, `request_link_code`, `confirm_link`; the sign-in refusal in `planProviderLink`; `server_suspend_user` / `server_lift_suspension`; deleted by `performUserDeletion` and the nuke (docs/suspension/) | Phase suspension-s1 execution (DECISIONS.md A195, A213, A214) | 2026-11-17 |
 
 ---
 

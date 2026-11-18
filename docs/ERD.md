@@ -2,6 +2,8 @@
 
 76 tables. Updated 2026-11-06 (S3 backend reset: 27 tables public → private per A37 / ACCESS-SECURITY-OPS Appendix A, 10 new, `group_phase_record` dropped per A23). Visibility: **21 public** (reference data, aggregates, `user`, `tournament`, `bracket_match`, `admin_alert`, the `lobby_cursor_event` event table); every other table is PRIVATE and read through views (S9). Paste into [mermaid.live](https://mermaid.live) to preview. **Since S11a: `user` is private and `user_private` is merged into it; 78 table files in `spacetimedb/src/tables/`, 20 of them public (the 76 / 21 above predate later additions).**
 
+Phase suspension-s1 execution (DECISIONS.md A195, A213, A214): new PRIVATE table `user_suspension` (`userId` PK, `reason` (0-500, the admins' record only), `suspendedById`, audit columns): one row per suspended account, deleted by a lift, with the user (`performUserDeletion`) and by `server_nuke_test_data`; read only by the new view `view_my_suspension` (user id only) and the one primary-key check of the permission helper and the view caller helper. Additive: no existing table changes shape (docs/suspension/architecture.md).
+
 Phase S14.3c-rev execution (DECISIONS.md A198): `user_loadout` gains `rev` (u32, the loadout's version, sent by `view_my_loadouts`) and `firstRev` (u32, private), after `slot`; `user_loadout_rate` gains `revFloor` (u32, the highest version the account was ever given) after `saveCount`. Both tables were never published, so their shape changed freely; no other table changes (docs/loadout/architecture.md).
 
 Phase S14.3s execution, S14.3s-limit (DECISIONS.md A194 item 6): new PRIVATE table `user_loadout_rate` (`userId` PK, `windowStart`, `saveCount`, audit columns), the fixed 60 s window of a member's loadout saves (at most 6), off the membership allowance of `user_rate_state` (unchanged); deleted with the user and cleared by `server_nuke_test_data`. Additive: no existing table changes shape (docs/loadout/architecture.md).
@@ -31,7 +33,7 @@ Phase S7b execution (DECISIONS.md A60): `match_result_game` gains `blueConfirmed
 
 | Color | Tables (PUBLIC unless marked) |
 |-------|--------|
-| blue | user (PRIVATE since S11a, A77), user_presence (PRIVATE, new S3 A48), user_identity (PRIVATE), ~~user_private~~ (merged into user, S11a), ban_record (PRIVATE), link_request (PRIVATE, new S3 A46), deleted_user (PRIVATE), server_identity (PRIVATE), user_deletion_job, identity_gc_job, gc_result (PRIVATE) |
+| blue | user (PRIVATE since S11a, A77), user_presence (PRIVATE, new S3 A48), user_identity (PRIVATE), ~~user_private~~ (merged into user, S11a), ban_record (PRIVATE), link_request (PRIVATE, new S3 A46), user_suspension (PRIVATE, new suspension-s1), deleted_user (PRIVATE), server_identity (PRIVATE), user_deletion_job, identity_gc_job, gc_result (PRIVATE) |
 | green | hsr_character, hsr_lightcone, archetype, hsr_character_archetype, season |
 | orange | hsr_account (PRIVATE), hsr_account_character (PRIVATE), user_loadout (PRIVATE, new S14.3s), user_loadout_rate (PRIVATE, new S14.3s-limit), cost_set (PRIVATE since S11a), hsr_character_cost, hsr_lightcone_cost, hsr_synergy_cost (characterA/characterB, A21), cost_set_draft_character (PRIVATE), cost_set_draft_lightcone (PRIVATE), cost_set_draft_synergy (PRIVATE) |
 | purple | tournament, bracket_match, tournament_enrolled (PRIVATE), tournament_team_member (PRIVATE), tournament_assistant (PRIVATE), tournament_team (PRIVATE), tournament_team_request (PRIVATE), tournament_stand_in (PRIVATE), tournament_player_account (PRIVATE), tournament_finalize_job (scheduled, new S3 A24) |
@@ -72,6 +74,11 @@ erDiagram
         string code PK
         Identity identity UK
         u32 userId FK
+    }
+    user_suspension {
+        u32 userId PK_FK "row exists = suspended (suspension-s1)"
+        string reason "0-500, admins' record only"
+        u32 suspendedById FK "the Admin, or 0 (SYSTEM) for a server call"
     }
     deleted_user {
         u32 id PK "archived displayName of a hard-deleted user (Phase 15.2 D-05)"
@@ -650,6 +657,7 @@ erDiagram
     user_presence }o--|| user : "userId (many-to-one: one row per identity)"
     link_request }o--|| user : "userId (many-to-one)"
     user_rate_state ||--|| user : "userId (one-to-one)"
+    user_suspension |o--|| user : "userId (zero or one per user, suspension-s1)"
     deleted_user ||--o| user : "id (the former User.id; archive row, no live FK)"
 
     %% Phase 12.1: Identity GC + GC audit log

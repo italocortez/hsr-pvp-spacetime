@@ -7,6 +7,7 @@ import { syncSoloTeamNames } from '@module/helpers/tournament/tournamentHelpers'
 import { checkDisplayName, checkUsername } from '@module/helpers/identity/usernames';
 import { syncLeaderboardCard } from '@module/helpers/stats/leaderboardRebuild';
 import { ensureNotInMaintenance } from '@module/helpers/identity/ensurePermissions';
+import { ensureNotSuspended } from '@module/helpers/identity/suspension';
 
 /**
  * Helper: resolve ctx.sender → UserIdentity → User.
@@ -15,6 +16,7 @@ import { ensureNotInMaintenance } from '@module/helpers/identity/ensurePermissio
 function resolveUser(ctx: any) {
     const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
     const user = mapping ? ctx.db.User.id.find(mapping.userId) : undefined;
+    ensureNotSuspended(ctx, user); // suspension-s1 (A214(2)): delete_my_account is refused too
     ensureNotInMaintenance(ctx, user); // A163(3) (S11a): only an Admin acts while maintenance mode is on
     if (!mapping || !user) return null;
     return { mapping, user };

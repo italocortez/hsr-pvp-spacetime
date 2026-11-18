@@ -9,6 +9,12 @@
 // 6. view_user_achievements    — anonymous arg view (userId): a user's UserAchievement rows (S9b, A43, A40)
 // 7. view_admin_users          — Moderator+, every User row without the provider columns (A77(1), S11a)
 // 8. view_my_link_request      — per-user, the caller's link request: code, expiry, awaiting confirmation, pending name (M5a, M5a2)
+// 9. view_my_suspension        — per-user, one row (user id only) while the caller's account is suspended (suspension-s1)
+// 10. view_admin_suspensions   — Admin only, every suspended account with its reason (suspension-s1 fix pass)
+//
+// suspension-s1 (A195(2), A214(6)): every per-user view resolves its caller through callerUserId / callerMapping
+// (helpers/identity/viewAnonymity.ts), which treats a suspended caller as a visitor with no account; only
+// view_my_suspension reads the mapping itself.
 //
 // `User` is private since S11a (A77): these views and the denormalized names / avatars of the other views are the only
 // way user data reaches a client. No full scan in any view a non-staff client can read (S9b). The Moderator+ listings
@@ -17,15 +23,18 @@
 import spacetimedb from '@module/schema';
 import { t } from 'spacetimedb/server';
 import { Role } from '@module/types/enums';
-import { staffCaller } from '@module/helpers/identity/viewAnonymity';
+import { callerMapping, callerUserId, staffCaller } from '@module/helpers/identity/viewAnonymity';
 import { DISCORD_LOGIN_METHOD } from '@module/helpers/lobby/banHelper';
 import { isAwaitingConfirm } from '@module/helpers/identity/linkCode';
+import { isSuspended } from '@module/helpers/identity/suspension';
+import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
+import { SYSTEM_USER_ID } from '@module/helpers/admin/auditColumns';
 
 /** A77(2) (S11a): `hasDiscordLinked` is no longer stored; a user is Discord-linked when its login method is Discord. */
 const hasDiscordLinked = (user: any): boolean => user.loginMethod === DISCORD_LOGIN_METHOD;
 
 // ---------------------------------------------------------------------------
-// 1. My Identity (per-user view) — the caller's own identity mapping. Uses ctx.sender directly on the PK.
+// 1. My Identity (per-user view) — the caller's own identity mapping (callerMapping: none when suspended).
 //    S9b: identity + userId only (no audit columns, no lastSeenAt: a connect no longer rewrites the client row).
 // ---------------------------------------------------------------------------
 const MyIdentityRow = t.object('MyIdentityRow', {
@@ -38,7 +47,7 @@ export const view_my_identity = spacetimedb.view(
     { name: 'view_my_identity', public: true },
     t.option(MyIdentityRow),
     (ctx) => {
-        const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
+        const mapping = callerMapping(ctx); // suspension-s1: none for a suspended caller
         if (!mapping) return undefined;
         return { identity: mapping.identity, userId: mapping.userId };
     }
@@ -73,9 +82,9 @@ export const view_my_profile = spacetimedb.view(
     { name: 'view_my_profile', public: true },
     t.array(MyProfileRow),
     (ctx) => {
-        const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
-        if (!mapping) return [];
-        const user = ctx.db.User.id.find(mapping.userId);
+        const userId = callerUserId(ctx); // suspension-s1: none for a suspended caller
+        if (userId === undefined) return [];
+        const user = ctx.db.User.id.find(userId);
         if (!user) return [];
         return [{
             id: user.id,
@@ -122,8 +131,8 @@ export const view_my_link_request = spacetimedb.view(
         // M5a2 review: a row the caller can never use or replace (request_link_code refuses a linked or soft-deleted
         // user) is not shown: no row when the caller's user is gone, no longer a guest, linked, or soft-deleted. Two
         // primary-key reads; the row itself is left to the sweep (no deletion on read).
-        const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
-        const user = mapping ? ctx.db.User.id.find(mapping.userId) : undefined;
+        const userId = callerUserId(ctx); // suspension-s1: none for a suspended caller
+        const user = userId !== undefined ? ctx.db.User.id.find(userId) : undefined;
         if (!user || !user.isGuest || user.loginMethod !== undefined || user.deletedAt !== undefined) return [];
         const awaiting = isAwaitingConfirm(row);
         return [{
@@ -132,6 +141,76 @@ export const view_my_link_request = spacetimedb.view(
             awaitingConfirm: awaiting,
             pendingProviderName: awaiting ? row.pendingProviderName : undefined,
         }];
+    }
+);
+
+// ---------------------------------------------------------------------------
+// 9. view_my_suspension (per-user) — suspension-s1 (A195, A213, A214): one row when the caller's account is suspended,
+//    none otherwise. The one per-caller view that does not go through callerUserId (it must answer a suspended caller).
+//    The row carries the user id only: no reason, no staff id, no date (A213(5), A214(1)(5)); the client step shows the
+//    suspended screen while the row exists. Two primary-key reads (UserIdentity, UserSuspension); nothing is sent to a
+//    caller who is not suspended.
+// ---------------------------------------------------------------------------
+const MySuspensionRow = t.row('MySuspensionRow', {
+    userId: t.u32().primaryKey(),
+});
+
+export const view_my_suspension = spacetimedb.view(
+    { name: 'view_my_suspension', public: true },
+    t.array(MySuspensionRow),
+    (ctx) => {
+        const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
+        if (!mapping || !isSuspended(ctx, mapping.userId)) return [];
+        return [{ userId: mapping.userId }];
+    }
+);
+
+// ---------------------------------------------------------------------------
+// 10. view_admin_suspensions (Admin only) — suspension-s1 fix pass: the list of suspended accounts, for the
+//    `manage-user suspended` command and a later admin tab. Not in Layer 0. The caller is resolved through staffCaller
+//    (so through callerUserId: a suspended Admin gets nothing, the list holds their own reason), then an Admin role is
+//    required (a Moderator gets nothing). The script's delegate maps to the SYSTEM user (Admin, never suspended) and
+//    passes. Only after the role check is UserSuspension read in full (A37 exemption for admin views: small, tab-gated).
+//    One row per suspended user, PK `userId`: username and display name (User is private, so denormalized here), the
+//    reason, `suspendedById` (0 = SYSTEM_USER_ID, a server call) with that user's username (`SYSTEM` for 0; unset when
+//    the staff user no longer exists), and `suspendedAt` (the row's createdDate). A user pending deletion (deletedAt set,
+//    or the User row already gone) gives no row: the deletion removes the suspension within seconds.
+// ---------------------------------------------------------------------------
+const AdminSuspensionRow = t.row('AdminSuspensionRow', {
+    userId: t.u32().primaryKey(),
+    username: t.string(),
+    displayName: t.string(),
+    reason: t.string(),
+    suspendedById: t.u32(),
+    suspendedByUsername: t.string().optional(),
+    suspendedAt: t.timestamp(),
+});
+
+export const view_admin_suspensions = spacetimedb.view(
+    { name: 'view_admin_suspensions', public: true },
+    t.array(AdminSuspensionRow),
+    (ctx) => {
+        const staff = staffCaller(ctx); // through callerUserId: none for a suspended caller
+        if (!staff || !isRoleAtLeast(staff.role, 'Admin')) return [];
+        const rows: any[] = [];
+        // Admin-only full read after the role check (A37 exemption for admin views: small table, tab-gated)
+        for (const s of ctx.db.UserSuspension.iter()) {
+            const user = ctx.db.User.id.find(s.userId);
+            if (!user || user.deletedAt !== undefined) continue; // pending deletion: the row goes with the account
+            const byUsername = s.suspendedById === SYSTEM_USER_ID
+                ? 'SYSTEM'
+                : ctx.db.User.id.find(s.suspendedById)?.username;
+            rows.push({
+                userId: s.userId,
+                username: user.username,
+                displayName: user.displayName,
+                reason: s.reason,
+                suspendedById: s.suspendedById,
+                suspendedByUsername: byUsername,
+                suspendedAt: s.createdDate,
+            });
+        }
+        return rows;
     }
 );
 

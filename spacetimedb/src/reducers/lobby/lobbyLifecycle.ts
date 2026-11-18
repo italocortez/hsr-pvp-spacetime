@@ -19,19 +19,18 @@ import {
     slotIsCoach,
     slotIsSpectator,
     LIVE_STAGES,
-    memberHasLeft,
     resolveMaxSpectators,
     PRIVATE_LOBBY_PASSWORD_TEXT,
 } from '@module/helpers/lobby/lobbyHelpers';
 import { hardDeleteLobby } from './lobbyGc';
 import { removeMemberRow } from '@module/helpers/lobby/memberRemoval';
+import { leaveMembership } from '@module/helpers/lobby/memberLeave';
 import { resolveUserLabel } from '@module/helpers/identity/userLabel';
 import { memberEventLabel, postMemberEventChat } from '@module/helpers/lobby/memberEventChat';
 import {
     ensureForfeitSecondsInRange,
     ensureNoActionAllowed,
     ensureNotDeferredOutsideTournament,
-    markMemberOffline,
 } from '@module/helpers/lobby/disconnectHelpers';
 import { consumeLobbyCreateAllowance, consumeMembershipAllowance, readAbuseConfig, recordGuestLobbyCreation } from '@module/helpers/lobby/abuseControls';
 import { CONFIRM_WINDOW_SECONDS_DEFAULT, ensureLobbyConfigInRange, ensureTeamAliases, resolveConfirmWindowSeconds } from '@module/helpers/lobby/lobbyConfigBounds';
@@ -460,37 +459,13 @@ export const leave_lobby = spacetimedb.reducer(
             throw new SenderError('Lobby not found.');
         }
 
-        const isLiveStage = LIVE_STAGES.includes(lobby.stage.tag);
-        const isPlayer = !slotIsSpectator(member.lobbySlot) && !slotIsCoach(member.lobbySlot);
-
-        if (isLiveStage && isPlayer) {
-            // A68(2): already away (or abandoned): a second Leave changes nothing, so the clock keeps its first stamp.
-            if (memberHasLeft(member)) return;
-
-            markMemberOffline(ctx, lobby, member, user.id, { leftAt: ctx.timestamp });
-
-            // D-11: system message (S9a fix, A37: rendered per reader by view_my_lobby_chat)
-            postMemberEventChat(ctx, lobby, 'away', user.id, user.displayName, user.id);
-
-            // Update activity (do NOT decrement currentPlayerCount — row is kept)
-            ctx.db.Lobby.id.update(updateWithAudit(ctx, lobby, {
-                lastActivityAt: ctx.timestamp,
-            }, user.id));
-
+        // suspension-s1: the rules live in leaveMembership (helpers/lobby/memberLeave.ts), shared with a suspension.
+        const outcome = leaveMembership(ctx, lobby, member, user, user.id);
+        if (outcome === 'away') {
             console.log(`[LOBBY] User #${user.id} left the live match in lobby #${lobbyId} (away, A68(1))`);
-            return;
+        } else if (outcome === 'removed') {
+            console.log(`[LOBBY] User #${user.id} left lobby #${lobbyId}`);
         }
-
-        const leaverLabel = memberEventLabel(ctx, lobby, user.id); // read before the row is removed
-        if (!removeMemberRow(ctx, lobbyId, user.id, user.id)) return; // empty Waiting lobby deleted
-
-        // D-11: system message (a spectator's or coach's leave during the match stays silent, as before)
-        // S9a fix (A37): rendered per reader by view_my_lobby_chat
-        if (!isLiveStage) {
-            postMemberEventChat(ctx, lobby, 'left', user.id, user.displayName, user.id, leaverLabel);
-        }
-
-        console.log(`[LOBBY] User #${user.id} left lobby #${lobbyId}`);
     }
 );
 

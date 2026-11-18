@@ -24,6 +24,7 @@ import { markPresenceOnline } from '@module/helpers/identity/presenceHelpers';
 import { recordGuestCreation } from '@module/helpers/lobby/abuseControls';
 import { guestUsernameBase, uniqueUsername } from '@module/helpers/identity/usernames';
 import { ensureNotInMaintenance } from '@module/helpers/identity/ensurePermissions';
+import { ensureNotSuspended } from '@module/helpers/identity/suspension';
 
 /**
  * Login as a guest user.
@@ -42,8 +43,12 @@ export const login_as_guest = spacetimedb.reducer((ctx) => {
     // M5a3: the Linker identity of the auth function never becomes a user (no guest row, no presence).
     if (isLinkerIdentity(ctx, ctx.sender)) throw new SenderError(LINKER_NOT_A_USER_TEXT);
     const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
+    const mappedUser = mapping ? ctx.db.User.id.find(mapping.userId) : undefined;
+    // suspension-s1: one rule for every user reducer; a suspended account is refused here too (a guest is never
+    // suspended, but a verified identity can call this).
+    ensureNotSuspended(ctx, mappedUser);
     // A163(3) (S11a): while maintenance mode is on only an Admin acts; no guest is created or refreshed.
-    ensureNotInMaintenance(ctx, mapping ? ctx.db.User.id.find(mapping.userId) : undefined);
+    ensureNotInMaintenance(ctx, mappedUser);
     if (mapping) {
         const user = ctx.db.User.id.find(mapping.userId);
         if (user) {
@@ -125,6 +130,8 @@ export const request_link_code = spacetimedb.reducer({
     checkClientNonce(clientNonce);
     const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
     const user = mapping ? ctx.db.User.id.find(mapping.userId) : undefined;
+    // suspension-s1: a live suspended user is refused before maintenance, as in getAuthenticatedUser (review M2).
+    if (user && user.deletedAt === undefined) ensureNotSuspended(ctx, user);
     ensureNotInMaintenance(ctx, user);
     if (!mapping || !user) throw new SenderError(NO_ACCOUNT_FOR_LINK_TEXT);
     if (user.deletedAt !== undefined) throw new SenderError(DELETED_ACCOUNT_TEXT);
@@ -167,6 +174,8 @@ export const confirm_link = spacetimedb.reducer({
     if (!isBase64Url32(confirmToken)) throw new SenderError(CONFIRM_TOKEN_INVALID_TEXT);
     const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
     const user = mapping ? ctx.db.User.id.find(mapping.userId) : undefined;
+    // suspension-s1: a live suspended user is refused before maintenance, as in getAuthenticatedUser (review M2).
+    if (user && user.deletedAt === undefined) ensureNotSuspended(ctx, user);
     ensureNotInMaintenance(ctx, user);
     if (!mapping || !user) throw new SenderError(NO_ACCOUNT_FOR_LINK_TEXT);
     if (user.deletedAt !== undefined) throw new SenderError(DELETED_ACCOUNT_TEXT);

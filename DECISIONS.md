@@ -2236,3 +2236,23 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   6. Orchestrator, from the research (`tmp/suspension/research.md`, local): what can be enforced is no writing (one check in the shared permission helper, plus one line in eight reducers), no reading of the person's own data (the caller-dependent views return nothing), and a refused Discord sign-in. Public data stays readable, the module cannot close a live connection or cancel a token, and a cleared browser is a fresh visitor; so "signed out" means the person's own data goes empty at once and the app shows the suspended screen. A suspended player in a live match becomes away, their host, captain or referee role passes on, and the existing rules for an absent player run, with no automatic forfeit (A68). A ban or deletion removes the suspension. Order: the backend with the script command, then the suspended screen, then the admin controls with the admin page.
 - **Why:** user, 2026-11-17: "Suspensions are manual, so why not have the lift of a suspension manual as well? I agree on your recomendations for your 4 questions."
 - **Where implemented:** not yet.
+
+### A215 — Account suspension: an Admin cannot suspend an Admin; the server can
+
+- **Date:** 2026-11-17 · **Status:** item 1 decided; items 2 to 4 are the orchestrator's choices for the build, open to change
+- **Decision:**
+  1. From the app, an Admin cannot suspend an Admin. Suspending is also a server function, run as the SYSTEM user through the command line script. Orchestrator's reading: the server function accepts any verified account except SYSTEM, so it is the way an Admin gets suspended.
+  2. Orchestrator: lifting from the app stays open to any Admin for any suspended account, a suspended Admin included.
+  3. Orchestrator: a suspended member of a lobby that has not started, and any spectator or coach, loses the seat as if they had pressed Leave; a player in a live match becomes away (A214 item 6).
+  4. Orchestrator: suspending an account that is already suspended is refused, since there is no end date to extend.
+- **Why:** user, 2026-11-17: "admins cannot suspend admins. Also make this function a server function so we can use it with the SYSTEM user"
+- **Where implemented:** `spacetimedb/src/reducers/admin/suspensionAdmin.ts`, `spacetimedb/src/reducers/identity/server.ts`, `spacetimedb/src/helpers/identity/suspensionActions.ts`; `docs/suspension/`
+
+### A216 — Only the server changes an Admin's role
+
+- **Date:** 2026-11-17 · **Status:** item 1 decided; item 2 is the orchestrator's reading, open to change
+- **Decision:**
+  1. From the app, an Admin cannot demote another Admin. Only the server (the SYSTEM user, through the command line script's role command) can. This closes the path "demote an Admin, then suspend them" that the suspension review pointed out (A215).
+  2. Orchestrator: an Admin changing their own role, and any edit of another Admin that does not touch the role, stay as they were.
+- **Why:** user, 2026-11-17: "Admins should not demote other admins, only system can demote admins"
+- **Where implemented:** `admin_update_user` in `spacetimedb/src/reducers/admin/admin.ts`; `docs/admin/`; log `docs/log/2026-11-17-suspension-s1.md`

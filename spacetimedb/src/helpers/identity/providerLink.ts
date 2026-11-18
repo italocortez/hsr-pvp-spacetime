@@ -7,6 +7,7 @@ import { uniqueUsername, USERNAME_MAX_LENGTH } from '@module/helpers/identity/us
 import { moveTournamentTiesToUser } from '@module/helpers/tournament/entryTransfer';
 import { rejectIfBanned, DISCORD_LOGIN_METHOD } from '@module/helpers/lobby/banHelper';
 import { LIVE_STAGES, slotIsCoach, slotIsSpectator } from '@module/helpers/lobby/lobbyHelpers';
+import { isSuspended, SUSPENDED_SIGN_IN_TEXT } from './suspension';
 
 // The guest -> verified merge of a provider link. Since M5a3 only confirm_link runs it (the identity is the caller,
 // found through its LinkRequest row); linker_present_code runs planProviderLink as a pre-check, and the direct
@@ -109,6 +110,15 @@ export function planProviderLink(ctx: any, input: ProviderLinkInput, resolveIden
     const existingByProvider = [...ctx.db.User.provider_id.filter(providerId)]
         .filter((u: any) => u.loginMethod === loginMethod);
     const providerOwner = existingByProvider.length > 0 ? existingByProvider[0] : null;
+
+    // suspension-s1 (A195, A214): no sign-in to a suspended account. Covers linker_present_code (the pre-check) and
+    // confirm_link (run again before the merge). The requesting side is checked too, for one rule (a guest is never
+    // suspended, A213(7)). One short line with no date: the auth function shows it after "Sign-in refused." (A178(6)).
+    // Every holder of the Discord id is tested, not only the first (review M9; two holders should never exist).
+    const anyHolderSuspended = existingByProvider.some((u: any) => isSuspended(ctx, u.id));
+    if (anyHolderSuspended || (currentUser && isSuspended(ctx, currentUser.id))) {
+        throw new SenderError(SUSPENDED_SIGN_IN_TEXT);
+    }
 
     // M5a3: both reducers that run the merge first require the live, unlinked guest that asked
     // (ensureStillTheRequestingGuest), so the non-guest sides below (a verified currentUser: re-point without the

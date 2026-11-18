@@ -9,6 +9,7 @@ import { seedAbuseConfigDefaults } from '@module/helpers/lobby/abuseControls';
 import { seedSystemLobbyPreset } from '@module/helpers/lobby/systemPreset';
 import { memberHasLeft } from '@module/helpers/lobby/lobbyHelpers';
 import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
+import { isSuspended } from '@module/helpers/identity/suspension';
 import { trustedServerRow } from '@module/helpers/identity/serverIdentities';
 
 // Private auth tables — imported for schema registration (UserPrivate was merged into User, A77)
@@ -36,6 +37,8 @@ export {
     view_user_achievements,                 // S9b: arg view (userId)
     view_admin_users,                       // S11a (A77): Moderator+, the admin Users tab
     view_my_link_request,                   // M5a: the caller's one-time link code
+    view_my_suspension,                     // suspension-s1: one row while the caller is suspended
+    view_admin_suspensions,                 // suspension-s1 fix pass: Admin only, the suspended accounts
 } from '@module/views/identityViews';
 export {
     view_my_cost_sets,
@@ -124,8 +127,9 @@ export {
 export { broadcast_cursor } from '@module/reducers/lobby/cursor';
 export { login_as_guest, request_link_code, confirm_link } from '@module/reducers/identity/auth';
 export { delete_my_account, update_display_name, update_username, update_avatar } from '@module/reducers/identity/profile';
-export { server_register_delegate, server_revoke_delegate, server_register_linker, server_revoke_linker, linker_present_code, server_set_role, server_delete_user, server_set_guest_creation, server_set_guest_lobby_creation, server_set_datetime, server_set_online, server_set_mmr, server_nuke_test_data } from '@module/reducers/identity/server';
+export { server_register_delegate, server_revoke_delegate, server_register_linker, server_revoke_linker, linker_present_code, server_set_role, server_delete_user, server_suspend_user, server_lift_suspension, server_set_guest_creation, server_set_guest_lobby_creation, server_set_datetime, server_set_online, server_set_mmr, server_nuke_test_data } from '@module/reducers/identity/server';
 export { admin_ban_user, admin_unban_user } from '@module/reducers/admin/banAdmin';
+export { admin_suspend_user, admin_lift_suspension } from '@module/reducers/admin/suspensionAdmin'; // suspension-s1
 export { admin_delete_row, admin_bulk_upsert, admin_update_user } from '@module/reducers/admin/admin';
 export { admin_update_elo_config, admin_seed_elo_config } from '@module/reducers/stats/eloAdmin';
 export { admin_seed_rating_config, admin_update_rating_config, admin_recalculate_all_ratings } from '@module/reducers/stats/ratingAdmin';
@@ -236,7 +240,9 @@ export const client_connected = spacetimedb.clientConnected((ctx) => {
   if (abuseConfig?.maintenanceMode && !trustedServerRow(ctx, ctx.sender)) {
     const adminMapping = ctx.db.UserIdentity.identity.find(ctx.sender);
     const adminUser = adminMapping ? ctx.db.User.id.find(adminMapping.userId) : undefined;
-    if (!adminUser || adminUser.deletedAt || !isRoleAtLeast(adminUser.role, 'Admin')) {
+    // suspension-s1 (review M3): a suspended Admin is refused like a non-Admin. Outside maintenance a suspended
+    // identity still connects, so it can read view_my_suspension and show the suspended screen.
+    if (!adminUser || adminUser.deletedAt || !isRoleAtLeast(adminUser.role, 'Admin') || isSuspended(ctx, adminUser.id)) {
       throw new Error('Maintenance mode: connections are not accepted right now.');
     }
   }

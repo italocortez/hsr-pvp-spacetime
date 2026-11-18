@@ -1,5 +1,6 @@
 import { SenderError } from 'spacetimedb/server';
 import { ABUSE_CONFIG_ID } from '@module/helpers/lobby/abuseControls';
+import { ensureNotSuspended } from './suspension';
 
 const ROLE_LEVEL: Record<string, number> = {
     Admin: 100,
@@ -44,6 +45,8 @@ export function getAuthenticatedUser(ctx: any) {
     if (user.deletedAt) {
         throw new SenderError("Unauthorized: This account has been deleted.");
     }
+    // suspension-s1 (A195, A214): a suspended account writes nothing, during maintenance too (checked first).
+    ensureNotSuspended(ctx, user);
     ensureNotInMaintenance(ctx, user);
     return user;
 }

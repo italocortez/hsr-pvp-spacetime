@@ -14,7 +14,7 @@ import { t } from 'spacetimedb/server';
 import {
     TeamSide, MatchResultStatus, MatchType, MatchEndReason, ConcedeTrigger, GameMode, LobbyStage,
 } from '@module/types/enums';
-import { callerMemberships, maskUserId } from '@module/helpers/identity/viewAnonymity';
+import { callerMemberships, maskUserId, staffCaller } from '@module/helpers/identity/viewAnonymity';
 import { findLobbyResult, findGame, isUnresolvedTie } from '@module/helpers/results/scoringHelpers';
 import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 
@@ -203,10 +203,7 @@ export const view_admin_stuck_games = spacetimedb.view(
     { name: 'view_admin_stuck_games', public: true },
     t.array(StuckGameRow),
     (ctx) => {
-        const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
-        if (!mapping) return [];
-        const user = ctx.db.User.id.find(mapping.userId);
-        if (!user || !isRoleAtLeast(user.role, 'Moderator')) return [];
+        if (!staffCaller(ctx)) return []; // suspension-s1: through callerUserId (a suspended caller is a visitor)
         const rows: any[] = [];
         for (const lobby of ctx.db.Lobby.stage.filter({ tag: 'Scoring', value: {} } as any)) {
             if (lobby.matchType.tag !== 'Ranked') continue;

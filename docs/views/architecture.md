@@ -579,6 +579,17 @@ New file `views/loadoutViews.ts` (exported from `index.ts`). Table, reducers, si
 |---|---|---|---|---|---|
 | `view_my_loadouts` (new) | loadoutViews | per-sender (a guest or an unmapped identity gets `[]`) | `MyLoadoutRow` (PK `slot`): rev (S14.3c-rev), name, note, code | own; no id, user id or audit columns | `UserIdentity.identity`, `User.id`, `UserLoadout.user_id` |
 
+## Phase suspension-s1 execution (DECISIONS.md A195, A213, A214)
+
+A suspended caller reads every per-caller view as a visitor with no account ([suspension architecture](../suspension/architecture.md), the full view audit in the [suspension contract](../suspension/contract.md)).
+
+- `helpers/identity/viewAnonymity.ts`: `callerUserId` returns undefined for a suspended user (one extra primary-key read, `UserSuspension.userId`); new `callerMapping` (the caller's `UserIdentity` row, same rule); `callerMemberships` and `staffCaller` go through `callerUserId`.
+- The local `callerUserId` copies in `tournamentViews.ts` and `matchHistoryViews.ts` are removed (the shared one is imported). The inline `UserIdentity.identity.find(ctx.sender)` reads now go through the helper: `view_my_identity` (`callerMapping`), `view_my_profile`, `view_my_link_request`, `view_lobby_presets`, the five cost set views, `view_my_tournament_enrollment`, `view_my_team_requests`, `view_my_stand_ins`, `view_tournament_matches_for_me` (`callerUserId`), `view_admin_stuck_games` (`staffCaller`). Rows for every other caller are unchanged.
+- New per-caller view `view_my_suspension` (`identityViews.ts`): `MySuspensionRow { userId: u32 PK }`, one row while the caller is suspended, none otherwise; no reason, no staff id, no date. The one per-caller view that reads the mapping itself. Not yet in Layer 0 (the client step adds it).
+- New staff view `view_admin_suspensions` (`identityViews.ts`, fix pass): `AdminSuspensionRow { userId: u32 PK, username, displayName, reason, suspendedById, suspendedByUsername?, suspendedAt }`, one row per suspended account. Caller through `staffCaller` (a suspended Admin gets nothing), then an Admin role (a Moderator gets nothing); a full read of the private `UserSuspension` only after that check (A37 exemption for admin views); a target pending deletion gives no row; "SYSTEM" as `suspendedByUsername` for actor 0. Not in Layer 0; the `manage-user suspended` command subscribes it. Details: [suspension architecture](../suspension/architecture.md).
+- `spacetimedb/src/__tests__/identity/suspension-structure.test.ts` pins where a view may read `ctx.sender` (only through the shared helpers, `view_my_suspension` and the `LinkRequest` read of `view_my_link_request`); a new view that resolves its caller itself fails it.
+- Anonymous views and public tables are unchanged.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -624,6 +635,8 @@ New file `views/loadoutViews.ts` (exported from `index.ts`). Table, reducers, si
 | A match event's organizer reads the attendee list and the organizer rows of `view_my_calendar_invites` only with the bracket permission; an Admin reads every attendee list | Phase S11a execution (DECISIONS.md A162) | 2026-11-11 |
 | `view_my_loadouts` (new, `loadoutViews.ts`): the caller's team builder loadouts from the private `UserLoadout` | Phase S14.3s execution (DECISIONS.md A190 items 1, 3, 15) | 2026-11-17 |
 | `view_my_loadouts` rows gain `rev` (u32, the loadout's version, 4 B a row); `firstRev` stays private | Phase S14.3c-rev execution (DECISIONS.md A198) | 2026-11-17 |
+| Every per-caller view answers a suspended caller as a visitor (`callerUserId` / `callerMapping`, the local copies and inline caller reads routed through them); new `view_my_suspension` | Phase suspension-s1 execution (DECISIONS.md A195, A213, A214) | 2026-11-17 |
+| Fix pass: new `view_admin_suspensions` (Admin only, the suspended accounts with reason and suspending account); a structural test pins the caller reads | Phase suspension-s1 execution (DECISIONS.md A214, A215) | 2026-11-17 |
 ---
 
 *Last updated: 2026-11-17 (S14.3s)*

@@ -4,18 +4,22 @@ import { resolveUserLabel } from './userLabel';
 import { slotIsSpectator, slotSameTeam } from '@module/helpers/lobby/lobbyHelpers';
 import { parseMemberEvent, renderMemberEvent } from '@module/helpers/lobby/memberEventChat';
 import { isRoleAtLeast } from './ensurePermissions';
+import { isSuspended } from './suspension';
 
 // ─── View-side anonymity (S9a; A37, A40) ────────────────────────────────────────────────────────────────────
 // Read-only helpers shared by the per-sender lobby / match views. Index-only: UserIdentity.identity,
 // LobbyMember.user_id / by_lobby_and_user, Lobby.id. Nothing here writes.
 
-/** The caller's user id and the memberships the per-sender views fan out from: abandoned rows excluded (A68(4)(10)). */
+/**
+ * The caller's user id and the memberships the per-sender views fan out from: abandoned rows excluded (A68(4)(10)).
+ * suspension-s1: null for a suspended caller too (callerUserId), so every lobby and match view returns what a visitor gets.
+ */
 export function callerMemberships(ctx: any): { userId: number; memberships: any[] } | null {
-    const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
-    if (!mapping) return null;
-    const memberships = [...ctx.db.LobbyMember.user_id.filter(mapping.userId)]
+    const userId = callerUserId(ctx);
+    if (userId === undefined) return null;
+    const memberships = [...ctx.db.LobbyMember.user_id.filter(userId)]
         .filter((m: any) => m.abandonedAt === undefined);
-    return { userId: mapping.userId, memberships };
+    return { userId, memberships };
 }
 
 /** The lobby's anonymity flags apply to this caller at all (D-71: a spectator referee sees every real identity). */
@@ -111,9 +115,21 @@ export function renderSystemChat(ctx: any, lobby: any, caller: any, msg: any): {
 
 // ─── S9b additions ───────────────────────────────────────────────────────────────────────────────────────────
 
-/** S9b: the caller's user id (UserIdentity.identity), or undefined for an unmapped identity. */
+/**
+ * S9b: the caller's user id (UserIdentity.identity), or undefined for an unmapped identity.
+ * suspension-s1 (A195(2), A214(6)): undefined for a suspended user as well, so every per-caller view returns what a
+ * visitor with no account gets. The one place a view resolves its caller: callerMemberships, staffCaller, callerMapping
+ * and every view file go through it (one extra primary-key read). view_my_suspension is the one exception.
+ */
 export function callerUserId(ctx: any): number | undefined {
-    return ctx.db.UserIdentity.identity.find(ctx.sender)?.userId;
+    return callerMapping(ctx)?.userId;
+}
+
+/** suspension-s1: the caller's UserIdentity row, or undefined for an unmapped identity or a suspended user. */
+export function callerMapping(ctx: any): any | undefined {
+    const mapping = ctx.db.UserIdentity.identity.find(ctx.sender);
+    if (!mapping || isSuspended(ctx, mapping.userId)) return undefined;
+    return mapping;
 }
 
 /** S9b staff views: the caller's User row when their role is Moderator or above, else undefined (the view returns []). */
