@@ -53,12 +53,14 @@ afterEach(() => {
 });
 
 describe('the sign-in panel chunk loads (pendingMs: 0)', () => {
-    it('a click from /lobbies commits the frame before the chunk resolves, then the panel', async () => {
-        const user = userEvent.setup();
+    it('a navigation from /lobbies commits the frame before the chunk resolves, then the panel', async () => {
         const pending = deferredChunk();
         const r = renderWithRouter('/lobbies', AUTH.visitor);
         await screen.findByRole('heading', { level: 1, name: /Module/ });
-        await user.click(screen.getByRole('link', { name: 'Sign in' }));
+        // S14.4b: the bar's "Sign in" opens the dialog now; the panel is reached by a guard's redirect.
+        act(() => {
+            void r.router.navigate({ to: '/', search: { login: 1, next: '/lobbies' } });
+        });
         // Still loading: the frame (its h1 and the disabled button), outside the shell.
         expect(await screen.findByRole('heading', { level: 1, name: 'Sign in.' })).toBeVisible();
         expect(screen.getByRole('button', { name: 'Sign in with Discord' })).toBeDisabled();
@@ -88,13 +90,16 @@ describe('the sign-in panel chunk fails to load', () => {
         await waitFor(() => expect(document.title).toBe('Connection lost — IPC Battlegrounds'));
     }
 
-    it('on a click from /lobbies: the offline splash, and Retry reloads the page', async () => {
+    it('on a navigation from /lobbies: the offline splash, and Retry reloads the page', async () => {
         const user = userEvent.setup();
         const reload = vi.spyOn(pageReload, 'run').mockImplementation(() => {});
         failingChunk();
-        renderWithRouter('/lobbies', AUTH.visitor);
+        const r = renderWithRouter('/lobbies', AUTH.visitor);
         await screen.findByRole('heading', { level: 1, name: /Module/ });
-        await user.click(screen.getByRole('link', { name: 'Sign in' }));
+        // S14.4b: the bar's "Sign in" opens the dialog now; the panel is reached by a guard's redirect.
+        act(() => {
+            void r.router.navigate({ to: '/', search: { login: 1, next: '/lobbies' } });
+        });
         await expectLoadFailed();
         await user.click(screen.getByRole('button', { name: 'Retry' }));
         expect(reload).toHaveBeenCalledTimes(1);

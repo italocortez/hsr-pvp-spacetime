@@ -11,6 +11,7 @@ import {
 import type { AuthSnapshot } from '@/auth/authStore';
 import { loginSearchFor } from '@/auth/loginSearch';
 import { signOut } from '@/auth/signOut';
+import { openSignInDialog, preloadSignInDialog } from '@/pages/sign-in/signInDialogState';
 import styles from './AccountArea.module.css';
 
 /** The menu's actions, an object so tests can spy on them. `signOut` is SDK-free (entry chunk). */
@@ -19,10 +20,22 @@ export const accountActions = {
 };
 
 /**
+ * A plain click on "Sign in" opens the sign-in dialog over the page (S14.4b, A221 R1) instead of following the link.
+ * A modified or middle click still opens the full-screen panel (`/?login=1&next=…`) in a new tab or window.
+ */
+function openDialogInstead(event: MouseEvent<HTMLAnchorElement>): void {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+        return;
+    event.preventDefault();
+    openSignInDialog(event.currentTarget);
+}
+
+/**
  * The bar's account area (S14.1), one fixed-size slot in every auth state so nothing moves when
  * the profile arrives: a neutral placeholder while auth is not ready; "Sign in" for a visitor or
- * a guest (to `/?login=1&next=<this page>`); for a member the account chip (the mockups'
- * `.accountChip`, initials in place of the avatar) opening a menu with Profile and Sign out.
+ * a guest (a link to `/?login=1&next=<this page>` whose plain click opens the sign-in dialog,
+ * S14.4b); for a member the account chip (the mockups' `.accountChip`, initials in place of the
+ * avatar) opening a menu with Profile and Sign out.
  */
 export function AccountArea({ auth }: { auth: AuthSnapshot }) {
     const href = useRouterState({ select: (s) => s.location.href });
@@ -35,7 +48,17 @@ export function AccountArea({ auth }: { auth: AuthSnapshot }) {
         content = <AccountMenu name={member.displayName?.trim() || 'Account'} />;
     } else {
         content = (
-            <Link className={styles.signIn} to="/" search={loginSearchFor(href)}>
+            <Link
+                className={styles.signIn}
+                to="/"
+                search={loginSearchFor(href)}
+                // The dialog replaces the panel here: no route preload on hover, the dialog's chunk instead.
+                preload={false}
+                aria-haspopup="dialog"
+                onClick={openDialogInstead}
+                onPointerEnter={preloadSignInDialog}
+                onFocus={preloadSignInDialog}
+            >
                 Sign in
             </Link>
         );

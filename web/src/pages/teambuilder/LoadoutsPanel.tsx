@@ -8,7 +8,6 @@ import {
 } from '@shared/loadouts';
 import { Link, useRouterState } from '@tanstack/react-router';
 import {
-    type FormEvent,
     type KeyboardEvent,
     type MouseEvent,
     type ReactNode,
@@ -20,6 +19,8 @@ import {
     useState,
 } from 'react';
 import { loginSearchFor } from '@/auth/loginSearch';
+import { Dialog } from '@/components/Dialog/Dialog';
+import { dialogInTurn } from '@/components/Dialog/dialogQueue';
 import hidden from '@/styles/visuallyHidden.module.css';
 import { accountView, reasonText, SAVE_TIP, SaveIndicator, type SaveView } from './AutosaveRing';
 import styles from './LoadoutsPanel.module.css';
@@ -61,6 +62,9 @@ import type { HeldInfo, LoadoutItem, LoadoutsState, Store } from './useLoadouts'
  * loadout stays held (nothing saved, nothing dropped) and the card shows one line with a button that opens it again.
  * The one-off notice ("deleted on another device, its team stays here") is a dialog too (`NoticeDialog`), dismissed
  * by its button or Escape. One dialog at a time: delete, then the held choice, then the notice.
+ *
+ * S14.4b: the three dialogs are the shared `components/Dialog` (same look, same behaviour); the queue is its
+ * `dialogInTurn`.
  */
 
 const SIGN_IN_LINK = 'Sign in with Discord';
@@ -124,7 +128,6 @@ export function LoadoutsPanel({
     const ids = useId();
     const nameRef = useRef<HTMLInputElement>(null);
     const caretRef = useRef<HTMLButtonElement>(null);
-    const dialogRef = useRef<HTMLDialogElement>(null);
     const cancelRef = useRef<HTMLButtonElement>(null);
     const [field, setField] = useState(loadouts.name);
     const [focused, setFocused] = useState(false);
@@ -231,18 +234,8 @@ export function LoadoutsPanel({
         const ref = { kind: item.store, key: item.key };
         setPending({ ...ref, name: item.name, seen: loadouts.deleteVersion(ref) });
     };
-    useEffect(() => {
-        const d = dialogRef.current;
-        if (!pending || !d || d.open) return;
-        if (typeof d.showModal === 'function') d.showModal();
-        else d.setAttribute('open', '');
-        // The safe action takes focus (React keeps no autofocus attribute for the dialog to find).
-        cancelRef.current?.focus();
-    }, [pending]);
-    const onDialogClose = async () => {
-        const d = dialogRef.current;
-        const choice = d?.returnValue ?? '';
-        if (d) d.returnValue = '';
+    // The dialog (shared `Dialog`) opens while `pending` is set; the safe action, Cancel, takes focus.
+    const onDialogClose = async (choice: string) => {
         const target = pending;
         setPending(null);
         caretRef.current?.focus();
@@ -271,7 +264,12 @@ export function LoadoutsPanel({
     const heldWaits = held !== null && dismissed === heldId;
     // One dialog at a time (S14.3j): the delete confirmation first, then the held choice, then the notice. A dialog
     // that has to wait stays closed (or is closed by the page, nothing chosen) and opens once those before it close.
-    const heldShown = held !== null && !heldWaits && pending === null;
+    const turn = dialogInTurn(['delete', 'held', 'notice'], {
+        delete: pending !== null,
+        held: held !== null && !heldWaits,
+        notice: loadouts.notice !== null,
+    });
+    const heldShown = turn === 'held';
     const chooseRef = useRef<HTMLButtonElement>(null);
     const focusChoose = useRef(false);
     useEffect(() => {
@@ -550,44 +548,41 @@ export function LoadoutsPanel({
                 )}
             </div>
 
-            <dialog
-                ref={dialogRef}
-                className={styles.dialog}
-                aria-labelledby={`${ids}-dialog-title`}
-                aria-describedby={`${ids}-dialog-text`}
+            <Dialog
+                open={turn === 'delete' && pending !== null}
                 onClose={onDialogClose}
-            >
-                {pending && (
-                    <form method="dialog" className={styles.dialogBody} onSubmit={closeWithChoice}>
-                        <h2 id={`${ids}-dialog-title`} className={styles.dialogTitle}>
-                            Delete {pending.name}?
-                        </h2>
-                        <p id={`${ids}-dialog-text`} className={styles.dialogText}>
+                title={pending ? `Delete ${pending.name}?` : ''}
+                description={
+                    pending && (
+                        <>
                             {pending.again && `${DELETE_CHANGED} `}
                             {pending.kind === 'account'
                                 ? 'It is removed from your account, on every device. This cannot be undone.'
                                 : 'It is removed from this browser. This cannot be undone.'}
-                        </p>
-                        <div className={styles.dialogActions}>
-                            <button
-                                ref={cancelRef}
-                                type="submit"
-                                value="cancel"
-                                className={styles.button}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                value="delete"
-                                className={`${styles.button} ${styles.danger}`}
-                            >
-                                Delete
-                            </button>
-                        </div>
-                    </form>
-                )}
-            </dialog>
+                        </>
+                    )
+                }
+                initialFocus={cancelRef}
+                actions={
+                    <>
+                        <button
+                            ref={cancelRef}
+                            type="submit"
+                            value="cancel"
+                            className={styles.button}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            value="delete"
+                            className={`${styles.button} ${styles.danger}`}
+                        >
+                            Delete
+                        </button>
+                    </>
+                }
+            />
 
             <HeldDialog
                 held={held}
@@ -599,7 +594,7 @@ export function LoadoutsPanel({
 
             <NoticeDialog
                 text={loadouts.notice}
-                open={pending === null && !heldShown}
+                open={turn === 'notice'}
                 onDismiss={() => {
                     loadouts.dismissNotice();
                     caretRef.current?.focus();
@@ -607,16 +602,6 @@ export function LoadoutsPanel({
             />
         </section>
     );
-}
-
-/**
- * What `method="dialog"` does, done by hand so the chosen button's value is the dialog's return value in every
- * engine (jsdom included). Shared by the delete, held and notice dialogs.
- */
-function closeWithChoice(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const by = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
-    e.currentTarget.closest('dialog')?.close(by?.value ?? '');
 }
 
 /** A delete refused because the account copy was newer (S14.3c-sync). */
@@ -679,45 +664,6 @@ export function differenceLines(
 }
 
 /**
- * A native modal `<dialog>` that follows `shown` (S14.3j: the held and notice dialogs; the delete dialog keeps its
- * own older form). `firstRef`'s button takes focus on open and whenever `focusKey` changes while open. `takeClose`,
- * in the dialog's `close` handler: the chosen button's value ('' for Escape), or null when the page closed it.
- */
-function useShownModal(shown: boolean, focusKey: string | null) {
-    const ref = useRef<HTMLDialogElement>(null);
-    const firstRef = useRef<HTMLButtonElement>(null);
-    const closedHere = useRef(false);
-
-    // biome-ignore lint/correctness/useExhaustiveDependencies: focusKey means "new content: focus its first button"
-    useEffect(() => {
-        const d = ref.current;
-        if (!d) return;
-        if (shown) {
-            if (!d.open) {
-                if (typeof d.showModal === 'function') d.showModal();
-                else d.setAttribute('open', '');
-            }
-            firstRef.current?.focus();
-        } else if (d.open) {
-            closedHere.current = true;
-            d.close('');
-        }
-    }, [shown, focusKey]);
-
-    const takeClose = (): string | null => {
-        const d = ref.current;
-        const value = d?.returnValue ?? '';
-        if (d) d.returnValue = '';
-        if (closedHere.current) {
-            closedHere.current = false;
-            return null;
-        }
-        return value;
-    };
-    return { ref, firstRef, takeClose };
-}
-
-/**
  * A one-off notice about the active loadout, to acknowledge (S14.3j; was a row with "Dismiss" in the card): today
  * only "This loadout was deleted on another device. Its team stays here, not saved." Its first sentence is the
  * heading, the rest the text. "Dismiss" and Escape both dismiss it (nothing is pending); closed by the page (the
@@ -732,46 +678,27 @@ export function NoticeDialog({
     open: boolean;
     onDismiss: () => void;
 }) {
-    const id = useId();
+    const firstRef = useRef<HTMLButtonElement>(null);
     const shown = open && text !== null;
-    const { ref, firstRef, takeClose } = useShownModal(shown, text);
     const cut = text?.indexOf('. ') ?? -1;
     const head = text && cut >= 0 ? text.slice(0, cut + 1) : text;
     const body = text && cut >= 0 ? text.slice(cut + 2) : null;
     return (
-        <dialog
-            ref={ref}
-            className={styles.dialog}
-            aria-labelledby={`${id}-title`}
-            aria-describedby={body ? `${id}-text` : undefined}
-            onClose={() => {
-                if (takeClose() !== null) onDismiss();
-            }}
+        <Dialog
+            open={shown}
+            // Dismiss and Escape both dismiss it; a close by the page calls nothing (the shared dialog's rule).
+            onClose={onDismiss}
+            title={head}
+            description={body}
+            initialFocus={firstRef}
+            focusKey={text}
             data-notice-dialog=""
-        >
-            {shown && (
-                <form method="dialog" className={styles.dialogBody} onSubmit={closeWithChoice}>
-                    <h2 id={`${id}-title`} className={styles.dialogTitle}>
-                        {head}
-                    </h2>
-                    {body && (
-                        <p id={`${id}-text`} className={styles.dialogText}>
-                            {body}
-                        </p>
-                    )}
-                    <div className={styles.dialogActions}>
-                        <button
-                            ref={firstRef}
-                            type="submit"
-                            value="dismiss"
-                            className={styles.button}
-                        >
-                            Dismiss
-                        </button>
-                    </div>
-                </form>
-            )}
-        </dialog>
+            actions={
+                <button ref={firstRef} type="submit" value="dismiss" className={styles.button}>
+                    Dismiss
+                </button>
+            }
+        />
     );
 }
 
@@ -812,16 +739,15 @@ export function HeldDialog({
     onDismiss: (heldId: string) => void;
 }) {
     const id = useId();
+    const firstRef = useRef<HTMLButtonElement>(null);
     const latest = useRef(held);
     latest.current = held;
     const shown = open && held !== null;
-    // On open, and when the hold changes under it (the buttons change): the first choice takes focus.
-    const { ref, firstRef, takeClose } = useShownModal(shown, heldIdOf(held));
 
-    const onClose = () => {
-        const value = takeClose();
+    // A close by the page (the hold ended elsewhere) calls nothing (the shared dialog's rule).
+    const onClose = (value: string) => {
         const h = latest.current;
-        if (value === null || !h) return;
+        if (!h) return;
         if (HELD_PICKS.includes(value)) onPick(value as HeldPick, h.key);
         else onDismiss(`${h.key}:${h.kind}`);
     };
@@ -829,19 +755,41 @@ export function HeldDialog({
     const changed = held?.kind === 'conflict';
     const diffs = held ? differenceLines(held.differences, characterName) : [];
     return (
-        <dialog
-            ref={ref}
-            className={`${styles.dialog} ${styles.heldDialog}`}
-            aria-labelledby={`${id}-title`}
-            aria-describedby={`${id}-hint`}
+        <Dialog
+            open={shown}
             onClose={onClose}
+            size="medium"
+            title={held ? heldTitle(held) : ''}
+            describedBy={`${id}-hint`}
+            // On open, and when the hold changes under it (the buttons change): the first choice takes focus.
+            initialFocus={firstRef}
+            focusKey={heldIdOf(held)}
             data-held-dialog=""
+            actions={
+                held &&
+                (changed ? (
+                    <>
+                        <button ref={firstRef} type="submit" value="keep" className={styles.button}>
+                            Keep my changes
+                        </button>
+                        <button type="submit" value="take" className={styles.button}>
+                            Use the account copy
+                        </button>
+                    </>
+                ) : (
+                    <>
+                        <button ref={firstRef} type="submit" value="new" className={styles.button}>
+                            Save as a new loadout
+                        </button>
+                        <button type="submit" value="discard" className={styles.button}>
+                            Discard my changes
+                        </button>
+                    </>
+                ))
+            }
         >
-            {shown && held && (
-                <form method="dialog" className={styles.dialogBody} onSubmit={closeWithChoice}>
-                    <h2 id={`${id}-title`} className={styles.dialogTitle}>
-                        {heldTitle(held)}
-                    </h2>
+            {held && (
+                <>
                     <ul className={styles.conflictList}>
                         <li>
                             In this browser: {held.mine.name}, {characters(held.mine.filled)},
@@ -870,40 +818,9 @@ export function HeldDialog({
                     <p id={`${id}-hint`} className={styles.conflictHint}>
                         Nothing is saved until you choose.
                     </p>
-                    <div className={styles.dialogActions}>
-                        {changed ? (
-                            <>
-                                <button
-                                    ref={firstRef}
-                                    type="submit"
-                                    value="keep"
-                                    className={styles.button}
-                                >
-                                    Keep my changes
-                                </button>
-                                <button type="submit" value="take" className={styles.button}>
-                                    Use the account copy
-                                </button>
-                            </>
-                        ) : (
-                            <>
-                                <button
-                                    ref={firstRef}
-                                    type="submit"
-                                    value="new"
-                                    className={styles.button}
-                                >
-                                    Save as a new loadout
-                                </button>
-                                <button type="submit" value="discard" className={styles.button}>
-                                    Discard my changes
-                                </button>
-                            </>
-                        )}
-                    </div>
-                </form>
+                </>
             )}
-        </dialog>
+        </Dialog>
     );
 }
 

@@ -101,6 +101,10 @@
     --radius-panel: 12px; /* content panels + popovers */
     --radius-modal: 16px; /* modals / dialogs */
 
+    /* ── S14.4b: the shared dialog's widths (components/Dialog; the team builder's two sizes) ── */
+    --dialog-small: 26rem;
+    --dialog-medium: 32rem;
+
     /* ── lobbyroom.html, match-classic.html: team colours ── */
     --team-blue: #5b84ec;
     --team-red: #db5c5c;

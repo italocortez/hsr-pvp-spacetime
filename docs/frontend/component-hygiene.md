@@ -140,6 +140,48 @@ A chart is plain markup and CSS, never a chart library or a canvas (A190 item 11
 
 **Browser support and fallback:** the Popover API (Chromium, Firefox) or, where it is missing (jsdom, older engines), a fixed box toggled by `hidden`. No `interestfor` (Chromium only, needs a polyfill) and no CSS anchor positioning: the hover intent and the placement are the script's, the same in every engine. Safari not checked (A164).
 
+### Modal dialog (S14.4b)
+
+**What it is for:** every modal dialog in the app: the team builder's delete confirmation, held choice and notice (S14.3j, moved onto it), the sign-in dialog, and next the create-lobby form, its Advanced Settings over it, and every later one. Reference: `components/Dialog` (`Dialog.tsx`, `Dialog.module.css`, `dialogQueue.ts`, tests in `Dialog.test.tsx`). Guides: web-guidance `ui-components/dialog.md`, `ui-behaviors/platform-controls-dismiss-dialog.md`, `ui-behaviors/light-dismiss-a-dialog.md`, `ui-behaviors/prevent-page-scroll-under-modal-dialog.md`, `ui-behaviors/animate-to-from-top-layer.md`.
+
+**API in short:**
+
+```tsx
+<Dialog
+    open={shown}                       // the page owns it; set it false in onClose
+    onClose={(value) => …}             // a close the person made: the submit button's value, '' for Escape,
+                                       // the back gesture, the close button, the backdrop; never for a close by the page
+    title="Delete Hyper?"              // the h2 that names the dialog
+    description="It is removed…"       // optional line under it (aria-describedby); or describedBy="<id in the body>"
+    actions={<button type="submit" value="delete">Delete</button>}   // the footer
+    size="small"                       // 'small' (--dialog-small, 26rem, default) or 'medium' (--dialog-medium, 32rem)
+    initialFocus={cancelRef}           // default: the first control, the close button last
+    focusKey={contentId}               // a new value while open places the focus again (new content)
+    dismissible={!busy}                // false while a submit is in flight: Escape, back, backdrop, close button do nothing
+    closeOnBackdrop                    // default off: a press on the backdrop does nothing
+    closeLabel="Close sign-in"         // shows the close button in the corner, with this name
+    returnFocus={trigger}              // default: the browser's (the element focused before opening)
+    onSubmit={(e) => …}                // a form of the page's own (fields in the body): the dialog stays open
+    className={styles.mine}            // sets the custom properties below
+    data-held-dialog=""                // data-* go on the <dialog>
+>
+    {body}                             // scrolls inside the dialog on a short screen
+</Dialog>
+```
+
+**Rules:**
+
+- **Native modal:** `<dialog>` opened with `showModal()`; no `role="dialog"`, `aria-modal`, focus trap or `inert` (the platform does them). The page behind is inert; scroll does not chain to it (`overscroll-behavior: contain` on the dialog and its backdrop; never `overflow: hidden` on the page).
+- **Content only while open:** the `dialog` element stays mounted (rendered into `document.body` through a portal); title, body and footer exist only while `open`. So a closed dialog holds nothing to find or focus, and a page can keep a reference to the element.
+- **Closing:** a submit button in the footer or body closes with its `value` (the dialog's own `method="dialog"` form, done by hand so every engine gives the value); a `type="button"` does what its handler says. The return value is reset after each close (Escape sets none). A close by the page (`open` turned false) calls no `onClose`. `closedby` is `closerequest`, `any` with `closeOnBackdrop`, `none` while not dismissible, and the `cancel` event is prevented then too.
+- **One at a time:** `dialogInTurn(order, wanted)` picks the first wanted dialog in a fixed order; the others wait closed and open by themselves when their turn comes (the team builder: delete, then the held choice, then the notice).
+- **Over another dialog:** open the second while the first stays open (render it anywhere, even inside the first's body: the portal keeps it out of the first's form). It stacks on top, Escape closes it first, and focus goes back to the control in the first that opened it (the browser's; `returnFocus` makes it explicit). A nested dialog's `close`, `cancel` and `submit` never reach the outer one's handlers.
+- **Looks** (the team builder's S14.3j frame): graphite panel, strong border, `--radius-modal`, dark backdrop; 22px padding; a 17px title. A page tunes it with custom properties on its own class (the base rule has no specificity, so the page's class wins in any load order): `--dialog-width`, `--dialog-pad`, `--dialog-gap`, `--dialog-bg`, `--dialog-title-size`, `--dialog-title-weight`, `--dialog-title-family`, `--dialog-title-line`, `--dialog-title-align`, `--dialog-title-close-room`, `--dialog-text-size`, `--dialog-text-color`. The panel is at most the viewport's height less 32px; the body scrolls, the title and footer stay.
+- **Motion:** a 200ms fade and 8px rise on open by `@starting-style`, none under reduced motion; no exit animation (the content leaves with the close). **Forced colours:** the border takes `CanvasText`.
+- **InfoPopover** inside a dialog works as usual; one outside stays closed while a modal is open (its "Modal dialogs" rule).
+
+**Browser support and fallback:** `showModal`, `requestClose` (the close button; falls back to `close('')`) and `closedby` (Chromium 134, Firefox 141; without it Escape and the back gesture still close, the backdrop does not) in current Chromium and Firefox. Where `showModal` or `close` is missing (jsdom, older engines) the dialog opens by its `open` attribute and closes by removing it and sending `close`. Safari not checked (A164): `closedby` is missing there, so `closeOnBackdrop` does nothing and `dismissible={false}` relies on the `cancel` handler alone.
+
 ## Rule 7: tests
 
 - **What gets a test:** every validator, guard and pure helper (a table of kept and dropped inputs, idempotence where the router re-runs it); route behaviour (redirects, not-found, no-access, search rewrites) through the real route tree; a page's landmarks and headline when it is added. Not every component: a component without logic is covered by the screenshot loop.

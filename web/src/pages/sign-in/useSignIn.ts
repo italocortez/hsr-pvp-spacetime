@@ -85,7 +85,16 @@ export const defaultSignInIo: SignInIo = {
  * flow marker on return, re-validated with `safeNextPath` before any navigation.
  */
 export function useSignIn(
-    { status, next }: { status?: LoginStatus; next?: string },
+    {
+        status,
+        next,
+        stay = false,
+    }: {
+        status?: LoginStatus;
+        next?: string;
+        /** S14.4b: the sign-in dialog over a page: a signed-in member is not sent anywhere (the dialog closes). */
+        stay?: boolean;
+    },
     io: SignInIo = defaultSignInIo,
 ) {
     const auth = useAuth();
@@ -145,12 +154,12 @@ export function useSignIn(
 
     // A signed-in (non-guest) user does not sign in again: to `next`, else `/`.
     useEffect(() => {
-        if (redirected.current || !auth.ready || !auth.user || auth.user.isGuest) return;
+        if (stay || redirected.current || !auth.ready || !auth.user || auth.user.isGuest) return;
         if (state.kind === 'confirming') return;
         redirected.current = true;
         setWatching(false);
         void router.navigate({ href: safeNextPath(nextRef.current) ?? '/', replace: true });
-    }, [auth, state.kind, router]);
+    }, [auth, state.kind, router, stay]);
 
     // The return from the function: read `status` once, drop it from the URL.
     useEffect(() => {

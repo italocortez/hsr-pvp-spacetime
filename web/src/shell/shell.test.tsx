@@ -283,12 +283,24 @@ describe('account area', () => {
         expect(new URLSearchParams(href.split('?')[1]).get('login')).toBe('1');
     });
 
-    it('a click on "Sign in" opens the sign-in panel, and it returns to the page after', async () => {
+    it('S14.4b: a click on "Sign in" opens the sign-in dialog over the page; the address stays', async () => {
         const user = userEvent.setup();
         const r = renderWithRouter('/teambuilder', AUTH.visitor);
         await headline();
-        await user.click(screen.getByRole('link', { name: 'Sign in' }));
-        await resolved(r, '/?login=1&next=%2Fteambuilder');
+        const signIn = screen.getByRole('link', { name: 'Sign in' });
+        expect(signIn).toHaveAttribute('aria-haspopup', 'dialog');
+        await user.click(signIn);
+        expect(
+            await screen.findByRole('dialog', { name: 'Enter the Battlegrounds' }),
+        ).toBeInTheDocument();
+        await act(() => new Promise((r2) => setTimeout(r2, 20)));
+        expect(r.router.state.resolvedLocation?.href).toBe('/teambuilder');
+        expect(primaryNav()).not.toBeNull();
+    });
+
+    it('S14.4b: the full-screen panel still serves the redirects (a guarded page as a visitor)', async () => {
+        const r = renderWithRouter('/profile', AUTH.visitor);
+        await resolved(r, '/?login=1&next=%2Fprofile');
         expect(await headline()).toHaveTextContent('Sign in.');
         expect(primaryNav()).toBeNull();
     });
@@ -726,7 +738,11 @@ describe('focus and announcement after navigation', () => {
         const user = userEvent.setup();
         const r = renderWithRouter('/', AUTH.visitor);
         await headline();
-        await user.click(screen.getByRole('link', { name: 'Sign in' }));
+        // S14.4b: the bar's "Sign in" opens the dialog now; the panel is reached by a navigation.
+        await user.keyboard('{Shift}');
+        act(() => {
+            void r.router.navigate({ to: '/', search: { login: 1, next: '/' } });
+        });
         await resolved(r, '/?login=1&next=%2F');
         await waitFor(() => expect(announcer()).toHaveTextContent('Sign in — IPC Battlegrounds'));
         expect(screen.getByRole('heading', { level: 1 })).toHaveFocus();

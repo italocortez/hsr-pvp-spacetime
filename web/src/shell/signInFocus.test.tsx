@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { loadedSignInPage } from '@/pages/sign-in/signInPanel';
@@ -12,7 +12,7 @@ import { AUTH, renderWithRouter } from '@/test/renderWithRouter';
  */
 
 describe('first navigation to the sign-in panel (cold chunk)', () => {
-    it('the first click on "Sign in" from /lobbies focuses the panel h1 and announces its title', async () => {
+    it('the first navigation to the panel from /lobbies focuses the panel h1 and announces its title', async () => {
         const user = userEvent.setup();
         const r = renderWithRouter('/lobbies', AUTH.visitor);
         expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent(
@@ -20,7 +20,12 @@ describe('first navigation to the sign-in panel (cold chunk)', () => {
         );
         // Cold: nothing in this file has loaded the panel yet.
         expect(loadedSignInPage()).toBeUndefined();
-        await user.click(screen.getByRole('link', { name: 'Sign in' }));
+        // S14.4b: the bar's "Sign in" opens the dialog now; the panel is reached by a guard's
+        // redirect after the viewer's first input (a key press).
+        await user.keyboard('{Shift}');
+        act(() => {
+            void r.router.navigate({ to: '/', search: { login: 1, next: '/lobbies' } });
+        });
         // The router waits on the chunk: a cold module transform can take over a second.
         await waitFor(
             () => expect(r.router.state.resolvedLocation?.href).toBe('/?login=1&next=%2Flobbies'),

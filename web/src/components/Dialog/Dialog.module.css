@@ -1,0 +1,177 @@
+/*
+ * The shared modal dialog (S14.4b; web-guidance dialog rule 1). The look is the team builder's dialogs (S14.3j):
+ * graphite panel, strong border, the modal radius, a dark backdrop. A page tunes it through custom properties set on
+ * its own class (`className`), never by reaching into these classes:
+ *
+ *   --dialog-width   the width (default: the size's token, --dialog-small or --dialog-medium)
+ *   --dialog-pad     the padding inside the panel (default 22px)
+ *   --dialog-gap     the space between title, description, body and footer (default 12px)
+ *   --dialog-bg      the panel's background (default --color-graphite)
+ *   --dialog-title-size, --dialog-title-weight, --dialog-title-family, --dialog-title-line
+ *   --dialog-title-align (the description follows it)
+ *   --dialog-title-close-room (the title's end padding beside the close button, default 36px)
+ *   --dialog-text-size, --dialog-text-color (the description)
+ *
+ * Small screens: the panel is at most the viewport's height less 32px; the body scrolls inside it while the title
+ * and the footer stay. Motion: a 200ms fade and 8px rise on open, none under reduced motion (the content leaves with
+ * the dialog, so there is no exit animation). Forced colours: the system's border colour.
+ */
+
+/* `:where`: no specificity, so a page's class on the same element wins whatever order the stylesheets load in. */
+:where(.dialog) {
+    --dialog-width: var(--dialog-small);
+
+    inline-size: min(var(--dialog-width), calc(100vw - 32px));
+    max-inline-size: calc(100vw - 32px);
+    padding: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-modal);
+    background: var(--dialog-bg, var(--color-graphite));
+    color: var(--text-body);
+    box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.8);
+
+    /* Never `display` on the closed dialog (the dialog guide): only while open. */
+    &[open] {
+        display: flex;
+        flex-direction: column;
+        max-block-size: calc(100dvh - 32px);
+    }
+
+    &:modal {
+        overscroll-behavior: contain;
+    }
+
+    &::backdrop {
+        overflow: hidden;
+        overscroll-behavior: contain;
+        background: rgba(8, 9, 14, 0.7);
+    }
+
+    @media (forced-colors: active) {
+        border-color: CanvasText;
+    }
+}
+
+:where(.medium) {
+    --dialog-width: var(--dialog-medium);
+}
+
+.form {
+    position: relative;
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: var(--dialog-gap, 12px);
+    min-block-size: 0;
+    margin: 0;
+    padding: var(--dialog-pad, 22px);
+}
+
+.title {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--color-snow);
+    font-family: var(--dialog-title-family, var(--font-secondary));
+    font-size: var(--dialog-title-size, 1.0625rem);
+    font-weight: var(--dialog-title-weight, 600);
+    /* Unset unless a page sets it: an undefined variable leaves the inherited line height. */
+    line-height: var(--dialog-title-line);
+    text-align: var(--dialog-title-align, start);
+
+    /* Room for the close button in the corner. */
+    &[data-with-close] {
+        padding-inline-end: var(--dialog-title-close-room, 36px);
+    }
+}
+
+.text {
+    margin: 0;
+    color: var(--dialog-text-color, inherit);
+    font-size: var(--dialog-text-size, 0.8125rem);
+    line-height: 1.5;
+    text-align: var(--dialog-title-align, start);
+}
+
+/* The body: scrolls inside the panel when the screen is short (the title and the footer stay). */
+.body {
+    display: flex;
+    flex: 0 1 auto;
+    flex-direction: column;
+    gap: var(--dialog-gap, 12px);
+    min-block-size: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.actions {
+    display: flex;
+    flex: none;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-block-start: 6px;
+
+    & > button {
+        flex: 0 1 8rem;
+    }
+}
+
+.close {
+    position: absolute;
+    inset-block-start: 12px;
+    inset-inline-end: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 34px;
+    block-size: 34px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+
+    @media (pointer: coarse) {
+        inline-size: 44px;
+        block-size: 44px;
+        inset-block-start: 8px;
+        inset-inline-end: 8px;
+    }
+
+    &:hover:not(:disabled) {
+        border-color: var(--border-subtle);
+        color: var(--color-snow);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-iris);
+        outline-offset: 2px;
+        color: var(--color-snow);
+    }
+
+    &:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+}
+
+.closeIcon {
+    inline-size: 16px;
+    block-size: 16px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .dialog[open] {
+        transition:
+            opacity var(--duration-fast) var(--ease-out),
+            translate var(--duration-fast) var(--ease-out);
+    }
+
+    @starting-style {
+        .dialog[open] {
+            opacity: 0;
+            translate: 0 8px;
+        }
+    }
+}

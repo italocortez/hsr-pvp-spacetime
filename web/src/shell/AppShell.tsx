@@ -5,6 +5,7 @@ import styles from './AppShell.module.css';
 import { ConnectionBanner } from './ConnectionBanner';
 import { NavBar } from './NavBar';
 import { RouteAnnouncer } from './RouteAnnouncer';
+import { SignInDialogHost } from './SignInDialogHost';
 import { InShellContext } from './shellContext';
 import { isSplashScreen } from './splash';
 
@@ -37,6 +38,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
                     <main id={MAIN_ID} className={styles.main} tabIndex={-1}>
                         {children}
                     </main>
+                    <SignInDialogHost />
                 </InShellContext.Provider>
             )}
             <RouteAnnouncer />

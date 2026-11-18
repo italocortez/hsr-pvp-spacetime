@@ -18,6 +18,28 @@ export const SIGN_IN_TEXT = {
     tryAgain: 'Try again',
 } as const;
 
+/**
+ * The sign-in dialog's wording (S14.4b): the mockup's (`design/mockups/index.html` sign-in dialog) where the decided
+ * wording has none, the panel's where it has. Table in docs/frontend/pages.md "Sign-in dialog (S14.4b)".
+ */
+export const SIGN_IN_DIALOG_TEXT = {
+    title: 'Enter the Battlegrounds',
+    lede: SIGN_IN_TEXT.lede,
+    discord: SIGN_IN_TEXT.button,
+    or: 'or',
+    guest: 'Continue as Guest',
+    fine: 'Guest accounts are kept in this browser only.',
+    close: 'Close sign-in',
+    playingAs: (name: string) => `You are playing as ${name}.`,
+    createdTitle: 'Guest account created',
+    createdMeta: 'You’re in. This guest account is kept in this browser only.',
+    enter: 'Enter Battlegrounds',
+    connecting: 'Connecting to the server…',
+    openingDiscord: 'Opening Discord…',
+    creatingGuest: 'Creating your guest account…',
+    loadFailed: 'Sign-in could not be loaded. Check your connection and try again.',
+} as const;
+
 export const SIGN_IN_TITLE = 'Sign in — IPC Battlegrounds';
 
 /** The splash frame's fixed parts (art and eyebrow). */

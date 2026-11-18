@@ -408,7 +408,7 @@
     }
 }
 
-/* The `.button` rule is shared with the delete dialog's buttons, whose flex `.dialogActions` sets. */
+/* The `.button` rule is shared with the dialogs' buttons, whose flex the shared Dialog's footer sets. */
 .button {
     display: inline-flex;
     flex: 1 1 auto;
@@ -629,66 +629,10 @@
     }
 }
 
-/* The delete confirmation and the held choice (dialog guide rule 1). */
-.dialog {
-    inline-size: min(26rem, calc(100vw - 32px));
-    padding: 0;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-modal);
-    background: var(--color-graphite);
-    color: var(--text-body);
-    box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.8);
-
-    &:modal {
-        overscroll-behavior: contain;
-    }
-
-    &::backdrop {
-        overflow: hidden;
-        overscroll-behavior: contain;
-        background: rgba(8, 9, 14, 0.7);
-    }
-}
-
-/* The held choice: more lines, and two longer buttons that fit one row on a desktop (S14.3j). */
-.heldDialog {
-    inline-size: min(32rem, calc(100vw - 32px));
-}
-
-.dialogBody {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 22px;
-}
-
-.dialogTitle {
-    margin: 0;
-    overflow-wrap: anywhere;
-    color: var(--color-snow);
-    font-family: var(--font-secondary);
-    font-size: 1.0625rem;
-    font-weight: 600;
-}
-
-.dialogText {
-    margin: 0;
-    font-size: 0.8125rem;
-    line-height: 1.5;
-}
-
-.dialogActions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    justify-content: flex-end;
-    margin-block-start: 6px;
-
-    & > button {
-        flex: 0 1 8rem;
-    }
-}
-
+/*
+ * The dialogs themselves (frame, title, text, footer) are the shared `components/Dialog` since S14.4b; the held
+ * choice uses its medium size. The danger button stays here with `.button`.
+ */
 .danger {
     border-color: color-mix(in srgb, var(--color-error) 50%, var(--color-space));
     background: color-mix(in srgb, var(--color-error) 22%, var(--color-space));

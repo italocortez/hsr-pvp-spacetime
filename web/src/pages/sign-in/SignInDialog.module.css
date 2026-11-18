@@ -1,0 +1,275 @@
+@import "@/styles/media.css";
+
+/*
+ * The sign-in dialog (S14.4b; design/mockups/index.html `.authModal`): the shared Dialog tuned by its custom
+ * properties (charcoal card, 440px, the mockup's padding and large title), the champagne hairline at the top, and the
+ * angled buttons stacked: Discord's blurple, "or", the quiet guest button. Kept from the shared dialog: the modal
+ * radius and border (the mockup's panel is square), the close button's corner place.
+ */
+
+.dialog {
+    --dialog-width: 27.5rem;
+    --dialog-pad: clamp(30px, 4vw, 42px) clamp(22px, 4vw, 40px) clamp(24px, 4vw, 36px);
+    --dialog-gap: 10px;
+    --dialog-bg: var(--bg-card);
+    --dialog-title-size: clamp(1.5rem, 3.4vw, 1.875rem);
+    --dialog-title-weight: 800;
+    --dialog-title-line: 1.08;
+    --dialog-text-size: 0.875rem;
+    --dialog-text-color: var(--text-muted);
+    /* The close button sits above the title's line (the panel's top padding is larger than its height). */
+    --dialog-title-close-room: 0px;
+
+    /* Phones: a smaller top padding and the 44px close button would meet the title; keep the room. */
+    @media (--bp-sm) {
+        --dialog-title-close-room: 40px;
+    }
+
+    border-color: var(--border-subtle);
+
+    &:modal::backdrop {
+        background: rgba(8, 9, 14, 0.74);
+        backdrop-filter: blur(6px);
+    }
+    box-shadow:
+        0 24px 70px rgba(8, 9, 14, 0.7),
+        0 0 40px rgba(126, 112, 224, 0.12);
+
+    /* The champagne hairline (the mockup's colophon mark). */
+    &::before {
+        content: "";
+        position: absolute;
+        inset-block-start: 0;
+        inset-inline-start: 50%;
+        inline-size: 34px;
+        block-size: 1px;
+        translate: -50% 0;
+        background: var(--color-prestige);
+        opacity: 0.65;
+    }
+}
+
+.buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-block-start: 14px;
+}
+
+/* The angled button (DESIGN.md 5.1 form, the mockup's `.authBtn`). The ring is an inset shadow: an outline would be clipped. */
+.cta {
+    position: relative;
+    display: inline-flex;
+    flex: none;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    inline-size: 100%;
+    block-size: 56px;
+    padding: 0 24px;
+    border: none;
+    clip-path: polygon(16px 0, 100% 0, calc(100% - 16px) 100%, 0 100%);
+    font-family: var(--font-secondary);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition:
+        background var(--duration-fast) var(--ease-out),
+        box-shadow var(--duration-fast) var(--ease-out);
+
+    &:focus-visible {
+        outline: none;
+        box-shadow: inset 0 0 0 2.5px var(--color-prestige);
+    }
+
+    &[aria-disabled="true"] {
+        opacity: 0.55;
+        cursor: not-allowed;
+    }
+
+    @media (forced-colors: active) {
+        border: 1px solid ButtonText;
+
+        &:focus-visible {
+            outline: 2px solid Highlight;
+            outline-offset: -4px;
+        }
+    }
+}
+
+.icon {
+    flex: none;
+    inline-size: 20px;
+    block-size: 20px;
+}
+
+/* Discord's brand blurple: the recognised sign-in mark. */
+.discord {
+    background: #5865f2;
+    color: #fff;
+
+    &:hover:not([aria-disabled="true"]) {
+        background: #4a55e0;
+    }
+}
+
+.guest {
+    background: transparent;
+    color: var(--color-snow);
+    box-shadow: inset 0 0 0 1px var(--border-strong);
+
+    & .icon {
+        color: var(--color-iris);
+    }
+
+    &:hover:not([aria-disabled="true"]) {
+        background: rgba(126, 112, 224, 0.08);
+        box-shadow: inset 0 0 0 1px var(--color-iris);
+    }
+
+    &:focus-visible {
+        box-shadow: inset 0 0 0 2.5px var(--color-iris);
+    }
+}
+
+.or {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    margin: 4px 0;
+    color: var(--text-disabled);
+    font-family: var(--font-primary);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+
+    &::before,
+    &::after {
+        content: "";
+        flex: 1;
+        block-size: 1px;
+        background: var(--border-subtle);
+    }
+}
+
+/*
+ * Progress, a refusal or a failure. The live region stays rendered while empty (one that appears with its text may not
+ * be read); empty, it takes no room (the negative margin cancels its gap).
+ */
+.message {
+    margin: 0;
+    color: var(--color-snow);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    text-align: center;
+    overflow-wrap: anywhere;
+
+    &:empty {
+        margin-block-end: calc(-1 * var(--dialog-gap, 10px));
+    }
+}
+
+.retry {
+    align-self: center;
+    min-block-size: 34px;
+    padding: 0 14px;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--color-snow);
+    font-family: var(--font-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+
+    &:hover {
+        border-color: var(--color-iris);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-iris);
+        outline-offset: 2px;
+    }
+}
+
+.fine {
+    margin: 12px 0 0;
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.6875rem;
+    line-height: 1.5;
+    letter-spacing: 0.02em;
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+
+/* The guest just created: the heading centred over their name, one line, and "Enter Battlegrounds". */
+.createdDialog {
+    --dialog-title-align: center;
+}
+
+.created {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: center;
+    text-align: center;
+}
+
+.guestName {
+    margin: 2px 0 4px;
+    color: var(--color-iris-hover);
+    font-family: var(--font-secondary);
+    font-size: 1.5rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    overflow-wrap: anywhere;
+}
+
+.meta {
+    max-inline-size: 32ch;
+    margin: 0 0 18px;
+    color: var(--text-muted);
+    font-family: var(--font-secondary);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+}
+
+.enter {
+    background: var(--color-iris);
+    color: var(--color-snow);
+
+    &:hover {
+        background: var(--color-iris-hover);
+    }
+}
+
+.arrow {
+    position: relative;
+    inline-size: 22px;
+    block-size: 1.5px;
+    background: currentColor;
+
+    &::after {
+        content: "";
+        position: absolute;
+        inset-block-start: 50%;
+        inset-inline-end: 0;
+        inline-size: 8px;
+        block-size: 8px;
+        border-block-start: 1.5px solid currentColor;
+        border-inline-end: 1.5px solid currentColor;
+        transform: translateY(-50%) rotate(45deg);
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+        transition: inline-size var(--duration-fast) var(--ease-out);
+
+        .enter:hover & {
+            inline-size: 30px;
+        }
+    }
+}
