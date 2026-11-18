@@ -130,7 +130,7 @@ describe('before the first connection', () => {
     it('a public route renders while the file loads, and nothing connects until it answers', async () => {
         mode = 'manual';
         await renderGate('/');
-        expect(h1()).toHaveTextContent('Module offline.');
+        expect(h1()).toHaveTextContent('IPC Battlegrounds');
         expect(connector).not.toHaveBeenCalled();
         expect(connectionStatusStore.getSnapshot().status).toEqual({ state: 'connecting' });
 
@@ -179,7 +179,7 @@ describe('before the first connection', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
         await advance();
         expectConnected();
-        expect(h1()).toHaveTextContent('Module offline.');
+        expect(h1()).toHaveTextContent('IPC Battlegrounds');
     });
 
     it('?maintenance=skip connects in spite of maintenance true, without reading the file, and the tab remembers it', async () => {
@@ -242,7 +242,7 @@ describe('stable tree', () => {
         await advance();
         pending[2]?.resolve(false);
         await advance();
-        expect(h1()).toHaveTextContent('Module offline.');
+        expect(h1()).toHaveTextContent('IPC Battlegrounds');
 
         expect(screen.getByLabelText('probe')).toBe(input);
         expect(input.value).toBe('typed');
@@ -350,14 +350,14 @@ describe('after a failed connection', () => {
         expect(stale?.signal.aborted).toBe(true);
         expect(readStatus).toHaveBeenCalledTimes(3);
         // The rebuild does not wait for the answer: the route is back, the connector stayed.
-        expect(h1()).toHaveTextContent('Module offline.');
+        expect(h1()).toHaveTextContent('IPC Battlegrounds');
         expect(conn.live()).toHaveLength(2);
         stale?.resolve(true);
         await advance();
         expect(connectionStatusStore.getSnapshot().status).toEqual({ state: 'connecting' });
         pending[1]?.resolve(false);
         await advance();
-        expect(h1()).toHaveTextContent('Module offline.');
+        expect(h1()).toHaveTextContent('IPC Battlegrounds');
         expect(conn.live()).toHaveLength(2);
     });
 
@@ -411,7 +411,7 @@ describe('a connected tab whose connection drops (reconnecting)', () => {
         await advance(1);
         expect(readStatus).toHaveBeenCalledTimes(2);
         // No splash while reconnecting, as before.
-        expect(h1()).toHaveTextContent('Module offline.');
+        expect(h1()).toHaveTextContent('IPC Battlegrounds');
         expect(connectionStatusStore.getSnapshot().status.state).toBe('reconnecting');
         expect(conn.live()).toHaveLength(2);
 

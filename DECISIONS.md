@@ -2306,3 +2306,17 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   9. Look questions L1 (hero under the bar or below it), L2 (create dialog on phones) and L3 (Advanced as a second dialog or an expanding section) are decided on A/B pages.
 - **Why:** user, 2026-11-17: "I agree with your rulings except for R4, we need to add those ban restrictions to the backend. and I also agree with your A/B versions for me to check"
 - **Where implemented:** not yet. Sub-steps: S14.4a static page, S14.4r ban restrictions (backend), S14.4b sign-in dialog, S14.4c create dialog, S14.4d Advanced Settings.
+
+### A222 — Partnered Discord servers: a public, admin-edited table; icons straight from Discord
+
+- **Date:** 2026-11-17 · **Status:** items 1 to 5 decided; items 6 and 7 are the orchestrator's choices, open to change; being built (S14.4p)
+- **Decision:**
+  1. The landing page's partnered Discord servers come from a small public table that an Admin can edit, so servers are added or removed without a deploy.
+  2. The table holds the server name and the invite link. It has no audit columns, a deliberate exception to the repo's convention.
+  3. The server's icon is never copied into git or UploadThing. The visitor's browser asks Discord for the current icon through the invite, so it is always up to date. (Checked on 2026-11-17: Discord's invite lookup answers a browser page from another origin, and its image host allows any origin.)
+  4. The security header may allow the two Discord hosts this needs: `discord.com` for the lookup and `cdn.discordapp.com` for the image.
+  5. For now the only partner is Genius Society. The hero and card art of the landing page stay in git with the code.
+  6. Orchestrator: the table also has a position (tile order) and a short description (the tile's one line of text from the mockup). The stored invite is the bare code, validated, so no arbitrary address can be stored. The name shown is the table's, never Discord's. If Discord does not answer, the tile shows initials.
+  7. Orchestrator: look question L1 is read as A (the hero runs under the frosted bar, the mockup's form), from the same message; it is what is built.
+- **Why:** user, 2026-11-17: "I'll uploadthem to upload thing, right now, only keep the genius society server as the only partnered discord"; "i was talking about the discord icons only yes, but if we have an invite link for genius server, wouldn't that be enough to get the image tho?"; "I say we create a small admin editable table (public) that stores the links for our parnered servers, so we can add or remove servers without needing to redeploy and it would always keep the image up to date, we will need the invite link and server name on that table i assume right? we dont need audit columns there"; then, to the two ways of keeping the image current and the security header question, "yeah lets go with option A and your security recomendation".
+- **Where implemented:** not yet; S14.4p.

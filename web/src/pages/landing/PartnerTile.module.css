@@ -1,0 +1,149 @@
+/*
+ * One partner tile (index.html `.serverTile`, DESIGN.md §4.4): the invite link, lifting on hover.
+ * The icon is the server's current Discord icon (S14.4p) or, while it is unknown or missing, the
+ * initials on the same circle.
+ */
+
+.tile {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 14px;
+    align-items: center;
+    padding: 1.75rem 1.25rem 1.5rem;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-card);
+    color: inherit;
+}
+
+.tileLink {
+    transition:
+        border-color var(--duration-base) var(--ease-out),
+        background var(--duration-base) var(--ease-out),
+        transform var(--duration-base) var(--ease-out);
+
+    &:hover {
+        border-color: rgba(126, 112, 224, 0.3);
+        background: var(--bg-elevated);
+
+        @media (prefers-reduced-motion: no-preference) {
+            transform: translateY(-2px);
+        }
+    }
+
+    &:focus-visible {
+        outline: none;
+        border-color: var(--color-iris);
+        box-shadow: 0 0 0 2px rgba(126, 112, 224, 0.35);
+    }
+
+    @media (forced-colors: active) {
+        &:focus-visible {
+            outline: 2px solid Highlight;
+            outline-offset: 2px;
+        }
+    }
+}
+
+.avatar {
+    position: relative;
+    inline-size: clamp(88px, 11vw, 112px);
+    aspect-ratio: 1;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 50%;
+    background: var(--color-charcoal);
+    transition: filter var(--duration-base) var(--ease-out);
+
+    /* The champagne ring on hover. */
+    &::after {
+        content: "";
+        position: absolute;
+        inset: -3px;
+        border: 1px solid var(--color-prestige);
+        border-radius: 50%;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity var(--duration-base) var(--ease-out);
+    }
+
+    .tileLink:hover & {
+        filter: brightness(1.05) saturate(1.1);
+    }
+
+    .tileLink:hover &::after {
+        opacity: 0.65;
+    }
+}
+
+/* The icon: fills the circle. */
+.icon {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+/* No icon (unknown, missing or failed): the initials, centred on the circle. */
+.initials {
+    display: grid;
+    place-items: center;
+    inline-size: 100%;
+    block-size: 100%;
+    border-radius: 50%;
+    background: var(--color-graphite);
+    color: var(--color-mist);
+    font-family: var(--font-secondary);
+    font-size: clamp(1.5rem, 2.6vw, 2rem);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+}
+
+.name {
+    color: var(--text-heading);
+    font-family: var(--font-secondary);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.role {
+    max-inline-size: 22ch;
+    margin: 0;
+    color: var(--text-muted);
+    font-family: var(--font-secondary);
+    font-size: 0.75rem;
+    font-weight: 400;
+    line-height: 1.45;
+    text-align: center;
+}
+
+.join {
+    position: relative;
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    margin-block-start: 0.25rem;
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    transition: color var(--duration-fast) var(--ease-out);
+
+    &::after {
+        content: "→" / "";
+        transition: transform var(--duration-fast) var(--ease-out);
+    }
+
+    .tileLink:hover & {
+        color: var(--color-iris);
+    }
+
+    .tileLink:hover &::after {
+        transform: translateX(3px);
+    }
+}

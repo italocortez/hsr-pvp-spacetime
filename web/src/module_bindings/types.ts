@@ -2163,6 +2163,15 @@ export const ParticipantStatus = __t.enum("ParticipantStatus", {
 });
 export type ParticipantStatus = __Infer<typeof ParticipantStatus>;
 
+export const PartnerServer = __t.object("PartnerServer", {
+  id: __t.u32(),
+  name: __t.string(),
+  inviteCode: __t.string(),
+  description: __t.string(),
+  position: __t.u32(),
+});
+export type PartnerServer = __Infer<typeof PartnerServer>;
+
 // The tagged union or sum type for the algebraic type `Path`.
 export const Path = __t.enum("Path", {
   Abundance: __t.unit(),

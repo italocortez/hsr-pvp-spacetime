@@ -2,6 +2,8 @@
 
 76 tables. Updated 2026-11-06 (S3 backend reset: 27 tables public → private per A37 / ACCESS-SECURITY-OPS Appendix A, 10 new, `group_phase_record` dropped per A23). Visibility: **21 public** (reference data, aggregates, `user`, `tournament`, `bracket_match`, `admin_alert`, the `lobby_cursor_event` event table); every other table is PRIVATE and read through views (S9). Paste into [mermaid.live](https://mermaid.live) to preview. **Since S11a: `user` is private and `user_private` is merged into it; 78 table files in `spacetimedb/src/tables/`, 20 of them public (the 76 / 21 above predate later additions).**
 
+Phase S14.4p execution (user ruling 2026-11-17): new PUBLIC table `partner_server` (`id` autoInc PK, `name` 1-50, `inviteCode` unique (the bare Discord invite code), `description` 0-80, `position`), the landing page's partner servers, at most 12 rows, edited by `admin_*` / `server_*` partner reducers. **No audit columns** (user ruling, a deliberate exception). Kept by `server_nuke_test_data`. No relationship to other tables. Additive: no existing table changes shape (docs/admin/architecture.md "Phase S14.4p execution").
+
 Phase suspension-s1 execution (DECISIONS.md A195, A213, A214): new PRIVATE table `user_suspension` (`userId` PK, `reason` (0-500, the admins' record only), `suspendedById`, audit columns): one row per suspended account, deleted by a lift, with the user (`performUserDeletion`) and by `server_nuke_test_data`; read only by the new view `view_my_suspension` (user id only) and the one primary-key check of the permission helper and the view caller helper. Additive: no existing table changes shape (docs/suspension/architecture.md).
 
 Phase S14.3c-rev execution (DECISIONS.md A198): `user_loadout` gains `rev` (u32, the loadout's version, sent by `view_my_loadouts`) and `firstRev` (u32, private), after `slot`; `user_loadout_rate` gains `revFloor` (u32, the highest version the account was ever given) after `saveCount`. Both tables were never published, so their shape changed freely; no other table changes (docs/loadout/architecture.md).
@@ -42,7 +44,7 @@ Phase S7b execution (DECISIONS.md A60): `match_result_game` gains `blueConfirmed
 | grey | match_session_history (PRIVATE), match_session_step_history (PRIVATE), match_participant_history (PRIVATE), match_result_game_history (PRIVATE) |
 | pink | mmr_rating (PRIVATE A40), mmr_history (PRIVATE), leaderboard (top 20 per category, A45), player_stat (PRIVATE), player_character_stat (PRIVATE), global_character_stat, player_relationship (PRIVATE), account_rating_config |
 | yellow | achievement, user_achievement, achievement_criteria, calendar_event (PRIVATE), calendar_event_invite (PRIVATE), availability_slot (PRIVATE), saved_calendar (PRIVATE) |
-| brown | abuse_config (PRIVATE, new S3 §B.5), user_rate_state (PRIVATE, new S3 §B.5), admin_alert (public, counts only, new S3 A42) |
+| brown | abuse_config (PRIVATE, new S3 §B.5), user_rate_state (PRIVATE, new S3 §B.5), admin_alert (public, counts only, new S3 A42), partner_server (public, no audit columns, new S14.4p) |
 
 ```mermaid
 erDiagram
@@ -495,6 +497,13 @@ erDiagram
     admin_alert {
         u32 id PK
         string kind "counts only, no user ids, no audit columns"
+    }
+    partner_server {
+        u32 id PK "autoInc"
+        string name "1-50"
+        string inviteCode UK "bare Discord invite code"
+        string description "0-80"
+        u32 position "tile order"
     }
 
     %% ── relationships ──────────────────────────────────────

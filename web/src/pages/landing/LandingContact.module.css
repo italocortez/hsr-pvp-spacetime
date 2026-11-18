@@ -1,0 +1,283 @@
+@import "@/styles/media.css";
+
+/*
+ * Port of index.html's contact section (`.contact`, `.contactCreator`, `.copyBtn`, `.serversRail`).
+ * Breakpoint snap: the mockup's 768px to --bp-md (exact). Deviations: a failed copy has its own
+ * look (warning tint, "Copy failed"); on phones the hint, hidden at rest as in the mockup, shows
+ * while a result is up, so the result is never colour alone; tiles without an invite are not
+ * links and have no hover lift; the partner heading is an `h3` (a `p` in the mockup).
+ */
+
+.contact {
+    position: relative;
+    overflow: hidden;
+    padding: clamp(6rem, 14vh, 10rem) clamp(1.5rem, 6vw, 5rem);
+    background: var(--bg-nav);
+}
+
+.inner {
+    max-inline-size: 1200px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.label {
+    display: block;
+    margin: 0 0 1.25rem;
+    color: var(--color-iris);
+    font-family: var(--font-primary);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    opacity: 0.7;
+}
+
+.heading {
+    margin: 0 0 1.5rem;
+    color: var(--text-heading);
+    font-family: var(--font-secondary);
+    font-size: clamp(3rem, 6vw, 4.5rem);
+    font-weight: 700;
+    line-height: 0.95;
+    letter-spacing: -0.015em;
+    text-transform: uppercase;
+}
+
+.accent {
+    color: var(--color-iris);
+    text-shadow: 0 0 30px rgba(126, 112, 224, 0.4);
+}
+
+.body {
+    max-inline-size: 52ch;
+    margin: 0 auto 3rem;
+    color: var(--text-muted);
+    font-family: var(--font-secondary);
+    font-size: clamp(0.9375rem, 1.2vw, 1.0625rem);
+    font-weight: 400;
+    line-height: 1.75;
+    text-align: center;
+}
+
+/* Creator: the editorial signature card with its champagne colophon hairline. */
+.creator {
+    position: relative;
+    max-inline-size: 720px;
+    margin: 3.5rem auto 0;
+    padding: clamp(2rem, 4vw, 3rem) clamp(1.75rem, 4vw, 3rem);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-card);
+    text-align: center;
+
+    &::before {
+        content: "";
+        position: absolute;
+        inset-block-start: 0;
+        inset-inline-start: 50%;
+        inline-size: 28px;
+        block-size: 1px;
+        background: var(--color-prestige);
+        opacity: 0.6;
+        transform: translateX(-50%);
+    }
+
+    @media (--bp-md) {
+        margin-block-start: 2.5rem;
+        padding: 1.75rem 1.5rem;
+    }
+}
+
+.creatorEyebrow {
+    display: block;
+    margin: 0 0 0.875rem;
+    color: var(--color-prestige);
+    font-family: var(--font-primary);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    opacity: 0.85;
+}
+
+.creatorLine {
+    margin: 0 0 1.5rem;
+    color: var(--text-heading);
+    font-family: var(--font-secondary);
+    font-size: clamp(1.0625rem, 1.6vw, 1.25rem);
+    font-weight: 400;
+    line-height: 1.5;
+
+    & strong {
+        color: var(--color-iris);
+        font-weight: 600;
+        text-shadow: 0 0 24px rgba(126, 112, 224, 0.35);
+    }
+}
+
+/* The Discord copy pill. */
+.copy {
+    position: relative;
+    display: inline-flex;
+    gap: 10px;
+    align-items: center;
+    min-block-size: 24px;
+    padding: 10px 18px;
+    border: 1px solid rgba(126, 112, 224, 0.25);
+    background: rgba(126, 112, 224, 0.06);
+    color: var(--text-body);
+    font-family: var(--font-primary);
+    cursor: pointer;
+    transition:
+        background var(--duration-fast) var(--ease-out),
+        border-color var(--duration-fast) var(--ease-out),
+        filter var(--duration-fast) var(--ease-out);
+
+    &:hover {
+        border-color: rgba(126, 112, 224, 0.5);
+        background: rgba(126, 112, 224, 0.14);
+        filter: drop-shadow(0 0 6px rgba(126, 112, 224, 0.22));
+    }
+
+    &:focus-visible {
+        outline-offset: 3px;
+    }
+
+    &[data-state="copied"] {
+        border-color: rgba(91, 181, 138, 0.55);
+        background: rgba(91, 181, 138, 0.14);
+    }
+
+    &[data-state="failed"] {
+        border-color: color-mix(in srgb, var(--color-warning) 55%, transparent);
+        background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+    }
+
+    @media (--bp-md) {
+        padding: 9px 14px;
+    }
+}
+
+.icon {
+    display: block;
+    flex-shrink: 0;
+    color: var(--color-iris);
+    opacity: 0.75;
+
+    .copy[data-state="copied"] & {
+        color: var(--color-success);
+        opacity: 1;
+    }
+
+    .copy[data-state="failed"] & {
+        color: var(--color-warning);
+        opacity: 1;
+    }
+}
+
+.username {
+    color: var(--color-iris);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+
+    .copy[data-state="copied"] & {
+        color: var(--color-success);
+    }
+}
+
+.copyDivider {
+    inline-size: 1px;
+    block-size: 12px;
+    background: rgba(126, 112, 224, 0.25);
+
+    @media (--bp-md) {
+        .copy[data-state="idle"] & {
+            display: none;
+        }
+    }
+}
+
+/*
+ * The hint: pewter in the mockup (about 2.3:1 on the pill); --text-muted here, as the footer's
+ * labels, for 4.5:1 text contrast.
+ */
+.hint {
+    color: var(--text-muted);
+    font-size: 0.6875rem;
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+
+    .copy[data-state="copied"] & {
+        color: var(--color-success);
+    }
+
+    .copy[data-state="failed"] & {
+        color: var(--color-warning);
+    }
+
+    @media (--bp-md) {
+        .copy[data-state="idle"] & {
+            display: none;
+        }
+    }
+}
+
+/* Partner communities: the mascot roster strip. */
+.rail {
+    position: relative;
+    margin-block-start: clamp(3rem, 6vh, 4.5rem);
+}
+
+.railLabel {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    justify-content: center;
+    margin: 0 0 2rem;
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+
+    &::before,
+    &::after {
+        content: "";
+        flex: 0 1 80px;
+        block-size: 1px;
+        background: var(--border-subtle);
+    }
+}
+
+/*
+ * The tiles: centred in a row, each the width of one of the mockup's three columns (880px less two
+ * 1.75rem gaps, over three), so one tile alone sits under the heading's centre at the size the
+ * mockup gives it, and further entries line up beside it. One column of at most 320px at 768px and
+ * below (the mockup's rule).
+ */
+.grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: clamp(1rem, 2vw, 1.75rem);
+    justify-content: center;
+    max-inline-size: 880px;
+    margin: 0 auto;
+    padding: 0;
+    list-style: none;
+
+    @media (--bp-md) {
+        max-inline-size: 320px;
+    }
+}
+
+.slot {
+    display: flex;
+    flex: 0 1 calc((880px - 2 * 1.75rem) / 3);
+
+    @media (--bp-md) {
+        flex-basis: 100%;
+    }
+}

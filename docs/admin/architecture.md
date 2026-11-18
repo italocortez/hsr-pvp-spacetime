@@ -328,6 +328,41 @@ New file `reducers/admin/suspensionAdmin.ts` ([suspension architecture](../suspe
 - `admin_lift_suspension(userId: u32)`: `ensureAdmin`; deletes the row of any suspended user, an Admin's included.
 - A suspended Admin is refused on every Admin tool ("Your account is suspended."), during maintenance too. The server twins (`server_suspend_user`, `server_lift_suspension`) are in the [auth architecture](../auth/architecture.md).
 
+## Phase S14.4p execution (user ruling 2026-11-17)
+
+The partnered Discord servers on the landing page come from a small public table an Admin edits without a redeploy. Behaviour: [contract](contract.md#acceptance-scenarios-phase-s144p-execution); the page side: [pages.md, Landing](../frontend/pages.md).
+
+```
+PartnerServer (id: u32 autoInc PK)  [PUBLIC -- public: true]   tables/admin/partnerServer.ts
+  +-- name: string          1..50 characters, trimmed; shown on the tile (never Discord's name)
+  +-- inviteCode: string    UNIQUE; the bare Discord invite code, [A-Za-z0-9-]{2,32}; never a URL
+  +-- description: string   0..80 characters, trimmed; the tile's one line (may be empty)
+  +-- position: u32         tile order (then id)
+  NO audit columns
+```
+
+- **No audit columns**: a deliberate exception to the audit-columns policy, by the user's explicit ruling ("we dont need audit columns there"). No actor or date is recorded for an edit.
+- **`description`** is not in the user's ruling (which named the invite link and the server name); it was added by the orchestrator's brief so the tile keeps its one-line text from the table. Flagged for the user.
+- **Size**: at most 12 rows (`PARTNER_SERVER_LIMIT`), so the landing page subscribes the whole table (a few hundred bytes); `docs/frontend/subscriptions.md`.
+- **Reducers** (`reducers/admin/partnerServers.ts`, one rule set in `helpers/admin/partnerServers.ts`):
+  - `admin_add_partner_server(name, invite, description, position)`, `admin_update_partner_server(id, name, invite, description, position)`, `admin_remove_partner_server(id)`: `ensureAdmin` (a suspended Admin is refused, "Your account is suspended."; a Linker has no user, "Unauthorized: No user linked to this identity.").
+  - `server_add_partner_server`, `server_update_partner_server`, `server_remove_partner_server`, same arguments: `requireServer` (Owner or Delegate; now exported from `reducers/identity/server.ts`), used by `npm run stdb:manage-partners`.
+  - `invite` takes a bare code or exactly `https://discord.gg/<code>` / `https://discord.com/invite/<code>`, surrounding spaces trimmed; the code is stored. Anything else is refused, so no other address can be stored. Update replaces every column of the row (the script fills an omitted description or position from the current row).
+  - Check order on add: name, description, invite, duplicate code, limit. On update: the id first, then the same checks (a row may keep its own code; an update is never refused by the limit).
+- **Refusal texts** (constants in `helpers/admin/partnerServers.ts`):
+
+| Case | Text |
+|---|---|
+| name empty or over 50 after trimming | `Partner server name must be 1 to 50 characters.` |
+| description over 80 after trimming | `Partner server description must be at most 80 characters.` |
+| invite not a code or one of the two link forms | `Invite must be a Discord invite code (letters, digits and hyphens, 2 to 32 characters) or a link of the form https://discord.gg/<code> or https://discord.com/invite/<code>.` |
+| code already listed | `A partner server with this invite is already listed.` |
+| a 13th row | `At most 12 partner servers can be listed.` |
+| unknown id (update, remove) | `Partner server not found.` |
+
+- **`server_nuke_test_data` keeps the table**: it is site content an Admin keeps, like the config rows the nuke preserves (`AbuseConfig`, `EloConfigTable`, `AccountRatingConfig`), not test state.
+- Tests: `spacetimedb/src/__tests__/admin/partner-servers.test.ts`.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -368,6 +403,7 @@ New file `reducers/admin/suspensionAdmin.ts` ([suspension architecture](../suspe
 | Maintenance mode: a live Admin connects and acts; a connected non-Admin is refused on every state-changing reducer (`ensureNotInMaintenance` in `getAuthenticatedUser`, `login_as_guest`, the profile reducers; the cursor is dropped); server and scheduled reducers keep running (triage L9). `admin_update_user` and `server_set_role` hand a demoted Moderator's match events to the tournament organizers | Phase S11a execution (DECISIONS.md A163(2), A163(3)) | 2026-11-12 |
 | `admin_update_user` refuses a role change of another Admin ("Only the server can change an Admin's role."); self-changes and non-role edits unchanged; `server_set_role` unchanged | Phase suspension-s1 execution (DECISIONS.md A216) | 2026-11-17 |
 | `admin_suspend_user` / `admin_lift_suspension` (Admin only; an Admin target refused from the app, user ruling 2026-11-17) | Phase suspension-s1 execution (DECISIONS.md A195, A213(3), A214) | 2026-11-17 |
+| Public `PartnerServer` table without audit columns (user ruling); `description` column added by the brief; `admin_*` / `server_*` add, update, remove partner server; at most 12 rows; `server_nuke_test_data` keeps the table; `requireServer` exported | Phase S14.4p execution (user ruling 2026-11-17) | 2026-11-17 |
 
 ---
 

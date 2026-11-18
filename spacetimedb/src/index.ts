@@ -166,6 +166,7 @@ export { run_identity_gc, admin_gc_identities, seed_identity_gc_job } from '@mod
 export { run_referee_transfer_check } from '@module/reducers/lobby/refereeTransfer';
 export { run_tournament_finalize } from '@module/reducers/tournament/tournamentFinalize';
 export { admin_update_abuse_config, admin_set_guest_lobby_creation, admin_set_guest_creation, admin_acknowledge_alert } from '@module/reducers/admin/abuse';
+export { admin_add_partner_server, admin_update_partner_server, admin_remove_partner_server, server_add_partner_server, server_update_partner_server, server_remove_partner_server } from '@module/reducers/admin/partnerServers'; // S14.4p
 export { start_draft, pick_character, ban_character, timer_expiry_classic } from '@module/reducers/draft/draftClassic';
 export { undo_last_step, pause_draft, resume_draft } from '@module/reducers/draft/draftControl';
 export { nominate_character, place_bid, pass_bid, timer_expiry_auction } from '@module/reducers/draft/draftAuction';

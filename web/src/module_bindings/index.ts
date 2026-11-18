@@ -39,6 +39,7 @@ import AddAchievementCriteriaReducer from "./add_achievement_criteria_reducer";
 import AddParticipantReducer from "./add_participant_reducer";
 import AddTeamMemberReducer from "./add_team_member_reducer";
 import AdminAcknowledgeAlertReducer from "./admin_acknowledge_alert_reducer";
+import AdminAddPartnerServerReducer from "./admin_add_partner_server_reducer";
 import AdminAssignCharacterArchetypesReducer from "./admin_assign_character_archetypes_reducer";
 import AdminBanUserReducer from "./admin_ban_user_reducer";
 import AdminBatchRemoveCharactersReducer from "./admin_batch_remove_characters_reducer";
@@ -55,6 +56,7 @@ import AdminGcLobbiesReducer from "./admin_gc_lobbies_reducer";
 import AdminLiftSuspensionReducer from "./admin_lift_suspension_reducer";
 import AdminRecalculateAllRatingsReducer from "./admin_recalculate_all_ratings_reducer";
 import AdminRemoveCharacterArchetypesReducer from "./admin_remove_character_archetypes_reducer";
+import AdminRemovePartnerServerReducer from "./admin_remove_partner_server_reducer";
 import AdminRestartTournamentFinalizeReducer from "./admin_restart_tournament_finalize_reducer";
 import AdminSeedEloConfigReducer from "./admin_seed_elo_config_reducer";
 import AdminSeedRatingConfigReducer from "./admin_seed_rating_config_reducer";
@@ -65,6 +67,7 @@ import AdminUnbanUserReducer from "./admin_unban_user_reducer";
 import AdminUpdateAbuseConfigReducer from "./admin_update_abuse_config_reducer";
 import AdminUpdateEloConfigReducer from "./admin_update_elo_config_reducer";
 import AdminUpdateHsrAccountReducer from "./admin_update_hsr_account_reducer";
+import AdminUpdatePartnerServerReducer from "./admin_update_partner_server_reducer";
 import AdminUpdateRatingConfigReducer from "./admin_update_rating_config_reducer";
 import AdminUpdateUserReducer from "./admin_update_user_reducer";
 import AdminUpsertArchetypeReducer from "./admin_upsert_archetype_reducer";
@@ -166,11 +169,13 @@ import SeedIdentityGcJobReducer from "./seed_identity_gc_job_reducer";
 import SeedLobbyGcJobReducer from "./seed_lobby_gc_job_reducer";
 import SelectMatchAccountReducer from "./select_match_account_reducer";
 import SendChatMessageReducer from "./send_chat_message_reducer";
+import ServerAddPartnerServerReducer from "./server_add_partner_server_reducer";
 import ServerDeleteUserReducer from "./server_delete_user_reducer";
 import ServerLiftSuspensionReducer from "./server_lift_suspension_reducer";
 import ServerNukeTestDataReducer from "./server_nuke_test_data_reducer";
 import ServerRegisterDelegateReducer from "./server_register_delegate_reducer";
 import ServerRegisterLinkerReducer from "./server_register_linker_reducer";
+import ServerRemovePartnerServerReducer from "./server_remove_partner_server_reducer";
 import ServerRevokeDelegateReducer from "./server_revoke_delegate_reducer";
 import ServerRevokeLinkerReducer from "./server_revoke_linker_reducer";
 import ServerSetDatetimeReducer from "./server_set_datetime_reducer";
@@ -180,6 +185,7 @@ import ServerSetMmrReducer from "./server_set_mmr_reducer";
 import ServerSetOnlineReducer from "./server_set_online_reducer";
 import ServerSetRoleReducer from "./server_set_role_reducer";
 import ServerSuspendUserReducer from "./server_suspend_user_reducer";
+import ServerUpdatePartnerServerReducer from "./server_update_partner_server_reducer";
 import SetActiveHsrAccountReducer from "./set_active_hsr_account_reducer";
 import SetActiveSeasonReducer from "./set_active_season_reducer";
 import SetAnonymousAliasReducer from "./set_anonymous_alias_reducer";
@@ -237,6 +243,7 @@ import HsrLightconeCostRow from "./hsr_lightcone_cost_table";
 import HsrSynergyCostRow from "./hsr_synergy_cost_table";
 import LeaderboardRow from "./leaderboard_table";
 import LobbyCursorEventRow from "./lobby_cursor_event_table";
+import PartnerServerRow from "./partner_server_table";
 import SeasonRow from "./season_table";
 import TournamentRow from "./tournament_table";
 import UserAchievementRow from "./user_achievement_table";
@@ -537,6 +544,21 @@ const tablesSchema = __schema({
     ],
     event: true,
   }, LobbyCursorEventRow),
+  partnerServer: __table({
+    name: 'partner_server',
+    indexes: [
+      { accessor: 'id', name: 'partner_server_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'inviteCode', name: 'partner_server_invite_code_idx_btree', algorithm: 'btree', columns: [
+        'inviteCode',
+      ] },
+    ],
+    constraints: [
+      { name: 'partner_server_id_key', constraint: 'unique', columns: ['id'] },
+      { name: 'partner_server_invite_code_key', constraint: 'unique', columns: ['inviteCode'] },
+    ],
+  }, PartnerServerRow),
   season: __table({
     name: 'season',
     indexes: [
@@ -1158,6 +1180,7 @@ const reducersSchema = __reducers(
   __reducerSchema("add_participant", AddParticipantReducer),
   __reducerSchema("add_team_member", AddTeamMemberReducer),
   __reducerSchema("admin_acknowledge_alert", AdminAcknowledgeAlertReducer),
+  __reducerSchema("admin_add_partner_server", AdminAddPartnerServerReducer),
   __reducerSchema("admin_assign_character_archetypes", AdminAssignCharacterArchetypesReducer),
   __reducerSchema("admin_ban_user", AdminBanUserReducer),
   __reducerSchema("admin_batch_remove_characters", AdminBatchRemoveCharactersReducer),
@@ -1174,6 +1197,7 @@ const reducersSchema = __reducers(
   __reducerSchema("admin_lift_suspension", AdminLiftSuspensionReducer),
   __reducerSchema("admin_recalculate_all_ratings", AdminRecalculateAllRatingsReducer),
   __reducerSchema("admin_remove_character_archetypes", AdminRemoveCharacterArchetypesReducer),
+  __reducerSchema("admin_remove_partner_server", AdminRemovePartnerServerReducer),
   __reducerSchema("admin_restart_tournament_finalize", AdminRestartTournamentFinalizeReducer),
   __reducerSchema("admin_seed_elo_config", AdminSeedEloConfigReducer),
   __reducerSchema("admin_seed_rating_config", AdminSeedRatingConfigReducer),
@@ -1184,6 +1208,7 @@ const reducersSchema = __reducers(
   __reducerSchema("admin_update_abuse_config", AdminUpdateAbuseConfigReducer),
   __reducerSchema("admin_update_elo_config", AdminUpdateEloConfigReducer),
   __reducerSchema("admin_update_hsr_account", AdminUpdateHsrAccountReducer),
+  __reducerSchema("admin_update_partner_server", AdminUpdatePartnerServerReducer),
   __reducerSchema("admin_update_rating_config", AdminUpdateRatingConfigReducer),
   __reducerSchema("admin_update_user", AdminUpdateUserReducer),
   __reducerSchema("admin_upsert_archetype", AdminUpsertArchetypeReducer),
@@ -1285,11 +1310,13 @@ const reducersSchema = __reducers(
   __reducerSchema("seed_lobby_gc_job", SeedLobbyGcJobReducer),
   __reducerSchema("select_match_account", SelectMatchAccountReducer),
   __reducerSchema("send_chat_message", SendChatMessageReducer),
+  __reducerSchema("server_add_partner_server", ServerAddPartnerServerReducer),
   __reducerSchema("server_delete_user", ServerDeleteUserReducer),
   __reducerSchema("server_lift_suspension", ServerLiftSuspensionReducer),
   __reducerSchema("server_nuke_test_data", ServerNukeTestDataReducer),
   __reducerSchema("server_register_delegate", ServerRegisterDelegateReducer),
   __reducerSchema("server_register_linker", ServerRegisterLinkerReducer),
+  __reducerSchema("server_remove_partner_server", ServerRemovePartnerServerReducer),
   __reducerSchema("server_revoke_delegate", ServerRevokeDelegateReducer),
   __reducerSchema("server_revoke_linker", ServerRevokeLinkerReducer),
   __reducerSchema("server_set_datetime", ServerSetDatetimeReducer),
@@ -1299,6 +1326,7 @@ const reducersSchema = __reducers(
   __reducerSchema("server_set_online", ServerSetOnlineReducer),
   __reducerSchema("server_set_role", ServerSetRoleReducer),
   __reducerSchema("server_suspend_user", ServerSuspendUserReducer),
+  __reducerSchema("server_update_partner_server", ServerUpdatePartnerServerReducer),
   __reducerSchema("set_active_hsr_account", SetActiveHsrAccountReducer),
   __reducerSchema("set_active_season", SetActiveSeasonReducer),
   __reducerSchema("set_anonymous_alias", SetAnonymousAliasReducer),
@@ -1376,6 +1404,8 @@ type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "ta
     readonly "Leaderboard": Omit<typeof tablesSchema.schemaType.tables["leaderboard"], "accessorName"> & { readonly accessorName: "Leaderboard" };
     /** @deprecated Use `lobbyCursorEvent` instead. This alias will be removed in the next major version. */
     readonly "LobbyCursorEvent": Omit<typeof tablesSchema.schemaType.tables["lobbyCursorEvent"], "accessorName"> & { readonly accessorName: "LobbyCursorEvent" };
+    /** @deprecated Use `partnerServer` instead. This alias will be removed in the next major version. */
+    readonly "PartnerServer": Omit<typeof tablesSchema.schemaType.tables["partnerServer"], "accessorName"> & { readonly accessorName: "PartnerServer" };
     /** @deprecated Use `season` instead. This alias will be removed in the next major version. */
     readonly "Season": Omit<typeof tablesSchema.schemaType.tables["season"], "accessorName"> & { readonly accessorName: "Season" };
     /** @deprecated Use `tournament` instead. This alias will be removed in the next major version. */
@@ -1577,6 +1607,7 @@ const tableAccessorAliases = {
   "HsrSynergyCost": "hsrSynergyCost",
   "Leaderboard": "leaderboard",
   "LobbyCursorEvent": "lobbyCursorEvent",
+  "PartnerServer": "partnerServer",
   "Season": "season",
   "Tournament": "tournament",
   "UserAchievement": "userAchievement",
@@ -1714,6 +1745,8 @@ export type Tables = __TablesBase & {
   readonly "Leaderboard": __TablesBase["leaderboard"];
   /** @deprecated Use `lobbyCursorEvent` instead. This alias will be removed in the next major version. */
   readonly "LobbyCursorEvent": __TablesBase["lobbyCursorEvent"];
+  /** @deprecated Use `partnerServer` instead. This alias will be removed in the next major version. */
+  readonly "PartnerServer": __TablesBase["partnerServer"];
   /** @deprecated Use `season` instead. This alias will be removed in the next major version. */
   readonly "Season": __TablesBase["season"];
   /** @deprecated Use `tournament` instead. This alias will be removed in the next major version. */

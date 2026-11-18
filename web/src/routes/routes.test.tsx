@@ -174,8 +174,8 @@ describe('search params', () => {
 
     // M5b: a page with login=1 is the sign-in panel (was the standby page).
     it.each([
-        ['/?next=//evil.example', '/', 'Module offline.'],
-        ['/?next=https://evil.example', '/', 'Module offline.'],
+        ['/?next=//evil.example', '/', 'IPC Battlegrounds'],
+        ['/?next=https://evil.example', '/', 'IPC Battlegrounds'],
         ['/?login=1&next=/%5Cevil.example', '/?login=1', 'Sign in.'],
     ])('%s drops the unsafe next and ends on %s', async (start, end, headline) => {
         const r = renderWithRouter(start);

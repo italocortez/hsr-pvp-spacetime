@@ -1,9 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { LoadFailedPage } from '@/pages/connection/LoadFailedPage';
+import { LandingPage } from '@/pages/landing/LandingPage';
 import { SignInFrame } from '@/pages/sign-in/SignInFrame';
 import { loadedSignInPage, loadSignInPage } from '@/pages/sign-in/signInPanel';
 import { isSignInSearch, parseIndexSearch } from '@/pages/sign-in/signInSearch';
-import { StandbyPage } from '@/pages/standby/StandbyPage';
 
 /*
  * `/` without `login=1` must not wait for the sign-in panel's chunk (S14.1, first paint). For
@@ -38,7 +38,7 @@ export const Route = createFileRoute('/')({
 
 function IndexRoute() {
     const { login, next, status } = Route.useSearch();
-    if (!login) return <StandbyPage />;
+    if (!login) return <LandingPage />;
     // The loader has loaded the panel before the router resolves this match, so the frame here
     // is unreachable today; it stays as a guard should the router ever render before the loader.
     const SignInPage = loadedSignInPage();
@@ -47,7 +47,7 @@ function IndexRoute() {
 
 /**
  * Only `login=1` waits on something (the panel's chunk). `/` alone is pending only for the moment
- * its own route chunk takes, and shows nothing then, as before (a standby block here would mount
+ * its own route chunk takes, and shows nothing then, as before (the landing page here would mount
  * twice).
  */
 function IndexPending() {

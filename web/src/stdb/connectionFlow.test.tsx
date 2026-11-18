@@ -73,7 +73,7 @@ describe('guarded routes and view_my_profile', () => {
     it('a public route renders while still connecting', async () => {
         renderWithConnection('/', conn);
         expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent(
-            'Module offline.',
+            'IPC Battlegrounds',
         );
     });
 });
@@ -97,7 +97,7 @@ describe('failure splashes in place of the routes', () => {
         await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
         expect(connectionStatusStore.getSnapshot().status).toEqual({ state: 'connecting' });
         expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent(
-            'Module offline.',
+            'IPC Battlegrounds',
         );
     });
 

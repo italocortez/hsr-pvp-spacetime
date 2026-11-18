@@ -409,6 +409,42 @@ _Superseded in Phase S8e execution (S8e review, DECISIONS.md A67(4), TD-13/14): 
 **When** an Admin calls `admin_set_guest_lobby_creation(false)` (or the breaker trips)
 **Then** the `view_admin_abuse_config` row updates in place with `guestLobbyCreationEnabled = false`; the row carries no audit column. A Moderator sees the state but cannot change it.
 
+## Acceptance Scenarios (Phase S14.4p execution)
+
+Partner servers: the public `partner_server` table behind the landing page's partner tiles (user ruling 2026-11-17). Tables, rules and texts: [architecture](architecture.md#phase-s144p-execution-user-ruling-2026-11-17).
+
+### S14.4p-P1 An Admin lists a partner server
+**Given** an Admin
+**When** they call `admin_add_partner_server("Genius Society", "https://discord.gg/HbXErzYVQ5", "Relic manipulators and build makers", 0)`
+**Then** one row exists with `inviteCode = "HbXErzYVQ5"` (the bare code), the trimmed name and description and position 0; the landing page shows its tile without a redeploy. The row has no audit columns.
+
+### S14.4p-P2 The script edits the list
+**Given** the delegate token (`npm run stdb:manage-partners -- --target <t> add|update|remove|list`)
+**When** it calls `server_add_partner_server`, `server_update_partner_server` or `server_remove_partner_server`
+**Then** the same rules apply as for the Admin reducers.
+
+### S14.4p-P3 Bad input is refused, nothing is written
+**When** the name is empty or over 50 characters, the description over 80, or the invite is anything but a code of letters, digits and hyphens (2 to 32) or one of the two link forms
+**Then** the call is refused with its text and no row changes. Another host, `http://`, a query string, an extra path or a scheme like `javascript:` are all refused.
+
+### S14.4p-P4 Duplicates and the limit
+**When** a code already listed is added (bare or as a link), or another row is updated to it, or a 13th row is added
+**Then** "A partner server with this invite is already listed." or "At most 12 partner servers can be listed."; an update of a row at the limit is accepted.
+
+### S14.4p-P5 Callers
+**When** a plain user, a Moderator or the Linker calls an `admin_*` partner reducer, or anyone but the Owner or a Delegate calls a `server_*` one (an Admin included)
+**Then** it is refused ("Forbidden: Requires Admin privileges.", "Unauthorized: No user linked to this identity." for the Linker, "Forbidden: caller is not a registered server identity."). A suspended Admin is refused ("Your account is suspended.") until the suspension is lifted.
+
+### S14.4p-P6 Test wipe
+**When** `server_nuke_test_data` runs on test1
+**Then** the partner list survives (site content, like the config rows).
+
+| Edge case | Expected behavior |
+|---|---|
+| Update with the row's own code | Accepted (not a duplicate of itself) |
+| Unknown id on update or remove | "Partner server not found." |
+| Description only spaces | Stored as empty |
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -440,3 +476,5 @@ _Superseded in Phase S8e execution (S8e review, DECISIONS.md A67(4), TD-13/14): 
 | `view_admin_users` (Moderator and above) lists every user with id, username, display name, guest flag, role, Discord-linked flag, avatar, displayed achievement, deletion time and audit columns; it replaces the read of the public `User` table | Phase S11a execution (DECISIONS.md A77) | 2026-11-12 |
 | `server_set_mmr` (test database only) writes the rating row of the active season (season 0 when none is active). Admin cost upserts and deletes find rows through indexes; behaviour is unchanged. A role change from Moderator or Admin to below Moderator hands the match events that user organizes to the tournament organizers | Phase S11a execution (DECISIONS.md A163(2); triage L5, L92) | 2026-11-12 |
 | An Admin cannot change another Admin's role from the app: `admin_update_user` refuses it with "Only the server can change an Admin's role."; only `server_set_role` (the script, as SYSTEM) can. An Admin's own role change and every other edit of an Admin stay as before | DECISIONS.md A216 (user ruling 2026-11-17) | 2026-11-17 |
+| Partner servers: an Admin-editable public list (name, invite code; no audit columns) behind the landing page's tiles | User ruling 2026-11-17 (not yet in DECISIONS.md) | 2026-11-17 |
+| Scenarios S14.4p-P1..P6 and edge cases: the `description` column (brief's addition), link forms normalised to the code, refusal texts, 12-row limit, callers, the nuke keeps the table | Phase S14.4p execution | 2026-11-17 |

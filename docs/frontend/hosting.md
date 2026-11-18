@@ -64,12 +64,13 @@ The cache rules do not overlap, so no rule depends on which of two values wins.
 | `img-src` | `'self'` | `web/public/` images |
 | | `data:` `blob:` | kept from the plan: inline and generated images (none in the app yet) |
 | | `https://*.ufs.sh` | media on UploadThing (A15) |
-| | `https://cdn.discordapp.com` | Discord avatars (M5) |
+| | `https://cdn.discordapp.com` | Discord avatars (M5); since S14.4p also the landing page's partner server icons (`https://cdn.discordapp.com/icons/<guild id>/<icon>.webp?size=128`, a plain `img` with `referrerpolicy="no-referrer"`, not cached by the image worker) |
 | `font-src` | `'self'` | self-hosted fonts (no Google Fonts, check:patterns gate 4) |
 | `connect-src` | `'self'` | `/status.json` and the login function's `POST /api/auth/discord/start` (M5b: no change needed; the navigation to Discord is a top-level `location.assign`, which no directive restricts, and Discord's redirect back is a top-level navigation to the site) |
 | | `wss://maincloud.spacetimedb.com` | the SpacetimeDB socket |
 | | `https://maincloud.spacetimedb.com` | the token exchange (`POST /v1/identity/websocket-token`) whenever a token is stored |
 | | `https://*.ufs.sh` | the service worker's CORS fetches of UploadThing media (M10) |
+| | `https://discord.com` | S14.4p (user ruling 2026-11-17): the browser asks Discord's public invite endpoint `GET https://discord.com/api/v10/invites/<code>` (no credentials, no extra headers) for a partner server's current icon (`web/src/lib/useDiscordInviteIcon.ts`). The exact origin only, nothing wider. Discord answers it cross-origin (checked from the dev server on 2026-11-17: status 200, body readable) |
 | `worker-src` | `'self'` | `/sw.js` |
 | `manifest-src` | `'self'` | a future web manifest |
 | `frame-ancestors` | `'none'` | no site may frame this one (clickjacking) |

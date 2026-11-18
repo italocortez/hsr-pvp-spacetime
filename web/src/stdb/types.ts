@@ -12,6 +12,7 @@ import type {
     MyLobbyListRow,
     MyProfileRow,
     MySuspensionRow,
+    PartnerServer,
 } from '@bindings/types';
 
 /*
@@ -117,5 +118,10 @@ export interface StdbConnectionLike {
          * generated connection always has it.
          */
         viewMySuspension?: TableLike<MySuspensionRow>;
+        /**
+         * S14.4p: the partnered Discord servers (public table, keyed by `id`), a route subscription of `/`.
+         * Optional as `reducers`, so the test doubles of the earlier steps still fit.
+         */
+        partnerServer?: TableLike<PartnerServer>;
     };
 }

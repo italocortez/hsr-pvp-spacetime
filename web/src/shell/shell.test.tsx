@@ -74,7 +74,9 @@ describe('which screens render inside the shell', () => {
         ['/admin', ADMIN],
     ])('%s: one main, one h1, the named Primary nav, a banner header', async (path, auth) => {
         renderWithRouter(path, auth);
-        expect(await headline()).toHaveTextContent('Module offline.');
+        expect(await headline()).toHaveTextContent(
+            path === '/' ? 'IPC Battlegrounds' : 'Module offline.',
+        );
         expect(screen.getAllByRole('main')).toHaveLength(1);
         expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
         expect(screen.getAllByRole('navigation')).toHaveLength(1);

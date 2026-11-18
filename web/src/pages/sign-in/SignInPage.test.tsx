@@ -94,7 +94,7 @@ describe('the panel', () => {
 
     it('a visitor on / without login=1 sees the standby page', async () => {
         renderAt('/');
-        await headline('Module offline.');
+        await headline('IPC Battlegrounds');
     });
 
     it('a signed-in member on /?login=1 is sent to next', async () => {
@@ -105,7 +105,7 @@ describe('the panel', () => {
     it('a signed-in member on /?login=1 without next goes to /', async () => {
         const r = renderAt('/?login=1', member());
         await waitFor(() => expect(href(r)).toBe('/'));
-        await headline('Module offline.');
+        await headline('IPC Battlegrounds');
     });
 });
 
@@ -643,7 +643,7 @@ describe('late answers and timeouts (last pass)', () => {
         act(() => {
             void r.router.navigate({ href: '/' });
         });
-        await headline('Module offline.');
+        await headline('IPC Battlegrounds');
         guestCall.resolve();
         await tick();
         expect(conn.reducers.requestLinkCode).not.toHaveBeenCalled();
@@ -673,14 +673,14 @@ describe('late answers and timeouts (last pass)', () => {
             act(() => {
                 void r.router.navigate({ href: '/' });
             });
-            await headline('Module offline.');
+            await headline('IPC Battlegrounds');
             settle(call);
             const before = [...r.conn.db.viewMyProfile.iter()][0] as MyProfileRow;
             act(() => r.conn.db.viewMyProfile.update(before, member()));
             await tick();
             // A live hook would have sent the member to next (/profile) or shown the refusal.
             expect(href(r)).toBe('/');
-            await headline('Module offline.');
+            await headline('IPC Battlegrounds');
         },
     );
 

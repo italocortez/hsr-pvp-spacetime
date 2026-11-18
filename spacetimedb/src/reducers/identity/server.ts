@@ -25,9 +25,9 @@ import { liftSuspension, suspendUser } from '@module/helpers/identity/suspension
 /**
  * Guard: the caller is a trusted server identity (Owner or Delegate, §C.4). A Linker (M5a3) is refused with the same
  * text: it may only present sign-in codes (linker_present_code).
- * Used by every server_* reducer.
+ * Used by every server_* reducer (S14.4p: exported for the partner server twins in reducers/admin/partnerServers.ts).
  */
-function requireServer(ctx: any) {
+export function requireServer(ctx: any) {
     const server = trustedServerRow(ctx, ctx.sender);
     if (!server) {
         throw new SenderError('Forbidden: caller is not a registered server identity.');
@@ -555,6 +555,7 @@ export const server_set_mmr = spacetimedb.reducer({
  *   - Starter achievements: Achievement + AchievementCriteria
  *   - Config: EloConfigTable, AccountRatingConfig
  *   - Scheduled jobs: IdentityGcJob, LobbyGcJob (seeded by scripts/stdb/bootstrap.ts)
+ *   - PartnerServer (S14.4p): site content an admin keeps, like the config rows; not test state
  *
  * Deletes everything else: users (except SYSTEM), rosters, lobbies, tournaments,
  * match sessions + history, chat, stats, cost sets, calendar events, leaderboards,

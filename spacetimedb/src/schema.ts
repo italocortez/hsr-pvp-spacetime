@@ -130,6 +130,9 @@ import { AbuseCounter } from '@module/tables/admin/abuseCounter';
 import { UserRateState } from '@module/tables/identity/userRateState';
 import { AdminAlert } from '@module/tables/admin/adminAlert';
 
+// Partner servers (S14.4p): the landing page's partner tiles; public, no audit columns (user ruling)
+import { PartnerServer } from '@module/tables/admin/partnerServer';
+
 const spacetimedb = schema({
     // User / Auth
     User,
@@ -264,6 +267,9 @@ const spacetimedb = schema({
     AbuseCounter,
     UserRateState,
     AdminAlert,
+
+    // Partner servers (S14.4p)
+    PartnerServer,
 }, {
     // Module environment (SpacetimeDB 2.12+, D-C1): supplied from the publisher's process environment at
     // publish time (scripts/stdb/publish.ts spawns the CLI with STDB_TARGET=<target>), preserved across
