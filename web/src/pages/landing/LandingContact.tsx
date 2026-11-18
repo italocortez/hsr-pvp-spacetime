@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import hidden from '@/styles/visuallyHidden.module.css';
 import styles from './LandingContact.module.css';
 import { PartnerTile } from './PartnerTile';
@@ -15,6 +16,8 @@ const HINT = { idle: 'Click to copy', copied: 'Copied!', failed: 'Copy failed' }
  */
 export function LandingContact() {
     const { partners } = usePartnerServers();
+    const [rail, setRail] = useState<HTMLDivElement | null>(null);
+    const near = useNearViewport(rail);
     return (
         <section className={styles.contact} aria-labelledby="landing-contact">
             <div className={styles.inner}>
@@ -38,12 +41,12 @@ export function LandingContact() {
                  * at first paint, so its arrival does not move what the visitor is reading.
                  */}
                 {partners.length > 0 && (
-                    <div className={styles.rail}>
+                    <div ref={setRail} className={styles.rail}>
                         <h3 className={styles.railLabel}>Partner Communities</h3>
                         <ul className={styles.grid}>
                             {partners.map((p) => (
                                 <li key={p.id} className={styles.slot}>
-                                    <PartnerTile partner={p} />
+                                    <PartnerTile partner={p} lookup={near} />
                                 </li>
                             ))}
                         </ul>
@@ -52,6 +55,33 @@ export function LandingContact() {
             </div>
         </section>
     );
+}
+
+/** How far ahead of the viewport the partner block starts its icon lookups. */
+const LOOKUP_ROOT_MARGIN = '600px 0px';
+
+/**
+ * True once `element` has come within LOOKUP_ROOT_MARGIN of the viewport, and from then on (S14.4-fix1: a visitor who
+ * never scrolls to the partner block sends Discord nothing). One observer for the whole block. Where the browser has no
+ * IntersectionObserver, true at once.
+ */
+function useNearViewport(element: Element | null): boolean {
+    const [near, setNear] = useState(() => typeof IntersectionObserver === 'undefined');
+    useEffect(() => {
+        if (near || !element) return;
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries.some((e) => e.isIntersecting)) {
+                    setNear(true);
+                    observer.disconnect();
+                }
+            },
+            { rootMargin: LOOKUP_ROOT_MARGIN },
+        );
+        observer.observe(element);
+        return () => observer.disconnect();
+    }, [element, near]);
+    return near;
 }
 
 /**

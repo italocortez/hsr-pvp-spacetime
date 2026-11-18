@@ -92,7 +92,7 @@ describe('the panel', () => {
         expect(subscribedToLinkView(conn)).toBe(false);
     });
 
-    it('a visitor on / without login=1 sees the standby page', async () => {
+    it('a visitor on / without login=1 sees the landing page', async () => {
         renderAt('/');
         await headline('IPC Battlegrounds');
     });

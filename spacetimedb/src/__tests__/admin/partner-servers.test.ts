@@ -16,7 +16,7 @@ import {
     PARTNER_SERVER_LIMIT,
 } from '@module/helpers/admin/partnerServers';
 import { SUSPENDED_TEXT } from '@module/helpers/identity/suspension';
-import { M, linkerAuth, newHarness, rejection, snap, tx, type Actor, type Harness } from '../fixtures/harness';
+import { M, linkerAuth, newHarness, rejection, snap, tx, type Actor, type Ctx, type Harness } from '../fixtures/harness';
 import { ADMIN_ONLY, admin, moderator, verified } from '../fixtures/identity';
 
 const NOT_SERVER = 'Forbidden: caller is not a registered server identity.';
@@ -224,5 +224,33 @@ describe('partner servers: callers', () => {
         tx(test, 'internal', (ctx) => M.server_lift_suspension(ctx, { username }));
         tx(test, boss, (ctx) => M.admin_add_partner_server(ctx, args()));
         expect(rows(test)).toHaveLength(1);
+    });
+});
+
+/** server_nuke_test_data reads ctx.env.STDB_TARGET; the harness has no module env, so the test database is simulated. */
+function onTestDatabase(ctx: Ctx): Ctx {
+    return new Proxy(ctx as object, {
+        get(target, prop) {
+            if (prop === 'env') return { STDB_TARGET: 'test' };
+            const value = Reflect.get(target, prop, target);
+            return typeof value === 'function' ? value.bind(target) : value;
+        },
+    }) as Ctx;
+}
+
+describe('partner servers: test wipe', () => {
+    it('S14.4-fix1, scenario S14.4p-P6: server_nuke_test_data wipes the users and keeps every partner row unchanged', () => {
+        const test = newHarness();
+        const player = verified(test, 'player');
+        serverAdd(test);
+        serverAdd(test, { invite: 'second-1', name: 'Second', description: '', position: 1 });
+        const before = rows(test);
+        expect(test.db.User.id.find(player.userId)).not.toBeNull();
+
+        tx(test, 'internal', (ctx) => M.server_nuke_test_data(onTestDatabase(ctx), { confirmation: 'NUKE_TEST_DATA' }));
+
+        // The wipe ran (the player's account is gone) and the partner list is exactly as it was.
+        expect(test.db.User.id.find(player.userId)).toBeNull();
+        expect(rows(test)).toEqual(before);
     });
 });

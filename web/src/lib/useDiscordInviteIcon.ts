@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
  * server may use it.
  *
  * The lookup is Discord's public invite endpoint, `GET https://discord.com/api/v10/invites/<code>` (no credentials, no
- * extra headers); the answer's `guild.id` and `guild.icon` make the CDN address
+ * extra headers, no referrer, redirects refused); the answer's `guild.id` and `guild.icon` make the CDN address
  * `https://cdn.discordapp.com/icons/<id>/<icon>.webp?size=128`. Both hosts are allowed by the CSP (`vercel.json`
  * `connect-src` and `img-src`; docs/frontend/hosting.md). The answer is checked strictly before any address is built:
  * the id is a digit string, the icon a 32-character hex hash, possibly prefixed `a_` (animated; the webp is its still
@@ -55,7 +55,14 @@ function checkedEntry(value: unknown): Entry | undefined {
     if (!value || typeof value !== 'object') return undefined;
     const v = value as Record<string, unknown>;
     if (v.kind === 'none') return { kind: 'none' };
-    if (v.kind === 'failed' && typeof v.until === 'number' && Number.isFinite(v.until)) {
+    // A failure is remembered for FAILED_LOOKUP_TTL_MS at most: a time further ahead (a tampered or corrupt entry)
+    // is not trusted, so it cannot hold back the icon for the whole session.
+    if (
+        v.kind === 'failed' &&
+        typeof v.until === 'number' &&
+        Number.isFinite(v.until) &&
+        v.until <= Date.now() + FAILED_LOOKUP_TTL_MS
+    ) {
         return { kind: 'failed', until: v.until };
     }
     if (
@@ -121,6 +128,10 @@ async function lookup(code: string): Promise<Entry> {
         const response = await fetch(discordInviteApiUrl(code), {
             method: 'GET',
             credentials: 'omit',
+            // No Referer (the image and the Join link send none either); `Origin` cannot be removed from a
+            // cross-origin fetch. No redirect: the CSP allows only the invite path, and a redirect would leave it.
+            referrerPolicy: 'no-referrer',
+            redirect: 'error',
         });
         entry = response.ok ? entryFromInviteAnswer(await response.json()) : undefined;
     } catch {
@@ -142,9 +153,11 @@ function request(code: string): Promise<Entry> {
 
 /**
  * The icon address of the Discord server behind invite `code`, or undefined while unknown, when the server has no
- * icon, when the lookup failed, or for a code without the invite shape (then nothing is requested).
+ * icon, when the lookup failed, or for a code without the invite shape (then nothing is requested). While `enabled` is
+ * false nothing is requested either (an answer remembered earlier still shows): the caller turns it on when the icon is
+ * about to be seen.
  */
-export function useDiscordInviteIcon(code: string): string | undefined {
+export function useDiscordInviteIcon(code: string, enabled = true): string | undefined {
     const valid = DISCORD_INVITE_CODE.test(code);
     const [state, setState] = useState(() => ({
         code,
@@ -160,6 +173,7 @@ export function useDiscordInviteIcon(code: string): string | undefined {
             );
             return;
         }
+        if (!enabled) return;
         let active = true;
         void request(code).then((entry) => {
             if (active) setState({ code, url: urlOf(entry) });
@@ -167,7 +181,7 @@ export function useDiscordInviteIcon(code: string): string | undefined {
         return () => {
             active = false;
         };
-    }, [code, valid]);
+    }, [code, valid, enabled]);
 
     return state.code === code ? state.url : undefined;
 }

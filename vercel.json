@@ -32,7 +32,7 @@
             "headers": [
                 {
                     "key": "Content-Security-Policy",
-                    "value": "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.ufs.sh https://cdn.discordapp.com; font-src 'self'; connect-src 'self' wss://maincloud.spacetimedb.com https://maincloud.spacetimedb.com https://*.ufs.sh https://discord.com; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+                    "value": "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.ufs.sh https://cdn.discordapp.com; font-src 'self'; connect-src 'self' wss://maincloud.spacetimedb.com https://maincloud.spacetimedb.com https://*.ufs.sh https://discord.com/api/v10/invites/; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
                 },
                 {
                     "key": "Strict-Transport-Security",

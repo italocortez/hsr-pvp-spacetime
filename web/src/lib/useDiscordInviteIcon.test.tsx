@@ -43,7 +43,7 @@ afterEach(() => {
 });
 
 describe('useDiscordInviteIcon', () => {
-    it('asks the invite endpoint once (GET, no credentials, no headers) and builds the CDN address', async () => {
+    it('asks the invite endpoint once (GET, no credentials, no headers, no referrer, no redirect) and builds the CDN address', async () => {
         fetchMock.mockResolvedValue(answer({ id: GUILD, icon: HASH }));
         const { result } = renderHook(() => useDiscordInviteIcon('HbXErzYVQ5'));
         expect(result.current).toBeUndefined();
@@ -51,7 +51,58 @@ describe('useDiscordInviteIcon', () => {
         expect(fetchMock).toHaveBeenCalledTimes(1);
         const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
         expect(url).toBe('https://discord.com/api/v10/invites/HbXErzYVQ5');
-        expect(init).toEqual({ method: 'GET', credentials: 'omit' });
+        expect(init).toEqual({
+            method: 'GET',
+            credentials: 'omit',
+            referrerPolicy: 'no-referrer',
+            redirect: 'error',
+        });
+    });
+
+    it('while not enabled it asks nothing; once enabled, one request', async () => {
+        fetchMock.mockResolvedValue(answer({ id: GUILD, icon: HASH }));
+        const { result, rerender } = renderHook(
+            ({ enabled }) => useDiscordInviteIcon('HbXErzYVQ5', enabled),
+            { initialProps: { enabled: false } },
+        );
+        await act(async () => {});
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(result.current).toBeUndefined();
+        rerender({ enabled: true });
+        await waitFor(() => expect(result.current).toBe(ICON));
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('not enabled, an answer remembered earlier still shows (no request)', async () => {
+        fetchMock.mockResolvedValue(answer({ id: GUILD, icon: HASH }));
+        const first = renderHook(() => useDiscordInviteIcon('HbXErzYVQ5'));
+        await waitFor(() => expect(first.result.current).toBe(ICON));
+        first.unmount();
+        const { result } = renderHook(() => useDiscordInviteIcon('HbXErzYVQ5', false));
+        expect(result.current).toBe(ICON);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('a stored failure dated further ahead than the retry window is ignored: the lookup runs', async () => {
+        sessionStorage.setItem(
+            'hsr.discordInvite.HbXErzYVQ5',
+            JSON.stringify({ kind: 'failed', until: 1e300 }),
+        );
+        fetchMock.mockResolvedValue(answer({ id: GUILD, icon: HASH }));
+        const { result } = renderHook(() => useDiscordInviteIcon('HbXErzYVQ5'));
+        await waitFor(() => expect(result.current).toBe(ICON));
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('a stored failure within the retry window is still honoured', async () => {
+        sessionStorage.setItem(
+            'hsr.discordInvite.HbXErzYVQ5',
+            JSON.stringify({ kind: 'failed', until: Date.now() + FAILED_LOOKUP_TTL_MS - 1000 }),
+        );
+        const { result } = renderHook(() => useDiscordInviteIcon('HbXErzYVQ5'));
+        await act(async () => {});
+        expect(result.current).toBeUndefined();
+        expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('an animated icon (a_ prefix) gives its webp address', async () => {

@@ -16,7 +16,9 @@ import { PARTNER_SERVERS_QUERY } from './usePartnerServers';
  * headings, every link target and the copy pill's success and failure paths. T-S14.4p: the
  * partner tiles come from the public `partner_server` table (a route subscription of `/`, beside
  * Layer 0 only), in position order, hidden while there are none; each icon comes from a mocked
- * Discord lookup (`fetch` is mocked; nothing reaches Discord).
+ * Discord lookup (`fetch` is mocked; nothing reaches Discord). T-S14.4-fix1: the lookups wait until
+ * the partner block comes near the viewport (jsdom has no IntersectionObserver, so elsewhere they
+ * start at once, the fallback).
  */
 
 const original = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
@@ -286,5 +288,65 @@ describe('the landing page and the database', () => {
         await waitFor(() =>
             expect(screen.queryByRole('heading', { name: 'Partner Communities' })).toBeNull(),
         );
+    });
+
+    it('S14.4-fix1: no Discord request until the partner block comes near the viewport (one observer, a generous margin), then one per tile', async () => {
+        const observers: FakeObserver[] = [];
+        class FakeObserver {
+            readonly targets: Element[] = [];
+            disconnected = false;
+            constructor(
+                readonly callback: IntersectionObserverCallback,
+                readonly options?: IntersectionObserverInit,
+            ) {
+                observers.push(this);
+            }
+            observe(target: Element) {
+                this.targets.push(target);
+            }
+            disconnect() {
+                this.disconnected = true;
+            }
+            unobserve() {}
+            takeRecords() {
+                return [];
+            }
+        }
+        vi.stubGlobal('IntersectionObserver', FakeObserver);
+        const fetchMock = vi.fn(() =>
+            Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve({ guild: { id: GUILD, icon: HASH } }),
+            } as Response),
+        );
+        vi.stubGlobal('fetch', fetchMock);
+        const { conn } = connectionWithPartners(
+            partnerRow({ id: 1, name: 'First', inviteCode: 'first-1', position: 0 }),
+            partnerRow({ id: 2, name: 'Second', inviteCode: 'second-1', position: 1 }),
+        );
+        renderWithConnection('/', conn);
+        await screen.findByRole('heading', { level: 1, name: 'IPC Battlegrounds' });
+        act(() => conn.apply(PARTNER_SERVERS_QUERY));
+        await waitFor(() => within(partnerList()).getAllByRole('listitem'));
+        await act(async () => {});
+
+        // Rendered, not yet near: nothing asked.
+        expect(fetchMock).not.toHaveBeenCalled();
+        const live = observers.filter((o) => !o.disconnected);
+        expect(live).toHaveLength(1);
+        const [observer] = live as [FakeObserver];
+        // The whole block, observed once, with a margin ahead of the viewport.
+        expect(observer.targets).toEqual([partnerList().parentElement]);
+        expect(observer.options?.rootMargin).toMatch(/^\d{3,}px/);
+
+        act(() =>
+            observer.callback(
+                [{ isIntersecting: true } as IntersectionObserverEntry],
+                observer as unknown as IntersectionObserver,
+            ),
+        );
+        await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+        expect(observer.disconnected).toBe(true);
+        await waitFor(() => expect(partnerList().querySelectorAll('img')).toHaveLength(2));
     });
 });

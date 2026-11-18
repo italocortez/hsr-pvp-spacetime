@@ -9,9 +9,10 @@ import { type Partner, partnerInitials } from './partners';
  * tile is the invite link, in a new tab. The name and the line come from the `partner_server` row; the icon is the
  * server's current one, asked from Discord by the invite code (`useDiscordInviteIcon`, S14.4p). Until it is known, when
  * Discord does not answer, when the server has no icon, or when the image fails to load: the name's initials.
+ * `lookup` false holds the request back (the contact block turns it on when the tiles come near the viewport).
  */
-export function PartnerTile({ partner }: { partner: Partner }) {
-    const icon = useDiscordInviteIcon(partner.inviteCode);
+export function PartnerTile({ partner, lookup = true }: { partner: Partner; lookup?: boolean }) {
+    const icon = useDiscordInviteIcon(partner.inviteCode, lookup);
     // The address that failed to load, so a new address is tried again.
     const [failed, setFailed] = useState<string | undefined>();
     const showIcon = icon !== undefined && icon !== failed;
