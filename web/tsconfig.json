@@ -19,6 +19,5 @@
             "@bindings/*": ["./src/module_bindings/*"]
         }
     },
-    "include": ["src", "vite.config.ts", "vitest.config.ts", "vite-plugin-local-auth.ts"],
-    "exclude": ["src/lib/legacy/**"]
+    "include": ["src", "vite.config.ts", "vitest.config.ts", "vite-plugin-local-auth.ts"]
 }

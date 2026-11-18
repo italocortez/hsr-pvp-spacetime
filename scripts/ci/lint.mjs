@@ -1,7 +1,7 @@
 // `npm run lint:ci`: Biome on the tracked and new (not ignored) files of web/, shared/,
 // scripts/ci/, scripts/preview/, scripts/local-auth/ and api/ (M9; the last two since M5b; user decision 2026-11-13: the frontend and shared code are
 // linted now, older findings elsewhere are cleaned later; scripts/preview/ added at M8). biome.json ignores still apply (module_bindings,
-// lib/legacy, routeTree.gen.ts, dist).
+// routeTree.gen.ts, dist).
 //
 // Left out: web/public/**/*.svg. noSvgWithoutTitle on standalone SVG assets; their accessibility
 // is handled where they are used (user, 2026-11-13).

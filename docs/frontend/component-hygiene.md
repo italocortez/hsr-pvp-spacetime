@@ -13,7 +13,7 @@ Rules for every page and component PR in `web/`. They are narrow on purpose: a r
 | `web/src/components/<Name>/` | shared pieces used by two or more pages: `<Name>.tsx` + `<Name>.module.css` |
 | `web/src/shell/` | the app shell around every non-splash page (S14.1): bar, account area, banner, announcer, the splash rule; each component with its own `.module.css` |
 | `web/src/styles/` | the only global CSS: `tokens.css`, `media.css`, `base.css`, plus `fonts.css` (the `@font-face` rules) |
-| `web/src/lib/` | hooks and helpers with no markup (`lib/legacy/` is reference only, not built or typechecked) |
+| `web/src/lib/` | hooks and helpers with no markup (the old `lib/legacy/` reference copies were removed on 2026-11-17 by the user's ruling) |
 
 Styling is CSS Modules plus tokens. No Tailwind, no CSS-in-JS, no inline `style` for static values (a `style` that passes a runtime value into a custom property is fine).
 

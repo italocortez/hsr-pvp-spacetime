@@ -33,14 +33,11 @@ function scan(gate, file, needles) {
     }
 }
 
-// 1. subscribeToAllTables is banned in the app (CLAUDE.md §4); generated bindings and the legacy
-//    reference copy are not app code.
+// 1. subscribeToAllTables is banned in the app (CLAUDE.md §4); generated bindings are not app code.
 const SRC = join(ROOT, 'web', 'src');
 for (const file of walk(SRC)) {
     const path = rel(file);
-    if (path.startsWith('web/src/module_bindings/') || path.startsWith('web/src/lib/legacy/')) {
-        continue;
-    }
+    if (path.startsWith('web/src/module_bindings/')) continue;
     if (!/\.(ts|tsx|js|jsx|mjs)$/.test(path)) continue;
     scan('subscribeToAllTables', file, ['subscribeToAllTables']);
 }

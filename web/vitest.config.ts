@@ -29,7 +29,7 @@ export default defineConfig({
     test: {
         environment: 'jsdom',
         include: ['src/**/*.test.{ts,tsx}'],
-        exclude: ['src/lib/legacy/**', 'src/module_bindings/**'],
+        exclude: ['src/module_bindings/**'],
         setupFiles: ['src/test/setup.ts'],
         // CSS is not processed: a CSS Module import is a proxy that returns a stable class name
         // for every key, so `styles.x` is always a non-empty string. Global CSS is never imported
