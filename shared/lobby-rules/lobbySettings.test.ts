@@ -1,13 +1,22 @@
 import { readFileSync } from 'node:fs';
 import CreateLobbyReducer from '@bindings/create_lobby_reducer';
 import {
+    ensureForfeitSecondsInRange,
+    ensureNoActionAllowed,
+    ensureNotDeferredOutsideTournament,
+} from '@module/helpers/lobby/disconnectHelpers';
+import {
     CONFIRM_WINDOW_SECONDS_DEFAULT,
     ensureAuctionAmounts,
     ensureLobbyConfigInRange,
+    ensureTeamAliases,
     resolveConfirmWindowSeconds,
     TEAM_ALIAS_MAX_LENGTH,
 } from '@module/helpers/lobby/lobbyConfigBounds';
-import { LIVE_STAGES as MODULE_LIVE_STAGES } from '@module/helpers/lobby/lobbyHelpers';
+import {
+    LIVE_STAGES as MODULE_LIVE_STAGES,
+    resolveMaxSpectators,
+} from '@module/helpers/lobby/lobbyHelpers';
 import {
     LOBBY_PASSWORD_MAX_LENGTH,
     lobbyPasswordRuleError,
@@ -18,17 +27,22 @@ import {
     ALREADY_IN_LOBBY_TEXT,
     AUCTION_CHARACTER_BUDGET_TEXT,
     AUCTION_MINIMUM_RAISE_TEXT,
+    advancedErrorKeys,
     applyLobbyPreset,
     awayLobbyOf,
     awayPromptCode,
+    BAN_RESTRICTION_OPTIONS,
     BUILT_IN_PRESETS,
     DEFAULT_LOBBY_SETTINGS,
     heldLobbyOf,
     hundredthsToPoints,
+    hundredthsToPointsText,
     initialLobbySettings,
+    LOBBY_ADVANCED_FIELDS,
     LOBBY_BAN_MODES,
     LOBBY_BAN_RESTRICTIONS,
     LOBBY_CONFIRM_WINDOW_SECONDS_DEFAULT,
+    LOBBY_CREATE_DISCONNECT_POLICIES,
     LOBBY_DISCONNECT_POLICIES,
     LOBBY_DRAFT_MODES,
     LOBBY_FORFEIT_SECONDS_MAX,
@@ -36,19 +50,24 @@ import {
     LOBBY_GAME_MODES,
     LOBBY_LINEUP_FORMATS,
     LOBBY_LIVE_STAGES,
+    LOBBY_MAIN_FIELDS,
     LOBBY_MATCH_TYPES,
     LOBBY_MAX_SPECTATORS_MAX,
     LOBBY_NAME_MAX_LENGTH,
+    LOBBY_NUMBER_FIELD_KIND,
     LOBBY_PASSWORD_MAX,
     LOBBY_ROSTER_VISIBILITIES,
     LOBBY_TEAM_ALIAS_MAX_LENGTH,
     type LobbyCostSetOption,
     type LobbyFormRules,
+    type LobbyNumberFieldKey,
     type LobbyPresetChoice,
     type LobbySettings,
     lobbyAmountErrors,
     lobbyHoldOf,
     lobbyLabel,
+    lobbyNumberFieldText,
+    lobbyNumberText,
     lobbyPasswordError,
     lobbyPresetChoices,
     lobbyPresetMatches,
@@ -58,8 +77,10 @@ import {
     numberDraftText,
     numberFromDraft,
     PRIVATE_LOBBY_NEEDS_PASSWORD_TEXT,
+    pointsTextToHundredths,
     pointsToHundredths,
     presetFromModule,
+    readLobbyNumber,
     selectableCostSets,
     settleLobbySettings,
     toCreateLobbyArgs,
@@ -410,21 +431,21 @@ describe('validation', () => {
             { deathPenalty: 1_000_001 },
             MEMBER,
             'deathPenalty',
-            'The death penalty is -10,000 to 10,000 points, in steps of 0.01.',
+            'The death penalty is -10,000 to 10,000, in steps of 0.01.',
         ],
         [
             'a fractional hundredth',
             { rosterDiffAdvantage: 1.5 },
             MEMBER,
             'rosterDiffAdvantage',
-            'The roster diff advantage is -10,000 to 10,000 points, in steps of 0.01.',
+            'The roster diff advantage is -10,000 to 10,000, in steps of 0.01.',
         ],
         [
             'a negative threshold',
             { rosterThreshold: -1 },
             MEMBER,
             'rosterThreshold',
-            'The roster threshold is 0 to 10,000 points, in steps of 0.01.',
+            'The roster threshold is 0 to 10,000, in steps of 0.01.',
         ],
         [
             'Deferred',
@@ -923,5 +944,263 @@ describe('module pins', () => {
         expect(create).toContain(
             'const maxSpectators = resolveMaxSpectators(args.maxSpectators, 12);',
         );
+    });
+
+    // T-S14.4d: the Advanced Settings bounds, by calling the module's own checks at each bound.
+    const accepts = (check: () => unknown) => {
+        try {
+            check();
+            return true;
+        } catch {
+            return false;
+        }
+    };
+
+    it('T-S14.4d: auto-forfeit: the form refuses exactly what ensureForfeitSecondsInRange refuses', () => {
+        for (const value of [0, 1, 29, 30, 31, 599, 600, 601]) {
+            const errors = validateLobbySettings(
+                settings({ disconnectForfeitSeconds: value }),
+                MEMBER,
+            );
+            expect(errors.disconnectForfeitSeconds === undefined, `forfeit ${value}`).toBe(
+                accepts(() => ensureForfeitSecondsInRange(value)),
+            );
+        }
+    });
+
+    it('T-S14.4d: spectators: the form refuses exactly what resolveMaxSpectators refuses (a whole u8)', () => {
+        for (const value of [0, 1, 12, 13]) {
+            const errors = validateLobbySettings(settings({ maxSpectators: value }), MEMBER);
+            expect(errors.maxSpectators === undefined, `spectators ${value}`).toBe(
+                accepts(() => resolveMaxSpectators(value, 12)),
+            );
+        }
+        // Below the module's range the u8 argument cannot even be sent; the form refuses it and a fraction too.
+        expect(validateLobbySettings(settings({ maxSpectators: -1 }), MEMBER).maxSpectators).toBe(
+            'Spectators are 0 to 12.',
+        );
+        expect(
+            validateLobbySettings(settings({ maxSpectators: 2.5 }), MEMBER).maxSpectators,
+        ).toBeDefined();
+    });
+
+    it('T-S14.4d: disconnect policy: the form refuses exactly what the module refuses, for Casual and Ranked', () => {
+        for (const policy of LOBBY_DISCONNECT_POLICIES) {
+            for (const matchType of LOBBY_MATCH_TYPES) {
+                const moduleOk = accepts(() => {
+                    ensureNotDeferredOutsideTournament(policy);
+                    ensureNoActionAllowed(policy, matchType === 'Ranked');
+                });
+                const errors = validateLobbySettings(
+                    settings({ disconnectPolicy: policy, matchType }),
+                    MEMBER,
+                );
+                expect(errors.disconnectPolicy === undefined, `${policy} ${matchType}`).toBe(
+                    moduleOk,
+                );
+            }
+        }
+        // The select offers what create_lobby can take: no Deferred (A91(2)).
+        expect([...LOBBY_CREATE_DISCONNECT_POLICIES]).toEqual(['Standard', 'NoAction']);
+    });
+
+    it('T-S14.4d: team names: the form refuses exactly what ensureTeamAliases refuses', () => {
+        for (const length of [0, 1, 30, 31]) {
+            const name = 'n'.repeat(length);
+            for (const side of ['teamBlueAlias', 'teamRedAlias'] as const) {
+                const s = settings({ [side]: name });
+                const errors = validateLobbySettings(s, MEMBER);
+                expect(errors[side] === undefined, `${side} ${length}`).toBe(
+                    accepts(() => ensureTeamAliases(s.teamBlueAlias, s.teamRedAlias)),
+                );
+            }
+        }
+    });
+
+    it('T-S14.4d: handicap points typed at the bounds: the form and ensureLobbyConfigInRange agree on the hundredths', () => {
+        const cases: [LobbyNumberFieldKey, string][] = [
+            ['deathPenalty', '10000'],
+            ['deathPenalty', '10000.01'],
+            ['deathPenalty', '-10000'],
+            ['deathPenalty', '-10000,01'],
+            ['rosterDiffAdvantage', '0.01'],
+            ['underThresholdAdvantage', '-0,5'],
+            ['aboveThresholdPenalty', '9999.99'],
+            ['rosterThreshold', '0'],
+            ['rosterThreshold', '10000'],
+            ['rosterThreshold', '10000.01'],
+        ];
+        for (const [key, text] of cases) {
+            const s = settings({ [key]: readLobbyNumber(key, text) });
+            expect(validateLobbySettings(s, MEMBER)[key] === undefined, `${key} ${text}`).toBe(
+                accepts(() => ensureLobbyConfigInRange(s)),
+            );
+        }
+    });
+});
+
+// ─── T-S14.4d: Advanced Settings ─────────────────────────────────────────────────────────────────────────────────
+
+describe('Advanced Settings fields (S14.4d)', () => {
+    it('the main and advanced fields together are every setting, each once', () => {
+        const all = [...LOBBY_MAIN_FIELDS, ...LOBBY_ADVANCED_FIELDS];
+        expect(new Set(all).size).toBe(all.length);
+        expect([...all].sort()).toEqual(Object.keys(DEFAULT_LOBBY_SETTINGS).sort());
+    });
+
+    it('every number field of Advanced Settings has a reading rule', () => {
+        const numbers = LOBBY_ADVANCED_FIELDS.filter(
+            (k) => typeof DEFAULT_LOBBY_SETTINGS[k] === 'number',
+        );
+        expect([...numbers].sort()).toEqual(Object.keys(LOBBY_NUMBER_FIELD_KIND).sort());
+    });
+
+    it('the ban restriction select offers the six options of the module (A221 R4), in the mockup order', () => {
+        expect([...BAN_RESTRICTION_OPTIONS].sort()).toEqual([...LOBBY_BAN_RESTRICTIONS].sort());
+        expect(BAN_RESTRICTION_OPTIONS).toEqual([
+            'NoRestriction',
+            'MaxOnePerRole',
+            'MaxOneDps',
+            'MaxTwoDps',
+            'MaxOneSupport',
+            'MaxOneSustain',
+        ]);
+    });
+
+    it('advancedErrorKeys lists only the advanced fields with an error, in field order', () => {
+        const errors = validateLobbySettings(
+            settings({
+                name: 'n'.repeat(51),
+                disconnectForfeitSeconds: 5,
+                standardTurnSeconds: 5,
+            }),
+            MEMBER,
+        );
+        expect(advancedErrorKeys(errors)).toEqual([
+            'standardTurnSeconds',
+            'disconnectForfeitSeconds',
+        ]);
+        expect(advancedErrorKeys(validateLobbySettings(settings(), MEMBER))).toEqual([]);
+    });
+});
+
+describe('points to hundredths from the typed text (S14.4d: exact, no float drift)', () => {
+    it.each([
+        ['0', 0],
+        ['1', 100],
+        ['1.5', 150],
+        ['1,5', 150],
+        ['1.15', 115],
+        ['0.29', 29],
+        ['0,07', 7],
+        ['.5', 50],
+        ['2.', 200],
+        ['-0.29', -29],
+        ['-2,25', -225],
+        ['10000.01', 1_000_001],
+        [' 3 ', 300],
+        ['-0', 0],
+    ] as const)('%j is %s hundredths', (text, hundredths) => {
+        expect(pointsTextToHundredths(text)).toBe(hundredths);
+    });
+
+    it.each(['', '-', '.', '1.234', '1,000', '1e3', 'abc', '1.2.3', '+1', '1 000'])(
+        '%j does not read',
+        (text) => {
+            expect(pointsTextToHundredths(text)).toBeNaN();
+        },
+    );
+
+    it('the roster threshold takes no sign', () => {
+        expect(pointsTextToHundredths('-1', false)).toBeNaN();
+        expect(pointsTextToHundredths('1.25', false)).toBe(125);
+    });
+
+    it('where a float multiplication drifts, the digit reading does not', () => {
+        // The trap: 0.29 * 100 is 28.999999999999996, 1.15 * 100 is 114.99999999999999.
+        expect(0.29 * 100).not.toBe(29);
+        expect(pointsTextToHundredths('0.29')).toBe(29);
+        expect(pointsTextToHundredths('1.15')).toBe(115);
+    });
+
+    it('every hundredth from -10,000.00 to 10,000.00 round-trips through its text', () => {
+        for (let h = -1_000_000; h <= 1_000_000; h += 1) {
+            const text = hundredthsToPointsText(h);
+            if (pointsTextToHundredths(text) !== h) throw new Error(`${h} -> ${text}`);
+        }
+    });
+
+    it('hundredths as text: no trailing zeros, the sign kept', () => {
+        expect(hundredthsToPointsText(115)).toBe('1.15');
+        expect(hundredthsToPointsText(-50)).toBe('-0.5');
+        expect(hundredthsToPointsText(300)).toBe('3');
+        expect(hundredthsToPointsText(-7)).toBe('-0.07');
+        expect(hundredthsToPointsText(Number.NaN)).toBe('');
+    });
+});
+
+describe('number field texts (S14.4d)', () => {
+    it('each kind reads its text into the value the form keeps', () => {
+        expect(readLobbyNumber('standardTurnSeconds', '45')).toBe(45);
+        expect(readLobbyNumber('standardTurnSeconds', '45.5')).toBe(45.5); // read, then refused by validation
+        expect(readLobbyNumber('standardTurnSeconds', 'abc')).toBeNaN();
+        // Amounts as the team builder's AmountField reads them: a comma or a dot, "1,000" refused as unclear.
+        expect(readLobbyNumber('minimumBidRaise', '2,5')).toBe(2.5);
+        expect(readLobbyNumber('characterBudget', '30')).toBe(30);
+        expect(readLobbyNumber('lightconeBudget', '1.005')).toBe(1.01);
+        expect(readLobbyNumber('characterBudget', '1,000')).toBeNaN();
+        expect(readLobbyNumber('characterBudget', '-5')).toBeNaN();
+        expect(readLobbyNumber('characterBudget', '')).toBeNaN();
+        // Points: hundredths.
+        expect(readLobbyNumber('deathPenalty', '1,5')).toBe(150);
+        expect(readLobbyNumber('rosterThreshold', '-1')).toBeNaN();
+    });
+
+    it('a value shows as its text: hundredths as points, an f32 amount as the amount it stands for', () => {
+        expect(lobbyNumberText('deathPenalty', 150)).toBe('1.5');
+        expect(lobbyNumberText('characterBudget', Math.fround(30.1))).toBe('30.1');
+        expect(lobbyNumberText('standardTurnSeconds', 60)).toBe('60');
+        expect(lobbyNumberText('standardTurnSeconds', Number.NaN)).toBe('');
+    });
+
+    it('a draft shows while it reads as the value; a preset that replaced the value replaces the text', () => {
+        expect(lobbyNumberFieldText('deathPenalty', '1.', 100)).toBe('1.');
+        expect(lobbyNumberFieldText('standardTurnSeconds', 'abc', Number.NaN)).toBe('abc');
+        expect(lobbyNumberFieldText('standardTurnSeconds', 'abc', 60)).toBe('60');
+        expect(lobbyNumberFieldText('minimumBidRaise', '2,5', 2.5)).toBe('2,5');
+        expect(lobbyNumberFieldText('minimumBidRaise', undefined, 5)).toBe('5');
+    });
+
+    it('toCreateLobbyArgs never sends NaN: an unread number field throws instead', () => {
+        expect(() => toCreateLobbyArgs(settings({ reserveBankSeconds: Number.NaN }))).toThrow(
+            /reserveBankSeconds/,
+        );
+        expect(() => toCreateLobbyArgs(settings())).not.toThrow();
+    });
+
+    it('advanced values reach the arguments: handicaps in hundredths, amounts as typed', () => {
+        const args = toCreateLobbyArgs(
+            settings({
+                draftMode: 'Auction',
+                banRestriction: 'MaxOneSupport',
+                lineupFormat: 'Thirds',
+                deathPenalty: readLobbyNumber('deathPenalty', '1,5'),
+                rosterThreshold: readLobbyNumber('rosterThreshold', '25.5'),
+                minimumBidRaise: readLobbyNumber('minimumBidRaise', '2,5'),
+                maxSpectators: 4,
+                confirmWindowSeconds: 0,
+                teamBlueAlias: 'Trailblazers',
+            }),
+        );
+        expect(args).toMatchObject({
+            banRestriction: { tag: 'MaxOneSupport' },
+            lineupFormat: { tag: 'Thirds' },
+            deathPenalty: 150,
+            rosterThreshold: 2550,
+            minimumBidRaise: 2.5,
+            maxSpectators: 4,
+            confirmWindowSeconds: 0,
+            teamBlueAlias: 'Trailblazers',
+        });
     });
 });

@@ -26,19 +26,19 @@ import {
     settleLobbySettings,
     TEAM_SIZE_LABEL,
 } from '@shared/lobby-rules/lobbySettings';
-import { type KeyboardEvent, type ReactNode, useId, useState } from 'react';
-import { InfoPopover } from '@/components/InfoPopover/InfoPopover';
+import { useId, useState } from 'react';
 import { SegmentedControl } from '@/components/SegmentedControl/SegmentedControl';
 import { NO_AUTOFILL } from '@/lib/noAutofill';
 import hidden from '@/styles/visuallyHidden.module.css';
+import { LabelRow, SelectField } from './fieldParts';
 import styles from './LobbySettingsForm.module.css';
-import { INFO, type InfoText, FORM_TEXT as TEXT } from './lobbySettingsText';
+import { INFO, FORM_TEXT as TEXT } from './lobbySettingsText';
 import { useFieldErrors } from './useFieldErrors';
 
 /*
  * The lobby settings form (S14.4c), a shared feature: the landing page's create dialog hosts it now, the lobbies page
  * and the lobby room's settings later. It renders the main fields of design/mockups/index.html's Create Lobby dialog
- * (the Advanced Settings fields come with S14.4d) and owns no state the host needs: the value, the preset choice and
+ * (the Advanced Settings fields are AdvancedLobbySettings, S14.4d) and owns no state the host needs: the value, the preset choice and
  * the errors come in as props; every change goes out settled (`settleLobbySettings`: a guest stays Casual with Closed
  * No Rating, a custom cost set fixes the game mode). The rules live in `shared/lobby-rules/lobbySettings.ts`.
  *
@@ -383,92 +383,6 @@ export function LobbySettingsForm({
             </p>
         </fieldset>
     );
-}
-
-function LabelRow({ label, info, htmlFor }: { label: string; info: InfoText; htmlFor?: string }) {
-    return (
-        <div className={styles.labelRow}>
-            {htmlFor ? (
-                <label htmlFor={htmlFor}>{label}</label>
-            ) : (
-                <span className={styles.label}>{label}</span>
-            )}
-            <InfoPopover label={info.label} heading={info.heading} foot={info.foot}>
-                {info.body.map((p, n) => (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: fixed text, never reordered
-                    <p key={n}>{p}</p>
-                ))}
-            </InfoPopover>
-        </div>
-    );
-}
-
-function SelectField({
-    id,
-    label,
-    info,
-    value,
-    onChange,
-    options,
-    locked,
-    extra,
-    error,
-}: {
-    id: string;
-    label: string;
-    info: InfoText;
-    value: string;
-    onChange: (value: string) => void;
-    options: readonly (readonly [string, string])[];
-    /** Set: the select cannot change, and this line says why (shown under it, and its description). */
-    locked?: { reasonId: string; reason: string };
-    extra: {
-        'aria-invalid': boolean;
-        'aria-describedby': string | undefined;
-        'data-field': string;
-    };
-    error: ReactNode;
-}) {
-    const describedBy =
-        [locked?.reasonId, extra['aria-describedby']].filter(Boolean).join(' ') || undefined;
-    const isLocked = locked !== undefined;
-    return (
-        <div className={styles.field}>
-            <LabelRow label={label} info={info} htmlFor={id} />
-            <select
-                id={id}
-                className={styles.select}
-                value={value}
-                // Locked: a controlled select whose change is ignored snaps back to `value`.
-                onChange={(e) => {
-                    if (!isLocked) onChange(e.target.value);
-                }}
-                // Locked: the picker does not open and no key changes the value; Tab still moves on.
-                onMouseDown={isLocked ? (e) => e.preventDefault() : undefined}
-                onKeyDown={isLocked ? ignoreChangeKeys : undefined}
-                aria-disabled={isLocked || undefined}
-                {...extra}
-                aria-describedby={describedBy}
-            >
-                {options.map(([v, text]) => (
-                    <option key={v} value={v}>
-                        {text}
-                    </option>
-                ))}
-            </select>
-            {locked && (
-                <p id={locked.reasonId} className={styles.hint}>
-                    {locked.reason}
-                </p>
-            )}
-            {error}
-        </div>
-    );
-}
-
-/** A locked select's keys: everything but Tab and Escape would open it or change its value. */
-function ignoreChangeKeys(event: KeyboardEvent<HTMLSelectElement>) {
-    if (event.key !== 'Tab' && event.key !== 'Escape') event.preventDefault();
 }
 
 /** The "Private" badge's padlock (the mockup's `.privLock`); the one inline copy. Decorative. */

@@ -8,11 +8,8 @@ export const CREATE_LOBBY_TEXT = {
     title: 'Create Lobby',
     close: 'Close',
     advanced: 'Advanced Settings',
-    advancedNote:
-        'Timers, ban restriction, Auction budgets, handicaps, referee powers, ownership, spectators and disconnect handling are not editable here yet: the lobby takes them from the preset above. Default Classic and Default Auction use the site defaults (60 s turns, 120 s reserve, no ban restriction, budgets 30 and 15 with a minimum raise of 5, no handicaps, the Standard disconnect policy).',
     create: 'Create',
     creating: 'Creating…',
-    presetOutOfRange: (sentence: string) => `A setting from the preset cannot be used: ${sentence}`,
     notConnected: 'Not connected to the server. Try again in a moment.',
     refused: 'The server did not create the lobby. Try again.',
     // The A68(4) question (S1): asked before a Create that would give up a match the person left, or after the

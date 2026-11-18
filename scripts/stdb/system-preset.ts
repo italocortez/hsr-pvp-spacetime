@@ -37,6 +37,12 @@ runMain('system-preset', async () => {
     const backend = backendEnvFor(target, { requireToken: true });
     const delegate = await connect({ backend, token: backend.serverToken, label: 'system-preset' });
     await delegate.conn.reducers.serverRefreshSystemPreset({});
-    console.log(`[system-preset] ${backend.dbName}: refresh done; the module log ([PRESET]) says whether the row changed`);
+    // A reducer returns nothing to its caller, so this script cannot report the outcome; the module logs it.
+    console.log(
+        `[system-preset] ${backend.dbName}: refresh sent and accepted. This script cannot see what it did (a reducer returns nothing). ` +
+            `To see the outcome, open the database's logs (dashboard: https://spacetimedb.com/@<username>/${backend.dbName}, Logs; or ` +
+            `spacetime logs ${backend.dbName} --server maincloud --no-config) and find the newest "[PRESET] System lobby preset #<id> …" line: ` +
+            'inserted, brought to the current constants, left as it is (edited by an Admin), or already current.',
+    );
     delegate.close();
 });

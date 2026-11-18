@@ -1,10 +1,12 @@
 import type { CostSet, LobbyPresetViewRow } from '@bindings/types';
 import {
+    advancedErrorKeys,
     awayLobbyOf,
     awayPromptCode,
     heldLobbyOf,
     LOBBY_MAIN_FIELDS,
     type LobbyFormRules,
+    type LobbyNumberDrafts,
     type LobbySettings,
     lobbyHoldOf,
     lobbyLabel,
@@ -14,15 +16,18 @@ import {
     toCreateLobbyArgs,
     validateLobbySettings,
 } from '@shared/lobby-rules/lobbySettings';
-import { type FormEvent, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog } from '@/components/Dialog/Dialog';
 import { GearIcon } from '@/components/GearIcon/GearIcon';
+import { AdvancedSettingsDialog } from '@/components/LobbySettingsForm/AdvancedSettingsDialog';
 import { LobbySettingsForm } from '@/components/LobbySettingsForm/LobbySettingsForm';
+import { ADVANCED_TEXT } from '@/components/LobbySettingsForm/lobbySettingsText';
 import { useStdbConnection } from '@/stdb/connectionContext';
 import { getMyLobbies, subscribeMyLobbies, useMyLobbies } from '@/stdb/myLobbies';
 import { NotConnectedError, useReducerCall } from '@/stdb/useReducerCall';
 import { useRouteSubscriptions } from '@/stdb/useRouteSubscriptions';
 import { useRows } from '@/stdb/useRows';
+import hidden from '@/styles/visuallyHidden.module.css';
 import styles from './CreateLobbyDialog.module.css';
 import { CREATE_LOBBY_QUERIES } from './createLobbyQueries';
 import { CREATE_LOBBY_TEXT as TEXT } from './createLobbyText';
@@ -123,7 +128,13 @@ function callOutcome(error: unknown): CallOutcome {
  * calls `create_lobby` with the form's value (`toCreateLobbyArgs`); the dialog cannot be dismissed while the call is
  * in flight; a refusal keeps it open with the module's sentence in the error slot. Success, and an answer that was
  * lost, wait for the new row of `view_my_lobbies` and hand its id to the host; with no row the host closes the dialog
- * (draft kept) and says so under "Play Now". Closing with changes asks first (the Dialog's `canClose`).
+ * (draft kept) and says so under "Play Now". Closing with changes asks first (the Dialog's `canClose`; advanced edits
+ * count too).
+ *
+ * Advanced Settings (S14.4d, the mockup's form, look question L3 option A): "Advanced Settings" opens the shared
+ * `AdvancedSettingsDialog` over this one; Create stays here. The button carries a count while a setting there needs a
+ * fix. Create with an invalid field focuses the first invalid main field, or, when every main field is valid, opens
+ * Advanced Settings and focuses its first invalid field. The number fields' texts are kept here (`drafts`).
  *
  * The A68(4) rule (S1): a person away from a live match (their `view_my_lobbies` row, or the module's prompt) is asked
  * in a second dialog over this one, naming that lobby, "Keep my match" focused; only its confirm button sends
@@ -139,7 +150,6 @@ export function CreateLobbyDialog({
     onUnresolved,
     returnFocus,
 }: CreateLobbyDialogProps) {
-    const id = useId();
     const conn = useStdbConnection();
     // As the partner servers: a connection without the handles (the earlier steps' test doubles) subscribes nothing.
     const hasViews = conn?.db.viewLobbyPresets !== undefined;
@@ -172,9 +182,14 @@ export function CreateLobbyDialog({
     /** The give-up question is open for this lobby (its label). */
     const [abandonAsk, setAbandonAsk] = useState<string | null>(null);
     const askedAt = useRef(0);
-    const [noteOpen, setNoteOpen] = useState(false);
+    /** Advanced Settings is open (the second dialog). */
+    const [advancedOpen, setAdvancedOpen] = useState(false);
+    /** Bumped by a Create that found an invalid advanced setting and none in the main fields: focus goes there. */
+    const [advancedFocus, setAdvancedFocus] = useState(0);
+    /** The number fields' texts as typed (kept here, so they outlive the Advanced dialog). */
+    const [drafts, setDrafts] = useState<LobbyNumberDrafts>({});
+    const advancedRef = useRef<HTMLButtonElement>(null);
     const [confirmOpen, setConfirmOpen] = useState(false);
-    const noteRef = useRef<HTMLParagraphElement>(null);
     const alive = useRef(true);
     useEffect(() => {
         alive.current = true;
@@ -190,10 +205,6 @@ export function CreateLobbyDialog({
             return settled === d.settings ? d : { ...d, settings: settled };
         });
     }, [rules, onDraft]);
-
-    useEffect(() => {
-        if (noteOpen) noteRef.current?.scrollIntoView?.({ block: 'nearest' });
-    }, [noteOpen]);
 
     // Another lobby holds the person (another tab, another device): Create would be refused; offer the way there. Not
     // while a call is in flight: the person's own new lobby arrives then.
@@ -246,13 +257,15 @@ export function CreateLobbyDialog({
         event.preventDefault();
         if (sending || abandonAsk !== null) return;
         setSubmitCount((n) => n + 1);
-        const keys = Object.keys(errors) as (keyof typeof errors)[];
-        if (keys.length > 0) {
-            const onMain = keys.some((k) => (LOBBY_MAIN_FIELDS as readonly string[]).includes(k));
-            // A field of the main dialog shows its own error (and takes focus); a preset's value has no field here yet.
-            setFormError(
-                onMain ? null : TEXT.presetOutOfRange(errors[keys[0] as keyof typeof errors] ?? ''),
-            );
+        if (Object.keys(errors).length > 0) {
+            setFormError(null);
+            // The main fields come first: their own hook focuses the first invalid one. Otherwise Advanced Settings
+            // opens and its first invalid field takes focus.
+            const onMain = LOBBY_MAIN_FIELDS.some((k) => errors[k] !== undefined);
+            if (!onMain) {
+                setAdvancedFocus((n) => n + 1);
+                setAdvancedOpen(true);
+            }
             return;
         }
         const rows = getMyLobbies().rows;
@@ -267,7 +280,7 @@ export function CreateLobbyDialog({
         void send(false);
     };
 
-    const noteId = `${id}-advanced`;
+    const advancedErrors = advancedErrorKeys(errors).length;
     const errorSlot = held ? (
         <span className={styles.held}>
             {TEXT.heldElsewhere(lobbyLabel(held))}{' '}
@@ -301,14 +314,28 @@ export function CreateLobbyDialog({
                 actions={
                     <>
                         <button
+                            ref={advancedRef}
                             type="button"
-                            className={`${styles.button} ${styles.secondary}`}
-                            aria-expanded={noteOpen}
-                            aria-controls={noteId}
-                            onClick={() => setNoteOpen((o) => !o)}
+                            className={`${styles.button} ${styles.secondary} ${styles.advanced}`}
+                            aria-haspopup="dialog"
+                            data-has-errors={advancedErrors > 0 ? '' : undefined}
+                            onClick={() => {
+                                setAdvancedFocus(0);
+                                setAdvancedOpen(true);
+                            }}
                         >
                             <GearIcon className={styles.gear} />
                             {TEXT.advanced}
+                            {advancedErrors > 0 && (
+                                <>
+                                    <span className={styles.errorMark} aria-hidden="true">
+                                        {advancedErrors}
+                                    </span>
+                                    <span className={hidden.visuallyHidden}>
+                                        {ADVANCED_TEXT.errorMark(advancedErrors)}
+                                    </span>
+                                </>
+                            )}
                         </button>
                         <button
                             type="submit"
@@ -334,10 +361,24 @@ export function CreateLobbyDialog({
                     submitCount={submitCount}
                     disabled={sending}
                 />
-                <p id={noteId} ref={noteRef} className={styles.note} hidden={!noteOpen}>
-                    {TEXT.advancedNote}
-                </p>
             </Dialog>
+            <AdvancedSettingsDialog
+                open={advancedOpen}
+                onClose={() => setAdvancedOpen(false)}
+                focusRequest={advancedFocus}
+                doneClassName={`${styles.button} ${styles.primary}`}
+                returnFocus={advancedRef}
+                value={settings}
+                onChange={setSettings}
+                rules={rules}
+                errors={errors}
+                submitCount={submitCount}
+                drafts={drafts}
+                onDraftsChange={setDrafts}
+                presets={presets}
+                presetKey={presetKey}
+                disabled={sending}
+            />
             <Dialog
                 open={abandonAsk !== null}
                 onClose={(value) => {

@@ -1,0 +1,109 @@
+@import "@/styles/media.css";
+
+/*
+ * Advanced Settings (S14.4d): design/mockups/index.html `.advNote`, `.advSection`, `.advSectionNote`, `.advSubNote`,
+ * `.advGroup.is-locked`, `.modal.wide .fieldRow`. The fields themselves are the main form's (LobbySettingsForm.module.css).
+ *
+ * The rows fill as many columns of at least 12.5rem as the host gives them: three in the mockup's 820px dialog, two
+ * inside the 480px create dialog, one at phone widths. No breakpoint: the host's width decides, so both hosts (a
+ * second dialog, a section in the first) share this layout.
+ */
+
+.advanced {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.note {
+    margin: 0 0 22px;
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.75rem;
+    letter-spacing: 0.02em;
+    line-height: 1.5;
+}
+
+.group {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+
+    & + & {
+        margin-block-start: 22px;
+    }
+
+    /* The mockup's locked group: dimmed; the fields stay focusable and say why. */
+    &[data-locked] > :not(h3, p) {
+        opacity: 0.5;
+    }
+}
+
+.section {
+    margin: 0;
+    padding-block-end: 8px;
+    border-block-end: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.625rem; /* 10px */
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+}
+
+.sectionNote {
+    margin-inline-start: 8px;
+    color: var(--text-disabled);
+    font-size: 0.5625rem; /* 9px */
+    letter-spacing: 0.12em;
+}
+
+.subNote {
+    margin: 0;
+    color: var(--text-disabled);
+    font-family: var(--font-primary);
+    font-size: 0.5625rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 12.5rem), 1fr));
+    gap: 16px 12px;
+    align-items: start;
+}
+
+/* A number with its unit inside the box, after the value. */
+.numberBox {
+    position: relative;
+
+    &[data-unit] input {
+        padding-inline-end: 4.5rem;
+    }
+
+    & input[readonly] {
+        color: var(--text-muted);
+        cursor: not-allowed;
+    }
+}
+
+.unit {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-end: 14px;
+    max-inline-size: 4rem;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.6875rem;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    translate: 0 -50%;
+    pointer-events: none;
+}

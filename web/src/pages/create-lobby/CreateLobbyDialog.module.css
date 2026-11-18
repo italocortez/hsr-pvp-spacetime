@@ -89,9 +89,33 @@
         border-color: var(--color-ash);
         color: var(--text-heading);
     }
+}
 
-    &[aria-controls] {
-        margin-inline-end: auto;
+/* "Advanced Settings": at the start of the footer; a count while a setting there needs a fix (S14.4d). */
+.advanced {
+    margin-inline-end: auto;
+
+    &[data-has-errors] {
+        border-color: var(--color-error);
+    }
+}
+
+.errorMark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 18px;
+    block-size: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--color-error);
+    color: var(--color-snow);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0;
+
+    @media (forced-colors: active) {
+        border: 1px solid CanvasText;
     }
 }
 
@@ -147,16 +171,4 @@
 .gear {
     inline-size: 13px;
     block-size: 13px;
-}
-
-/* The Advanced Settings seam (S14.4d builds the fields): a short note at the end of the body. */
-.note {
-    margin: 0;
-    padding: 12px 14px;
-    border: 1px solid var(--border-subtle);
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--color-iris) 6%, transparent);
-    color: var(--text-muted);
-    font-size: 0.75rem;
-    line-height: 1.55;
 }

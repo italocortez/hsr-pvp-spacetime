@@ -1,0 +1,23 @@
+@import "@/styles/media.css";
+
+/*
+ * The Advanced Settings dialog (S14.4d): the mockup's `.modal.wide` (820px) in the shared Dialog, with the create
+ * dialog's italic 20px title. Phones (560px and below): the shared full-screen sheet.
+ */
+
+.dialog {
+    --dialog-width: 51.25rem;
+    --dialog-gap: 18px;
+    --dialog-title-family: var(--font-secondary);
+    --dialog-title-size: 1.25rem;
+    --dialog-title-weight: 800;
+
+    & h2 {
+        font-style: italic;
+        letter-spacing: -0.01em;
+    }
+
+    @media (--bp-sm) {
+        --dialog-pad: 18px;
+    }
+}

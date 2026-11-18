@@ -567,15 +567,137 @@ describe('cost sets and presets', () => {
         expect(within(d).getByRole('combobox', { name: 'Draft Mode' })).toHaveValue('Auction');
         expect(within(d).getByRole('combobox', { name: 'Team Size' })).toHaveValue('3');
     });
+});
 
-    it('Advanced Settings shows the seam note', async () => {
+// T-S14.4d: Advanced Settings as a second dialog over Create (L3 option A, the mockup's form).
+describe('Advanced Settings (S14.4d)', () => {
+    const advancedDialog = () => screen.findByRole('dialog', { name: 'Advanced Settings' });
+
+    it('opens over Create; its values reach create_lobby; the preset select says Custom', async () => {
+        const user = userEvent.setup();
+        const { createLobby } = setup(MEMBER);
+        const d = await openDialog(user);
+        const button = within(d).getByRole('button', { name: 'Advanced Settings' });
+        expect(button).toHaveAttribute('aria-haspopup', 'dialog');
+        expect(within(d).queryByText(/not editable here yet/)).toBeNull();
+        await user.click(button);
+        const a = await advancedDialog();
+        await user.selectOptions(
+            within(a).getByRole('combobox', { name: 'Ban Restriction' }),
+            'MaxOneSupport',
+        );
+        const turn = within(a).getByRole('textbox', { name: 'Standard Turn (seconds)' });
+        await user.clear(turn);
+        await user.type(turn, '45');
+        const death = within(a).getByRole('textbox', { name: 'Death Penalty (points)' });
+        await user.clear(death);
+        await user.type(death, '1,5');
+        const spectators = within(a).getByRole('textbox', { name: 'Spectators (at most)' });
+        await user.clear(spectators);
+        await user.type(spectators, '4');
+        await user.click(within(a).getByRole('button', { name: 'Done' }));
+        await waitFor(() =>
+            expect(screen.queryByRole('dialog', { name: 'Advanced Settings' })).toBeNull(),
+        );
+        expect(button).toHaveFocus();
+        expect(within(d).getByRole('combobox', { name: 'Settings Preset' })).toHaveValue('custom');
+        await user.click(within(d).getByRole('button', { name: 'Create' }));
+        await waitFor(() => expect(createLobby).toHaveBeenCalledOnce());
+        expect(createLobby.mock.calls[0]?.[0]).toMatchObject({
+            banRestriction: { tag: 'MaxOneSupport' },
+            standardTurnSeconds: 45,
+            deathPenalty: 150,
+            maxSpectators: 4,
+        });
+    });
+
+    it('a setting there that needs a fix: the button counts it; Create opens Advanced Settings and focuses it', async () => {
+        const user = userEvent.setup();
+        const { createLobby } = setup(MEMBER);
+        const d = await openDialog(user);
+        await user.click(within(d).getByRole('button', { name: 'Advanced Settings' }));
+        const a = await advancedDialog();
+        const reserve = within(a).getByRole('textbox', { name: 'Reserve Bank (seconds)' });
+        await user.clear(reserve);
+        await user.type(reserve, '2000');
+        await user.click(within(a).getByRole('button', { name: 'Close Advanced Settings' }));
+        await waitFor(() =>
+            expect(screen.queryByRole('dialog', { name: 'Advanced Settings' })).toBeNull(),
+        );
+        expect(
+            within(d).getByRole('button', {
+                name: 'Advanced Settings, 1 setting needs a fix',
+            }),
+        ).toHaveAttribute('data-has-errors');
+        await user.click(within(d).getByRole('button', { name: 'Create' }));
+        const again = await advancedDialog();
+        const field = within(again).getByRole('textbox', { name: 'Reserve Bank (seconds)' });
+        await waitFor(() => expect(field).toHaveFocus());
+        expect(field).toHaveValue('2000');
+        expect(field).toHaveAccessibleDescription('The reserve bank is 0 to 1800 seconds.');
+        expect(createLobby).not.toHaveBeenCalled();
+    });
+
+    it('a main field that needs a fix takes focus first; Advanced Settings stays closed', async () => {
+        const user = userEvent.setup();
+        const { createLobby } = setup(MEMBER);
+        const d = await openDialog(user);
+        await user.click(within(d).getByRole('button', { name: 'Advanced Settings' }));
+        const a = await advancedDialog();
+        const turn = within(a).getByRole('textbox', { name: 'Standard Turn (seconds)' });
+        await user.clear(turn);
+        await user.type(turn, '5');
+        await user.click(within(a).getByRole('button', { name: 'Close Advanced Settings' }));
+        await waitFor(() =>
+            expect(screen.queryByRole('dialog', { name: 'Advanced Settings' })).toBeNull(),
+        );
+        const password = within(d).getByLabelText('Lobby Password');
+        await user.type(password, 'a-b');
+        await user.click(within(d).getByRole('button', { name: 'Create' }));
+        expect(password).toHaveFocus();
+        expect(screen.queryByRole('dialog', { name: 'Advanced Settings' })).toBeNull();
+        expect(createLobby).not.toHaveBeenCalled();
+    });
+
+    it('an Auction lobby with a raise of 0 is stopped by the form (A224)', async () => {
+        const user = userEvent.setup();
+        const { createLobby } = setup(MEMBER);
+        const d = await openDialog(user);
+        await user.selectOptions(
+            within(d).getByRole('combobox', { name: 'Draft Mode' }),
+            'Auction',
+        );
+        await user.click(within(d).getByRole('button', { name: 'Advanced Settings' }));
+        const a = await advancedDialog();
+        const raise = within(a).getByRole('textbox', { name: 'Minimum Bid Raise' });
+        await user.clear(raise);
+        await user.type(raise, '0');
+        await user.click(within(a).getByRole('button', { name: 'Done' }));
+        await waitFor(() => expect(raise).toHaveFocus());
+        expect(raise).toHaveAccessibleDescription(
+            'An Auction lobby needs a minimum bid raise above 0.',
+        );
+        expect(createLobby).not.toHaveBeenCalled();
+    });
+
+    it('an edit made only in Advanced Settings counts for the discard question', async () => {
         const user = userEvent.setup();
         setup(MEMBER);
         const d = await openDialog(user);
-        const advanced = within(d).getByRole('button', { name: 'Advanced Settings' });
-        expect(advanced).toHaveAttribute('aria-expanded', 'false');
-        await user.click(advanced);
-        expect(advanced).toHaveAttribute('aria-expanded', 'true');
-        expect(within(d).getByText(/not editable here yet/)).toBeVisible();
+        await user.click(within(d).getByRole('button', { name: 'Advanced Settings' }));
+        const a = await advancedDialog();
+        await user.click(
+            within(within(a).getByRole('group', { name: 'Hide MMR' })).getByRole('button', {
+                name: 'On',
+            }),
+        );
+        await user.click(within(a).getByRole('button', { name: 'Done' }));
+        await waitFor(() =>
+            expect(screen.queryByRole('dialog', { name: 'Advanced Settings' })).toBeNull(),
+        );
+        await user.click(within(d).getByRole('button', { name: 'Close' }));
+        expect(
+            await screen.findByRole('dialog', { name: 'Discard this lobby?' }),
+        ).toBeInTheDocument();
     });
 });

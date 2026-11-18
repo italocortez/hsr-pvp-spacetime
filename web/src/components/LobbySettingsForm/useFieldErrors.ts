@@ -29,6 +29,12 @@ export type FieldErrorsOptions<F extends string> = {
     submitCount: number;
     /** Makes each field's error id (`${idPrefix}-${key}-error`). */
     idPrefix: string;
+    /**
+     * S14.4d: set when the host decides which section takes focus (two sections, one submit). Each new value above 0
+     * moves focus to the first invalid field of `fields`, also on the first render (a section that mounts to show its
+     * errors, as Advanced Settings opened by Create); 0 asks for nothing. While set, a submit alone moves no focus here.
+     */
+    focusRequest?: number;
 };
 
 export function useFieldErrors<F extends string>({
@@ -37,6 +43,7 @@ export function useFieldErrors<F extends string>({
     errors,
     submitCount,
     idPrefix,
+    focusRequest,
 }: FieldErrorsOptions<F>) {
     const [touched, setTouched] = useState<ReadonlySet<F>>(() => new Set());
     const [announcement, setAnnouncement] = useState('');
@@ -86,10 +93,25 @@ export function useFieldErrors<F extends string>({
     useEffect(() => {
         if (submitCount === lastSubmit.current) return;
         lastSubmit.current = submitCount;
+        if (focusRequest !== undefined) return;
         const first = fields.find((k) => errors[k] !== undefined);
         if (!first) return;
         containerRef.current?.querySelector<HTMLElement>(`[data-field="${first}"]`)?.focus();
-    }, [submitCount, errors, fields]);
+    }, [submitCount, errors, fields, focusRequest]);
+
+    // The host's request (S14.4d). After the commit's other effects: a dialog that opens with this section places its
+    // own first focus in the same commit, and this one must come after it.
+    const lastRequest = useRef(0);
+    useEffect(() => {
+        if (focusRequest === undefined || focusRequest === lastRequest.current) return;
+        lastRequest.current = focusRequest;
+        if (focusRequest === 0) return;
+        const first = fields.find((k) => errors[k] !== undefined);
+        if (!first) return;
+        queueMicrotask(() =>
+            containerRef.current?.querySelector<HTMLElement>(`[data-field="${first}"]`)?.focus(),
+        );
+    }, [focusRequest, errors, fields]);
 
     /** The props that tie a control to its error. */
     const errorProps = (key: F) => ({

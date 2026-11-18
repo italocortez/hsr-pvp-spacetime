@@ -13,9 +13,16 @@
 //   one-lobby rule         spacetimedb/src/helpers/lobby/lobbyHelpers.ts           LIVE_STAGES and membershipHold
 //   disconnect             spacetimedb/src/helpers/lobby/disconnectHelpers.ts      Deferred, NoAction, 30 to 600 s
 //   spectators             spacetimedb/src/helpers/lobby/lobbyHelpers.ts           resolveMaxSpectators (0 to 12)
+//   team names             spacetimedb/src/helpers/lobby/lobbyConfigBounds.ts      ensureTeamAliases (at most 30)
+//
+// S14.4d: Advanced Settings edits the same value (`LOBBY_ADVANCED_FIELDS`); its number fields keep a text draft each
+// and read it with `readLobbyNumber` (handicap points to hundredths by digit arithmetic, amounts as AmountField reads
+// them).
 //
 // The handicap values are kept in the module's unit, hundredths of a point (A21), so a preset round-trips exactly;
 // a field that shows points converts with `pointsToHundredths` / `hundredthsToPoints`.
+
+import { amountText, readAmount } from '@shared/teambuilder/amount';
 
 // ─── The module's enums, as their tags ───────────────────────────────────────────────────────────────────────────
 
@@ -87,6 +94,39 @@ export const ROSTER_VISIBILITY_LABEL: Record<LobbyRosterVisibility, string> = {
     ClosedWithRating: 'Closed with Rating',
     ClosedNoRating: 'Closed No Rating',
 };
+/** The mockup's six options, in its order (`#inpBanRestrict`). */
+export const BAN_RESTRICTION_OPTIONS: readonly LobbyBanRestriction[] = [
+    'NoRestriction',
+    'MaxOnePerRole',
+    'MaxOneDps',
+    'MaxTwoDps',
+    'MaxOneSupport',
+    'MaxOneSustain',
+];
+export const BAN_RESTRICTION_LABEL: Record<LobbyBanRestriction, string> = {
+    NoRestriction: 'No restriction',
+    MaxOneDps: 'Max 1 DPS',
+    MaxTwoDps: 'Max 2 DPS',
+    MaxOnePerRole: 'Max 1 per role',
+    MaxOneSupport: 'Max 1 support',
+    MaxOneSustain: 'Max 1 sustain',
+};
+/** A21: the format is the character count (groups of 4). */
+export const LINEUP_FORMAT_LABEL: Record<LobbyLineupFormat, string> = {
+    Halves: 'Halves · 8 characters',
+    Thirds: 'Thirds · 12 characters',
+};
+export const DISCONNECT_POLICY_LABEL: Record<LobbyDisconnectPolicy, string> = {
+    Standard: 'Standard',
+    Deferred: 'Deferred',
+    NoAction: 'No Action',
+};
+/** The policies `create_lobby` takes (A91(2): Deferred is for tournament lobbies only, so it is not offered). */
+export const LOBBY_CREATE_DISCONNECT_POLICIES: readonly LobbyDisconnectPolicy[] = [
+    'Standard',
+    'NoAction',
+];
+
 export const TEAM_SIZE_LABEL: Record<LobbyTeamSize, string> = {
     1: '1v1 · 2 players',
     2: '2v2 · 4 players',
@@ -197,6 +237,50 @@ export const LOBBY_MAIN_FIELDS = [
     'rosterVisibility',
     'teamSize',
 ] as const satisfies readonly LobbySettingKey[];
+
+/**
+ * The fields of Advanced Settings (S14.4d), in the order they are shown (the mockup's groups: match with the team names,
+ * Auction economy, handicaps, ownership, timers, referee powers, privacy and spectators, disconnect handling); the first invalid one
+ * takes focus after a failed submit when no main field is invalid.
+ */
+export const LOBBY_ADVANCED_FIELDS = [
+    'banRestriction',
+    'lineupFormat',
+    'teamBlueAlias',
+    'teamRedAlias',
+    'allowMirrorPicks',
+    'autoRandomPick',
+    'characterBudget',
+    'lightconeBudget',
+    'minimumBidRaise',
+    'deathPenalty',
+    'rosterDiffAdvantage',
+    'rosterThreshold',
+    'underThresholdAdvantage',
+    'aboveThresholdPenalty',
+    'requireOwnership',
+    'standardTurnSeconds',
+    'reserveBankSeconds',
+    'confirmWindowSeconds',
+    'refereeCanUndo',
+    'refereeCanPause',
+    'refereeCanSetCaptain',
+    'refereeCanKick',
+    'allowPlayerPause',
+    'refereeExclusiveConcede',
+    'isAnonymousSpectators',
+    'hideMmr',
+    'maxSpectators',
+    'disconnectPolicy',
+    'disconnectForfeitSeconds',
+] as const satisfies readonly LobbySettingKey[];
+
+export type LobbyAdvancedField = (typeof LOBBY_ADVANCED_FIELDS)[number];
+
+/** The keys of `errors` that belong to Advanced Settings (for the button's mark and the focus rule). */
+export function advancedErrorKeys(errors: LobbySettingsErrors): LobbyAdvancedField[] {
+    return LOBBY_ADVANCED_FIELDS.filter((k) => errors[k] !== undefined);
+}
 
 /** A preset's values: everything but the lobby's own name and password. */
 export type LobbyPresetValues = Omit<LobbySettings, 'name' | 'password'>;
@@ -530,6 +614,112 @@ export function numberDraftText(
     return drafts[key] ?? (Number.isNaN(value) ? '' : String(value));
 }
 
+/**
+ * How Advanced Settings reads and writes each number field (S14.4d):
+ * - `whole`: a whole number as typed (seconds, spectators); a decimal reads but validation refuses it.
+ * - `amount`: an Auction amount as the team builder's AmountField reads it (`readAmount`: a dot or a comma as the
+ *   decimal mark, more than two decimals rounded half up on the digits); the value is the amount itself (the module
+ *   takes an f32).
+ * - `signedPoints` / `points`: points entered whole or with up to two decimals (a dot or a comma), stored in
+ *   hundredths (A21) by exact digit arithmetic, never by multiplying a float; `points` refuses a sign (the roster
+ *   threshold is a u32).
+ */
+export type LobbyNumberFieldKind = 'whole' | 'amount' | 'signedPoints' | 'points';
+
+export const LOBBY_NUMBER_FIELD_KIND = {
+    standardTurnSeconds: 'whole',
+    reserveBankSeconds: 'whole',
+    confirmWindowSeconds: 'whole',
+    disconnectForfeitSeconds: 'whole',
+    maxSpectators: 'whole',
+    characterBudget: 'amount',
+    lightconeBudget: 'amount',
+    minimumBidRaise: 'amount',
+    deathPenalty: 'signedPoints',
+    rosterDiffAdvantage: 'signedPoints',
+    underThresholdAdvantage: 'signedPoints',
+    aboveThresholdPenalty: 'signedPoints',
+    rosterThreshold: 'points',
+} as const satisfies Partial<Record<LobbyNumberKey, LobbyNumberFieldKind>>;
+
+export type LobbyNumberFieldKey = keyof typeof LOBBY_NUMBER_FIELD_KIND;
+
+/** Larger than any bound the form checks: `readAmount` caps at its `max`, the form wants the range error instead. */
+const AMOUNT_READ_MAX = Number.MAX_SAFE_INTEGER;
+
+/**
+ * Points as typed ("1", "-2.5", "0,25", ".5") to hundredths, exactly: digits only, no float multiplication, so "1.15"
+ * is 115 and "10000.01" is 1000001. NaN for an empty text, a third decimal, a sign where `signed` is false, or
+ * anything else.
+ */
+export function pointsTextToHundredths(text: string, signed = true): number {
+    const m = /^(-?)(\d*)(?:[.,](\d{0,2}))?$/.exec(text.trim());
+    if (!m) return Number.NaN;
+    const [, sign = '', whole = '', fraction = ''] = m;
+    if (whole === '' && fraction === '') return Number.NaN;
+    if (sign && !signed) return Number.NaN;
+    // Longer than any bound: the range check refuses it without reading it exactly.
+    if (whole.length > 12) return sign ? -Number.MAX_SAFE_INTEGER : Number.MAX_SAFE_INTEGER;
+    const hundredths = Number(whole || '0') * 100 + Number(`${fraction}00`.slice(0, 2));
+    return sign && hundredths !== 0 ? -hundredths : hundredths;
+}
+
+/** Hundredths as points text ("115" is "1.15", "-50" is "-0.5", "300" is "3"), by integer arithmetic. */
+export function hundredthsToPointsText(hundredths: number): string {
+    if (!Number.isInteger(hundredths))
+        return Number.isNaN(hundredths) ? '' : String(hundredths / 100);
+    const sign = hundredths < 0 ? '-' : '';
+    const abs = Math.abs(hundredths);
+    const whole = Math.floor(abs / 100);
+    const cents = abs % 100;
+    if (cents === 0) return `${sign}${whole}`;
+    return `${sign}${whole}.${String(cents).padStart(2, '0').replace(/0$/, '')}`;
+}
+
+/** A number field's text as the value the form keeps for `key` (NaN when it does not read; validation refuses NaN). */
+export function readLobbyNumber(key: LobbyNumberFieldKey, text: string): number {
+    switch (LOBBY_NUMBER_FIELD_KIND[key]) {
+        case 'whole':
+            return numberFromDraft(text);
+        case 'amount': {
+            const read = readAmount(text, AMOUNT_READ_MAX);
+            return read.kind === 'amount' ? read.value / 100 : Number.NaN;
+        }
+        case 'signedPoints':
+            return pointsTextToHundredths(text, true);
+        case 'points':
+            return pointsTextToHundredths(text, false);
+    }
+}
+
+/** The text a number field shows for a value of `key` (empty for NaN). */
+export function lobbyNumberText(key: LobbyNumberFieldKey, value: number): string {
+    if (Number.isNaN(value)) return '';
+    switch (LOBBY_NUMBER_FIELD_KIND[key]) {
+        case 'whole':
+            return String(value);
+        case 'amount':
+            // An f32 from a module preset (30.1 is 30.100000381…) shows as the amount it stands for.
+            return Number.isFinite(value) ? amountText(Math.round(value * 100)) : String(value);
+        case 'signedPoints':
+        case 'points':
+            return hundredthsToPointsText(value);
+    }
+}
+
+/**
+ * What a number field shows: the person's draft while it still reads as the current value (so "1." or "abc" stay as
+ * typed), else the value's own text (a preset picked meanwhile replaced it).
+ */
+export function lobbyNumberFieldText(
+    key: LobbyNumberFieldKey,
+    draft: string | undefined,
+    value: number,
+): string {
+    if (draft !== undefined && Object.is(readLobbyNumber(key, draft), value)) return draft;
+    return lobbyNumberText(key, value);
+}
+
 // ─── Validation ──────────────────────────────────────────────────────────────────────────────────────────────────
 
 export type LobbySettingsErrors = Partial<Record<LobbySettingKey, string>>;
@@ -618,10 +808,10 @@ export function validateLobbySettings(
         ['deathPenalty', 'The death penalty'],
     ] as const) {
         if (!inRange(s[key], -LOBBY_HANDICAP_MAX_HUNDREDTHS, LOBBY_HANDICAP_MAX_HUNDREDTHS))
-            e[key] = `${label} is -10,000 to 10,000 points, in steps of 0.01.`;
+            e[key] = `${label} is -10,000 to 10,000, in steps of 0.01.`;
     }
     if (!inRange(s.rosterThreshold, 0, LOBBY_HANDICAP_MAX_HUNDREDTHS))
-        e.rosterThreshold = 'The roster threshold is 0 to 10,000 points, in steps of 0.01.';
+        e.rosterThreshold = 'The roster threshold is 0 to 10,000, in steps of 0.01.';
 
     if (s.disconnectPolicy === 'Deferred')
         e.disconnectPolicy = 'Deferred is only for tournament lobbies.';
@@ -750,6 +940,11 @@ export function toCreateLobbyArgs(
         confirmWindowSeconds: s.confirmWindowSeconds,
     };
     if (options.abandonCurrentMatch) args.abandonCurrentMatch = true;
+    // The form validates first; this is the last guard: a NaN or an infinity is never sent (an f32 would carry it).
+    for (const [key, v] of Object.entries(args)) {
+        if (typeof v === 'number' && !Number.isFinite(v))
+            throw new RangeError(`create_lobby argument ${key} is not a finite number.`);
+    }
     return args;
 }
 
