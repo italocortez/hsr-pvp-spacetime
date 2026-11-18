@@ -2,6 +2,8 @@
 
 76 tables. Updated 2026-11-06 (S3 backend reset: 27 tables public → private per A37 / ACCESS-SECURITY-OPS Appendix A, 10 new, `group_phase_record` dropped per A23). Visibility: **21 public** (reference data, aggregates, `user`, `tournament`, `bracket_match`, `admin_alert`, the `lobby_cursor_event` event table); every other table is PRIVATE and read through views (S9). Paste into [mermaid.live](https://mermaid.live) to preview. **Since S11a: `user` is private and `user_private` is merged into it; 78 table files in `spacetimedb/src/tables/`, 20 of them public (the 76 / 21 above predate later additions).**
 
+Phase S14.5s execution (DECISIONS.md A226 item 2): new PRIVATE table `user_username_rate` (`userId` PK, `windowStart`, `changeCount`, audit columns), the fixed one-hour window of a verified user's own username changes (at most 3, `update_username` only); no view reads it; deleted with the user and cleared by `server_nuke_test_data`. Additive: no existing table changes shape (docs/auth/architecture.md "Phase S14.5s execution").
+
 Phase S14.4p execution (user ruling 2026-11-17): new PUBLIC table `partner_server` (`id` autoInc PK, `name` 1-50, `inviteCode` unique (the bare Discord invite code), `description` 0-80, `position`), the landing page's partner servers, at most 12 rows, edited by `admin_*` / `server_*` partner reducers. **No audit columns** (user ruling, a deliberate exception). Kept by `server_nuke_test_data`. No relationship to other tables. Additive: no existing table changes shape (docs/admin/architecture.md "Phase S14.4p execution").
 
 Phase suspension-s1 execution (DECISIONS.md A195, A213, A214): new PRIVATE table `user_suspension` (`userId` PK, `reason` (0-500, the admins' record only), `suspendedById`, audit columns): one row per suspended account, deleted by a lift, with the user (`performUserDeletion`) and by `server_nuke_test_data`; read only by the new view `view_my_suspension` (user id only) and the one primary-key check of the permission helper and the view caller helper. Additive: no existing table changes shape (docs/suspension/architecture.md).
@@ -35,7 +37,7 @@ Phase S7b execution (DECISIONS.md A60): `match_result_game` gains `blueConfirmed
 
 | Color | Tables (PUBLIC unless marked) |
 |-------|--------|
-| blue | user (PRIVATE since S11a, A77), user_presence (PRIVATE, new S3 A48), user_identity (PRIVATE), ~~user_private~~ (merged into user, S11a), ban_record (PRIVATE), link_request (PRIVATE, new S3 A46), user_suspension (PRIVATE, new suspension-s1), deleted_user (PRIVATE), server_identity (PRIVATE), user_deletion_job, identity_gc_job, gc_result (PRIVATE) |
+| blue | user (PRIVATE since S11a, A77), user_presence (PRIVATE, new S3 A48), user_identity (PRIVATE), ~~user_private~~ (merged into user, S11a), ban_record (PRIVATE), link_request (PRIVATE, new S3 A46), user_suspension (PRIVATE, new suspension-s1), user_username_rate (PRIVATE, new S14.5s), deleted_user (PRIVATE), server_identity (PRIVATE), user_deletion_job, identity_gc_job, gc_result (PRIVATE) |
 | green | hsr_character, hsr_lightcone, archetype, hsr_character_archetype, season |
 | orange | hsr_account (PRIVATE), hsr_account_character (PRIVATE), user_loadout (PRIVATE, new S14.3s), user_loadout_rate (PRIVATE, new S14.3s-limit), cost_set (PRIVATE since S11a), hsr_character_cost, hsr_lightcone_cost, hsr_synergy_cost (characterA/characterB, A21), cost_set_draft_character (PRIVATE), cost_set_draft_lightcone (PRIVATE), cost_set_draft_synergy (PRIVATE) |
 | purple | tournament, bracket_match, tournament_enrolled (PRIVATE), tournament_team_member (PRIVATE), tournament_assistant (PRIVATE), tournament_team (PRIVATE), tournament_team_request (PRIVATE), tournament_stand_in (PRIVATE), tournament_player_account (PRIVATE), tournament_finalize_job (scheduled, new S3 A24) |
@@ -81,6 +83,11 @@ erDiagram
         u32 userId PK_FK "row exists = suspended (suspension-s1)"
         string reason "0-500, admins' record only"
         u32 suspendedById FK "the Admin, or 0 (SYSTEM) for a server call"
+    }
+    user_username_rate {
+        u32 userId PK_FK "username change window (S14.5s)"
+        Timestamp windowStart
+        u32 changeCount "at most 3 per hour"
     }
     deleted_user {
         u32 id PK "archived displayName of a hard-deleted user (Phase 15.2 D-05)"
@@ -667,6 +674,7 @@ erDiagram
     link_request }o--|| user : "userId (many-to-one)"
     user_rate_state ||--|| user : "userId (one-to-one)"
     user_suspension |o--|| user : "userId (zero or one per user, suspension-s1)"
+    user_username_rate |o--|| user : "userId (zero or one per user, S14.5s)"
     deleted_user ||--o| user : "id (the former User.id; archive row, no live FK)"
 
     %% Phase 12.1: Identity GC + GC audit log

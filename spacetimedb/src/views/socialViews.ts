@@ -2,6 +2,7 @@
 // Per-user views over relationships and roster visibility across lobbies.
 //
 // 1. view_my_relationships      — caller's PlayerRelationship rows + the other player's card (D-33; S9b: D2, A40)
+// 1b. view_my_player_cards      — the caller's Best Ally and Nemesis cards, two rows at most (S14.5s, A226)
 // 2. view_my_roster_visibility  — rosters visible to caller per lobby (D-10..D-16; S9b: A37 / A40)
 // 3. view_my_roster             — caller's own HsrAccounts + characters (D-20)
 //
@@ -13,7 +14,7 @@ import { GameMode, DraftMode, MatchType } from '@module/types/enums';
 import { slotIsSpectator, slotSameTeam } from '@module/helpers/lobby/lobbyHelpers';
 import { resolveUserLabel } from '@module/helpers/identity/userLabel';
 import {
-    callerMemberships, callerUserId, hideUserId, mmrByModeOf, ratingVisible,
+    callerMemberships, callerUserId, hideUserId, MMR_GAME_MODES, mmrByModeOf, ratingVisible,
 } from '@module/helpers/identity/viewAnonymity';
 
 // ---------------------------------------------------------------------------
@@ -78,6 +79,138 @@ export const view_my_relationships = spacetimedb.view(
                 matchesAsOpponent: r.matchesAsOpponent,
                 winsAsOpponent: r.winsAsOpponent,
             });
+        }
+        return rows;
+    }
+);
+
+// ---------------------------------------------------------------------------
+// 1b. My Player Cards (per-user view) — S14.5s (A226 items 5, 6): the profile's Best Ally and Nemesis, at most two
+//     rows, each with what a player card shows. Built from the caller's PlayerRelationship rows of the active season
+//     (seasonId 0 when no season is active, as finalization writes), summed per other player over every game mode,
+//     draft mode, match type and team size:
+//     - BestAlly: the most wins together among players with at least PLAYER_CARD_MIN_MATCHES matches together;
+//     - Nemesis: the most losses against among players with at least PLAYER_CARD_MIN_MATCHES matches against.
+//     A count of 0 never qualifies. Ties: the fewer shared matches first (the higher rate), then the lower user id.
+//     A candidate whose User row is gone (deleted) or pending deletion (deletedAt: an admin deletion or a ban) is
+//     skipped and the next one is taken. A suspended other player is shown, as on the leaderboard.
+//     Card: displayName, username (the handle), avatar, displayed title, the three mode ratings of the active season
+//     (`[MemoryOfChaos, ApocalypticShadow, AnomalyArbitration]`, EloConfig.initialRating for an unplayed mode, as
+//     mmrByModeOf), `globalRating` = MmrRating.globalCompositeRating of the active season (A102: the rounded average of
+//     the player's rated modes of that season; unset before their first rated match of the season), the rating of the
+//     ACTIVE game account (A226 item 5: always shown; unset when no account is active) and the number of game accounts.
+//     `matches` / `wins` / `losses` are the caller's side of the relation (together for BestAlly, against for Nemesis).
+//     The caller is resolved through callerUserId (a suspended or unmapped caller gets []).
+//     Read set: UserIdentity.identity + UserSuspension (callerUserId), Season.is_active, PlayerRelationship.by_user
+//     (the caller's rows only), then for each carded player only: User.id, MmrRating.by_user_mode_season (3 reads),
+//     EloConfigTable.id (only for an unplayed mode), HsrAccount.user_id. No scan.
+// ---------------------------------------------------------------------------
+/** S14.5s (A226 item 6): the fewest shared matches for a Best Ally or Nemesis card. */
+export const PLAYER_CARD_MIN_MATCHES = 3;
+
+const PlayerCardRow = t.row('PlayerCardRow', {
+    relation: t.string().primaryKey(), // 'BestAlly' | 'Nemesis'; one row each at most, so the client gets onUpdate
+    userId: t.u32(),
+    displayName: t.string(),
+    username: t.string(),
+    avatarCharacterName: t.string(),
+    displayedAchievementId: t.u32().optional(),
+    mmrByMode: t.array(t.u32()),
+    globalRating: t.u32().optional(),
+    activeAccountRating: t.u32().optional(),
+    accountCount: t.u32(),
+    matches: t.u32(),
+    wins: t.u32(),
+    losses: t.u32(),
+});
+
+interface PairTotals { matchesAsAlly: number; winsAsAlly: number; matchesAsOpponent: number; winsAsOpponent: number }
+
+/** The ordered candidates of one relation: qualifying players, best first (count desc, matches asc, user id asc). */
+function rankCandidates(
+    totals: Map<number, PairTotals>,
+    matchesOf: (p: PairTotals) => number,
+    countOf: (p: PairTotals) => number,
+): number[] {
+    return [...totals.entries()]
+        .filter(([, p]) => matchesOf(p) >= PLAYER_CARD_MIN_MATCHES && countOf(p) > 0)
+        .sort(([idA, a], [idB, b]) => (countOf(b) - countOf(a)) || (matchesOf(a) - matchesOf(b)) || (idA - idB))
+        .map(([id]) => id);
+}
+
+/** The card fields of a live user (index reads only). */
+function playerCard(ctx: any, user: any, seasonId: number) {
+    let globalRating: number | undefined;
+    let initialRating: number | undefined;
+    const mmrByMode = MMR_GAME_MODES.map((mode) => {
+        const row = [...ctx.db.MmrRating.by_user_mode_season.filter([user.id, { tag: mode } as any, seasonId])][0];
+        if (row) {
+            if (globalRating === undefined) globalRating = row.globalCompositeRating;
+            return row.rating;
+        }
+        if (initialRating === undefined) initialRating = ctx.db.EloConfigTable.id.find(1)?.initialRating ?? 0;
+        return initialRating as number;
+    });
+    const accounts = [...ctx.db.HsrAccount.user_id.filter(user.id)];
+    const active = accounts.find((a: any) => a.isActive);
+    return {
+        userId: user.id,
+        displayName: user.displayName,
+        username: user.username,
+        avatarCharacterName: user.avatarCharacterName,
+        displayedAchievementId: user.displayedAchievementId,
+        mmrByMode,
+        globalRating,
+        activeAccountRating: active ? active.accountRating : undefined,
+        accountCount: accounts.length,
+    };
+}
+
+export const view_my_player_cards = spacetimedb.view(
+    { name: 'view_my_player_cards', public: true },
+    t.array(PlayerCardRow),
+    (ctx) => {
+        const me = callerUserId(ctx);
+        if (me === undefined) return [];
+        const activeSeason = [...ctx.db.Season.is_active.filter(true)][0];
+        const seasonId = activeSeason ? activeSeason.id : 0;
+
+        const totals = new Map<number, PairTotals>();
+        for (const r of ctx.db.PlayerRelationship.by_user.filter(me)) {
+            if (r.seasonId !== seasonId) continue;
+            const p = totals.get(r.otherUserId) ?? { matchesAsAlly: 0, winsAsAlly: 0, matchesAsOpponent: 0, winsAsOpponent: 0 };
+            p.matchesAsAlly += r.matchesAsAlly;
+            p.winsAsAlly += r.winsAsAlly;
+            p.matchesAsOpponent += r.matchesAsOpponent;
+            p.winsAsOpponent += r.winsAsOpponent;
+            totals.set(r.otherUserId, p);
+        }
+
+        const relations = [
+            {
+                relation: 'BestAlly',
+                matchesOf: (p: PairTotals) => p.matchesAsAlly,
+                countOf: (p: PairTotals) => p.winsAsAlly,
+                winsOf: (p: PairTotals) => p.winsAsAlly,
+            },
+            {
+                relation: 'Nemesis',
+                matchesOf: (p: PairTotals) => p.matchesAsOpponent,
+                countOf: (p: PairTotals) => p.matchesAsOpponent - p.winsAsOpponent,
+                winsOf: (p: PairTotals) => p.winsAsOpponent,
+            },
+        ];
+        const rows: any[] = [];
+        for (const rel of relations) {
+            for (const otherId of rankCandidates(totals, rel.matchesOf, rel.countOf)) {
+                const user = ctx.db.User.id.find(otherId);
+                if (!user || user.deletedAt !== undefined) continue;
+                const p = totals.get(otherId)!;
+                const matches = rel.matchesOf(p);
+                const wins = rel.winsOf(p);
+                rows.push({ relation: rel.relation, ...playerCard(ctx, user, seasonId), matches, wins, losses: matches - wins });
+                break;
+            }
         }
         return rows;
     }

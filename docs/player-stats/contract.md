@@ -137,6 +137,38 @@ All flat structured rows, zero JSON blobs (D-55). Self-contained for replay rend
 **When:** Admin calls `set_active_season(seasonId=2)`
 **Then:** Season #1.isActive set to false, Season #2.isActive set to true. Only one season active at any time.
 
+### Best Ally and Nemesis Cards (Phase S14.5s execution, A226 items 5, 6, 7)
+
+#### Best Ally
+**Given:** The caller has finished matches in the active season (season 0 when none is active) on the same side as other players
+**When:** They read `view_my_player_cards`
+**Then:** One `BestAlly` row for the player with the most wins together among those with at least 3 matches together, counted over every mode, draft mode, match type and team size of that season. `matches`, `wins`, `losses` are the caller's together.
+
+#### Nemesis
+**Given:** The caller has finished matches in the active season against other players
+**When:** They read `view_my_player_cards`
+**Then:** One `Nemesis` row for the player with the most losses against among those with at least 3 matches against. `matches`, `wins`, `losses` are the caller's against that player.
+
+#### Thresholds and Ties
+**Given:** Candidates for a relation
+**When:** The view picks one
+**Then:** Fewer than 3 shared matches, or 0 wins together (0 losses against), never qualifies; with no candidate the row is absent. Equal counts go to the player with fewer shared matches, then to the lower user id. The same player may hold both rows.
+
+#### What a Card Shows
+**Given:** A carded player
+**When:** The row is built
+**Then:** User id, display name, username (the handle), avatar, displayed title; the three mode ratings of the active season (the initial rating for an unplayed mode); the Global rating of that season (the module's stored composite, unset before their first rated match of the season); the rating of their active game account (unset when none is active) and how many game accounts they have.
+
+#### Deleted, Pending Deletion and Suspended Players
+**Given:** The best candidate's account is deleted, or pending deletion after an admin deletion or a ban
+**When:** The view picks
+**Then:** That player is skipped and the next qualifying player is carded. A suspended player is still carded.
+
+#### Who Can Read It
+**Given:** A suspended caller, or an identity with no account
+**When:** They read `view_my_player_cards`
+**Then:** No rows. Each caller sees only their own cards.
+
 ### Casual Auto-Finalize (D-37)
 **Given:** MatchResultRecord with matchType=Casual, all captains confirmed
 **When:** `submit_match_result(matchResultId, winnerUserId)` called
@@ -179,6 +211,7 @@ All flat structured rows, zero JSON blobs (D-55). Self-contained for replay rend
 | view_my_player_stats | PlayerStat (private) | Per-user view |
 | view_my_character_stats | PlayerCharacterStat (private) | Per-user view |
 | view_my_relationships | PlayerRelationship (private) | Per-user view |
+| view_my_player_cards | PlayerRelationship, User, MmrRating, HsrAccount (private) | Per-user view, two rows at most (Phase S14.5s execution) |
 
 ## Phase History
 
@@ -222,6 +255,7 @@ All flat structured rows, zero JSON blobs (D-55). Self-contained for replay rend
 | No stat row of any kind is written for the `EMPTY` and `SKIP` placeholders, and no player row for the system user. A Classic timer auto-pick of a real character writes the faced rows and the global row; who receives its played stat is set by DECISIONS.md A106 | Phase S10f execution (backend audit 2026-11-09, results finding 3) | 2026-11-09 _Superseded in Phase S10k execution (DECISIONS.md A110)._ |
 | A Classic timer auto-pick of a real character credits the played stat to every non-coach player of the acting team, with that side's win flag; the other team gets the faced stat and the global stat is written once. A manual Classic pick credits the picker; an Auction sale the winning team (A82) | Phase S10i execution (DECISIONS.md A106) | 2026-11-10 _Superseded in Phase S10k execution (DECISIONS.md A110)._ |
 | The played stat follows ownership for every way a team gets a character (manual Classic pick, Classic timer auto-pick, Auction sale): each non-coach player of the owning team who owns the character on any of their game accounts, selected for the match or not, gets it with that side's win flag; if no player of the team is recorded as owning it, a team of one player credits that player and a team of two or more credits nobody. The faced stat of the other team and the single global row are unchanged; `EMPTY` and `SKIP` write nothing; no row for the system user. Ownership is read when the match is finalized (for a tournament game, when the tournament's finalization runs) | Phase S10k execution (DECISIONS.md A110) | 2026-11-10 |
+| Best Ally and Nemesis Cards: Best Ally, Nemesis, Thresholds and Ties, What a Card Shows, Deleted, Pending Deletion and Suspended Players, Who Can Read It. User decisions: A226 items 5 to 7 (only cards of other people; the active account rating always shown; a small view with handle, rating and account count from 3 shared matches; the active season). Execution choices: sums over every mode, draft mode, match type and team size of the season; 0 wins or losses never qualify; ties by fewer shared matches then the lower user id; deleted and pending-deletion players skipped; suspended players shown; Global = the stored composite rating | Phase S14.5s execution (DECISIONS.md A226) | 2026-11-18 |
 
 ---
 

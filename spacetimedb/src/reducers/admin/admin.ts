@@ -10,7 +10,7 @@ import { findLobbyResult } from '@module/helpers/results/scoringHelpers';
 import { performUserDeletion } from '@module/helpers/identity/userDeletionHelper';
 import { ensureAdmin, isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { handOverMatchEventsOfFormerStaff } from '@module/helpers/calendar/calendarCascade';
-import { checkDisplayName, checkUsername } from '@module/helpers/identity/usernames';
+import { checkDisplayName, checkNewUsername } from '@module/helpers/identity/usernames';
 import { syncLeaderboardCard } from '@module/helpers/stats/leaderboardRebuild';
 import { syncSoloTeamNames } from '@module/helpers/tournament/tournamentHelpers';
 import { auditUpdate } from '@module/helpers/admin/auditColumns';
@@ -841,9 +841,12 @@ export const admin_update_user = spacetimedb.reducer(
         // S10r (A122(1), L1): a user pending deletion (deletedAt set by an admin deletion or a ban) is not edited.
         if (user.deletedAt) throw new SenderError(`User #${userId} is pending deletion.`);
 
-        // S10r (A122(1), L1): the same name rules as the player's own rename (trim, non-empty, 32 characters).
+        // S10r (A122(1), L1): the same name rules as the player's own rename. S14.5s (A226 item 2): a CHANGED username
+        // follows the new shared rule (checkNewUsername); the user's current name passes unchanged, so an edit of the
+        // display name or role keeps a name the rule would refuse today. No rate limit for staff.
         const newDisplayName = checkDisplayName(displayName);
-        const newUsername = checkUsername(username);
+        const trimmedUsername = username.trim();
+        const newUsername = trimmedUsername === user.username ? trimmedUsername : checkNewUsername(username);
 
         // Validate role tag
         validateEnum('userRole', roleTag, ctx, 'User');

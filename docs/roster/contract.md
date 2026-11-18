@@ -406,6 +406,33 @@ admin_upsert_archetype, admin_delete_archetype, admin_assign_character_archetype
 **When:** Any admin_* reducer called
 **Then:** Throws "Admin"
 
+### Staff UID Correction (Phase S14.5s execution, A226 item 4)
+
+#### Staff Correct a UID
+**Given:** A game account, not selected in any lobby; a Moderator or Admin
+**When:** They call `mod_update_hsr_account_uid(hsrAccountId, uid)` with a valid UID
+**Then:** The account's UID changes and its region follows the new first digit. Its last-modified columns name the staff member; a log line records the old and new UID. The owner's own edit still has no UID field.
+
+#### Not Staff
+**Given:** A player (the owner included), a Tournament Host or a guest; or a suspended staff member
+**When:** They call `mod_update_hsr_account_uid`
+**Then:** "Forbidden: Requires Moderator or Admin privileges." (the suspended staff member: "Your account is suspended."). Nothing changes.
+
+#### Invalid or Unchanged UID
+**Given:** A staff member
+**When:** The UID is not 9 digits, or starts with a digit other than 6 to 9; or the account does not exist; or the UID is the current one
+**Then:** "UID must be exactly 9 digits" / "Invalid UID: first digit must be 6, 7, 8, or 9" / "HSR account not found"; the current UID is a no-op that writes nothing.
+
+#### Duplicate UID after a Correction
+**Given:** Account B shares its UID with account A; account C holds another UID
+**When:** Staff change B's UID to C's
+**Then:** Allowed, as on creation: B and C are both flagged as duplicates, and A loses the flag (its UID now has one holder).
+
+#### Account in Use
+**Given:** The account is selected in a lobby (any stage; an abandoned membership does not lock)
+**When:** Staff call `mod_update_hsr_account_uid`
+**Then:** "This account is selected in active lobby <join code>; its roster cannot be edited until the player's membership in that lobby ends or the lobby closes." Nothing changes. A tournament account lock does not block the correction.
+
 ## Edge Cases
 
 | Case | Expected Behavior | Notes |
@@ -455,6 +482,7 @@ admin_upsert_archetype, admin_delete_archetype, admin_assign_character_archetype
 | Phase 15.5 verify-work: provenance entry added documenting that the `view_public_hsr_accounts` identifier propagated to the Integration Surface table during Plan 04 (commit `28d59f9`). No roster code or behavior change in Phase 15.5 — pure identifier follow-through | Phase 15.5 verify-work | 2026-04-17 |
 | `displayLabel` is at most 32 characters in the user and admin account reducers. Deleting a user recomputes the duplicate-UID flag of the accounts that shared a UID with the deleted ones | Phase S10f execution (backend audit 2026-11-09, roster findings 5, 6) | 2026-11-09 |
 | Admin roster edits share the lobby lock of the owner's reducers (D-24): refused while the account is selected in an active lobby; an abandoned membership does not lock | Phase S10w execution (DECISIONS.md A142) | 2026-11-10 |
+| Staff UID Correction: Staff Correct a UID, Not Staff, Invalid or Unchanged UID, Duplicate UID after a Correction, Account in Use. User decision: A226 item 4 (the UID fixed for the owner; a Moderator or Admin can correct it). Execution choices: the name `mod_update_hsr_account_uid` (the `mod_` prefix of `mod_promote_to_host`), no server variant, the current UID as a no-op, the tournament account lock not checked, the old and new UID in the log line | Phase S14.5s execution (DECISIONS.md A226) | 2026-11-18 |
 
 ---
 

@@ -2199,6 +2199,23 @@ export const PickPayload = __t.object("PickPayload", {
 });
 export type PickPayload = __Infer<typeof PickPayload>;
 
+export const PlayerCardRow = __t.object("PlayerCardRow", {
+  relation: __t.string(),
+  userId: __t.u32(),
+  displayName: __t.string(),
+  username: __t.string(),
+  avatarCharacterName: __t.string(),
+  displayedAchievementId: __t.option(__t.u32()),
+  mmrByMode: __t.array(__t.u32()),
+  globalRating: __t.option(__t.u32()),
+  activeAccountRating: __t.option(__t.u32()),
+  accountCount: __t.u32(),
+  matches: __t.u32(),
+  wins: __t.u32(),
+  losses: __t.u32(),
+});
+export type PlayerCardRow = __Infer<typeof PlayerCardRow>;
+
 export const PlayerCharacterStat = __t.object("PlayerCharacterStat", {
   userId: __t.u32(),
   characterName: __t.string(),
@@ -3024,6 +3041,17 @@ export const UserSuspension = __t.object("UserSuspension", {
 });
 export type UserSuspension = __Infer<typeof UserSuspension>;
 
+export const UserUsernameRate = __t.object("UserUsernameRate", {
+  userId: __t.u32(),
+  windowStart: __t.timestamp(),
+  changeCount: __t.u32(),
+  createdById: __t.u32(),
+  createdDate: __t.timestamp(),
+  lastModifiedById: __t.u32(),
+  lastModifiedDate: __t.timestamp(),
+});
+export type UserUsernameRate = __Infer<typeof UserUsernameRate>;
+
 export const ViewAdminAbuseConfig = __t.object("ViewAdminAbuseConfig", {});
 export type ViewAdminAbuseConfig = __Infer<typeof ViewAdminAbuseConfig>;
 
@@ -3214,6 +3242,9 @@ export type ViewMyMmrHistory = __Infer<typeof ViewMyMmrHistory>;
 
 export const ViewMyMmrRatings = __t.object("ViewMyMmrRatings", {});
 export type ViewMyMmrRatings = __Infer<typeof ViewMyMmrRatings>;
+
+export const ViewMyPlayerCards = __t.object("ViewMyPlayerCards", {});
+export type ViewMyPlayerCards = __Infer<typeof ViewMyPlayerCards>;
 
 export const ViewMyPlayerStats = __t.object("ViewMyPlayerStats", {});
 export type ViewMyPlayerStats = __Infer<typeof ViewMyPlayerStats>;

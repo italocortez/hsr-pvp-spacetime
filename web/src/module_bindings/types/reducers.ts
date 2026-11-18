@@ -111,6 +111,7 @@ import ManualAwardAchievementReducer from "../manual_award_achievement_reducer";
 import MigrateRosterReducer from "../migrate_roster_reducer";
 import ModDemoteFromHostReducer from "../mod_demote_from_host_reducer";
 import ModPromoteToHostReducer from "../mod_promote_to_host_reducer";
+import ModUpdateHsrAccountUidReducer from "../mod_update_hsr_account_uid_reducer";
 import NominateCharacterReducer from "../nominate_character_reducer";
 import OverrideMatchResultReducer from "../override_match_result_reducer";
 import PassBidReducer from "../pass_bid_reducer";
@@ -303,6 +304,7 @@ export type ManualAwardAchievementParams = __Infer<typeof ManualAwardAchievement
 export type MigrateRosterParams = __Infer<typeof MigrateRosterReducer>;
 export type ModDemoteFromHostParams = __Infer<typeof ModDemoteFromHostReducer>;
 export type ModPromoteToHostParams = __Infer<typeof ModPromoteToHostReducer>;
+export type ModUpdateHsrAccountUidParams = __Infer<typeof ModUpdateHsrAccountUidReducer>;
 export type NominateCharacterParams = __Infer<typeof NominateCharacterReducer>;
 export type OverrideMatchResultParams = __Infer<typeof OverrideMatchResultReducer>;
 export type PassBidParams = __Infer<typeof PassBidReducer>;

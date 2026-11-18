@@ -150,7 +150,7 @@ Views 10-20 apply anonymous enforcement (D-92): when `lobby.isAnonymousPlayers=t
 | `identityViews.ts` | view_my_identity, view_my_profile, view_public_hsr_accounts, view_admin_user_private | 4 |
 | `costSetViews.ts` | view_my_cost_sets, view_my_draft_character_costs, view_my_draft_lightcone_costs, view_my_draft_synergy_costs (+ view_cost_set_missing S10i, view_published_cost_sets S11a) | 6 |
 | `statsViews.ts` | view_my_player_stats, view_my_character_stats | 2 |
-| `socialViews.ts` | view_my_relationships, view_my_roster_visibility, view_my_roster | 3 |
+| `socialViews.ts` | view_my_relationships, view_my_roster_visibility, view_my_roster (+ view_my_player_cards S14.5s) | 4 |
 | `matchViews.ts` | view_my_match_steps, view_my_match_participants | 2 |
 | `matchHistoryViews.ts` | view_match_history, view_match_participant_history, view_match_step_history + 5 new `view_my_*_history` | 8 |
 | `tournamentViews.ts` | 7 existing tournament views | 7 |
@@ -590,6 +590,16 @@ A suspended caller reads every per-caller view as a visitor with no account ([su
 - `spacetimedb/src/__tests__/identity/suspension-structure.test.ts` pins where a view may read `ctx.sender` (only through the shared helpers, `view_my_suspension` and the `LinkRequest` read of `view_my_link_request`); a new view that resolves its caller itself fails it.
 - Anonymous views and public tables are unchanged.
 
+## Phase S14.5s execution (DECISIONS.md A226 items 2, 5, 6, 7)
+
+| View | File | Scope | Row | Anonymity | Indexes |
+|---|---|---|---|---|---|
+| `view_my_player_cards` (new) | socialViews | per-sender (`callerUserId`: a suspended or unmapped caller gets `[]`) | `PlayerCardRow` (PK `relation`: `BestAlly` / `Nemesis`, two rows at most): userId, displayName, username, avatarCharacterName, displayedAchievementId?, mmrByMode, globalRating?, activeAccountRating?, accountCount, matches, wins, losses | the carded player identified (finished matches, A37); no audit ids; deleted and pending-deletion players skipped | `UserIdentity.identity`, `UserSuspension.userId`, `Season.is_active`, `PlayerRelationship.by_user`, `User.id`, `MmrRating.by_user_mode_season`, `EloConfigTable.id`, `HsrAccount.user_id` |
+
+Selection, the Global rating, the read set and what re-sends the rows: [../player-stats/architecture.md](../player-stats/architecture.md) "Phase S14.5s execution". Unlike `view_my_relationships`, a ranked match of a partner who is not carded sends nothing.
+
+`view_user_by_username(username)` is unchanged and serves the profile's "is this name taken" check while typing (one row or none, exact match on the unique index); how the page uses it: [../auth/architecture.md](../auth/architecture.md) "Phase S14.5s execution".
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -637,6 +647,7 @@ A suspended caller reads every per-caller view as a visitor with no account ([su
 | `view_my_loadouts` rows gain `rev` (u32, the loadout's version, 4 B a row); `firstRev` stays private | Phase S14.3c-rev execution (DECISIONS.md A198) | 2026-11-17 |
 | Every per-caller view answers a suspended caller as a visitor (`callerUserId` / `callerMapping`, the local copies and inline caller reads routed through them); new `view_my_suspension` | Phase suspension-s1 execution (DECISIONS.md A195, A213, A214) | 2026-11-17 |
 | Fix pass: new `view_admin_suspensions` (Admin only, the suspended accounts with reason and suspending account); a structural test pins the caller reads | Phase suspension-s1 execution (DECISIONS.md A214, A215) | 2026-11-17 |
+| New `view_my_player_cards` (`socialViews.ts`): the caller's Best Ally and Nemesis cards; `view_user_by_username` named as the username availability check (unchanged) | Phase S14.5s execution (DECISIONS.md A226) | 2026-11-18 |
 ---
 
 *Last updated: 2026-11-17 (S14.3s)*

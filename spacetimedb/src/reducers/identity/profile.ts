@@ -4,7 +4,8 @@ import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { performUserDeletion } from '@module/helpers/identity/userDeletionHelper';
 import { membershipHold } from '@module/helpers/lobby/lobbyHelpers';
 import { syncSoloTeamNames } from '@module/helpers/tournament/tournamentHelpers';
-import { checkDisplayName, checkUsername } from '@module/helpers/identity/usernames';
+import { checkDisplayName, checkNewUsername, consumeUsernameChangeAllowance } from '@module/helpers/identity/usernames';
+import { usernameTakenText } from '@shared/identity';
 import { syncLeaderboardCard } from '@module/helpers/stats/leaderboardRebuild';
 import { ensureNotInMaintenance } from '@module/helpers/identity/ensurePermissions';
 import { ensureNotSuspended } from '@module/helpers/identity/suspension';
@@ -106,14 +107,16 @@ export const update_display_name = spacetimedb.reducer({
 /**
  * Update the caller's username.
  * Only verified (non-guest) users with a linked Discord can change their username.
- * Uniqueness is enforced by the database constraint.
+ *
+ * S14.5s (A226 item 2): the new name follows the shared rule (checkNewUsername: Discord's form, 2 to 32 characters,
+ * reserved names refused; the web's form runs the same function from @shared/identity). The caller's own current name
+ * (trimmed) is a no-op that writes and counts nothing, so an existing name the rule would refuse is never re-checked.
+ * "Taken" is one read of the unique User.username index (exact, case-sensitive). The old name is free at once. Last,
+ * the change counts on the caller's username window (3 per hour, consumeUsernameChangeAllowance).
  */
 export const update_username = spacetimedb.reducer({
     newUsername: t.string(),
 }, (ctx, { newUsername }) => {
-    // S10r (A122(1)): the name rules live in checkUsername, shared with admin_update_user.
-    const trimmed = checkUsername(newUsername);
-
     const resolved = resolveUser(ctx);
     if (!resolved) {
         throw new SenderError('User not found — login first');
@@ -122,15 +125,16 @@ export const update_username = spacetimedb.reducer({
         throw new SenderError('Guest users cannot change their username. Link your Discord account first.');
     }
 
+    if (newUsername.trim() === resolved.user.username) return;
+    const trimmed = checkNewUsername(newUsername);
+
     // Pre-check uniqueness. Without this the unique-index violation surfaces
     // to the client as the opaque "The instance encountered a fatal error."
-    if (trimmed !== resolved.user.username) {
-        const existing = ctx.db.User.username.find(trimmed);
-        if (existing) {
-            throw new SenderError(`Username "${trimmed}" is already taken.`);
-        }
+    if (ctx.db.User.username.find(trimmed)) {
+        throw new SenderError(usernameTakenText(trimmed));
     }
 
+    consumeUsernameChangeAllowance(ctx, resolved.user.id);
     ctx.db.User.id.update(updateWithAudit(ctx, resolved.user, {
         username: trimmed,
     }, resolved.user.id));

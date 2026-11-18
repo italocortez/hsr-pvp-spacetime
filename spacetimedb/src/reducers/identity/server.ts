@@ -712,6 +712,7 @@ export const server_nuke_test_data = spacetimedb.reducer({
     ctx.db.HsrAccount.clear();
     ctx.db.UserLoadout.clear(); // S14.3s
     ctx.db.UserLoadoutRate.clear(); // S14.3s-limit
+    ctx.db.UserUsernameRate.clear(); // S14.5s
 
     // ── User achievements (keep Achievement/AchievementCriteria seed data)
     ctx.db.UserAchievement.clear();

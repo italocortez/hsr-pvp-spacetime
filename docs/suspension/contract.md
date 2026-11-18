@@ -145,6 +145,7 @@ How each of the 80 views is covered. "callerUserId" means the shared helper in `
 | socialViews | view_my_relationships, view_my_roster | callerUserId |
 | socialViews | view_my_roster_visibility | callerMemberships |
 | loadoutViews | view_my_loadouts | callerUserId |
+| socialViews | view_my_player_cards (Phase S14.5s execution) | callerUserId |
 | costSetViews | view_my_cost_sets, view_my_draft_character_costs, view_my_draft_lightcone_costs, view_my_draft_synergy_costs, view_cost_set_missing | callerUserId |
 | costSetViews | view_published_cost_sets | anonymous |
 | calendarViews | view_my_calendar_events, view_my_calendar_invites, view_my_availability, view_saved_calendar_availability, view_my_saved_calendars, view_event_attendees | callerUserId |
@@ -310,6 +311,7 @@ The lobby rows written here (lobby, member rows, chat lines) carry the SYSTEM ac
 | Fix pass: the sign-in refusal tests every user holding the Discord id (review M9) | Phase suspension-s1 execution | 2026-11-17 |
 | Fix pass: `view_admin_suspensions` (Admin only, through `staffCaller`; an account pending deletion gives no row; "SYSTEM" as the username for actor 0) and `manage-user suspended`; the open question closed with option (a) | Phase suspension-s1 execution | 2026-11-17 |
 | Fix pass: `manage-user` refuses extra positional arguments, a repeated `--reason` and a reason over 500 UTF-16 units (the dry run too) (review S1, M4) | Phase suspension-s1 execution | 2026-11-17 |
+| The new `view_my_player_cards` resolves its caller through `callerUserId` (a suspended caller gets no rows); a suspended player is still shown on other people's cards; `update_username` and `mod_update_hsr_account_uid` refuse a suspended caller through `resolveUser` / `ensureModerator` (DECISIONS.md A226) | Phase S14.5s execution | 2026-11-18 |
 | Fix pass: a structural test pins where the module source reads `.sender` (review S2) | Phase suspension-s1 execution | 2026-11-17 |
 
 ---

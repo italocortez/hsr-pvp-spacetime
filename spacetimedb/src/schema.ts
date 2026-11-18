@@ -3,6 +3,7 @@ import { User } from '@module/tables/identity/user';
 import { UserPresence } from '@module/tables/identity/userPresence';
 import { LinkRequest } from '@module/tables/identity/linkRequest';
 import { UserSuspension } from '@module/tables/identity/userSuspension';
+import { UserUsernameRate } from '@module/tables/identity/userUsernameRate';
 import { DeletedUser } from '@module/tables/identity/deletedUser';
 import { BanRecord } from '@module/tables/admin/banRecord';
 import { UserIdentity } from '@module/tables/identity/userIdentity';
@@ -143,6 +144,7 @@ const spacetimedb = schema({
     ServerIdentity,
     LinkRequest,
     UserSuspension,         // suspension-s1 (A195, A213, A214): the suspended accounts; private
+    UserUsernameRate,       // S14.5s (A226 item 2): the username change window; private
 
     // Static Assets
     HsrCharacter,

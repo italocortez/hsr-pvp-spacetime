@@ -139,6 +139,7 @@ import ManualAwardAchievementReducer from "./manual_award_achievement_reducer";
 import MigrateRosterReducer from "./migrate_roster_reducer";
 import ModDemoteFromHostReducer from "./mod_demote_from_host_reducer";
 import ModPromoteToHostReducer from "./mod_promote_to_host_reducer";
+import ModUpdateHsrAccountUidReducer from "./mod_update_hsr_account_uid_reducer";
 import NominateCharacterReducer from "./nominate_character_reducer";
 import OverrideMatchResultReducer from "./override_match_result_reducer";
 import PassBidReducer from "./pass_bid_reducer";
@@ -300,6 +301,7 @@ import ViewMyMatchSessionRow from "./view_my_match_session_table";
 import ViewMyMatchStepsRow from "./view_my_match_steps_table";
 import ViewMyMmrHistoryRow from "./view_my_mmr_history_table";
 import ViewMyMmrRatingsRow from "./view_my_mmr_ratings_table";
+import ViewMyPlayerCardsRow from "./view_my_player_cards_table";
 import ViewMyPlayerStatsRow from "./view_my_player_stats_table";
 import ViewMyProfileRow from "./view_my_profile_table";
 import ViewMyRelationshipsRow from "./view_my_relationships_table";
@@ -970,6 +972,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, ViewMyMmrRatingsRow),
+  viewMyPlayerCards: __table({
+    name: 'view_my_player_cards',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, ViewMyPlayerCardsRow),
   viewMyPlayerStats: __table({
     name: 'view_my_player_stats',
     indexes: [
@@ -1282,6 +1291,7 @@ const reducersSchema = __reducers(
   __reducerSchema("migrate_roster", MigrateRosterReducer),
   __reducerSchema("mod_demote_from_host", ModDemoteFromHostReducer),
   __reducerSchema("mod_promote_to_host", ModPromoteToHostReducer),
+  __reducerSchema("mod_update_hsr_account_uid", ModUpdateHsrAccountUidReducer),
   __reducerSchema("nominate_character", NominateCharacterReducer),
   __reducerSchema("override_match_result", OverrideMatchResultReducer),
   __reducerSchema("pass_bid", PassBidReducer),
@@ -1518,6 +1528,8 @@ type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "ta
     readonly "view_my_mmr_history": Omit<typeof tablesSchema.schemaType.tables["viewMyMmrHistory"], "accessorName"> & { readonly accessorName: "view_my_mmr_history" };
     /** @deprecated Use `viewMyMmrRatings` instead. This alias will be removed in the next major version. */
     readonly "view_my_mmr_ratings": Omit<typeof tablesSchema.schemaType.tables["viewMyMmrRatings"], "accessorName"> & { readonly accessorName: "view_my_mmr_ratings" };
+    /** @deprecated Use `viewMyPlayerCards` instead. This alias will be removed in the next major version. */
+    readonly "view_my_player_cards": Omit<typeof tablesSchema.schemaType.tables["viewMyPlayerCards"], "accessorName"> & { readonly accessorName: "view_my_player_cards" };
     /** @deprecated Use `viewMyPlayerStats` instead. This alias will be removed in the next major version. */
     readonly "view_my_player_stats": Omit<typeof tablesSchema.schemaType.tables["viewMyPlayerStats"], "accessorName"> & { readonly accessorName: "view_my_player_stats" };
     /** @deprecated Use `viewMyProfile` instead. This alias will be removed in the next major version. */
@@ -1666,6 +1678,7 @@ const tableAccessorAliases = {
   "view_my_match_steps": "viewMyMatchSteps",
   "view_my_mmr_history": "viewMyMmrHistory",
   "view_my_mmr_ratings": "viewMyMmrRatings",
+  "view_my_player_cards": "viewMyPlayerCards",
   "view_my_player_stats": "viewMyPlayerStats",
   "view_my_profile": "viewMyProfile",
   "view_my_relationships": "viewMyRelationships",
@@ -1859,6 +1872,8 @@ export type Tables = __TablesBase & {
   readonly "view_my_mmr_history": __TablesBase["viewMyMmrHistory"];
   /** @deprecated Use `viewMyMmrRatings` instead. This alias will be removed in the next major version. */
   readonly "view_my_mmr_ratings": __TablesBase["viewMyMmrRatings"];
+  /** @deprecated Use `viewMyPlayerCards` instead. This alias will be removed in the next major version. */
+  readonly "view_my_player_cards": __TablesBase["viewMyPlayerCards"];
   /** @deprecated Use `viewMyPlayerStats` instead. This alias will be removed in the next major version. */
   readonly "view_my_player_stats": __TablesBase["viewMyPlayerStats"];
   /** @deprecated Use `viewMyProfile` instead. This alias will be removed in the next major version. */

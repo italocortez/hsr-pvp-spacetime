@@ -105,6 +105,18 @@ All mirror user variants with `ensureAdmin(ctx)` and `targetUserId` parameter (n
 - `admin_batch_upsert_characters(hsrAccountId, charactersJson)` -- refused for a selected account (A142, Phase S10w below)
 - `admin_batch_remove_characters(hsrAccountId, characterNamesJson)` -- same (A142)
 
+### mod_update_hsr_account_uid(hsrAccountId, uid) -- staff UID correction (Phase S14.5s execution, A226 item 4)
+`ensureModerator` (Moderator or Admin; a suspended or deleted staff member is refused by `getAuthenticatedUser`). The owner's `update_hsr_account` still takes no UID: the UID stays fixed for the owner. In `reducers/roster/rosterAdmin.ts`; no server variant (none of the file's neighbours has one).
+1. `HsrAccount.id.find` (missing: "HSR account not found")
+2. `validateUid(uid)` and `deriveRegion(uid)`, as `create_hsr_account` ("UID must be exactly 9 digits", "Invalid UID: first digit must be 6, 7, 8, or 9")
+3. The same UID as now: no-op, nothing written
+4. `ensureAccountRosterEditable` (S10w, A142): refused while the account is selected in a lobby (`accountLobbyLocks`: a non-abandoned membership's `LobbyMemberAccount` row), with the Admin roster refusal naming the lobby's join code. A tournament account lock (`TournamentPlayerAccount`) is not checked
+5. Update `uid` and `region` (`updateWithAudit`, actor the staff member)
+6. Duplicate handling as on creation: a UID other accounts hold is allowed and flagged; `recalcDuplicateUid` runs for the old UID (its other holders may lose the flag) and for the new one
+7. Log line `[ROSTER] HSR account #<id> of user #<owner>: UID <old> changed to <new> by staff user #<staff>`
+
+Behaviour: [contract](contract.md) "Staff UID Correction".
+
 ### Phase 12.3: rosterMutations.ts helpers and lobby guards
 
 New file `spacetimedb/src/helpers/roster/rosterMutations.ts` exports two helpers that
@@ -249,6 +261,7 @@ for their roster while the rows stay for the match (`docs/lobby/architecture.md`
 | Fix pass: the Admin roster refusal says the lock lasts until the membership ends or the lobby closes (an away player stays locked) | Phase S10w execution (DECISIONS.md A142; S10w review F3) | 2026-11-10 |
 | Team builder loadouts in the roster folders (`UserLoadout`, docs/loadout); `ensureVerifiedUser` optional message; deletion cascade and wipe include `UserLoadout` | Phase S14.3s execution (DECISIONS.md A190) | 2026-11-17 |
 | Loadout versions: `rev`/`firstRev` on `UserLoadout`, `revFloor` on `UserLoadoutRate`, `baseRev` on both loadout reducers (docs/loadout) | Phase S14.3c-rev execution (DECISIONS.md A198) | 2026-11-17 |
+| `mod_update_hsr_account_uid` (Moderator+): creation's UID checks and duplicate handling, refused for an account selected in a lobby (A142 lock), audit and log line | Phase S14.5s execution (DECISIONS.md A226 item 4) | 2026-11-18 |
 
 ---
 

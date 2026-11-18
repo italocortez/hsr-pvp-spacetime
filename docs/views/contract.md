@@ -696,6 +696,7 @@ _Superseded in Phase S9a execution (DECISIONS.md A37): the public history views 
 | The staff views and `view_tournament_registrant_accounts` count an assistant only with at least one permission | Phase S10s execution (DECISIONS.md A122(21)) | 2026-11-10 |
 | `view_my_tournament_stand_ins` (staff: organizer, assistants with at least one permission, Moderator and above; unfinished tournaments): match, team, stand-in, approver, approval time. `view_tournament_matches_for_me` includes the open matches a user stands in for | Phase S10v execution (DECISIONS.md A135) | 2026-11-10 |
 | New views: `view_admin_users` (staff), `view_published_cost_sets` (everyone, published sets only). `User` and `CostSet` are private. No view returns another user's provider id or name, link time, role, guest flag or deletion state to a caller below Moderator (test `identity/user-private`) | Phase S11a execution (DECISIONS.md A77; triage L91) | 2026-11-12 |
+| New `view_my_player_cards`: at most two rows (Best Ally, Nemesis) of the caller's own; a suspended or unmapped caller gets none; scenarios in the player-stats contract "Best Ally and Nemesis Cards". `view_user_by_username` is the username availability check while typing (auth contract "Is the Name Free While Typing"); unchanged. User decisions: A226 items 2, 5 to 7 | Phase S14.5s execution (DECISIONS.md A226) | 2026-11-18 |
 
 ---
 

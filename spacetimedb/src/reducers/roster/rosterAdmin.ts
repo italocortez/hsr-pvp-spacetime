@@ -1,6 +1,6 @@
 import spacetimedb from '@module/schema';
 import { t, SenderError } from 'spacetimedb/server';
-import { ensureAdmin } from '@module/helpers/identity/ensurePermissions';
+import { ensureAdmin, ensureModerator } from '@module/helpers/identity/ensurePermissions';
 import { auditInsert, auditUpdate } from '@module/helpers/admin/auditColumns';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { validateUid, deriveRegion, recalcDuplicateUid, ensureDisplayLabelLength } from '@module/helpers/roster/rosterHelpers';
@@ -68,6 +68,36 @@ export const admin_update_hsr_account = spacetimedb.reducer(
             isRosterPublic,
             isRatingPublic,
         }, admin.id));
+    }
+);
+
+// ─── mod_update_hsr_account_uid ───────────────────────────────────────────────
+// S14.5s (A226 item 4): staff correct the UID of any game account when its owner asks; the UID stays fixed for the
+// owner (update_hsr_account takes none). Moderator or Admin. The new UID gets the creation checks (validateUid,
+// region derived again) and the creation's duplicate handling: a UID another account holds is allowed and flagged,
+// and isDuplicateUid is recomputed for the holders of the old and of the new UID (recalcDuplicateUid). Refused while
+// the account is selected in a live lobby (ensureAccountRosterEditable, S10w / A142, as the Admin roster edits).
+// The same UID as now is a no-op. Audit columns carry the staff member; one log line.
+
+export const mod_update_hsr_account_uid = spacetimedb.reducer(
+    { hsrAccountId: t.u32(), uid: t.string() },
+    (ctx, { hsrAccountId, uid }) => {
+        const staff = ensureModerator(ctx);
+
+        const account = ctx.db.HsrAccount.id.find(hsrAccountId);
+        if (!account) throw new SenderError('HSR account not found');
+
+        validateUid(uid);
+        const region = deriveRegion(uid);
+        if (uid === account.uid) return;
+        ensureAccountRosterEditable(ctx, hsrAccountId);
+
+        const oldUid = account.uid;
+        ctx.db.HsrAccount.id.update(updateWithAudit(ctx, account, { uid, region }, staff.id));
+        recalcDuplicateUid(ctx, oldUid, staff.id);
+        recalcDuplicateUid(ctx, uid, staff.id);
+
+        console.log(`[ROSTER] HSR account #${hsrAccountId} of user #${account.userId}: UID ${oldUid} changed to ${uid} by staff user #${staff.id}`);
     }
 );
 

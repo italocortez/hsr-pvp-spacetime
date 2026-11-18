@@ -133,6 +133,26 @@ reads: `docs/match-results/architecture.md`, "Phase S10k execution".
 
 - **Concede in the confirm window (S10t review F2, A129).** The D-79 matrix in `finalizationHelpers.ts` treats a concede or forfeit made while the draft is complete but the lobby still in Drafting (the confirm window, A129 / A130) like an Equipping concede: for a Ranked match the character stats (`PlayerCharacterStat`, `GlobalCharacterStat`) are counted, as they were for the same moment before A129, when a complete draft was already in Equipping. The test is `concedeAtStage === 'Drafting' && !isDraftComplete(lobby, session)` (`helpers/draft/draftComplete.ts`; the session and lobby rows still exist at that point of finalization). `concedeAtStage` stays the literal stage ("Drafting"). A concede mid-draft still skips them. Details: [../match-results/architecture.md](../match-results/architecture.md) "Phase S10t execution".
 
+## Phase S14.5s execution (DECISIONS.md A226 items 5, 6, 7): the Best Ally and Nemesis cards
+
+New per-caller view `view_my_player_cards` (`views/socialViews.ts`; no new table). Row `PlayerCardRow`, at most two:
+
+| Column | Meaning |
+|---|---|
+| `relation` (PK, string) | `BestAlly` or `Nemesis`; one row each at most, so the client gets `onUpdate` |
+| `userId`, `displayName`, `username`, `avatarCharacterName`, `displayedAchievementId?` | the carded player (the username is the handle; the title is the displayed achievement) |
+| `mmrByMode` | the active season's rating per mode, `[MemoryOfChaos, ApocalypticShadow, AnomalyArbitration]`, `EloConfig.initialRating` for a mode not played (as `mmrByModeOf`) |
+| `globalRating?` | "Global MMR": `MmrRating.globalCompositeRating` of the active season, which finalization stores on each of the season's rows (A102: the rounded average of the player's rated modes of that season, played modes only). Unset before the player's first rated match of the season. The web must not average `mmrByMode` itself (that array fills unplayed modes with the initial rating) |
+| `activeAccountRating?` | `accountRating` of the player's game account flagged `isActive` (A226 item 5: always shown on a card); unset when no account is active (none, or none flagged) |
+| `accountCount` | the number of the player's game accounts |
+| `matches`, `wins`, `losses` | the caller's side: together (BestAlly) or against (Nemesis), summed over the active season |
+
+**Selection.** The caller's `PlayerRelationship` rows of the active season (`seasonId` 0 when none is active, as finalization writes) are summed per other player over game mode, draft mode, match type and team size. Best ally: the most `winsAsAlly` among players with `matchesAsAlly >= 3` (`PLAYER_CARD_MIN_MATCHES`); nemesis: the most losses against (`matchesAsOpponent - winsAsOpponent`) among players with `matchesAsOpponent >= 3`. A count of 0 never qualifies. Ties: fewer shared matches first (the higher rate), then the lower user id. A candidate with no `User` row (deleted) or with `deletedAt` set (pending deletion after an admin deletion or a ban) is skipped and the next one is taken; with no candidate left the row is absent. A suspended player is shown (no other view hides a suspended player from others). One player can be both rows. A guest partner shows with their guest name and 0 accounts.
+
+**Caller.** `callerUserId`: a suspended caller or an unmapped identity gets `[]` (no `.sender` read of its own; the `suspension-structure.test.ts` allow-list is unchanged). Relationships are aggregates of finished matches, whose identities the participants already know (A37); outside a lobby there is no anonymity setting.
+
+**Read set and egress.** Index reads only: `UserIdentity.identity` and `UserSuspension` (through `callerUserId`), `Season.is_active`, `PlayerRelationship.by_user` (the caller's rows of every season, filtered in the body; the table has no index with a season prefix), then for each carded player only `User.id`, `MmrRating.by_user_mode_season` (three reads), `EloConfigTable.id` (only for an unplayed mode) and `HsrAccount.user_id`; plus `User.id` of each skipped deleted candidate. The server re-evaluates the view when a table it reads changes and sends only rows that differ (reasoned from the view diff, not yet measured: the dev egress meter after a publish confirms it), so the two rows reach the client again only when (a) a match the caller finished changes the totals of a carded player or changes who is carded, (b) a carded player's name, handle, avatar, title, active-season rating, active account rating, active flag or account count changes, or (c) the active season changes. A rating change of any other partner sends nothing. By contrast, `view_my_relationships` carries every partner's `otherMmrByMode` on every one of that partner's rows (one per mode, draft mode, match type, team size and season), so each partner's ranked match re-sends all of that partner's rows to the caller; the card view avoids that. Size: two rows of about 80 bytes plus the strings.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -150,6 +170,7 @@ reads: `docs/match-results/architecture.md`, "Phase S10k execution".
 | A Classic timer pick credits the whole acting team with "played" | Phase S10i execution (DECISIONS.md A106) | 2026-11-10 |
 | A Ranked concede in the confirm window counts the character stats (the complete draft is treated like Equipping) | Phase S10t execution (DECISIONS.md A129, review F2) | 2026-11-10 |
 | "Played" follows ownership (owners on the owning side; lone player when nobody owns it; nobody in a 2+ side) for picks, timer picks and sales | Phase S10k execution (DECISIONS.md A110) | 2026-11-10 |
+| `view_my_player_cards`: Best Ally and Nemesis cards from the caller's active-season relationships (3-match threshold, ties by fewer matches then lower id, deleted and pending-deletion players skipped), with the card's ratings, active account rating and account count | Phase S14.5s execution (DECISIONS.md A226 items 5, 6, 7) | 2026-11-18 |
 
 ---
 

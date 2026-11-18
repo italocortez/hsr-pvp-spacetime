@@ -596,6 +596,34 @@ Account suspension; the feature's own docs are [suspension architecture](../susp
 - New server reducers `server_suspend_user(username, reason)` and `server_lift_suspension(username)` (`requireServer`, actor SYSTEM; `manage-user suspend` / `unsuspend`).
 - `client_connected` is unchanged: a suspended identity connects and reads as a visitor.
 
+## Phase S14.5s execution (DECISIONS.md A226 item 2): username changes
+
+Behaviour scenarios: [contract](contract.md) "Username changes (Phase S14.5s execution)".
+
+**The rule for a new username** lives in `shared/identity/username.ts` (barrel `@shared/identity`), imported by the module and by the web's profile form, so both run the same `usernameRuleError(raw)`: trimmed; lowercase letters a to z, digits, underscore and period; 2 to 32 characters; no two periods in a row; not reserved (`system`, `admin`, `administrator`, `moderator`, `mod`, `staff`, `support`, `guest`, and every name starting with `guest_`). Before S14.5s nothing was reserved; the SYSTEM user was guarded only by name in `admin_update_user`, `server_set_role` and `server_delete_user`. The module wraps the function in `checkNewUsername` (`helpers/identity/usernames.ts`; replaces S10r's `checkUsername`, whose empty and over-32 texts are kept).
+
+| Path | Rule | Taken check | Rate limit |
+|---|---|---|---|
+| `update_username` (verified user, own name) | `checkNewUsername` when the trimmed name differs from the current one; the current name is a no-op that writes and counts nothing | `User.username.find(name)` (the unique index, one read, exact and case-sensitive) | `consumeUsernameChangeAllowance`, last |
+| `admin_update_user` (Admin) | `checkNewUsername` only when the username changes (it already shared the player's rename rules, A122(1)); the current name passes unchanged | the same index read (unchanged) | none |
+| `login_as_guest` | not applied: `Guest_<last 8 hex>` via `uniqueUsername` (unchanged) | `uniqueUsername` | none |
+| `confirm_link` (guest upgrade, `applyProviderLink`) | not applied: the Discord handle as sent, through `cleanProviderName` and `uniqueUsername` (unchanged) | `uniqueUsername` | none |
+
+The old name is free at once (the row is updated in place; nothing holds the old value). Guests are refused as before; a suspended caller gets "Your account is suspended." (`resolveUser`).
+
+**New private table `user_username_rate`** (`UserUsernameRate`, `tables/identity/userUsernameRate.ts`): `userId` (PK), `windowStart`, `changeCount`, the audit columns. One row per user, created on the first accepted change; a fixed window of one hour holding at most 3 changes (`USERNAME_CHANGES_PER_WINDOW`, `USERNAME_CHANGE_WINDOW_MS` in `@shared/identity`; constants, not `AbuseConfig` columns, so the publish stays additive). The fourth change in the window is refused with "You can change your username 3 times per hour. Try again later." and nothing changes. No view reads the table; `performUserDeletion` deletes the row and `server_nuke_test_data` clears the table. Abuse estimate: a script at the limit writes one `User` row 3 times an hour (72 a day); each write re-sends the caller's `view_my_profile` row and any row that denormalizes the username (`view_user_by_username` for a subscriber of that exact name), a few hundred bytes per change, well under 1 TeV a month per account.
+
+**Existing names are not rewritten.** Where names that the rule would refuse can still come from:
+
+1. Guests: `Guest_<hex8>` (upper-case G). No new name can collide with one, even case-insensitively: upper case is refused and `guest_` is a reserved prefix.
+2. The SYSTEM user: `SYSTEM`; `system` is reserved.
+3. A Discord link: the handle exactly as Discord sends it (the auth function sends `username`, never `global_name`). Current Discord handles already follow the rule, but an account Discord has not migrated can carry upper case, spaces and other characters, and `uniqueUsername` may append `_2`. Unchanged in this step.
+4. Names written before S14.5s by `update_username` or `admin_update_user` (only trimmed and capped then).
+
+**Case residue.** `User.username` is unique and case-sensitive. A new lowercase name is checked by exact match, so it is accepted beside an existing mixed-case twin (`erinx` beside `ErinX`); after this step only paths 3 and 4 can produce such a twin. A case-insensitive check would need an index on a lowercased key: a new column on `User` (a breaking publish, not done) or a new private key table (`username_key`, lowercased name to user id, filled by every writer and once for the existing rows by a server reducer). Neither is built in this step.
+
+**Availability while typing** needs no new view: the existing anonymous `view_user_by_username(username)` answers "is this exact name taken" with at most one row, read from the same unique index. The web subscribes `SELECT * FROM view_user_by_username('<name>')` for one name at a time (unsubscribe the old name first; a short pause after typing), only for a name that passes `usernameRuleError` and is not the caller's own. A row means taken. One row is about 60 to 100 bytes (id, username, display name, avatar name, optional title), plus the subscribe and unsubscribe messages. Two gaps, both closed by the module at Save: a user pending deletion (`deletedAt`, at most about 5 s) returns no row while the name is still held, and the view is exact-match, so it shares the case residue above.
+
 ## Phase History
 
 | Decision | Source | Date |
@@ -646,6 +674,7 @@ Account suspension; the feature's own docs are [suspension architecture](../susp
 | `performUserDeletion` ends with `removeDeletedUserFromLeaderboard` (the user's `Leaderboard` rows of every season go; the active season is rebuilt when it held one); `client_connected` admits a live Admin under maintenance mode; `login_as_guest` and the profile reducers (`resolveUser`) refuse a non-Admin under maintenance mode | Phase S11a execution (DECISIONS.md A163(1), A163(3)) | 2026-11-12 |
 | `performUserDeletion` also deletes the user's `UserLoadoutRate` row (the loadout save window; docs/loadout/architecture.md) | Phase S14.3s execution, S14.3s-limit (DECISIONS.md A194 item 6) | 2026-11-17 |
 | Account suspension: `user_suspension`; the check in `getAuthenticatedUser`, `resolveUser`, `login_as_guest`, `request_link_code`, `confirm_link`; the sign-in refusal in `planProviderLink`; `server_suspend_user` / `server_lift_suspension`; deleted by `performUserDeletion` and the nuke (docs/suspension/) | Phase suspension-s1 execution (DECISIONS.md A195, A213, A214) | 2026-11-17 |
+| Username changes: the shared rule `@shared/identity` (Discord's form, 2 to 32, reserved names) in `update_username` and, for a changed name, `admin_update_user`; the current name is a no-op; new private `user_username_rate` (3 changes per hour, `update_username` only), deleted with the user and by the nuke; existing names not rewritten; the case residue and `view_user_by_username` as the availability check documented | Phase S14.5s execution (DECISIONS.md A226 item 2) | 2026-11-18 |
 
 ---
 

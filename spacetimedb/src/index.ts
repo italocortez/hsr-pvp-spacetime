@@ -73,6 +73,7 @@ export {
     view_my_relationships,
     view_my_roster_visibility,
     view_my_roster,
+    view_my_player_cards,                   // S14.5s (A226 items 5, 6): Best Ally and Nemesis cards
 } from '@module/views/socialViews';
 export { view_my_loadouts } from '@module/views/loadoutViews'; // S14.3s
 export {
@@ -136,7 +137,7 @@ export { admin_seed_rating_config, admin_update_rating_config, admin_recalculate
 export { run_user_deletion } from '@module/reducers/identity/userDeletion';
 export { create_hsr_account, update_hsr_account, set_active_hsr_account, delete_hsr_account, batch_upsert_characters, batch_remove_characters, migrate_roster } from '@module/reducers/roster/roster';
 export { save_loadout, delete_loadout } from '@module/reducers/roster/userLoadouts'; // S14.3s
-export { admin_create_hsr_account, admin_update_hsr_account, admin_delete_hsr_account, admin_batch_upsert_characters, admin_batch_remove_characters, admin_upsert_archetype, admin_delete_archetype, admin_assign_character_archetypes, admin_remove_character_archetypes } from '@module/reducers/roster/rosterAdmin';
+export { admin_create_hsr_account, admin_update_hsr_account, admin_delete_hsr_account, admin_batch_upsert_characters, admin_batch_remove_characters, admin_upsert_archetype, admin_delete_archetype, admin_assign_character_archetypes, admin_remove_character_archetypes, mod_update_hsr_account_uid } from '@module/reducers/roster/rosterAdmin';
 export { create_cost_set, edit_draft_character_cost, edit_draft_lightcone_cost, edit_draft_synergy_cost, publish_cost_set, lock_cost_set, unpublish_cost_set, delete_cost_set } from '@module/reducers/roster/costSetManagement';
 export { create_tournament, update_tournament, advance_tournament_stage, cancel_tournament, admin_cancel_idle_tournaments, admin_restart_tournament_finalize } from '@module/reducers/tournament/tournamentManagement';
 export { check_in_tournament } from '@module/reducers/tournament/tournamentCheckIn';

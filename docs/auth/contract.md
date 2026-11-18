@@ -506,6 +506,53 @@ The entries below describe the sign-in rebuilt in M5a to M5b. Flow, windows and 
 **When:** They click "Link this account" in the first tab
 **Then:** The click checks that tab's stale cache, so it can link the second flow's account under the first handle. Accepted as documented: no attacker can cause it. Closing it needs `confirm_link` to take the expiry the page saw.
 
+### Username changes (Phase S14.5s execution, A226 item 2)
+
+#### Change the Username
+**Given:** A verified user, not suspended
+**When:** They call `update_username` with a name that passes the rule and that no other account holds
+**Then:** The trimmed name is stored at once; their old name is free for anyone at once. The change counts on their hourly limit.
+
+#### The Rule for a New Username
+**Given:** A verified user
+**When:** The new name, after trimming, is empty, longer than 32 or shorter than 2 characters, uses anything but a to z, 0 to 9, underscore and period, has two periods in a row, or is reserved (`system`, `admin`, `administrator`, `moderator`, `mod`, `staff`, `support`, `guest`, or starts with `guest_`)
+**Then:** Refused, in this order of checks: "Username cannot be empty", "Username must be 32 characters or fewer", "Username must be at least 2 characters", "Username can use only lowercase letters a to z, digits, underscore and period", "Username cannot contain two periods in a row", "That username is reserved". Nothing changes and nothing is counted. The web's form runs the same function (`@shared/identity`).
+
+#### Name Taken
+**Given:** Another account holds exactly that name
+**When:** The user saves it
+**Then:** "Username "<name>" is already taken." Nothing changes and nothing is counted. The check is an exact, case-sensitive match on the unique index.
+
+#### Same Name Again
+**Given:** A user whose current name may be one the rule refuses today (an older name)
+**When:** They save their current name (after trimming)
+**Then:** Nothing is written and nothing is counted; no rule check runs.
+
+#### Too Many Changes
+**Given:** A user who changed their name 3 times in the hour since their window opened
+**When:** They change it again
+**Then:** "You can change your username 3 times per hour. Try again later." The name stays. Once the hour since the window opened has passed, the next change opens a new window.
+
+#### Guests and Suspended Users
+**Given:** A guest, or a suspended user
+**When:** They call `update_username`
+**Then:** The guest gets "Guest users cannot change their username. Link your Discord account first."; the suspended user "Your account is suspended." Nothing changes.
+
+#### Admin Rename
+**Given:** An Admin edits a user with `admin_update_user`
+**When:** The username changes
+**Then:** The new name follows the same rule and the taken check; staff renames do not count on the player's limit. When the username sent is the user's current one, it passes unchanged even if the rule would refuse it, so the display name and role of a user with an older name stay editable.
+
+#### Existing Names
+**Given:** Names from before this step (guest names `Guest_<hex8>`, `SYSTEM`, Discord handles taken at sign-in, older renames)
+**When:** The step is published
+**Then:** Nothing is rewritten. A Discord sign-in still takes the handle as Discord sends it. Because the taken check is case-sensitive, a new lowercase name can sit beside an older mixed-case twin (`erinx` beside `ErinX`); a lookalike of a guest name or of `SYSTEM` cannot be chosen (upper case refused, `guest_` and `system` reserved).
+
+#### Is the Name Free While Typing
+**Given:** The profile form
+**When:** The user pauses typing a name that passes the rule and is not their own
+**Then:** The page subscribes `view_user_by_username('<name>')`: one row means taken, none means free at that moment. The module decides at Save (a user pending deletion still holds the name for a few seconds while the view shows no row).
+
 ## Edge Cases
 
 | Case | Expected Behavior | Notes |
@@ -606,3 +653,4 @@ The entries below describe the sign-in rebuilt in M5a to M5b. Flow, windows and 
 | The second lock: presentation stores a pending link and the token hash and changes no account; one presentation per code; 2-minute confirm window; `confirm_link` by the requesting identity links; no link during maintenance (settles A175(9)). User decision: A176 item 1 (the two-step link). Execution choices (A176 item 1): the 2-minute window, no attempt counter, a new request drops a pending one, the view shows the pending name but never the id or hash and hides unusable rows; bidi and zero-width characters stripped from names | Phase M5a2 execution (DECISIONS.md A176) | 2026-11-13 |
 | The Linker identity (Owner registers and revokes; only it presents; refused by every other reducer and at connect under maintenance; connect and disconnect write nothing); `server_link_provider` removed; a second sign-in on a linked account refused. User decisions: A177 items 1 to 4 (narrow key, direct link removed, sign-in to an account pending deletion left as is, guest-creation switch left for now). Execution choice: A177 item 6 (bootstrap keeps the Linker). Open: A177 item 5 (the link token can sign in as any Discord-linked account) | Phase M5a3 execution (DECISIONS.md A177) | 2026-11-13 |
 | The login function and the sign-in page: `start` and `callback` rules, cancelled, refused and failed outcomes, the confirm step on an explicit click, the changed-in-another-tab and too-long states, a signed-in user sent on. User decisions: A178 items 1 and 2, A179 (the panel lede; the orchestrator's recommendations accepted, including the two-tab window and the link-token limit for test1). Execution choices, confirmed by A179(2): A178 items 3 to 8 (wording, fixed `AUTH_ORIGIN` and prod-only target, `SameSite=Strict`, refusal display rule, lobby id rule, two-tab window). The lobby id rule (A178(7)) is not an auth behaviour and is left out of this contract. Contract entries for M5a to M5b written after the real Discord test | Phase M5b execution (DECISIONS.md A178, A179) | 2026-11-14 |
+| Username changes: Change the Username, The Rule for a New Username, Name Taken, Same Name Again, Too Many Changes, Guests and Suspended Users, Admin Rename, Existing Names, Is the Name Free While Typing. User decisions: A226 item 2 (verified users only, not taken, Discord's form, reserved names, a short-term limit, the old name free at once, "taken" while typing). Execution choices: the reserved list as the step brief named it (nothing was reserved before), 3 changes per hour, the current name as a no-op, the Admin rename under the same rule only for a changed name and without the limit, existing names and the Discord sign-in left as they are | Phase S14.5s execution (DECISIONS.md A226) | 2026-11-18 |
