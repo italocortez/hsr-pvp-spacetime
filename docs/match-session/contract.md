@@ -969,6 +969,11 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 **When:** Blue's captain bans a second DPS character
 **Then:** Rejected: "Ban restriction: your team may ban at most one DPS character."; a Support ban is accepted; Red's own first DPS ban is unaffected. MaxTwoDps allows two DPS bans per team; MaxOnePerRole rejects a second ban of any role. When Blue's ban timer expires with autoRandomPick on, the auto-ban draws only characters Blue may still ban (SKIP when none).
 
+### Ban Restriction: Max 1 Support, Max 1 Sustain (Phase S14.4r execution, A221 item 4)
+**Given:** A Classic lobby, ban mode Six, `banRestriction = MaxOneSupport` (or `MaxOneSustain`); Blue already banned one Support (Sustain) character this game
+**When:** Blue's captain bans a second Support (Sustain) character
+**Then:** Rejected: "Ban restriction: your team may ban at most one Support character." ("... at most one Sustain character."). Red's own first Support (Sustain) ban is unaffected; a DPS ban and a ban of the other of the two roles are accepted; the SKIP ban of an expired turn, an EMPTY pick and names without a character row do not count. When Blue's ban timer expires with autoRandomPick on, the auto-ban skips a second Support (Sustain) and draws a legal character, or records SKIP when none is left.
+
 ### Eidolon Edit in Scoring Recomputes and Resets Both Confirmations (Phase S7b execution, A60(1)(2))
 **Given:** a Classic Bo3 lobby in Scoring, game 1 open; Blue drafted Blue-1 at E0 (Classic cost 2 at E0, 5 at E2); both teams' group scores are in and the Red captain has confirmed the game (`MatchResultGame.redConfirmed = true`)
 **When:** a Blue player calls `set_eidolon(lobbyId, Blue, 'blue-1', 2)`
@@ -1211,6 +1216,8 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(3))._
 | The `ArrangeLineup` step variant and `MatchSessionStep.anonymousLabel` are removed; the step view computes the label | Phase S11a execution (DECISIONS.md triage L39) | 2026-11-12 |
 | No light cone on an empty pick: `equip_lightcone` on `EMPTY` (a Classic `EMPTY` pick or an Auction `EMPTY` sale) is refused with "A light cone cannot be equipped on an empty pick."; nothing is written and no budget moves. A real pick of the same team still takes a light cone | Phase S14.3s execution (DECISIONS.md A191 item 4) | 2026-11-17 |
 | A light cone equipped on `EMPTY` before the rule stays until `unequip_lightcone` removes it, which still works on `EMPTY` and refunds its cost (implementer's choice: no data migration; none exist on prod) | Phase S14.3s execution | 2026-11-17 |
+| Scenario "Ban Restriction: Max 1 Support, Max 1 Sustain" added: two restrictions, one Support (one Sustain) ban per team per game, enforced like Max 1 DPS in `ban_character` and the timer-expiry auto-ban | Phase S14.4r execution (DECISIONS.md A221 item 4) | 2026-11-17 |
+| Refusal texts "Ban restriction: your team may ban at most one Support character." / "... at most one Sustain character." (implementer's choice: the wording Max 1 per role already uses for those roles) | Phase S14.4r execution | 2026-11-17 |
 
 ---
 

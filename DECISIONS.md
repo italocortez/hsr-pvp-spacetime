@@ -2283,3 +2283,26 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   3. The unused `HudChip` component is deleted (follows A218).
 - **Why:** user, 2026-11-17: "you can delete HudChip and we can go with your recommendation on landing them on the home page"; then, after the explanation of the flash, "we can leave the flash as is".
 - **Where implemented:** `web/src/auth/signOut.ts`, `web/src/stdb/SuspensionGate.tsx`; `docs/frontend/pages.md` (SUS2)
+
+### A220 — CI: split the test suites into parallel jobs once a run reaches 6 minutes
+
+- **Date:** 2026-11-17 · **Status:** decided; not yet due
+- **Decision:** The CI workflow stays one job for now. When a run reaches about 6 minutes, the three test suites (unit, in-memory module, web) become parallel jobs. Measured on 2026-11-18 (UTC): a run takes 4 min 40 s, of which the tests take 4 min 13 s. The repository is public, so the minutes cost nothing; the point is waiting time only. Orchestrator: the loadout card messages other than the choices and the deleted notice stay in the card (user, same day: "we can leave the card messages as you recommended, they are okay").
+- **Why:** user, 2026-11-17: "we can split once we reach 6 minutes"
+- **Where implemented:** not yet; `.github/workflows/ci.yml` when due
+
+### A221 — Landing page (S14.4): the user's rulings on the dialogs
+
+- **Date:** 2026-11-17 · **Status:** decided; not built
+- **Decision:** (the orchestrator's eight questions from `tmp/landing/research.md`; the user agreed with each recommendation except R4)
+  1. R1: the bar's "Sign in" opens the sign-in dialog on every page. The full-screen sign-in page stays for the guards' redirects and for the return from Discord.
+  2. R2: the dialog has a "Continue as Guest" button, showing the backend's guest name. A visitor who presses "Play Now" becomes a guest automatically, so nobody is refused.
+  3. R3: creating a lobby works now. The person lands on the lobby placeholder, which shows the join code and a "Leave lobby" button, until the lobby room page exists (S14.7).
+  4. R4: the two ban restrictions the mockup has and the backend lacks, "Max 1 support" and "Max 1 sustain", are added to the backend. This extends A45 item 2 from four options to six.
+  5. R5: the seven backend settings the mockup lacks (lineup format, spectator count, confirm window, mirror picks, random auto-pick, hide MMR, team names) all go into Advanced Settings, with the backend's defaults.
+  6. R6: the tournament match picker is left out of the landing page's dialog; tournament lobbies come with the tournaments page.
+  7. R7: presets are "Default Classic" and "Default Auction" built into the page, plus the system preset and the person's own.
+  8. R8: defaults follow the other pages: Apocalyptic Shadow, Auction budgets 30 and 15; the rest as the mockup.
+  9. Look questions L1 (hero under the bar or below it), L2 (create dialog on phones) and L3 (Advanced as a second dialog or an expanding section) are decided on A/B pages.
+- **Why:** user, 2026-11-17: "I agree with your rulings except for R4, we need to add those ban restrictions to the backend. and I also agree with your A/B versions for me to check"
+- **Where implemented:** not yet. Sub-steps: S14.4a static page, S14.4r ban restrictions (backend), S14.4b sign-in dialog, S14.4c create dialog, S14.4d Advanced Settings.

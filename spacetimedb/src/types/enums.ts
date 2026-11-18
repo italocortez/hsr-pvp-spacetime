@@ -270,12 +270,15 @@ export const BracketDecision = t.enum('BracketDecision', {
     Staff: t.unit(),
 });
 
-// A45(2): the mockup's four ban-restriction options, enforced per team in ban_character using HsrCharacter.role.
+// A45(2), A221(4): the mockup's six ban-restriction options, enforced per team in ban_character using HsrCharacter.role.
 export const BanRestriction = t.enum('BanRestriction', {
     NoRestriction: t.unit(),
     MaxOneDps: t.unit(),
     MaxTwoDps: t.unit(),
     MaxOnePerRole: t.unit(),
+    // A221(4): appended, never inserted (a published column type; a prefix-preserving append migrates in place)
+    MaxOneSupport: t.unit(),
+    MaxOneSustain: t.unit(),
 });
 
 // A45(3): shuffle_teams modes, the lobby room's Random Swap / Team Swap buttons (lobbyroom.html #randomSwap, #teamSwap).

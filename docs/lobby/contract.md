@@ -1076,6 +1076,11 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(2))._
 **When:** The host calls `update_lobby_settings` with `bestOf = 3`, then with `lineupFormat = Thirds`, then with `bestOfNAdvantage = Blue`, then with `refereeControlsShelving = false` and `banRestriction = MaxOnePerRole`
 **Then:** The first three are rejected ("bestOf is set by the tournament bracket and cannot be changed in a tournament lobby." / "lineupFormat is set by the tournament and cannot be changed in a tournament lobby." / "bestOfNAdvantage is set by the tournament bracket and cannot be changed in a tournament lobby."; the head start comes from the bracket, A27); the fourth is accepted (free set).
 
+### Ban Restriction Max 1 Support and Max 1 Sustain Are Settable (Phase S14.4r execution, A221 item 4)
+**Given:** A user in no lobby; a host of a lobby in Waiting; an Admin managing presets
+**When:** The user calls `create_lobby` with `banRestriction = MaxOneSupport`; the host calls `update_lobby_settings` with `banRestriction = MaxOneSustain`, then without the key; the Admin calls `create_lobby_preset` / `update_lobby_preset` with either value
+**Then:** Each is stored as given, like the four older values; an omitted key keeps the stored value. A tournament lobby takes the value from its preset. Enforcement during the draft: `docs/match-session/contract.md` "Ban Restriction: Max 1 Support, Max 1 Sustain".
+
 ### Cost Set Must Be Selectable and Cover the Mode (Phase S6 execution, backlog #2, D-D6)
 **Given:** Published cost set #5 with Classic rows for MemoryOfChaos only; published set #6 with no rows; set #7 locked
 **When:** A user calls `create_lobby` with set #6, with set #5 and `draftMode = Auction`, with set #7, with set #5 Classic, with set 0
@@ -1427,6 +1432,7 @@ _Superseded in Phase S8g execution (DECISIONS.md A70)._ Read "team1" as "the Blu
 | A return never lifts an automatic pause: neither `client_connected` nor the reconnect branch of `join_lobby` changes the pause or the frozen clock. The pause ends only through `resume_draft` (rules in `docs/match-session/contract.md`) | Phase S10aa execution (DECISIONS.md A151) | 2026-11-11 |
 | A lobby password contains only A to Z, a to z and 0 to 9 and is at most 20 characters ("The lobby password can have at most 20 characters.", "The lobby password can contain only letters A to Z and a to z and digits 0 to 9."); it is stored as a salted hash, never as text; `join_lobby` refuses a wrong or rule-breaking password with "Incorrect lobby password."; there is no limit on attempts | Phase S11a execution (DECISIONS.md A163(4); triage L24) | 2026-11-12 |
 | `broadcast_cursor` is dropped outside Drafting, Equipping and Scoring; its throttle stamp lives in the private table `LobbyCursorStamp`, so a cursor does not rewrite the member row (`LobbyMember.lastCursorAt` is removed). The lobby GC jobs: see the auth contract row on scheduled reducers | Phase S11a execution (DECISIONS.md triage L19) | 2026-11-12 |
+| Scenario "Ban Restriction Max 1 Support and Max 1 Sustain Are Settable" added: `create_lobby`, `update_lobby_settings` and the presets accept the two new `banRestriction` values | Phase S14.4r execution (DECISIONS.md A221 item 4) | 2026-11-17 |
 
 ---
 

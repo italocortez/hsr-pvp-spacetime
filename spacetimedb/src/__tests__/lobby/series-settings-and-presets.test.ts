@@ -335,3 +335,38 @@ describe('A33a: the system preset', () => {
         expect(tournaments(test)[0].lobbyPresetId).toBe(systemId);
     });
 });
+
+// T-S14.4r (A221(4)): the two appended ban restrictions are accepted wherever the older four are.
+describe('A221(4) (T-S14.4r): MaxOneSupport and MaxOneSustain on lobbies and presets', () => {
+    it('create_lobby stores MaxOneSupport; update_lobby_settings switches it to MaxOneSustain and back', () => {
+        const test = newHarness();
+        const solo = guest(test, 'solo');
+        tx(test, solo, (ctx) => M.create_lobby(ctx, { ...DEFAULT_LOBBY_ARGS, banRestriction: { tag: 'MaxOneSupport' } } as any));
+        const created = [...test.db.Lobby.iter()].find((x) => x.hostUserId === solo.userId)!;
+        expect(created.banRestriction.tag).toBe('MaxOneSupport');
+
+        const s = setupLobby(test, { noStart: true });
+        tx(test, s.host, (ctx) => M.update_lobby_settings(ctx, settingsArgs(s.lobbyId, { banRestriction: { tag: 'MaxOneSustain' } })));
+        expect(lobbyRow(test, s.lobbyId).banRestriction.tag).toBe('MaxOneSustain');
+        tx(test, s.host, (ctx) => M.update_lobby_settings(ctx, settingsArgs(s.lobbyId))); // omitted: kept
+        expect(lobbyRow(test, s.lobbyId).banRestriction.tag).toBe('MaxOneSustain');
+        tx(test, s.host, (ctx) => M.update_lobby_settings(ctx, settingsArgs(s.lobbyId, { banRestriction: { tag: 'MaxOneSupport' } })));
+        expect(lobbyRow(test, s.lobbyId).banRestriction.tag).toBe('MaxOneSupport');
+    });
+
+    it('a preset carries MaxOneSupport and MaxOneSustain; an update without the key keeps it', () => {
+        const test = newHarness();
+        tx(test, 'internal', (ctx) => M.create_lobby_preset(ctx, { ...PRESET_ARGS, name: 'sup', banRestriction: { tag: 'MaxOneSupport' } } as any));
+        tx(test, 'internal', (ctx) => M.create_lobby_preset(ctx, { ...PRESET_ARGS, name: 'sus', banRestriction: { tag: 'MaxOneSustain' } } as any));
+        expect(presetNamed(test, 'sup').banRestriction.tag).toBe('MaxOneSupport');
+        expect(presetNamed(test, 'sus').banRestriction.tag).toBe('MaxOneSustain');
+
+        const sup = presetNamed(test, 'sup');
+        tx(test, 'internal', (ctx) => M.update_lobby_preset(ctx, { ...PRESET_ARGS, presetId: sup.id, name: 'sup' } as any));
+        expect(presetNamed(test, 'sup').banRestriction.tag).toBe('MaxOneSupport');
+        tx(test, 'internal', (ctx) => M.update_lobby_preset(ctx, {
+            ...PRESET_ARGS, presetId: sup.id, name: 'sup', banRestriction: { tag: 'MaxOneSustain' },
+        } as any));
+        expect(presetNamed(test, 'sup').banRestriction.tag).toBe('MaxOneSustain');
+    });
+});

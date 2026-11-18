@@ -522,3 +522,127 @@ describe('A45(2): Ban Restriction', () => {
         expect(last.payload.tag === 'Ban' && last.payload.value.characterName).toBe('sup1');
     });
 });
+
+// ─── A221(4) (T-S14.4r): Max 1 Support, Max 1 Sustain ───────────────────────────────────────────────────────
+
+/** Plays filler steps (role-less names) until it is `team`'s Ban turn. */
+function playUntilBanTurn(s: Lobby, team: 'Blue' | 'Red') {
+    for (let guard = 0; guard < 40; guard++) {
+        const sess = session(s.test, s.lobbyId);
+        const step = sess.draftSequence[sess.turnIndex];
+        if (step.actionRequired.tag === 'Ban' && step.teamTurn.tag === team) return;
+        const actor = step.teamTurn.tag as 'Blue' | 'Red';
+        const filler = `f_${sess.turnIndex}`;
+        if (step.actionRequired.tag === 'Pick') pick(s, actor, filler); else ban(s, actor, filler);
+    }
+    throw new Error(`no Ban turn for ${team}`);
+}
+
+/** Lobby with autoRandomPick on and a ban pool of `pool` (the default set's Classic MoC cost rows), as in the A45(2) test. */
+function autoBanLobby(test: Harness, restriction: string, pool: string[]) {
+    tx(test, 'internal', (ctx) => {
+        for (const characterName of pool) {
+            ctx.db.HsrCharacterCost.insert({
+                characterName, gameMode: { tag: 'MemoryOfChaos' }, draftMode: { tag: 'Classic' },
+                costs: { e0: 1, e1: 1, e2: 1, e3: 1, e4: 1, e5: 1, e6: 1 }, costSetId: 0,
+                createdById: 0, createdDate: ctx.timestamp, lastModifiedById: 0, lastModifiedDate: ctx.timestamp,
+            } as any);
+        }
+    });
+    return setupLobby(test, {
+        lobby: { banMode: { tag: 'Four' }, banRestriction: { tag: restriction }, autoRandomPick: true },
+        beforeStart: (l) => { dropDefaultCostCoverage(test); tx(test, 'internal', (ctx) => {
+            for (const name of ['b1', 'b2', 'r1', 'r2']) {
+                const acct = ctx.db.HsrAccount.insert({
+                    id: 0, userId: l.a[name].userId, uid: '600000000', region: 'America', displayLabel: name,
+                    isActive: true, isRosterPublic: false, isRatingPublic: false, isDuplicateUid: false, accountRating: 0,
+                    createdById: 0, createdDate: ctx.timestamp, lastModifiedById: 0, lastModifiedDate: ctx.timestamp,
+                });
+                ctx.db.HsrAccountCharacter.insert({
+                    hsrAccountId: acct.id, characterName: pool[0], eidolonLevel: 0,
+                    createdById: 0, createdDate: ctx.timestamp, lastModifiedById: 0, lastModifiedDate: ctx.timestamp,
+                } as any);
+                ctx.db.LobbyMemberAccount.insert({ lobbyId: l.lobbyId, userId: l.a[name].userId, hsrAccountId: acct.id });
+            }
+        }); },
+    });
+}
+
+const lastBan = (test: Harness, lobbyId: number) => steps(test, lobbyId).filter((x) => x.action.tag === 'Ban').at(-1)!;
+
+describe.each([
+    { tag: 'MaxOneSupport', role: 'Support', other: 'Sustain' },
+    { tag: 'MaxOneSustain', role: 'Sustain', other: 'Support' },
+] as const)('A221(4) (T-S14.4r): $tag', ({ tag, role, other }) => {
+    const refusal = `Ban restriction: your team may ban at most one ${role} character.`;
+
+    it(`stores the restriction; the first ${role} ban is allowed, the second by the same team is refused; the other team and other roles are unaffected`, () => {
+        const test = newHarness();
+        seedRoles(test, { cap1: role, cap2: role, cap3: role, cap4: role, oth1: other, dps1: 'Dps' });
+        const s = setupLobby(test, { lobby: { banMode: { tag: 'Six' }, banRestriction: { tag } } });
+        expect(lobbyRow(test, s.lobbyId).banRestriction.tag).toBe(tag);
+
+        ban(s, 'Blue', 'cap1'); // Blue's first: allowed
+        ban(s, 'Red', 'cap2'); // Red's first: the other team is unaffected by Blue's
+        playUntilBanTurn(s, 'Red');
+        expectReject(test, captain(s, 'Red'), (ctx) =>
+            (priceBanNames(ctx, s.lobbyId, ['cap3']), M.ban_character(ctx, { lobbyId: s.lobbyId, characterName: 'cap3' })), refusal);
+        ban(s, 'Red', 'dps1'); // another role: allowed
+        playUntilBanTurn(s, 'Blue');
+        expectReject(test, captain(s, 'Blue'), (ctx) =>
+            (priceBanNames(ctx, s.lobbyId, ['cap4']), M.ban_character(ctx, { lobbyId: s.lobbyId, characterName: 'cap4' })), refusal);
+        ban(s, 'Blue', 'oth1'); // the other role (Support / Sustain) is not capped by this restriction
+        playUntilBanTurn(s, 'Blue');
+        expectReject(test, captain(s, 'Blue'), (ctx) =>
+            (priceBanNames(ctx, s.lobbyId, ['cap3']), M.ban_character(ctx, { lobbyId: s.lobbyId, characterName: 'cap3' })), refusal);
+        ban(s, 'Blue', 'unknown-name'); // no HsrCharacter row → no role → legal
+        const bans = steps(test, s.lobbyId).filter((x) => x.action.tag === 'Ban').map((x) => (x.payload.value as any).characterName);
+        expect(bans).toEqual(expect.arrayContaining(['cap1', 'cap2', 'dps1', 'oth1', 'unknown-name']));
+        expect(bans).not.toContain('cap3');
+        expect(bans).not.toContain('cap4');
+    });
+
+    it(`the SKIP ban and an EMPTY pick do not count toward the ${role} cap`, () => {
+        const test = newHarness();
+        seedRoles(test, { cap1: role, cap2: role });
+        const s = setupLobby(test, { lobby: { banMode: { tag: 'Six' }, banRestriction: { tag } } });
+        // Blue's first ban turn expires with autoRandomPick off: the SKIP sentinel.
+        advance(test, TURN_MS);
+        tx(test, s.host, (ctx) => M.timer_expiry_classic(ctx, { lobbyId: s.lobbyId }));
+        expect((lastBan(test, s.lobbyId).payload.value as any).characterName).toBe('SKIP');
+        ban(s, 'Red', 'r_ban');
+        tx(test, captain(s, 'Blue'), (ctx) => M.pick_character(ctx, { lobbyId: s.lobbyId, characterName: 'EMPTY', eidolon: 0 }));
+        playUntilBanTurn(s, 'Blue');
+        ban(s, 'Blue', 'cap1'); // the first real one: allowed
+        playUntilBanTurn(s, 'Blue');
+        expectReject(test, captain(s, 'Blue'), (ctx) =>
+            (priceBanNames(ctx, s.lobbyId, ['cap2']), M.ban_character(ctx, { lobbyId: s.lobbyId, characterName: 'cap2' })), refusal);
+    });
+
+    it(`the timer-expiry auto-ban (autoRandomPick) skips a second ${role} and draws a legal character`, () => {
+        const test = newHarness();
+        seedRoles(test, { capA: role, capB: role, dps1: 'Dps' });
+        const s = autoBanLobby(test, tag, ['capA', 'capB', 'dps1']);
+        ban(s, 'Blue', 'capA');
+        playUntilBanTurn(s, 'Blue');
+        // capB is unbanned but illegal for Blue, so only dps1 qualifies.
+        advance(test, 31_000);
+        tx(test, s.a.b1, (ctx) => M.timer_expiry_classic(ctx, { lobbyId: s.lobbyId }));
+        const last = lastBan(test, s.lobbyId);
+        expect(last.actorSlot.tag).toBe('Blue');
+        expect(last.payload.tag === 'Ban' && last.payload.value.characterName).toBe('dps1');
+    });
+
+    it(`the timer-expiry auto-ban falls back to SKIP when only a second ${role} is left`, () => {
+        const test = newHarness();
+        seedRoles(test, { capA: role, capB: role });
+        const s = autoBanLobby(test, tag, ['capA', 'capB']);
+        ban(s, 'Blue', 'capA');
+        playUntilBanTurn(s, 'Blue');
+        advance(test, 31_000);
+        tx(test, s.a.b1, (ctx) => M.timer_expiry_classic(ctx, { lobbyId: s.lobbyId }));
+        const last = lastBan(test, s.lobbyId);
+        expect(last.actorSlot.tag).toBe('Blue');
+        expect(last.payload.tag === 'Ban' && last.payload.value.characterName).toBe('SKIP');
+    });
+});

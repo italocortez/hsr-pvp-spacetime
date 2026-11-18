@@ -1,7 +1,8 @@
 // ─── A45(2): Ban Restriction, per team ──────────────────────────────────────────────────────────────────────
 // Lobby.banRestriction limits which characters ONE team may ban in the current game, by HsrCharacter.role:
 //   NoRestriction — anything; MaxOneDps — at most one Dps ban; MaxTwoDps — at most two Dps bans;
-//   MaxOnePerRole — at most one ban per role (Dps, Sustain, Support).
+//   MaxOnePerRole — at most one ban per role (Dps, Sustain, Support);
+//   MaxOneSupport — at most one Support ban; MaxOneSustain — at most one Sustain ban (A221(4)).
 // Counted over the team's Ban steps of the lobby's one game (A67(3)).
 // The SKIP / EMPTY sentinels and names without an HsrCharacter row carry no role and never count or violate.
 // Enforced by ban_character and respected by the timer-expiry auto-ban (timer_expiry_classic, both draft modes).
@@ -42,6 +43,13 @@ export function banRestrictionError(ctx: any, lobby: any, teamTag: string, chara
     }
     if (restriction === 'MaxOnePerRole' && banned.includes(role)) {
         return `Ban restriction: your team may ban at most one ${role} character.`;
+    }
+    // A221(4): one role capped at one ban, like MaxOneDps
+    if (restriction === 'MaxOneSupport' && role === 'Support' && banned.includes('Support')) {
+        return 'Ban restriction: your team may ban at most one Support character.';
+    }
+    if (restriction === 'MaxOneSustain' && role === 'Sustain' && banned.includes('Sustain')) {
+        return 'Ban restriction: your team may ban at most one Sustain character.';
     }
     return null;
 }

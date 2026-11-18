@@ -375,6 +375,8 @@ export const BanRestriction = __t.enum("BanRestriction", {
   MaxOneDps: __t.unit(),
   MaxTwoDps: __t.unit(),
   MaxOnePerRole: __t.unit(),
+  MaxOneSupport: __t.unit(),
+  MaxOneSustain: __t.unit(),
 });
 export type BanRestriction = __Infer<typeof BanRestriction>;
 
