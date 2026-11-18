@@ -206,9 +206,7 @@ export function LobbySettingsForm({
              * effect. "Custom" once one of them was edited: the label is never stale; picking a preset again re-applies it.
              */}
             <div className={styles.field}>
-                <div className={styles.labelRow}>
-                    <label htmlFor={fieldId('preset')}>{TEXT.preset}</label>
-                </div>
+                <LabelRow label={TEXT.preset} info={INFO.preset} htmlFor={fieldId('preset')} />
                 <select
                     id={fieldId('preset')}
                     className={styles.select}

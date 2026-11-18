@@ -6,6 +6,7 @@ import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHel
 import {
     ensureNotInLobby,
     ensureGuestRestrictions,
+    ensureGuestHostOwnership,
     ensureLobbyMember,
     ensureMemberPresentUnlessStaff,
     ensurePresentIfMember,
@@ -44,6 +45,7 @@ import { ensureLobbyPasswordRule, hashLobbyPassword, lobbyPasswordRuleError } fr
 // Creates a new lobby and inserts the creator as the host/referee.
 // Per D-22 / A68(4): enforces one lobby per user; an away membership is given up with abandonCurrentMatch.
 // Per D-23: guests cannot create Ranked lobbies.
+// S14.4u: a guest cannot create a lobby that requires ownership (ensureGuestHostOwnership).
 // Per D-24: host gets isReferee=true.
 // Per D-27: host joins as Spectator initially.
 // Per D-42: Ranked forces allowMirrorPicks=false.
@@ -119,6 +121,7 @@ export const create_lobby = spacetimedb.reducer(
 
         // D-23: guest restrictions
         ensureGuestRestrictions(user, args.matchType);
+        ensureGuestHostOwnership(user, args.requireOwnership); // S14.4u
 
         // A91(2): no Deferred outside tournaments; A92(3): NoAction only for casual lobbies; A92(2): grace 30-600 s.
         ensureNotDeferredOutsideTournament(args.disconnectPolicy.tag);

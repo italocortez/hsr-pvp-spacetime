@@ -882,6 +882,7 @@ The landing page's "Play Now" creates a lobby (A221 R2, R3): a visitor becomes a
   | "Cost Set", "Default" | cost set field | A185 item 6 |
   | "Settings Preset" | preset field | ★ (mockup "Advanced Settings Preset": a preset sets the main fields too) |
   | "Custom", "{preset} applied." | preset field, its polite read-out | ★ (S14.4c-fix) |
+  | "About Settings Preset"; "Settings Preset"; "A preset fills in every setting of the lobby in one step: the ones here and the ones in Advanced Settings. Your lobby name, password and team names are never changed."; "For a guest, Type stays Casual, Roster stays Closed No Rating and Require Ownership stays Off."; foot "Change any setting it filled in and this shows Custom. Default Classic and Default Auction are the site’s defaults, and Tournament default is the preset a tournament uses when it names none. Tournament Hosts, Moderators and Admins also see the presets saved on their account." | preset field's info mark (S14.4u) | the user's request of 2026-11-18, checked against the code by the builder: "Change any setting afterwards" became "Change any setting it filled in" (the name, password and team names do not make it Custom); the guest sentence added (a guest's forced values stay); the system preset named; "presets saved on your account" kept but limited to Tournament Hosts, Moderators and Admins (only they can save one, `create_lobby_preset`; no page saves one yet) |
   | "Advanced Settings" | footer button | ★ (mockup "Advanced"; the brief's name) |
   | the Advanced note above | body | ★ |
   | "Close" | close button's name | mockup |
@@ -935,7 +936,7 @@ Every advanced setting of `create_lobby` is a field of the shared lobby settings
   | Roster Threshold | points, no sign | `rosterThreshold` (u32 hundredths) | "cost" | 0 to 10000 | 0 | as above |
   | Under-Threshold Advantage | points | `underThresholdAdvantage` | the mode's | -10000 to 10000 | 0 | as above |
   | Above-Threshold Penalty | points | `aboveThresholdPenalty` | the mode's | -10000 to 10000 | 0 | as above |
-  | Require Ownership | Off / On | `requireOwnership` | | | Off | match. Not limited for guests: the module has no rule (a guest has no game account, so in such a lobby a guest could pick nothing; open point) |
+  | Require Ownership | Off / On | `requireOwnership` | | a guest host refused (S14.4u, `ensureGuestHostOwnership`) | Off | match. Not limited for guests: the module has no rule (a guest has no game account, so in such a lobby a guest could pick nothing; open point) _Superseded in S14.4u (user ruling 2026-11-18, option A): for a guest it shows Off with On unavailable and "Guests have no game account, so a guest's lobby cannot require ownership. Sign in with Discord to use it." (the Ranked mirror-picks pattern); `settleLobbySettings` keeps it Off (a preset that has it on is applied Off and the select still names the preset, as the forced roster does); `validateLobbySettings` gives "Guests cannot host a lobby that requires ownership." (the module's sentence, pinned); `toCreateLobbyArgs(…, { isGuest })` never sends true for a guest; the module refuses it in `create_lobby` and `update_lobby_settings`._ |
   | Standard Turn (s) | whole | `standardTurnSeconds` (u32) | s | 10 to 600 | 60 | mockup `min="0"` |
   | Reserve Bank (s) | whole | `reserveBankSeconds` (u32) | s | 0 to 1800 | 120 | match |
   | (none) | Confirm Window | `confirmWindowSeconds` (u32, optional) | s | 0 to 300 (0: no window) | 60 | R5 (A131), in Timers |
@@ -962,6 +963,8 @@ Every advanced setting of `create_lobby` is a field of the shared lobby settings
   | "Lineup Format", "Halves · 8 characters", "Thirds · 12 characters", "Blue Team Name", "Red Team Name", "Blue", "Red", "Mirror Picks", "Random Auto-Pick", "Confirm Window", "Hide MMR", "Spectators" | new fields | ★ |
   | "points", "cycles", "per cost", "cost", "s", "max" | units in the box | ★ |
   | "Auction draft only: a Classic lobby does not use these.", "Classic draft only: an Auction lobby does not use it.", "Ranked lobbies never allow mirror picks.", "No Action (Casual only)" | reasons | ★ |
+  | "Guests have no game account, so a guest's lobby cannot require ownership. Sign in with Discord to use it." | Require Ownership, guest reason (S14.4u) | ★ (the brief's example) |
+  | "Guests cannot host a lobby that requires ownership." | field error, the module's refusal (S14.4u) | ★ |
   | ", {n} setting(s) need(s) a fix" | footer button's name | ★ |
   | the range sentences of `validateLobbySettings`; the handicap ones lose "points" since the unit is the mode's; since S14.4d-fix the amount and handicap ones end "in steps of 0.01, with no thousands separator." and write their bounds without one ("The death penalty is -10000 to 10000, in steps of 0.01, with no thousands separator.") | field errors | ★ |
   | the reworded info texts of S14.4d-fix (Referee-Only Concede, Light Cone Budget, Spectators, Anonymous Spectators, Disconnect Policy, Confirm Window) | info panels | ★ |

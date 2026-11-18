@@ -46,6 +46,17 @@ export type InfoText = {
 };
 
 export const INFO = {
+    // S14.4u: the user's request of 2026-11-18, checked against applyLobbyPreset, lobbyPresetMatches and
+    // view_lobby_presets (the system preset reaches every signed-in user; own presets need TournamentHost+).
+    preset: {
+        label: 'About Settings Preset',
+        heading: 'Settings Preset',
+        body: [
+            'A preset fills in every setting of the lobby in one step: the ones here and the ones in Advanced Settings. Your lobby name, password and team names are never changed.',
+            'For a guest, Type stays Casual, Roster stays Closed No Rating and Require Ownership stays Off.',
+        ],
+        foot: 'Change any setting it filled in and this shows Custom. Default Classic and Default Auction are the site’s defaults, and Tournament default is the preset a tournament uses when it names none. Tournament Hosts, Moderators and Admins also see the presets saved on their account.',
+    },
     draftMode: {
         label: 'About Draft Mode',
         heading: 'Draft Mode',
@@ -185,6 +196,9 @@ export const ADVANCED_TEXT = {
     auctionLocked: 'Auction draft only: a Classic lobby does not use these.',
     classicLocked: 'Classic draft only: an Auction lobby does not use it.',
     rankedMirror: 'Ranked lobbies never allow mirror picks.',
+    // S14.4u: the module refuses it for a guest host (GUEST_OWNERSHIP_TEXT).
+    guestOwnership:
+        "Guests have no game account, so a guest's lobby cannot require ownership. Sign in with Discord to use it.",
     // The footer button's mark: how many advanced settings need a fix (read with the button's name).
     errorMark: (n: number) => `, ${n} ${n === 1 ? 'setting needs' : 'settings need'} a fix`,
 } as const;

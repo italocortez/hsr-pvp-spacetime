@@ -337,6 +337,63 @@ describe('lobby audit LOW #24: update_lobby_settings to Ranked with a guest memb
     });
 });
 
+// ════════════════════════════════════════════════════════════════════════════
+// T-S14.4u: a guest cannot host a lobby that requires ownership (user ruling, option A)
+// ════════════════════════════════════════════════════════════════════════════
+
+const GUEST_OWNERSHIP = 'Guests cannot host a lobby that requires ownership.';
+
+describe('S14.4u: a guest-hosted lobby cannot require ownership', () => {
+    it('create_lobby: a guest with requireOwnership is refused and no lobby is written; without it the guest creates', () => {
+        const test = newHarness();
+        const g = guest(test, 'g');
+        const msg = rejection(test, g, (ctx) => M.create_lobby(ctx, { ...DEFAULT_LOBBY_ARGS, requireOwnership: true } as any));
+        expect(msg).toBe(GUEST_OWNERSHIP);
+        expect([...test.db.Lobby.host_user_id.filter(g.userId)]).toHaveLength(0);
+        const id = createLobby(test, g);
+        expect(lobbyRow(test, id).requireOwnership).toBe(false);
+    });
+
+    it('create_lobby and update_lobby_settings: a verified host is unaffected, guests in the lobby included', () => {
+        const test = newHarness();
+        const h = verified(test, 'h');
+        const id = createLobby(test, h, { requireOwnership: true });
+        expect(lobbyRow(test, id).requireOwnership).toBe(true);
+        joinLobby(test, guest(test, 'g'), id);
+        tx(test, h, (ctx) => M.update_lobby_settings(ctx, settingsArgs(id, { requireOwnership: false })));
+        tx(test, h, (ctx) => M.update_lobby_settings(ctx, settingsArgs(id, { requireOwnership: true })));
+        expect(lobbyRow(test, id).requireOwnership).toBe(true);
+    });
+
+    it('update_lobby_settings: a guest host turning it on is refused with the row unchanged; a Moderator is refused for that lobby too', () => {
+        const test = newHarness();
+        const g = guest(test, 'g');
+        const id = createLobby(test, g);
+        const msg = rejection(test, g, (ctx) => M.update_lobby_settings(ctx, settingsArgs(id, { requireOwnership: true })));
+        expect(msg).toBe(GUEST_OWNERSHIP);
+        expect(lobbyRow(test, id).requireOwnership).toBe(false);
+        const mod = moderator(test, 'mod');
+        expect(rejection(test, mod, (ctx) => M.update_lobby_settings(ctx, settingsArgs(id, { requireOwnership: true })))).toBe(GUEST_OWNERSHIP);
+        expect(lobbyRow(test, id).requireOwnership).toBe(false);
+        tx(test, g, (ctx) => M.update_lobby_settings(ctx, settingsArgs(id, { requireOwnership: false, teamBlueAlias: 'Sharks' })));
+        expect(lobbyRow(test, id).teamBlueAlias).toBe('Sharks');
+    });
+
+    it('the host role handed to a guest in a lobby with ownership on: the hand-over stands, the lobby keeps it, and the guest host can only save it Off', () => {
+        const test = newHarness();
+        const h = verified(test, 'h');
+        const id = createLobby(test, h, { requireOwnership: true });
+        const g = guest(test, 'g');
+        joinLobby(test, g, id);
+        tx(test, h, (ctx) => M.transfer_host(ctx, { lobbyId: id, targetJoinSeq: seatOf(ctx, id, g.userId) }));
+        expect(lobbyRow(test, id).hostUserId).toBe(g.userId);
+        expect(lobbyRow(test, id).requireOwnership).toBe(true);
+        expect(rejection(test, g, (ctx) => M.update_lobby_settings(ctx, settingsArgs(id, { requireOwnership: true })))).toBe(GUEST_OWNERSHIP);
+        tx(test, g, (ctx) => M.update_lobby_settings(ctx, settingsArgs(id, { requireOwnership: false })));
+        expect(lobbyRow(test, id).requireOwnership).toBe(false);
+    });
+});
+
 // ─── Texts ───────────────────────────────────────────────────────────────────
 
 // S10r review F6: the four L17 reducers share the membership bucket but answer with a neutral text; joins and seat

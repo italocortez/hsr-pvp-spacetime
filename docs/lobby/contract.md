@@ -78,6 +78,7 @@ The lobby system manages the lifecycle of match rooms where players assemble, co
 | presetId > 0 but not found | "Preset not found." |
 | User already in a lobby (D-22) | "You are already in a lobby. Leave it before creating or joining another." |
 | Guest creating Ranked lobby (D-23) | "Guests cannot create or join Ranked lobbies." |
+| Guest creating a lobby with `requireOwnership=true` (Phase S14.4u execution) | "Guests cannot host a lobby that requires ownership." |
 | Join code collision after 10 retries | "Could not generate a unique join code. Please try again." |
 
 ---
@@ -343,6 +344,7 @@ _Superseded in Phase S8f execution (DECISIONS.md A68)._ A live-stage Leave trans
 | Lobby not found | "Lobby not found." |
 | Not host/mod/admin | "Only the host, moderators, or admins can perform this action." |
 | Not in Waiting stage (D-28) | "This action is not allowed in the current lobby stage ({stage})." |
+| `requireOwnership=true` while the lobby's host is a guest, lobby not tournament-controlled, whoever calls (Phase S14.4u execution) | "Guests cannot host a lobby that requires ownership." |
 
 ---
 
@@ -1121,6 +1123,11 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(2))._
 **When:** The host calls `create_lobby_preset` with `draftMode = Auction` and `characterBudget = 0` (or `minimumBidRaise = 0`); calls `update_lobby_preset` switching the Classic preset to Auction with either at 0, or setting an Auction preset's either to 0; calls `create_tournament` or `update_tournament` naming the old Auction row as `lobbyPresetId`; a member calls `create_tournament_lobby` for a tournament that already points at the old row
 **Then:** Each is refused with the lobby sentences: "characterBudget must be above 0 in an Auction lobby." / "minimumBidRaise must be above 0 in an Auction lobby."; nothing is written. A Classic preset with both at 0 saves. The old row is not rewritten and stays readable; the tournament that already points at it keeps pointing at it, and its lobby is refused until the preset is fixed.
 
+### Guest Host Cannot Require Ownership (Phase S14.4u execution, user ruling 2026-11-18, option A)
+**Given:** A guest in no lobby; a guest who hosts lobby #10 (ownership Off); a Moderator; a verified host of lobby #11 (ownership On) with a guest member
+**When:** The guest calls `create_lobby` with `requireOwnership = true`; the guest host, or the Moderator, calls `update_lobby_settings(10, …)` with `requireOwnership = true`; the verified host saves #11's settings with it On; the verified host hands the host role of #11 to the guest member (`transfer_host`), and the guest saves #11's settings
+**Then:** The create and both updates of #10 are refused: "Guests cannot host a lobby that requires ownership."; no lobby is written and #10 is unchanged. The verified host's save of #11 is accepted (guest members do not block it). The hand-over to the guest is accepted and #11 keeps ownership On; the guest's save with it On is refused, with it Off accepted. Tournament lobbies take the tournament's value and are not checked. The web form shows a guest Require Ownership Off with On unavailable and the reason, and sends it Off.
+
 ### Shuffle Teams (Phase S6 execution, A45(3))
 **Given:** A lobby in Waiting: b1, b2 Blue players, r1, r2 Red players, all confirmed; the host is a spectator
 **When:** The host calls `shuffle_teams(lobbyId, TeamSwap)`; later `shuffle_teams(lobbyId, RandomSwap)`
@@ -1460,6 +1467,7 @@ _Superseded in Phase S8g execution (DECISIONS.md A70)._ Read "team1" as "the Blu
 | Scenario "System Preset Is Playable in Both Draft Modes" added: the system preset's budgets are 30 and 15 (were 0 and 0, which left an Auction lobby unable to buy anything with a price) and its minimum raise 5 (was 20); an older row that no Admin edited is brought to the current values by the paths that ensure the preset | Phase S14.4s execution (user rulings 2026-11-18; values from DECISIONS.md A190 item 5, A221 R8) | 2026-11-18 |
 | Scenarios "Server Refreshes the System Preset" and "Auction Lobby Needs a Budget and a Minimum Raise" added: `server_refresh_system_preset` (server identities only); `create_lobby`, `update_lobby_settings` and `create_tournament_lobby` refuse an Auction lobby with a character budget or minimum raise of 0; Classic and presets are not checked | Phase S14.4s execution (user rulings 2026-11-18) | 2026-11-18 |
 | Scenario "Auction Preset Needs a Budget and a Minimum Raise" added and two error rows each on `create_lobby_preset` / `update_lobby_preset`: saving an Auction preset with a character budget or minimum raise of 0 is refused with the lobby sentences, and so is attaching such an older row in `create_tournament` / `update_tournament`; older rows are not rewritten and `create_tournament_lobby` keeps its check; the S14.4s "presets are not checked" sentence is marked superseded | Phase S14.4t execution (user ruling 2026-11-18; DECISIONS.md A224) | 2026-11-18 |
+| Scenario "Guest Host Cannot Require Ownership" and one error row each on `create_lobby` / `update_lobby_settings` added: a guest cannot create, and a guest-hosted lobby cannot be saved with, `requireOwnership` on ("Guests cannot host a lobby that requires ownership."); guest members, joins and the host hand-over are unchanged | Phase S14.4u execution (user ruling 2026-11-18, option A) | 2026-11-18 |
 
 ---
 

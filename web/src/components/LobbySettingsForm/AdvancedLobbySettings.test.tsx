@@ -1,4 +1,5 @@
 import {
+    applyLobbyPreset,
     BUILT_IN_PRESETS,
     initialLobbySettings,
     type LobbyFormRules,
@@ -20,6 +21,9 @@ import { AdvancedSettingsDialog } from './AdvancedSettingsDialog';
  */
 
 const MEMBER: LobbyFormRules = { isGuest: false, costSets: [] };
+const GUEST: LobbyFormRules = { isGuest: true, costSets: [] };
+const GUEST_OWNERSHIP_REASON =
+    "Guests have no game account, so a guest's lobby cannot require ownership. Sign in with Discord to use it.";
 
 type HostProps = {
     initial?: Partial<LobbySettings>;
@@ -218,6 +222,50 @@ describe('AdvancedLobbySettings', () => {
             screen.getByRole('combobox', { name: 'Disconnect Policy' }),
         ).getByRole('option', { name: 'No Action (Casual only)' });
         expect(noAction).toBeDisabled();
+    });
+
+    // T-S14.4u: a guest's lobby cannot require ownership (the module refuses it).
+    it('a guest: Require Ownership shows Off, On is unavailable with the visible reason, and a click changes nothing', async () => {
+        const user = userEvent.setup();
+        const values: LobbySettings[] = [];
+        render(
+            <Host
+                initial={initialLobbySettings(GUEST)}
+                onValue={(v) => values.push(v)}
+                extra={{ rules: GUEST }}
+            />,
+        );
+        const ownership = screen.getByRole('group', { name: 'Require Ownership' });
+        expect(within(ownership).getByRole('button', { pressed: true })).toHaveTextContent('Off');
+        const on = within(ownership).getByRole('button', { name: 'On' });
+        expect(on).toHaveAccessibleDescription(GUEST_OWNERSHIP_REASON);
+        expect(screen.getByText(GUEST_OWNERSHIP_REASON, { selector: 'p' })).toBeVisible();
+        await user.click(on);
+        expect(values.every((v) => v.requireOwnership === false)).toBe(true);
+        expect(within(ownership).getByRole('button', { pressed: true })).toHaveTextContent('Off');
+    });
+
+    it('a guest: a preset with Require Ownership on is applied Off and the note still names the preset', () => {
+        const [classic] = BUILT_IN_PRESETS;
+        if (!classic) throw new Error('built-ins');
+        const owned = {
+            key: 'preset:5',
+            label: 'Owned only',
+            values: { ...classic.values, requireOwnership: true },
+        };
+        const applied = applyLobbyPreset(initialLobbySettings(GUEST), owned, GUEST);
+        expect(applied.requireOwnership).toBe(false);
+        render(
+            <Host
+                initial={applied}
+                extra={{ rules: GUEST, presets: [owned], presetKey: owned.key }}
+            />,
+        );
+        expect(screen.getByText(/Settings Preset: Owned only\.$/)).toBeInTheDocument();
+        // A member keeps it on, and the note names the preset too.
+        expect(applyLobbyPreset(initialLobbySettings(MEMBER), owned, MEMBER).requireOwnership).toBe(
+            true,
+        );
     });
 
     it('an Auction raise of 0 is an error in an Auction lobby only (A224)', () => {

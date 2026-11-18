@@ -117,6 +117,8 @@ describe('LobbySettingsForm', () => {
                 .getAllByRole('button', { name: /^About / })
                 .map((b) => b.getAttribute('aria-label')),
         ).toEqual([
+            // T-S14.4u: the preset's info mark (user request, 2026-11-18).
+            'About Settings Preset',
             'About Draft Mode',
             'About Game Mode',
             'About Cost Set',
@@ -233,6 +235,24 @@ describe('LobbySettingsForm', () => {
         expect(preset).toHaveValue('builtin:auction');
         expect(screen.getByRole('combobox', { name: 'Team Size' })).toHaveValue('3');
         expect(within(preset).queryByRole('option', { name: 'Custom' })).toBeNull();
+    });
+
+    // T-S14.4u: the user's request of 2026-11-18.
+    it('the preset has an info mark that opens its panel: what a preset fills in, what it keeps, and Custom', () => {
+        render(<Host />);
+        const mark = screen.getByRole('button', { name: 'About Settings Preset' });
+        expect(mark).toHaveAttribute('aria-expanded', 'false');
+        fireEvent.click(mark);
+        expect(mark).toHaveAttribute('aria-expanded', 'true');
+        const panel = mark.nextElementSibling as HTMLElement;
+        expect(panel).not.toHaveAttribute('hidden');
+        expect(panel.querySelector('p')?.textContent).toBe('Settings Preset');
+        expect(panel.textContent).toContain(
+            'Your lobby name, password and team names are never changed.',
+        );
+        expect(panel.textContent).toContain(
+            'Change any setting it filled in and this shows Custom.',
+        );
     });
 
     it('after a submit every error shows and the first invalid field takes focus', () => {

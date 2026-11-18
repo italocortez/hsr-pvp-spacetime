@@ -54,6 +54,7 @@ import { useFieldErrors } from './useFieldErrors';
  *   unavailable and the reason given. A locked amount that holds an error (a preset's) stays editable so it can be fixed.
  * - Ranked: Mirror Picks shows Off with On unavailable (the module forces it, D-42); No Action is offered for Casual
  *   lobbies only (A92(3)); Deferred is not offered (A91(2)).
+ * - A guest: Require Ownership shows Off with On unavailable and the reason (S14.4u: the module refuses it).
  * - Errors: `useFieldErrors` over `LOBBY_ADVANCED_FIELDS`. The host says when this section moves focus
  *   (`focusRequest`): Create with an invalid field here and none in the main fields, or the dialog's Done.
  * - S14.4d-fix: leaving a number field replaces its text with the text of the value that is sent ("$5" is "5", "1.50"
@@ -388,7 +389,13 @@ export function AdvancedLobbySettings({
             </Group>
 
             <Group title={TEXT.ownership}>
-                <div className={styles.grid}>{toggle('requireOwnership')}</div>
+                <div className={styles.grid}>
+                    {/* S14.4u: a guest's lobby cannot require ownership (the module refuses it). */}
+                    {toggle('requireOwnership', {
+                        shown: rules.isGuest ? false : value.requireOwnership,
+                        fixed: rules.isGuest ? TEXT.guestOwnership : undefined,
+                    })}
+                </div>
             </Group>
 
             <Group title={TEXT.timers}>

@@ -300,11 +300,19 @@ export interface Lobby {
     a: Record<string, Actor>;
 }
 
+/** T-S14.4u: the default host of a lobby that requires ownership: a Discord-linked user named 'host'. */
+function linkedHost(test: Harness): Actor {
+    const h = guest(test, 'host');
+    linkDiscord(test, h, discordId('discord-host-requires-ownership'), 'host');
+    return h;
+}
+
 /** Host creates the lobby; seats join in order and take their slots; players confirm; host starts the draft. */
 export function setupLobby(test: Harness, opts: SetupOpts = {}): Lobby {
     const seats = opts.seats ?? [['b1', 'BluePlayer'], ['b2', 'BluePlayer'], ['r1', 'RedPlayer'], ['r2', 'RedPlayer']];
     const a: Record<string, Actor> = { ...(opts.actors ?? {}) };
-    const host = a.host ?? guest(test, 'host');
+    // T-S14.4u: a guest cannot host a lobby that requires ownership, so the default host is Discord-linked there.
+    const host = a.host ?? (opts.lobby?.requireOwnership === true ? linkedHost(test) : guest(test, 'host'));
     a.host = host;
     for (const [name] of seats) a[name] ??= guest(test, name);
 

@@ -2347,3 +2347,14 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   10. Test changes approved: the headline expected on `/lobby/123`; the unused landing copy helper deleted.
 - **Why:** user, 2026-11-18: "I think our field on teambuilder where we name loadouts also invites password managers to write stuff, check that. As for your recomendation, I would prefer presets to change everything but we can update the preset to match our existing default rules that our reducers enforce"; "For your questions 1 to 5, I agree on your suggestion ..."; "i want presets to change everything, not just advance settings"; "for 1, yes refuse it; for 2, minimum raise default set as 5, cannot be 0 or lower; for 3, keep 15, updating the test. For 4, you can update it".
 - **Where implemented:** `shared/lobby-rules/lobbySettings.ts`, `web/src/components/{LobbySettingsForm,Dialog}/`, `web/src/pages/{create-lobby,lobby-room}/`, `web/src/lib/noAutofill.ts`; `spacetimedb/src/helpers/lobby/{lobbyConfigBounds,systemPreset}.ts`, `server_refresh_system_preset`, `scripts/stdb/system-preset.ts`
+
+### A225 — A guest cannot host a lobby that requires ownership; Advanced Settings is a second dialog
+
+- **Date:** 2026-11-18 · **Status:** decided; built (S14.4u), the module part not yet published
+- **Decision:**
+  1. A guest cannot host a lobby with "Require Ownership" on: the module refuses it at creation and on a settings change, and the form shows it Off and locked for a guest with the reason. (A guest has no game account, so such a lobby cannot be played.)
+  2. Advanced Settings stays a second dialog over Create, as in the mockup (look question L3, option A).
+  3. The "Settings Preset" select has an info mark that explains what a preset does.
+  4. Orchestrator, left as they are and open to a ruling: a verified host may require ownership with guests seated (those guests cannot pick in Classic); the host role can pass to a guest in such a lobby, whose next settings save turns ownership off. Number fields take no thousands separator and refuse a third decimal.
+- **Why:** user, 2026-11-18: "I agree on your recomendations for your questions, what else is there for me to review?" (the orchestrator's four questions: the guest rule as option A, the second dialog, the publish, the push after a look); then "can we add a settings preset info icon explaing what it does?"
+- **Where implemented:** `ensureGuestHostOwnership` in `spacetimedb/src/helpers/lobby/lobbyHelpers.ts`; `shared/lobby-rules/lobbySettings.ts`; `web/src/components/LobbySettingsForm/`

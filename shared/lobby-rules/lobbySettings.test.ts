@@ -14,6 +14,8 @@ import {
     TEAM_ALIAS_MAX_LENGTH,
 } from '@module/helpers/lobby/lobbyConfigBounds';
 import {
+    ensureGuestHostOwnership,
+    GUEST_OWNERSHIP_TEXT as MODULE_GUEST_OWNERSHIP_TEXT,
     LIVE_STAGES as MODULE_LIVE_STAGES,
     resolveMaxSpectators,
 } from '@module/helpers/lobby/lobbyHelpers';
@@ -34,6 +36,7 @@ import {
     BAN_RESTRICTION_OPTIONS,
     BUILT_IN_PRESETS,
     DEFAULT_LOBBY_SETTINGS,
+    GUEST_OWNERSHIP_TEXT,
     heldLobbyOf,
     hundredthsToPoints,
     hundredthsToPointsText,
@@ -316,6 +319,35 @@ describe('the person and the cost set', () => {
         expect(settleLobbySettings(member, MEMBER)).toBe(member);
     });
 
+    // T-S14.4u: a guest's lobby cannot require ownership (user ruling, option A).
+    it('a guest is kept with Require Ownership Off; a member keeps it on', () => {
+        expect(
+            settleLobbySettings(
+                settings({
+                    matchType: 'Casual',
+                    rosterVisibility: 'ClosedNoRating',
+                    requireOwnership: true,
+                }),
+                GUEST,
+            ).requireOwnership,
+        ).toBe(false);
+        expect(initialLobbySettings(GUEST).requireOwnership).toBe(false);
+        const member = settings({ requireOwnership: true });
+        expect(settleLobbySettings(member, MEMBER)).toBe(member);
+    });
+
+    it('a guest: a preset with Require Ownership on is applied Off, and the preset still matches (no "Custom")', () => {
+        const owned = presetFromModule(
+            modulePreset({ requireOwnership: true, rosterVisibility: { tag: 'ClosedNoRating' } }),
+        );
+        const forGuest = applyLobbyPreset(initialLobbySettings(GUEST), owned, GUEST);
+        expect(forGuest.requireOwnership).toBe(false);
+        expect(lobbyPresetMatches(forGuest, owned, GUEST)).toBe(true);
+        const forMember = applyLobbyPreset(initialLobbySettings(MEMBER), owned, MEMBER);
+        expect(forMember.requireOwnership).toBe(true);
+        expect(lobbyPresetMatches(forMember, owned, MEMBER)).toBe(true);
+    });
+
     it('a custom cost set fixes the game mode to its own (A185 item 1); the default set does not', () => {
         expect(settleLobbySettings(settings({ costSetId: 7 }), WITH_SETS).gameMode).toBe(
             'MemoryOfChaos',
@@ -397,6 +429,14 @@ describe('validation', () => {
             GUEST,
             'matchType',
             'Guests can only create Casual lobbies.',
+        ],
+        [
+            // T-S14.4u: the module's refusal, pinned below.
+            'Require Ownership for a guest',
+            { requireOwnership: true, rosterVisibility: 'ClosedNoRating' },
+            GUEST,
+            'requireOwnership',
+            'Guests cannot host a lobby that requires ownership.',
         ],
         ['team size 4', { teamSize: 4 as never }, MEMBER, 'teamSize', 'Pick 1v1, 2v2 or 3v3.'],
         [
@@ -521,6 +561,7 @@ describe('validation', () => {
             { maxSpectators: 0, confirmWindowSeconds: 0 },
         ],
         ['a picked custom set in its own mode', { costSetId: 7, gameMode: 'MemoryOfChaos' }],
+        ['Require Ownership for a member (T-S14.4u)', { requireOwnership: true }],
     ])('accepted: %s', (_name, over) => {
         expect(validateLobbySettings(settings(over), WITH_SETS)).toEqual({});
     });
@@ -568,6 +609,15 @@ describe('toCreateLobbyArgs', () => {
         expect(
             toCreateLobbyArgs(settings(), { abandonCurrentMatch: true }).abandonCurrentMatch,
         ).toBe(true);
+    });
+
+    // T-S14.4u: the last guard; the settled value is already Off for a guest.
+    it('a guest never sends Require Ownership; a member sends what the form holds', () => {
+        const on = settings({ requireOwnership: true });
+        expect(toCreateLobbyArgs(on, { isGuest: true }).requireOwnership).toBe(false);
+        expect(toCreateLobbyArgs(on, { isGuest: false }).requireOwnership).toBe(true);
+        expect(toCreateLobbyArgs(on).requireOwnership).toBe(true);
+        expect(Object.keys(toCreateLobbyArgs(on, { isGuest: true }))).not.toContain('isGuest');
     });
 
     it('sends every argument create_lobby takes, and nothing else', () => {
@@ -970,6 +1020,17 @@ describe('module pins', () => {
         const create = moduleSource('reducers/lobby/lobbyLifecycle.ts');
         expect(helpers).toContain(`if (user.isGuest === true && matchType.tag === 'Ranked') {`);
         expect(create).toContain(`rosterVisibility = { tag: 'ClosedNoRating', value: {} } as any;`);
+        // T-S14.4u: a guest host's Require Ownership is refused with the sentence the form mirrors, by both reducers.
+        expect(GUEST_OWNERSHIP_TEXT).toBe(MODULE_GUEST_OWNERSHIP_TEXT);
+        expect(() => ensureGuestHostOwnership({ isGuest: true }, true)).toThrow(
+            GUEST_OWNERSHIP_TEXT,
+        );
+        expect(() => ensureGuestHostOwnership({ isGuest: true }, false)).not.toThrow();
+        expect(() => ensureGuestHostOwnership({ isGuest: false }, true)).not.toThrow();
+        expect(create).toContain('ensureGuestHostOwnership(user, args.requireOwnership);');
+        expect(moduleSource('reducers/lobby/lobbySettings.ts')).toContain(
+            'ensureGuestHostOwnership(ctx.db.User.id.find(lobby.hostUserId), args.requireOwnership);',
+        );
         expect(create).toContain(
             `const allowMirrorPicks = args.matchType.tag === 'Ranked' ? false : args.allowMirrorPicks;`,
         );

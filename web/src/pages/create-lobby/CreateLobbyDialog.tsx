@@ -234,7 +234,7 @@ export function CreateLobbyDialog({
         const before = new Set(getMyLobbies().rows.map((r) => r.id));
         let unresolved: string = TEXT.notShown;
         try {
-            await createLobby(toCreateLobbyArgs(settings, { abandonCurrentMatch }));
+            await createLobby(toCreateLobbyArgs(settings, { abandonCurrentMatch, isGuest }));
         } catch (error) {
             if (!alive.current) return;
             const outcome = callOutcome(error);

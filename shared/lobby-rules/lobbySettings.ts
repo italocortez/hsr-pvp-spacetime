@@ -513,7 +513,7 @@ export interface LobbyCostSetOption {
 }
 
 export interface LobbyFormRules {
-    /** A guest: Ranked is refused and the roster is Closed No Rating (D-23). */
+    /** A guest: Ranked is refused, the roster is Closed No Rating (D-23) and ownership is Off (S14.4u). */
     isGuest: boolean;
     /** The published cost sets (the default set, id 0, is always available and not listed). */
     costSets: readonly LobbyCostSetOption[];
@@ -543,17 +543,31 @@ export const costSetLockedText = (setName: string, mode: LobbyGameMode) =>
     `The cost set ${setName} is for ${GAME_MODE_LABEL[mode]} only. Pick Default to change the game mode.`;
 
 /**
+ * The module's refusal of a guest-hosted lobby that requires ownership (S14.4u; `GUEST_OWNERSHIP_TEXT` in
+ * `spacetimedb/src/helpers/lobby/lobbyHelpers.ts`, pinned by the test).
+ */
+export const GUEST_OWNERSHIP_TEXT = 'Guests cannot host a lobby that requires ownership.';
+
+/**
  * The form's value after a change, made consistent with what the module will do and the page shows: a guest's match
- * type stays Casual and their roster Closed No Rating (the module forces the roster, D-23, and refuses Ranked); a
- * custom cost set fixes the game mode to its own (A185 item 1).
+ * type stays Casual, their roster Closed No Rating (the module forces the roster, D-23, and refuses Ranked) and
+ * Require Ownership Off (the module refuses it, S14.4u: a guest has no game account); a custom cost set fixes the
+ * game mode to its own (A185 item 1).
  */
 export function settleLobbySettings(settings: LobbySettings, rules: LobbyFormRules): LobbySettings {
     let next = settings;
     if (
         rules.isGuest &&
-        (next.matchType !== 'Casual' || next.rosterVisibility !== 'ClosedNoRating')
+        (next.matchType !== 'Casual' ||
+            next.rosterVisibility !== 'ClosedNoRating' ||
+            next.requireOwnership)
     ) {
-        next = { ...next, matchType: 'Casual', rosterVisibility: 'ClosedNoRating' };
+        next = {
+            ...next,
+            matchType: 'Casual',
+            rosterVisibility: 'ClosedNoRating',
+            requireOwnership: false,
+        };
     }
     const fixed = costSetGameMode(next.costSetId, rules.costSets);
     if (fixed !== undefined && fixed !== next.gameMode) next = { ...next, gameMode: fixed };
@@ -831,6 +845,7 @@ export function validateLobbySettings(
     }
     if (rules.isGuest && s.matchType === 'Ranked')
         e.matchType = 'Guests can only create Casual lobbies.';
+    if (rules.isGuest && s.requireOwnership) e.requireOwnership = GUEST_OWNERSHIP_TEXT;
     if (!(LOBBY_TEAM_SIZES as readonly number[]).includes(s.teamSize))
         e.teamSize = 'Pick 1v1, 2v2 or 3v3.';
 
@@ -934,11 +949,13 @@ export interface CreateLobbyArgs {
  * so "private without a password" cannot be sent); the name and the team names are trimmed (an all-space team name is
  * sent empty, so the sides keep Blue and Red; review D M3); Ranked sends no mirror picks (the module forces it, D-42);
  * an Auction lobby sends neither mirror picks nor random auto-pick, which the module reads in the Classic draft only
- * (review D M4; the form shows both Off there). `abandonCurrentMatch` only after the person confirmed the A68(4) prompt.
+ * (review D M4; the form shows both Off there). A guest (`isGuest`) never sends Require Ownership (S14.4u: the module
+ * refuses it; the settled value is already Off, this is the last guard). `abandonCurrentMatch` only after the person
+ * confirmed the A68(4) prompt.
  */
 export function toCreateLobbyArgs(
     s: LobbySettings,
-    options: { abandonCurrentMatch?: boolean } = {},
+    options: { abandonCurrentMatch?: boolean; isGuest?: boolean } = {},
 ): CreateLobbyArgs {
     const args: CreateLobbyArgs = {
         teamSize: s.teamSize,
@@ -961,7 +978,7 @@ export function toCreateLobbyArgs(
         isAnonymousPlayers: s.isAnonymousPlayers,
         isAnonymousSpectators: s.isAnonymousSpectators,
         rosterVisibility: { tag: s.rosterVisibility },
-        requireOwnership: s.requireOwnership,
+        requireOwnership: options.isGuest ? false : s.requireOwnership,
         costSetId: s.costSetId,
         disconnectPolicy: { tag: s.disconnectPolicy },
         disconnectForfeitSeconds: s.disconnectForfeitSeconds,

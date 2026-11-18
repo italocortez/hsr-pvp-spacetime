@@ -3,7 +3,7 @@ import { t, SenderError } from 'spacetimedb/server';
 import { DraftMode, BanMode, GameMode, MatchType, RosterVisibility, DisconnectPolicy, LobbySlot, BanRestriction, LineupFormat, ShuffleMode } from '@module/types/enums';
 import { getAuthenticatedUser, isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
-import { ensureLobbyMember, ensurePresentMember, ensurePresentIfMember, ensureMemberPresentUnlessStaff, memberHasLeft, ensureHostOrAbove, PRIVATE_LOBBY_PASSWORD_TEXT, ensureStageIs, resolveSeat, slotTeam, slotIsCoach, slotIsSpectator, resolveMaxSpectators } from '@module/helpers/lobby/lobbyHelpers';
+import { ensureLobbyMember, ensurePresentMember, ensurePresentIfMember, ensureMemberPresentUnlessStaff, memberHasLeft, ensureHostOrAbove, ensureGuestHostOwnership, PRIVATE_LOBBY_PASSWORD_TEXT, ensureStageIs, resolveSeat, slotTeam, slotIsCoach, slotIsSpectator, resolveMaxSpectators } from '@module/helpers/lobby/lobbyHelpers';
 import { normalizeLobbyName } from '@module/helpers/tournament/seriesSettings';
 import { ensureCostSetCovers, ensureSelectableCostSet } from '@module/helpers/draft/costSetGuards';
 import { ensureSeatAllowed } from '@module/helpers/tournament/tournamentLobbySides';
@@ -24,6 +24,7 @@ import { ensureLobbyPasswordRule, hashLobbyPassword } from '@module/helpers/lobb
 //   budgets, handicaps, referee powers, aliases, pause settings, visibility).
 // Per D-42: Ranked forces allowMirrorPicks=false.
 // Per D-23: guests forced to ClosedNoRating and Casual.
+// S14.4u: requireOwnership is refused while the lobby's host is a guest (ensureGuestHostOwnership).
 // Resets all members' isConfirmed to false on settings change (A38(4)).
 // Backlog #9 (A33 tiering): lineupFormat joins the tournament lock list; banRestriction, hideMmr,
 //   refereeExclusiveConcede, name and maxSpectators (A68(8)) are free-set fields, editable in tournament lobbies too.
@@ -129,6 +130,11 @@ export const update_lobby_settings = spacetimedb.reducer(
         if (matchType.tag === 'Ranked' && lobby.matchType.tag !== 'Ranked'
             && [...ctx.db.LobbyMember.lobby_id.filter(lobbyId)].some((m: any) => ctx.db.User.id.find(m.userId)?.isGuest === true)) {
             throw new SenderError('A guest is in this lobby; guests cannot join Ranked lobbies.');
+        }
+
+        // S14.4u: a guest-hosted lobby cannot require ownership (the host, not the caller: a Moderator may update it).
+        if (!isTournamentLocked) {
+            ensureGuestHostOwnership(ctx.db.User.id.find(lobby.hostUserId), args.requireOwnership);
         }
 
         // S10e (lobby audit #10, #5): the values this update stores are in range; team aliases capped.

@@ -144,6 +144,20 @@ export function ensureGuestRestrictions(user: any, matchType: any): void {
     }
 }
 
+/** S14.4u: the refusal of a guest-hosted lobby that requires ownership (the web form shows its own sentence). */
+export const GUEST_OWNERSHIP_TEXT = 'Guests cannot host a lobby that requires ownership.';
+
+/**
+ * S14.4u (user ruling, option A): a guest has no game account (the roster reducers need a verified user), so a lobby
+ * a guest hosts cannot require ownership. `create_lobby` passes the creator; `update_lobby_settings` the lobby's host
+ * (not the caller, who may be a Moderator). Tournament lobbies take the tournament's value and do not call this.
+ */
+export function ensureGuestHostOwnership(host: any, requireOwnership: boolean): void {
+    if (host?.isGuest === true && requireOwnership) {
+        throw new SenderError(GUEST_OWNERSHIP_TEXT);
+    }
+}
+
 /**
  * Next per-lobby join counter (R4, A74(3)): `lobby.lastJoinSeq + 1`. The host's seat is 1, written with
  * `lastJoinSeq: 1` by create_lobby and create_tournament_lobby; join_lobby takes the next number and writes it back
