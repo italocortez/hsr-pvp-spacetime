@@ -151,12 +151,20 @@
     }
 }
 
+/*
+ * The content sits centred in the slanted panel's visible area: the 18px slant hides 9px at
+ * mid-height, so the start padding is the end padding plus 9px (as in `.signIn`). The mockups'
+ * 15/30 (22 on phones) left the disc 8px (phone) and the disc and name 12px (wider) left of
+ * centre; the sums, and so the chip's width, are unchanged.
+ */
 .chipInner {
+    --chip-end: 18px;
+
     display: inline-flex;
     align-items: center;
     gap: 10px;
     block-size: 100%;
-    padding: 0 30px 0 15px;
+    padding: 0 var(--chip-end) 0 calc(var(--chip-end) + 9px);
     background:
         linear-gradient(rgba(126, 112, 224, 0.18), rgba(126, 112, 224, 0.09)), var(--bg-nav);
     transition: background var(--duration-fast) var(--ease-out);
@@ -167,7 +175,7 @@
     }
 
     @media (--bp-sm) {
-        padding: 0 22px 0 15px;
+        --chip-end: 14px;
     }
 }
 
