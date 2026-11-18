@@ -46,7 +46,9 @@ import { type Align, placeInfoPopover, type Side } from './placeInfoPopover';
  * on top, so a panel shown while a modal is open would cover it. While a modal dialog that does not hold the trigger is
  * open, the panel stays closed: an open one closes when the modal opens, and a timed open (`flash`) is held back and
  * shown by its normal rule once no such modal is open (if the occurrence still stands). A popover inside the modal
- * works as usual. The signal is the platform's: `dialog:modal`, re-read whenever a dialog's `open` attribute changes
+ * works as usual, also in a second dialog stacked over a first (only dialogs above the trigger's own count, by the
+ * shared Dialog's `data-dialog-level`), and the Escape that closes an open panel is cancelled, so it does not also
+ * close the dialog. The signal is the platform's: `dialog:modal`, re-read whenever a dialog's `open` attribute changes
  * or dialogs come and go (one shared MutationObserver while any popover is mounted).
  */
 
@@ -116,9 +118,27 @@ const openModals = (): Element[] => {
     }
     return [...document.querySelectorAll('dialog[open]')];
 };
-/** A modal dialog is open that does not hold `el` (so `el`'s panel would be drawn over it). */
-const blockedByModal = (el: Element | null) =>
-    openModals().some((d) => !el?.isConnected || !d.contains(el));
+/**
+ * A dialog's place in a stack: the shared Dialog stamps `data-dialog-level` when it opens (1 for the first, 2 for one
+ * opened over it). A modal without the stamp counts as above everything.
+ */
+const levelOf = (d: Element) => {
+    const n = Number((d as HTMLElement).dataset?.dialogLevel);
+    return Number.isFinite(n) && n > 0 ? n : Number.POSITIVE_INFINITY;
+};
+/**
+ * A modal dialog is open above the one that holds `el` (or above the page, when no dialog holds it), so `el`'s panel
+ * would be drawn over it. A dialog under the trigger's own does not count: a popover in a second dialog over a first
+ * works as usual.
+ */
+const blockedByModal = (el: Element | null) => {
+    if (!el?.isConnected) return openModals().length > 0;
+    const own = el.closest('dialog');
+    const ownLevel = own?.open ? levelOf(own) : 0;
+    return openModals().some(
+        (d) => !d.contains(el) && (ownLevel === Number.POSITIVE_INFINITY || levelOf(d) > ownLevel),
+    );
+};
 
 const modalListeners = new Set<() => void>();
 let modalObserver: MutationObserver | null = null;
@@ -370,6 +390,8 @@ export function InfoPopover({
         const onKey = (e: KeyboardEvent) => {
             if (e.key !== 'Escape') return;
             const inside = panelRef.current?.contains(document.activeElement) === true;
+            // This Escape was for the panel: a cancelled keydown is not also the close request of a dialog around it.
+            e.preventDefault();
             close();
             if (inside) triggerRef.current?.focus();
         };

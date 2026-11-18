@@ -37,7 +37,6 @@ export const SIGN_IN_DIALOG_TEXT = {
     connecting: 'Connecting to the server…',
     openingDiscord: 'Opening Discord…',
     creatingGuest: 'Creating your guest account…',
-    loadFailed: 'Sign-in could not be loaded. Check your connection and try again.',
 } as const;
 
 export const SIGN_IN_TITLE = 'Sign in — IPC Battlegrounds';

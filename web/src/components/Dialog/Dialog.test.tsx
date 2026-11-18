@@ -1,7 +1,9 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { type ReactNode, useRef, useState } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Dialog, type DialogProps } from './Dialog';
 import { dialogInTurn } from './dialogQueue';
 
@@ -202,7 +204,12 @@ describe('Dialog: closing', () => {
         expect(fireEvent(dialog(), new Event('cancel', { cancelable: true }))).toBe(true);
         rerender({ dismissible: false });
         expect(fireEvent(dialog(), new Event('cancel', { cancelable: true }))).toBe(false);
-        expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled();
+        // S14.4b-fix: `aria-disabled`, not `disabled` (a disabled button with focus drops it to `body`).
+        const close = screen.getByRole('button', { name: 'Close' });
+        expect(close).toHaveAttribute('aria-disabled', 'true');
+        expect(close).not.toBeDisabled();
+        fireEvent.click(close);
+        expect(dialog()).toHaveAttribute('open');
     });
 
     it('onSubmit: the page handles its form, the dialog stays open', async () => {
@@ -240,6 +247,188 @@ describe('Dialog: a second dialog over the first', () => {
         expect(outerClose).not.toHaveBeenCalled();
         expect(document.querySelectorAll('dialog[open]')).toHaveLength(1);
         expect(screen.getByRole('button', { name: 'Advanced Settings' })).toHaveFocus();
+    });
+});
+
+describe('Dialog: S14.4b-fix (review B)', () => {
+    const proto = HTMLDialogElement.prototype as unknown as Record<string, unknown>;
+    const saved = { showModal: proto.showModal, close: proto.close };
+    afterEach(() => {
+        for (const key of ['showModal', 'close'] as const) {
+            if (saved[key]) proto[key] = saved[key];
+            else delete proto[key];
+        }
+    });
+
+    /** As a real browser: `close()` closes at once and sends the `close` event in a later task. */
+    function browserLikeDialog() {
+        proto.showModal = function (this: HTMLDialogElement) {
+            this.setAttribute('open', '');
+        };
+        proto.close = function (this: HTMLDialogElement, value?: string) {
+            if (!this.hasAttribute('open')) return;
+            if (value !== undefined) this.returnValue = value;
+            this.removeAttribute('open');
+            setTimeout(() => this.dispatchEvent(new Event('close')), 0);
+        };
+    }
+
+    it('S3: not dismissible and no onSubmit: a submit button and Enter in a field do not close it', async () => {
+        const user = userEvent.setup();
+        const { onClose } = renderDialog({
+            dismissible: false,
+            children: <input aria-label="Name" />,
+            actions: (
+                <button type="submit" value="go">
+                    Go
+                </button>
+            ),
+        });
+        await user.click(screen.getByRole('button', { name: 'Go' }));
+        await user.type(screen.getByLabelText('Name'), 'x{Enter}');
+        expect(dialog()).toHaveAttribute('open');
+        expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('S4: a submit in a dialog rendered inside a page form never reaches the page form’s handler', async () => {
+        const user = userEvent.setup();
+        const pageSubmit = vi.fn((e: { preventDefault: () => void }) => e.preventDefault());
+        const onClose = vi.fn();
+        const onSubmit = vi.fn();
+        render(
+            <form onSubmit={pageSubmit}>
+                <Dialog
+                    open
+                    onClose={onClose}
+                    title="Delete?"
+                    actions={
+                        <button type="submit" value="delete">
+                            Delete
+                        </button>
+                    }
+                />
+                <Dialog
+                    open
+                    onClose={() => {}}
+                    onSubmit={onSubmit}
+                    title="Rename"
+                    actions={<button type="submit">Save</button>}
+                />
+            </form>,
+        );
+        await user.click(screen.getByRole('button', { name: 'Save' }));
+        await user.click(screen.getByRole('button', { name: 'Delete' }));
+        expect(onSubmit).toHaveBeenCalledTimes(1);
+        expect(onClose).toHaveBeenCalledExactlyOnceWith('delete');
+        expect(pageSubmit).not.toHaveBeenCalled();
+    });
+
+    it('S9: two closes by the page before their close events arrive call nothing', async () => {
+        browserLikeDialog();
+        const { onClose, rerender } = renderDialog();
+        rerender({ open: false });
+        rerender({ open: true });
+        rerender({ open: false });
+        await act(() => new Promise((done) => setTimeout(done, 20)));
+        expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('canClose: false keeps it open on Escape and the close button; a submit button’s value still closes', async () => {
+        const user = userEvent.setup();
+        const canClose = vi.fn(() => false);
+        const { onClose } = renderDialog({ canClose, closeLabel: 'Close' });
+        expect(fireEvent(dialog(), new Event('cancel', { cancelable: true }))).toBe(false);
+        await user.click(screen.getByRole('button', { name: 'Close' }));
+        expect(canClose).toHaveBeenCalledTimes(2);
+        expect(dialog()).toHaveAttribute('open');
+        expect(onClose).not.toHaveBeenCalled();
+        await user.click(screen.getByRole('button', { name: 'Delete' }));
+        expect(onClose).toHaveBeenCalledExactlyOnceWith('delete');
+    });
+
+    it('canClose: true lets the close button close it', async () => {
+        const user = userEvent.setup();
+        const { onClose } = renderDialog({ canClose: () => true, closeLabel: 'Close' });
+        await user.click(screen.getByRole('button', { name: 'Close' }));
+        expect(onClose).toHaveBeenCalledExactlyOnceWith('');
+    });
+
+    it('error: a polite region above the actions, there while empty; none when not asked for', () => {
+        const { rerender } = renderDialog({ error: null, children: <input aria-label="Name" /> });
+        const region = within(dialog()).getByRole('status');
+        expect(region).toBeEmptyDOMElement();
+        // Above the actions: the region comes right before the footer.
+        expect(region.nextElementSibling).toContainElement(
+            screen.getByRole('button', { name: 'Delete' }),
+        );
+        rerender({ error: 'The name is taken.' });
+        expect(within(dialog()).getByRole('status')).toHaveTextContent('The name is taken.');
+        rerender({ error: undefined });
+        expect(within(dialog()).queryByRole('status')).toBeNull();
+    });
+
+    it('focus fallback: the element to return to is gone after a close by the person: main takes focus', async () => {
+        browserLikeDialog();
+        // A browser returns focus to the element focused before opening; that one is gone, so focus is on body.
+        const close = proto.close as (this: HTMLDialogElement, value?: string) => void;
+        proto.close = function (this: HTMLDialogElement, value?: string) {
+            (document.activeElement as HTMLElement | null)?.blur();
+            close.call(this, value);
+        };
+        const user = userEvent.setup();
+        const main = document.createElement('main');
+        main.tabIndex = -1;
+        document.body.append(main);
+        const opener = document.createElement('button');
+        const { onClose } = renderDialog({ returnFocus: opener });
+        await user.click(screen.getByRole('button', { name: 'Cancel' }));
+        await act(() => new Promise((done) => setTimeout(done, 20)));
+        expect(onClose).toHaveBeenCalledExactlyOnceWith('cancel');
+        expect(main).toHaveFocus();
+        main.remove();
+    });
+
+    it('focus fallback: the page stops rendering it while open: fallbackFocus takes focus', () => {
+        const fallback = document.createElement('button');
+        document.body.append(fallback);
+        const r = render(
+            <Dialog
+                open
+                onClose={() => {}}
+                title="T"
+                fallbackFocus={fallback}
+                actions={<button type="submit">Ok</button>}
+            />,
+        );
+        expect(screen.getByRole('button', { name: 'Ok' })).toHaveFocus();
+        r.unmount();
+        expect(fallback).toHaveFocus();
+        fallback.remove();
+    });
+
+    it('stacked dialogs carry their level (for InfoPopover)', async () => {
+        const user = userEvent.setup();
+        render(<Stacked outerClose={() => {}} innerClose={() => {}} />);
+        await user.click(screen.getByRole('button', { name: 'Advanced Settings' }));
+        expect(screen.getByRole('dialog', { name: 'Create Lobby' })).toHaveAttribute(
+            'data-dialog-level',
+            '1',
+        );
+        expect(screen.getByRole('dialog', { name: 'Advanced Settings' })).toHaveAttribute(
+            'data-dialog-level',
+            '2',
+        );
+    });
+
+    it('the body keeps room for focus rings and gives it back (no shift)', () => {
+        const root = [join(process.cwd(), 'web'), process.cwd()].find((d) =>
+            existsSync(join(d, 'vite.config.ts')),
+        ) as string;
+        const css = readFileSync(join(root, 'src/components/Dialog/Dialog.module.css'), 'utf8');
+        const body = /\.body\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+        expect(body).toMatch(/padding:\s*var\(--dialog-ring-room\)/);
+        expect(body).toMatch(/margin:\s*calc\(-1 \* var\(--dialog-ring-room\)\)/);
+        expect(body).toMatch(/--dialog-ring-room:\s*4px/);
     });
 });
 

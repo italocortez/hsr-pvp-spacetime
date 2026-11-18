@@ -10,10 +10,12 @@
  *   --dialog-title-size, --dialog-title-weight, --dialog-title-family, --dialog-title-line
  *   --dialog-title-align (the description follows it)
  *   --dialog-title-close-room (the title's end padding beside the close button, default 36px)
+ *   --dialog-title-start-room (the title's start padding with a close button, default 0; the same value as the
+ *     close room keeps a centred title centred on the panel)
  *   --dialog-text-size, --dialog-text-color (the description)
  *
  * Small screens: the panel is at most the viewport's height less 32px; the body scrolls inside it while the title
- * and the footer stay. Motion: a 200ms fade and 8px rise on open, none under reduced motion (the content leaves with
+ * and the footer stay. The body keeps 4px of room for focus rings at its edges (`.body`). Motion: a 200ms fade and 8px rise on open, none under reduced motion (the content leaves with
  * the dialog, so there is no exit animation). Forced colours: the system's border colour.
  */
 
@@ -80,6 +82,7 @@
 
     /* Room for the close button in the corner. */
     &[data-with-close] {
+        padding-inline-start: var(--dialog-title-start-room, 0px);
         padding-inline-end: var(--dialog-title-close-room, 36px);
     }
 }
@@ -92,15 +95,36 @@
     text-align: var(--dialog-title-align, start);
 }
 
-/* The body: scrolls inside the panel when the screen is short (the title and the footer stay). */
+/*
+ * The body: scrolls inside the panel when the screen is short (the title and the footer stay). A scroll box clips
+ * what is drawn outside it, so it keeps room for a focus ring around a control at its edge (an outline with an
+ * offset, the slanted buttons' 4px ring) and gives the room back with a negative margin: nothing moves.
+ */
 .body {
+    --dialog-ring-room: 4px;
+
     display: flex;
     flex: 0 1 auto;
     flex-direction: column;
     gap: var(--dialog-gap, 12px);
     min-block-size: 0;
+    margin: calc(-1 * var(--dialog-ring-room));
+    padding: var(--dialog-ring-room);
     overflow-y: auto;
     overscroll-behavior: contain;
+}
+
+/* A form-level error (`error`), above the actions; the empty live region takes no room (its gap is cancelled). */
+.error {
+    margin: 0;
+    color: var(--color-snow);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+
+    &:empty {
+        margin-block-end: calc(-1 * var(--dialog-gap, 12px));
+    }
 }
 
 .actions {
@@ -139,7 +163,7 @@
         inset-inline-end: 8px;
     }
 
-    &:hover:not(:disabled) {
+    &:hover:not([aria-disabled="true"]) {
         border-color: var(--border-subtle);
         color: var(--color-snow);
     }
@@ -150,7 +174,7 @@
         color: var(--color-snow);
     }
 
-    &:disabled {
+    &[aria-disabled="true"] {
         opacity: 0.4;
         cursor: not-allowed;
     }

@@ -1,0 +1,64 @@
+/*
+ * The focus ring of a slanted button (DESIGN.md 5.1 angle; first built for the landing page's "Play Now", S14.4-fix1,
+ * shared since S14.4b-fix by the sign-in dialog's buttons). A normal outline would be a rectangle around the angle,
+ * and an inset shadow on a clipped element loses its two sides. So the button itself is not clipped: its fill is a
+ * clipped child layer behind the text (z-index -1), and on keyboard focus two clipped layers behind the fill, each
+ * 2px larger on every side, draw the ring in the button's own shape: snow, then a void edge outside it that keeps it
+ * readable over any background. Snow on the iris or blurple fill is about 3.4:1.
+ *
+ * Use: add `.slanted` next to the button's own class, set `--slant` there (default 16px; the angle's run; the fill's
+ * clip-path uses the same value), give the fill an opaque background (a transparent one shows the ring through it:
+ * use the surface's own colour for a quiet button), and keep about 4px of room around the button (a scroll box clips the ring; the
+ * shared Dialog's body keeps it). The button's own `::before` and `::after` are taken.
+ *
+ * Forced colours: the layers go (backgrounds are the system's), the button gets a whole 2px border, nothing is
+ * clipped, and focus is the system's Highlight outline.
+ */
+
+.slanted {
+    position: relative;
+    isolation: isolate;
+
+    &:focus-visible {
+        outline: none;
+    }
+
+    &:focus-visible::before,
+    &:focus-visible::after {
+        content: "";
+        position: absolute;
+        clip-path: polygon(
+            var(--slant, 16px) 0,
+            100% 0,
+            calc(100% - var(--slant, 16px)) 100%,
+            0 100%
+        );
+        pointer-events: none;
+    }
+
+    &:focus-visible::before {
+        inset: -4px;
+        z-index: -3;
+        background: var(--color-void);
+    }
+
+    &:focus-visible::after {
+        inset: -2px;
+        z-index: -2;
+        background: var(--color-snow);
+    }
+
+    @media (forced-colors: active) {
+        border: 2px solid ButtonText;
+
+        &:focus-visible {
+            outline: 2px solid Highlight;
+            outline-offset: 2px;
+        }
+
+        &:focus-visible::before,
+        &:focus-visible::after {
+            display: none;
+        }
+    }
+}

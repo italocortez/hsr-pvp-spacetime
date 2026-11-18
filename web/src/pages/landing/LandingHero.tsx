@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import heroImage from '@/assets/landing/landingpage2.webp';
+import slanted from '@/styles/slantedFocus.module.css';
 import styles from './LandingHero.module.css';
 
 /** `landingpage2.webp`, 3168 by 1344: the page's largest paint. */
@@ -36,7 +37,7 @@ export function LandingHero() {
                 </h1>
                 <p className={styles.subtitle}>Draft. Battle. Win.</p>
                 {/* Interim target until the create-lobby dialog exists (S14.4c). */}
-                <Link className={styles.cta} to="/lobbies">
+                <Link className={`${styles.cta} ${slanted.slanted}`} to="/lobbies">
                     <span className={styles.ctaFill} aria-hidden="true" />
                     <span className={styles.ctaLabel}>Play Now</span>
                     <span className={styles.ctaArrow} aria-hidden="true" />

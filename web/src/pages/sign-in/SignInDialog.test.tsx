@@ -60,7 +60,7 @@ const theDialog = () => screen.getByRole('dialog');
 /** Opens the dialog and waits for its chunk: the buttons act once it is in. */
 async function open(user: ReturnType<typeof userEvent.setup>) {
     await user.click(await signInLink());
-    // The first open shows the frame while the chunk loads, then the loaded dialog (another element): query again.
+    // A cold chunk: nothing shows until it is in, then the dialog opens once (S14.4b-fix).
     await waitFor(
         () =>
             expect(
@@ -87,6 +87,21 @@ describe('opening', () => {
         expect(within(d).getByText('Guest accounts are kept in this browser only.')).toBeVisible();
         expect(r.router.state.location.href).toBe('/lobbies');
         expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
+    });
+
+    it('one dialog element per opening: no frame, no swap, focus placed once (S14.4b-fix S1)', async () => {
+        const user = userEvent.setup();
+        renderAt('/lobbies');
+        const added: Node[] = [];
+        const watch = new MutationObserver((records) => {
+            for (const r of records)
+                for (const n of r.addedNodes) if (n.nodeName === 'DIALOG') added.push(n);
+        });
+        watch.observe(document.body, { childList: true, subtree: true });
+        const d = await open(user);
+        await act(() => new Promise((r) => setTimeout(r, 20)));
+        watch.disconnect();
+        expect(added).toEqual([d]);
     });
 
     it('a modified click leaves the link alone (the full-screen panel in a new tab)', async () => {
@@ -143,7 +158,7 @@ describe('Continue as Guest', () => {
         expect(await signInLink()).toHaveFocus();
     });
 
-    it('while the guest is being created: the line says so, Escape and the close button do nothing', async () => {
+    it('while the guest is being created: the line says so, and the person can still close it (S14.4b-fix S2)', async () => {
         const user = userEvent.setup();
         const { conn } = renderAt('/lobbies');
         let finish: () => void = () => {};
@@ -161,12 +176,29 @@ describe('Continue as Guest', () => {
         await user.click(guest);
         expect(within(d).getByRole('status')).toHaveTextContent('Creating your guest account…');
         expect(guest).toHaveFocus();
-        expect(fireEvent(d, new Event('cancel', { cancelable: true }))).toBe(false);
-        expect(within(d).getByRole('button', { name: 'Close sign-in' })).toBeDisabled();
+        expect(fireEvent(d, new Event('cancel', { cancelable: true }))).toBe(true);
+        const close = within(d).getByRole('button', { name: 'Close sign-in' });
+        expect(close).toHaveAttribute('aria-disabled', 'false');
+        await user.click(close);
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+        // The late answer is dropped: nothing reopens, nothing throws.
         await act(async () => finish());
+        expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    it('the created view: the guest’s name and its line describe the dialog (S14.4b-fix S8)', async () => {
+        const user = userEvent.setup();
+        const { conn } = renderAt('/lobbies');
+        conn.reducers.loginAsGuest.mockImplementation(async () => {
+            conn.db.viewMyProfile.insert(guestRow());
+        });
+        const d = await open(user);
+        await user.click(within(d).getByRole('button', { name: 'Continue as Guest' }));
         expect(
             await screen.findByRole('dialog', { name: 'Guest account created' }),
-        ).toBeInTheDocument();
+        ).toHaveAccessibleDescription(
+            `${GUEST_NAME} You’re in. This guest account is kept in this browser only.`,
+        );
     });
 
     it('a refusal shows the module’s sentence; the dialog stays', async () => {

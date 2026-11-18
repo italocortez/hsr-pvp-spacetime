@@ -283,34 +283,12 @@
     }
 
     /*
-     * A normal outline would be a rectangle around the angle. The focus ring instead follows the angle: two clipped
-     * layers behind the fill, each 2px larger on every side, snow then void (the 2px snow ring the bar's slanted
-     * buttons use, AccountArea.module.css). Snow on the iris fill is about 3.4:1, and the void edge outside keeps the
-     * ring readable over any part of the art (S14.4-fix1; the mockup's 2.5px champagne inset was about 1.8:1).
+     * The focus ring follows the angle: the shared slanted ring (`styles/slantedFocus.module.css`, on the link next
+     * to this class), snow then void, with forced colours there too. Snow on the iris fill is about 3.4:1, and the
+     * void edge outside keeps the ring readable over any part of the art (S14.4-fix1; the mockup's 2.5px champagne
+     * inset was about 1.8:1).
      */
-    &:focus-visible {
-        outline: none;
-    }
-
-    &:focus-visible::before,
-    &:focus-visible::after {
-        content: "";
-        position: absolute;
-        clip-path: polygon(20px 0, 100% 0, calc(100% - 20px) 100%, 0 100%);
-        pointer-events: none;
-    }
-
-    &:focus-visible::before {
-        inset: -4px;
-        z-index: -3;
-        background: var(--color-void);
-    }
-
-    &:focus-visible::after {
-        inset: -2px;
-        z-index: -2;
-        background: var(--color-snow);
-    }
+    --slant: 20px;
 
     @media (--bp-md) {
         block-size: 56px;
@@ -320,20 +298,6 @@
 
         &:hover {
             letter-spacing: 0.32em;
-        }
-    }
-
-    @media (forced-colors: active) {
-        border: 2px solid ButtonText;
-
-        &:focus-visible {
-            outline: 2px solid Highlight;
-            outline-offset: 2px;
-        }
-
-        &:focus-visible::before,
-        &:focus-visible::after {
-            display: none;
         }
     }
 }

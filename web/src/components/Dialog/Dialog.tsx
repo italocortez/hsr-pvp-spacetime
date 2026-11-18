@@ -34,13 +34,30 @@ export type DialogProps = {
     children?: ReactNode;
     /** The footer: the dialog's actions, at the end of the row. */
     actions?: ReactNode;
+    /**
+     * A form-level error, shown above the actions (it does not scroll away with the body) and announced politely.
+     * Pass `null` while there is none: the live region then exists before its first text, so the text is read out.
+     * Left undefined, there is no region.
+     */
+    error?: ReactNode;
     size?: DialogSize;
     /** The element that takes focus on open (default: the first control, the close button last). */
     initialFocus?: RefObject<HTMLElement | null>;
     /** A new value while open means new content: the initial focus is placed again. */
     focusKey?: unknown;
-    /** False while a submit is in flight: Escape, the back gesture, the backdrop and the close button do nothing. */
+    /**
+     * False while a submit is in flight: Escape, the back gesture, the backdrop and the close button do nothing (the
+     * close button stays focusable, `aria-disabled`), and without `onSubmit` a submit button or Enter in a field does
+     * not close it either.
+     */
     dismissible?: boolean;
+    /**
+     * Asked before a dismissal by the person (Escape, the back gesture, the backdrop, the close button); false keeps
+     * the dialog open. For a form with unsaved input: the page decides, for example by opening a confirmation. Not
+     * asked for a submit button's value (a deliberate choice) or a close by the page. Chromium lets a page refuse only
+     * one Escape per user activation; the next Escape closes (the platform's anti-abuse rule).
+     */
+    canClose?: () => boolean;
     /** A press on the backdrop closes it (default: does nothing). */
     closeOnBackdrop?: boolean;
     /** Shows the close button in the corner, with this accessible name. */
@@ -48,9 +65,14 @@ export type DialogProps = {
     /** Where focus goes after a close the person made (default: the browser's, the element focused before opening). */
     returnFocus?: FocusTarget;
     /**
+     * Where focus goes when the dialog closes or leaves the page and focus would otherwise fall to `body` (the element
+     * to return to is gone, as when "Sign in" is replaced by the account chip). Default: the page's `main`.
+     */
+    fallbackFocus?: FocusTarget;
+    /**
      * The page handles its own form (fields in the body, a submit button in the footer): called with the submit event,
      * default already prevented; the dialog stays open until `open` turns false. Without it a submit button closes the
-     * dialog with its `value`.
+     * dialog with its `value`. Either way the submit stops here: it never reaches an ancestor form's handler.
      */
     onSubmit?: (event: FormEvent<HTMLFormElement>) => void;
     /** A class on the `dialog`, to set the custom properties of `Dialog.module.css`. */
@@ -84,10 +106,13 @@ export function Dialog({
     initialFocus,
     focusKey,
     dismissible = true,
+    canClose,
     closeOnBackdrop = false,
     closeLabel,
     returnFocus,
+    fallbackFocus,
     onSubmit,
+    error,
     className,
     ...rest
 }: DialogProps) {
@@ -96,9 +121,10 @@ export function Dialog({
     const descriptionId = `${id}-description`;
     const ref = useRef<HTMLDialogElement>(null);
     const closeRef = useRef<HTMLButtonElement>(null);
-    const closedHere = useRef(false);
-    const latest = useRef({ onClose, returnFocus, initialFocus });
-    latest.current = { onClose, returnFocus, initialFocus };
+    // Closes by the page whose `close` event has not arrived yet (a browser sends it in a later task).
+    const closedHere = useRef(0);
+    const latest = useRef({ onClose, returnFocus, initialFocus, fallbackFocus });
+    latest.current = { onClose, returnFocus, initialFocus, fallbackFocus };
 
     // biome-ignore lint/correctness/useExhaustiveDependencies: focusKey means "new content: place the focus again"
     useEffect(() => {
@@ -106,15 +132,28 @@ export function Dialog({
         if (!d) return;
         if (open) {
             if (!d.open) {
+                // Its place in a stack of dialogs (InfoPopover holds back only for dialogs above its own).
+                d.dataset.dialogLevel = String(
+                    document.querySelectorAll('dialog[open]').length + 1,
+                );
                 if (typeof d.showModal === 'function') d.showModal();
                 else d.setAttribute('open', '');
             }
             firstFocus(d, latest.current.initialFocus, closeRef.current)?.focus();
         } else if (d.open) {
-            closedHere.current = true;
+            closedHere.current += 1;
             closeDialog(d, '');
+            focusIfLost(latest.current.returnFocus, latest.current.fallbackFocus);
         }
     }, [open, focusKey]);
+
+    // Leaving the page while open (the page stopped rendering it): focus must not fall to `body`.
+    useEffect(() => {
+        const d = ref.current;
+        return () => {
+            if (d?.open) focusIfLost(latest.current.returnFocus, latest.current.fallbackFocus);
+        };
+    }, []);
 
     const handleClose = (event: SyntheticEvent<HTMLDialogElement>) => {
         // A nested dialog's close reaches this one through the React tree: not ours.
@@ -123,28 +162,34 @@ export function Dialog({
         const value = d.returnValue ?? '';
         // Escape sets no value and engines differ on clearing the last one (the dialog guide).
         d.returnValue = '';
-        if (closedHere.current) {
-            closedHere.current = false;
+        if (closedHere.current > 0) {
+            closedHere.current -= 1;
             return;
         }
         latest.current.onClose(value);
         const target = resolve(latest.current.returnFocus);
         if (target?.isConnected) target.focus();
+        else focusIfLost(undefined, latest.current.fallbackFocus);
     };
+
+    const vetoed = () => canClose !== undefined && !canClose();
 
     const handleCancel = (event: SyntheticEvent<HTMLDialogElement>) => {
         if (event.target !== event.currentTarget) return;
-        if (!dismissible) event.preventDefault();
+        if (!dismissible || vetoed()) event.preventDefault();
     };
 
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
         // A nested dialog's form submits through the React tree too.
         if (event.target !== event.currentTarget) return;
         event.preventDefault();
+        // The portal keeps the DOM apart, but React events still bubble to an ancestor's `onSubmit`.
+        event.stopPropagation();
         if (onSubmit) {
             onSubmit(event);
             return;
         }
+        if (!dismissible) return;
         // What `method="dialog"` does, by hand, so the chosen button's value is the return value in every engine.
         const by = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
         if (ref.current) closeDialog(ref.current, by?.value ?? '');
@@ -153,8 +198,9 @@ export function Dialog({
     const requestClose = () => {
         const d = ref.current as (HTMLDialogElement & { requestClose?: () => void }) | null;
         if (!d || !dismissible) return;
+        // `requestClose()` sends `cancel`, where the veto is asked; the fallback asks it here.
         if (typeof d.requestClose === 'function') d.requestClose();
-        else closeDialog(d, '');
+        else if (!vetoed()) closeDialog(d, '');
     };
 
     const closedBy = !dismissible ? 'none' : closeOnBackdrop ? 'any' : 'closerequest';
@@ -188,6 +234,11 @@ export function Dialog({
                         </p>
                     )}
                     {hasBody && <div className={styles.body}>{children}</div>}
+                    {error !== undefined && (
+                        <div className={styles.error} role="status" data-dialog-error="">
+                            {error}
+                        </div>
+                    )}
                     {actions && <div className={styles.actions}>{actions}</div>}
                     {closeLabel && (
                         <button
@@ -196,7 +247,8 @@ export function Dialog({
                             className={styles.close}
                             aria-label={closeLabel}
                             onClick={requestClose}
-                            disabled={!dismissible}
+                            // Not `disabled`: a disabled button that has focus drops it to `body` inside the modal.
+                            aria-disabled={!dismissible}
                             data-dialog-close=""
                         >
                             <CloseGlyph />
@@ -223,6 +275,18 @@ function closeDialog(d: HTMLDialogElement, value: string): void {
 function resolve(target: FocusTarget | undefined): HTMLElement | null {
     if (!target) return null;
     return 'current' in target ? target.current : target;
+}
+
+/** Focus fell to `body` (or nowhere): the element to return to if it is still on the page, else the fallback. */
+function focusIfLost(back: FocusTarget | undefined, fallback: FocusTarget | undefined): void {
+    if (typeof document === 'undefined') return;
+    const active = document.activeElement;
+    if (active !== null && active !== document.body) return;
+    const target =
+        [resolve(back), resolve(fallback), document.querySelector<HTMLElement>('main')].find(
+            (el) => el?.isConnected,
+        ) ?? null;
+    target?.focus({ preventScroll: true });
 }
 
 /** The chosen element, else the first control that is not the close button, else the close button. */

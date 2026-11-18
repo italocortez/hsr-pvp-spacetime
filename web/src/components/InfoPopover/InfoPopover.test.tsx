@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Dialog } from '@/components/Dialog/Dialog';
 import { CLOSE_DELAY_MS, EXIT_MS, FLASH_MS, InfoPopover, OPEN_DELAY_MS } from './InfoPopover';
 
 /*
@@ -498,7 +499,47 @@ describe('InfoPopover: modal dialogs (S14.3k)', () => {
         expect(isOpen(trigger('Inside'))).toBe(false);
         expect(isOpen(trigger('Outside'))).toBe(false);
     });
+
+    // T-S14.4b-fix (review B, S5): the shared Dialog stacked (`Stacked` below).
+    it('a timed open in a second dialog over a first shows; one in the first dialog, now under it, is held', () => {
+        const { rerender } = render(<Stacked flash={0} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Advanced Settings' }));
+        expect(document.querySelectorAll('dialog[open]')).toHaveLength(2);
+        rerender(<Stacked flash={1} firstFlash={1} />);
+        expect(isOpen(trigger('About Best Of'))).toBe(true);
+        expect(panelOf(trigger('About Best Of'))).toHaveAttribute('data-why', 'flash');
+        expect(isOpen(trigger('About the mode'))).toBe(false);
+    });
+
+    it('the Escape that closes an open panel is cancelled (not also the dialog’s close request); with none open it is not', () => {
+        render(<Stacked flash={0} />);
+        fireEvent.click(trigger('About the mode'));
+        expect(isOpen(trigger('About the mode'))).toBe(true);
+        expect(fireEvent.keyDown(trigger('About the mode'), { key: 'Escape' })).toBe(false);
+        expect(isOpen(trigger('About the mode'))).toBe(false);
+        expect(fireEvent.keyDown(trigger('About the mode'), { key: 'Escape' })).toBe(true);
+    });
 });
+
+/** T-S14.4b-fix: two shared Dialogs stacked (the create form and its Advanced Settings), a popover in each. */
+function Stacked({ flash, firstFlash = 0 }: { flash: number; firstFlash?: number }) {
+    const [second, setSecond] = useState(false);
+    return (
+        <Dialog open onClose={() => {}} title="Create Lobby">
+            <button type="button" onClick={() => setSecond(true)}>
+                Advanced Settings
+            </button>
+            <InfoPopover label="About the mode" form="pill" flash={firstFlash}>
+                mode
+            </InfoPopover>
+            <Dialog open={second} onClose={() => setSecond(false)} title="Advanced Settings">
+                <InfoPopover label="About Best Of" form="pill" flash={flash}>
+                    best of
+                </InfoPopover>
+            </Dialog>
+        </Dialog>
+    );
+}
 
 describe('InfoPopover: exit and reduced motion', () => {
     it('closing fades out: the content stays for EXIT_MS, then goes', () => {

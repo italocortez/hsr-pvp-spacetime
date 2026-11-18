@@ -128,6 +128,37 @@ describe('useEnsureSignedIn', () => {
         await expect(result.current()).resolves.toEqual({ kind: 'failed', reason: 'timeout' });
     });
 
+    it('a call that never answers (a half-open connection): timeout, and the next call sends again (S14.4b-fix S2)', async () => {
+        setAuthSnapshot(VISITOR);
+        conn.reducers.loginAsGuest.mockImplementationOnce(() => new Promise<void>(() => {}));
+        const result = setup(50);
+        await expect(result.current()).resolves.toEqual({ kind: 'failed', reason: 'timeout' });
+        conn.reducers.loginAsGuest.mockImplementationOnce(async () => {
+            setAuthSnapshot(GUEST);
+        });
+        let out: unknown;
+        await act(async () => {
+            out = await result.current();
+        });
+        expect(conn.reducers.loginAsGuest).toHaveBeenCalledTimes(2);
+        expect(out).toEqual({ kind: 'ready', created: true, isGuest: true });
+    });
+
+    it('a late rejection after the time limit is dropped (no unhandled rejection)', async () => {
+        setAuthSnapshot(VISITOR);
+        let fail: () => void = () => {};
+        conn.reducers.loginAsGuest.mockImplementationOnce(
+            () =>
+                new Promise<void>((_resolve, reject) => {
+                    fail = () => reject(new Error('dropped'));
+                }),
+        );
+        const result = setup(30);
+        await expect(result.current()).resolves.toEqual({ kind: 'failed', reason: 'timeout' });
+        fail();
+        await new Promise((r) => setTimeout(r, 10));
+    });
+
     it('two calls at once share one login_as_guest', async () => {
         setAuthSnapshot(VISITOR);
         conn.reducers.loginAsGuest.mockImplementation(async () => {

@@ -11,7 +11,11 @@ import {
 import type { AuthSnapshot } from '@/auth/authStore';
 import { loginSearchFor } from '@/auth/loginSearch';
 import { signOut } from '@/auth/signOut';
-import { openSignInDialog, preloadSignInDialog } from '@/pages/sign-in/signInDialogState';
+import {
+    openSignInDialog,
+    preloadSignInDialog,
+    preloadSignInDialogWhenIdle,
+} from '@/pages/sign-in/signInDialogState';
 import styles from './AccountArea.module.css';
 
 /** The menu's actions, an object so tests can spy on them. `signOut` is SDK-free (entry chunk). */
@@ -21,7 +25,8 @@ export const accountActions = {
 
 /**
  * A plain click on "Sign in" opens the sign-in dialog over the page (S14.4b, A221 R1) instead of following the link.
- * A modified or middle click still opens the full-screen panel (`/?login=1&next=…`) in a new tab or window.
+ * A modified or middle click still opens the full-screen panel (`/?login=1&next=…`) in a new tab or window, and a
+ * plain click goes there too if the dialog's chunk cannot be loaded (`SignInDialogHost`).
  */
 function openDialogInstead(event: MouseEvent<HTMLAnchorElement>): void {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
@@ -40,6 +45,10 @@ function openDialogInstead(event: MouseEvent<HTMLAnchorElement>): void {
 export function AccountArea({ auth }: { auth: AuthSnapshot }) {
     const href = useRouterState({ select: (s) => s.location.href });
     const member = auth.user && !auth.user.isGuest ? auth.user : undefined;
+    const showsSignIn = auth.ready && !member;
+
+    // "Sign in" is on screen: load the dialog's chunk once the browser is idle, so the first click finds it in.
+    useEffect(() => (showsSignIn ? preloadSignInDialogWhenIdle() : undefined), [showsSignIn]);
 
     let content: ReactNode;
     if (!auth.ready) {

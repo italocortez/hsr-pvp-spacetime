@@ -18,7 +18,8 @@ export type EnsureSignedInResult =
     /** The module refused (`text`: its sentence, may be empty): guest creation off, maintenance, a ban. */
     | { kind: 'refused'; text: string }
     /**
-     * `notConnected`: no open connection, nothing was sent; `timeout`: the profile view did not answer in time;
+     * `notConnected`: no open connection, nothing was sent; `timeout`: the call or the profile view did not answer in
+     * time;
      * `unknown`: the call failed another way (the connection dropped: the result is unknown).
      */
     | { kind: 'failed'; reason: 'notConnected' | 'timeout' | 'unknown' };
@@ -53,9 +54,22 @@ function refusalOf(error: unknown): string | undefined {
     return error.message.trim().slice(0, 200);
 }
 
+const TIMED_OUT = Symbol('timed out');
+
+/** `promise`'s value, or TIMED_OUT after `ms` (the promise's later answer is dropped). */
+function withinTime<T>(promise: Promise<T>, ms: number): Promise<T | typeof TIMED_OUT> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<typeof TIMED_OUT>((resolve) => {
+        timer = setTimeout(() => resolve(TIMED_OUT), ms);
+    });
+    return Promise.race([promise, late]).finally(() => clearTimeout(timer));
+}
+
 /**
  * Returns `ensureSignedIn()`: resolves once the viewer is a guest or a member, or with the reason they are not. It
- * never rejects. Calls made while one is running share it (one `login_as_guest` at most).
+ * never rejects, and every step has a time limit (`waitMs`; the call to `login_as_guest` too). Calls made through the
+ * same returned function while one is running share it (one `login_as_guest` from this hook at most); two components
+ * that each use the hook can each send one (the module answers the second for an existing user by doing nothing).
  */
 export function useEnsureSignedIn(waitMs: number = ENSURE_WAIT_MS) {
     const loginAsGuest = useReducerCall((r) => r.loginAsGuest({}));
@@ -66,7 +80,9 @@ export function useEnsureSignedIn(waitMs: number = ENSURE_WAIT_MS) {
         if (!known) return { kind: 'failed', reason: 'timeout' };
         if (known.user) return { kind: 'ready', created: false, isGuest: known.user.isGuest };
         try {
-            await loginAsGuest();
+            // A half-open connection can hold the call for good: it gets the same time limit as the waits.
+            if ((await withinTime(loginAsGuest(), waitMs)) === TIMED_OUT)
+                return { kind: 'failed', reason: 'timeout' };
         } catch (error) {
             if (error instanceof NotConnectedError)
                 return { kind: 'failed', reason: 'notConnected' };

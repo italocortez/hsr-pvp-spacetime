@@ -56,9 +56,17 @@
     margin-block-start: 14px;
 }
 
-/* The angled button (DESIGN.md 5.1 form, the mockup's `.authBtn`). The ring is an inset shadow: an outline would be clipped. */
+/*
+ * The angled button (DESIGN.md 5.1 form, the mockup's `.authBtn`). The button is not clipped: its fill is the clipped
+ * `.fill` layer behind the text, and the focus ring is the shared slanted ring (`styles/slantedFocus.module.css`, the
+ * landing page's "Play Now" ring) in the button's own shape, all four sides, with forced colours there too. Each
+ * button sets `--cta-bg` and `--cta-edge` (an inset line drawn on the fill).
+ */
 .cta {
-    position: relative;
+    --slant: 16px;
+    --cta-bg: transparent;
+    --cta-edge: none;
+
     display: inline-flex;
     flex: none;
     gap: 12px;
@@ -68,35 +76,36 @@
     block-size: 56px;
     padding: 0 24px;
     border: none;
-    clip-path: polygon(16px 0, 100% 0, calc(100% - 16px) 100%, 0 100%);
+    background: none;
     font-family: var(--font-secondary);
     font-size: 0.8125rem;
     font-weight: 700;
     letter-spacing: 0.14em;
     text-transform: uppercase;
     cursor: pointer;
-    transition:
-        background var(--duration-fast) var(--ease-out),
-        box-shadow var(--duration-fast) var(--ease-out);
-
-    &:focus-visible {
-        outline: none;
-        box-shadow: inset 0 0 0 2.5px var(--color-prestige);
-    }
 
     &[aria-disabled="true"] {
         opacity: 0.55;
         cursor: not-allowed;
     }
 
+    /* The shared ring's whole border, restated: `border: none` above would otherwise win by load order. */
     @media (forced-colors: active) {
-        border: 1px solid ButtonText;
-
-        &:focus-visible {
-            outline: 2px solid Highlight;
-            outline-offset: -4px;
-        }
+        border: 2px solid ButtonText;
     }
+}
+
+.fill {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    clip-path: polygon(var(--slant) 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%);
+    background: var(--cta-bg);
+    box-shadow: var(--cta-edge);
+    pointer-events: none;
+    transition:
+        background var(--duration-fast) var(--ease-out),
+        box-shadow var(--duration-fast) var(--ease-out);
 }
 
 .icon {
@@ -107,30 +116,30 @@
 
 /* Discord's brand blurple: the recognised sign-in mark. */
 .discord {
-    background: #5865f2;
+    --cta-bg: #5865f2;
+
     color: #fff;
 
     &:hover:not([aria-disabled="true"]) {
-        background: #4a55e0;
+        --cta-bg: #4a55e0;
     }
 }
 
+/* The quiet button: the card's own colour, opaque, so the focus ring behind the fill does not show through. */
 .guest {
-    background: transparent;
+    --cta-bg: var(--bg-card);
+    --cta-edge: inset 0 0 0 1px var(--border-strong);
+
     color: var(--color-snow);
-    box-shadow: inset 0 0 0 1px var(--border-strong);
 
     & .icon {
         color: var(--color-iris);
     }
 
     &:hover:not([aria-disabled="true"]) {
-        background: rgba(126, 112, 224, 0.08);
-        box-shadow: inset 0 0 0 1px var(--color-iris);
-    }
-
-    &:focus-visible {
-        box-shadow: inset 0 0 0 2.5px var(--color-iris);
+        --cta-bg: linear-gradient(rgba(126, 112, 224, 0.08), rgba(126, 112, 224, 0.08))
+            var(--bg-card);
+        --cta-edge: inset 0 0 0 1px var(--color-iris);
     }
 }
 
@@ -172,29 +181,6 @@
     }
 }
 
-.retry {
-    align-self: center;
-    min-block-size: 34px;
-    padding: 0 14px;
-    border: 1px solid var(--border-strong);
-    border-radius: 8px;
-    background: transparent;
-    color: var(--color-snow);
-    font-family: var(--font-secondary);
-    font-size: 0.75rem;
-    font-weight: 600;
-    cursor: pointer;
-
-    &:hover {
-        border-color: var(--color-iris);
-    }
-
-    &:focus-visible {
-        outline: 2px solid var(--color-iris);
-        outline-offset: 2px;
-    }
-}
-
 .fine {
     margin: 12px 0 0;
     color: var(--text-muted);
@@ -209,6 +195,11 @@
 /* The guest just created: the heading centred over their name, one line, and "Enter Battlegrounds". */
 .createdDialog {
     --dialog-title-align: center;
+
+    /* Phones: the room kept for the close button on the right is kept on the left too, so the title stays centred. */
+    @media (--bp-sm) {
+        --dialog-title-start-room: 40px;
+    }
 }
 
 .created {
@@ -239,11 +230,12 @@
 }
 
 .enter {
-    background: var(--color-iris);
+    --cta-bg: var(--color-iris);
+
     color: var(--color-snow);
 
     &:hover {
-        background: var(--color-iris-hover);
+        --cta-bg: var(--color-iris-hover);
     }
 }
 
