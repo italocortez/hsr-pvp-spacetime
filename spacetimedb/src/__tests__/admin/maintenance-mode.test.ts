@@ -11,8 +11,8 @@
 import { describe, expect, it } from 'vitest';
 import { ScheduleAt } from 'spacetimedb';
 import { MAINTENANCE_TEXT } from '@module/helpers/identity/ensurePermissions';
-import { DEFAULT_LOBBY_ARGS, M, advance, connect, now, rejection, setupLobby, tx, type Actor, type Ctx, type Harness } from '../fixtures/harness';
-import { admin, moderator } from '../fixtures/identity';
+import { DEFAULT_LOBBY_ARGS, M, advance, connect, linkerAuth, now, rejection, setupLobby, tx, type Actor, type Ctx, type Harness } from '../fixtures/harness';
+import { admin, freshAuth, moderator } from '../fixtures/identity';
 import { at } from '../fixtures/calendar';
 import { duel } from '../fixtures/tournament-matches';
 
@@ -139,5 +139,91 @@ describe('A163(3): turning maintenance mode off restores everything', () => {
         tx(w.test, w.user, (ctx) => M.update_display_name(ctx, { newDisplayName: 'Later' }));
         expect(w.test.db.User.id.find(w.user.userId)!.displayName).toBe('Later');
         tx(w.test, w.mod, (ctx) => M.update_display_name(ctx, { newDisplayName: 'Mod name' }));
+    });
+});
+
+// ─── T-MNT1: server_set_maintenance, the server twin of the Admin's switch ─────────────────────────────────────────
+// 'internal' is the Owner server identity; a Delegate is registered by the owner as the scripts' token is. Same row and
+// effect as admin_update_abuse_config({ maintenanceMode }); audit actor SYSTEM (0); the same value writes nothing.
+
+describe('MNT1: server_set_maintenance', () => {
+    const NOT_SERVER = 'Forbidden: caller is not a registered server identity.';
+    const serverSet = (on: boolean) => (ctx: Ctx) => M.server_set_maintenance(ctx, { on });
+    const config = (test: Harness) => test.db.AbuseConfig.id.find(1)!;
+    /** A Delegate server identity (as bootstrap registers the scripts' token), as an actor. */
+    const delegate = (test: Harness, sub: string): Actor => {
+        const { auth, identity } = freshAuth(test, sub);
+        tx(test, 'internal', (ctx) => M.server_register_delegate(ctx, { identityHex: identity.toHexString(), label: sub }));
+        return { sub, auth, identity, userId: test.db.UserIdentity.identity.find(identity)!.userId } as Actor;
+    };
+
+    it('turns the mode on and off with SYSTEM in the audit columns, as the Owner and as a Delegate', () => {
+        const w = world();
+        const d = delegate(w.test, 'mnt-delegate');
+        setMaintenance(w.test, w.boss, false); // stamps the admin as last modifier
+        expect(config(w.test).lastModifiedById).toBe(w.boss.userId);
+
+        tx(w.test, 'internal', serverSet(true));
+        expect(config(w.test)).toMatchObject({ maintenanceMode: true, lastModifiedById: 0 });
+        tx(w.test, d, serverSet(false));
+        expect(config(w.test)).toMatchObject({ maintenanceMode: false, lastModifiedById: 0 });
+        tx(w.test, d, serverSet(true));
+        expect(config(w.test).maintenanceMode).toBe(true);
+        tx(w.test, 'internal', serverSet(false));
+        expect(config(w.test).maintenanceMode).toBe(false);
+    });
+
+    it('a normal user, an Admin and the Linker are refused with the server-identity text; nothing changes', () => {
+        const w = world();
+        const linker = { auth: linkerAuth(w.test) } as Actor;
+        const before = JSON.stringify(config(w.test), (_k, v) => (typeof v === 'bigint' ? v.toString() : v));
+        for (const who of [w.user, w.boss, linker]) {
+            expect(rejection(w.test, who, serverSet(true))).toBe(NOT_SERVER);
+        }
+        expect(JSON.stringify(config(w.test), (_k, v) => (typeof v === 'bigint' ? v.toString() : v))).toBe(before);
+        expect(config(w.test).maintenanceMode).toBe(false);
+    });
+
+    it('while on: a normal user is refused at connect and on a reducer; server reducers still run; the Delegate still connects', () => {
+        const w = world();
+        const d = delegate(w.test, 'mnt-delegate-on');
+        tx(w.test, 'internal', serverSet(true));
+        expect(rejection(w.test, w.user, (ctx) => M.client_connected(ctx, {}))).toBe(CONNECT_REFUSED);
+        expect(rejection(w.test, w.user, (ctx) => M.update_display_name(ctx, { newDisplayName: 'Nope' }))).toBe(MAINTENANCE_TEXT);
+        connect(w.test, d);
+        tx(w.test, 'internal', (ctx) => M.client_connected(ctx, {}));
+        const username = w.test.db.User.id.find(w.mod.userId)!.username;
+        tx(w.test, d, (ctx) => M.server_set_role(ctx, { username, roleTag: 'TournamentHost' }));
+        expect(w.test.db.User.id.find(w.mod.userId)!.role.tag).toBe('TournamentHost');
+        tx(w.test, d, (ctx) => M.server_set_guest_creation(ctx, { enabled: false }));
+        expect(config(w.test).guestCreationEnabled).toBe(false);
+    });
+
+    it('turning it off through the server reducer restores normal use', () => {
+        const w = world();
+        const d = delegate(w.test, 'mnt-delegate-off');
+        tx(w.test, d, serverSet(true));
+        expect(rejection(w.test, w.user, (ctx) => M.update_display_name(ctx, { newDisplayName: 'Later' }))).toBe(MAINTENANCE_TEXT);
+        tx(w.test, d, serverSet(false));
+        connect(w.test, w.user);
+        tx(w.test, w.user, (ctx) => M.update_display_name(ctx, { newDisplayName: 'Later' }));
+        expect(w.test.db.User.id.find(w.user.userId)!.displayName).toBe('Later');
+    });
+
+    it('setting the value it already has succeeds and writes nothing (audit columns unchanged)', () => {
+        const w = world();
+        setMaintenance(w.test, w.boss, false);
+        const off = config(w.test);
+        advance(w.test, 1000);
+        tx(w.test, 'internal', serverSet(false));
+        expect(config(w.test)).toMatchObject({ maintenanceMode: false, lastModifiedById: w.boss.userId });
+        expect(config(w.test).lastModifiedDate.microsSinceUnixEpoch).toBe(off.lastModifiedDate.microsSinceUnixEpoch);
+
+        tx(w.test, 'internal', serverSet(true));
+        const on = config(w.test);
+        advance(w.test, 1000);
+        tx(w.test, 'internal', serverSet(true));
+        expect(config(w.test)).toMatchObject({ maintenanceMode: true, lastModifiedById: 0 });
+        expect(config(w.test).lastModifiedDate.microsSinceUnixEpoch).toBe(on.lastModifiedDate.microsSinceUnixEpoch);
     });
 });

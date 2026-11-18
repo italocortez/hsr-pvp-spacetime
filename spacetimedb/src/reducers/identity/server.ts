@@ -7,7 +7,7 @@ import { performUserDeletion } from '@module/helpers/identity/userDeletionHelper
 import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { handOverMatchEventsOfFormerStaff } from '@module/helpers/calendar/calendarCascade';
 import { seedSystemLobbyPreset } from '@module/helpers/lobby/systemPreset';
-import { setGuestCreationEnabled, setGuestLobbyCreationEnabled } from '@module/helpers/lobby/abuseControls';
+import { setGuestCreationEnabled, setGuestLobbyCreationEnabled, setMaintenanceMode } from '@module/helpers/lobby/abuseControls';
 import { cleanProviderName, planProviderLink } from '@module/helpers/identity/providerLink';
 import { requireLinker, trustedServerRow } from '@module/helpers/identity/serverIdentities';
 import {
@@ -368,6 +368,21 @@ export const server_set_guest_lobby_creation = spacetimedb.reducer({
     requireServer(ctx);
     setGuestLobbyCreationEnabled(ctx, enabled, SYSTEM_USER_ID);
     console.log(`[ABUSE] Guest lobby creation ${enabled ? 'enabled' : 'disabled'} by a server identity`);
+});
+
+/**
+ * MNT1: server-only switch of maintenance mode (AbuseConfig.maintenanceMode, A163(3)), the server-side twin of the
+ * Admin's admin_update_abuse_config({ maintenanceMode }), so the operator can switch it without the admin page
+ * (npm run stdb:maintenance). Same row, same effect: connected clients are not dropped; new connections of non-server,
+ * non-Admin identities are refused by client_connected and the actions of connected non-Admins by
+ * ensureNotInMaintenance. Setting the value it already has writes nothing and succeeds. Audit actor: SYSTEM.
+ */
+export const server_set_maintenance = spacetimedb.reducer({
+    on: t.bool(),
+}, (ctx, { on }) => {
+    requireServer(ctx);
+    const changed = setMaintenanceMode(ctx, on, SYSTEM_USER_ID);
+    console.log(`[ABUSE] Maintenance mode ${on ? 'on' : 'off'}${changed ? '' : ' (unchanged)'} by a server identity`);
 });
 
 /**

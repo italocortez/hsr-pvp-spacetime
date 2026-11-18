@@ -122,12 +122,16 @@ Turning it on (the file first, then the module, so visitors meet the splash inst
 
 1. Set `web/public/status.json` to `{ "maintenance": true }`, build and deploy. `check:patterns` gate 9 fails on that build (it requires `false` in `web/dist/status.json`), so turning maintenance on is a deliberate deploy from a commit that CI marks red. Keep the commit on its own branch, or deploy the local build without committing.
 2. Open the deployed site in a fresh tab and check that the maintenance splash shows and no socket opens.
-3. Turn the module's maintenance on (B-8). The module drops the sockets of tabs that are still connected; they go to `reconnecting` (no splash) and read the file 30 s after the drop, which shows the maintenance splash and stops their reconnect loop. Tabs on the offline splash read at once or within 30 s, then every 60 s. Hidden tabs wait until they are visible.
+3. Turn the module's maintenance on (B-8): `npm run stdb:maintenance -- --target prod on` (the delegate token; `status` shows the current value, `--dry-run` prints the call; an Admin can also switch it on the admin page). Turning it on drops no socket (Phase MNT1 execution corrects the earlier text here, which said it did): a tab that is still connected stays connected and a non-Admin is refused on its next action with "The site is in maintenance. Please try again later." Only when its socket drops (a breaking publish, a network blip, a reload) does it reconnect, get refused, go to `reconnecting` and read the file 30 s later, which shows the maintenance splash and stops its reconnect loop. Tabs on the offline splash read at once or within 30 s, then every 60 s. Hidden tabs wait until they are visible.
 
 Ending it (the reverse order: the module first, so tabs that connect find it open):
 
-1. Turn the module's maintenance off.
+1. Turn the module's maintenance off: `npm run stdb:maintenance -- --target prod off`.
 2. Set the file back to `{ "maintenance": false }`, build, deploy, and check in a fresh tab that `/` connects. Open tabs connect on their next Retry.
+
+The server identities (the Owner and the delegate token of the scripts) are not refused while it is on: their connections and `server_*` reducers pass, so the script can switch it off again, and publish, bootstrap and seed run inside the window.
+
+**Publishing a breaking module change:** a publish that changes an existing table or enum belongs inside a maintenance window. Observed 2026-11-18: appending two variants to an enum made the publish report "All clients will be disconnected due to breaking schema changes" and recreate the views, with no data loss. A publish that only adds tables, views or reducers disconnects nobody and needs no window. Order: status file on, module maintenance on, publish, check, module maintenance off, status file off.
 
 **Module before web (SUS2):** publish the module that has `view_my_suspension` (`stdb:publish:prod`) before deploying a web build that subscribes it; Layer 0 treats a failing view as a connection failure, so the other order shows every visitor the offline splash, and Retry repeats it ([suspension architecture](../suspension/architecture.md#release)).
 

@@ -153,6 +153,7 @@ import ServerRevokeLinkerReducer from "../server_revoke_linker_reducer";
 import ServerSetDatetimeReducer from "../server_set_datetime_reducer";
 import ServerSetGuestCreationReducer from "../server_set_guest_creation_reducer";
 import ServerSetGuestLobbyCreationReducer from "../server_set_guest_lobby_creation_reducer";
+import ServerSetMaintenanceReducer from "../server_set_maintenance_reducer";
 import ServerSetMmrReducer from "../server_set_mmr_reducer";
 import ServerSetOnlineReducer from "../server_set_online_reducer";
 import ServerSetRoleReducer from "../server_set_role_reducer";
@@ -343,6 +344,7 @@ export type ServerRevokeLinkerParams = __Infer<typeof ServerRevokeLinkerReducer>
 export type ServerSetDatetimeParams = __Infer<typeof ServerSetDatetimeReducer>;
 export type ServerSetGuestCreationParams = __Infer<typeof ServerSetGuestCreationReducer>;
 export type ServerSetGuestLobbyCreationParams = __Infer<typeof ServerSetGuestLobbyCreationReducer>;
+export type ServerSetMaintenanceParams = __Infer<typeof ServerSetMaintenanceReducer>;
 export type ServerSetMmrParams = __Infer<typeof ServerSetMmrReducer>;
 export type ServerSetOnlineParams = __Infer<typeof ServerSetOnlineReducer>;
 export type ServerSetRoleParams = __Infer<typeof ServerSetRoleReducer>;

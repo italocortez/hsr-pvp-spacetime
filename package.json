@@ -34,6 +34,7 @@
         "stdb:manage-user": "tsx scripts/stdb/manage-user.ts",
         "stdb:manage-partners": "tsx scripts/stdb/manage-partners.ts",
         "stdb:guest-switch": "tsx scripts/stdb/guest-switch.ts",
+        "stdb:maintenance": "tsx scripts/stdb/maintenance.ts",
         "energy": "node tools/energy-model.js"
     },
     "devDependencies": {

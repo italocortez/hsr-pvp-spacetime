@@ -181,6 +181,7 @@ import ServerRevokeLinkerReducer from "./server_revoke_linker_reducer";
 import ServerSetDatetimeReducer from "./server_set_datetime_reducer";
 import ServerSetGuestCreationReducer from "./server_set_guest_creation_reducer";
 import ServerSetGuestLobbyCreationReducer from "./server_set_guest_lobby_creation_reducer";
+import ServerSetMaintenanceReducer from "./server_set_maintenance_reducer";
 import ServerSetMmrReducer from "./server_set_mmr_reducer";
 import ServerSetOnlineReducer from "./server_set_online_reducer";
 import ServerSetRoleReducer from "./server_set_role_reducer";
@@ -1322,6 +1323,7 @@ const reducersSchema = __reducers(
   __reducerSchema("server_set_datetime", ServerSetDatetimeReducer),
   __reducerSchema("server_set_guest_creation", ServerSetGuestCreationReducer),
   __reducerSchema("server_set_guest_lobby_creation", ServerSetGuestLobbyCreationReducer),
+  __reducerSchema("server_set_maintenance", ServerSetMaintenanceReducer),
   __reducerSchema("server_set_mmr", ServerSetMmrReducer),
   __reducerSchema("server_set_online", ServerSetOnlineReducer),
   __reducerSchema("server_set_role", ServerSetRoleReducer),

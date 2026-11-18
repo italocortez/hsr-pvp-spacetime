@@ -2320,3 +2320,13 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   7. Orchestrator: look question L1 is read as A (the hero runs under the frosted bar, the mockup's form), from the same message; it is what is built.
 - **Why:** user, 2026-11-17: "I'll uploadthem to upload thing, right now, only keep the genius society server as the only partnered discord"; "i was talking about the discord icons only yes, but if we have an invite link for genius server, wouldn't that be enough to get the image tho?"; "I say we create a small admin editable table (public) that stores the links for our parnered servers, so we can add or remove servers without needing to redeploy and it would always keep the image up to date, we will need the invite link and server name on that table i assume right? we dont need audit columns there"; then, to the two ways of keeping the image current and the security header question, "yeah lets go with option A and your security recomendation".
 - **Where implemented:** not yet; S14.4p.
+
+### A223 — Maintenance mode can be switched by the server; breaking publishes go in a maintenance window
+
+- **Date:** 2026-11-18 · **Status:** decided; built (MNT1), not yet published
+- **Decision:**
+  1. The database's maintenance mode gets a server function and a script command (`stdb:maintenance on | off | status`), so it does not depend on the admin page.
+  2. Orchestrator, from what the publish of 2026-11-18 showed: a publish that changes an existing table or list of values disconnects every connected client (no data is lost), so on prod it belongs inside a maintenance window. A publish that only adds tables, views or functions disconnects nobody.
+  3. Orchestrator, correcting an earlier statement: turning maintenance on does not drop connected clients. They are refused on their next action, and refused when they next connect; the server identity and Admins still get in.
+- **Why:** user, 2026-11-18: "do we have a maintanance mode we can start so that we can push edits like this on prod eventually?"; then "we can add that maintance mode on a server function, yes".
+- **Where implemented:** `server_set_maintenance` in `spacetimedb/src/reducers/identity/server.ts`; `scripts/stdb/maintenance.ts`; `docs/frontend/hosting.md`, `docs/admin/`

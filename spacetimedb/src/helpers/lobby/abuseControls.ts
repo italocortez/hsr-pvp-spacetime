@@ -156,6 +156,20 @@ export function setGuestLobbyCreationEnabled(ctx: any, enabled: boolean, actorId
     ctx.db.AbuseConfig.id.update(updateWithAudit(ctx, existing, { guestLobbyCreationEnabled: enabled }, actorId));
 }
 
+/**
+ * MNT1: writes AbuseConfig.maintenanceMode with `actorId` in the audit columns, the same row and column the Admin sets
+ * through admin_update_abuse_config. The flag has no other effect at write time: nobody is disconnected here (a module
+ * cannot drop a socket); client_connected refuses new connections and ensureNotInMaintenance refuses the actions of
+ * connected non-Admins. Setting the value the row already holds writes nothing (returns false). Used by
+ * server_set_maintenance (SYSTEM).
+ */
+export function setMaintenanceMode(ctx: any, on: boolean, actorId: number): boolean {
+    const existing = seedAbuseConfigDefaults(ctx);
+    if (existing.maintenanceMode === on) return false;
+    ctx.db.AbuseConfig.id.update(updateWithAudit(ctx, existing, { maintenanceMode: on }, actorId));
+    return true;
+}
+
 const EPOCH = new Timestamp(0n);
 
 /** Updates the user's UserRateState row, or creates it (windows start at the epoch, so the first check opens one). */
