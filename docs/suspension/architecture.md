@@ -1,6 +1,6 @@
 # Account Suspension -- Architecture
 
-Last updated: 2026-11-17 (suspension-s1: backend and the command line script, fix pass included; no client screen, no admin page)
+Last updated: 2026-11-17 (suspension-s1: backend and the command line script, fix pass included; SUS2: the client's suspended screen; no admin page)
 
 ## Overview
 
@@ -105,6 +105,19 @@ Untouched: tournament entries, teams, captaincy, assistant and organizer roles (
 `scripts/stdb/manage-user.ts`: `suspend <username> [--reason "<text>"]` (`server_suspend_user`) and `unsuspend <username>` (`server_lift_suspension`), with `--dry-run` as the other commands (the dry run prints the reason's length, not its text). `--reason` is parsed by the script itself (the shared `_args.ts` parser knows boolean flags only) and is refused on any other command, when given twice, and when longer than 500 UTF-16 units (checked before the dry run, so the dry run reports it). A reason that starts with `--` must be written `--reason=<text>`. Every command takes an exact number of positional arguments (`set-role` 2, `delete` / `suspend` / `unsuspend` 1, `suspended` none); an extra word is refused with the usage text, so an unquoted reason (`--reason spam in chat`) or a second username fails instead of half-working.
 
 `suspended`: connects as the delegate, subscribes `SELECT * FROM view_admin_suspensions` (`subscribeOnly` in `_connection.ts`), prints the rows as a text table on applied (user id, username, display name, suspended by, set at in UTC, reason; `suspendedById` 0 shown as "server"), and closes. `--dry-run` prints the subscription, the database and the env key name only.
+
+## Client (SUS2)
+
+The suspended screen; no module change. Page, wording and tests: [pages.md](../frontend/pages.md) "Suspended (SUS2)"; subscription placement: [subscriptions.md](../frontend/subscriptions.md) Decision 6.
+
+| Piece | File | Role |
+|---|---|---|
+| Layer 0 | `web/src/stdb/layer0.ts` | subscribes `view_my_suspension` beside `view_my_profile` and `view_my_lobbies`, for the whole session; reads the profile and the suspension together once both have applied; while a row exists sets the flag and keeps the auth store "not ready" (not "visitor", so the guards do not redirect under the screen); a subscription error is a connection failure like the other two |
+| Flag | `web/src/stdb/suspensionStatus.ts` | an external store (`useSuspended`), no SDK code (the root layout is in the entry chunk) |
+| Gate | `web/src/stdb/SuspensionGate.tsx` | in the root layout below `ConnectionGate` (offline and maintenance first): the suspended page in place of the shell and every route while the flag is set; the routes unmount, so their subscriptions end |
+| Page | `web/src/pages/suspended/SuspendedPage.tsx` | "Account suspended", the body text, one "Sign out" button (`signOut`: token forgotten, reload as a visitor) |
+
+The lift deletes the row: the view drops it and the profile row returns in the same transaction, Layer 0 clears the flag after the auth store has the user again, and the app comes back on the same address without a reload. The live connection stays a suspended identity's connection; the module still refuses every write (see "The check").
 
 ## Cost
 

@@ -2256,3 +2256,10 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   2. Orchestrator: an Admin changing their own role, and any edit of another Admin that does not touch the role, stay as they were.
 - **Why:** user, 2026-11-17: "Admins should not demote other admins, only system can demote admins"
 - **Where implemented:** `admin_update_user` in `spacetimedb/src/reducers/admin/admin.ts`; `docs/admin/`; log `docs/log/2026-11-17-suspension-s1.md`
+
+### A217 — Page order after the profile: admin panel, lobbies, lobby room, calendar
+
+- **Date:** 2026-11-17 · **Status:** decided
+- **Decision:** After the landing page (S14.4) and the profile page (S14.5), the order is: admin panel (S14.9), lobbies (S14.6), lobby room (S14.7), calendar (S14.8). Orchestrator: the steps keep their numbers, so earlier references stay valid; only the order and the "depends on" column in `ROADMAP.md` change. The admin controls for suspensions (SUS3) and the light cone position editor come with the admin panel, so they arrive earlier.
+- **Why:** user, 2026-11-17: "after doing the landing page and profile, we can put on roadmap the admin panel, then lobbies, then lobby room, then calendar"
+- **Where implemented:** `ROADMAP.md`

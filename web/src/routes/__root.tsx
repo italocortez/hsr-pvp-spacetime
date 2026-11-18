@@ -3,6 +3,7 @@ import { lazy, Suspense } from 'react';
 import type { AuthSnapshot } from '@/auth/authStore';
 import { AppShell } from '@/shell/AppShell';
 import { ConnectionGate } from '@/stdb/ConnectionGate';
+import { SuspensionGate } from '@/stdb/SuspensionGate';
 
 export type RouterContext = { auth: AuthSnapshot };
 
@@ -23,9 +24,11 @@ function RootLayout() {
     return (
         <>
             <ConnectionGate>
-                <AppShell>
-                    <Outlet />
-                </AppShell>
+                <SuspensionGate>
+                    <AppShell>
+                        <Outlet />
+                    </AppShell>
+                </SuspensionGate>
             </ConnectionGate>
             <Suspense>
                 <RouterDevtools />

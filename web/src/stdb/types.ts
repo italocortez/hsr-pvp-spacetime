@@ -11,6 +11,7 @@ import type {
     MyLoadoutRow,
     MyLobbyListRow,
     MyProfileRow,
+    MySuspensionRow,
 } from '@bindings/types';
 
 /*
@@ -110,5 +111,11 @@ export interface StdbConnectionLike {
         hsrSynergyCost?: KeylessTableLike<HsrSynergyCost>;
         /** S14.3c: the member's own loadouts; keyed by `slot` (so `onUpdate`). Optional as `reducers`. */
         viewMyLoadouts?: TableLike<MyLoadoutRow>;
+        /**
+         * SUS2: one row while the viewer's account is suspended (Layer 0); keyed by `userId`.
+         * Optional as `reducers`, so the test doubles of the earlier steps still fit; the
+         * generated connection always has it.
+         */
+        viewMySuspension?: TableLike<MySuspensionRow>;
     };
 }

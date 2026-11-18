@@ -4,17 +4,20 @@ import { useSyncExternalStore } from 'react';
 import { toSql } from 'spacetimedb';
 import { type AuthSnapshot, authStore, setAuthSnapshot } from '@/auth/authStore';
 import { failConnection } from './connectionStatus';
+import { setSuspended } from './suspensionStatus';
 import type { StdbConnectionLike } from './types';
 
 /*
  * Layer 0 (docs/frontend/subscriptions.md Decision 6): on every route, for the whole session,
- * `view_my_profile` and `view_my_lobbies`, nothing else. The profile view feeds the auth store
- * (the router guards); the lobbies view feeds `useMyLobbies()`.
+ * `view_my_profile`, `view_my_lobbies` and (SUS2) `view_my_suspension`, nothing else. The profile
+ * view feeds the auth store (the router guards); the lobbies view feeds `useMyLobbies()`; the
+ * suspension view feeds the suspension flag (`suspensionStatus.ts`, the root's `SuspensionGate`).
  */
 
 export const LAYER0_QUERIES = {
     profile: toSql(tables.viewMyProfile),
     lobbies: toSql(tables.viewMyLobbies),
+    suspension: toSql(tables.viewMySuspension),
 } as const;
 
 /** The auth snapshot for the rows of `view_my_profile` (at most one). */
@@ -65,12 +68,16 @@ export function useMyLobbies(): readonly MyLobbyListRow[] {
 
 /**
  * Subscribes Layer 0 on `conn` and keeps the auth store and the lobby rows in step with the
- * cache. Returns the cleanup (callbacks removed, both handles unsubscribed). Row events before
- * the first `onApplied` are ignored for auth: "no row yet" is not "visitor" until applied.
+ * cache, and (SUS2) the suspension flag. Returns the cleanup (callbacks removed, every handle
+ * unsubscribed). Row events before the first `onApplied` of both the profile and the suspension
+ * view are ignored for auth: "no row yet" is not "visitor" until applied.
  */
 export function startLayer0(conn: StdbConnectionLike): () => void {
-    const { viewMyProfile, viewMyLobbies } = conn.db;
+    const { viewMyProfile, viewMyLobbies, viewMySuspension } = conn.db;
     let profileApplied = false;
+    // SUS2: without the suspension handle (the test doubles of earlier steps) there is nothing to
+    // wait for; the generated connection always has it.
+    let suspensionApplied = viewMySuspension === undefined;
     let stopped = false;
     // Set by the first subscription error: from then on this connection says nothing about the
     // viewer. The SDK delivers a failed replay's error first and the deletes of that subscription's
@@ -81,10 +88,23 @@ export function startLayer0(conn: StdbConnectionLike): () => void {
 
     // Callbacks run after the whole transaction is in the cache, so reading the cache here sees
     // the final state of a role change (delete + insert) at once, never a gap.
+    //
+    // SUS2: the profile and the suspension are read together, once both have had a first result.
+    // While suspended the auth store says "not ready" (the account's views answer as for a
+    // visitor, so "visitor" would send the guards to the sign-in panel under the suspended
+    // screen); when the row goes (lifted) the profile row is back in the same transaction, the
+    // user returns and the guards run again on the same address.
     const syncProfile = () => {
-        if (stopped || dead || !profileApplied) return;
-        const next = profileToAuth([...viewMyProfile.iter()]);
+        if (stopped || dead || !profileApplied || !suspensionApplied) return;
+        const isSuspended =
+            viewMySuspension !== undefined && [...viewMySuspension.iter()].length > 0;
+        const next: AuthSnapshot = isSuspended
+            ? { ready: false }
+            : profileToAuth([...viewMyProfile.iter()]);
+        // The screen goes up before the auth store changes, and comes down after it.
+        if (isSuspended) setSuspended(true);
         if (!sameAuth(authStore.getSnapshot(), next)) setAuthSnapshot(next);
+        if (!isSuspended) setSuspended(false);
     };
     const syncLobbies = () => {
         if (stopped || dead) return;
@@ -97,6 +117,9 @@ export function startLayer0(conn: StdbConnectionLike): () => void {
     viewMyLobbies.onInsert(syncLobbies);
     viewMyLobbies.onUpdate(syncLobbies);
     viewMyLobbies.onDelete(syncLobbies);
+    viewMySuspension?.onInsert(syncProfile);
+    viewMySuspension?.onUpdate(syncProfile);
+    viewMySuspension?.onDelete(syncProfile);
 
     // Layer 0 is what tells the app who the viewer is: without it the guards would wait forever, or
     // keep a user whose view is gone (a failed replay). A subscription error is a connection
@@ -127,6 +150,16 @@ export function startLayer0(conn: StdbConnectionLike): () => void {
         .onApplied(syncLobbies)
         .onError(failed('view_my_lobbies'))
         .subscribe(LAYER0_QUERIES.lobbies);
+    const mySuspension = viewMySuspension
+        ? conn
+              .subscriptionBuilder()
+              .onApplied(() => {
+                  suspensionApplied = true;
+                  syncProfile();
+              })
+              .onError(failed('view_my_suspension'))
+              .subscribe(LAYER0_QUERIES.suspension)
+        : undefined;
 
     return () => {
         stopped = true;
@@ -136,8 +169,11 @@ export function startLayer0(conn: StdbConnectionLike): () => void {
         viewMyLobbies.removeOnInsert(syncLobbies);
         viewMyLobbies.removeOnUpdate(syncLobbies);
         viewMyLobbies.removeOnDelete(syncLobbies);
-        for (const handle of [profile, myLobbies]) {
-            if (!handle.isEnded()) handle.unsubscribe();
+        viewMySuspension?.removeOnInsert(syncProfile);
+        viewMySuspension?.removeOnUpdate(syncProfile);
+        viewMySuspension?.removeOnDelete(syncProfile);
+        for (const handle of [profile, myLobbies, mySuspension]) {
+            if (handle && !handle.isEnded()) handle.unsubscribe();
         }
         setLobbies([]);
     };

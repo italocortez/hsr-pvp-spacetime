@@ -34,7 +34,8 @@ if (import.meta.env.DEV) {
     console.info(`[stdb] target=${env.target} database=${env.dbName}`);
     // Dev only, dropped from production builds (check:patterns gate 3):
     // window.__devAuth('member') etc. for the route guards; window.__devConnection('offline') etc.
-    // for the connection splashes; window.__wireStats() and a panel for the egress meter, which
+    // for the connection splashes, window.__devConnection('suspended') / ('lifted') for the
+    // suspended page (SUS2); window.__wireStats() and a panel for the egress meter, which
     // must wrap WebSocket before the provider builds the connection, so it loads before render.
     // The dev server never registers the image cache worker and removes one left from earlier
     // (M10); that runs in the background and does not hold the render.

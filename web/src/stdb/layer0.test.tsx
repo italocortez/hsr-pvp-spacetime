@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { authStore, setAuthSnapshot } from '@/auth/authStore';
-import { MockConnection, profileRow } from '@/test/mockConnection';
+import { MockConnection, MockTable, profileRow } from '@/test/mockConnection';
 import { connectionStatusStore, resetConnectionStatus } from './connectionStatus';
 import { LAYER0_QUERIES, profileToAuth, startLayer0, useMyLobbies } from './layer0';
 
@@ -48,6 +48,19 @@ describe('startLayer0', () => {
         expect(conn.liveQueries()).toEqual([LAYER0_QUERIES.profile, LAYER0_QUERIES.lobbies]);
         expect(LAYER0_QUERIES.profile).toBe('SELECT * FROM "view_my_profile"');
         expect(LAYER0_QUERIES.lobbies).toBe('SELECT * FROM "view_my_lobbies"');
+    });
+
+    // SUS2: the generated connection has `view_my_suspension`, the third Layer 0 subscription
+    // (the shared double above predates it; the suspension behaviour is in suspension.test.tsx).
+    it('SUS2: with the suspension view, subscribes it too, one subscription each, nothing else', () => {
+        Object.assign(conn.db, { viewMySuspension: new MockTable() });
+        stop = startLayer0(conn);
+        expect(conn.liveQueries()).toEqual([
+            LAYER0_QUERIES.profile,
+            LAYER0_QUERIES.lobbies,
+            LAYER0_QUERIES.suspension,
+        ]);
+        expect(LAYER0_QUERIES.suspension).toBe('SELECT * FROM "view_my_suspension"');
     });
 
     it('stays not ready before the first result, even if a row event arrives early', () => {

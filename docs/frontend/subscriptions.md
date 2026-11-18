@@ -54,10 +54,12 @@ Each subscription lives at the highest layout that all its consumers share. Layo
 
 | Layer | Subscriptions | Lifecycle |
 |---|---|---|
-| Global (app provider) | connection · `view_my_profile` (bootstrap) · `view_my_lobbies` · the public reference set (mounted on first need, see Decision 1) | app session |
+| Global (app provider) | connection · `view_my_profile` (bootstrap) · `view_my_lobbies` · `view_my_suspension` (SUS2) · the public reference set (mounted on first need, see Decision 1) | app session |
 | Authed zone | the signed-in user's own rows, through `view_my_*` views | logged-in session |
 | Match zone | lobby, members, presets, active match session, through per-viewer views | lobby / draft navigation |
 | Match entity | entity-scoped views (steps, results, chat for that lobby); match views only past the Waiting stage (PAGE-MAP D3) | single page mount |
+
+**SUS2: `view_my_suspension` joins Layer 0** (`web/src/stdb/layer0.ts`, the third Layer 0 subscription). It must be global for the same reason as the profile: a suspended caller's other per-caller views answer as for a visitor, so only this view tells the app to show the suspended page ([pages.md](pages.md) "Suspended (SUS2)"). Egress: nothing for a caller who is not suspended (zero rows), one 4-byte row for a suspended one; one more subscription per session. A subscription error is a connection failure, as for the other two. Layer 0 reads the profile and the suspension together once both have applied.
 
 **`view_my_profile` is global** because it is how the client discovers whether it is authenticated: it cannot be gated on being authenticated. The view filters by `ctx.sender`, so anonymous identities get 0 rows (effectively free) and signed-in identities get 1 row.
 

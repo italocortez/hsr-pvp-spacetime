@@ -80,9 +80,9 @@ Each executed step writes its log to `docs/log/<date>-<step>.md` (goal, decision
 | SUS1 | Account suspension, backend and script (A195, A213 to A216): set and lifted by hand, no write, no read of own data, Discord sign-in refused, an Admin-only list, `manage-user suspend`, `unsuspend`, `suspended`; only the server changes an Admin's role. Built and reviewed 2026-11-17. Open: publish to the test database and the hand checks there; SUS2 the suspended screen; SUS3 admin controls with S14.9 | S14.3 | built 2026-11-17, not published |
 | S14.4 | Port: `index` (landing, auth modal, create-lobby modal) | S14.3 | pending |
 | S14.5 | Port: `profile` | S14.4 | pending |
-| S14.6 | Port: `lobbies` | S14.5 | pending |
+| S14.9 | Port: `adminpanel`, moved up to right after the profile page (A217; the step keeps its number). Includes the suspend and lift controls (SUS3) and the light cone position editor | S14.5 | pending |
+| S14.6 | Port: `lobbies` | S14.9 | pending |
 | S14.7 | Port: `lobbyroom` (Waiting stage) | S14.6 | pending |
 | S14.8 | Port: `calendar` | S14.7 | pending |
-| S14.9 | Port: `adminpanel` | S14.8 | pending |
-| S14.10+ | Missing pages as mockups land: match flow, tournaments + bracket, leaderboard, replay viewer, editors | S14.9 | pending |
+| S14.10+ | Missing pages as mockups land: match flow, tournaments + bracket, leaderboard, replay viewer, editors | S14.8 | pending |
 | S15 | Module typing pass (user 2026-11-07, after the migration): replace the `ctx: any` helper signatures (169) and the `as any` enum-literal casts (169) in `spacetimedb/src`, workarounds from the 2.6.1 SDK era, with the 2.14.1 types (typed reducer context, generated enum constructors from `@bindings/types`); drop the non-null assertions the tests prove unnecessary; then the Biome config turns `noExplicitAny` into a hard rule; gated by `npm run typecheck` and the full `npm test` (S10 suites); Opus implements, Fable reviews | S14.10+ | pending |

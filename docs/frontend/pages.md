@@ -125,6 +125,31 @@ Profile sub-routes (achievements, roster, stats, replays) come with the profile 
   - **CSP.** **Done (M7):** `vercel.json` `connect-src` allows `wss://maincloud.spacetimedb.com` (the socket) and `https://maincloud.spacetimedb.com` (the token exchange, `POST /v1/identity/websocket-token`, whenever a token is stored); check:patterns gate 9 keeps both. Full policy: [hosting.md](hosting.md#content-security-policy).
 - **Dev helpers:** `window.__devConnection('offline' | 'maintenance' | 'reconnecting' | 'connected' | 'retry')`; the egress meter `window.__wireStats()` and its panel. Neither is in the production build (check:patterns gate 3).
 
+## Suspended (SUS2)
+
+- **When:** the viewer's account is suspended (A195, A213, A214; backend: [suspension architecture](../suspension/architecture.md)). Layer 0 subscribes `view_my_suspension` (one row `{ userId }` while suspended, none otherwise) and writes a flag (`web/src/stdb/suspensionStatus.ts`). The root layout renders `ConnectionGate` > `SuspensionGate` > shell and routes: while the flag is set, `SuspensionGate` (`web/src/stdb/SuspensionGate.tsx`) renders the suspended page in place of the shell and every route, at any URL, which stays. The offline and maintenance splashes come first (a failed connection says nothing about the viewer). When the row goes (lifted), the app comes back on the same address without a reload.
+- **Subscriptions:** the routes unmount, so every route subscription ends; Layer 0 keeps running (it is how the lift is seen). The public reference set, once started, stays for the session as everywhere else (Decision 1 of [subscriptions.md](subscriptions.md)); it is public data a visitor reads too.
+- **Auth while suspended:** the account's own views answer as for a visitor, so Layer 0 keeps the auth store "not ready" while the row exists instead of "visitor": the guards wait and do not send the address to the sign-in panel under the suspended page. Layer 0 reads the profile and the suspension together, once both have had a first result, so a suspended hard load never shows the visitor app first.
+- **Files:** `web/src/pages/suspended/SuspendedPage.tsx` (no CSS of its own) on `web/src/components/SplashLayout/` with the standby art, like the connection splashes, and one `IpcActionButton`.
+- **Wording:**
+
+  | Element | Text |
+  |---|---|
+  | Title (h1) | Account *suspended* (text "Account suspended") |
+  | Body | This account is suspended. You cannot use the site with it. |
+  | Button | Sign out |
+  | Eyebrow | `Status // Suspended` |
+  | HUD chip | `SYS://SUSPENDED` |
+  | Bottom HUD | `Sector 00 · Suspended` |
+  | Document title | `Account suspended — IPC Battlegrounds` |
+
+  No date, no reason, no staff name (A213(5), A214(1)(5)). The title, body and button are the brief's exact words; the eyebrow, chip and bottom HUD follow the connection splashes' pattern (builder's choice, SUS2, open for the user to rule on). The headline has no closing full stop, unlike the other splashes, to keep the exact title text.
+- **Sign out** (A214(4)) calls the existing `signOut` (`web/src/auth/signOut.ts`): the stored token is forgotten and the page reloads as a new anonymous identity, so the normal site shows to a visitor.
+- **Accessibility:** one `main`, one `h1`; on mount focus moves to the heading (`tabindex="-1"`, no scroll), because the page usually replaces one the viewer was using and the focused control is gone; the button is the next tab stop. Motion and the reduced-motion rules are `SplashLayout`'s and `IpcButton`'s, shared with the other splashes.
+- **Dev helper:** `window.__devConnection('suspended')` shows the page without a real suspension, `('lifted')` takes it down; the live connection's next `view_my_suspension` event replaces the forced flag. Not in the production build (check:patterns gate 3, the `__devConnection` marker).
+- **Tests:** `web/src/stdb/suspension.test.tsx` (Layer 0 with the suspension view; the page in place of the shell and the route, route subscription ended, the app back on lift, Sign out, no reason or date text); `web/src/stdb/layer0.test.tsx` pins the three Layer 0 queries.
+- **Screenshots:** `tmp/pw/sus2/suspended-{1440,390}.png` (dev server, forced with `window.__devConnection('suspended')`; local only).
+
 ## Sign in (M5b)
 
 - **Route:** `/?login=1` (where the guards send a visitor, with `next`), and the function's return `/?login=1&status=confirm|refused|cancelled|failed`. `/` without `login=1` is the standby page as before. A signed-in non-guest on `/?login=1` is sent to `next` (re-checked with `safeNextPath`, through `router.navigate({ href })`), else `/`. Title `Sign in — IPC Battlegrounds`.
