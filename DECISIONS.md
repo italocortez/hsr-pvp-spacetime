@@ -2207,3 +2207,19 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   4. The account suspension step (A195) starts now.
 - **Why:** user, 2026-11-17: "I thought we alreadyh agreed on using chart.js tho? othjerwise i agree on deleting the legacy folder"; "when are we using chart.js then?"; "lets cleanup the spacetimedb skill, lets just keep using our chart for teambuilder, its okay to have it for now, the npush, then lets go with suspension".
 - **Where implemented:** item 2: commit `f320fc8`; item 3: `.claude/skills/spacetimedb/`; item 4: research under way.
+
+### A213 — Account suspension: the user's rulings before the build
+
+- **Date:** 2026-11-17 · **Status:** decided, subject to what the research shows the platform can enforce; not built
+- **Decision:** (the orchestrator's eight questions, the user agreeing with each recommendation except on the reason)
+  1. A suspended person may still use the site as a visitor, like anyone without an account. The account is locked; nothing more is attempted.
+  2. Suspended while in a lobby or a match: treated as if they had disconnected. The existing timers and rules for an absent player apply, and a referee or host can act as they already can.
+  3. Only an Admin may suspend, at first.
+  4. A suspension has an end date, or lasts "until lifted".
+  5. No reason is given to the suspended person. They are told that the account is suspended and until when. Orchestrator's reading, to confirm at the build: a reason may still be recorded for the admins' own record, but it is not required and never shown to the person.
+  6. Their public traces (name on leaderboards, profile, tournament entries) stay visible while suspended.
+  7. Guests cannot be suspended; a guest is deleted as today.
+  8. Suspending and lifting is possible from the command line script as well as, later, from the admin page.
+  Together with A195: a suspended account is signed out and can neither read nor write.
+- **Why:** user, 2026-11-17: "I beleive you had questions for my suspension"; then "I agree on your recomendations but the reason, we dont have to give a reason."
+- **Where implemented:** not yet. Research: `tmp/suspension/research.md` (local, under way at the time of this entry).
