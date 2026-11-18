@@ -539,7 +539,7 @@ spacetimedb.clientConnected((ctx) => { /* ... */ });
 | `ctx.databaseIdentity` | The module's identity (`ctx.identity` is the deprecated alias) |
 | `ctx.random()` / `.integerInRange(min, max)` / `.bigintInRange(min, max)` / `.uint32()` / `.fill(typedArray)` | Deterministic RNG seeded from `ctx.timestamp`. Its first outputs are skewed (S10o F1), so this repo draws with `shared/lobby-rules/timerDraw.ts` instead |
 | `ctx.newUuidV4()` / `ctx.newUuidV7()` | Deterministic UUIDs |
-| `ctx.senderAuth` | `AuthCtx` — see SKILL.md "AuthCtx applicability" (`isInternal` was always `false` on 2.6.1; since 2.14.0, unchanged in 2.15.0, it means `sender === databaseIdentity`) |
+| `ctx.senderAuth` | `AuthCtx` — see SKILL.md "AuthCtx, scheduled reducers and the project's auth gates" (`isInternal` was always `false` on 2.6.1; since 2.14.0, unchanged in 2.15.0, it means `sender === databaseIdentity`) |
 | `ctx.env` | Typed module env (v2.12.0+), e.g. `ctx.env.STDB_TARGET` in this repo |
 
 `ctx.random.shuffle(array)` (in-place) is **v2.13.0+** and present in 2.15.0; the repo replaces it with `fairShuffle` (A120).
@@ -593,7 +593,7 @@ ctx.db.cleanupJob.scheduledId.delete(jobId);
 
 Upstream writes the forward reference as `scheduled: (): any => run_cleanup` — the cast is needed because the forward reference defeats type inference. When the table and reducer live in different files, this repo uses the `export let _reducer: any` + setter pattern (see SKILL.md "TypeScript patterns") to avoid a circular import.
 
-**`onSchedule` (v2.7.0+, PR #5435):** the binding moves onto the reducer (or a `t.unit()`-returning procedure), so the table no longer references it and table/reducer can sit in separate files without a cycle. It exists in this repo's SDK 2.15.0, whose `TableOpts.scheduled` JSDoc is `@deprecated` in its favor; adopting it would retire the `export let` workaround (a user decision):
+**`onSchedule` (v2.7.0+, PR #5435):** the binding moves onto the reducer (or a `t.unit()`-returning procedure), so the table no longer references it and table/reducer can sit in separate files without a cycle. It exists in this repo's SDK 2.15.0, whose `TableOpts.scheduled` JSDoc is `@deprecated` in its favor. This repo uses it for `RefereeTransferCheck` and `TournamentFinalizeJob`; the three older GC job tables keep the `export let` workaround:
 ```typescript
 const cleanupJob = table({ name: 'cleanup_job' }, {
   scheduledId: t.u64().primaryKey().autoInc(),
@@ -765,7 +765,7 @@ The same trick covers filters SQL can't express: compute the flag in the reducer
 - Real-time updates when underlying data changes
 - Full control over what data clients can access
 
-> ⚠️ **Do NOT use Row Level Security (RLS) for access control** — `spacetimedb.clientVisibilityFilter.sql(...)` exists in SDK 2.15.0, but upstream labels it experimental and unstable ("Use Views Instead"); it is not marked deprecated. The only planned use is A111's S11 test on `LobbyCursorEvent`. See `references/how-to-guides.md` § Row Level Security.
+> ⚠️ **Do NOT use Row Level Security (RLS) for access control** — `spacetimedb.clientVisibilityFilter.sql(...)` exists in SDK 2.15.0, but upstream labels it experimental and unstable ("Use Views Instead"); it is not marked deprecated. The only planned use is A111's test on `LobbyCursorEvent` (not run yet). See `references/how-to-guides.md` § Row Level Security.
 
 > ⚠️ **CRITICAL:** Procedural views (views that compute results in code) can ONLY access data via index lookups, NOT `.iter()`.
 > If you need a view that scans/filters across many rows (including the entire table), return a **query** built with the query builder (`ctx.from...`).
@@ -874,18 +874,20 @@ export const my_player = spacetimedb.view(
 ```
 Name the row type something other than the view handle's generated PascalCase name (e.g. not `ViewMyProfileRow` for `view_my_profile`) to avoid a binding-name collision.
 
-Per the v2.14.1 views doc, a view that returns `t.array(SomeTable.rowType)` for a table whose column is `.primaryKey()` also gets PK semantics. In this repo's **2.15.0** bindings, `viewMyLobbies` (`view_my_lobbies`) and `viewMyCostSets` (`view_my_cost_sets`) still show `constraints: []` in `web/src/module_bindings/index.ts` — don't assume `onUpdate` fires for them.
+Per the v2.14.1 views doc, a view that returns `t.array(SomeTable.rowType)` for a table whose column is `.primaryKey()` also gets PK semantics. In this repo's **2.15.0** bindings every view shows `constraints: []` in `web/src/module_bindings/index.ts`, keyed or not; the key shows on the generated row type instead (`view_<name>_table.ts`, e.g. `view_my_lobbies_table.ts`, `view_my_cost_sets_table.ts`, `view_my_loadouts_table.ts` carry `.primaryKey()`).
 Before this, views only ever fired `onInsert`/`onDelete` on the client — every change looked like a delete-then-insert. With a declared `.primaryKey()`, the client can now fire **`onUpdate`** for views, same shape as regular tables:
 ```typescript
 conn.db.my_player.onUpdate((ctx, oldRow, newRow) => {
   console.log('View row updated:', oldRow, '->', newRow);
 });
 ```
-In this repo some view row types declare `.primaryKey()` (e.g. in `views/adminViews.ts`, `lobbyViews.ts`, `calendarViews.ts`); the other views emit insert/delete only, and views with arguments cannot have a primary key. Check the view's `constraints` in `web/src/module_bindings/index.ts` before relying on `onUpdate`.
+In this repo many view row types declare `.primaryKey()` (e.g. in `views/adminViews.ts`, `lobbyViews.ts`, `calendarViews.ts`, `loadoutViews.ts`); the other views emit insert/delete only, and views with arguments cannot have a primary key. Check the generated row type (`view_<name>_table.ts`), not `constraints`, before relying on `onUpdate`.
 
 ---
 
 ## 8) React Integration
+
+Generic SDK reference. This repo's pages do not use the SDK's React hooks: only `web/src/stdb/StdbProvider.tsx` mounts `SpacetimeDBProvider` (beside the app, after first render), and pages use the hooks in `web/src/stdb/` (A173; SKILL.md "The client layer").
 
 ### Provider setup
 ```typescript
@@ -1002,20 +1004,13 @@ conn.db.myTable.onDelete((ctx, row) => {
 
 These fire for ALL changes (yours and others'). Remove callbacks with `conn.db.myTable.removeOnInsert(callback)` (same for `removeOnUpdate`, `removeOnDelete`).
 
-### Per-reducer callbacks
+### Reducer call results (no per-reducer callbacks)
+On 2.15.0 there is no `conn.reducers.onX(...)` listener and no `_then()` (neither is in the typings or `dist/sdk/index.mjs`). A call returns `Promise<void>`: it resolves once the call committed (the caller's cache already holds that transaction's updates) and rejects with `SenderError` (the module's text), `InternalError`, `DisconnectedError` or `UnknownCallResultError` (`dist/lib/errors.d.ts`). Row events from the transaction still reach `conn.db.x.onInsert/onUpdate/onDelete`, whose `ctx.event` is tagged `Reducer` (with `value.outcome`) or `Transaction`.
 ```typescript
-// Register a callback for a specific reducer (fires for all callers)
-conn.reducers.onUpdateUsername((ctx) => {
-  console.log('Status:', ctx.event.status);  // { tag: 'Committed' } | { tag: 'Failed', value: string } | { tag: 'OutOfEnergy' }
-  console.log('Caller:', ctx.event.callerIdentity);
-  console.log('Energy:', ctx.event.energyConsumed);
-});
-
 // For reacting only to YOUR OWN reducer call:
-conn.reducers.updateUsername({ newUsername: 'alice' })._then((ctx) => {
-  // Fires only for this specific call
-});
+await conn.reducers.updateUsername({ newUsername: 'alice' });  // throws on refusal
 ```
+This repo's pages call reducers through `useReducerCall` (SKILL.md "Reducer calls and errors on the client").
 
 ### Client-side cache access
 ```typescript
@@ -1191,7 +1186,7 @@ Never import `spacetimedb` from `index.ts` in a module file (see § 1, "Cannot a
 | Module unit tests (in-memory datastore) | v2.12.0 | `spacetimedb/server/test-utils` + `spacetimedb/server/test-utils/vitest` plugin (both in the 2.15.0 package `exports`) | In use: `spacetimedb/src/__tests__/` (S10). See `references/how-to-guides.md` § Module Unit Testing. Does NOT simulate subscriptions, RLS, lifecycle hooks, or the scheduler; on 2.14.1 and 2.15.0 the harness cannot set the module env, so `ctx.env` reads throw there (`harness/smoke.test.ts` (f)) |
 | Submodules (mount another TS module under a namespace) | v2.8.0 (reusable `@spacetimedb/*` packages need 2.12+) | `schema({ ...tables, myAuth: { name: 'auth_data', module: authLib } })` → `ctx.db.myAuth.<table>`, client `conn.db.myAuth.<table>` | Official packages: `@spacetimedb/cron`, `@spacetimedb/retry`, `@spacetimedb/rate-limit`, `@spacetimedb/crypto`, `@spacetimedb/resend` (v2.13.0). Changing a namespace's canonical `name` drops its tables + data |
 | Async inter-database calls (outbox tables) | v2.14.0 | `table({ outbox: { receiver: gw.reducers.admitPlayer } }, { msgId: t.u64().primaryKey().autoInc(), world: gw.identity().target(), ...params })`; optional `spacetimedb.reducer({ onResult: outbox }, ...)` | Requires `dependencies` in `spacetime.json` + generated `src/remote_bindings/`; both DBs on the same server. Not relevant until the project splits databases |
-| `isInternal` = `sender === databaseIdentity` | v2.14.0 (breaking) | `ctx.senderAuth.isInternal` is **true** for scheduled reducers/procedures; `init` is no longer internal; `jwt` is none when internal | Present in 2.14.1 and 2.15.0 (`AuthCtx.isInternal` JSDoc in `dist/lib/reducers.d.ts`). See SKILL.md "AuthCtx applicability": the five scheduled reducers are guarded by `ensureScheduler` since S11a (live check pending on test1), and a database keeps the old behavior until a 2.14.1 build is published to it |
+| `isInternal` = `sender === databaseIdentity` | v2.14.0 (breaking) | `ctx.senderAuth.isInternal` is **true** for scheduled reducers/procedures; `init` is no longer internal; `jwt` is none when internal | Present in 2.14.1 and 2.15.0 (`AuthCtx.isInternal` JSDoc in `dist/lib/reducers.d.ts`). See SKILL.md "AuthCtx, scheduled reducers and the project's auth gates": the five scheduled reducers are guarded by `ensureScheduler`, confirmed live on test1 (S11a); a database keeps the old behavior until a 2.14+ build is published to it |
 | HTTP handlers get a real sender | v2.14.0 | `ctx.sender` inside `spacetimedb.httpHandler(...)` (HTTP handlers are still unstable) | Repo defines no HTTP handlers |
 | `ctx.random.shuffle(array)` | v2.13.0 | In-place; copy first | Present, but not used for draws here: `fairShuffle` in `shared/lobby-rules/timerDraw.ts` replaces it (A120; skewed `ctx.random` seed) |
-| Generated TS bindings `--import-extension none\|js\|ts` | v2.14.0 (CLI) | `spacetime generate --import-extension js` or per-entry in `spacetime.json` | Only needed for `moduleResolution: "nodenext"` / Node-Bun-Deno direct TS execution; a bundler such as Vite (`web/`, M3) doesn't need it, and `scripts/stdb/*.ts` run through `tsx` |
+| Generated TS bindings `--import-extension none\|js\|ts` | v2.14.0 (CLI) | `spacetime generate --import-extension js` or per-entry in `spacetime.json` | Only needed for `moduleResolution: "nodenext"` / Node-Bun-Deno direct TS execution; a bundler such as Vite (`web/`) doesn't need it, and `scripts/stdb/*.ts` run through `tsx` |

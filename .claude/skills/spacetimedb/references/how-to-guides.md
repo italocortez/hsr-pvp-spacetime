@@ -83,16 +83,18 @@ Note: Client disconnection behavior is currently "undefined" — the client sees
 
 ---
 
-## Event Tables & Per-Call Callbacks
+## Event Tables & Per-Call Results
 
 SpacetimeDB 2.0 removed global reducer callbacks in favor of two patterns:
 
-### Per-call callbacks (`_then()`)
-For observing results of YOUR OWN reducer calls only:
+### Per-call results (the call's Promise)
+For observing results of YOUR OWN reducer calls only. On this repo's 2.15.0 the call returns `Promise<void>`, which resolves on commit and rejects with `SenderError` / `InternalError` / `DisconnectedError` / `UnknownCallResultError` (no `_then()` exists in 2.15.0; checked against `dist/sdk/index.mjs` and the typings; see SKILL.md "Reducer calls and errors on the client"):
 ```typescript
-conn.reducers.createItem({ title: 'Hello' })._then((ctx) => {
-  // Fires only for THIS specific call
-});
+try {
+  await conn.reducers.createItem({ title: 'Hello' });  // settles for THIS call only
+} catch (error) {
+  if (error instanceof Error && error.name === 'SenderError') showRefusal(error.message);
+}
 ```
 
 ### Event tables (recommended)
@@ -107,12 +109,12 @@ For cross-client notifications. Event tables:
 conn.subscriptionBuilder().subscribe(
   tables.LobbyCursorEvent.where(r => r.lobbyId.eq(lobbyId))
 );
-// High-rate events (cursors): prefer a row callback over useTable. useTable re-snapshots
-// and re-renders React on every event (2.6.1 dist/react/index.mjs:1827-1835).
+// High-rate events (cursors): prefer a row callback over a React table hook. useTable re-snapshots
+// and re-renders React on every event (2.6.1 dist/react/index.mjs:1827-1835); this repo's pages don't use useTable.
 conn.db.LobbyCursorEvent.onInsert((ctx, ev) => { /* move the cursor */ });
 ```
 
-**A filter is not access control.** It cuts egress, but any SDK client can subscribe without it, and views can't wrap event tables. The row filter (`clientVisibilityFilter`, § Row Level Security) exists in SDK 2.15.0 but is experimental, and whether it restricts event-table rows is not verified (A111 tests it on `LobbyCursorEvent` at S11). Never put data meant only for specific recipients in a public event table; anything in it is readable by every connected client that asks.
+**A filter is not access control.** It cuts egress, but any SDK client can subscribe without it, and views can't wrap event tables. The row filter (`clientVisibilityFilter`, § Row Level Security) exists in SDK 2.15.0 but is experimental, and whether it restricts event-table rows is not verified (A111's test on `LobbyCursorEvent` has not been run yet). Never put data meant only for specific recipients in a public event table; anything in it is readable by every connected client that asks.
 
 This project uses `LobbyCursorEvent` as an event table (rows carry the lobby id, the sender's seat, x, y and a timestamp; no user id, A96). The client subscribes it filtered to its own lobby, only once the lobby stage is past Waiting, and reads it via `onInsert` (CLAUDE.md §4). A111: it stays public for now.
 
@@ -246,7 +248,7 @@ export const accountFilter = spacetimedb.clientVisibilityFilter.sql(
   'SELECT * FROM account WHERE account.identity = :sender'
 );
 ```
-Mutually dependent rules still publish, but client queries on those tables then fail with a cyclic-dependency error. Views are simpler, more performant, and provide full row/column access control, so they stay this repo's access control. Don't introduce RLS elsewhere. The one planned exception is a test (A111, step S11): one row filter on the public `LobbyCursorEvent` event table on test1, to see whether it limits cursor events to the lobby's members and at what cost. Adoption is the user's call after that test.
+Mutually dependent rules still publish, but client queries on those tables then fail with a cyclic-dependency error. Views are simpler, more performant, and provide full row/column access control, so they stay this repo's access control. Don't introduce RLS elsewhere. The one planned exception is a test (A111, not run yet): one row filter on the public `LobbyCursorEvent` event table on test1, to see whether it limits cursor events to the lobby's members and at what cost. Adoption is the user's call after that test.
 
 ---
 
@@ -268,7 +270,7 @@ These fixes landed in v2.1.0 (released 2026-03-24). No client code changes requi
 
 ## Known 2.6.1 TS SDK bugs fixed upstream
 
-History: these were known upstream bugs on the old 2.6.1 baseline. All are fixed in this repo's SDK 2.14.1, but a database keeps a module-side bug until a build against 2.14.1 is published to it. If one of these symptoms shows up, check the published build before debugging app logic:
+History: these were known upstream bugs on the old 2.6.1 baseline. All are fixed in this repo's SDK 2.15.0, and test1 has run 2.15.0 builds since the M5 publishes (2026-11-14); a database keeps a module-side bug until a fixed build is published to it. If one of these symptoms shows up, check the published build before debugging app logic:
 
 | Symptom on 2.6.1 | Fixed in |
 |---|---|
@@ -313,7 +315,7 @@ Tools: `list_databases` (host-wide only; databases owned by your identity), `get
 
 Tests run module logic against an in-memory datastore, with no publish (unlike `npm run test:integration`, which wipes and re-bootstraps test1 before the live residue). Run from the module project (`spacetimedb/`) with Node 22+, `"type": "module"` in its `package.json`, and `vitest@^3.2.4` (upstream minimums).
 
-**This repo:** config `spacetimedb/vitest.config.mts` (one `'@module'` alias), suites in `spacetimedb/src/__tests__/` with shared `*-fixtures.ts`, run by `npm test` after the unit tests and never touching maincloud. Harness gotchas (no `test.db` reads inside `withReducerTx`, views called as functions, `ctx.env` throws, scheduled reducers fired by hand, seats via `seatOf`) are in `test/README.md` § In-memory harness. Upstream's generic setup:
+**This repo:** config `spacetimedb/vitest.config.mts` (one `'@module'` alias), suites in `spacetimedb/src/__tests__/<subject>/` with shared builders in `__tests__/fixtures/`, run by `npm test` after the unit tests and never touching maincloud. Harness gotchas (no `test.db` reads inside `withReducerTx`, views called as functions, `ctx.env` throws, scheduled reducers fired by hand, seats via `seatOf`) are in `test/README.md` § In-memory harness. Upstream's generic setup:
 
 ```typescript
 // vitest.config.ts
