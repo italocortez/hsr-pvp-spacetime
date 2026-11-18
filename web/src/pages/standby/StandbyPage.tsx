@@ -18,8 +18,6 @@ export function StandbyPage({ module }: { module?: string }) {
     return (
         <SplashLayout
             image={IMAGE}
-            hudLabel="SYS://STANDBY"
-            hudCoord="Sector 04 · Provisioning"
             eyebrow="Status // Standby"
             title={
                 <>

@@ -8,8 +8,6 @@ export function MaintenancePage({ onRetry }: { onRetry: () => void }) {
     return (
         <ConnectionSplash
             eyebrow="Status // Maintenance"
-            hudLabel="SYS://MAINTENANCE"
-            hudCoord="Sector 00 · Maintenance"
             title={
                 <>
                     Under <em>maintenance.</em>

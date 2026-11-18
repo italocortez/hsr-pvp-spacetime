@@ -29,7 +29,8 @@ async function expectSplash(headline: string, eyebrow: string, chip: string, onR
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getAllByRole('main')).toHaveLength(1);
     expect(screen.getByText(eyebrow)).toBeInTheDocument();
-    expect(screen.getByText(chip)).toBeInTheDocument();
+    // No top-right chip (user ruling, SUS2 fix pass): the old label is gone.
+    expect(screen.queryByText(chip)).toBeNull();
     // One action: Retry (no "Return to Base" link).
     expect(screen.queryByRole('link', { name: 'Return to Base' })).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Retry' }));

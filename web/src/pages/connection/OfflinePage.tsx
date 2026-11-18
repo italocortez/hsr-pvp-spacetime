@@ -8,8 +8,6 @@ export function OfflinePage({ onRetry }: { onRetry: () => void }) {
     return (
         <ConnectionSplash
             eyebrow="Error // Offline"
-            hudLabel="SYS://OFFLINE"
-            hudCoord="Sector 00 · Offline"
             title={
                 <>
                     Connection <em>lost.</em>

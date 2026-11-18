@@ -1,12 +1,14 @@
 import type { MySuspensionRow } from '@bindings/types';
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { authStore, setAuthSnapshot } from '@/auth/authStore';
+import { SUSPENDED_TEXT } from '@/pages/suspended/SuspendedPage';
 import { costQueryList } from '@/stdb/costQueries';
 import { CHARACTERS, costSet, LIGHTCONES } from '@/test/costFixtures';
 import { MockConnection, MockTable, profileRow } from '@/test/mockConnection';
 import { renderWithConnection } from '@/test/renderWithConnection';
+import { connectionStatusStore, setConnectionStatus } from './connectionStatus';
 import { LAYER0_QUERIES, startLayer0 } from './layer0';
 import { setSuspended, suspensionStore } from './suspensionStatus';
 
@@ -149,9 +151,9 @@ describe('the suspended page in place of the app', () => {
         expect(heading).toHaveFocus();
         await userEvent.tab();
         expect(screen.getByRole('button', { name: 'Sign out' })).toHaveFocus();
-        // The route's own subscription ended with the route; Layer 0 stays.
+        // Every route subscription ended with the route (the three custom-set queries); Layer 0 stays.
         const live = conn.liveQueries();
-        expect(live).not.toEqual(expect.arrayContaining([costQueryList(5)[0]]));
+        for (const query of costQueryList(5)) expect(live).not.toContain(query);
         expect(live).toEqual(
             expect.arrayContaining([
                 LAYER0_QUERIES.profile,
@@ -161,7 +163,9 @@ describe('the suspended page in place of the app', () => {
         );
     });
 
-    it('a row from the first result: the suspended page, never the route', async () => {
+    // Until Layer 0's first result the not-ready app shows (the shell and, on a public route, the
+    // page as for a visitor; never the account's data, never a redirect); this pins the end state.
+    it('a row in the first result: the suspended page replaces the not-ready app', async () => {
         await openCosts({ suspended: true });
         expect(
             await screen.findByRole('heading', { level: 1, name: 'Account suspended' }),
@@ -191,14 +195,153 @@ describe('the suspended page in place of the app', () => {
         expect(signOutMock).toHaveBeenCalledTimes(1);
     });
 
-    it('shows no reason, no date and no staff name', async () => {
+    it('shows only its fixed words (no reason, date, staff name, chip or sector) and no link', async () => {
         await openCosts({ suspended: true });
-        const main = await screen.findByRole('main');
-        const text = main.textContent ?? '';
-        expect(text).not.toMatch(/reason|until|since|by staff|admin|moderator/i);
-        expect(text).not.toMatch(/\d{4}-\d{2}|\d{1,2}\/\d{1,2}|\d{1,2}:\d{2}/);
-        expect(text).not.toMatch(
-            /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\b|\b(19|20)\d{2}\b/,
+        await screen.findByRole('heading', { level: 1, name: 'Account suspended' });
+        const main = screen.getByRole('main');
+        // Every visible text piece, in order: anything added to the screen (a date, a reason, the
+        // old HUD chip or sector line) makes this list longer.
+        const pieces: string[] = [];
+        const walker = document.createTreeWalker(main, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            const text = node.textContent?.trim();
+            if (text) pieces.push(text);
+        }
+        expect(pieces).toEqual([
+            'IPC Battlegrounds',
+            'Status // Suspended',
+            'Account',
+            'suspended',
+            SUSPENDED_TEXT.body,
+            SUSPENDED_TEXT.signOut,
+            'IPC // Battlegrounds',
+            'v0.9',
+        ]);
+        // S2: the brand mark is not a link here; "Sign out" is the one control.
+        expect(within(main).queryAllByRole('link')).toHaveLength(0);
+        expect(within(main).getAllByRole('button')).toHaveLength(1);
+    });
+});
+
+describe('the suspended page on a guarded route, over failures and across connections', () => {
+    const MEMBER = profileRow({ id: 7 });
+    const SIGN_IN_BUTTON = { name: 'Sign in with Discord' } as const;
+
+    const suspendedHeading = () =>
+        screen.findByRole('heading', { level: 1, name: 'Account suspended' });
+
+    /** `/profile` with the suspension row in Layer 0's first result. */
+    async function openProfileSuspended() {
+        conn.db.viewMySuspension.seed(SUSPENDED_ROW);
+        const r = renderWithConnection('/profile', conn);
+        await act(async () => conn.applyAll());
+        await suspendedHeading();
+        return r;
+    }
+
+    it('/profile: the address stays, no sign-in panel under the screen; the lift returns /profile', async () => {
+        const { router } = await openProfileSuspended();
+        // Give a sign-in redirect every chance to happen: it must not.
+        await act(async () => new Promise((r) => setTimeout(r, 50)));
+        expect(router.state.location.href).toBe('/profile');
+        expect(screen.queryByRole('button', SIGN_IN_BUTTON)).toBeNull();
+        expect(authStore.getSnapshot()).toEqual({ ready: false });
+
+        await act(async () => {
+            conn.db.viewMyProfile.rows = [MEMBER];
+            conn.db.viewMySuspension.delete(SUSPENDED_ROW);
+        });
+        expect(await screen.findByText('Profile')).toBeInTheDocument();
+        expect(screen.queryByRole('heading', { name: 'Account suspended' })).toBeNull();
+        expect(router.state.location.href).toBe('/profile');
+    });
+
+    it('"Sign out" on /profile goes to the home page /, not a reload of /profile', async () => {
+        await openProfileSuspended();
+        await userEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+        expect(signOutMock).toHaveBeenCalledTimes(1);
+        expect(signOutMock).toHaveBeenCalledWith({ to: '/' });
+
+        // The real sign-out with those options loads `/` and does not reload in place.
+        const actual = await vi.importActual<typeof import('@/auth/signOut')>('@/auth/signOut');
+        const assign = vi.fn();
+        const reload = vi.fn();
+        const [options] = signOutMock.mock.calls[0] as [{ to: string }];
+        actual.signOut({ ...options, tokenStorageKey: 'test-token', assign, reload });
+        expect(assign).toHaveBeenCalledWith('/');
+        expect(reload).not.toHaveBeenCalled();
+    });
+
+    it('a failed connection while suspended: the offline splash shows over the suspended screen', async () => {
+        await openProfileSuspended();
+        act(() =>
+            setConnectionStatus({
+                state: 'failed',
+                kind: 'offline',
+                reason: 'WebSocket error',
+                recovery: 'retry',
+            }),
         );
+        expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent(
+            'Connection lost.',
+        );
+        expect(screen.queryByRole('heading', { name: 'Account suspended' })).toBeNull();
+        expect(screen.getAllByRole('main')).toHaveLength(1);
+    });
+
+    it('a stale flag stays until the next connection answers, and its first result replaces it', async () => {
+        const { router, rerenderWithConnection } = await openProfileSuspended();
+        // A Layer 0 error that drops no rows: the offline splash; the flag keeps its last value.
+        await act(async () => {
+            conn.live()
+                .find((s) => s.query === LAYER0_QUERIES.lobbies)
+                ?.fail('boom');
+        });
+        expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent(
+            'Connection lost.',
+        );
+        expect(suspensionStore.getSnapshot()).toBe(true);
+
+        await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+        const next = connWithSuspension();
+        next.db.viewMyProfile.seed(MEMBER);
+        rerenderWithConnection(next);
+        // Before the new connection's first result: still the suspended screen.
+        expect(await suspendedHeading()).toBeInTheDocument();
+        expect(next.liveQueries()).toEqual(
+            expect.arrayContaining([LAYER0_QUERIES.profile, LAYER0_QUERIES.suspension]),
+        );
+
+        // The first result has no suspension row: the app comes back on the same address.
+        await act(async () => next.applyAll());
+        expect(await screen.findByText('Profile')).toBeInTheDocument();
+        expect(suspensionStore.getSnapshot()).toBe(false);
+        expect(screen.queryByRole('heading', { name: 'Account suspended' })).toBeNull();
+        expect(router.state.location.href).toBe('/profile');
+    });
+
+    it('a failing view_my_suspension is a connection failure: offline splash, auth not ready, no redirect, connection closed', async () => {
+        conn.db.viewMyProfile.seed(MEMBER);
+        const { router } = renderWithConnection('/profile', conn);
+        // The profile answers; the suspension view fails (as against a module without the view).
+        await act(async () => conn.apply(LAYER0_QUERIES.profile));
+        await act(async () => {
+            conn.live()
+                .find((s) => s.query === LAYER0_QUERIES.suspension)
+                ?.fail('no such view');
+        });
+        expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent(
+            'Connection lost.',
+        );
+        expect(connectionStatusStore.getSnapshot().status).toMatchObject({
+            state: 'failed',
+            reason: 'no such view',
+        });
+        expect(authStore.getSnapshot()).toEqual({ ready: false });
+        expect(suspensionStore.getSnapshot()).toBe(false);
+        expect(screen.queryByText('Profile')).toBeNull();
+        await act(async () => new Promise((r) => setTimeout(r, 50)));
+        expect(router.state.location.href).toBe('/profile');
+        expect(conn.disconnects).toBe(1);
     });
 });

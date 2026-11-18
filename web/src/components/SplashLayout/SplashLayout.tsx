@@ -1,7 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { BrandLogo } from '@/components/BrandLogo/BrandLogo';
-import { HudChip } from '@/components/HudChip/HudChip';
 import { IpcButton } from '@/components/IpcButton/IpcButton';
 import { useInShell } from '@/shell/shellContext';
 import styles from './SplashLayout.module.css';
@@ -9,8 +8,6 @@ import styles from './SplashLayout.module.css';
 type Props = {
     /** Full-bleed background art (public path); decorative. */
     image: { src: string; width: number; height: number };
-    hudLabel: string;
-    hudCoord: string;
     eyebrow: string;
     title: ReactNode;
     lede: ReactNode;
@@ -18,29 +15,40 @@ type Props = {
     children?: ReactNode;
     /** The CTA; default: the "Return to Base" link to `/` (the connection splashes pass Retry). */
     action?: ReactNode;
+    /**
+     * Default true: the brand mark links to `/`. False renders the mark without the link (the
+     * suspended screen, whose one action is "Sign out" and whose address must not change).
+     */
+    brandLink?: boolean;
 };
 
 /**
  * Full-bleed editorial screen from design/mockups/standby.html (DESIGN.md §4.5): art + scrims,
- * brand mark, HUD chip, text column with one IPC CTA back to base, bottom HUD line.
+ * brand mark, text column with one IPC CTA back to base, bottom HUD line. No top-right chip and
+ * no sector text (user ruling, SUS2 fix pass).
  * Used by the standby page and, through `ErrorSplash`, the 404 and no-access pages, and through
  * `ConnectionSplash` the offline and maintenance screens. Inside the app shell (S14.1: the standby
  * block of an unported page) it renders without its own `main` and brand link.
  */
 export function SplashLayout({
     image,
-    hudLabel,
-    hudCoord,
     eyebrow,
     title,
     lede,
     children,
     action = <IpcButton to="/">Return to Base</IpcButton>,
+    brandLink = true,
 }: Props) {
     // Inside the app shell (S14.1: the standby block of an unported page) the shell owns the
     // `main` landmark and the brand mark, and sets `--shell-offset` to its bar height.
     const inShell = useInShell();
     const Root = inShell ? 'div' : 'main';
+    const brandContent = (
+        <>
+            <BrandLogo className={styles.brandLogo} />
+            <span className={styles.brandWord}>IPC Battlegrounds</span>
+        </>
+    );
     return (
         <Root className={styles.splash}>
             <img
@@ -56,16 +64,14 @@ export function SplashLayout({
             <div className={styles.scrimEdges} aria-hidden="true" />
 
             {/* The word is hidden on narrow screens; the label keeps the link's name (= the visible text). */}
-            {!inShell && (
-                <Link className={styles.brand} to="/" aria-label="IPC Battlegrounds">
-                    <BrandLogo className={styles.brandLogo} />
-                    <span className={styles.brandWord}>IPC Battlegrounds</span>
-                </Link>
-            )}
-
-            <div className={styles.hud}>
-                <HudChip label={hudLabel} />
-            </div>
+            {!inShell &&
+                (brandLink ? (
+                    <Link className={styles.brand} to="/" aria-label="IPC Battlegrounds">
+                        {brandContent}
+                    </Link>
+                ) : (
+                    <div className={styles.brand}>{brandContent}</div>
+                ))}
 
             <div className={styles.overlay}>
                 <p className={styles.eyebrow}>{eyebrow}</p>
@@ -77,8 +83,6 @@ export function SplashLayout({
 
             <div className={styles.bottomHud} aria-hidden="true">
                 <span>{'IPC // Battlegrounds'}</span>
-                <span className={`${styles.sep} ${styles.hudCoord}`} />
-                <span className={styles.hudCoord}>{hudCoord}</span>
                 <span className={styles.sep} />
                 <span>v0.9</span>
             </div>

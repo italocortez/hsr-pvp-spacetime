@@ -128,6 +128,8 @@ Ending it (the reverse order: the module first, so tabs that connect find it ope
 1. Turn the module's maintenance off.
 2. Set the file back to `{ "maintenance": false }`, build, deploy, and check in a fresh tab that `/` connects. Open tabs connect on their next Retry.
 
+**Module before web (SUS2):** publish the module that has `view_my_suspension` (`stdb:publish:prod`) before deploying a web build that subscribes it; Layer 0 treats a failing view as a connection failure, so the other order shows every visitor the offline splash, and Retry repeats it ([suspension architecture](../suspension/architecture.md#release)).
+
 ### Staff bypass
 
 `?maintenance=skip` on any URL sets a `sessionStorage` flag (`hsr-pvp:maintenance-skip`) and the tab then ignores the status file. The module stays the authority: during maintenance it still lets only Admins connect (B-8), so anyone else who uses the parameter gets the refused socket and the offline splash. There is no link to it in the UI. Orchestrator's choice, for the user to rule on.

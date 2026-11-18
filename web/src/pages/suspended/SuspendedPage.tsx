@@ -31,8 +31,7 @@ export function SuspendedPage({ onSignOut }: { onSignOut: () => void }) {
     return (
         <SplashLayout
             image={IMAGE}
-            hudLabel="SYS://SUSPENDED"
-            hudCoord="Sector 00 · Suspended"
+            brandLink={false}
             eyebrow="Status // Suspended"
             title={
                 <>

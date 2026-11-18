@@ -67,7 +67,7 @@
 }
 
 .scrimEdges {
-    /* Top-bar scrim: keeps the brand and HUD labels legible over bright art; gone by 120px. */
+    /* Top-bar scrim: keeps the brand legible over bright art; gone by 120px. */
     --scrim-top: linear-gradient(
         180deg,
         rgba(8, 9, 14, 0.58) 0,
@@ -117,7 +117,8 @@
         filter var(--duration-base) var(--ease-out),
         transform var(--duration-base) var(--ease-out);
 
-    .brand:hover & {
+    /* Only the link form reacts (the suspended screen's mark is not a control). */
+    a.brand:hover & {
         filter: drop-shadow(0 0 10px rgba(126, 112, 224, 0.75));
         transform: scale(1.06);
     }
@@ -135,27 +136,13 @@
         0 1px 2px rgba(8, 9, 14, 0.95);
     transition: color var(--duration-fast) var(--ease-out);
 
-    .brand:hover & {
+    a.brand:hover & {
         color: var(--text-heading);
     }
 
-    /* Below 480px only the mark shows, so it never meets the HUD chip (the link keeps its label). */
+    /* Below 480px only the mark shows (the link keeps its label). */
     @media (--bp-xs) {
         display: none;
-    }
-}
-
-/* Top-right HUD chip. */
-.hud {
-    position: absolute;
-    top: 32px;
-    right: 36px;
-    z-index: 5;
-    display: flex;
-
-    @media (--bp-lg) {
-        top: 26px;
-        right: 24px;
     }
 }
 
@@ -172,7 +159,7 @@
     @media (--bp-lg) {
         align-items: flex-start;
         max-inline-size: 100%;
-        /* Content starts below the brand / HUD bar; short screens scroll instead of overlapping. */
+        /* Content starts below the brand mark; short screens scroll instead of overlapping. */
         padding: 88px 28px 64px;
     }
 }
@@ -280,11 +267,4 @@
     block-size: 12px;
     background: rgba(255, 255, 255, 0.32);
     box-shadow: 0 0 6px rgba(8, 9, 14, 0.9);
-}
-
-/* The coordinate and its separator drop out together. */
-.hudCoord {
-    @media (--bp-sm) {
-        display: none;
-    }
 }

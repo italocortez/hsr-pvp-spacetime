@@ -15,8 +15,6 @@ export function NotFoundPage({ what = 'Page' }: { what?: string }) {
     return (
         <ErrorSplash
             code="404"
-            hudLabel="SYS://NO SIGNAL"
-            hudCoord="Sector ?? · Uncharted"
             title={
                 <>
                     {what} <em>not found.</em>

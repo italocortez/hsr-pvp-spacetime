@@ -14,8 +14,6 @@ export function LoadFailedPage() {
     return (
         <ConnectionSplash
             eyebrow="Error // Offline"
-            hudLabel="SYS://OFFLINE"
-            hudCoord={'Sector 00 · Offline'}
             title={
                 <>
                     Connection <em>lost.</em>

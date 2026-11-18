@@ -115,9 +115,15 @@ The suspended screen; no module change. Page, wording and tests: [pages.md](../f
 | Layer 0 | `web/src/stdb/layer0.ts` | subscribes `view_my_suspension` beside `view_my_profile` and `view_my_lobbies`, for the whole session; reads the profile and the suspension together once both have applied; while a row exists sets the flag and keeps the auth store "not ready" (not "visitor", so the guards do not redirect under the screen); a subscription error is a connection failure like the other two |
 | Flag | `web/src/stdb/suspensionStatus.ts` | an external store (`useSuspended`), no SDK code (the root layout is in the entry chunk) |
 | Gate | `web/src/stdb/SuspensionGate.tsx` | in the root layout below `ConnectionGate` (offline and maintenance first): the suspended page in place of the shell and every route while the flag is set; the routes unmount, so their subscriptions end |
-| Page | `web/src/pages/suspended/SuspendedPage.tsx` | "Account suspended", the body text, one "Sign out" button (`signOut`: token forgotten, reload as a visitor) |
+| Page | `web/src/pages/suspended/SuspendedPage.tsx` | "Account suspended", the body text, one "Sign out" button (`signOut({ to: '/' })`, passed by `SuspensionGate`: token forgotten, the home page `/` loaded as a visitor whatever the address; user ruling, SUS2 fix pass). The brand mark is not a link here |
 
-The lift deletes the row: the view drops it and the profile row returns in the same transaction, Layer 0 clears the flag after the auth store has the user again, and the app comes back on the same address without a reload. The live connection stays a suspended identity's connection; the module still refuses every write (see "The check").
+While suspended, the live connection stays open (the module cannot close it): it is still the suspended identity's connection, and the module refuses every write it sends (see "The check").
+
+The lift deletes the row: the view drops it and the profile row returns in the same transaction, Layer 0 clears the flag after the auth store has the user again, and the app comes back on the same address without a reload. From then on the same connection writes again as a normal user.
+
+## Release
+
+- Publish the module with `view_my_suspension` (`stdb:publish:prod`) before the Vercel deploy of a web build that subscribes it: Layer 0 treats a failing view as a connection failure, so the other order shows every visitor and user the offline splash, and Retry repeats it ([hosting.md](../frontend/hosting.md#switching-maintenance-on-and-off)).
 
 ## Cost
 

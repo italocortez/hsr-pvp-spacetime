@@ -26,8 +26,9 @@ const STATES = {
             recovery: 'retry',
         }),
     retry: retryConnection,
-    // SUS2: the suspended page without a real suspension; `lifted` takes it down. The next
-    // `view_my_suspension` event of the live connection replaces the forced flag.
+    // SUS2: the suspended page without a real suspension; `lifted` takes it down. Only the flag
+    // is forced, never the auth store. The live connection's next Layer 0 profile or suspension
+    // row event (or a new connection's first result) replaces the forced flag.
     suspended: () => setSuspended(true),
     lifted: () => setSuspended(false),
 } as const;

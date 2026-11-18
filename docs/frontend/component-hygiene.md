@@ -66,7 +66,7 @@ State, derivations, effects and URL or storage sync go into a `use*` hook next t
 
 ## Rule 5: layout-agnostic props
 
-A prop answers "what does this show?", never "where am I rendered?". No `isInSidebar`, `leftOffset`, `stackVertically`. The parent positions the component by wrapping it (for example `SplashLayout` wraps `HudChip` in its corner slot). Two genuinely different presentations are two components with the same data contract.
+A prop answers "what does this show?", never "where am I rendered?". No `isInSidebar`, `leftOffset`, `stackVertically`. The parent positions the component by wrapping it (for example `SplashLayout` places the `IpcButton` or `IpcActionButton` its caller passes as `action` in its CTA slot). Two genuinely different presentations are two components with the same data contract.
 
 One sanctioned exception (S14.1): the app shell provides `useInShell()` (`web/src/shell/shellContext.ts`) because it owns the page's `main` landmark and the brand mark. A full-bleed layout reads it to avoid a second `main` and a second brand link (`SplashLayout`); sizes still come from the parent through a custom property (`--shell-offset`), not from the context.
 

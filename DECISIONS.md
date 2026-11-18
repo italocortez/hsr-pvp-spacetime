@@ -2263,3 +2263,23 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Decision:** After the landing page (S14.4) and the profile page (S14.5), the order is: admin panel (S14.9), lobbies (S14.6), lobby room (S14.7), calendar (S14.8). Orchestrator: the steps keep their numbers, so earlier references stay valid; only the order and the "depends on" column in `ROADMAP.md` change. The admin controls for suspensions (SUS3) and the light cone position editor come with the admin panel, so they arrive earlier.
 - **Why:** user, 2026-11-17: "after doing the landing page and profile, we can put on roadmap the admin panel, then lobbies, then lobby room, then calendar"
 - **Where implemented:** `ROADMAP.md`
+
+### A218 — Full-screen pages: no corner chip, no "Sector" text
+
+- **Date:** 2026-11-17 · **Status:** decided
+- **Decision:**
+  1. The dot with the `SYS://…` label in the upper right corner is removed from every full-screen page (suspended, standby, maintenance, offline, could-not-load, no access, not found, sign-in).
+  2. The "Sector …" flavor text in the bottom line is removed on the same pages. The bottom line reads `IPC // BATTLEGROUNDS | V0.9`.
+  3. Orchestrator: the small line above the title (`STATUS // …`, `ERROR // …`) stays, since it carries the page's kind or the error code. The `HudChip` component has no caller left and waits for the user's word to be deleted.
+- **Why:** user, 2026-11-17: "can we make it so that we don't keep this text and dot on the upper right of any page? it really is unnecessary and adds nothing to what we are already explaining in most of our pages"; then "the \"SECTOR 00 · SUSPENDED\" flavor text can go away" and "correct, we can remove the sector flavor text everywhere, not needed".
+- **Where implemented:** `web/src/components/SplashLayout/` and its callers; `docs/frontend/pages.md`
+
+### A219 — Suspended screen: sign-out lands on the home page; the flash on a direct load stays
+
+- **Date:** 2026-11-17 · **Status:** decided
+- **Decision:**
+  1. "Sign out" on the suspended screen lands on the home page, whatever address the person was on. Sign-out elsewhere in the app keeps reloading in place.
+  2. On a fresh load, a suspended person can see the navigation bar and the public page for a moment, until the database has answered; then the suspended screen takes over. Their own data never shows and nothing redirects. This is accepted; the browser does not remember a suspension between loads.
+  3. The unused `HudChip` component is deleted (follows A218).
+- **Why:** user, 2026-11-17: "you can delete HudChip and we can go with your recommendation on landing them on the home page"; then, after the explanation of the flash, "we can leave the flash as is".
+- **Where implemented:** `web/src/auth/signOut.ts`, `web/src/stdb/SuspensionGate.tsx`; `docs/frontend/pages.md` (SUS2)

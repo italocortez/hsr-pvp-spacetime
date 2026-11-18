@@ -84,6 +84,13 @@ export function startLayer0(conn: StdbConnectionLike): () => void {
     // cached rows after it (`db_connection_impl.ts` `#applyReplayBatch`); without this flag the
     // profile delete would turn a signed-in user into a visitor under the splash and the guards
     // would send them to sign in.
+    // The flag does not cover one case: in a replay batch the SDK first calls `onApplied` of the
+    // sets that succeeded, then `onError` of the failed one (`#applyReplayBatch`). The applied
+    // callbacks run `syncProfile` with the failed set's rows already gone and `dead` still false,
+    // so listeners can see a passing "visitor" (or the suspension flag go false) before the error
+    // in the same task. No render or redirect happens in between and the end state is the offline
+    // splash, but the suspension flag stays false afterwards: after Retry the shell can show until
+    // the new connection's first result.
     let dead = false;
 
     // Callbacks run after the whole transaction is in the cache, so reading the cache here sees

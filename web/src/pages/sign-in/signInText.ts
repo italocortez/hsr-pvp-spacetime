@@ -6,7 +6,6 @@
 /** Wording: the orchestrator's proposal (M5b), kept exactly for the user's ruling. */
 export const SIGN_IN_TEXT = {
     eyebrow: 'Access // Sign in',
-    chip: 'SYS://AUTH',
     lede: 'Sign in with Discord to get access to all our lobby, tournament and calendar features!',
     button: 'Sign in with Discord',
     notConfigured: 'Sign-in is not configured on this machine.',
@@ -21,10 +20,8 @@ export const SIGN_IN_TEXT = {
 
 export const SIGN_IN_TITLE = 'Sign in — IPC Battlegrounds';
 
-/** The splash frame's fixed parts (art and HUD lines). */
+/** The splash frame's fixed parts (art and eyebrow). */
 export const SIGN_IN_FRAME = {
     image: { src: '/standby.webp', width: 1920, height: 1080 },
-    hudLabel: SIGN_IN_TEXT.chip,
-    hudCoord: 'Sector 00 · Access',
     eyebrow: SIGN_IN_TEXT.eyebrow,
 } as const;

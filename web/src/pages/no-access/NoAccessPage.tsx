@@ -8,8 +8,6 @@ export function NoAccessPage() {
     return (
         <ErrorSplash
             code="403"
-            hudLabel="SYS://RESTRICTED"
-            hudCoord="Sector 00 · Restricted"
             title={
                 <>
                     Access <em>denied.</em>
