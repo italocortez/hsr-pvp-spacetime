@@ -60,7 +60,7 @@ The cache rules do not overlap, so no rule depends on which of two values wins.
 | `script-src` | `'self'` | the built bundle; `web/dist/index.html` has no inline script (check:patterns gate 8) |
 | | `'unsafe-eval'` | the SDK builds its BSATN codecs with `Function(...)` (`spacetimedb` 2.15.0 `src/lib/algebraic_type.ts` lines 466 to 786; 12 such calls in the built main chunk, plus one for a Node-only `import()` that the browser never reaches). Without it, building the connection throws `EvalError` and the page renders nothing (checked, M7 log) |
 | `style-src` | `'self'` | the built CSS files |
-| | `'unsafe-inline'` | kept from the plan (Chart.js not checked yet). Today's app works without it: see Proposals |
+| | `'unsafe-inline'` | kept from the plan. Today's app works without it: see Proposals. Chart.js (`chart.js` 4.6.1, pinned, S14.5c) does not need it: its lazy chunk injects no `<style>` element and calls no `insertRule`, `eval` or `Function`; it sizes the canvas through the CSSOM (`style.width`, `style.height`, `style.setProperty`), which CSP does not block (checked in the built `chartRuntime-*.js`) |
 | `img-src` | `'self'` | `web/public/` images |
 | | `data:` `blob:` | kept from the plan: inline and generated images (none in the app yet) |
 | | `https://*.ufs.sh` | media on UploadThing (A15) |
@@ -265,7 +265,7 @@ The address must match the page's own origin exactly: opening the dev server as 
 
 ## Proposals (not applied)
 
-1. **`style-src 'self'`** without `'unsafe-inline'`: the built app loaded `/`, `/costs`, the `/profile` redirect and a not-found page with zero CSP violations under it. React sets `style` props through the CSSOM, which CSP does not block, and Vite links every stylesheet. Revisit when Chart.js or another library that injects `<style>` arrives.
+1. **`style-src 'self'`** without `'unsafe-inline'`: the built app loaded `/`, `/costs`, the `/profile` redirect and a not-found page with zero CSP violations under it. React sets `style` props through the CSSOM, which CSP does not block, and Vite links every stylesheet. Chart.js arrived in S14.5c and injects no `<style>` (see the table); revisit when another library that injects `<style>` arrives.
 2. **`Cross-Origin-Opener-Policy: same-origin`**: isolates the window from cross-origin popups. Check against the Discord sign-in flow (M5) first.
 3. **`X-Frame-Options: DENY`**: only for old browsers that ignore `frame-ancestors`; low value.
 4. **A maintenance rule without a red commit:** let gate 9 accept `true` only when a CI variable or the commit message says so, so a maintenance deploy can come from a green commit.

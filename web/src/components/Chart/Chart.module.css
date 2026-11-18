@@ -1,0 +1,179 @@
+/*
+ * The shared chart's frame (S14.5c). The canvas is drawn by Chart.js; this file sizes its box, styles the HTML
+ * tooltip and legend, and holds the theme the canvas reads (`chartTheme.ts`): a model refers to these custom
+ * properties as `'var(--chart-ink)'` and so on, and a caller may override any of them on an ancestor.
+ *
+ * Settable on an ancestor: --chart-h (the canvas box's height, 260px: reserved from the first paint),
+ * --chart-legend-indent (0), the series colours a model names (the team builder: --chart-tone-1..4), and the theme
+ * below.
+ *
+ * Look from the S14.3b CSS chart (design/mockups/teambuilder.html's Chart.js chart): faint grid
+ * rgba(255, 255, 255, 0.06), axis line --border-strong, labels above the bars in gold, names in snow, the axis title
+ * in mist, the tooltip on graphite with a --border-strong edge.
+ */
+
+.chart {
+    --chart-ink: var(--color-snow); /* names under the bars */
+    --chart-muted: var(--color-mist); /* axis titles */
+    --chart-grid: rgba(255, 255, 255, 0.06); /* the mockup's CHART_COL.grid; no token */
+    --chart-axis: var(--border-strong);
+    --chart-surface: var(--bg-card); /* the gap between stacked parts */
+    --chart-accent: var(--color-prestige); /* the labels above the bars, the tooltip's total */
+
+    position: relative;
+}
+
+.frame {
+    position: relative;
+    box-sizing: border-box;
+    block-size: var(--chart-h, 260px);
+}
+
+.canvas {
+    display: block;
+}
+
+.empty {
+    position: absolute;
+    inset: 0 0 0 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    color: var(--text-muted);
+    font-family: var(--font-primary);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-align: center;
+    text-transform: uppercase;
+    pointer-events: none;
+}
+
+/* The tooltip: above the column's label (24px), kept inside the chart's width. */
+.tip {
+    --tip-w: min(13rem, 100%);
+
+    position: absolute;
+    z-index: 20;
+    inset-block-start: calc(var(--top) - 24px);
+    inset-inline-start: clamp(0px, calc(var(--x) - var(--tip-w) / 2), calc(100% - var(--tip-w)));
+    display: grid;
+    gap: 4px;
+    box-sizing: border-box;
+    inline-size: var(--tip-w);
+    padding: 11px;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    background: var(--color-graphite);
+    box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.85);
+    translate: 0 -100%;
+    pointer-events: none;
+}
+
+.tipTitle {
+    margin-block-end: 2px;
+    color: var(--color-snow);
+    font-family: var(--font-secondary);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.tipRow {
+    display: grid;
+    grid-template-columns: 10px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    color: var(--color-mist);
+    font-family: var(--font-primary);
+    font-size: 0.6875rem;
+
+    & b {
+        color: var(--color-snow);
+        font-variant-numeric: tabular-nums;
+        font-weight: 700;
+    }
+}
+
+/* A short stroke of the series colour (dataviz: line keys in tooltips). */
+.tipKey {
+    display: block;
+    inline-size: 10px;
+    block-size: 3px;
+}
+
+.tipFooter {
+    margin-block-start: 2px;
+    color: var(--chart-accent);
+    font-family: var(--font-primary);
+    font-size: 0.6875rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+}
+
+.legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    /* --chart-legend-indent: lines the legend up with the plot (past a value axis title). */
+    margin: 18px 0 0 var(--chart-legend-indent, 0);
+    padding: 14px 0 0;
+    border-block-start: 1px solid var(--border-subtle);
+    list-style: none;
+
+    & li {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        color: var(--text-body);
+        font-family: var(--font-primary);
+        font-size: 0.625rem;
+        font-weight: 500;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+    }
+}
+
+.swatch {
+    display: block;
+    flex: none;
+    inline-size: 10px;
+    block-size: 10px;
+}
+
+/* Reads the theme for the canvas; never seen. Forced colours must not overwrite what it reads. */
+.probe {
+    position: absolute;
+    inline-size: 0;
+    block-size: 0;
+    overflow: hidden;
+    forced-color-adjust: none;
+    visibility: hidden;
+}
+
+/* Forced colours: the canvas keeps its own colours, so the theme becomes system colours (readable labels on the
+   forced background) and the frame gets a visible edge. A caller maps its series colours the same way. */
+@media (forced-colors: active) {
+    .chart {
+        --chart-ink: CanvasText;
+        --chart-muted: CanvasText;
+        --chart-grid: GrayText;
+        --chart-axis: CanvasText;
+        --chart-surface: Canvas;
+        --chart-accent: CanvasText;
+    }
+
+    .frame {
+        border: 1px solid CanvasText;
+    }
+
+    .swatch,
+    .tipKey {
+        forced-color-adjust: none;
+    }
+
+    .tip {
+        border-color: CanvasText;
+    }
+}
