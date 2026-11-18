@@ -73,6 +73,8 @@ Each subscription lives at the highest layout that all its consumers share. Layo
 
 ## Decision 9 — Reference subscriptions stay on; gated panels use `useTable` `enabled`
 
+> **Partly replaced by A173 (2026-11-13).** Pages do not use the SDK's `useTable`. The reference set still stays on for the session; a gated panel gates its subscription through the repo's own hooks in `web/src/stdb/` (`useRouteSubscriptions`, `useRows`). The `useTable` notes below are kept as history.
+
 Once mounted, the reference-data subscriptions stay on for the session, with no `enabled` prop: portrait warmup and page hydration depend on that data being live, and gating it would bring back the "first frame missing portraits" bug. Gated UI panels (admin tabs, modals) pass `{ enabled: <boolean> }` in the second argument of `useTable`.
 
 **Why gated panels:** a hidden-but-mounted panel (for example the admin `User` tab kept mounted with `display: none`) would otherwise keep its subscription alive; gating recovers that egress.
@@ -85,6 +87,8 @@ Once mounted, the reference-data subscriptions stay on for the session, with no 
 ---
 
 ## Decision 10 — Reducer calls in React components use `useReducer(reducers.X)`
+
+> **Replaced by A173 (2026-11-13).** Pages call reducers through `useReducerCall` in `web/src/stdb/`, which refuses at once when there is no connection instead of queueing. The text below is kept as history.
 
 Inside React components or hooks, use `const callX = useReducer(reducers.X)` and call `callX(args)`. The hook returns a stable, typed, Promise-returning callback that queues until the connection is ready, which removes the per-site connection null-check and its readiness race.
 

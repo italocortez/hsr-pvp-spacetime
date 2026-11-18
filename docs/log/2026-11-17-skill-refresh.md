@@ -91,6 +91,6 @@ Length: SKILL.md 962 lines / 84,003 bytes before, 905 lines / 87,942 bytes after
 
 | Phase | Agent | Tokens | Tool calls | Time |
 |---|---|---|---|---|
-| Refresh | Opus | figures not available at commit time | | |
+| Refresh | Opus | 325,234 | 160 | 12 min |
 
 Documentation only; no code, test or config changed, so no test run. The orchestrator checked that only the skill folder and this log changed. Decision: A212 item 3.
