@@ -6,7 +6,7 @@ import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHel
 import { performUserDeletion } from '@module/helpers/identity/userDeletionHelper';
 import { isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { handOverMatchEventsOfFormerStaff } from '@module/helpers/calendar/calendarCascade';
-import { seedSystemLobbyPreset } from '@module/helpers/lobby/systemPreset';
+import { refreshSystemLobbyPreset, seedSystemLobbyPreset } from '@module/helpers/lobby/systemPreset';
 import { setGuestCreationEnabled, setGuestLobbyCreationEnabled, setMaintenanceMode } from '@module/helpers/lobby/abuseControls';
 import { cleanProviderName, planProviderLink } from '@module/helpers/identity/providerLink';
 import { requireLinker, trustedServerRow } from '@module/helpers/identity/serverIdentities';
@@ -383,6 +383,24 @@ export const server_set_maintenance = spacetimedb.reducer({
     requireServer(ctx);
     const changed = setMaintenanceMode(ctx, on, SYSTEM_USER_ID);
     console.log(`[ABUSE] Maintenance mode ${on ? 'on' : 'off'}${changed ? '' : ' (unchanged)'} by a server identity`);
+});
+
+/**
+ * S14.4s: server-only refresh of the system lobby preset (refreshSystemLobbyPreset): a row no Admin has edited is
+ * brought to the code's current constants, an Admin-edited row is left alone, an absent row is inserted. `init` runs
+ * only on the first publish or a wipe, so this is how a live database gets new constants
+ * (npm run stdb:system-preset -- --target <t> refresh). The outcome goes to the module log.
+ */
+export const server_refresh_system_preset = spacetimedb.reducer((ctx) => {
+    requireServer(ctx);
+    const { row, outcome } = refreshSystemLobbyPreset(ctx);
+    const text = {
+        inserted: 'was absent and has been inserted',
+        updated: 'has been brought to the current constants',
+        adminEdited: 'was edited by an Admin and has been left as it is',
+        current: 'already has the current constants (nothing written)',
+    }[outcome];
+    console.log(`[PRESET] System lobby preset #${row.id} ${text} (by a server identity)`);
 });
 
 /**

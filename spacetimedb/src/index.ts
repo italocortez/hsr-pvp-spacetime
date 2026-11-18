@@ -127,7 +127,7 @@ export {
 export { broadcast_cursor } from '@module/reducers/lobby/cursor';
 export { login_as_guest, request_link_code, confirm_link } from '@module/reducers/identity/auth';
 export { delete_my_account, update_display_name, update_username, update_avatar } from '@module/reducers/identity/profile';
-export { server_register_delegate, server_revoke_delegate, server_register_linker, server_revoke_linker, linker_present_code, server_set_role, server_delete_user, server_suspend_user, server_lift_suspension, server_set_guest_creation, server_set_guest_lobby_creation, server_set_maintenance, server_set_datetime, server_set_online, server_set_mmr, server_nuke_test_data } from '@module/reducers/identity/server';
+export { server_register_delegate, server_revoke_delegate, server_register_linker, server_revoke_linker, linker_present_code, server_set_role, server_delete_user, server_suspend_user, server_lift_suspension, server_set_guest_creation, server_set_guest_lobby_creation, server_set_maintenance, server_refresh_system_preset, server_set_datetime, server_set_online, server_set_mmr, server_nuke_test_data } from '@module/reducers/identity/server';
 export { admin_ban_user, admin_unban_user } from '@module/reducers/admin/banAdmin';
 export { admin_suspend_user, admin_lift_suspension } from '@module/reducers/admin/suspensionAdmin'; // suspension-s1
 export { admin_delete_row, admin_bulk_upsert, admin_update_user } from '@module/reducers/admin/admin';
@@ -225,7 +225,8 @@ export const init = spacetimedb.init((ctx) => {
   seedAbuseConfigDefaults(ctx);
 
   // A33a / CH-S4: the built-in system lobby preset ("Tournament default"), owned by SYSTEM_USER_ID, from
-  // compile-time constants (helpers/lobby/systemPreset.ts). Idempotent: inserted only when absent.
+  // compile-time constants (helpers/lobby/systemPreset.ts). Idempotent: inserted when absent; a row no Admin edited is
+  // brought to the constants (S14.4s, refreshSystemLobbyPreset).
   seedSystemLobbyPreset(ctx);
 });
 

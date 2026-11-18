@@ -145,6 +145,7 @@ import ServerAddPartnerServerReducer from "../server_add_partner_server_reducer"
 import ServerDeleteUserReducer from "../server_delete_user_reducer";
 import ServerLiftSuspensionReducer from "../server_lift_suspension_reducer";
 import ServerNukeTestDataReducer from "../server_nuke_test_data_reducer";
+import ServerRefreshSystemPresetReducer from "../server_refresh_system_preset_reducer";
 import ServerRegisterDelegateReducer from "../server_register_delegate_reducer";
 import ServerRegisterLinkerReducer from "../server_register_linker_reducer";
 import ServerRemovePartnerServerReducer from "../server_remove_partner_server_reducer";
@@ -336,6 +337,7 @@ export type ServerAddPartnerServerParams = __Infer<typeof ServerAddPartnerServer
 export type ServerDeleteUserParams = __Infer<typeof ServerDeleteUserReducer>;
 export type ServerLiftSuspensionParams = __Infer<typeof ServerLiftSuspensionReducer>;
 export type ServerNukeTestDataParams = __Infer<typeof ServerNukeTestDataReducer>;
+export type ServerRefreshSystemPresetParams = __Infer<typeof ServerRefreshSystemPresetReducer>;
 export type ServerRegisterDelegateParams = __Infer<typeof ServerRegisterDelegateReducer>;
 export type ServerRegisterLinkerParams = __Infer<typeof ServerRegisterLinkerReducer>;
 export type ServerRemovePartnerServerParams = __Infer<typeof ServerRemovePartnerServerReducer>;

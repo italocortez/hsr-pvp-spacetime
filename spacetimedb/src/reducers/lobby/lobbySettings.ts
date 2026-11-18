@@ -9,7 +9,7 @@ import { ensureCostSetCovers, ensureSelectableCostSet } from '@module/helpers/dr
 import { ensureSeatAllowed } from '@module/helpers/tournament/tournamentLobbySides';
 import { isCaptainMovingOwnStandIn, participateAsStandIn } from '@module/helpers/tournament/standIns';
 import { ensureForfeitSecondsInRange, ensureNoActionAllowed, ensureNotDeferredOutsideTournament } from '@module/helpers/lobby/disconnectHelpers';
-import { ensureLobbyConfigInRange, ensureTeamAliases, resolveConfirmWindowSeconds } from '@module/helpers/lobby/lobbyConfigBounds';
+import { ensureAuctionAmounts, ensureLobbyConfigInRange, ensureTeamAliases, resolveConfirmWindowSeconds } from '@module/helpers/lobby/lobbyConfigBounds';
 import { MEMBERSHIP_ACTION_TEXT, consumeMembershipAllowance } from '@module/helpers/lobby/abuseControls';
 import { fairShuffle, SHUFFLE_DOMAIN, shuffleKeyAt } from '@shared/lobby-rules';
 import { ensureLobbyPasswordRule, hashLobbyPassword } from '@module/helpers/lobby/lobbyPassword';
@@ -145,6 +145,7 @@ export const update_lobby_settings = spacetimedb.reducer(
             aboveThresholdPenalty: args.aboveThresholdPenalty,
             deathPenalty: args.deathPenalty,
         });
+        ensureAuctionAmounts(args.draftMode.tag, args); // S14.4s: the draft mode and amounts this update stores
         ensureTeamAliases(args.teamBlueAlias, args.teamRedAlias);
 
         // Resolve disconnectForfeitSeconds — locked fields use lobby value

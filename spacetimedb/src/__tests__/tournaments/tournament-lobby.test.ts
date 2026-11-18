@@ -37,7 +37,6 @@ import {
     PARTICIPANTS,
 } from '../fixtures/tournaments';
 import { byKey, createTournamentLobby, lobbiesOf, sidesOf, SEAT, slotOf } from '../fixtures/tournament-matches';
-
 const setSlot = (test: Harness, by: Actor, lobbyId: number, target: Actor, slot: string) =>
     tx(test, by, (ctx) => M.set_team_slot(ctx, { lobbyId, targetJoinSeq: seatOf(ctx, lobbyId, target.userId), lobbySlot: { tag: slot } as any }));
 const approve = (test: Harness, by: Actor, bracketMatchId: number, teamId: number, userId: number) =>
@@ -242,6 +241,29 @@ describe('create_tournament_lobby: the integrity set, the free set, the series (
         expect(l2.characterBudget).toBe(sys.characterBudget);
         expect(l2.banMode.tag).toBe(sys.banMode.tag);
         expect(l2.refereeCanKick).toBe(sys.refereeCanKick);
+    });
+
+    // T-S14.4s (user ruling 2026-11-18): a preset is checked when a lobby is made from it.
+    it('T-S14.4s: an Auction preset with a character budget or a minimum raise of 0 is refused at create_tournament_lobby; a Classic one with 0 / 0 is accepted', () => {
+        const f = liveField(4);
+        const sys = [...f.test.db.LobbyPreset.iter()].find((p) => p.isSystemPreset)!;
+        const own = f.test.db.LobbyPreset.insert({
+            ...sys, id: 0, isSystemPreset: false, name: 'own', creatorUserId: f.org.userId,
+            draftMode: { tag: 'Auction' } as any, characterBudget: 0, minimumBidRaise: 5,
+        });
+        f.test.db.Tournament.id.update({ ...tRow(f.test, f.id), lobbyPresetId: own.id });
+        const m1 = byKey(f.test, f.id, 'W-R1-M1');
+        expectReject(f.test, f.org, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: m1.id }),
+            'characterBudget must be above 0 in an Auction lobby.');
+
+        f.test.db.LobbyPreset.id.update({ ...f.test.db.LobbyPreset.id.find(own.id)!, characterBudget: 30, minimumBidRaise: 0 });
+        expectReject(f.test, f.org, (ctx) => M.create_tournament_lobby(ctx, { bracketMatchId: m1.id }),
+            'minimumBidRaise must be above 0 in an Auction lobby.');
+        expect(lobbiesOf(f.test, m1.id)).toHaveLength(0);
+
+        f.test.db.LobbyPreset.id.update({ ...f.test.db.LobbyPreset.id.find(own.id)!, draftMode: { tag: 'Classic' } as any, characterBudget: 0, minimumBidRaise: 0 });
+        const l = lobbyRow(f.test, createTournamentLobby(f.test, f.org, m1.id));
+        expect(l).toMatchObject({ draftMode: { tag: 'Classic' }, characterBudget: 0, minimumBidRaise: 0 });
     });
 });
 

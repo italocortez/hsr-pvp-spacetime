@@ -33,7 +33,7 @@ import {
     ensureNotDeferredOutsideTournament,
 } from '@module/helpers/lobby/disconnectHelpers';
 import { consumeLobbyCreateAllowance, consumeMembershipAllowance, readAbuseConfig, recordGuestLobbyCreation } from '@module/helpers/lobby/abuseControls';
-import { CONFIRM_WINDOW_SECONDS_DEFAULT, ensureLobbyConfigInRange, ensureTeamAliases, resolveConfirmWindowSeconds } from '@module/helpers/lobby/lobbyConfigBounds';
+import { CONFIRM_WINDOW_SECONDS_DEFAULT, ensureAuctionAmounts, ensureLobbyConfigInRange, ensureTeamAliases, resolveConfirmWindowSeconds } from '@module/helpers/lobby/lobbyConfigBounds';
 import { normalizeLobbyName } from '@module/helpers/tournament/seriesSettings';
 import { ensureCostSetUsable } from '@module/helpers/draft/costSetGuards';
 import { autoSeatSlot } from '@module/helpers/tournament/tournamentLobbySides';
@@ -127,6 +127,7 @@ export const create_lobby = spacetimedb.reducer(
 
         // S10e (lobby audit #10, #5): numeric settings in range; team aliases capped.
         ensureLobbyConfigInRange(args);
+        ensureAuctionAmounts(args.draftMode.tag, args); // S14.4s
         ensureTeamAliases(args.teamBlueAlias, args.teamRedAlias);
 
         // A42(1) kill switch: guests cannot create while AbuseConfig.guestLobbyCreationEnabled is off;

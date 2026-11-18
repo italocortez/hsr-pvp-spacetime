@@ -5,6 +5,7 @@ import { insertWithAudit } from '@module/helpers/admin/auditHelpers';
 import { ensureNotInLobby, generateJoinCode } from '@module/helpers/lobby/lobbyHelpers';
 import { ensureTournamentPermission, hasTournamentPermission } from '@module/helpers/tournament/tournamentPermissions';
 import { findSystemLobbyPreset, SYSTEM_PRESET_VALUES } from '@module/helpers/lobby/systemPreset';
+import { ensureAuctionAmounts } from '@module/helpers/lobby/lobbyConfigBounds';
 import { autoSeatSlot } from '@module/helpers/tournament/tournamentLobbySides';
 import { findLobbyResult } from '@module/helpers/results/scoringHelpers';
 import { matchGames } from '@module/helpers/tournament/bracketResults';
@@ -113,6 +114,8 @@ export const create_tournament_lobby = spacetimedb.reducer(
 
         // A33a: the free set from the tournament's preset, or the system preset when that row no longer exists
         const preset = ctx.db.LobbyPreset.id.find(tournament.lobbyPresetId) ?? findSystemLobbyPreset(ctx) ?? SYSTEM_PRESET_VALUES;
+        // S14.4s: a preset is checked when a lobby is made from it (an Auction lobby needs a budget and a raise above 0).
+        ensureAuctionAmounts(preset.draftMode.tag, preset);
 
         const key = bracketMatch.positionKey;
         const name = `${tournament.name.slice(0, Math.max(0, LOBBY_NAME_MAX - key.length - 1))} ${key}`.trim();

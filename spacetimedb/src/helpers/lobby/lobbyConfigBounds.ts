@@ -10,7 +10,8 @@ import { SenderError } from 'spacetimedb/server';
 //   reserveBankSeconds     0 - 1800
 //   confirmWindowSeconds   0 - 300, default 60 (S10t, A131; 0 = no confirm window: the last pick or sale moves the
 //                          lobby to Equipping in the same call); resolveConfirmWindowSeconds, an optional argument
-//   characterBudget, lightconeBudget, minimumBidRaise   finite, 0 - 100000 (f32 arguments: NaN / ±Infinity rejected)
+//   characterBudget, lightconeBudget, minimumBidRaise   finite, 0 - 100000 (f32 arguments: NaN / ±Infinity rejected);
+//                          in an Auction lobby characterBudget and minimumBidRaise above 0 (S14.4s, ensureAuctionAmounts)
 //   rosterDiffAdvantage, underThresholdAdvantage, aboveThresholdPenalty, deathPenalty
 //                          -1000000 - 1000000 hundredths (A21 fixed point, i32 columns; S10e review N1: negative
 //                          values stay accepted, as before S10e, only the magnitude is bounded)
@@ -64,6 +65,23 @@ export function ensureLobbyConfigInRange(c: LobbyConfigNumbers): void {
         ensureIntRange(name, c[name], -HANDICAP_MAX_HUNDREDTHS, HANDICAP_MAX_HUNDREDTHS, ' (hundredths)');
     }
     ensureIntRange('rosterThreshold', c.rosterThreshold, 0, HANDICAP_MAX_HUNDREDTHS, ' (hundredths)');
+}
+
+/** S14.4s (user ruling 2026-11-18): the two Auction refusals of ensureAuctionAmounts. */
+export const AUCTION_CHARACTER_BUDGET_TEXT = 'characterBudget must be above 0 in an Auction lobby.';
+export const AUCTION_MINIMUM_RAISE_TEXT = 'minimumBidRaise must be above 0 in an Auction lobby.';
+
+/**
+ * S14.4s (user ruling 2026-11-18): an Auction lobby needs a character budget and a minimum bid raise above 0 (a budget
+ * of 0 buys nothing with a price; a raise of 0 lets a bid repeat the current one). Classic does not use them, so a
+ * Classic lobby is not checked. Called wherever a lobby's settings are set: create_lobby, update_lobby_settings (the
+ * draft mode it will store) and create_tournament_lobby (the preset's values). Presets are not checked here: a preset
+ * is checked when a lobby is made from it.
+ */
+export function ensureAuctionAmounts(draftModeTag: string, c: { characterBudget: number; minimumBidRaise: number }): void {
+    if (draftModeTag !== 'Auction') return;
+    if (!(c.characterBudget > 0)) throw new SenderError(AUCTION_CHARACTER_BUDGET_TEXT);
+    if (!(c.minimumBidRaise > 0)) throw new SenderError(AUCTION_MINIMUM_RAISE_TEXT);
 }
 
 /**

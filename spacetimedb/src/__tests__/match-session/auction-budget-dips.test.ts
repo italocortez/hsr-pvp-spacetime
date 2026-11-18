@@ -123,7 +123,10 @@ describe('A133: an eidolon raise during the draft needs character budget above 0
     });
 
     it('A133(1): a team at 0 cannot nominate or bid on a character with a default extra; it can nominate a cost-0 character without extra and EMPTY', () => {
-        const s = lobby({ requireOwnership: true, characterBudget: 33.3, lightconeBudget: 12.7, minimumBidRaise: 0 });
+        const s = lobby({ requireOwnership: true, characterBudget: 33.3, lightconeBudget: 12.7, minimumBidRaise: 0.1 });
+        // T-S14.4s: create_lobby refuses a raise of 0 in Auction; the raise of 0 this test needs (the bid of 0 below) is
+        // written on the row, as a lobby created before S14.4s still carries it.
+        s.test.db.Lobby.id.update({ ...lobbyRow(s.test, s.lobbyId), minimumBidRaise: 0 });
         selectAccount(s.test, s.lobbyId, s.a.b1.userId, 9001, { A: 0, Y: 1, Z: 0, f0: 0, f1: 0 }); // Blue: Y only at E1
         selectAccount(s.test, s.lobbyId, s.a.r1.userId, 9002, { A: 0, Y: 0, Z: 0, f0: 0, f1: 0 });
         price(s, 'Y', [0, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7]); // Blue's default extra 0.7, Red's 0
@@ -489,7 +492,7 @@ describe('A133 (review F2): a sale is never refused; an extra that grew after th
 
 describe('A133 (review F3): a character budget that is 0 for the player counts as 0', () => {
     it('A133: budgets 0.3 / 50, Blue buys P at 0.1 and Q at 0.2 (a residue of 1.49e-8 remains): a raise is refused', () => {
-        const s = lobby({ characterBudget: 0.3, lightconeBudget: 50, minimumBidRaise: 0 });
+        const s = lobby({ characterBudget: 0.3, lightconeBudget: 50, minimumBidRaise: 0.1 }); // T-S14.4s: was 0 (no bid here reads it)
         buyAt(s, 'Blue', 'A', E6(20), 'f1');
         buyAt(s, 'Blue', 'P', 0.1, 'f2');
         buyAt(s, 'Blue', 'Q', 0.2, 'f3');
@@ -530,7 +533,10 @@ describe('Minimum raise (review F6): a bid of exactly current + minimum raise is
     });
 
     it('G4: with a minimum raise of 0 an equal bid stays legal', () => {
-        const s = lobby({ minimumBidRaise: 0 });
+        // T-S14.4s: create_lobby refuses a raise of 0 in Auction; a lobby created before S14.4s still carries it, so the
+        // raise of 0 is written on the row.
+        const s = lobby();
+        s.test.db.Lobby.id.update({ ...lobbyRow(s.test, s.lobbyId), minimumBidRaise: 0 });
         const nominator = nominatorOf(s);
         nominate(s, 'x', 3);
         bid(s, other(nominator), 3);

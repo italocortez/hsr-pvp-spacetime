@@ -39,7 +39,7 @@ BanRecord (id: u32 autoInc PK)  [PRIVATE -- public: false]
 3. Create SYSTEM user: `username="SYSTEM"`, role=Admin, id from autoInc (audit actor `SYSTEM_USER_ID=0`)
 4. Insert `UserIdentity` linking the owner identity -> SYSTEM user.id
 5. Abuse controls (Phase S5 execution, D-B5 / A42), on every init, only when absent: `AbuseConfig` id 1 with the defaults (`seedAbuseConfigDefaults`, SYSTEM actor). Phase S6 execution (A57): no breaker job is seeded any more; the breaker runs inline in `create_lobby`
-6. System lobby preset (Phase S6 execution, A33a / CH-S4), on every init, only when absent: one `LobbyPreset` with `isSystemPreset = true`, `creatorUserId = SYSTEM_USER_ID (0)`, name "Tournament default" (`seedSystemLobbyPreset`, helpers/lobby/systemPreset.ts; values in docs/lobby/architecture.md)
+6. System lobby preset (Phase S6 execution, A33a / CH-S4): one `LobbyPreset` with `isSystemPreset = true`, `creatorUserId = SYSTEM_USER_ID (0)`, name "Tournament default" (`seedSystemLobbyPreset`, helpers/lobby/systemPreset.ts; values in docs/lobby/architecture.md). Inserted when absent; Phase S14.4s execution: a row no Admin has edited (`lastModifiedById` still 0) is brought to the code's current constants, an Admin-edited row is left alone (`refreshSystemLobbyPreset`; the same refresh runs in `create_tournament` without a preset, `server_nuke_test_data` and `server_refresh_system_preset`, below)
 
 ### server_register_delegate(identityHex, label) / server_revoke_delegate(identityHex)
 1. `requireOwner(ctx)` -- only the Owner row may manage delegates
@@ -78,6 +78,12 @@ The server-side twin of the Admin's `admin_update_abuse_config({ maintenanceMode
 2. `setMaintenanceMode(ctx, on, SYSTEM_USER_ID)` (`helpers/lobby/abuseControls.ts`): writes `AbuseConfig.maintenanceMode` (row 1, seeded when absent) with SYSTEM (0) in the audit columns. Setting the value the row already holds writes nothing and succeeds.
 Effect, identical to the Admin path: nothing happens to open sockets at write time (a module cannot drop a connection). From the next transaction on, `client_connected` refuses new connections of identities that are neither a trusted server identity nor a live Admin, and `ensureNotInMaintenance` refuses the actions of connected non-Admins (see "Maintenance mode" under Abuse controls). Server identities pass both checks, so the script can turn the mode off again and publish, bootstrap and seed run during maintenance.
 Called through a server-identity connection: `npm run stdb:maintenance -- --target test|prod on|off|status` (`scripts/stdb/maintenance.ts`, the delegate token of the target's env file; `--dry-run` prints the call). `status` subscribes `view_admin_abuse_config` as the delegate (mapped to the SYSTEM user, an Admin, so the staff view returns the row) and prints the flag.
+
+### server_refresh_system_preset() (Phase S14.4s execution, user ruling 2026-11-18)
+`init` runs only on the first publish or a wipe, so a live database keeps an older system lobby preset after a publish that changes its constants. This reducer brings it up to date. Both databases; not gated by `requireTestDatabase`.
+1. `requireServer(ctx)` -- Owner or Delegate; any other caller (a user, an Admin client and the Linker included) is rejected with "Forbidden: caller is not a registered server identity."
+2. `refreshSystemLobbyPreset(ctx)` (`helpers/lobby/systemPreset.ts`): absent row inserted; a row an Admin edited (`lastModifiedById` is not 0) left as it is; a row equal to the constants left unwritten; otherwise every `SYSTEM_PRESET_VALUES` column written (same id and creation audit, SYSTEM (0) as modifier). The module log line `[PRESET] System lobby preset #<id> ...` names the outcome (inserted, brought to the current constants, edited by an Admin and left, already current). Lobbies that copied older values are not rewritten.
+Called through a server-identity connection: `npm run stdb:system-preset -- --target test|prod refresh` (`scripts/stdb/system-preset.ts`, the delegate token of the target's env file; `--dry-run` prints the call). Run it after the publish that carries new constants. Adding the reducer is an additive publish (a new reducer, no table change).
 
 ### server_set_mmr(userId, gameModeTag, rating) -- test databases only
 1. `requireTestDatabase(ctx)` -- module env `STDB_TARGET` must be `test` ("Not a test database.")
@@ -413,6 +419,7 @@ PartnerServer (id: u32 autoInc PK)  [PUBLIC -- public: true]   tables/admin/part
 | `admin_suspend_user` / `admin_lift_suspension` (Admin only; an Admin target refused from the app, user ruling 2026-11-17) | Phase suspension-s1 execution (DECISIONS.md A195, A213(3), A214) | 2026-11-17 |
 | Public `PartnerServer` table without audit columns (user ruling); `description` column added by the brief; `admin_*` / `server_*` add, update, remove partner server; at most 12 rows; `server_nuke_test_data` keeps the table; `requireServer` exported | Phase S14.4p execution (user ruling 2026-11-17) | 2026-11-17 |
 | New `server_set_maintenance(on)` (`requireServer`, SYSTEM audit actor, same `AbuseConfig.maintenanceMode` column as the Admin path through `setMaintenanceMode`; the same value writes nothing); `stdb:maintenance` script (`on`, `off`, `status`) | Phase MNT1 execution (user ruling 2026-11-18) | 2026-11-18 |
+| New `server_refresh_system_preset()` (`requireServer`; `refreshSystemLobbyPreset` brings a never-edited system preset to the constants, leaves an Admin's edit, logs the outcome); `stdb:system-preset` script (`refresh`, `--dry-run`); init item 6 corrected (the seed also refreshes) | Phase S14.4s execution (user ruling 2026-11-18) | 2026-11-18 |
 
 ---
 

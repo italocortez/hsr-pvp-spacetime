@@ -1097,6 +1097,21 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(2))._
 **When:** Anyone lists `LobbyPreset`; an Admin calls `delete_lobby_preset` on the system preset; a non-admin calls `update_lobby_preset` on it
 **Then:** Exactly one row has `isSystemPreset = true` (name "Tournament default", owner SYSTEM_USER_ID 0, the tournament-lobby defaults); a second `init` adds none. The delete is rejected ("The system lobby preset cannot be deleted."); the non-admin update is rejected ("Only admins can modify or delete system presets.").
 
+### System Preset Is Playable in Both Draft Modes (Phase S14.4s execution)
+**Given:** The system preset; on an older database, its row still carries character and light cone budgets 0 and 0 and a minimum raise of 20, and no Admin has edited it
+**When:** A user applies the preset in the create-lobby form with draft mode Classic or Auction and calls `create_lobby`; on the older database, `init`, `create_tournament` without a preset, `server_nuke_test_data` or `server_refresh_system_preset` runs
+**Then:** The preset's budgets are 30 (character) and 15 (light cone), the values of A190 item 5 and A221 R8, and its minimum raise is 5 (user ruling 2026-11-18); both lobbies are created, and in the Auction lobby a character with a price can be nominated and outbid by the minimum raise. On the older database the row is brought to the current values in place (same id). A row an Admin has edited is never changed. Lobbies created from the old values keep them.
+
+### Server Refreshes the System Preset (Phase S14.4s execution)
+**Given:** A live database whose system preset predates the current constants
+**When:** A server identity calls `server_refresh_system_preset` (`npm run stdb:system-preset -- --target <t> refresh`); a user, an Admin or the Linker calls it
+**Then:** A row no Admin has edited is brought to the current constants; a row an Admin edited is left as it is; a row already current is not written; the module log names which. Any other caller is refused ("Forbidden: caller is not a registered server identity.").
+
+### Auction Lobby Needs a Budget and a Minimum Raise (Phase S14.4s execution, user ruling 2026-11-18)
+**Given:** A user in no lobby; a host of a Classic lobby in Waiting; a tournament whose preset is an Auction preset with character budget 0 or minimum raise 0
+**When:** The user calls `create_lobby` with `draftMode = Auction` and `characterBudget = 0` (or `minimumBidRaise = 0`); the host calls `update_lobby_settings` switching to Auction with either at 0; a member calls `create_tournament_lobby`
+**Then:** Each is refused: "characterBudget must be above 0 in an Auction lobby." / "minimumBidRaise must be above 0 in an Auction lobby." A Classic lobby with both at 0 is accepted. A preset may still be saved with these values; it is refused when a lobby is made from it.
+
 ### Shuffle Teams (Phase S6 execution, A45(3))
 **Given:** A lobby in Waiting: b1, b2 Blue players, r1, r2 Red players, all confirmed; the host is a spectator
 **When:** The host calls `shuffle_teams(lobbyId, TeamSwap)`; later `shuffle_teams(lobbyId, RandomSwap)`
@@ -1433,6 +1448,8 @@ _Superseded in Phase S8g execution (DECISIONS.md A70)._ Read "team1" as "the Blu
 | A lobby password contains only A to Z, a to z and 0 to 9 and is at most 20 characters ("The lobby password can have at most 20 characters.", "The lobby password can contain only letters A to Z and a to z and digits 0 to 9."); it is stored as a salted hash, never as text; `join_lobby` refuses a wrong or rule-breaking password with "Incorrect lobby password."; there is no limit on attempts | Phase S11a execution (DECISIONS.md A163(4); triage L24) | 2026-11-12 |
 | `broadcast_cursor` is dropped outside Drafting, Equipping and Scoring; its throttle stamp lives in the private table `LobbyCursorStamp`, so a cursor does not rewrite the member row (`LobbyMember.lastCursorAt` is removed). The lobby GC jobs: see the auth contract row on scheduled reducers | Phase S11a execution (DECISIONS.md triage L19) | 2026-11-12 |
 | Scenario "Ban Restriction Max 1 Support and Max 1 Sustain Are Settable" added: `create_lobby`, `update_lobby_settings` and the presets accept the two new `banRestriction` values | Phase S14.4r execution (DECISIONS.md A221 item 4) | 2026-11-17 |
+| Scenario "System Preset Is Playable in Both Draft Modes" added: the system preset's budgets are 30 and 15 (were 0 and 0, which left an Auction lobby unable to buy anything with a price) and its minimum raise 5 (was 20); an older row that no Admin edited is brought to the current values by the paths that ensure the preset | Phase S14.4s execution (user rulings 2026-11-18; values from DECISIONS.md A190 item 5, A221 R8) | 2026-11-18 |
+| Scenarios "Server Refreshes the System Preset" and "Auction Lobby Needs a Budget and a Minimum Raise" added: `server_refresh_system_preset` (server identities only); `create_lobby`, `update_lobby_settings` and `create_tournament_lobby` refuse an Auction lobby with a character budget or minimum raise of 0; Classic and presets are not checked | Phase S14.4s execution (user rulings 2026-11-18) | 2026-11-18 |
 
 ---
 

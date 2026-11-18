@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 import {
     DEFAULT_LOBBY_ARGS,
     M,
+    ONE_V_ONE,
     expectReject,
     guest,
     advanceToEquipping,
@@ -24,9 +25,15 @@ import {
     type Harness,
     type Lobby,
     priceCharacters,
+    priceBanNames,
+    advance,
+    linkerAuth,
+    rejection,
+    type Actor,
 } from '../fixtures/harness';
 import { finishGame as closeCurrentGame, captain } from '../fixtures/draft-and-scoring';
-import { PRESET_ARGS, settingsArgs } from '../fixtures/lobby';
+import { PRESET_ARGS, presetArgs, settingsArgs, updatePresetArgs } from '../fixtures/lobby';
+import { admin } from '../fixtures/identity';
 
 const BEST_OF = 'bestOf must be 1 or 3.';
 
@@ -295,7 +302,9 @@ describe('A33a: the system preset', () => {
             createdById: 0,
             standardTurnSeconds: 60,
             reserveBankSeconds: 120,
-            minimumBidRaise: 20,
+            minimumBidRaise: 5, // T-S14.4s: user ruling 2026-11-18 (was 20)
+            characterBudget: 30, // T-S14.4s: A190 item 5 / A221 R8 (was 0)
+            lightconeBudget: 15, // T-S14.4s: A190 item 5 / A221 R8 (was 0)
             refereeCanKick: false,
             refereeExclusiveConcede: true,
         });
@@ -333,6 +342,161 @@ describe('A33a: the system preset', () => {
             M.update_tournament(ctx, updateTournamentArgs(t, { lobbyPresetId: 9999 })), /Lobby preset not found/);
         tx(test, 'internal', (ctx) => M.update_tournament(ctx, updateTournamentArgs(t, { lobbyPresetId: systemId })));
         expect(tournaments(test)[0].lobbyPresetId).toBe(systemId);
+    });
+
+    // T-S14.4s: a row seeded before S14.4s (budgets 0 / 0, raise 20) gets the new values from the path that ensures the row.
+    it('T-S14.4s: an old row (budgets 0 / 0, raise 20, never edited) is brought to 30 / 15 / 5 by the ensure path; the rest of the row stays', () => {
+        const test = newHarness();
+        const seeded = systemPresets(test)[0];
+        test.db.LobbyPreset.id.update({ ...seeded, characterBudget: 0, lightconeBudget: 0, minimumBidRaise: 20 });
+        const old = systemPresets(test)[0];
+
+        tx(test, 'internal', (ctx) => M.init(ctx, {}));
+        expect(systemPresets(test)).toHaveLength(1);
+        const viaInit = systemPresets(test)[0];
+        expect(viaInit).toMatchObject({ id: old.id, characterBudget: 30, lightconeBudget: 15, minimumBidRaise: 5, lastModifiedById: 0, createdById: 0 });
+        const { characterBudget: _c1, lightconeBudget: _l1, minimumBidRaise: _r1, lastModifiedDate: _d1, ...restOld } = old;
+        const { characterBudget: _c2, lightconeBudget: _l2, minimumBidRaise: _r2, lastModifiedDate: _d2, ...restNew } = viaInit;
+        expect(restNew).toEqual(restOld);
+
+        // create_tournament without a preset (the other ensure path) upgrades it too.
+        test.db.LobbyPreset.id.update({ ...viaInit, characterBudget: 0, lightconeBudget: 0, minimumBidRaise: 20 });
+        createTournament(test);
+        expect(systemPresets(test)[0]).toMatchObject({ id: old.id, characterBudget: 30, lightconeBudget: 15, minimumBidRaise: 5 });
+        expect(tournaments(test)[0].lobbyPresetId).toBe(old.id);
+    });
+
+    it('T-S14.4s: a row an Admin edited is not upgraded, even with budgets 0 / 0', () => {
+        const test = newHarness();
+        const presetId = systemPresets(test)[0].id;
+        tx(test, 'internal', (ctx) => M.update_lobby_preset(ctx, updatePresetArgs(presetId, 'Admin zero', { characterBudget: 0, lightconeBudget: 0 })));
+        const edited = test.db.LobbyPreset.id.find(presetId)!;
+        expect(edited.lastModifiedById).not.toBe(0);
+
+        tx(test, 'internal', (ctx) => M.init(ctx, {}));
+        createTournament(test);
+        expect(test.db.LobbyPreset.id.find(presetId)).toMatchObject({ name: 'Admin zero', characterBudget: 0, lightconeBudget: 0 });
+    });
+
+    it('T-S14.4s: its values pass create_lobby in both draft modes, and the Auction lobby can nominate a priced character and take a raise', () => {
+        const test = newHarness();
+        const p = systemPresets(test)[0];
+        const fromPreset = (draftMode: string) => ({
+            teamSize: p.teamSize, draftMode: { tag: draftMode }, banMode: p.banMode, gameMode: p.gameMode, matchType: p.matchType,
+            isPublic: p.isPublic, password: '', standardTurnSeconds: p.standardTurnSeconds, reserveBankSeconds: p.reserveBankSeconds,
+            characterBudget: p.characterBudget, lightconeBudget: p.lightconeBudget, minimumBidRaise: p.minimumBidRaise,
+            rosterDiffAdvantage: p.rosterDiffAdvantage, rosterThreshold: p.rosterThreshold,
+            underThresholdAdvantage: p.underThresholdAdvantage, aboveThresholdPenalty: p.aboveThresholdPenalty, deathPenalty: p.deathPenalty,
+            isAnonymousPlayers: p.isAnonymousPlayers, isAnonymousSpectators: p.isAnonymousSpectators, rosterVisibility: p.rosterVisibility,
+            requireOwnership: p.requireOwnership, costSetId: p.costSetId, disconnectPolicy: p.disconnectPolicy,
+            disconnectForfeitSeconds: p.disconnectForfeitSeconds ?? 0, allowMirrorPicks: p.allowMirrorPicks, autoRandomPick: p.autoRandomPick,
+            refereeCanUndo: p.refereeCanUndo, refereeCanPause: p.refereeCanPause, refereeCanSetCaptain: p.refereeCanSetCaptain,
+            refereeCanKick: p.refereeCanKick, allowPlayerPause: p.allowPlayerPause, teamBlueAlias: '', teamRedAlias: '',
+            banRestriction: p.banRestriction, lineupFormat: p.lineupFormat, hideMmr: p.hideMmr,
+            refereeExclusiveConcede: p.refereeExclusiveConcede, maxSpectators: p.maxSpectators, confirmWindowSeconds: p.confirmWindowSeconds,
+        });
+
+        // The same validation create_lobby applies, once per draft mode.
+        const classicHost = guest(test, 'classic-host');
+        tx(test, classicHost, (ctx) => M.create_lobby(ctx, fromPreset('Classic') as any));
+        expect([...test.db.Lobby.iter()].find((l) => l.hostUserId === classicHost.userId)!.draftMode.tag).toBe('Classic');
+
+        // Auction with the preset's values, played: the ban phase, then a nomination at cost 1 and a raise of minimumBidRaise.
+        const s = setupLobby(test, { seats: ONE_V_ONE, lobby: fromPreset('Auction') });
+        expect(lobbyRow(test, s.lobbyId)).toMatchObject({ characterBudget: 30, lightconeBudget: 15 });
+        let guard = 0;
+        while (!session(test, s.lobbyId).isAuctionPhase && guard++ < 20) {
+            const sess = session(test, s.lobbyId);
+            const who = captain(s, sess.draftSequence[sess.turnIndex].teamTurn.tag as 'Blue' | 'Red');
+            const characterName = `ban${guard}`;
+            tx(test, who, (ctx) => (priceBanNames(ctx, s.lobbyId, [characterName]), M.ban_character(ctx, { lobbyId: s.lobbyId, characterName })));
+        }
+        expect(session(test, s.lobbyId).isAuctionPhase).toBe(true);
+        const nominator = session(test, s.lobbyId).nextNominatorTeam.tag as 'Blue' | 'Red';
+        const bidder = nominator === 'Blue' ? 'Red' : 'Blue';
+        tx(test, captain(s, nominator), (ctx) => (priceCharacters(ctx, s.lobbyId, ['priced'], 1), M.nominate_character(ctx, { lobbyId: s.lobbyId, characterName: 'priced' })));
+        tx(test, captain(s, bidder), (ctx) => M.place_bid(ctx, { lobbyId: s.lobbyId, bidAmount: Math.fround(1 + p.minimumBidRaise) }));
+        expect(session(test, s.lobbyId)).toMatchObject({ currentNomination: 'priced', currentBidAmount: 1 + p.minimumBidRaise, currentBidTeam: { tag: bidder } });
+    });
+});
+
+// T-S14.4s: server_refresh_system_preset, the operator's way to bring a live database's system preset to the constants.
+describe('S14.4s: server_refresh_system_preset', () => {
+    const NOT_SERVER = 'Forbidden: caller is not a registered server identity.';
+    const refresh = (ctx: any) => M.server_refresh_system_preset(ctx, {});
+
+    it('brings a never-edited old row to the constants (same id, SYSTEM modifier)', () => {
+        const test = newHarness();
+        const seeded = systemPresets(test)[0];
+        test.db.LobbyPreset.id.update({ ...seeded, characterBudget: 0, lightconeBudget: 0, minimumBidRaise: 20, banMode: { tag: 'Six' } as any });
+        tx(test, 'internal', refresh);
+        expect(systemPresets(test)).toHaveLength(1);
+        expect(systemPresets(test)[0]).toMatchObject({
+            id: seeded.id, characterBudget: 30, lightconeBudget: 15, minimumBidRaise: 5, banMode: { tag: 'Four' }, lastModifiedById: 0, createdById: 0,
+        });
+    });
+
+    it('leaves a row an Admin edited as it is', () => {
+        const test = newHarness();
+        const presetId = systemPresets(test)[0].id;
+        tx(test, 'internal', (ctx) => M.update_lobby_preset(ctx, updatePresetArgs(presetId, 'Admin edit', { minimumBidRaise: 20 })));
+        const before = test.db.LobbyPreset.id.find(presetId)!;
+        tx(test, 'internal', refresh);
+        expect(test.db.LobbyPreset.id.find(presetId)).toEqual(before);
+    });
+
+    it('writes nothing when the row is current', () => {
+        const test = newHarness();
+        const before = systemPresets(test)[0];
+        advance(test, 5_000);
+        tx(test, 'internal', refresh);
+        expect(systemPresets(test)[0]).toEqual(before); // lastModifiedDate unchanged: no write
+    });
+
+    it('is refused for a user, an Admin and the Linker', () => {
+        const test = newHarness();
+        const before = systemPresets(test)[0];
+        test.db.LobbyPreset.id.update({ ...before, minimumBidRaise: 20 });
+        const old = systemPresets(test)[0];
+        const user = guest(test, 'plain');
+        const adm = admin(test, 'adm');
+        const linker = { auth: linkerAuth(test) } as Actor;
+        for (const who of [user, adm, linker]) expect(rejection(test, who, refresh)).toBe(NOT_SERVER);
+        expect(systemPresets(test)[0]).toEqual(old);
+    });
+});
+
+// T-S14.4s (user ruling 2026-11-18): an Auction lobby needs a character budget and a minimum raise above 0.
+describe('S14.4s: Auction lobbies refuse a character budget or a minimum raise of 0', () => {
+    const BUDGET = 'characterBudget must be above 0 in an Auction lobby.';
+    const RAISE = 'minimumBidRaise must be above 0 in an Auction lobby.';
+
+    it('create_lobby: Auction with budget 0 or raise 0 is refused; Classic with both 0 is accepted', () => {
+        const test = newHarness();
+        const a = guest(test, 'a');
+        expect(rejection(test, a, (ctx) => M.create_lobby(ctx, { ...DEFAULT_LOBBY_ARGS, draftMode: { tag: 'Auction' }, characterBudget: 0 } as any))).toBe(BUDGET);
+        expect(rejection(test, a, (ctx) => M.create_lobby(ctx, { ...DEFAULT_LOBBY_ARGS, draftMode: { tag: 'Auction' }, minimumBidRaise: 0 } as any))).toBe(RAISE);
+        expect([...test.db.Lobby.iter()].filter((l) => l.hostUserId === a.userId)).toHaveLength(0);
+        tx(test, a, (ctx) => M.create_lobby(ctx, { ...DEFAULT_LOBBY_ARGS, characterBudget: 0, minimumBidRaise: 0 } as any));
+        expect([...test.db.Lobby.iter()].find((l) => l.hostUserId === a.userId)).toMatchObject({ draftMode: { tag: 'Classic' }, characterBudget: 0, minimumBidRaise: 0 });
+    });
+
+    it('update_lobby_settings: a switch to Auction, or an Auction lobby set to budget 0 or raise 0, is refused; Classic with both 0 is accepted', () => {
+        const test = newHarness();
+        const s = setupLobby(test, { noStart: true });
+        tx(test, s.host, (ctx) => M.update_lobby_settings(ctx, settingsArgs(s.lobbyId, { characterBudget: 0, minimumBidRaise: 0 })));
+        expect(lobbyRow(test, s.lobbyId)).toMatchObject({ draftMode: { tag: 'Classic' }, characterBudget: 0, minimumBidRaise: 0 });
+        expect(rejection(test, s.host, (ctx) => M.update_lobby_settings(ctx, settingsArgs(s.lobbyId, { draftMode: { tag: 'Auction' }, characterBudget: 0 })))).toBe(BUDGET);
+        expect(rejection(test, s.host, (ctx) => M.update_lobby_settings(ctx, settingsArgs(s.lobbyId, { draftMode: { tag: 'Auction' }, minimumBidRaise: 0 })))).toBe(RAISE);
+        expect(lobbyRow(test, s.lobbyId).draftMode.tag).toBe('Classic');
+        tx(test, s.host, (ctx) => M.update_lobby_settings(ctx, settingsArgs(s.lobbyId, { draftMode: { tag: 'Auction' } })));
+        expect(lobbyRow(test, s.lobbyId)).toMatchObject({ draftMode: { tag: 'Auction' }, characterBudget: 100, minimumBidRaise: 1 });
+    });
+
+    it('a preset may still be saved with an Auction budget of 0 (it is checked when a lobby is made from it)', () => {
+        const test = newHarness();
+        tx(test, 'internal', (ctx) => M.create_lobby_preset(ctx, presetArgs('auction zero', { draftMode: { tag: 'Auction' }, characterBudget: 0, minimumBidRaise: 0 })));
+        expect(presetNamed(test, 'auction zero')).toMatchObject({ draftMode: { tag: 'Auction' }, characterBudget: 0, minimumBidRaise: 0 });
     });
 });
 
