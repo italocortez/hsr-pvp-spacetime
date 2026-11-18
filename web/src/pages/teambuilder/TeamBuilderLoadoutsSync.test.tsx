@@ -250,7 +250,7 @@ describe('a stale draft (A198): the database refuses it; the person chooses', ()
         await openStale(0, 'Hyper');
         await later(600_000);
         expect(saves(conn)).toEqual([]);
-        const group = screen.getByRole('group', {
+        const group = screen.getByRole('dialog', {
             name: 'Hyper was also changed on another device.',
         });
         expect(
@@ -334,6 +334,78 @@ describe('a stale draft (A198): the database refuses it; the person chooses', ()
         expect(saves(conn)).toEqual([]);
         expect(choice()).toBeInTheDocument();
         expect(slotNames()).toEqual(['Acheron', 'Pela', null, null]);
+    });
+
+    it('S14.3j: the choice is a modal dialog; Escape leaves it held, the card line opens it again', async () => {
+        fakeTimers();
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        putActive('0', 1);
+        await openStale(0, 'Hyper');
+        const dialog = screen.getByRole('dialog', {
+            name: 'Hyper was also changed on another device.',
+        }) as HTMLDialogElement;
+        expect(dialog).toHaveAttribute('open');
+        expect(choice()).toHaveFocus();
+        expect(within(dialog).getByText('Nothing is saved until you choose.')).toBeInTheDocument();
+        expect(
+            within(dialog).getByRole('button', { name: 'Use the account copy' }),
+        ).toBeInTheDocument();
+        // Escape: a close with no choice. Nothing is saved or dropped; the card says it waits.
+        act(() => dialog.close());
+        expect(dialog).not.toHaveAttribute('open');
+        expect(choice()).toBeNull();
+        const again = screen.getByRole('button', { name: 'Choose a copy' });
+        expect(again).toHaveFocus();
+        expect(
+            screen.getByText('Hyper was also changed on another device.', { selector: 'span' }),
+        ).toBeInTheDocument();
+        await later(600_000);
+        expect(saves(conn)).toEqual([]);
+        expect(storedDrafts()?.['0']).toMatchObject({ code: CLARA, baseRev: 1 });
+        expect(slotNames()).toEqual(['Clara', null, null, null]);
+        // Opened again from the card: the same choice, and it still works.
+        await user.click(again);
+        expect(dialog).toHaveAttribute('open');
+        expect(choice()).toHaveFocus();
+        expect(screen.queryByRole('button', { name: 'Choose a copy' })).toBeNull();
+        await user.click(choice() as HTMLElement);
+        await waitFor(() => expect(saves(conn)).toHaveLength(2));
+        expect(saves(conn)).toEqual([`0/1/Hyper/${CLARA}`, `0/2/Hyper/${CLARA}`]);
+        expect(caret()).toHaveFocus();
+        await waitFor(() => expect(choice()).toBeNull());
+        expect(dialog).not.toHaveAttribute('open');
+    });
+
+    it('S14.3j: two loadouts changed elsewhere: one dialog at a time; the other opens with its loadout', async () => {
+        fakeTimers();
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        conn.server.seed(0, 'Hyper');
+        conn.server.elsewhere(0, 'Hyper', PELA, 'newer, from the phone');
+        conn.server.seed(1, 'Other');
+        conn.server.elsewhere(1, 'Other', PELA, 'newer, from the phone');
+        putDrafts({ ...stale(0, 'Hyper'), ...stale(1, 'Other') });
+        putActive('0', 1);
+        await openMember(conn);
+        expect(document.querySelectorAll('dialog[open]')).toHaveLength(1);
+        expect(
+            screen.getByRole('dialog', { name: 'Hyper was also changed on another device.' }),
+        ).toHaveAttribute('open');
+        expect(
+            screen.getByText(
+                'Changed on another device too: Other. Open it to choose which copy to keep.',
+            ),
+        ).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Use the account copy' }));
+        await waitFor(() => expect(choice()).toBeNull());
+        expect(document.querySelectorAll('dialog[open]')).toHaveLength(0);
+        await user.click(caret());
+        await user.click(screen.getByRole('menuitemradio', { name: /Other/ }));
+        expect(
+            screen.getByRole('dialog', { name: 'Other was also changed on another device.' }),
+        ).toHaveAttribute('open');
+        expect(document.querySelectorAll('dialog[open]')).toHaveLength(1);
+        expect(choice()).toHaveFocus();
+        expect(saves(conn)).toEqual([]);
     });
 
     it('the version follows each save: edit, an edit while the save flies, closed; the next visit sends it on the new version', async () => {
@@ -554,7 +626,7 @@ describe('deleted on another device (A198 item 3; review N6)', () => {
         fireEvent.click(card('Pela'));
         await act(async () => conn.server.deleteElsewhere(0));
         expect(
-            screen.getByRole('group', { name: 'This loadout was deleted on another device.' }),
+            screen.getByRole('dialog', { name: 'This loadout was deleted on another device.' }),
         ).toBeInTheDocument();
         await later(120_000);
         expect(saves(conn)).toEqual([]);
@@ -604,7 +676,7 @@ describe('deleted on another device (A198 item 3; review N6)', () => {
         putDrafts({ 0: draft({ name: 'Hyper', code: CLARA, baseRev: 1 }) });
         putActive('0', 1);
         await openMember(conn);
-        const group = screen.getByRole('group', { name: /also changed/ });
+        const group = screen.getByRole('dialog', { name: /also changed/ });
         expect(
             within(group).getByText('Name: “Hyper” here, “Fresh idea” on your account.'),
         ).toBeInTheDocument();
@@ -614,6 +686,31 @@ describe('deleted on another device (A198 item 3; review N6)', () => {
         expect(names()).toEqual(['Fresh idea']);
         fireEvent.click(screen.getByRole('button', { name: 'Save as a new loadout' }));
         await waitFor(() => expect(names()).toEqual(['Fresh idea', 'Hyper']));
+    });
+
+    it('S14.3j: the same dialog; Escape keeps the changes held, "Choose what to keep" opens it again', async () => {
+        fakeTimers();
+        conn.server.seed(0, 'Hyper');
+        conn.server.deleteElsewhere(0);
+        putDrafts({ 0: draft({ name: 'Hyper', code: CLARA, baseRev: 1 }) });
+        putActive('0', 1);
+        await openMember(conn);
+        const dialog = screen.getByRole('dialog', {
+            name: 'This loadout was deleted on another device.',
+        }) as HTMLDialogElement;
+        expect(deletedChoice()).toHaveFocus();
+        act(() => dialog.close());
+        expect(deletedChoice()).toBeNull();
+        await later(120_000);
+        expect(saves(conn)).toEqual([]);
+        expect(storedDrafts()?.['0']).toMatchObject({ code: CLARA });
+        fireEvent.click(screen.getByRole('button', { name: 'Choose what to keep' }));
+        expect(dialog).toHaveAttribute('open');
+        expect(deletedChoice()).toHaveFocus();
+        fireEvent.click(screen.getByRole('button', { name: 'Discard my changes' }));
+        await waitFor(() => expect(storedDrafts()).toBeNull());
+        expect(dialog).not.toHaveAttribute('open');
+        expect(caret()).toHaveFocus();
     });
 
     it('refused as deleted while the view lags: the same choice', async () => {
@@ -1059,7 +1156,7 @@ describe('a loadout deleted elsewhere with no edits here (review M1)', () => {
         await act(async () => conn.server.deleteElsewhere(0));
         await waitFor(() =>
             expect(
-                screen.getByText(/This loadout was deleted on another device. Its team stays here/),
+                within(noticeDialog()).getByText('Its team stays here, not saved.'),
             ).toBeInTheDocument(),
         );
         fireEvent.click(card('Pela'));
@@ -1068,5 +1165,93 @@ describe('a loadout deleted elsewhere with no edits here (review M1)', () => {
             slot: 0,
             baseRev: 0,
         });
+    });
+
+    /** S14.3j: the notice's dialog (its first sentence is the dialog's name). */
+    const noticeDialog = () =>
+        screen.getByRole('dialog', {
+            name: 'This loadout was deleted on another device.',
+        }) as HTMLDialogElement;
+
+    async function vanish() {
+        fakeTimers();
+        await openMember(conn);
+        fireEvent.click(card('Acheron'));
+        await later(61_000);
+        await waitFor(() => expect(storedDrafts()).toBeNull());
+        await act(async () => conn.server.deleteElsewhere(0));
+    }
+
+    it('S14.3j: the notice is a modal dialog; Dismiss closes it for good, focus on the caret; the team stays', async () => {
+        await vanish();
+        const dialog = noticeDialog();
+        expect(dialog).toHaveAttribute('open');
+        expect(dialog).toHaveAttribute('data-notice-dialog');
+        const dismiss = within(dialog).getByRole('button', { name: 'Dismiss' });
+        expect(dismiss).toHaveFocus();
+        fireEvent.click(dismiss);
+        expect(dialog).not.toHaveAttribute('open');
+        expect(screen.queryByText('Its team stays here, not saved.')).toBeNull();
+        expect(caret()).toHaveFocus();
+        expect(slotNames()).toEqual(['Acheron', null, null, null]);
+        await later(120_000);
+        expect(dialog).not.toHaveAttribute('open');
+    });
+
+    it('S14.3j: Escape dismisses the notice the same way', async () => {
+        await vanish();
+        const dialog = noticeDialog();
+        act(() => dialog.close());
+        expect(dialog).not.toHaveAttribute('open');
+        expect(screen.queryByText('Its team stays here, not saved.')).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
+        expect(caret()).toHaveFocus();
+        expect(slotNames()).toEqual(['Acheron', null, null, null]);
+    });
+
+    it('S14.3j: one dialog at a time: a notice that arrives behind the delete dialog opens once it closes', async () => {
+        fakeTimers();
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        putActive('0', 1);
+        await openMember(conn, [
+            { slot: 0, name: 'Hyper' },
+            { slot: 1, name: 'Other' },
+        ]);
+        await user.click(caret());
+        await user.click(screen.getByRole('menuitem', { name: 'Delete Other' }));
+        const del = screen.getByRole('dialog', { name: 'Delete Other?' });
+        await act(async () => conn.server.deleteElsewhere(0));
+        await later(1_000);
+        // The notice waits: only the delete dialog is open.
+        expect(document.querySelectorAll('dialog[open]')).toHaveLength(1);
+        expect(del).toHaveAttribute('open');
+        expect(screen.queryByText('Its team stays here, not saved.')).toBeNull();
+        await user.click(within(del).getByRole('button', { name: 'Cancel' }));
+        await waitFor(() => expect(noticeDialog()).toHaveAttribute('open'));
+        expect(document.querySelectorAll('dialog[open]')).toHaveLength(1);
+        expect(within(noticeDialog()).getByRole('button', { name: 'Dismiss' })).toHaveFocus();
+        expect(names()).toEqual(['Other']);
+    });
+
+    it('S14.3j: one dialog at a time: a held choice that arrives behind the delete dialog opens once it closes', async () => {
+        fakeTimers();
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        putActive('0', 1);
+        await openMember(conn, [
+            { slot: 0, name: 'Hyper' },
+            { slot: 1, name: 'Other' },
+        ]);
+        fireEvent.click(card('Pela'));
+        await user.click(caret());
+        await user.click(screen.getByRole('menuitem', { name: 'Delete Other' }));
+        const del = screen.getByRole('dialog', { name: 'Delete Other?' });
+        await act(async () => conn.server.elsewhere(0, 'Hyper', CLARA, 'from the phone'));
+        await later(1_000);
+        expect(document.querySelectorAll('dialog[open]')).toHaveLength(1);
+        expect(choice()).toBeNull();
+        await user.click(within(del).getByRole('button', { name: 'Cancel' }));
+        await waitFor(() => expect(choice()).toHaveFocus());
+        expect(document.querySelectorAll('dialog[open]')).toHaveLength(1);
+        expect(saves(conn)).toEqual([]);
     });
 });

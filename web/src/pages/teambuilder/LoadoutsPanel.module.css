@@ -566,31 +566,14 @@
     }
 }
 
-/* The choice for a held loadout (fix pass B2, S8). */
-.conflict {
-    display: grid;
-    gap: 8px;
-    margin: 0;
-    padding: 10px 14px;
-    border: 1px solid var(--color-warning);
-    border-radius: 8px;
-    background: var(--color-space);
-    color: var(--text-body);
-    font-size: 0.8125rem;
-    line-height: 1.45;
-}
-
-.conflictTitle {
-    margin: 0;
-    color: var(--color-snow);
-    font-weight: 600;
-}
-
+/* The choice for a held loadout (fix pass B2, S8), inside its dialog since S14.3j (`HeldDialog`). */
 .conflictList {
     display: grid;
     gap: 4px;
     margin: 0;
     padding-inline-start: 1.1em;
+    font-size: 0.8125rem;
+    line-height: 1.45;
     overflow-wrap: anywhere;
 }
 
@@ -598,12 +581,6 @@
     margin: 0;
     color: var(--text-muted);
     font-size: 0.75rem;
-}
-
-.conflictActions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
 }
 
 .noticeButton {
@@ -652,7 +629,7 @@
     }
 }
 
-/* The delete confirmation (dialog guide rule 1). */
+/* The delete confirmation and the held choice (dialog guide rule 1). */
 .dialog {
     inline-size: min(26rem, calc(100vw - 32px));
     padding: 0;
@@ -671,6 +648,11 @@
         overscroll-behavior: contain;
         background: rgba(8, 9, 14, 0.7);
     }
+}
+
+/* The held choice: more lines, and two longer buttons that fit one row on a desktop (S14.3j). */
+.heldDialog {
+    inline-size: min(32rem, calc(100vw - 32px));
 }
 
 .dialogBody {

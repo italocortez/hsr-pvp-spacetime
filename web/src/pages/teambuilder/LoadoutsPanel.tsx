@@ -8,6 +8,7 @@ import {
 } from '@shared/loadouts';
 import { Link, useRouterState } from '@tanstack/react-router';
 import {
+    type FormEvent,
     type KeyboardEvent,
     type MouseEvent,
     type ReactNode,
@@ -32,7 +33,7 @@ import {
     UploadIcon,
 } from './TeamBuilderIcons';
 import page from './TeamBuilderPage.module.css';
-import type { LoadoutItem, LoadoutsState, Store } from './useLoadouts';
+import type { HeldInfo, LoadoutItem, LoadoutsState, Store } from './useLoadouts';
 
 /*
  * The Loadouts card (S14.3c; design/mockups/teambuilder.html `section.controls`): the combined control (the
@@ -54,6 +55,12 @@ import type { LoadoutItem, LoadoutsState, Store } from './useLoadouts';
  *
  * Delete asks first (A190 item 10): a native modal `<dialog>` (the dialog guide's rule 1), Cancel focused, Escape
  * cancels; focus goes back to the caret, since the menu item that opened it has gone.
+ *
+ * S14.3j: the held choice (changed or deleted on another device) is a modal dialog of the same form (`HeldDialog`),
+ * so the card keeps its height. It opens by itself for the active loadout. Escape closes it without a choice: the
+ * loadout stays held (nothing saved, nothing dropped) and the card shows one line with a button that opens it again.
+ * The one-off notice ("deleted on another device, its team stays here") is a dialog too (`NoticeDialog`), dismissed
+ * by its button or Escape. One dialog at a time: delete, then the held choice, then the notice.
  */
 
 const SIGN_IN_LINK = 'Sign in with Discord';
@@ -252,6 +259,47 @@ export function LoadoutsPanel({
             onLoaded();
             say(`${target.name} deleted.`);
         }
+    };
+
+    // ── The held choice (S14.3j). `dismissed`: the held loadout whose dialog was closed without a choice (Escape); it
+    // stays held and the card's line opens it again. Forgotten once nothing is held, so opening that loadout again
+    // (or the next hold) brings the dialog back by itself. Never while the delete dialog is open.
+    const held = loadouts.held;
+    const heldId = heldIdOf(held);
+    const [dismissed, setDismissed] = useState<string | null>(null);
+    if (heldId === null && dismissed !== null) setDismissed(null);
+    const heldWaits = held !== null && dismissed === heldId;
+    // One dialog at a time (S14.3j): the delete confirmation first, then the held choice, then the notice. A dialog
+    // that has to wait stays closed (or is closed by the page, nothing chosen) and opens once those before it close.
+    const heldShown = held !== null && !heldWaits && pending === null;
+    const chooseRef = useRef<HTMLButtonElement>(null);
+    const focusChoose = useRef(false);
+    useEffect(() => {
+        if (!focusChoose.current || !chooseRef.current) return;
+        focusChoose.current = false;
+        chooseRef.current.focus();
+    });
+    const onHeldPick = (pick: HeldPick, key: string) => {
+        caretRef.current?.focus();
+        if (pick === 'keep') {
+            loadouts.keepMine(key);
+            announce('Your changes are kept and saved.');
+        } else if (pick === 'take') {
+            loadouts.takeAccountCopy(key);
+            onLoaded();
+            announce('The account copy is back.');
+        } else if (pick === 'new') {
+            loadouts.saveAsNew(key);
+            announce('Your changes are saved as a new loadout.');
+        } else {
+            loadouts.discard(key);
+            onLoaded();
+            announce('Your changes are discarded.');
+        }
+    };
+    const onHeldDismiss = (id: string) => {
+        focusChoose.current = true;
+        setDismissed(id);
     };
 
     const working = status.kind === 'working';
@@ -471,41 +519,18 @@ export function LoadoutsPanel({
                         {fullText}
                     </p>
                 )}
-                {loadouts.notice && (
-                    <p className={styles.notice}>
-                        <span>{loadouts.notice}</span>
+                {held && heldWaits && (
+                    <p className={styles.notice} data-held-waits="">
+                        <span>{heldTitle(held)}</span>
                         <button
+                            ref={chooseRef}
                             type="button"
                             className={styles.noticeButton}
-                            onClick={loadouts.dismissNotice}
+                            onClick={() => setDismissed(null)}
                         >
-                            Dismiss
+                            {held.kind === 'conflict' ? 'Choose a copy' : 'Choose what to keep'}
                         </button>
                     </p>
-                )}
-                {loadouts.held && (
-                    <HeldChoice
-                        held={loadouts.held}
-                        characterName={characterName}
-                        onKeep={(key) => {
-                            loadouts.keepMine(key);
-                            announce('Your changes are kept and saved.');
-                        }}
-                        onTake={(key) => {
-                            loadouts.takeAccountCopy(key);
-                            onLoaded();
-                            announce('The account copy is back.');
-                        }}
-                        onSaveNew={(key) => {
-                            loadouts.saveAsNew(key);
-                            announce('Your changes are saved as a new loadout.');
-                        }}
-                        onDiscard={(key) => {
-                            loadouts.discard(key);
-                            onLoaded();
-                            announce('Your changes are discarded.');
-                        }}
-                    />
                 )}
                 {otherLines(loadouts.otherHeld).map((text) => (
                     <p key={text} className={styles.line}>
@@ -533,18 +558,7 @@ export function LoadoutsPanel({
                 onClose={onDialogClose}
             >
                 {pending && (
-                    <form
-                        method="dialog"
-                        className={styles.dialogBody}
-                        onSubmit={(e) => {
-                            // What `method="dialog"` does, done by hand so the chosen button's value is the
-                            // dialog's return value in every engine (jsdom included).
-                            e.preventDefault();
-                            const by = (e.nativeEvent as SubmitEvent)
-                                .submitter as HTMLButtonElement | null;
-                            dialogRef.current?.close(by?.value ?? '');
-                        }}
-                    >
+                    <form method="dialog" className={styles.dialogBody} onSubmit={closeWithChoice}>
                         <h2 id={`${ids}-dialog-title`} className={styles.dialogTitle}>
                             Delete {pending.name}?
                         </h2>
@@ -574,8 +588,35 @@ export function LoadoutsPanel({
                     </form>
                 )}
             </dialog>
+
+            <HeldDialog
+                held={held}
+                open={heldShown}
+                characterName={characterName}
+                onPick={onHeldPick}
+                onDismiss={onHeldDismiss}
+            />
+
+            <NoticeDialog
+                text={loadouts.notice}
+                open={pending === null && !heldShown}
+                onDismiss={() => {
+                    loadouts.dismissNotice();
+                    caretRef.current?.focus();
+                }}
+            />
         </section>
     );
+}
+
+/**
+ * What `method="dialog"` does, done by hand so the chosen button's value is the dialog's return value in every
+ * engine (jsdom included). Shared by the delete, held and notice dialogs.
+ */
+function closeWithChoice(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const by = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+    e.currentTarget.closest('dialog')?.close(by?.value ?? '');
 }
 
 /** A delete refused because the account copy was newer (S14.3c-sync). */
@@ -638,103 +679,231 @@ export function differenceLines(
 }
 
 /**
- * The choice for a held loadout (S14.3c-sync): changed on another device (both copies and what differs; "Keep my
- * changes" or "Use the account copy"), or deleted on another device / not savable any more ("Save as a new loadout"
- * or "Discard my changes"). Nothing is saved until one is pressed.
+ * A native modal `<dialog>` that follows `shown` (S14.3j: the held and notice dialogs; the delete dialog keeps its
+ * own older form). `firstRef`'s button takes focus on open and whenever `focusKey` changes while open. `takeClose`,
+ * in the dialog's `close` handler: the chosen button's value ('' for Escape), or null when the page closed it.
  */
-function HeldChoice({
-    held,
-    characterName,
-    onKeep,
-    onTake,
-    onSaveNew,
-    onDiscard,
+function useShownModal(shown: boolean, focusKey: string | null) {
+    const ref = useRef<HTMLDialogElement>(null);
+    const firstRef = useRef<HTMLButtonElement>(null);
+    const closedHere = useRef(false);
+
+    // biome-ignore lint/correctness/useExhaustiveDependencies: focusKey means "new content: focus its first button"
+    useEffect(() => {
+        const d = ref.current;
+        if (!d) return;
+        if (shown) {
+            if (!d.open) {
+                if (typeof d.showModal === 'function') d.showModal();
+                else d.setAttribute('open', '');
+            }
+            firstRef.current?.focus();
+        } else if (d.open) {
+            closedHere.current = true;
+            d.close('');
+        }
+    }, [shown, focusKey]);
+
+    const takeClose = (): string | null => {
+        const d = ref.current;
+        const value = d?.returnValue ?? '';
+        if (d) d.returnValue = '';
+        if (closedHere.current) {
+            closedHere.current = false;
+            return null;
+        }
+        return value;
+    };
+    return { ref, firstRef, takeClose };
+}
+
+/**
+ * A one-off notice about the active loadout, to acknowledge (S14.3j; was a row with "Dismiss" in the card): today
+ * only "This loadout was deleted on another device. Its team stays here, not saved." Its first sentence is the
+ * heading, the rest the text. "Dismiss" and Escape both dismiss it (nothing is pending); closed by the page (the
+ * notice went, or a dialog before it in the queue opened): no callback, it opens again once that dialog closes.
+ */
+export function NoticeDialog({
+    text,
+    open,
+    onDismiss,
 }: {
-    held: NonNullable<LoadoutsState['held']>;
-    characterName: (key: string) => string;
-    onKeep: (key: string) => void;
-    onTake: (key: string) => void;
-    onSaveNew: (key: string) => void;
-    onDiscard: (key: string) => void;
+    text: string | null;
+    open: boolean;
+    onDismiss: () => void;
 }) {
     const id = useId();
-    const { mine, theirs, key, kind } = held;
-    const edited = `edited ${whenFormat.format(mine.at)}`;
-    const changed = kind === 'conflict';
-    const title = changed
-        ? `${mine.name} was also changed on another device.`
-        : kind === 'deleted'
+    const shown = open && text !== null;
+    const { ref, firstRef, takeClose } = useShownModal(shown, text);
+    const cut = text?.indexOf('. ') ?? -1;
+    const head = text && cut >= 0 ? text.slice(0, cut + 1) : text;
+    const body = text && cut >= 0 ? text.slice(cut + 2) : null;
+    return (
+        <dialog
+            ref={ref}
+            className={styles.dialog}
+            aria-labelledby={`${id}-title`}
+            aria-describedby={body ? `${id}-text` : undefined}
+            onClose={() => {
+                if (takeClose() !== null) onDismiss();
+            }}
+            data-notice-dialog=""
+        >
+            {shown && (
+                <form method="dialog" className={styles.dialogBody} onSubmit={closeWithChoice}>
+                    <h2 id={`${id}-title`} className={styles.dialogTitle}>
+                        {head}
+                    </h2>
+                    {body && (
+                        <p id={`${id}-text`} className={styles.dialogText}>
+                            {body}
+                        </p>
+                    )}
+                    <div className={styles.dialogActions}>
+                        <button
+                            ref={firstRef}
+                            type="submit"
+                            value="dismiss"
+                            className={styles.button}
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                </form>
+            )}
+        </dialog>
+    );
+}
+
+/** The held choice's buttons, as the dialog's return values. */
+export type HeldPick = 'keep' | 'take' | 'new' | 'discard';
+const HELD_PICKS: readonly string[] = ['keep', 'take', 'new', 'discard'];
+
+/** One hold of one loadout: a new kind of hold on the same loadout is a new choice (the dialog opens again). */
+const heldIdOf = (held: HeldInfo | null) => (held ? `${held.key}:${held.kind}` : null);
+
+/** The held choice's heading (also the card's line once its dialog was closed without a choice). */
+const heldTitle = (held: HeldInfo) =>
+    held.kind === 'conflict'
+        ? `${held.mine.name} was also changed on another device.`
+        : held.kind === 'deleted'
           ? 'This loadout was deleted on another device.'
           : 'This loadout cannot be saved again.';
-    const diffs = differenceLines(held.differences, characterName);
+
+/**
+ * The choice for a held loadout (S14.3c-sync; a modal dialog since S14.3j, built as the delete dialog): changed on
+ * another device (both copies and what differs; "Keep my changes" or "Use the account copy"), or deleted on another
+ * device / not savable any more ("Save as a new loadout" or "Discard my changes"). Nothing is saved until one is
+ * pressed. `open`: shown now. The first button (the one that keeps this browser's work) takes focus. Escape (no
+ * return value) calls `onDismiss` with the hold's id: nothing is saved or dropped. Closed by the page (the hold ended
+ * elsewhere, `open` turned false): neither callback.
+ */
+export function HeldDialog({
+    held,
+    open,
+    characterName,
+    onPick,
+    onDismiss,
+}: {
+    held: HeldInfo | null;
+    open: boolean;
+    characterName: (key: string) => string;
+    onPick: (pick: HeldPick, key: string) => void;
+    onDismiss: (heldId: string) => void;
+}) {
+    const id = useId();
+    const latest = useRef(held);
+    latest.current = held;
+    const shown = open && held !== null;
+    // On open, and when the hold changes under it (the buttons change): the first choice takes focus.
+    const { ref, firstRef, takeClose } = useShownModal(shown, heldIdOf(held));
+
+    const onClose = () => {
+        const value = takeClose();
+        const h = latest.current;
+        if (value === null || !h) return;
+        if (HELD_PICKS.includes(value)) onPick(value as HeldPick, h.key);
+        else onDismiss(`${h.key}:${h.kind}`);
+    };
+
+    const changed = held?.kind === 'conflict';
+    const diffs = held ? differenceLines(held.differences, characterName) : [];
     return (
-        // biome-ignore lint/a11y/useSemanticElements: a labelled group of two choices, not a form fieldset
-        <div role="group" aria-labelledby={id} className={styles.conflict}>
-            <p id={id} className={styles.conflictTitle}>
-                {title}
-            </p>
-            <ul className={styles.conflictList}>
-                <li>
-                    In this browser: {mine.name}, {characters(mine.filled)}, {edited}.
-                </li>
-                {theirs ? (
-                    <li>
-                        On your account: {theirs.name}, {characters(theirs.filled)}, changed on
-                        another device (time not known).
-                    </li>
-                ) : (
-                    <li>On your account: nothing in its place.</li>
-                )}
-            </ul>
-            {changed && diffs.length > 0 && (
-                <>
-                    <p className={styles.conflictHint}>What differs:</p>
+        <dialog
+            ref={ref}
+            className={`${styles.dialog} ${styles.heldDialog}`}
+            aria-labelledby={`${id}-title`}
+            aria-describedby={`${id}-hint`}
+            onClose={onClose}
+            data-held-dialog=""
+        >
+            {shown && held && (
+                <form method="dialog" className={styles.dialogBody} onSubmit={closeWithChoice}>
+                    <h2 id={`${id}-title`} className={styles.dialogTitle}>
+                        {heldTitle(held)}
+                    </h2>
                     <ul className={styles.conflictList}>
-                        {diffs.map((line) => (
-                            <li key={line}>{line}</li>
-                        ))}
+                        <li>
+                            In this browser: {held.mine.name}, {characters(held.mine.filled)},
+                            edited {whenFormat.format(held.mine.at)}.
+                        </li>
+                        {held.theirs ? (
+                            <li>
+                                On your account: {held.theirs.name},{' '}
+                                {characters(held.theirs.filled)}, changed on another device (time
+                                not known).
+                            </li>
+                        ) : (
+                            <li>On your account: nothing in its place.</li>
+                        )}
                     </ul>
-                </>
+                    {changed && diffs.length > 0 && (
+                        <>
+                            <p className={styles.conflictHint}>What differs:</p>
+                            <ul className={styles.conflictList}>
+                                {diffs.map((line) => (
+                                    <li key={line}>{line}</li>
+                                ))}
+                            </ul>
+                        </>
+                    )}
+                    <p id={`${id}-hint`} className={styles.conflictHint}>
+                        Nothing is saved until you choose.
+                    </p>
+                    <div className={styles.dialogActions}>
+                        {changed ? (
+                            <>
+                                <button
+                                    ref={firstRef}
+                                    type="submit"
+                                    value="keep"
+                                    className={styles.button}
+                                >
+                                    Keep my changes
+                                </button>
+                                <button type="submit" value="take" className={styles.button}>
+                                    Use the account copy
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <button
+                                    ref={firstRef}
+                                    type="submit"
+                                    value="new"
+                                    className={styles.button}
+                                >
+                                    Save as a new loadout
+                                </button>
+                                <button type="submit" value="discard" className={styles.button}>
+                                    Discard my changes
+                                </button>
+                            </>
+                        )}
+                    </div>
+                </form>
             )}
-            <p className={styles.conflictHint}>Nothing is saved until you choose.</p>
-            <div className={styles.conflictActions}>
-                {changed ? (
-                    <>
-                        <button
-                            type="button"
-                            className={styles.noticeButton}
-                            onClick={() => onKeep(key)}
-                        >
-                            Keep my changes
-                        </button>
-                        <button
-                            type="button"
-                            className={styles.noticeButton}
-                            onClick={() => onTake(key)}
-                        >
-                            Use the account copy
-                        </button>
-                    </>
-                ) : (
-                    <>
-                        <button
-                            type="button"
-                            className={styles.noticeButton}
-                            onClick={() => onSaveNew(key)}
-                        >
-                            Save as a new loadout
-                        </button>
-                        <button
-                            type="button"
-                            className={styles.noticeButton}
-                            onClick={() => onDiscard(key)}
-                        >
-                            Discard my changes
-                        </button>
-                    </>
-                )}
-            </div>
-        </div>
+        </dialog>
     );
 }
 

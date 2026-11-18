@@ -13,10 +13,46 @@ import {
     AUTO_SAVES,
     EMPTY_WORKING,
     FULL_PILL,
+    HeldDialog,
+    NoticeDialog,
     STORAGE_OFF,
     STORAGE_OFF_PILL,
 } from '@/pages/teambuilder/LoadoutsPanel';
+import { DELETED_HERE } from '@/pages/teambuilder/useActiveLoadout';
+import type { HeldInfo } from '@/pages/teambuilder/useLoadouts';
+import LoadoutsPanelDemo from './LoadoutsPanelDemo';
 import styles from './SaveIndicatorDemo.module.css';
+
+/** S14.3j: the held choice's dialog with made-up copies (a conflict with long lines, and a deletion). */
+const HELD_DEMO: Record<'conflict' | 'deleted', HeldInfo> = {
+    conflict: {
+        key: '0',
+        kind: 'conflict',
+        mine: { name: 'Hyper Carry', filled: 4, at: Date.now() - 3_600_000 },
+        theirs: { name: 'Hyper Carry (phone)', filled: 3 },
+        differences: [
+            { kind: 'name', mine: 'Hyper Carry', theirs: 'Hyper Carry (phone)' },
+            { kind: 'note' },
+            {
+                kind: 'members',
+                mine: ['Acheron', 'Pela', 'Silver Wolf', 'Huohuo'],
+                theirs: ['Acheron', 'Jiaoqiu', 'Aventurine'],
+            },
+            {
+                kind: 'modes',
+                mine: { gameMode: 'as', draftMode: 'classic', costSetId: 0 },
+                theirs: { gameMode: 'aa', draftMode: 'auction', costSetId: 3 },
+            },
+        ],
+    },
+    deleted: {
+        key: '1',
+        kind: 'deleted',
+        mine: { name: 'Hyper Carry', filled: 4, at: Date.now() - 3_600_000 },
+        theirs: null,
+        differences: [],
+    },
+};
 
 /*
  * Dev only (S14.3g): every state of the team builder's save indicator without signing in or waiting a minute.
@@ -144,6 +180,8 @@ export default function SaveIndicatorDemo() {
     const [demo, setDemo] = useState<Demo>({ view: savedAccount, saves: 0, id: 'a' });
     const [looping, setLooping] = useState(true);
     const [step, setStep] = useState('At rest');
+    const [held, setHeld] = useState<HeldInfo | null>(null);
+    const [notice, setNotice] = useState<string | null>(null);
 
     useEffect(() => {
         if (!looping) return;
@@ -254,6 +292,42 @@ export default function SaveIndicatorDemo() {
                     </button>
                 ))}
             </div>
+
+            <div className={styles.buttons}>
+                <span className={styles.groupLabel}>The held choice (S14.3j):</span>
+                <button type="button" onClick={() => setHeld(HELD_DEMO.conflict)}>
+                    Held dialog: changed
+                </button>
+                <button type="button" onClick={() => setHeld(HELD_DEMO.deleted)}>
+                    Held dialog: deleted
+                </button>
+                <HeldDialog
+                    held={held}
+                    open={held !== null}
+                    characterName={(key) => key}
+                    onPick={(pick) => {
+                        setStep(`Held choice: ${pick}`);
+                        setHeld(null);
+                    }}
+                    onDismiss={() => {
+                        setStep('Held choice: closed without a choice');
+                        setHeld(null);
+                    }}
+                />
+                <button type="button" onClick={() => setNotice(DELETED_HERE)}>
+                    Notice dialog: deleted here
+                </button>
+                <NoticeDialog
+                    text={notice}
+                    open={held === null}
+                    onDismiss={() => {
+                        setStep('Notice dismissed');
+                        setNotice(null);
+                    }}
+                />
+            </div>
+
+            <LoadoutsPanelDemo />
 
             <div className={styles.popovers}>
                 <span className={styles.groupLabel}>The shared info popover:</span>
