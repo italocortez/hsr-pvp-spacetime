@@ -41,6 +41,13 @@ import { type Align, placeInfoPopover, type Side } from './placeInfoPopover';
  * Placement: placeInfoPopover.ts (below and start-aligned unless the caller says otherwise; flips and shifts to stay
  * 8px inside the viewport; never over its own trigger), worked out on open, on every render while open, on resize and
  * on scroll. Motion: a 160ms fade and 4px slide in and out, none under reduced motion (InfoPopover.module.css).
+ *
+ * Modal dialogs (S14.3k): a modal `<dialog>` and this panel both live in the top layer, where the later one is drawn
+ * on top, so a panel shown while a modal is open would cover it. While a modal dialog that does not hold the trigger is
+ * open, the panel stays closed: an open one closes when the modal opens, and a timed open (`flash`) is held back and
+ * shown by its normal rule once no such modal is open (if the occurrence still stands). A popover inside the modal
+ * works as usual. The signal is the platform's: `dialog:modal`, re-read whenever a dialog's `open` attribute changes
+ * or dialogs come and go (one shared MutationObserver while any popover is mounted).
  */
 
 export const OPEN_DELAY_MS = 200;
@@ -90,6 +97,58 @@ const canPopover = () =>
 const reducedMotion = () =>
     globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
 
+// ── Open modal dialogs (S14.3k).
+/**
+ * Read once, before any test stand-in: without a native `showModal` (jsdom, older engines) a page opens its modal by
+ * the `open` attribute (LoadoutsPanel's fallback), and `:modal` never matches, so there an open dialog counts as modal.
+ */
+const nativeModal =
+    typeof HTMLDialogElement !== 'undefined' &&
+    typeof HTMLDialogElement.prototype.showModal === 'function';
+const openModals = (): Element[] => {
+    if (typeof document === 'undefined') return [];
+    if (nativeModal) {
+        try {
+            return [...document.querySelectorAll('dialog:modal')];
+        } catch {
+            // An engine without `:modal`: the attribute below.
+        }
+    }
+    return [...document.querySelectorAll('dialog[open]')];
+};
+/** A modal dialog is open that does not hold `el` (so `el`'s panel would be drawn over it). */
+const blockedByModal = (el: Element | null) =>
+    openModals().some((d) => !el?.isConnected || !d.contains(el));
+
+const modalListeners = new Set<() => void>();
+let modalObserver: MutationObserver | null = null;
+let lastModals: Element[] = [];
+const recheckModals = () => {
+    const now = openModals();
+    if (now.length === lastModals.length && now.every((d, n) => d === lastModals[n])) return;
+    lastModals = now;
+    for (const l of [...modalListeners]) l();
+};
+function watchModals(listener: () => void) {
+    modalListeners.add(listener);
+    if (!modalObserver && typeof MutationObserver !== 'undefined') {
+        lastModals = openModals();
+        modalObserver = new MutationObserver(recheckModals);
+        modalObserver.observe(document.documentElement, {
+            subtree: true,
+            childList: true,
+            attributes: true,
+            attributeFilter: ['open'],
+        });
+    }
+    return () => {
+        modalListeners.delete(listener);
+        if (modalListeners.size > 0) return;
+        modalObserver?.disconnect();
+        modalObserver = null;
+    };
+}
+
 type Timer = { current: ReturnType<typeof setTimeout> | null };
 const clear = (t: Timer) => {
     if (t.current !== null) clearTimeout(t.current);
@@ -133,24 +192,28 @@ export function InfoPopover({
     const flashLeft = useRef(0);
     const flashStart = useRef(0);
 
-    const close = useCallback(() => {
-        clear(openTimer);
-        clear(closeTimer);
-        clear(flashTimer);
-        if (current?.id === id) current = null;
-        if (whyRef.current === null) return;
-        setWhy(null);
-        clear(exitTimer);
-        if (reducedMotion()) {
-            setLeaving(false);
-            return;
-        }
-        setLeaving(true);
-        exitTimer.current = setTimeout(() => {
-            exitTimer.current = null;
-            setLeaving(false);
-        }, EXIT_MS);
-    }, [id, setWhy]);
+    /** `instant`: no exit fade (a panel that must not stay drawn over a modal dialog). */
+    const close = useCallback(
+        (instant = false) => {
+            clear(openTimer);
+            clear(closeTimer);
+            clear(flashTimer);
+            if (current?.id === id) current = null;
+            if (whyRef.current === null) return;
+            setWhy(null);
+            clear(exitTimer);
+            if (instant || reducedMotion()) {
+                setLeaving(false);
+                return;
+            }
+            setLeaving(true);
+            exitTimer.current = setTimeout(() => {
+                exitTimer.current = null;
+                setLeaving(false);
+            }, EXIT_MS);
+        },
+        [id, setWhy],
+    );
 
     const open = useCallback(
         (reason: Why) => {
@@ -189,23 +252,50 @@ export function InfoPopover({
         runFlash(Math.max(flashLeft.current, CLOSE_DELAY_MS));
     };
 
-    const lastFlash = useRef(0);
-    useEffect(() => {
-        if (flash === lastFlash.current) return;
-        lastFlash.current = flash;
-        // 0: the occurrence is over (a problem cleared): a timed open ends at once; one the person opened stays.
-        if (!flash) {
-            if (whyRef.current === 'flash') close();
-            return;
-        }
-        if (whyRef.current !== null) return;
+    const showFlash = useCallback(() => {
         open('flash');
         if (hovering.current || focused.current) {
             flashLeft.current = FLASH_MS;
             return;
         }
         runFlash(FLASH_MS);
-    }, [flash, open, close, runFlash]);
+    }, [open, runFlash]);
+
+    const lastFlash = useRef(0);
+    /** A timed open held back by a modal dialog (S14.3k); shown once no modal covers the trigger's page. */
+    const held = useRef(false);
+    useEffect(() => {
+        if (flash === lastFlash.current) return;
+        lastFlash.current = flash;
+        // 0: the occurrence is over (a problem cleared): a timed open ends at once; one the person opened stays.
+        if (!flash) {
+            held.current = false;
+            if (whyRef.current === 'flash') close();
+            return;
+        }
+        if (whyRef.current !== null) return;
+        if (blockedByModal(triggerRef.current)) {
+            held.current = true;
+            return;
+        }
+        showFlash();
+    }, [flash, close, showFlash]);
+
+    // A modal dialog opening closes the panel (a timed open is held back); one closing lets a held timed open show.
+    useEffect(
+        () =>
+            watchModals(() => {
+                if (blockedByModal(triggerRef.current)) {
+                    if (whyRef.current === 'flash') held.current = true;
+                    close();
+                    return;
+                }
+                if (!held.current) return;
+                held.current = false;
+                if (lastFlash.current && whyRef.current === null) showFlash();
+            }),
+        [close, showFlash],
+    );
 
     useEffect(
         () => () => {
@@ -300,6 +390,12 @@ export function InfoPopover({
     const supported = canPopover();
     const visible = isOpen || leaving;
     useLayoutEffect(() => {
+        // A timed open decided in the same commit as a modal dialog's opening: held back before it is ever drawn.
+        if (why === 'flash' && blockedByModal(triggerRef.current)) {
+            held.current = true;
+            close(true);
+            return;
+        }
         const el = panelRef.current as
             | (HTMLDivElement & { showPopover(): void; hidePopover(): void })
             | null;
@@ -307,7 +403,7 @@ export function InfoPopover({
         const shown = el.matches(':popover-open');
         if (visible && !shown) el.showPopover();
         else if (!visible && shown) el.hidePopover();
-    }, [visible, supported]);
+    }, [visible, supported, why, close]);
 
     const place = useCallback(() => {
         const t = triggerRef.current;

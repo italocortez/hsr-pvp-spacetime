@@ -166,30 +166,28 @@ const STATES: Record<string, Fake> = {
 export default function LoadoutsPanelDemo() {
     const [state, setState] = useState<string | null>(null);
     const loadouts = state ? ({ ...base, ...STATES[state] } as unknown as LoadoutsState) : null;
+    // The card sits outside the `.buttons` row: that row's `& button` rule would dress every button of the card.
     return (
-        <div className={styles.buttons}>
-            <span className={styles.groupLabel}>The Loadouts card, per message (S14.3j):</span>
-            {Object.keys(STATES).map((s) => (
-                <button key={s} type="button" onClick={() => setState(s)}>
-                    {s}
-                </button>
-            ))}
+        <>
+            <div className={styles.buttons}>
+                <span className={styles.groupLabel}>The Loadouts card, per message (S14.3j):</span>
+                {Object.keys(STATES).map((s) => (
+                    <button key={s} type="button" onClick={() => setState(s)}>
+                        {s}
+                    </button>
+                ))}
+            </div>
             {loadouts && (
-                <div
-                    data-panel-demo=""
-                    style={{ flex: '1 1 100%', inlineSize: 'min(560px, 100%)' }}
-                >
-                    <div style={{ inlineSize: 'min(560px, 100%)', display: 'grid' }}>
-                        <LoadoutsPanel
-                            key={state ?? ''}
-                            loadouts={loadouts}
-                            code="1.acheron-0._._._.as-c-0-3000-1500"
-                            announce={noop}
-                            onLoaded={noop}
-                        />
-                    </div>
+                <div data-panel-demo="" style={{ inlineSize: 'min(560px, 100%)', display: 'grid' }}>
+                    <LoadoutsPanel
+                        key={state ?? ''}
+                        loadouts={loadouts}
+                        code="1.acheron-0._._._.as-c-0-3000-1500"
+                        announce={noop}
+                        onLoaded={noop}
+                    />
                 </div>
             )}
-        </div>
+        </>
     );
 }

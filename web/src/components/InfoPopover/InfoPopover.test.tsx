@@ -404,6 +404,102 @@ describe('InfoPopover: the timed open (flash)', () => {
     });
 });
 
+describe('InfoPopover: modal dialogs (S14.3k)', () => {
+    // jsdom has no `showModal`: there an open dialog counts as modal (the pages' fallback opens it by the attribute).
+    const made: HTMLDialogElement[] = [];
+    afterEach(() => {
+        for (const d of made.splice(0)) d.remove();
+    });
+    const modal = () => {
+        const d = document.createElement('dialog');
+        document.body.append(d);
+        made.push(d);
+        return d;
+    };
+    const show = (d: HTMLDialogElement) =>
+        act(async () => {
+            d.setAttribute('open', '');
+        });
+    const hide = (d: HTMLDialogElement) =>
+        act(async () => {
+            d.removeAttribute('open');
+        });
+    const problem = () => fireEvent.click(screen.getByRole('button', { name: 'Problem' }));
+
+    it('no timed open while a modal dialog is open; it shows by its normal rule once the dialog closes', async () => {
+        render(<Flashing />);
+        const d = modal();
+        await show(d);
+        problem();
+        expect(isOpen(trigger('Save status'))).toBe(false);
+        wait(FLASH_MS * 2);
+        expect(isOpen(trigger('Save status'))).toBe(false);
+        await hide(d);
+        expect(isOpen(trigger('Save status'))).toBe(true);
+        expect(panelOf(trigger('Save status'))).toHaveAttribute('data-why', 'flash');
+        wait(FLASH_MS);
+        expect(isOpen(trigger('Save status'))).toBe(false);
+    });
+
+    it('an open panel closes when a modal dialog opens; a timed one comes back once it closes, a clicked one does not', async () => {
+        render(<Flashing />);
+        const d = modal();
+        problem();
+        expect(isOpen(trigger('Save status'))).toBe(true);
+        await show(d);
+        expect(isOpen(trigger('Save status'))).toBe(false);
+        await hide(d);
+        expect(isOpen(trigger('Save status'))).toBe(true);
+        // A click on the timed panel pins it (now opened by the person).
+        fireEvent.click(trigger('Save status'));
+        expect(panelOf(trigger('Save status'))).toHaveAttribute('data-why', 'click');
+        await show(d);
+        expect(isOpen(trigger('Save status'))).toBe(false);
+        await hide(d);
+        expect(isOpen(trigger('Save status'))).toBe(false);
+    });
+
+    it('a held timed open whose occurrence ended meanwhile (flash back to 0) stays closed', async () => {
+        const d = modal();
+        await show(d);
+        const { rerender } = render(
+            <InfoPopover label="C" form="pill" flash={1}>
+                z
+            </InfoPopover>,
+        );
+        expect(isOpen(trigger('C'))).toBe(false);
+        rerender(
+            <InfoPopover label="C" form="pill" flash={0}>
+                z
+            </InfoPopover>,
+        );
+        await hide(d);
+        expect(isOpen(trigger('C'))).toBe(false);
+    });
+
+    it('a popover inside the open modal works as usual; one outside it stays held', async () => {
+        render(
+            <>
+                <InfoPopover label="Outside" form="pill" flash={1}>
+                    out
+                </InfoPopover>
+                <dialog open>
+                    <InfoPopover label="Inside" form="pill" flash={1}>
+                        in
+                    </InfoPopover>
+                    <InfoPopover label="Inside click">click</InfoPopover>
+                </dialog>
+            </>,
+        );
+        expect(isOpen(trigger('Inside'))).toBe(true);
+        expect(isOpen(trigger('Outside'))).toBe(false);
+        fireEvent.click(trigger('Inside click'));
+        expect(isOpen(trigger('Inside click'))).toBe(true);
+        expect(isOpen(trigger('Inside'))).toBe(false);
+        expect(isOpen(trigger('Outside'))).toBe(false);
+    });
+});
+
 describe('InfoPopover: exit and reduced motion', () => {
     it('closing fades out: the content stays for EXIT_MS, then goes', () => {
         render(<Basic />);

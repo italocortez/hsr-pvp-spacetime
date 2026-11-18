@@ -376,6 +376,25 @@ describe('a stale draft (A198): the database refuses it; the person chooses', ()
         expect(dialog).not.toHaveAttribute('open');
     });
 
+    it('S14.3k: the save spot’s pill never shows over the dialog; after Escape it shows by itself', async () => {
+        fakeTimers();
+        putActive('0', 1);
+        await openStale(0, 'Hyper');
+        const dialog = screen.getByRole('dialog', {
+            name: 'Hyper was also changed on another device.',
+        }) as HTMLDialogElement;
+        const status = screen.getByRole('button', { name: 'Save status' });
+        expect(dialog).toHaveAttribute('open');
+        expect(status).toHaveAttribute('aria-expanded', 'false');
+        await later(1_000);
+        expect(status).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.queryByText('Changed on another device: see below')).toBeNull();
+        // Escape: the dialog closes; the held pill now shows, pointing at the line below.
+        await act(async () => dialog.close());
+        expect(status).toHaveAttribute('aria-expanded', 'true');
+        expect(screen.getByText('Changed on another device: see below')).toBeInTheDocument();
+    });
+
     it('S14.3j: two loadouts changed elsewhere: one dialog at a time; the other opens with its loadout', async () => {
         fakeTimers();
         const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
@@ -711,6 +730,24 @@ describe('deleted on another device (A198 item 3; review N6)', () => {
         await waitFor(() => expect(storedDrafts()).toBeNull());
         expect(dialog).not.toHaveAttribute('open');
         expect(caret()).toHaveFocus();
+    });
+
+    it('S14.3k: the pill stays hidden while the deleted choice is open', async () => {
+        fakeTimers();
+        conn.server.seed(0, 'Hyper');
+        conn.server.deleteElsewhere(0);
+        putDrafts({ 0: draft({ name: 'Hyper', code: CLARA, baseRev: 1 }) });
+        putActive('0', 1);
+        await openMember(conn);
+        expect(
+            screen.getByRole('dialog', { name: 'This loadout was deleted on another device.' }),
+        ).toHaveAttribute('open');
+        await later(1_000);
+        expect(screen.getByRole('button', { name: 'Save status' })).toHaveAttribute(
+            'aria-expanded',
+            'false',
+        );
+        expect(screen.queryByText('Deleted on another device: see below')).toBeNull();
     });
 
     it('refused as deleted while the view lags: the same choice', async () => {
