@@ -2196,3 +2196,14 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   7. Implementer: the Auction panel's two info buttons use the shared popover.
 - **Why:** user rulings in A210 (items 6 to 8); user, 2026-11-17, on the dead click on a full team: "we can do option A for the unpicked cards".
 - **Where implemented:** `web/src/components/{InfoPopover,ExclamationIcon}/`, `web/src/pages/teambuilder/` (`AutosaveRing`, `LoadoutsPanel`, `AuctionPanel`, `CharacterPool`), `web/src/dev/SaveIndicatorDemo`, `docs/frontend/{pages,component-hygiene}.md`, `docs/log/2026-11-17-s14-3i.md`
+
+### A212 — The team builder keeps its own chart for now; the legacy folder is removed
+
+- **Date:** 2026-11-17 · **Status:** decided
+- **Decision:**
+  1. The team builder keeps its own chart component for now. Chart.js stays approved (A202) and arrives with the profile page; the team builder's chart moves onto it then (A203). The orchestrator had offered to switch now or to bring the profile page forward; the user kept the plan.
+  2. The reference copies of the old app under `web/src/lib/legacy/` are deleted, with the configuration lines that only excluded them.
+  3. The project's `spacetimedb` skill file is brought up to date with the repository.
+  4. The account suspension step (A195) starts now.
+- **Why:** user, 2026-11-17: "I thought we alreadyh agreed on using chart.js tho? othjerwise i agree on deleting the legacy folder"; "when are we using chart.js then?"; "lets cleanup the spacetimedb skill, lets just keep using our chart for teambuilder, its okay to have it for now, the npush, then lets go with suspension".
+- **Where implemented:** item 2: commit `f320fc8`; item 3: `.claude/skills/spacetimedb/`; item 4: research under way.
