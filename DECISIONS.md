@@ -2374,3 +2374,15 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   9. Chart.js: the newest stable version is used (4.6.1 on 2026-11-18), pinned exactly, with no helper packages (A202).
 - **Why:** user, 2026-11-18, pasted answers: "For R1, I agree on A / For R2, usernames should be editable by verified users only and as long as its not already used, we can use the common practices from big tech to quickly check usernames instead of scanning the whole table. / For R3, Agree on A / For R4, Agree on A, maybe with an admin/moderator function to edit it in case they reach out and we can edit it. / For R5, we can add them but I'm thinking of not allowing to see other ppl's full profiles ... / For R6, agree on A. / For R7, agree on A. / for R8, agree on A. / For charts.js check the newest stable version and lets try that."; then "it seems like a very useless feature at the moment then, may as well keep it always shown"; then "yeah lets go with A for this R5. I also agree on your recommendations for R2".
 - **Where implemented:** not yet. Sub-steps: S14.5c chart wrapper, S14.5s backend, S14.5a home, S14.5b roster, S14.5d stats, S14.5e titles and the player card.
+
+### A227 — No Chart.js: the app draws its own charts
+
+- **Date:** 2026-11-18 · **Status:** decided; the revert is done, the profile charts are not built
+- **Decision:**
+  1. Chart.js is not used. The S14.5c commit (`1d971d5`: the dependency, the shared `Chart` wrapper, the team builder's chart on it) is reverted; `chart.js` is out of `web/package.json` and the lock file.
+  2. The team builder keeps its own chart, the shared `StackedBarChart` component, as it was before S14.5c. The component is not deleted.
+  3. The profile page's charts (S14.5d) are built with our own code as well, as shared components.
+  4. If a chart needs the feel of a Chart.js drawing, its source can be read later as a reference.
+  5. This replaces A202 item 1, A203 and A226 item 9. A202 item 2 (our own screenshot export) stands.
+- **Why:** user, 2026-11-18, after seeing the before and after page: "Honestly I would prefer to have our own code here for team builder, we can later take a look at how chart.js does a few of its drawings through his source code if we need to replicate the feeling, but you can revert on the previous stackedbarchart component. For profile, lets do our own charts as well".
+- **Where implemented:** the revert commit of `1d971d5`. Item 3: not yet (S14.5d).
