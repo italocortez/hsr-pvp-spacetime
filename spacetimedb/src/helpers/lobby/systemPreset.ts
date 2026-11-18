@@ -1,6 +1,7 @@
 import { SenderError } from 'spacetimedb/server';
 import { SYSTEM_USER_ID } from '@module/helpers/admin/auditColumns';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
+import { ensureAuctionAmounts } from '@module/helpers/lobby/lobbyConfigBounds';
 
 // ─── A33a: the built-in system lobby preset ─────────────────────────────────────────────────────────────────
 // Seeded by `init` (CH-S4: from compile-time constants, no data file), idempotent: exactly one LobbyPreset row with
@@ -73,7 +74,8 @@ export function findSystemLobbyPreset(ctx: any): any {
 }
 
 /**
- * A33a (S8b): the preset a tournament may point at: the system preset or one the organizer owns. Returns the row.
+ * A33a (S8b): the preset a tournament may point at: the system preset or one the organizer owns, and (S14.4t) one that
+ * passes ensureAuctionAmounts. Returns the row.
  * create_tournament and update_tournament call it when the argument names a preset; a preset deleted later is
  * a dangling id that create_tournament_lobby resolves to the system preset (S8d).
  */
@@ -83,6 +85,8 @@ export function ensureTournamentPreset(ctx: any, presetId: number, organizerId: 
     if (!preset.isSystemPreset && preset.creatorUserId !== organizerId) {
         throw new SenderError("The tournament can only use the system preset or one of the organizer's own presets.");
     }
+    // S14.4t: a preset stored before saves were checked (an Auction one with budget or raise 0) is refused when attached.
+    ensureAuctionAmounts(preset.draftMode.tag, preset);
     return preset;
 }
 

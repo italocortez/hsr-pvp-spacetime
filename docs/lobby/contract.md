@@ -519,6 +519,8 @@ _Superseded in Phase S8f execution (DECISIONS.md A68)._ A live-stage Leave trans
 |-----------|--------------|
 | Role below TournamentHost | "Only Tournament Hosts, Moderators, and Admins can create lobby presets." |
 | Name empty or > 50 chars | "Preset name must be between 1 and 50 characters." |
+| Auction with `characterBudget` 0 or less (Phase S14.4t execution) | "characterBudget must be above 0 in an Auction lobby." |
+| Auction with `minimumBidRaise` 0 or less (Phase S14.4t execution) | "minimumBidRaise must be above 0 in an Auction lobby." |
 
 ---
 
@@ -551,6 +553,8 @@ _Superseded in Phase S8f execution (DECISIONS.md A68)._ A live-stage Leave trans
 | Preset not found | "Lobby preset not found." |
 | Non-admin editing system preset | "Only admins can modify or delete system presets." |
 | Moderator editing non-mod/non-TO preset | "Moderators can only modify presets created by moderators, TOs, or themselves." |
+| The stored draft mode Auction with `characterBudget` 0 or less (Phase S14.4t execution) | "characterBudget must be above 0 in an Auction lobby." |
+| The stored draft mode Auction with `minimumBidRaise` 0 or less (Phase S14.4t execution) | "minimumBidRaise must be above 0 in an Auction lobby." |
 | TO editing another user's preset | "You do not have permission to modify this preset." |
 | Name empty or > 50 chars | "Preset name must be between 1 and 50 characters." |
 
@@ -1110,7 +1114,12 @@ _Superseded in Phase S8e execution (DECISIONS.md A67(2))._
 ### Auction Lobby Needs a Budget and a Minimum Raise (Phase S14.4s execution, user ruling 2026-11-18)
 **Given:** A user in no lobby; a host of a Classic lobby in Waiting; a tournament whose preset is an Auction preset with character budget 0 or minimum raise 0
 **When:** The user calls `create_lobby` with `draftMode = Auction` and `characterBudget = 0` (or `minimumBidRaise = 0`); the host calls `update_lobby_settings` switching to Auction with either at 0; a member calls `create_tournament_lobby`
-**Then:** Each is refused: "characterBudget must be above 0 in an Auction lobby." / "minimumBidRaise must be above 0 in an Auction lobby." A Classic lobby with both at 0 is accepted. A preset may still be saved with these values; it is refused when a lobby is made from it.
+**Then:** Each is refused: "characterBudget must be above 0 in an Auction lobby." / "minimumBidRaise must be above 0 in an Auction lobby." A Classic lobby with both at 0 is accepted. A preset may still be saved with these values; it is refused when a lobby is made from it. _The preset sentence is superseded in Phase S14.4t execution: see "Auction Preset Needs a Budget and a Minimum Raise"._
+
+### Auction Preset Needs a Budget and a Minimum Raise (Phase S14.4t execution, user ruling 2026-11-18, DECISIONS.md A224)
+**Given:** A Tournament Host; their Classic preset; an Auction preset row stored before S14.4t with character budget 0 or minimum raise 0; a tournament they organize
+**When:** The host calls `create_lobby_preset` with `draftMode = Auction` and `characterBudget = 0` (or `minimumBidRaise = 0`); calls `update_lobby_preset` switching the Classic preset to Auction with either at 0, or setting an Auction preset's either to 0; calls `create_tournament` or `update_tournament` naming the old Auction row as `lobbyPresetId`; a member calls `create_tournament_lobby` for a tournament that already points at the old row
+**Then:** Each is refused with the lobby sentences: "characterBudget must be above 0 in an Auction lobby." / "minimumBidRaise must be above 0 in an Auction lobby."; nothing is written. A Classic preset with both at 0 saves. The old row is not rewritten and stays readable; the tournament that already points at it keeps pointing at it, and its lobby is refused until the preset is fixed.
 
 ### Shuffle Teams (Phase S6 execution, A45(3))
 **Given:** A lobby in Waiting: b1, b2 Blue players, r1, r2 Red players, all confirmed; the host is a spectator
@@ -1450,6 +1459,7 @@ _Superseded in Phase S8g execution (DECISIONS.md A70)._ Read "team1" as "the Blu
 | Scenario "Ban Restriction Max 1 Support and Max 1 Sustain Are Settable" added: `create_lobby`, `update_lobby_settings` and the presets accept the two new `banRestriction` values | Phase S14.4r execution (DECISIONS.md A221 item 4) | 2026-11-17 |
 | Scenario "System Preset Is Playable in Both Draft Modes" added: the system preset's budgets are 30 and 15 (were 0 and 0, which left an Auction lobby unable to buy anything with a price) and its minimum raise 5 (was 20); an older row that no Admin edited is brought to the current values by the paths that ensure the preset | Phase S14.4s execution (user rulings 2026-11-18; values from DECISIONS.md A190 item 5, A221 R8) | 2026-11-18 |
 | Scenarios "Server Refreshes the System Preset" and "Auction Lobby Needs a Budget and a Minimum Raise" added: `server_refresh_system_preset` (server identities only); `create_lobby`, `update_lobby_settings` and `create_tournament_lobby` refuse an Auction lobby with a character budget or minimum raise of 0; Classic and presets are not checked | Phase S14.4s execution (user rulings 2026-11-18) | 2026-11-18 |
+| Scenario "Auction Preset Needs a Budget and a Minimum Raise" added and two error rows each on `create_lobby_preset` / `update_lobby_preset`: saving an Auction preset with a character budget or minimum raise of 0 is refused with the lobby sentences, and so is attaching such an older row in `create_tournament` / `update_tournament`; older rows are not rewritten and `create_tournament_lobby` keeps its check; the S14.4s "presets are not checked" sentence is marked superseded | Phase S14.4t execution (user ruling 2026-11-18; DECISIONS.md A224) | 2026-11-18 |
 
 ---
 

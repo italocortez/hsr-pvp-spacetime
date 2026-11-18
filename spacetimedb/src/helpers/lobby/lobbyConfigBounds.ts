@@ -75,8 +75,10 @@ export const AUCTION_MINIMUM_RAISE_TEXT = 'minimumBidRaise must be above 0 in an
  * S14.4s (user ruling 2026-11-18): an Auction lobby needs a character budget and a minimum bid raise above 0 (a budget
  * of 0 buys nothing with a price; a raise of 0 lets a bid repeat the current one). Classic does not use them, so a
  * Classic lobby is not checked. Called wherever a lobby's settings are set: create_lobby, update_lobby_settings (the
- * draft mode it will store) and create_tournament_lobby (the preset's values). Presets are not checked here: a preset
- * is checked when a lobby is made from it.
+ * draft mode it will store) and create_tournament_lobby (the preset's values). S14.4t (user ruling 2026-11-18): also
+ * wherever a preset is saved or attached: create_lobby_preset, update_lobby_preset (the values they store) and
+ * ensureTournamentPreset (create_tournament / update_tournament naming a preset). Rows stored before S14.4t are not
+ * rewritten; create_tournament_lobby keeps its check as the safety net.
  */
 export function ensureAuctionAmounts(draftModeTag: string, c: { characterBudget: number; minimumBidRaise: number }): void {
     if (draftModeTag !== 'Auction') return;

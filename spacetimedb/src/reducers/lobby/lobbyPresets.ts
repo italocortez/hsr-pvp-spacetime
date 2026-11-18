@@ -6,7 +6,7 @@ import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHel
 import { readAbuseConfig } from '@module/helpers/lobby/abuseControls';
 import { resolveMaxSpectators } from '@module/helpers/lobby/lobbyHelpers';
 import { ensureForfeitSecondsInRange, ensureNotDeferredOutsideTournament } from '@module/helpers/lobby/disconnectHelpers';
-import { CONFIRM_WINDOW_SECONDS_DEFAULT, ensureLobbyConfigInRange, resolveConfirmWindowSeconds } from '@module/helpers/lobby/lobbyConfigBounds';
+import { CONFIRM_WINDOW_SECONDS_DEFAULT, ensureAuctionAmounts, ensureLobbyConfigInRange, resolveConfirmWindowSeconds } from '@module/helpers/lobby/lobbyConfigBounds';
 
 import { ensureCostSetCovers, ensureCostSetUsable } from '@module/helpers/draft/costSetGuards';
 
@@ -127,6 +127,7 @@ export const create_lobby_preset = spacetimedb.reducer(
         ensureForfeitSecondsInRange(args.disconnectForfeitSeconds);
         // S10e (lobby audit #10): numeric settings in range.
         ensureLobbyConfigInRange(args);
+        ensureAuctionAmounts(args.draftMode.tag, args); // S14.4t: a preset that could not make a playable Auction lobby
 
         // Resolve disconnectForfeitSeconds — 0 sentinel means "not set"
         const disconnectForfeitSeconds = args.disconnectForfeitSeconds > 0
@@ -252,6 +253,7 @@ export const update_lobby_preset = spacetimedb.reducer(
         ensureForfeitSecondsInRange(args.disconnectForfeitSeconds);
         // S10e (lobby audit #10): numeric settings in range.
         ensureLobbyConfigInRange(args);
+        ensureAuctionAmounts(args.draftMode.tag, args); // S14.4t: the draft mode and amounts this update stores
 
         // Resolve disconnectForfeitSeconds — 0 sentinel means "not set"
         const disconnectForfeitSeconds = args.disconnectForfeitSeconds > 0

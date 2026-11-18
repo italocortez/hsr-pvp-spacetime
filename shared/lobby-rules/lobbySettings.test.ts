@@ -46,6 +46,7 @@ import {
     type LobbyFormRules,
     type LobbyPresetChoice,
     type LobbySettings,
+    lobbyAmountErrors,
     lobbyHoldOf,
     lobbyLabel,
     lobbyPasswordError,
@@ -822,6 +823,52 @@ describe('module pins', () => {
                 }
             }
         }
+    });
+
+    it('T-S14.4t: a preset save: lobbyAmountErrors refuses exactly what the module refuses, and both preset reducers apply the check', () => {
+        for (const draftMode of LOBBY_DRAFT_MODES) {
+            for (const characterBudget of [-1, 0, 0.01, 30, 100_000, 100_001, Number.NaN]) {
+                for (const minimumBidRaise of [-0.5, 0, 0.01, 5, 100_001]) {
+                    for (const lightconeBudget of [-1, 0, 15, 100_001]) {
+                        const values = {
+                            draftMode,
+                            characterBudget,
+                            lightconeBudget,
+                            minimumBidRaise,
+                        };
+                        const moduleOk = (() => {
+                            try {
+                                ensureLobbyConfigInRange(settings(values));
+                                ensureAuctionAmounts(draftMode, values);
+                                return true;
+                            } catch {
+                                return false;
+                            }
+                        })();
+                        const e = lobbyAmountErrors(values);
+                        expect(Object.keys(e).length === 0, JSON.stringify(values)).toBe(moduleOk);
+                        // The lobby form gives the same sentences.
+                        const full = validateLobbySettings(settings(values), MEMBER);
+                        expect({
+                            characterBudget: full.characterBudget,
+                            lightconeBudget: full.lightconeBudget,
+                            minimumBidRaise: full.minimumBidRaise,
+                        }).toEqual({
+                            characterBudget: e.characterBudget,
+                            lightconeBudget: e.lightconeBudget,
+                            minimumBidRaise: e.minimumBidRaise,
+                        });
+                    }
+                }
+            }
+        }
+        // create_lobby_preset and update_lobby_preset call the same check on the values they store (S14.4t).
+        const presets = moduleSource('reducers/lobby/lobbyPresets.ts');
+        expect(
+            presets.match(
+                /ensureLobbyConfigInRange\(args\);\s*ensureAuctionAmounts\(args\.draftMode\.tag, args\);/g,
+            ),
+        ).toHaveLength(2);
     });
 
     it('the one-lobby rule: the live stages are the module LIVE_STAGES, and membershipHold decides as lobbyHoldOf', () => {

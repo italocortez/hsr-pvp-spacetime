@@ -493,10 +493,58 @@ describe('S14.4s: Auction lobbies refuse a character budget or a minimum raise o
         expect(lobbyRow(test, s.lobbyId)).toMatchObject({ draftMode: { tag: 'Auction' }, characterBudget: 100, minimumBidRaise: 1 });
     });
 
-    it('a preset may still be saved with an Auction budget of 0 (it is checked when a lobby is made from it)', () => {
+    // T-S14.4t (user ruling 2026-11-18): flipped; S14.4s let this preset save ("a preset may still be saved").
+    it('T-S14.4t: create_lobby_preset refuses an Auction preset with budget 0 or raise 0; Classic with both 0 saves', () => {
         const test = newHarness();
-        tx(test, 'internal', (ctx) => M.create_lobby_preset(ctx, presetArgs('auction zero', { draftMode: { tag: 'Auction' }, characterBudget: 0, minimumBidRaise: 0 })));
-        expect(presetNamed(test, 'auction zero')).toMatchObject({ draftMode: { tag: 'Auction' }, characterBudget: 0, minimumBidRaise: 0 });
+        expect(rejection(test, 'internal', (ctx) => M.create_lobby_preset(ctx, presetArgs('auction zero', { draftMode: { tag: 'Auction' }, characterBudget: 0, minimumBidRaise: 0 })))).toBe(BUDGET);
+        expect(rejection(test, 'internal', (ctx) => M.create_lobby_preset(ctx, presetArgs('auction budget', { draftMode: { tag: 'Auction' }, characterBudget: 0 })))).toBe(BUDGET);
+        expect(rejection(test, 'internal', (ctx) => M.create_lobby_preset(ctx, presetArgs('auction raise', { draftMode: { tag: 'Auction' }, minimumBidRaise: 0 })))).toBe(RAISE);
+        for (const name of ['auction zero', 'auction budget', 'auction raise']) expect(presetNamed(test, name)).toBeUndefined();
+
+        tx(test, 'internal', (ctx) => M.create_lobby_preset(ctx, presetArgs('classic zero', { characterBudget: 0, minimumBidRaise: 0 })));
+        expect(presetNamed(test, 'classic zero')).toMatchObject({ draftMode: { tag: 'Classic' }, characterBudget: 0, minimumBidRaise: 0 });
+        tx(test, 'internal', (ctx) => M.create_lobby_preset(ctx, presetArgs('auction ok', { draftMode: { tag: 'Auction' } })));
+        expect(presetNamed(test, 'auction ok')).toMatchObject({ draftMode: { tag: 'Auction' }, characterBudget: 100, minimumBidRaise: 1 });
+    });
+
+    it('T-S14.4t: update_lobby_preset refuses a switch to Auction, or an Auction preset set to budget 0 or raise 0; Classic with both 0 saves', () => {
+        const test = newHarness();
+        tx(test, 'internal', (ctx) => M.create_lobby_preset(ctx, presetArgs('p', { characterBudget: 0, minimumBidRaise: 0 })));
+        const id = presetNamed(test, 'p')!.id;
+        expect(rejection(test, 'internal', (ctx) => M.update_lobby_preset(ctx, updatePresetArgs(id, 'p', { draftMode: { tag: 'Auction' }, characterBudget: 0, minimumBidRaise: 0 })))).toBe(BUDGET);
+        expect(presetNamed(test, 'p')!.draftMode.tag).toBe('Classic');
+
+        tx(test, 'internal', (ctx) => M.update_lobby_preset(ctx, updatePresetArgs(id, 'p', { draftMode: { tag: 'Auction' } })));
+        expect(presetNamed(test, 'p')).toMatchObject({ draftMode: { tag: 'Auction' }, characterBudget: 100, minimumBidRaise: 1 });
+        expect(rejection(test, 'internal', (ctx) => M.update_lobby_preset(ctx, updatePresetArgs(id, 'p', { draftMode: { tag: 'Auction' }, characterBudget: 0 })))).toBe(BUDGET);
+        expect(rejection(test, 'internal', (ctx) => M.update_lobby_preset(ctx, updatePresetArgs(id, 'p', { draftMode: { tag: 'Auction' }, minimumBidRaise: 0 })))).toBe(RAISE);
+        expect(presetNamed(test, 'p')).toMatchObject({ draftMode: { tag: 'Auction' }, characterBudget: 100, minimumBidRaise: 1 });
+
+        tx(test, 'internal', (ctx) => M.update_lobby_preset(ctx, updatePresetArgs(id, 'p', { characterBudget: 0, minimumBidRaise: 0 })));
+        expect(presetNamed(test, 'p')).toMatchObject({ draftMode: { tag: 'Classic' }, characterBudget: 0, minimumBidRaise: 0 });
+    });
+
+    it('T-S14.4t: a bad Auction row stored before S14.4t stays as it is and readable, and attaching it to a tournament is refused', () => {
+        const test = newHarness();
+        createTournament(test);
+        const t = tournaments(test)[0];
+        const organizerId = t.organizerId;
+        // An old row, written straight to the table as a pre-S14.4t save would have left it.
+        const old = test.db.LobbyPreset.insert({
+            ...systemPresets(test)[0], id: 0, isSystemPreset: false, name: 'old auction', creatorUserId: organizerId,
+            draftMode: { tag: 'Auction' } as any, characterBudget: 0, minimumBidRaise: 0,
+        });
+        expect(test.db.LobbyPreset.id.find(old.id)).toMatchObject({ name: 'old auction', draftMode: { tag: 'Auction' }, characterBudget: 0, minimumBidRaise: 0 });
+
+        expect(rejection(test, 'internal', (ctx) => M.create_tournament(ctx, { ...TOURNAMENT_ARGS, name: 'Cup 2', lobbyPresetId: old.id } as any))).toBe(BUDGET);
+        expect(tournaments(test)).toHaveLength(1);
+        expect(rejection(test, 'internal', (ctx) => M.update_tournament(ctx, updateTournamentArgs(t, { lobbyPresetId: old.id })))).toBe(BUDGET);
+        expect(tournaments(test)[0].lobbyPresetId).toBe(t.lobbyPresetId);
+
+        test.db.LobbyPreset.id.update({ ...test.db.LobbyPreset.id.find(old.id)!, characterBudget: 30 });
+        expect(rejection(test, 'internal', (ctx) => M.update_tournament(ctx, updateTournamentArgs(t, { lobbyPresetId: old.id })))).toBe(RAISE);
+        // The row is never rewritten by the refusals.
+        expect(test.db.LobbyPreset.id.find(old.id)).toMatchObject({ draftMode: { tag: 'Auction' }, characterBudget: 30, minimumBidRaise: 0 });
     });
 });
 

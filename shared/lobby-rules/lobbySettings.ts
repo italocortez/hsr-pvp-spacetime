@@ -549,6 +549,34 @@ export function lobbyPasswordError(password: string): string | undefined {
 }
 
 /**
+ * The three amounts as the module checks them, one sentence per field: each 0 to 100,000 (ensureLobbyConfigInRange),
+ * and in Auction a character budget and a minimum bid raise above 0 (ensureAuctionAmounts; user ruling, S14.4c-fix).
+ * The module applies the same two checks when a lobby is created or updated and, since S14.4t, when a preset is saved
+ * (create_lobby_preset, update_lobby_preset), so a preset save form can call this on its values.
+ */
+export function lobbyAmountErrors(
+    s: Pick<LobbySettings, 'draftMode' | 'characterBudget' | 'lightconeBudget' | 'minimumBidRaise'>,
+): LobbySettingsErrors {
+    const e: LobbySettingsErrors = {};
+    for (const [key, label] of [
+        ['characterBudget', 'The character budget'],
+        ['lightconeBudget', 'The light cone budget'],
+        ['minimumBidRaise', 'The minimum bid raise'],
+    ] as const) {
+        if (!amountOk(s[key]))
+            e[key] = `${label} is 0 to ${LOBBY_BUDGET_MAX.toLocaleString('en-US')}.`;
+    }
+    // An Auction lobby needs something to bid with and a raise that moves.
+    if (s.draftMode === 'Auction') {
+        if (e.characterBudget === undefined && !(s.characterBudget > 0))
+            e.characterBudget = AUCTION_CHARACTER_BUDGET_TEXT;
+        if (e.minimumBidRaise === undefined && !(s.minimumBidRaise > 0))
+            e.minimumBidRaise = AUCTION_MINIMUM_RAISE_TEXT;
+    }
+    return e;
+}
+
+/**
  * Every setting the module would refuse, as one sentence per field (the form's wording; the module's own sentences
  * name arguments such as `standardTurnSeconds`). Empty when `create_lobby` accepts the values, apart from what only
  * the module knows: whether the cost set covers the game mode and draft mode, the one-lobby rule, the creation limit
@@ -582,22 +610,7 @@ export function validateLobbySettings(
         e.reserveBankSeconds = `The reserve bank is 0 to ${LOBBY_RESERVE_SECONDS_MAX} seconds.`;
     if (!inRange(s.confirmWindowSeconds, 0, LOBBY_CONFIRM_WINDOW_SECONDS_MAX))
         e.confirmWindowSeconds = `The confirm window is 0 to ${LOBBY_CONFIRM_WINDOW_SECONDS_MAX} seconds.`;
-    for (const [key, label] of [
-        ['characterBudget', 'The character budget'],
-        ['lightconeBudget', 'The light cone budget'],
-        ['minimumBidRaise', 'The minimum bid raise'],
-    ] as const) {
-        if (!amountOk(s[key]))
-            e[key] = `${label} is 0 to ${LOBBY_BUDGET_MAX.toLocaleString('en-US')}.`;
-    }
-    // An Auction lobby needs something to bid with and a raise that moves (user ruling, S14.4c-fix; the module's
-    // bounds helper refuses the same).
-    if (s.draftMode === 'Auction') {
-        if (e.characterBudget === undefined && !(s.characterBudget > 0))
-            e.characterBudget = AUCTION_CHARACTER_BUDGET_TEXT;
-        if (e.minimumBidRaise === undefined && !(s.minimumBidRaise > 0))
-            e.minimumBidRaise = AUCTION_MINIMUM_RAISE_TEXT;
-    }
+    Object.assign(e, lobbyAmountErrors(s));
     for (const [key, label] of [
         ['rosterDiffAdvantage', 'The roster diff advantage'],
         ['underThresholdAdvantage', 'The under-threshold advantage'],
