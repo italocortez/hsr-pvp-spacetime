@@ -55,6 +55,11 @@ export type SegmentedControlProps<V extends string> = {
     idPrefix?: string;
     /** The champagne tone of the mockup's table switch. */
     tone?: 'brand' | 'prestige';
+    /**
+     * False: the pill shows no label of its own (S14.4c: a form field whose label sits above it); `label` still names
+     * the group.
+     */
+    showLabel?: boolean;
 };
 
 /** The id `SegmentedControl` gives the tab of `value` (tabs semantics). */
@@ -70,6 +75,7 @@ export function SegmentedControl<V extends string>({
     semantics = 'buttons',
     idPrefix,
     tone = 'brand',
+    showLabel = true,
 }: SegmentedControlProps<V>) {
     const reasonBase = useId();
     const generated = useId();
@@ -142,7 +148,7 @@ export function SegmentedControl<V extends string>({
     );
 
     return (
-        <ControlFrame label={label} tone={tone}>
+        <ControlFrame label={showLabel ? label : undefined} tone={tone}>
             {isTabs ? (
                 <div role="tablist" aria-label={label} className={styles.items}>
                     {buttons}
@@ -166,15 +172,18 @@ export function ControlFrame({
     tone = 'brand',
     children,
 }: {
-    label: string;
+    /** The decorative label; none when undefined. */
+    label: string | undefined;
     tone?: 'brand' | 'prestige';
     children: ReactNode;
 }) {
     return (
         <div className={styles.frame} data-tone={tone}>
-            <span className={styles.label} aria-hidden="true">
-                {label}
-            </span>
+            {label !== undefined && (
+                <span className={styles.label} aria-hidden="true">
+                    {label}
+                </span>
+            )}
             {children}
         </div>
     );

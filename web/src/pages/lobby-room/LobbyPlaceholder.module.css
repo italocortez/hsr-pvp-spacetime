@@ -1,0 +1,116 @@
+/*
+ * The lobby placeholder (S14.4c) inside the standby frame (components/SplashLayout): the lobby's facts in the standby
+ * page's champagne pill style (pages/standby/StandbyPage.module.css `.modulePill`), the Leave button and its status.
+ * No mockup: the lobby room (S14.7) replaces it.
+ */
+
+/* A lobby name can be 50 characters: smaller than the splash's display title, and it wraps anywhere. */
+.name {
+    display: block;
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    line-height: 1.05;
+    overflow-wrap: anywhere;
+}
+
+.facts {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.code,
+.host {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    align-items: center;
+    max-inline-size: 100%;
+    margin: 0;
+    padding: 8px 10px 8px 14px;
+    border: 1px solid rgba(201, 169, 97, 0.4);
+    background: rgba(201, 169, 97, 0.06);
+    font-family: var(--font-primary);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--color-prestige);
+}
+
+.host {
+    padding-inline-end: 14px;
+}
+
+.factLabel {
+    color: var(--color-prestige);
+}
+
+.factValue {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+    color: var(--text-heading);
+    letter-spacing: 1.2px;
+    text-transform: none;
+}
+
+.codeValue {
+    color: var(--text-heading);
+    font-family: var(--font-secondary);
+    font-size: 1.125rem;
+    font-weight: 800;
+    letter-spacing: 0.2em;
+}
+
+.copy {
+    min-block-size: 30px;
+    padding: 4px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    background: rgba(8, 9, 14, 0.5);
+    color: var(--text-heading);
+    font-family: var(--font-primary);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition:
+        border-color var(--duration-fast),
+        color var(--duration-fast);
+
+    &:hover {
+        border-color: var(--color-iris);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-iris);
+        outline-offset: 2px;
+    }
+
+    &[data-state="copied"] {
+        border-color: var(--color-success);
+        color: var(--color-success);
+    }
+
+    &[data-state="failed"] {
+        border-color: var(--color-warning);
+        color: var(--color-warning);
+    }
+}
+
+.actions {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.error {
+    max-inline-size: 440px;
+    margin: 0;
+    color: var(--text-heading);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    text-shadow: 0 1px 8px rgba(8, 9, 14, 0.75);
+}

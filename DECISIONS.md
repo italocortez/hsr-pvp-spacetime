@@ -2330,3 +2330,20 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   3. Orchestrator, correcting an earlier statement: turning maintenance on does not drop connected clients. They are refused on their next action, and refused when they next connect; the server identity and Admins still get in.
 - **Why:** user, 2026-11-18: "do we have a maintanance mode we can start so that we can push edits like this on prod eventually?"; then "we can add that maintance mode on a server function, yes".
 - **Where implemented:** `server_set_maintenance` in `spacetimedb/src/reducers/identity/server.ts`; `scripts/stdb/maintenance.ts`; `docs/frontend/hosting.md`, `docs/admin/`
+
+### A224 — Create lobby: presets set everything; Auction needs a budget and a raise; the phone sheet
+
+- **Date:** 2026-11-18 · **Status:** decided; built (S14.4c, S14.4s), the module part not yet published
+- **Decision:**
+  1. A lobby settings preset sets every field of the form, main and advanced, and never the lobby name or password. Orchestrator's safeguards: the preset select sits right after name and password, picking one is announced, and it shows "Custom" after an edit.
+  2. The module's built-in preset is brought in line with rules that work: Auction budgets 30 and 15 (were 0 and 0). Orchestrator: only the unplayable values changed; the tournament choices of A33a stay.
+  3. An Auction lobby with a character budget of 0 is refused by the module (creation, settings change, a tournament lobby made from a preset).
+  4. The minimum bid raise defaults to 5 (was 20) and cannot be 0 or lower. Orchestrator's reading: enforced for Auction lobbies; a Classic lobby never uses the value and is not checked.
+  5. The built-in preset keeps a light cone budget of 15.
+  6. Existing databases are updated through a server function and script (`stdb:system-preset refresh`); a preset an Admin edited is left alone.
+  7. The lobby name stays optional, up to 50 characters, as the module allows. An empty name shows as "Lobby" plus the join code.
+  8. On phones the create dialog is a full-screen sheet (look question L2, option B), a size of the shared dialog.
+  9. Free-text fields that are not credentials tell browsers and password managers to leave them alone (lobby name and password, loadout name and note, search and amount fields).
+  10. Test changes approved: the headline expected on `/lobby/123`; the unused landing copy helper deleted.
+- **Why:** user, 2026-11-18: "I think our field on teambuilder where we name loadouts also invites password managers to write stuff, check that. As for your recomendation, I would prefer presets to change everything but we can update the preset to match our existing default rules that our reducers enforce"; "For your questions 1 to 5, I agree on your suggestion ..."; "i want presets to change everything, not just advance settings"; "for 1, yes refuse it; for 2, minimum raise default set as 5, cannot be 0 or lower; for 3, keep 15, updating the test. For 4, you can update it".
+- **Where implemented:** `shared/lobby-rules/lobbySettings.ts`, `web/src/components/{LobbySettingsForm,Dialog}/`, `web/src/pages/{create-lobby,lobby-room}/`, `web/src/lib/noAutofill.ts`; `spacetimedb/src/helpers/lobby/{lobbyConfigBounds,systemPreset}.ts`, `server_refresh_system_preset`, `scripts/stdb/system-preset.ts`

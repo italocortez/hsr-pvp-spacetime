@@ -1,4 +1,5 @@
 import type { Ref } from 'react';
+import { NO_AUTOFILL } from '@/lib/noAutofill';
 import hidden from '@/styles/visuallyHidden.module.css';
 import styles from './SearchField.module.css';
 
@@ -39,7 +40,7 @@ export function SearchField({
                 value={value}
                 placeholder={placeholder}
                 maxLength={maxLength}
-                autoComplete="off"
+                {...NO_AUTOFILL}
                 autoCapitalize="none"
                 spellCheck={false}
                 autoCorrect="off"

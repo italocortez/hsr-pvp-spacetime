@@ -10,7 +10,11 @@ import {
 import { createPortal } from 'react-dom';
 import styles from './Dialog.module.css';
 
-export type DialogSize = 'small' | 'medium';
+/**
+ * `small` and `medium`: a card. `sheet`: a medium card from 561px up, a full-screen sheet at the phone step (560px and
+ * below): full width and height, the title at the top, the body scrolling, the actions at the bottom.
+ */
+export type DialogSize = 'small' | 'medium' | 'sheet';
 
 /** Where focus goes after a close the person made: an element, or a ref to one. */
 export type FocusTarget = HTMLElement | null | RefObject<HTMLElement | null>;
@@ -209,9 +213,14 @@ export function Dialog({
     const dialog = (
         <dialog
             ref={ref}
-            className={[styles.dialog, size === 'medium' ? styles.medium : '', className ?? '']
+            className={[
+                styles.dialog,
+                size === 'medium' ? styles.medium : size === 'sheet' ? styles.sheet : '',
+                className ?? '',
+            ]
                 .filter(Boolean)
                 .join(' ')}
+            data-dialog-size={size}
             aria-labelledby={titleId}
             aria-describedby={description ? descriptionId : describedBy}
             onClose={handleClose}

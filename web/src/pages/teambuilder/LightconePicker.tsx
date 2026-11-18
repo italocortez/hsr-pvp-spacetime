@@ -9,6 +9,7 @@ import {
     useState,
 } from 'react';
 import { EDGE, GAP, placePanel } from '@/components/MultiSelectDropdown/MultiSelectDropdown';
+import { NO_AUTOFILL } from '@/lib/noAutofill';
 import { formatCostFixed as formatCost } from '@/lib/rosterModel';
 import styles from './LightconePicker.module.css';
 import { lightconeCandidates } from './lightconeCandidates';
@@ -273,7 +274,7 @@ export function LightconePicker({
                         open && candidates.length > 0 ? optionId(active) : undefined
                     }
                     placeholder={name ? `S${superimposition} ${name}` : 'Select lightcone…'}
-                    autoComplete="off"
+                    {...NO_AUTOFILL}
                     spellCheck={false}
                     value={query}
                     data-lc-search=""

@@ -1,3 +1,5 @@
+@import "@/styles/media.css";
+
 /*
  * The shared modal dialog (S14.4b; web-guidance dialog rule 1). The look is the team builder's dialogs (S14.3j):
  * graphite panel, strong border, the modal radius, a dark backdrop. A page tunes it through custom properties set on
@@ -15,7 +17,8 @@
  *   --dialog-text-size, --dialog-text-color (the description)
  *
  * Small screens: the panel is at most the viewport's height less 32px; the body scrolls inside it while the title
- * and the footer stay. The body keeps 4px of room for focus rings at its edges (`.body`). Motion: a 200ms fade and 8px rise on open, none under reduced motion (the content leaves with
+ * and the footer stay. The body keeps 4px of room for focus rings at its edges (`.body`), and shows a shadow at an
+ * edge it can scroll past (the scroll cue, below). Motion: a 200ms fade and 8px rise on open, none under reduced motion (the content leaves with
  * the dialog, so there is no exit animation). Forced colours: the system's border colour.
  */
 
@@ -56,6 +59,29 @@
 
 :where(.medium) {
     --dialog-width: var(--dialog-medium);
+}
+
+/*
+ * `size="sheet"` (S14.4c-fix, user ruling B): a medium dialog from 561px up; at the phone step (--bp-sm, 560px and
+ * below, the step where the forms go to one column) a full-screen sheet: the whole viewport (`100dvh`), no border or
+ * corner radius, padding that clears the safe areas, the title row at the top, the body scrolling (with the scroll
+ * cue) and the actions pinned at the bottom. A dialog stacked over it keeps its own size.
+ */
+:where(.sheet) {
+    --dialog-width: var(--dialog-medium);
+
+    @media (--bp-sm) {
+        &[open] {
+            inset: 0;
+            inline-size: 100%;
+            max-inline-size: 100%;
+            block-size: 100dvh;
+            max-block-size: 100dvh;
+            margin: 0;
+            border: 0;
+            border-radius: 0;
+        }
+    }
 }
 
 .form {
@@ -112,6 +138,79 @@
     padding: var(--dialog-ring-room);
     overflow-y: auto;
     overscroll-behavior: contain;
+    container-type: scroll-state;
+}
+
+/*
+ * The scroll cue (web-guidance scrollability-affordance-hints.md, shadows): when the body scrolls, a shadow at its top
+ * and bottom edge says there is more above or below, as if the content were tucked under the title and the footer.
+ * Its own `::before` and `::after`, sticky at the edges; their negative margins cancel their height and the gap.
+ * Chromium shows them by scroll-state queries; Firefox by a scroll-driven animation; without either there is none (the
+ * scrollbar stays).
+ */
+.body::before,
+.body::after {
+    --dialog-cue: 14px;
+
+    content: "";
+    position: sticky;
+    z-index: 1;
+    flex: none;
+    display: block;
+    block-size: var(--dialog-cue);
+    margin-inline: calc(-1 * var(--dialog-ring-room));
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity var(--duration-fast);
+}
+
+.body::before {
+    inset-block-start: 0;
+    margin-block-end: calc(-1 * (var(--dialog-cue) + var(--dialog-gap, 12px)));
+    background: radial-gradient(farthest-side at 50% 0, rgb(0 0 0 / 0.7), transparent);
+    border-block-start: 1px solid var(--border-subtle);
+}
+
+.body::after {
+    inset-block-end: 0;
+    margin-block-start: calc(-1 * (var(--dialog-cue) + var(--dialog-gap, 12px)));
+    background: radial-gradient(farthest-side at 50% 100%, rgb(0 0 0 / 0.7), transparent);
+    border-block-end: 1px solid var(--border-subtle);
+}
+
+@container scroll-state(scrollable: block-start) {
+    .body::before {
+        opacity: 1;
+    }
+}
+
+@container scroll-state(scrollable: block-end) {
+    .body::after {
+        opacity: 1;
+    }
+}
+
+@supports not (container-type: scroll-state) {
+    .body::before,
+    .body::after {
+        animation: dialog-cue-show linear both;
+        animation-timeline: scroll();
+    }
+
+    .body::before {
+        animation-range: 0 2rem;
+    }
+
+    .body::after {
+        animation-direction: reverse;
+        animation-range: calc(100% - 2rem) 100%;
+    }
+}
+
+@keyframes dialog-cue-show {
+    to {
+        opacity: 1;
+    }
 }
 
 /* A form-level error (`error`), above the actions; the empty live region takes no room (its gap is cancelled). */
@@ -183,6 +282,29 @@
 .closeIcon {
     inline-size: 16px;
     block-size: 16px;
+}
+
+/* The sheet's inside at the phone step (see `:where(.sheet)` above); after `.form`, `.body` and `.close`, and more
+ * specific, so it wins over them. */
+.sheet {
+    @media (--bp-sm) {
+        & .form {
+            padding: max(var(--dialog-pad, 22px), env(safe-area-inset-top))
+                max(var(--dialog-pad, 22px), env(safe-area-inset-right))
+                max(var(--dialog-pad, 22px), env(safe-area-inset-bottom))
+                max(var(--dialog-pad, 22px), env(safe-area-inset-left));
+        }
+
+        /* The body takes the room between the title and the actions, so the actions sit at the bottom. */
+        & .body {
+            flex: 1 1 auto;
+        }
+
+        & .close {
+            inset-block-start: max(8px, env(safe-area-inset-top));
+            inset-inline-end: max(8px, env(safe-area-inset-right));
+        }
+    }
 }
 
 @media (prefers-reduced-motion: no-preference) {

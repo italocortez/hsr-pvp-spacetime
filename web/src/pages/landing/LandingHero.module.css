@@ -260,6 +260,10 @@
     letter-spacing: 0.32em;
     text-transform: uppercase;
     pointer-events: auto;
+    /* A button since S14.4c (it opens the create dialog): no box of its own, the fill layer draws it. */
+    border: 0;
+    background: none;
+    cursor: pointer;
     filter: drop-shadow(0 0 8px rgba(201, 169, 97, 0.2))
         drop-shadow(0 0 20px rgba(126, 112, 224, 0.25));
     transition:
@@ -339,6 +343,26 @@
 
 .ctaLabel {
     position: relative;
+}
+
+/* While "Play Now" works (the guest on demand, the chunk): the pointer says so; the pulse keeps going. */
+.cta[aria-busy="true"] {
+    cursor: progress;
+}
+
+/* "Play Now"'s one status line (S14.4c): progress or a failure, read out politely. Empty, it takes no room. */
+.status {
+    max-inline-size: 32rem;
+    margin: 1rem 0 0;
+    color: var(--text-heading);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    text-shadow: 0 1px 4px rgba(8, 9, 14, 0.95);
+    pointer-events: auto;
+
+    &:empty {
+        margin: 0;
+    }
 }
 
 .ctaArrow {

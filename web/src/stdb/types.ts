@@ -7,6 +7,8 @@ import type {
     HsrLightcone,
     HsrLightconeCost,
     HsrSynergyCost,
+    LobbyMemberViewRow,
+    LobbyPresetViewRow,
     MyLinkRequestRow,
     MyLoadoutRow,
     MyLobbyListRow,
@@ -14,6 +16,7 @@ import type {
     MySuspensionRow,
     PartnerServer,
 } from '@bindings/types';
+import type { CreateLobbyParams } from '@bindings/types/reducers';
 
 /*
  * The slice of the SDK connection this app uses, as plain structural types. The generated
@@ -79,8 +82,20 @@ export interface LoadoutReducersLike {
     deleteLoadout(args: { slot: number; baseRev: number }): Promise<void>;
 }
 
+/**
+ * S14.4c: creating a lobby (the landing page's create dialog) and leaving it (the lobby placeholder). Optional on the
+ * connection as the loadout reducers. The arguments are `CreateLobbyParams` of the bindings; the form builds them with
+ * `toCreateLobbyArgs` (`shared/lobby-rules/lobbySettings.ts`).
+ */
+export interface LobbyReducersLike {
+    createLobby(args: CreateLobbyParams): Promise<void>;
+    leaveLobby(args: { lobbyId: number }): Promise<void>;
+}
+
 /** Every reducer the app may find on the connection. */
-export type AppReducersLike = ReducersLike & Partial<LoadoutReducersLike>;
+export type AppReducersLike = ReducersLike &
+    Partial<LoadoutReducersLike> &
+    Partial<LobbyReducersLike>;
 
 export interface StdbConnectionLike {
     subscriptionBuilder(): SubscriptionBuilderLike;
@@ -123,5 +138,12 @@ export interface StdbConnectionLike {
          * Optional as `reducers`, so the test doubles of the earlier steps still fit.
          */
         partnerServer?: TableLike<PartnerServer>;
+        /**
+         * S14.4c: the system preset and the viewer's own presets (keyed by `id`), subscribed while the create dialog
+         * is open; and the members of the viewer's lobbies (keyed by `memberKey`), subscribed by the lobby
+         * placeholder. Optional as `reducers`, so the test doubles of the earlier steps still fit.
+         */
+        viewLobbyPresets?: TableLike<LobbyPresetViewRow>;
+        viewMyLobbyMembers?: TableLike<LobbyMemberViewRow>;
     };
 }

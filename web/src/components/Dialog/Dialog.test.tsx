@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { type ReactNode, useRef, useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -429,6 +429,70 @@ describe('Dialog: S14.4b-fix (review B)', () => {
         expect(body).toMatch(/padding:\s*var\(--dialog-ring-room\)/);
         expect(body).toMatch(/margin:\s*calc\(-1 \* var\(--dialog-ring-room\)\)/);
         expect(body).toMatch(/--dialog-ring-room:\s*4px/);
+    });
+
+    it('size="sheet": its own size mark and class; small and medium are unchanged', () => {
+        renderDialog({ size: 'sheet' });
+        const sheet = screen.getByRole('dialog', { name: 'Delete Hyper?' });
+        expect(sheet).toHaveAttribute('data-dialog-size', 'sheet');
+        expect(sheet.className).toMatch(/sheet/);
+        expect(sheet.className).not.toMatch(/medium/);
+        cleanup();
+        renderDialog({ size: 'medium' });
+        const medium = screen.getByRole('dialog', { name: 'Delete Hyper?' });
+        expect(medium).toHaveAttribute('data-dialog-size', 'medium');
+        expect(medium.className).not.toMatch(/sheet/);
+    });
+
+    it('size="sheet" is a full-screen sheet at the phone step and a medium card above it', () => {
+        const root = [join(process.cwd(), 'web'), process.cwd()].find((d) =>
+            existsSync(join(d, 'vite.config.ts')),
+        ) as string;
+        const css = readFileSync(join(root, 'src/components/Dialog/Dialog.module.css'), 'utf8');
+        expect(css).toMatch(/@import "@\/styles\/media\.css";/);
+        const sheet = /:where\(\.sheet\)\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? '';
+        expect(sheet).toMatch(/--dialog-width:\s*var\(--dialog-medium\)/);
+        expect(sheet).toMatch(/@media \(--bp-sm\)/);
+        for (const rule of [
+            /block-size:\s*100dvh/,
+            /max-block-size:\s*100dvh/,
+            /inline-size:\s*100%/,
+            /border:\s*0/,
+            /border-radius:\s*0/,
+            /margin:\s*0/,
+        ]) {
+            expect(sheet).toMatch(rule);
+        }
+        const inner = /\n\.sheet\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? '';
+        expect(inner).toMatch(/@media \(--bp-sm\)/);
+        // Safe areas on every side; the body grows so the actions sit at the bottom.
+        for (const side of ['top', 'right', 'bottom', 'left']) {
+            expect(inner).toContain(`env(safe-area-inset-${side})`);
+        }
+        expect(inner).toMatch(/& \.body\s*\{\s*flex:\s*1 1 auto/);
+    });
+
+    it('the body shows a scroll cue at an edge it can scroll past (shadows, with a fallback)', () => {
+        const root = [join(process.cwd(), 'web'), process.cwd()].find((d) =>
+            existsSync(join(d, 'vite.config.ts')),
+        ) as string;
+        const css = readFileSync(join(root, 'src/components/Dialog/Dialog.module.css'), 'utf8');
+        const body = /\.body\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+        expect(body).toMatch(/container-type:\s*scroll-state/);
+        expect(css).toMatch(
+            /@container scroll-state\(scrollable: block-start\)\s*\{\s*\.body::before\s*\{\s*opacity:\s*1/,
+        );
+        expect(css).toMatch(
+            /@container scroll-state\(scrollable: block-end\)\s*\{\s*\.body::after\s*\{\s*opacity:\s*1/,
+        );
+        // Firefox: no scroll-state queries; the scroll-driven animation shows the same shadows.
+        expect(css).toMatch(
+            /@supports not \(container-type: scroll-state\)[\s\S]*animation-timeline:\s*scroll\(\)/,
+        );
+        // The cue takes no room: its negative margin cancels its height and the body's gap.
+        expect(css).toMatch(
+            /margin-block-end:\s*calc\(-1 \* \(var\(--dialog-cue\) \+ var\(--dialog-gap, 12px\)\)\)/,
+        );
     });
 });
 

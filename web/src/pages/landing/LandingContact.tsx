@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useCopyText } from '@/lib/useCopyText';
 import hidden from '@/styles/visuallyHidden.module.css';
 import styles from './LandingContact.module.css';
 import { PartnerTile } from './PartnerTile';
 import { CREATOR_DISCORD } from './partners';
-import { useCopyText } from './useCopyText';
 import { usePartnerServers } from './usePartnerServers';
 
 const HANDLE = `@${CREATOR_DISCORD}`;

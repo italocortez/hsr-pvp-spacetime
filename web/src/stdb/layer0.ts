@@ -1,9 +1,9 @@
 import { tables } from '@bindings/index';
-import type { MyLobbyListRow, MyProfileRow } from '@bindings/types';
-import { useSyncExternalStore } from 'react';
+import type { MyProfileRow } from '@bindings/types';
 import { toSql } from 'spacetimedb';
 import { type AuthSnapshot, authStore, setAuthSnapshot } from '@/auth/authStore';
 import { failConnection } from './connectionStatus';
+import { setMyLobbies } from './myLobbies';
 import { setSuspended } from './suspensionStatus';
 import type { StdbConnectionLike } from './types';
 
@@ -41,28 +41,9 @@ function sameAuth(a: AuthSnapshot, b: AuthSnapshot): boolean {
     );
 }
 
-// --- view_my_lobbies rows, for useMyLobbies() --------------------------------------------------
+// --- view_my_lobbies rows: the SDK-free store in `myLobbies.ts` (S14.4c) ------------------------
 
-let lobbies: readonly MyLobbyListRow[] = [];
-const lobbyListeners = new Set<() => void>();
-
-function setLobbies(next: readonly MyLobbyListRow[]): void {
-    if (next.length === 0 && lobbies.length === 0) return;
-    lobbies = next;
-    for (const listener of lobbyListeners) listener();
-}
-
-function subscribeLobbies(listener: () => void): () => void {
-    lobbyListeners.add(listener);
-    return () => {
-        lobbyListeners.delete(listener);
-    };
-}
-
-/** The viewer's lobbies (`view_my_lobbies`), empty until the first result. No UI uses it yet. */
-export function useMyLobbies(): readonly MyLobbyListRow[] {
-    return useSyncExternalStore(subscribeLobbies, () => lobbies);
-}
+export { useMyLobbies } from './myLobbies';
 
 // --- the subscriptions ---------------------------------------------------------------------------
 
@@ -113,9 +94,10 @@ export function startLayer0(conn: StdbConnectionLike): () => void {
         if (!sameAuth(authStore.getSnapshot(), next)) setAuthSnapshot(next);
         if (!isSuspended) setSuspended(false);
     };
+    let lobbiesApplied = false;
     const syncLobbies = () => {
         if (stopped || dead) return;
-        setLobbies([...viewMyLobbies.iter()]);
+        setMyLobbies([...viewMyLobbies.iter()], lobbiesApplied);
     };
 
     viewMyProfile.onInsert(syncProfile);
@@ -154,7 +136,10 @@ export function startLayer0(conn: StdbConnectionLike): () => void {
         .subscribe(LAYER0_QUERIES.profile);
     const myLobbies = conn
         .subscriptionBuilder()
-        .onApplied(syncLobbies)
+        .onApplied(() => {
+            lobbiesApplied = true;
+            syncLobbies();
+        })
         .onError(failed('view_my_lobbies'))
         .subscribe(LAYER0_QUERIES.lobbies);
     const mySuspension = viewMySuspension
@@ -182,6 +167,6 @@ export function startLayer0(conn: StdbConnectionLike): () => void {
         for (const handle of [profile, myLobbies, mySuspension]) {
             if (handle && !handle.isEnded()) handle.unsubscribe();
         }
-        setLobbies([]);
+        setMyLobbies([], false);
     };
 }

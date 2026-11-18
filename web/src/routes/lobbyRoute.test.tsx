@@ -2,17 +2,20 @@ import { screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { AUTH, renderWithRouter } from '@/test/renderWithRouter';
 
-/* T-M5b: `/lobby/$lobbyId` shows the not-found page for an id that is not a u32 (M6 notes). */
+/*
+ * T-M5b: `/lobby/$lobbyId` shows the not-found page for an id that is not a u32 (M6 notes). T-S14.4c: a valid id
+ * shows the lobby placeholder (here, with no connection, its "opening" state) instead of the standby block.
+ */
 
 describe('/lobby/$lobbyId', () => {
     it.each(['/lobby/123', '/lobby/1', '/lobby/4294967295'])(
-        '%s renders the Lobby Room placeholder',
+        '%s renders the lobby placeholder',
         async (path) => {
             renderWithRouter(path, AUTH.member);
             expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent(
-                'Module offline.',
+                'Opening the lobby.',
             );
-            expect(screen.getByText('Lobby Room')).toBeInTheDocument();
+            expect(screen.getByText('Connecting to the server…')).toBeInTheDocument();
         },
     );
 
@@ -30,7 +33,7 @@ describe('/lobby/$lobbyId', () => {
         expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent(
             'Lobby not found.',
         );
-        expect(screen.queryByText('Lobby Room')).toBeNull();
+        expect(screen.queryByText('Connecting to the server…')).toBeNull();
         expect(decodeURIComponent(r.router.state.location.pathname)).toBe(decodeURIComponent(path));
     });
 });

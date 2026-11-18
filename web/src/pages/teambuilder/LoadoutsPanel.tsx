@@ -21,6 +21,7 @@ import {
 import { loginSearchFor } from '@/auth/loginSearch';
 import { Dialog } from '@/components/Dialog/Dialog';
 import { dialogInTurn } from '@/components/Dialog/dialogQueue';
+import { NO_AUTOFILL } from '@/lib/noAutofill';
 import hidden from '@/styles/visuallyHidden.module.css';
 import { accountView, reasonText, SAVE_TIP, SaveIndicator, type SaveView } from './AutosaveRing';
 import styles from './LoadoutsPanel.module.css';
@@ -505,6 +506,7 @@ export function LoadoutsPanel({
                             ref={linkRef}
                             type="text"
                             readOnly
+                            {...NO_AUTOFILL}
                             value={shareUrl}
                             onFocus={(e) => e.currentTarget.select()}
                         />
@@ -1101,13 +1103,14 @@ function LoadoutMenuBox({
             <PencilIcon className={styles.pencil} />
             <input
                 ref={nameRef}
-                id={`${ids}-name`}
+                // Not "-name": nothing for an autofill heuristic to take for a person's name.
+                id={`${ids}-loadout-title`}
                 type="text"
                 className={styles.nameInput}
                 value={field}
                 maxLength={LOADOUT_NAME_MAX}
                 spellCheck={false}
-                autoComplete="off"
+                {...NO_AUTOFILL}
                 placeholder="Name this loadout"
                 aria-label="Rename active loadout"
                 aria-describedby={statusId}

@@ -30,6 +30,11 @@ describe('SearchField', () => {
         expect(input).toHaveAttribute('autocomplete', 'off');
         expect(input).toHaveAttribute('spellcheck', 'false');
         expect(input).toHaveAttribute('placeholder', 'Search by name or alias');
+        // S14.4c-fix: no password manager takes it.
+        expect(input).toHaveAttribute('data-1p-ignore', '');
+        expect(input).toHaveAttribute('data-lpignore', 'true');
+        expect(input).toHaveAttribute('data-bwignore', '');
+        expect(input).toHaveAttribute('data-form-type', 'other');
     });
 
     it('reports what is typed, up to the maximum length; markup stays text', async () => {

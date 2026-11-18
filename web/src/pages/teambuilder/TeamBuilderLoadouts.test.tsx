@@ -127,6 +127,18 @@ describe('browser loadouts (visitor)', () => {
         expect(nameField()).toHaveAttribute('maxlength', '40');
     });
 
+    it('the name and the note are not autofill or password manager targets (S14.4c-fix)', async () => {
+        await open();
+        for (const field of [nameField(), screen.getByRole('textbox', { name: 'Note' })]) {
+            expect(field).toHaveAttribute('autocomplete', 'off');
+            expect(field).toHaveAttribute('data-1p-ignore', '');
+            expect(field).toHaveAttribute('data-lpignore', 'true');
+            expect(field).toHaveAttribute('data-bwignore', '');
+            expect(field).toHaveAttribute('data-form-type', 'other');
+        }
+        expect(nameField().id).not.toMatch(/name/i);
+    });
+
     it('New Loadout starts empty and selects its name; the menu switches back with the team', async () => {
         const user = userEvent.setup();
         await open();

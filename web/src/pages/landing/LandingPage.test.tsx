@@ -87,10 +87,11 @@ describe('the landing page at /', () => {
         for (const img of rest) expect(img).toHaveAttribute('loading', 'lazy');
     });
 
-    it('links: Play Now and card 01 to /lobbies, 02 /tournaments, 03 /costs, 04 /teambuilder', async () => {
+    it('links: card 01 to /lobbies, 02 /tournaments, 03 /costs, 04 /teambuilder; Play Now is a button (S14.4c)', async () => {
         await renderLanding();
         const main = within(screen.getByRole('main'));
-        expect(main.getByRole('link', { name: 'Play Now' })).toHaveAttribute('href', '/lobbies');
+        expect(main.getByRole('button', { name: 'Play Now' })).toHaveAttribute('type', 'button');
+        expect(main.queryByRole('link', { name: 'Play Now' })).toBeNull();
         expect(main.getByRole('link', { name: /Two ways to draft\./ })).toHaveAttribute(
             'href',
             '/lobbies',
@@ -204,7 +205,7 @@ describe('the landing page and the database', () => {
         ].sort();
         await waitFor(() => expect(distinct(conn.liveQueries())).toEqual(expected));
         act(() => conn.applyAll());
-        await screen.findByRole('link', { name: 'Play Now' });
+        await screen.findByRole('button', { name: 'Play Now' });
         expect(distinct(conn.liveQueries())).toEqual(expected);
         // Every subscription ever made on this page, ended ones included.
         expect(distinct(conn.subscriptions.map((s) => s.query))).toEqual(expected);
@@ -225,7 +226,7 @@ describe('the landing page and the database', () => {
         await screen.findByRole('heading', { level: 1, name: 'IPC Battlegrounds' });
         expect(screen.queryByRole('heading', { name: 'Partner Communities' })).toBeNull();
         act(() => conn.applyAll());
-        await screen.findByRole('link', { name: 'Play Now' });
+        await screen.findByRole('button', { name: 'Play Now' });
         expect(screen.queryByRole('heading', { name: 'Partner Communities' })).toBeNull();
         expect(fetchMock).not.toHaveBeenCalled();
     });

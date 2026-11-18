@@ -1,0 +1,162 @@
+@import "@/styles/media.css";
+
+/*
+ * The create-lobby dialog (S14.4c; design/mockups/index.html `.modal`, `.modalTitle`, `.modalFoot`, `.btn`). The frame
+ * is the shared Dialog's (components/Dialog), tuned through its custom properties: the mockup's 480px width, the
+ * italic 20px title. Phones (560px and below, user ruling B): the shared Dialog's full-screen sheet (`size="sheet"`),
+ * the body scrolling between the title and the buttons. The stacked questions stay small cards.
+ */
+
+.dialog {
+    --dialog-width: 30rem;
+    --dialog-gap: 18px;
+    --dialog-title-family: var(--font-secondary);
+    --dialog-title-size: 1.25rem;
+    --dialog-title-weight: 800;
+
+    & h2 {
+        font-style: italic;
+        letter-spacing: -0.01em;
+    }
+
+    @media (--bp-sm) {
+        --dialog-pad: 18px;
+    }
+}
+
+.confirm {
+    --dialog-width: 24rem;
+}
+
+/* The mockup's `.btn`: 40px, 9px corners, small caps-like tracking. */
+.button {
+    display: inline-flex;
+    gap: 7px;
+    align-items: center;
+    justify-content: center;
+    block-size: 40px;
+    padding: 0 20px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    /* The mockup's `.btn` inherits the page's sans face. */
+    font-family: var(--font-secondary);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        color var(--duration-fast),
+        background-color var(--duration-fast),
+        border-color var(--duration-fast),
+        transform var(--duration-instant) var(--ease-out);
+
+    &:active:not([aria-disabled="true"]) {
+        transform: scale(0.97);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-iris);
+        outline-offset: 2px;
+    }
+
+    &[aria-disabled="true"] {
+        cursor: progress;
+        opacity: 0.7;
+    }
+}
+
+/* The shared footer gives each button an 8rem basis; these size to their words (at least 8rem). */
+:is(.dialog, .confirm) .button {
+    flex: 0 1 auto;
+    min-inline-size: 8rem;
+
+    /* Phones: both footer buttons on one row (tighter padding and tracking) instead of a second row. */
+    @media (--bp-sm) {
+        min-inline-size: 0;
+        padding: 0 14px;
+        letter-spacing: 0.02em;
+    }
+}
+
+/* The footer: Advanced Settings at the start, the dialog's actions at the end (the mockup's `margin-right: auto`). */
+.secondary {
+    border-color: var(--border-strong);
+    background: transparent;
+    color: var(--text-body);
+
+    &:hover {
+        border-color: var(--color-ash);
+        color: var(--text-heading);
+    }
+
+    &[aria-controls] {
+        margin-inline-end: auto;
+    }
+}
+
+.primary {
+    background: var(--color-iris);
+    color: var(--color-snow);
+    box-shadow: var(--glow-brand-sm);
+
+    &:hover:not([aria-disabled="true"]) {
+        background: var(--color-iris-hover);
+    }
+}
+
+.danger {
+    background: var(--color-error);
+    color: var(--color-snow);
+
+    &:hover {
+        background: color-mix(in srgb, var(--color-error) 85%, var(--color-snow));
+    }
+}
+
+/* "You are already in lobby …" with the way there (the error slot). */
+.held {
+    display: inline;
+}
+
+.link {
+    display: inline;
+    min-inline-size: 0;
+    min-block-size: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--color-iris-hover);
+    font: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+
+    &:hover {
+        color: var(--color-snow);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-iris);
+        outline-offset: 2px;
+        border-radius: 2px;
+    }
+}
+
+.gear {
+    inline-size: 13px;
+    block-size: 13px;
+}
+
+/* The Advanced Settings seam (S14.4d builds the fields): a short note at the end of the body. */
+.note {
+    margin: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--color-iris) 6%, transparent);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    line-height: 1.55;
+}

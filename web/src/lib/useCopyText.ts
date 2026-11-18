@@ -9,6 +9,9 @@ export const COPY_FEEDBACK_MS = 2000;
 let lastMessage = '';
 
 /**
+ * Shared since S14.4c (the landing page's Discord pill and the lobby placeholder's join code); it lived in
+ * `pages/landing/` before.
+ *
  * Copies one fixed text with the Async Clipboard API (web-guidance `copy-button.md`): the state
  * drives the button's look, `message` fills the page's live region. A refused or missing
  * clipboard is the failure state, shown and announced like a success. A repeat click restarts

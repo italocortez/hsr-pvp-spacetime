@@ -30,17 +30,24 @@ export function IpcActionButton({
     onClick,
     children,
     disabled = false,
+    busy = false,
 }: {
     onClick: () => void;
     children: ReactNode;
     disabled?: boolean;
+    /**
+     * The action runs: the button looks as `disabled` and ignores presses, but stays focusable (`aria-disabled`), so
+     * focus does not fall to `body` while it runs or after it fails.
+     */
+    busy?: boolean;
 }) {
     return (
         <button
             type="button"
             className={`${styles.cta} ${styles.button}`}
-            onClick={onClick}
+            onClick={busy ? undefined : onClick}
             disabled={disabled}
+            aria-disabled={busy || undefined}
         >
             <span>{children}</span>
         </button>

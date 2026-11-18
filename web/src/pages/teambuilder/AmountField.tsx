@@ -1,5 +1,6 @@
 import { type AmountRead, amountText, readAmount } from '@shared/teambuilder';
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
+import { NO_AUTOFILL } from '@/lib/noAutofill';
 import styles from './AmountField.module.css';
 
 /*
@@ -144,7 +145,7 @@ export function AmountField({
                 type="text"
                 inputMode="decimal"
                 enterKeyHint="done"
-                autoComplete="off"
+                {...NO_AUTOFILL}
                 spellCheck={false}
                 // The longest amount the cap allows, with room for a currency sign and a space.
                 maxLength={amountText(max).length + 2}

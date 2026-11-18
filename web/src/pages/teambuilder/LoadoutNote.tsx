@@ -1,5 +1,6 @@
 import { LOADOUT_NOTE_MAX } from '@shared/loadouts';
 import { useId } from 'react';
+import { NO_AUTOFILL } from '@/lib/noAutofill';
 import hidden from '@/styles/visuallyHidden.module.css';
 import styles from './LoadoutNote.module.css';
 
@@ -36,6 +37,7 @@ export function LoadoutNote({
                 className={styles.field}
                 value={value}
                 maxLength={LOADOUT_NOTE_MAX}
+                {...NO_AUTOFILL}
                 spellCheck
                 aria-describedby={`${id}-count`}
                 placeholder={NOTE_PLACEHOLDER}
