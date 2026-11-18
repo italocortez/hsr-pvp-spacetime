@@ -2223,3 +2223,16 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   Together with A195: a suspended account is signed out and can neither read nor write.
 - **Why:** user, 2026-11-17: "I beleive you had questions for my suspension"; then "I agree on your recomendations but the reason, we dont have to give a reason."
 - **Where implemented:** not yet. Research: `tmp/suspension/research.md` (local, under way at the time of this entry).
+
+### A214 — Account suspension: lifted by hand only; four further rulings
+
+- **Date:** 2026-11-17 · **Status:** decided; not built
+- **Decision:**
+  1. A suspension has no end date. It is set by hand and lifted by hand. This replaces A213 item 4 ("an end date, or until lifted") and removes the scheduled job the research had found necessary for an end time (the part of the module that serves a person's own data has no clock). The suspended person is told that the account is suspended, with no date and no reason.
+  2. A suspended person cannot delete their own account; staff can on request.
+  3. Tournament entries of a suspended player are left untouched; staff decide (disqualify or award a walkover).
+  4. The suspended screen has a "Sign out" button, so the person can go back to browsing as a visitor.
+  5. A reason can be recorded for the admins' own record; it is optional and never shown to the person.
+  6. Orchestrator, from the research (`tmp/suspension/research.md`, local): what can be enforced is no writing (one check in the shared permission helper, plus one line in eight reducers), no reading of the person's own data (the caller-dependent views return nothing), and a refused Discord sign-in. Public data stays readable, the module cannot close a live connection or cancel a token, and a cleared browser is a fresh visitor; so "signed out" means the person's own data goes empty at once and the app shows the suspended screen. A suspended player in a live match becomes away, their host, captain or referee role passes on, and the existing rules for an absent player run, with no automatic forfeit (A68). A ban or deletion removes the suspension. Order: the backend with the script command, then the suspended screen, then the admin controls with the admin page.
+- **Why:** user, 2026-11-17: "Suspensions are manual, so why not have the lift of a suspension manual as well? I agree on your recomendations for your 4 questions."
+- **Where implemented:** not yet.
