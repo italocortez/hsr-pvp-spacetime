@@ -53,7 +53,7 @@ describe('the landing page at /', () => {
         expect(
             screen.getByRole('heading', {
                 level: 2,
-                name: 'The whole competitive stack. In one page.',
+                name: 'Everything you need in one place.',
             }),
         ).toBeInTheDocument();
         expect(screen.getByRole('heading', { level: 2, name: 'Get in Touch' })).toBeInTheDocument();

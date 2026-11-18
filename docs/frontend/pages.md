@@ -778,7 +778,7 @@ First of the S14.4 sub-steps (research: `tmp/landing/research.md`). Static page 
   | Text | Where | Source |
   |---|---|---|
   | "HONKAI · STAR RAIL // PVP", "IPC Battlegrounds", "Draft. Battle. Win.", "Play Now", "Scroll to Explore" | hero | mockup |
-  | "// IPC Capabilities", "The whole competitive stack. *In one page.*" | features head | mockup |
+  | "// IPC Capabilities", "Everything you need *in one place.*" | features head | user, 2026-11-18 |
   | "01 · Draft Modes", "Classic", "Auction", "Two ways to draft.", "Two flagship draft modes — Classic and Auction. Pick your discipline; both lead to the bracket.", "Choose your draft" | card 01 | mockup |
   | "02 · Bracket System", "Tournaments", "Built-in bracket system. Self-host single & double-elimination championships end-to-end." | card 02 | mockup |
   | "03 · Balance", "Balance & Cost Tables", "Curated cost tables and balance tuning behind every match — fair, competitive, transparent." | card 03 | mockup |

@@ -45,7 +45,7 @@ export function LandingFeatures() {
                 <div>
                     <p className={styles.eyebrow}>{'// IPC Capabilities'}</p>
                     <h2 id="landing-features" className={styles.heading}>
-                        The whole competitive stack. <em>In one page.</em>
+                        Everything you need <em>in one place.</em>
                     </h2>
                 </div>
             </div>
