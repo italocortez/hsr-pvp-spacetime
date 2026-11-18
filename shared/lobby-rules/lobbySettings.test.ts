@@ -67,6 +67,7 @@ import {
     lobbyHoldOf,
     lobbyLabel,
     lobbyNumberFieldText,
+    lobbyNumberLeaveText,
     lobbyNumberText,
     lobbyPasswordError,
     lobbyPresetChoices,
@@ -232,9 +233,10 @@ describe('presets (A116, A221 R7)', () => {
             rosterVisibility: 'OpenRoster',
             characterBudget: 25.5,
             deathPenalty: -150,
-            teamBlueAlias: '',
-            teamRedAlias: '',
         });
+        // T-S14.4d-fix (review D S2): a preset holds no team names (was: both ''), like the name and password.
+        expect(p.values).not.toHaveProperty('teamBlueAlias');
+        expect(p.values).not.toHaveProperty('teamRedAlias');
         expect(
             presetFromModule(modulePreset({ disconnectForfeitSeconds: 90 })).values
                 .disconnectForfeitSeconds,
@@ -281,6 +283,26 @@ describe('presets (A116, A221 R7)', () => {
             modulePreset({ costSetId: 7, gameMode: { tag: 'ApocalypticShadow' } }),
         );
         expect(applyLobbyPreset(current, withSet, WITH_SETS).gameMode).toBe('MemoryOfChaos');
+    });
+
+    // T-S14.4d-fix (review D S2): the team names are the lobby's own, like the name and password.
+    it('a preset picked after a team name keeps both team names; typing a team name keeps the preset matched', () => {
+        const [classic, auction] = BUILT_IN_PRESETS;
+        if (!classic || !auction) throw new Error('built-ins');
+        const named = {
+            ...initialLobbySettings(MEMBER),
+            teamBlueAlias: 'Sharks',
+            teamRedAlias: 'Jets',
+        };
+        const picked = applyLobbyPreset(named, auction, MEMBER);
+        expect(picked).toMatchObject({
+            draftMode: 'Auction',
+            teamBlueAlias: 'Sharks',
+            teamRedAlias: 'Jets',
+        });
+        expect(lobbyPresetMatches(named, classic, MEMBER)).toBe(true);
+        expect(lobbyPresetMatches(picked, auction, MEMBER)).toBe(true);
+        expect(lobbyPresetMatches(picked, classic, MEMBER)).toBe(false);
     });
 });
 
@@ -410,42 +432,42 @@ describe('validation', () => {
             { characterBudget: -1 },
             MEMBER,
             'characterBudget',
-            'The character budget is 0 to 100,000.',
+            'The character budget is 0 to 100000, in steps of 0.01, with no thousands separator.',
         ],
         [
             'an infinite budget',
             { lightconeBudget: Number.POSITIVE_INFINITY },
             MEMBER,
             'lightconeBudget',
-            'The light cone budget is 0 to 100,000.',
+            'The light cone budget is 0 to 100000, in steps of 0.01, with no thousands separator.',
         ],
         [
             'a raise over the cap',
             { minimumBidRaise: 100_001 },
             MEMBER,
             'minimumBidRaise',
-            'The minimum bid raise is 0 to 100,000.',
+            'The minimum bid raise is 0 to 100000, in steps of 0.01, with no thousands separator.',
         ],
         [
             'a handicap over the cap',
             { deathPenalty: 1_000_001 },
             MEMBER,
             'deathPenalty',
-            'The death penalty is -10,000 to 10,000, in steps of 0.01.',
+            'The death penalty is -10000 to 10000, in steps of 0.01, with no thousands separator.',
         ],
         [
             'a fractional hundredth',
             { rosterDiffAdvantage: 1.5 },
             MEMBER,
             'rosterDiffAdvantage',
-            'The roster diff advantage is -10,000 to 10,000, in steps of 0.01.',
+            'The roster diff advantage is -10000 to 10000, in steps of 0.01, with no thousands separator.',
         ],
         [
             'a negative threshold',
             { rosterThreshold: -1 },
             MEMBER,
             'rosterThreshold',
-            'The roster threshold is 0 to 10,000, in steps of 0.01.',
+            'The roster threshold is 0 to 10000, in steps of 0.01, with no thousands separator.',
         ],
         [
             'Deferred',
@@ -597,9 +619,19 @@ describe('the one-lobby rule (D-22, A68(4))', () => {
 describe('an Auction lobby that cannot work (user ruling, S14.4c-fix)', () => {
     it.each([
         [0, 5, 'characterBudget', AUCTION_CHARACTER_BUDGET_TEXT],
-        [-1, 5, 'characterBudget', 'The character budget is 0 to 100,000.'],
+        [
+            -1,
+            5,
+            'characterBudget',
+            'The character budget is 0 to 100000, in steps of 0.01, with no thousands separator.',
+        ],
         [30, 0, 'minimumBidRaise', AUCTION_MINIMUM_RAISE_TEXT],
-        [30, -0.5, 'minimumBidRaise', 'The minimum bid raise is 0 to 100,000.'],
+        [
+            30,
+            -0.5,
+            'minimumBidRaise',
+            'The minimum bid raise is 0 to 100000, in steps of 0.01, with no thousands separator.',
+        ],
     ] as const)(
         'Auction, budget %s, raise %s: %s refused',
         (characterBudget, minimumBidRaise, key, text) => {
@@ -1147,7 +1179,11 @@ describe('number field texts (S14.4d)', () => {
         // Amounts as the team builder's AmountField reads them: a comma or a dot, "1,000" refused as unclear.
         expect(readLobbyNumber('minimumBidRaise', '2,5')).toBe(2.5);
         expect(readLobbyNumber('characterBudget', '30')).toBe(30);
-        expect(readLobbyNumber('lightconeBudget', '1.005')).toBe(1.01);
+        // T-S14.4d-fix (review D M6): a third decimal is refused, as in the points fields (was: '1.005' read as 1.01).
+        expect(readLobbyNumber('lightconeBudget', '1.005')).toBeNaN();
+        expect(readLobbyNumber('lightconeBudget', '1.000')).toBeNaN();
+        expect(readLobbyNumber('deathPenalty', '1.005')).toBeNaN();
+        expect(readLobbyNumber('lightconeBudget', '1.01')).toBe(1.01);
         expect(readLobbyNumber('characterBudget', '1,000')).toBeNaN();
         expect(readLobbyNumber('characterBudget', '-5')).toBeNaN();
         expect(readLobbyNumber('characterBudget', '')).toBeNaN();
@@ -1169,6 +1205,61 @@ describe('number field texts (S14.4d)', () => {
         expect(lobbyNumberFieldText('standardTurnSeconds', 'abc', 60)).toBe('60');
         expect(lobbyNumberFieldText('minimumBidRaise', '2,5', 2.5)).toBe('2,5');
         expect(lobbyNumberFieldText('minimumBidRaise', undefined, 5)).toBe('5');
+    });
+
+    // T-S14.4d-fix (review D S4): on leaving, a field shows the text of the value it sends.
+    it.each<[LobbyNumberFieldKey, string, string]>([
+        ['characterBudget', '$5', '5'],
+        ['characterBudget', ' 2,5 ', '2.5'],
+        ['characterBudget', '1.50', '1.5'],
+        ['characterBudget', '1.005', '1.005'], // refused: stays as typed, beside its error
+        ['characterBudget', 'abc', 'abc'],
+        ['reserveBankSeconds', ' 60 ', '60'],
+        ['reserveBankSeconds', '1.', '1'],
+        ['reserveBankSeconds', '-0', '0'],
+        ['reserveBankSeconds', '9999999999999999', '9999999999999999'], // far beyond every bound: kept
+        ['deathPenalty', '-0.50', '-0.5'],
+        ['deathPenalty', '5.', '5'],
+    ])('on leaving %s, %j shows as %j', (key, typed, shown) => {
+        expect(lobbyNumberLeaveText(key, typed)).toBe(shown);
+        // What it shows reads as what it sent.
+        const sent = readLobbyNumber(key, typed);
+        if (!Number.isNaN(sent) && Math.abs(sent) < 1e12)
+            expect(readLobbyNumber(key, shown)).toBe(sent);
+    });
+
+    // T-S14.4d-fix (review D M2): "-0" in a whole-number field is 0, not -0 (no "Custom", no discard question).
+    it('"-0" reads as 0 in a whole-number field', () => {
+        expect(Object.is(numberFromDraft('-0'), 0)).toBe(true);
+        const start = initialLobbySettings(MEMBER);
+        const typed = {
+            ...start,
+            disconnectForfeitSeconds: readLobbyNumber('disconnectForfeitSeconds', '-0'),
+        };
+        expect(lobbySettingsChanged(typed, start)).toBe(false);
+        expect(lobbyPresetMatches(typed, BUILT_IN_PRESETS[0] as LobbyPresetChoice, MEMBER)).toBe(
+            true,
+        );
+        expect(Object.is(toCreateLobbyArgs(typed).disconnectForfeitSeconds, 0)).toBe(true);
+    });
+
+    // T-S14.4d-fix (review D M3, M4).
+    it('team names are trimmed (all spaces is empty); Auction sends no mirror picks and no random auto-pick', () => {
+        const trimmed = toCreateLobbyArgs(
+            settings({ teamBlueAlias: '   ', teamRedAlias: ' Red Fox ' }),
+        );
+        expect(trimmed).toMatchObject({ teamBlueAlias: '', teamRedAlias: 'Red Fox' });
+        expect(
+            validateLobbySettings(settings({ teamRedAlias: ` ${'r'.repeat(30)} ` }), MEMBER),
+        ).toEqual({});
+        const auction = toCreateLobbyArgs(
+            settings({ draftMode: 'Auction', allowMirrorPicks: true, autoRandomPick: true }),
+        );
+        expect(auction).toMatchObject({ allowMirrorPicks: false, autoRandomPick: false });
+        const classic = toCreateLobbyArgs(
+            settings({ allowMirrorPicks: true, autoRandomPick: true }),
+        );
+        expect(classic).toMatchObject({ allowMirrorPicks: true, autoRandomPick: true });
     });
 
     it('toCreateLobbyArgs never sends NaN: an unread number field throws instead', () => {

@@ -1,5 +1,5 @@
 import { advancedErrorKeys } from '@shared/lobby-rules/lobbySettings';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Dialog, type FocusTarget } from '@/components/Dialog/Dialog';
 import { AdvancedLobbySettings, type AdvancedLobbySettingsProps } from './AdvancedLobbySettings';
 import styles from './AdvancedSettingsDialog.module.css';
@@ -10,7 +10,8 @@ import { ADVANCED_TEXT as TEXT } from './lobbySettingsText';
  * shared Dialog, stacked, with the field groups and one "Done". A thin wrapper: the value, errors and drafts are the
  * host's, so closing it loses nothing and the host's own submit (Create) stays in the first dialog.
  *
- * Opened while a setting here is invalid, it shows every error at once. Done closes it when every advanced setting is
+ * It opens with focus on its first field (Ban Restriction), placed quietly, so no info panel opens by itself
+ * (S14.4d-fix). Opened while a setting here is invalid, it shows every error at once. Done closes it when every advanced setting is
  * valid; otherwise it shows every error here and moves focus to the
  * first invalid field. The close button, Escape and the back gesture always close it (the host's button carries a mark
  * while a setting here needs a fix). On phones it is a full-screen sheet over the host's sheet (`size="sheet"`).
@@ -50,6 +51,8 @@ export function AdvancedSettingsDialog({
         setDoneTries(0);
         onClose();
     };
+    // S14.4d-fix (review D S1): the first field takes the first focus, not the info button beside its label.
+    const firstField = useRef<HTMLSelectElement>(null);
     return (
         <Dialog
             open={open}
@@ -58,6 +61,7 @@ export function AdvancedSettingsDialog({
             closeLabel={TEXT.close}
             size="sheet"
             className={styles.dialog}
+            initialFocus={firstField}
             returnFocus={returnFocus}
             onSubmit={() => {
                 if (advancedErrorKeys(fields.errors).length > 0) setDoneTries((n) => n + 1);
@@ -72,6 +76,7 @@ export function AdvancedSettingsDialog({
         >
             <AdvancedLobbySettings
                 {...fields}
+                firstFieldRef={firstField}
                 submitCount={submitCount + doneTries + (openedWithErrors ? 1 : 0)}
                 focusRequest={focusRequest + doneTries}
             />

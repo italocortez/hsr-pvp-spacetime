@@ -10,6 +10,7 @@ import {
     useState,
 } from 'react';
 import { ExclamationIcon } from '@/components/ExclamationIcon/ExclamationIcon';
+import { isQuietFocus } from '@/lib/quietFocus';
 import styles from './InfoPopover.module.css';
 import { type Align, placeInfoPopover, type Side } from './placeInfoPopover';
 
@@ -26,7 +27,8 @@ import { type Align, placeInfoPopover, type Side } from './placeInfoPopover';
  *
  * Opening: hover with a short intent delay (OPEN_DELAY_MS) and a close delay (CLOSE_DELAY_MS) that lets the pointer
  * cross the gap onto the panel; keyboard focus (the same delay, so tabbing past does not flash it); a click or tap
- * (a toggle: it pins the panel open, or closes a pinned one). Closing: Escape (focus inside the panel goes back to the
+ * (a toggle: it pins the panel open, or closes a pinned one). Focus moved by code through `focusQuietly` (a dialog's
+ * first focus or its return of focus, S14.4d-fix) is not keyboard focus and opens nothing. Closing: Escape (focus inside the panel goes back to the
  * trigger), a press outside, focus moving on, the pointer leaving a hover-opened panel. One open at a time.
  * `flash`: a counter the caller bumps for a new occurrence (a problem appearing); each new value shows the panel by
  * itself for FLASH_MS, paused while hovered or focused, without taking focus. A re-render with the same value does
@@ -351,13 +353,14 @@ export function InfoPopover({
         resumeFlash();
     };
 
-    // ── Focus (keyboard only: a focus that comes with a press is the click's).
+    // ── Focus (keyboard only: a focus that comes with a press is the click's; one a dialog placed by code, through
+    // `focusQuietly`, is nobody's, S14.4d-fix).
     const onFocus = () => {
         const byPointer = pointerPress.current;
         pointerPress.current = false;
         focused.current = true;
         pauseFlash();
-        if (byPointer) return;
+        if (byPointer || isQuietFocus(triggerRef.current)) return;
         if (whyRef.current === 'hover') setWhy('focus');
         else if (whyRef.current === null && openTimer.current === null)
             openTimer.current = setTimeout(() => {

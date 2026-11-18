@@ -38,6 +38,11 @@ export type CreateLobbyDraft = {
     presetKey: string;
     /** The value it opened with: closing asks before discarding once the settings differ from it. */
     initial: LobbySettings;
+    /**
+     * The Advanced Settings number fields' texts as typed (S14.4d-fix, review D M5: kept with the settings, so a close
+     * that keeps the draft also keeps "abc" beside its error). Absent: none typed yet.
+     */
+    numberTexts?: LobbyNumberDrafts;
 };
 
 export type CreateLobbyDialogProps = {
@@ -73,6 +78,7 @@ export const NEW_LOBBY_WAIT_MS = 10_000;
 export const ABANDON_CONFIRM_GUARD_MS = 500;
 
 const NONE: readonly string[] = [];
+const NO_TEXTS: LobbyNumberDrafts = {};
 
 /** A lobby that was not among `before` and holds the person (their new one), or undefined. */
 function newLobbyId(before: ReadonlySet<number>): number | undefined {
@@ -134,7 +140,8 @@ function callOutcome(error: unknown): CallOutcome {
  * Advanced Settings (S14.4d, the mockup's form, look question L3 option A): "Advanced Settings" opens the shared
  * `AdvancedSettingsDialog` over this one; Create stays here. The button carries a count while a setting there needs a
  * fix. Create with an invalid field focuses the first invalid main field, or, when every main field is valid, opens
- * Advanced Settings and focuses its first invalid field. The number fields' texts are kept here (`drafts`).
+ * Advanced Settings and focuses its first invalid field. The number fields' texts are kept in the draft
+ * (`numberTexts`), so they survive this dialog closing with its draft kept.
  *
  * The A68(4) rule (S1): a person away from a live match (their `view_my_lobbies` row, or the module's prompt) is asked
  * in a second dialog over this one, naming that lobby, "Keep my match" focused; only its confirm button sends
@@ -186,8 +193,9 @@ export function CreateLobbyDialog({
     const [advancedOpen, setAdvancedOpen] = useState(false);
     /** Bumped by a Create that found an invalid advanced setting and none in the main fields: focus goes there. */
     const [advancedFocus, setAdvancedFocus] = useState(0);
-    /** The number fields' texts as typed (kept here, so they outlive the Advanced dialog). */
-    const [drafts, setDrafts] = useState<LobbyNumberDrafts>({});
+    /** The number fields' texts as typed (in the draft, so they outlive the Advanced dialog and this one). */
+    const drafts = draft.numberTexts ?? NO_TEXTS;
+    const setDrafts = (next: LobbyNumberDrafts) => onDraft((d) => ({ ...d, numberTexts: next }));
     const advancedRef = useRef<HTMLButtonElement>(null);
     const [confirmOpen, setConfirmOpen] = useState(false);
     const alive = useRef(true);

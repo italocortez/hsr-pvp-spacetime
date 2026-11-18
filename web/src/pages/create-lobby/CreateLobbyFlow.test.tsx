@@ -701,3 +701,219 @@ describe('Advanced Settings (S14.4d)', () => {
         ).toBeInTheDocument();
     });
 });
+
+// T-S14.4d-fix: review D S1, S2, S4, M3, M4, M5, M9.
+describe('Advanced Settings (S14.4d-fix)', () => {
+    const advancedDialog = () => screen.findByRole('dialog', { name: 'Advanced Settings' });
+    type User = ReturnType<typeof userEvent.setup>;
+    const typeInto = async (user: User, a: HTMLElement, name: string, text: string) => {
+        const field = within(a).getByRole('textbox', { name });
+        await user.clear(field);
+        await user.type(field, text);
+        return field;
+    };
+    const pick = async (user: User, a: HTMLElement, group: string, choice: 'On' | 'Off') =>
+        user.click(
+            within(within(a).getByRole('group', { name: group })).getByRole('button', {
+                name: choice,
+            }),
+        );
+    const closeAdvanced = async (user: User, a: HTMLElement) => {
+        await user.click(within(a).getByRole('button', { name: 'Done' }));
+        await waitFor(() =>
+            expect(screen.queryByRole('dialog', { name: 'Advanced Settings' })).toBeNull(),
+        );
+    };
+
+    it('S1: it opens with focus on Ban Restriction and no info panel open', async () => {
+        const user = userEvent.setup();
+        setup(MEMBER);
+        const d = await openDialog(user);
+        await user.click(within(d).getByRole('button', { name: 'Advanced Settings' }));
+        const a = await advancedDialog();
+        await waitFor(() =>
+            expect(within(a).getByRole('combobox', { name: 'Ban Restriction' })).toHaveFocus(),
+        );
+        // Past the popover's open delay (200 ms).
+        await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
+        for (const info of within(a).getAllByRole('button', { name: /^About / }))
+            expect(info).toHaveAttribute('aria-expanded', 'false');
+        expect(within(a).queryByRole('tooltip')).toBeNull();
+    });
+
+    it('M9: every advanced field reaches create_lobby (Classic)', async () => {
+        const user = userEvent.setup();
+        const { createLobby } = setup(MEMBER);
+        const d = await openDialog(user);
+        await user.click(within(d).getByRole('button', { name: 'Advanced Settings' }));
+        const a = await advancedDialog();
+        await user.selectOptions(
+            within(a).getByRole('combobox', { name: 'Ban Restriction' }),
+            'MaxTwoDps',
+        );
+        await user.selectOptions(
+            within(a).getByRole('combobox', { name: 'Lineup Format' }),
+            'Thirds',
+        );
+        await typeInto(user, a, 'Blue Team Name', '  Sharks ');
+        await typeInto(user, a, 'Red Team Name', 'Jets');
+        await pick(user, a, 'Mirror Picks', 'On');
+        await pick(user, a, 'Random Auto-Pick', 'On');
+        await typeInto(user, a, 'Death Penalty (points)', '1,5');
+        await typeInto(
+            user,
+            a,
+            'Roster Diff Advantage (points per point of roster-cost difference)',
+            '2',
+        );
+        await typeInto(user, a, 'Roster Threshold (roster cost)', '25.5');
+        await typeInto(user, a, 'Under-Threshold Advantage (points)', '0.25');
+        await typeInto(user, a, 'Above-Threshold Penalty (points)', '-3');
+        await pick(user, a, 'Require Ownership', 'On');
+        await typeInto(user, a, 'Standard Turn (seconds)', '45');
+        await typeInto(user, a, 'Reserve Bank (seconds)', '90');
+        await typeInto(user, a, 'Confirm Window (seconds)', '30');
+        await pick(user, a, 'Referee Can Undo', 'Off');
+        await pick(user, a, 'Referee Can Pause', 'Off');
+        await pick(user, a, 'Referee Can Set Captain', 'Off');
+        await pick(user, a, 'Referee Can Kick', 'On');
+        await pick(user, a, 'Players Can Pause', 'Off');
+        await pick(user, a, 'Referee-Only Concede', 'Off');
+        await pick(user, a, 'Anonymous Spectators', 'On');
+        await pick(user, a, 'Hide MMR', 'On');
+        await typeInto(user, a, 'Spectators (at most)', '4');
+        await user.selectOptions(
+            within(a).getByRole('combobox', { name: 'Disconnect Policy' }),
+            'NoAction',
+        );
+        await typeInto(user, a, 'Auto-Forfeit (seconds)', '120');
+        await closeAdvanced(user, a);
+        await user.click(within(d).getByRole('button', { name: 'Create' }));
+        await waitFor(() => expect(createLobby).toHaveBeenCalledOnce());
+        expect(createLobby.mock.calls[0]?.[0]).toMatchObject({
+            banRestriction: { tag: 'MaxTwoDps' },
+            lineupFormat: { tag: 'Thirds' },
+            teamBlueAlias: 'Sharks',
+            teamRedAlias: 'Jets',
+            allowMirrorPicks: true,
+            autoRandomPick: true,
+            deathPenalty: 150,
+            rosterDiffAdvantage: 200,
+            rosterThreshold: 2550,
+            underThresholdAdvantage: 25,
+            aboveThresholdPenalty: -300,
+            requireOwnership: true,
+            standardTurnSeconds: 45,
+            reserveBankSeconds: 90,
+            confirmWindowSeconds: 30,
+            refereeCanUndo: false,
+            refereeCanPause: false,
+            refereeCanSetCaptain: false,
+            refereeCanKick: true,
+            allowPlayerPause: false,
+            refereeExclusiveConcede: false,
+            isAnonymousSpectators: true,
+            hideMmr: true,
+            maxSpectators: 4,
+            disconnectPolicy: { tag: 'NoAction' },
+            disconnectForfeitSeconds: 120,
+        });
+    });
+
+    it('M9, M4, S4: the Auction amounts reach create_lobby as shown; mirror picks and auto-pick are sent false', async () => {
+        const user = userEvent.setup();
+        const { createLobby } = setup(MEMBER);
+        const d = await openDialog(user);
+        await user.click(within(d).getByRole('button', { name: 'Advanced Settings' }));
+        let a = await advancedDialog();
+        await pick(user, a, 'Mirror Picks', 'On');
+        await pick(user, a, 'Random Auto-Pick', 'On');
+        await closeAdvanced(user, a);
+        await user.selectOptions(
+            within(d).getByRole('combobox', { name: 'Draft Mode' }),
+            'Auction',
+        );
+        await user.click(within(d).getByRole('button', { name: 'Advanced Settings' }));
+        a = await advancedDialog();
+        for (const group of ['Mirror Picks', 'Random Auto-Pick'])
+            expect(
+                within(within(a).getByRole('group', { name: group })).getByRole('button', {
+                    pressed: true,
+                }),
+            ).toHaveTextContent('Off');
+        const budget = await typeInto(user, a, 'Character Budget', '$40');
+        const cones = await typeInto(user, a, 'Light Cone Budget', '20,5');
+        const raise = await typeInto(user, a, 'Minimum Bid Raise', '2.50');
+        await user.tab();
+        expect(budget).toHaveValue('40');
+        expect(cones).toHaveValue('20.5');
+        expect(raise).toHaveValue('2.5');
+        await closeAdvanced(user, a);
+        await user.click(within(d).getByRole('button', { name: 'Create' }));
+        await waitFor(() => expect(createLobby).toHaveBeenCalledOnce());
+        expect(createLobby.mock.calls[0]?.[0]).toMatchObject({
+            draftMode: { tag: 'Auction' },
+            characterBudget: 40,
+            lightconeBudget: 20.5,
+            minimumBidRaise: 2.5,
+            allowMirrorPicks: false,
+            autoRandomPick: false,
+        });
+    });
+
+    it('S2: a preset picked after a team name keeps it; typing a team name keeps the preset name', async () => {
+        const user = userEvent.setup();
+        const { createLobby } = setup(MEMBER);
+        const d = await openDialog(user);
+        const preset = within(d).getByRole('combobox', { name: 'Settings Preset' });
+        await user.click(within(d).getByRole('button', { name: 'Advanced Settings' }));
+        let a = await advancedDialog();
+        await typeInto(user, a, 'Blue Team Name', 'Sharks');
+        await closeAdvanced(user, a);
+        expect(preset).toHaveValue('builtin:classic');
+        await user.selectOptions(preset, 'builtin:auction');
+        expect(preset).toHaveValue('builtin:auction');
+        await user.click(within(d).getByRole('button', { name: 'Advanced Settings' }));
+        a = await advancedDialog();
+        expect(within(a).getByRole('textbox', { name: 'Blue Team Name' })).toHaveValue('Sharks');
+        expect(within(a).getByText(/Settings Preset: Default Auction\./)).toBeInTheDocument();
+        await closeAdvanced(user, a);
+        await user.click(within(d).getByRole('button', { name: 'Create' }));
+        await waitFor(() => expect(createLobby).toHaveBeenCalledOnce());
+        expect(createLobby.mock.calls[0]?.[0]).toMatchObject({
+            draftMode: { tag: 'Auction' },
+            teamBlueAlias: 'Sharks',
+        });
+    });
+
+    it('M5: a typed number text survives the create dialog closing with its draft kept', async () => {
+        const user = userEvent.setup();
+        setup(MEMBER);
+        const d = await openDialog(user);
+        await user.click(within(d).getByRole('button', { name: 'Advanced Settings' }));
+        const a = await advancedDialog();
+        await typeInto(user, a, 'Confirm Window (seconds)', 'abc');
+        await user.click(within(a).getByRole('button', { name: 'Close Advanced Settings' }));
+        await waitFor(() =>
+            expect(screen.queryByRole('dialog', { name: 'Advanced Settings' })).toBeNull(),
+        );
+        // A close that could not be refused: the draft is kept.
+        act(() => {
+            d.removeAttribute('open');
+            d.dispatchEvent(new Event('close'));
+        });
+        await waitFor(() =>
+            expect(screen.queryByRole('dialog', { name: 'Create Lobby' })).toBeNull(),
+        );
+        const reopened = await openDialog(user);
+        await user.click(
+            within(reopened).getByRole('button', {
+                name: 'Advanced Settings, 1 setting needs a fix',
+            }),
+        );
+        const again = await advancedDialog();
+        const field = within(again).getByRole('textbox', { name: 'Confirm Window (seconds)' });
+        expect(field).toHaveValue('abc');
+        expect(field).toHaveAccessibleDescription('The confirm window is 0 to 300 seconds.');
+    });
+});

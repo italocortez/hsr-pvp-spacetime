@@ -1,4 +1,4 @@
-import type { KeyboardEvent, ReactNode } from 'react';
+import type { KeyboardEvent, ReactNode, Ref } from 'react';
 import { InfoPopover } from '@/components/InfoPopover/InfoPopover';
 import hidden from '@/styles/visuallyHidden.module.css';
 import styles from './LobbySettingsForm.module.css';
@@ -72,6 +72,7 @@ export function SelectField({
     locked,
     extra,
     error,
+    selectRef,
 }: {
     id: string;
     label: string;
@@ -80,10 +81,15 @@ export function SelectField({
     onChange: (value: string) => void;
     /** [value, text], or [value, text, true] for an option shown but not offered (`disabled`). */
     options: readonly (readonly [string, string] | readonly [string, string, boolean])[];
-    /** Set: the select cannot change, and this line says why (shown under it, and its description). */
-    locked?: { reasonId: string; reason: string };
+    /**
+     * Set: the select cannot change, and the element `reasonId` says why (its description). With `reason` that line is
+     * shown under the select; without it the reason is an element elsewhere (a whole read-only form's one line).
+     */
+    locked?: { reasonId: string; reason?: string };
     extra: ErrorProps;
     error: ReactNode;
+    /** The select element (a dialog's first focus). */
+    selectRef?: Ref<HTMLSelectElement>;
 }) {
     const describedBy =
         [locked?.reasonId, extra['aria-describedby']].filter(Boolean).join(' ') || undefined;
@@ -92,6 +98,7 @@ export function SelectField({
         <div className={styles.field}>
             <LabelRow label={label} info={info} htmlFor={id} />
             <select
+                ref={selectRef}
                 id={id}
                 className={styles.select}
                 value={value}
@@ -112,7 +119,7 @@ export function SelectField({
                     </option>
                 ))}
             </select>
-            {locked && (
+            {locked?.reason && (
                 <p id={locked.reasonId} className={styles.hint}>
                     {locked.reason}
                 </p>

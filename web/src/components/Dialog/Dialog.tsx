@@ -8,6 +8,7 @@ import {
     useRef,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { focusQuietly } from '@/lib/quietFocus';
 import styles from './Dialog.module.css';
 
 /**
@@ -97,6 +98,10 @@ const FOCUSABLE =
  * mounted, so a page can keep a reference to it.
  *
  * Where `showModal` is missing (jsdom, older engines) the dialog opens by its `open` attribute.
+ *
+ * Every focus the dialog moves itself (the first focus, the return after a close) goes through `focusQuietly`
+ * (S14.4d-fix): a control that reacts to keyboard focus, as an InfoPopover trigger opens its panel, does not react to
+ * focus the dialog placed.
  */
 export function Dialog({
     open,
@@ -143,7 +148,9 @@ export function Dialog({
                 if (typeof d.showModal === 'function') d.showModal();
                 else d.setAttribute('open', '');
             }
-            firstFocus(d, latest.current.initialFocus, closeRef.current)?.focus();
+            // Quietly: focus placed by the dialog is not the person's keyboard (an info button there does not open).
+            const first = firstFocus(d, latest.current.initialFocus, closeRef.current);
+            if (first) focusQuietly(first);
         } else if (d.open) {
             closedHere.current += 1;
             closeDialog(d, '');
@@ -172,7 +179,7 @@ export function Dialog({
         }
         latest.current.onClose(value);
         const target = resolve(latest.current.returnFocus);
-        if (target?.isConnected) target.focus();
+        if (target?.isConnected) focusQuietly(target);
         else focusIfLost(undefined, latest.current.fallbackFocus);
     };
 
@@ -295,7 +302,7 @@ function focusIfLost(back: FocusTarget | undefined, fallback: FocusTarget | unde
         [resolve(back), resolve(fallback), document.querySelector<HTMLElement>('main')].find(
             (el) => el?.isConnected,
         ) ?? null;
-    target?.focus({ preventScroll: true });
+    if (target) focusQuietly(target, { preventScroll: true });
 }
 
 /** The chosen element, else the first control that is not the close button, else the close button. */

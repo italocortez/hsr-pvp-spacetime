@@ -6,11 +6,11 @@ import {
     type LobbySettings,
     validateLobbySettings,
 } from '@shared/lobby-rules/lobbySettings';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { AdvancedLobbySettings } from './AdvancedLobbySettings';
+import { AdvancedLobbySettings, type AdvancedLobbySettingsProps } from './AdvancedLobbySettings';
 import { AdvancedSettingsDialog } from './AdvancedSettingsDialog';
 
 /*
@@ -26,9 +26,11 @@ type HostProps = {
     focusRequest?: number;
     submitCount?: number;
     onValue?: (value: LobbySettings) => void;
+    /** T-S14.4d-fix: props for the lobby room's reuse (locks, read-only, no presets). */
+    extra?: Partial<AdvancedLobbySettingsProps>;
 };
 
-function Host({ initial = {}, focusRequest = 0, submitCount = 0, onValue }: HostProps) {
+function Host({ initial = {}, focusRequest = 0, submitCount = 0, onValue, extra }: HostProps) {
     const [value, setValue] = useState<LobbySettings>(() => ({
         ...initialLobbySettings(MEMBER),
         ...initial,
@@ -50,6 +52,7 @@ function Host({ initial = {}, focusRequest = 0, submitCount = 0, onValue }: Host
                 onDraftsChange={setDrafts}
                 presets={BUILT_IN_PRESETS}
                 presetKey="builtin:classic"
+                {...extra}
             />
         </form>
     );
@@ -234,10 +237,170 @@ describe('AdvancedLobbySettings', () => {
         rerender(<Host initial={initial} focusRequest={1} submitCount={2} />);
         await waitFor(() => expect(textbox('Reserve Bank (seconds)')).toHaveFocus());
     });
+
+    // T-S14.4d-fix (review D S4): a field never shows something other than what is sent.
+    it('leaving a number field shows the text of the value it sends; a text that does not read stays', async () => {
+        const user = userEvent.setup();
+        const onValue = vi.fn();
+        render(<Host initial={{ draftMode: 'Auction' }} onValue={onValue} />);
+        const budget = textbox('Character Budget');
+        for (const [typed, shown, sent] of [
+            ['$5', '5', 5],
+            [' 2,5 ', '2.5', 2.5],
+            ['1.50', '1.5', 1.5],
+        ] as const) {
+            await user.clear(budget);
+            await user.type(budget, typed);
+            expect(budget).toHaveValue(typed);
+            await user.tab();
+            expect(budget).toHaveValue(shown);
+            expect(onValue.mock.lastCall?.[0].characterBudget).toBe(sent);
+        }
+        // A third decimal is refused, not rounded (review D M6): the text stays beside its error.
+        await user.clear(budget);
+        await user.type(budget, '1.005');
+        await user.tab();
+        expect(budget).toHaveValue('1.005');
+        expect(budget).toHaveAccessibleDescription(
+            'The character budget is 0 to 100000, in steps of 0.01, with no thousands separator.',
+        );
+        const turn = textbox('Standard Turn (seconds)');
+        await user.clear(turn);
+        await user.type(turn, '45.');
+        await user.tab();
+        expect(turn).toHaveValue('45');
+        const forfeit = textbox('Auto-Forfeit (seconds)');
+        await user.clear(forfeit);
+        await user.type(forfeit, '-0');
+        await user.tab();
+        expect(forfeit).toHaveValue('0');
+        expect(Object.is(onValue.mock.lastCall?.[0].disconnectForfeitSeconds, 0)).toBe(true);
+        const death = textbox('Death Penalty (points)');
+        await user.clear(death);
+        await user.type(death, '-0,50');
+        await user.tab();
+        expect(death).toHaveValue('-0.5');
+    });
+
+    // T-S14.4d-fix (review D M4): the module reads both in the Classic draft only.
+    it('Auction: Mirror Picks and Random Auto-Pick turned on in Classic show Off', () => {
+        render(
+            <Host
+                initial={{ draftMode: 'Auction', allowMirrorPicks: true, autoRandomPick: true }}
+            />,
+        );
+        for (const name of ['Mirror Picks', 'Random Auto-Pick']) {
+            const group = screen.getByRole('group', { name });
+            expect(within(group).getByRole('button', { pressed: true })).toHaveTextContent('Off');
+            expect(within(group).getByRole('button', { name: 'On' })).toHaveAttribute(
+                'aria-disabled',
+                'true',
+            );
+        }
+    });
+
+    // T-S14.4d-fix (review D M12): an error line inside the locked Auction group is never dimmed.
+    it('the locked Auction group is dimmed only while none of its amounts holds an error', () => {
+        const group = () =>
+            screen.getByRole('heading', { name: /Auction Economy/ }).parentElement as HTMLElement;
+        const { unmount } = render(<Host />);
+        expect(group()).toHaveAttribute('data-locked');
+        unmount();
+        render(<Host initial={{ characterBudget: 100_001 }} submitCount={1} />);
+        expect(group()).not.toHaveAttribute('data-locked');
+        expect(textbox('Character Budget')).toHaveAccessibleDescription(
+            /The character budget is 0 to 100000/,
+        );
+    });
+
+    // T-S14.4d-fix: the pieces the lobby room will need.
+    it('without presets there is no preset note', () => {
+        render(<Host extra={{ presets: undefined, presetKey: undefined }} />);
+        expect(screen.queryByText(/Settings Preset:/)).toBeNull();
+        expect(screen.getByRole('combobox', { name: 'Ban Restriction' })).toBeInTheDocument();
+    });
+
+    it('a locked field is read-only and focusable with its reason; its info button still opens', async () => {
+        const user = userEvent.setup();
+        const onValue = vi.fn();
+        const reason = 'The tournament sets this.';
+        render(
+            <Host
+                onValue={onValue}
+                extra={{
+                    locks: {
+                        lineupFormat: reason,
+                        reserveBankSeconds: reason,
+                        teamBlueAlias: reason,
+                        hideMmr: reason,
+                    },
+                }}
+            />,
+        );
+        const lineup = screen.getByRole('combobox', { name: 'Lineup Format' });
+        expect(lineup).toHaveAttribute('aria-disabled', 'true');
+        expect(lineup).toHaveAccessibleDescription(reason);
+        fireEvent.change(lineup, { target: { value: 'Thirds' } });
+        expect(lineup).toHaveValue('Halves');
+        const reserve = textbox('Reserve Bank (seconds)');
+        expect(reserve).toHaveAttribute('readonly');
+        expect(reserve).toHaveAccessibleDescription(reason);
+        reserve.focus();
+        expect(reserve).toHaveFocus();
+        const blue = textbox('Blue Team Name');
+        expect(blue).toHaveAttribute('readonly');
+        expect(blue).toHaveAccessibleDescription(reason);
+        const hide = screen.getByRole('group', { name: 'Hide MMR' });
+        expect(within(hide).getByRole('button', { name: 'On' })).toHaveAccessibleDescription(
+            reason,
+        );
+        // Unlocked fields are untouched.
+        expect(textbox('Standard Turn (seconds)')).not.toHaveAttribute('readonly');
+        const info = screen.getByRole('button', { name: 'About Lineup Format' });
+        await user.click(info);
+        expect(info).toHaveAttribute('aria-expanded', 'true');
+        expect(onValue).not.toHaveBeenCalled();
+    });
+
+    it('read-only for a non-host: every field read-only, one reason at the top, the info buttons work', async () => {
+        const user = userEvent.setup();
+        const reason = 'Only the host can change these settings.';
+        render(<Host initial={{ draftMode: 'Auction' }} extra={{ readOnlyReason: reason }} />);
+        // One visible line; the toggles' unavailable options carry it as their (visually hidden) description.
+        const lines = document.querySelectorAll('[data-read-only-reason]');
+        expect(lines).toHaveLength(1);
+        expect(lines[0]).toHaveTextContent(reason);
+        expect(screen.getAllByText(reason).filter((el) => el.tagName === 'P')).toHaveLength(1);
+        for (const name of ['Ban Restriction', 'Lineup Format', 'Disconnect Policy']) {
+            const select = screen.getByRole('combobox', { name });
+            expect(select).toHaveAttribute('aria-disabled', 'true');
+            expect(select).toHaveAccessibleDescription(reason);
+        }
+        for (const name of ['Blue Team Name', 'Character Budget', 'Standard Turn (seconds)']) {
+            expect(textbox(name)).toHaveAttribute('readonly');
+            expect(textbox(name)).toHaveAccessibleDescription(reason);
+        }
+        const kick = screen.getByRole('group', { name: 'Referee Can Kick' });
+        expect(within(kick).getByRole('button', { name: 'On' })).toHaveAttribute(
+            'aria-disabled',
+            'true',
+        );
+        const info = screen.getByRole('button', { name: 'About Character Budget' });
+        expect(info).not.toBeDisabled();
+        await user.click(info);
+        expect(info).toHaveAttribute('aria-expanded', 'true');
+    });
 });
 
-function DialogHost({ initial = {} }: { initial?: Partial<LobbySettings> }) {
-    const [open, setOpen] = useState(true);
+function DialogHost({
+    initial = {},
+    startOpen = true,
+}: {
+    initial?: Partial<LobbySettings>;
+    /** T-S14.4d-fix: false opens it from the "Open" button, as a person does. */
+    startOpen?: boolean;
+}) {
+    const [open, setOpen] = useState(startOpen);
     const [value, setValue] = useState<LobbySettings>(() => ({
         ...initialLobbySettings(MEMBER),
         ...initial,
@@ -267,6 +430,37 @@ function DialogHost({ initial = {} }: { initial?: Partial<LobbySettings> }) {
 }
 
 describe('AdvancedSettingsDialog', () => {
+    // T-S14.4d-fix (review D S1, the review's probe P1 as a test): the Ban Restriction info panel opened by itself.
+    it.each([
+        ['a pointer click', 'pointer'],
+        ['the keyboard (Enter on the button)', 'keyboard'],
+    ] as const)('opened by %s: focus on the first field, no info panel opens', (_how, how) => {
+        vi.useFakeTimers();
+        try {
+            render(<DialogHost startOpen={false} />);
+            const openButton = screen.getByRole('button', { name: 'Open' });
+            if (how === 'pointer') {
+                fireEvent.pointerDown(openButton);
+                fireEvent.click(openButton);
+            } else {
+                openButton.focus();
+                fireEvent.keyDown(openButton, { key: 'Enter' });
+                fireEvent.click(openButton);
+            }
+            const dialog = screen.getByRole('dialog', { name: 'Advanced Settings' });
+            expect(within(dialog).getByRole('combobox', { name: 'Ban Restriction' })).toHaveFocus();
+            act(() => {
+                vi.advanceTimersByTime(1000);
+            });
+            for (const info of within(dialog).getAllByRole('button', { name: /^About / }))
+                expect(info).toHaveAttribute('aria-expanded', 'false');
+            expect(within(dialog).queryByRole('tooltip')).toBeNull();
+            expect(within(dialog).queryByText(/Caps how many characters/)).toBeNull();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it('Done closes it when nothing needs a fix', async () => {
         const user = userEvent.setup();
         render(<DialogHost />);

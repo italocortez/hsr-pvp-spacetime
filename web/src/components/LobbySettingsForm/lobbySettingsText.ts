@@ -237,7 +237,8 @@ export const ADVANCED_INFO = {
         label: 'About Light Cone Budget',
         heading: 'Light Cone Budget',
         body: [
-            'A separate Auction-mode spending pool dedicated to bidding on light cones (weapons), kept distinct from the character budget so teams manage their character and equipment economies independently.',
+            'In an Auction lobby, what each team has for its light cones. Light cones are not auctioned: after the draft each team equips them at their listed cost, paid from this budget.',
+            'It also covers what the character budget cannot: an eidolon extra larger than the character budget left spills into it, and when the draft ends any character budget left over is added to it.',
         ],
         foot: 'Ignored in Classic mode.',
     },
@@ -312,14 +313,14 @@ export const ADVANCED_INFO = {
         body: [
             "A per-team reserve time pool, in seconds, consumed only after the side's standard turn time runs out. It acts as a shared safety buffer across the whole match, so a team can occasionally take longer on a hard decision without immediately timing out.",
         ],
-        foot: '0 to 1,800 seconds; the default is 120.',
+        foot: '0 to 1800 seconds; the default is 120.',
     },
     confirmWindowSeconds: {
         label: 'About Confirm Window time',
         heading: 'Confirm Window (seconds)',
         body: [
-            'After the last pick or sale, the draft waits this long before equipping starts by itself. In that window the referee can undo a step or move on at once.',
-            '0 means no window: equipping starts with the last step.',
+            'After the last pick or sale, the draft waits this long before equipping starts by itself. In that window a referee can undo the last step (with Referee Can Undo on) or move on to equipping at once. A pause holds the window.',
+            '0 means no window: equipping starts with the last step, which then cannot be undone.',
         ],
         foot: '0 to 300 seconds; the default is 60.',
     },
@@ -367,7 +368,8 @@ export const ADVANCED_INFO = {
         label: 'About Referee-Only Concede',
         heading: 'Referee-Only Concede',
         body: [
-            'When enabled and a real third-party referee is present, only the referee may concede or decide the match outcome. A player who abandons their team will not auto-concede on their behalf, which protects competitive integrity in officiated matches.',
+            'When on, and a referee who sits in the Spectator seat is in the lobby, only that referee can concede, claim a forfeit or defer the match; the players cannot. With this off, or without such a referee, players concede for their own team.',
+            'No setting ends a match by itself: a match is never conceded automatically.',
         ],
         foot: 'On by default. The host can change it later in the lobby settings.',
     },
@@ -375,7 +377,8 @@ export const ADVANCED_INFO = {
         label: 'About Anonymous Spectators',
         heading: 'Anonymous Spectators',
         body: [
-            "Hides spectator identities the same way player anonymity does, so watchers appear anonymized rather than named. It's independent of player anonymity, so you can anonymize the crowd without anonymizing the competitors, or vice versa.",
+            'When on, the people in the Spectator seat are shown to everyone else in the lobby under an anonymous label instead of their name. A referee in the Spectator seat still sees every name.',
+            'It is independent of Anonymous Players, so you can hide the crowd without hiding the competitors, or the other way round.',
         ],
         foot: 'Inherited from and locked to the tournament setting in tournament lobbies.',
     },
@@ -389,7 +392,8 @@ export const ADVANCED_INFO = {
         label: 'About Spectators',
         heading: 'Spectators',
         body: [
-            'How many spectators the lobby holds, from 0 to 12. Players and coaches are not counted.',
+            'How many people can join only to watch, from 0 to 12: everyone who joins once the match has started, and in a tournament lobby everyone who joins without a team seat.',
+            'Before the start of a casual lobby, people who join wait in the Spectator seat for a place on a team and are not counted. A lobby holds at most 20 members in all.',
         ],
         foot: 'The default is 12.',
     },
@@ -405,8 +409,8 @@ export const ADVANCED_INFO = {
         heading: 'Disconnect Policy',
         body: ['Governs how the match reacts when a player drops during an active stage.'],
         list: [
-            "Standard: protects the match. It pauses the draft, hands the captain, referee, and host roles to a teammate, and drains the dropped player's grace pool. Nothing ends the match by itself: once every player of a side is offline and the grace has run out, the other team or the referee can claim a forfeit.",
-            'No Action: ignores the disconnect. The timer keeps running and play continues as if the player were still present. Casual lobbies only.',
+            "Standard: protects the match. A player still offline 15 seconds after dropping pauses the draft (during drafting). After those 15 seconds the captain role moves to a teammate, and the host and referee roles move to another member who is online. The player's disconnect pool drains while they are away. Nothing ends the match by itself: once every player of a side has been offline past the grace (or their pool is spent), the other team or the referee can claim a forfeit.",
+            'No Action: the draft is not paused, nothing is counted against the player, and no forfeit can be claimed; the timer keeps running. The captain, host and referee roles still move after 15 seconds offline. Casual lobbies only.',
         ],
         foot: 'Only matters during active stages (drafting, equipping, scoring). Deferred is for tournament lobbies only. In tournament lobbies it is inherited from and locked to the tournament.',
     },

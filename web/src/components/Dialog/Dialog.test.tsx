@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import { type ReactNode, useRef, useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { InfoPopover } from '@/components/InfoPopover/InfoPopover';
 import { Dialog, type DialogProps } from './Dialog';
 import { dialogInTurn } from './dialogQueue';
 
@@ -418,6 +419,44 @@ describe('Dialog: S14.4b-fix (review B)', () => {
             'data-dialog-level',
             '2',
         );
+    });
+
+    // T-S14.4d-fix (review D S1): the shared guard, for every dialog whose first control is an info button.
+    it('a first focus that lands on an InfoPopover trigger does not open its panel; the person’s own focus does', () => {
+        vi.useFakeTimers();
+        try {
+            const view = (open: boolean) => (
+                <Dialog
+                    open={open}
+                    onClose={() => {}}
+                    title="Settings"
+                    actions={<button type="submit">Done</button>}
+                >
+                    <InfoPopover label="About the first field" heading="First">
+                        Explains the first field.
+                    </InfoPopover>
+                    <input aria-label="First field" />
+                </Dialog>
+            );
+            const { rerender } = render(view(false));
+            rerender(view(true));
+            const info = screen.getByRole('button', { name: 'About the first field' });
+            expect(info).toHaveFocus();
+            act(() => {
+                vi.advanceTimersByTime(1000);
+            });
+            expect(info).toHaveAttribute('aria-expanded', 'false');
+            expect(screen.queryByText('Explains the first field.')).toBeNull();
+            // The person's own focus (Tab away and back) still opens it.
+            act(() => screen.getByRole('textbox', { name: 'First field' }).focus());
+            act(() => info.focus());
+            act(() => {
+                vi.advanceTimersByTime(1000);
+            });
+            expect(info).toHaveAttribute('aria-expanded', 'true');
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('the body keeps room for focus rings and gives it back (no shift)', () => {

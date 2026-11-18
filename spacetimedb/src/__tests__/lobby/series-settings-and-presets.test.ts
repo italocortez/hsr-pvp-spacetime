@@ -546,6 +546,27 @@ describe('S14.4s: Auction lobbies refuse a character budget or a minimum raise o
         // The row is never rewritten by the refusals.
         expect(test.db.LobbyPreset.id.find(old.id)).toMatchObject({ draftMode: { tag: 'Auction' }, characterBudget: 30, minimumBidRaise: 0 });
     });
+
+    // T-S14.4d-fix (review D S6): create_tournament without a preset checks the system preset as the by-id branch does.
+    it('T-S14.4d-fix: create_tournament without a preset is refused while the system preset is an Admin-edited Auction row with budget or raise 0', () => {
+        const test = newHarness();
+        const presetId = systemPresets(test)[0].id;
+        // An Admin edit stored before S14.4t (written straight to the row, as the save was allowed then).
+        const seeded = test.db.LobbyPreset.id.find(presetId)!;
+        test.db.LobbyPreset.id.update({ ...seeded, draftMode: { tag: 'Auction' } as any, characterBudget: 0, lastModifiedById: 999 });
+        expect(rejection(test, 'internal', (ctx) => M.create_tournament(ctx, { ...TOURNAMENT_ARGS } as any))).toBe(BUDGET);
+        expect(tournaments(test)).toHaveLength(0);
+
+        test.db.LobbyPreset.id.update({ ...test.db.LobbyPreset.id.find(presetId)!, characterBudget: 30, minimumBidRaise: 0 });
+        expect(rejection(test, 'internal', (ctx) => M.create_tournament(ctx, { ...TOURNAMENT_ARGS } as any))).toBe(RAISE);
+        expect(tournaments(test)).toHaveLength(0);
+        // The refusals leave the Admin's row as it is.
+        expect(test.db.LobbyPreset.id.find(presetId)).toMatchObject({ draftMode: { tag: 'Auction' }, characterBudget: 30, minimumBidRaise: 0, lastModifiedById: 999 });
+
+        test.db.LobbyPreset.id.update({ ...test.db.LobbyPreset.id.find(presetId)!, minimumBidRaise: 5 });
+        createTournament(test);
+        expect(tournaments(test)[0].lobbyPresetId).toBe(presetId);
+    });
 });
 
 // T-S14.4r (A221(4)): the two appended ban restrictions are accepted wherever the older four are.

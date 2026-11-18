@@ -282,8 +282,15 @@ export function advancedErrorKeys(errors: LobbySettingsErrors): LobbyAdvancedFie
     return LOBBY_ADVANCED_FIELDS.filter((k) => errors[k] !== undefined);
 }
 
-/** A preset's values: everything but the lobby's own name and password. */
-export type LobbyPresetValues = Omit<LobbySettings, 'name' | 'password'>;
+/**
+ * The settings a preset never holds: the lobby's own name and password, and (S14.4d-fix, review D S2) its two team
+ * names, which `LobbyPreset` has no column for. Picking a preset keeps them; editing them never makes the form "Custom".
+ */
+export const LOBBY_OWN_FIELDS = ['name', 'password', 'teamBlueAlias', 'teamRedAlias'] as const;
+type LobbyOwnField = (typeof LOBBY_OWN_FIELDS)[number];
+
+/** A preset's values: everything but the lobby's own name, password and team names. */
+export type LobbyPresetValues = Omit<LobbySettings, LobbyOwnField>;
 
 /**
  * The defaults (A221 R8): Apocalyptic Shadow and Auction budgets 30 and 15 as the other pages (A190 items 5 and 9);
@@ -337,7 +344,13 @@ export const DEFAULT_LOBBY_SETTINGS: Readonly<LobbySettings> = Object.freeze({
 });
 
 function presetValuesOf(settings: Readonly<LobbySettings>): LobbyPresetValues {
-    const { name: _name, password: _password, ...values } = settings;
+    const {
+        name: _name,
+        password: _password,
+        teamBlueAlias: _blue,
+        teamRedAlias: _red,
+        ...values
+    } = settings;
     return values;
 }
 
@@ -473,8 +486,6 @@ export function presetFromModule(row: ModuleLobbyPreset): LobbyPresetChoice {
             allowPlayerPause: row.allowPlayerPause,
             refereeExclusiveConcede: row.refereeExclusiveConcede,
             maxSpectators: row.maxSpectators,
-            teamBlueAlias: '',
-            teamRedAlias: '',
         },
     };
 }
@@ -549,21 +560,27 @@ export function settleLobbySettings(settings: LobbySettings, rules: LobbyFormRul
     return next;
 }
 
-/** The form after picking a preset: its values, the name and password kept, settled for the person. */
+/** The form after picking a preset: its values, the name, password and team names kept, settled for the person. */
 export function applyLobbyPreset(
     current: LobbySettings,
     preset: LobbyPresetChoice,
     rules: LobbyFormRules,
 ): LobbySettings {
     return settleLobbySettings(
-        { ...preset.values, name: current.name, password: current.password },
+        {
+            ...preset.values,
+            name: current.name,
+            password: current.password,
+            teamBlueAlias: current.teamBlueAlias,
+            teamRedAlias: current.teamRedAlias,
+        },
         rules,
     );
 }
 
 /**
- * True while the form still holds what `preset` sets (every value but the name and password, as the person would get
- * it): the preset select names it; once a field it set is edited, the select says "Custom".
+ * True while the form still holds what `preset` sets (every value but the name, password and team names, as the
+ * person would get it): the preset select names it; once a field it set is edited, the select says "Custom".
  */
 export function lobbyPresetMatches(
     current: LobbySettings,
@@ -597,12 +614,15 @@ export type LobbyNumberKey = {
  */
 export type LobbyNumberDrafts = Partial<Record<LobbyNumberKey, string>>;
 
-/** A number field's text as a number: NaN for an empty or unreadable text (validation refuses NaN). */
+/**
+ * A number field's text as a number: NaN for an empty or unreadable text (validation refuses NaN). "-0" reads as 0,
+ * never -0 (review D M2: -0 would differ from 0 under `Object.is`).
+ */
 export function numberFromDraft(text: string): number {
     const trimmed = text.trim();
     if (trimmed === '' || !/^-?\d*(\.\d*)?$/.test(trimmed) || /^-?\.?$/.test(trimmed))
         return Number.NaN;
-    return Number(trimmed);
+    return Number(trimmed) + 0;
 }
 
 /** What a number field shows: its draft while one exists, else the value. */
@@ -618,8 +638,14 @@ export function numberDraftText(
  * How Advanced Settings reads and writes each number field (S14.4d):
  * - `whole`: a whole number as typed (seconds, spectators); a decimal reads but validation refuses it.
  * - `amount`: an Auction amount as the team builder's AmountField reads it (`readAmount`: a dot or a comma as the
- *   decimal mark, more than two decimals rounded half up on the digits); the value is the amount itself (the module
- *   takes an f32).
+ *   decimal mark, a currency sign at either end dropped), except that a third decimal is refused, as in the points
+ *   fields (S14.4d-fix, review D M6: one rule in one dialog; the module's f32 cannot hold 0.01 steps exactly either, so
+ *   rounding would only change what was typed, not make it exact); the value is the amount itself (the module takes an
+ *   f32).
+ *
+ * One rule for separators in every number field (review D M1): no thousands separator. A comma is a decimal mark in the
+ * amount and points fields ("1,5"); a comma followed by exactly three digits ("1,000") is refused as unclear, and the
+ * range sentences write their bounds without a separator ("0 to 100000") and say so.
  * - `signedPoints` / `points`: points entered whole or with up to two decimals (a dot or a comma), stored in
  *   hundredths (A21) by exact digit arithmetic, never by multiplying a float; `points` refuses a sign (the roster
  *   threshold is a u32).
@@ -682,6 +708,8 @@ export function readLobbyNumber(key: LobbyNumberFieldKey, text: string): number 
         case 'whole':
             return numberFromDraft(text);
         case 'amount': {
+            // A third decimal is refused (see LobbyNumberFieldKind), never rounded.
+            if (/[.,]\d{3,}/.test(text)) return Number.NaN;
             const read = readAmount(text, AMOUNT_READ_MAX);
             return read.kind === 'amount' ? read.value / 100 : Number.NaN;
         }
@@ -720,6 +748,17 @@ export function lobbyNumberFieldText(
     return lobbyNumberText(key, value);
 }
 
+/**
+ * A number field's text once the person leaves it (S14.4d-fix, review D S4): a text that reads becomes the text of the
+ * value it sends (" 60 " is "60", "1." is "1", "$5" is "5", "2,5" is "2.5", "-0" is "0"), so the field never shows
+ * something other than what Create sends; a text that does not read stays as typed, beside its error, and so does one
+ * far beyond every bound (at least 1e12, which the readers cap or round), which can never be sent.
+ */
+export function lobbyNumberLeaveText(key: LobbyNumberFieldKey, text: string): string {
+    const value = readLobbyNumber(key, text);
+    return Number.isNaN(value) || Math.abs(value) >= 1e12 ? text : lobbyNumberText(key, value);
+}
+
 // ─── Validation ──────────────────────────────────────────────────────────────────────────────────────────────────
 
 export type LobbySettingsErrors = Partial<Record<LobbySettingKey, string>>;
@@ -739,7 +778,7 @@ export function lobbyPasswordError(password: string): string | undefined {
 }
 
 /**
- * The three amounts as the module checks them, one sentence per field: each 0 to 100,000 (ensureLobbyConfigInRange),
+ * The three amounts as the module checks them, one sentence per field: each 0 to 100000 (ensureLobbyConfigInRange),
  * and in Auction a character budget and a minimum bid raise above 0 (ensureAuctionAmounts; user ruling, S14.4c-fix).
  * The module applies the same two checks when a lobby is created or updated and, since S14.4t, when a preset is saved
  * (create_lobby_preset, update_lobby_preset), so a preset save form can call this on its values.
@@ -754,7 +793,8 @@ export function lobbyAmountErrors(
         ['minimumBidRaise', 'The minimum bid raise'],
     ] as const) {
         if (!amountOk(s[key]))
-            e[key] = `${label} is 0 to ${LOBBY_BUDGET_MAX.toLocaleString('en-US')}.`;
+            e[key] =
+                `${label} is 0 to ${LOBBY_BUDGET_MAX}, in steps of 0.01, with no thousands separator.`;
     }
     // An Auction lobby needs something to bid with and a raise that moves.
     if (s.draftMode === 'Auction') {
@@ -808,10 +848,11 @@ export function validateLobbySettings(
         ['deathPenalty', 'The death penalty'],
     ] as const) {
         if (!inRange(s[key], -LOBBY_HANDICAP_MAX_HUNDREDTHS, LOBBY_HANDICAP_MAX_HUNDREDTHS))
-            e[key] = `${label} is -10,000 to 10,000, in steps of 0.01.`;
+            e[key] = `${label} is -10000 to 10000, in steps of 0.01, with no thousands separator.`;
     }
     if (!inRange(s.rosterThreshold, 0, LOBBY_HANDICAP_MAX_HUNDREDTHS))
-        e.rosterThreshold = 'The roster threshold is 0 to 10,000, in steps of 0.01.';
+        e.rosterThreshold =
+            'The roster threshold is 0 to 10000, in steps of 0.01, with no thousands separator.';
 
     if (s.disconnectPolicy === 'Deferred')
         e.disconnectPolicy = 'Deferred is only for tournament lobbies.';
@@ -824,9 +865,9 @@ export function validateLobbySettings(
         e.disconnectForfeitSeconds = `Auto-forfeit is 0 (the default, ${LOBBY_FORFEIT_SECONDS_DEFAULT} s) or ${LOBBY_FORFEIT_SECONDS_MIN} to ${LOBBY_FORFEIT_SECONDS_MAX} seconds.`;
     if (!inRange(s.maxSpectators, 0, LOBBY_MAX_SPECTATORS_MAX))
         e.maxSpectators = `Spectators are 0 to ${LOBBY_MAX_SPECTATORS_MAX}.`;
-    if (s.teamBlueAlias.length > LOBBY_TEAM_ALIAS_MAX_LENGTH)
+    if (s.teamBlueAlias.trim().length > LOBBY_TEAM_ALIAS_MAX_LENGTH)
         e.teamBlueAlias = `Use at most ${LOBBY_TEAM_ALIAS_MAX_LENGTH} characters.`;
-    if (s.teamRedAlias.length > LOBBY_TEAM_ALIAS_MAX_LENGTH)
+    if (s.teamRedAlias.trim().length > LOBBY_TEAM_ALIAS_MAX_LENGTH)
         e.teamRedAlias = `Use at most ${LOBBY_TEAM_ALIAS_MAX_LENGTH} characters.`;
     return e;
 }
@@ -890,8 +931,10 @@ export interface CreateLobbyArgs {
 
 /**
  * The form's value as `create_lobby`'s arguments. The password decides privacy (A99: an empty one is a public lobby,
- * so "private without a password" cannot be sent); the name is trimmed; Ranked sends no mirror picks (the module
- * forces it, D-42). `abandonCurrentMatch` only after the person confirmed the A68(4) prompt.
+ * so "private without a password" cannot be sent); the name and the team names are trimmed (an all-space team name is
+ * sent empty, so the sides keep Blue and Red; review D M3); Ranked sends no mirror picks (the module forces it, D-42);
+ * an Auction lobby sends neither mirror picks nor random auto-pick, which the module reads in the Classic draft only
+ * (review D M4; the form shows both Off there). `abandonCurrentMatch` only after the person confirmed the A68(4) prompt.
  */
 export function toCreateLobbyArgs(
     s: LobbySettings,
@@ -922,15 +965,16 @@ export function toCreateLobbyArgs(
         costSetId: s.costSetId,
         disconnectPolicy: { tag: s.disconnectPolicy },
         disconnectForfeitSeconds: s.disconnectForfeitSeconds,
-        allowMirrorPicks: s.matchType === 'Ranked' ? false : s.allowMirrorPicks,
-        autoRandomPick: s.autoRandomPick,
+        allowMirrorPicks:
+            s.matchType === 'Ranked' || s.draftMode === 'Auction' ? false : s.allowMirrorPicks,
+        autoRandomPick: s.draftMode === 'Auction' ? false : s.autoRandomPick,
         refereeCanUndo: s.refereeCanUndo,
         refereeCanPause: s.refereeCanPause,
         refereeCanSetCaptain: s.refereeCanSetCaptain,
         refereeCanKick: s.refereeCanKick,
         allowPlayerPause: s.allowPlayerPause,
-        teamBlueAlias: s.teamBlueAlias,
-        teamRedAlias: s.teamRedAlias,
+        teamBlueAlias: s.teamBlueAlias.trim(),
+        teamRedAlias: s.teamRedAlias.trim(),
         name: s.name.trim(),
         banRestriction: { tag: s.banRestriction },
         lineupFormat: { tag: s.lineupFormat },

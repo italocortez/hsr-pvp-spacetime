@@ -21,6 +21,7 @@ import { ensureBestOf, ensureWinnerAdvantage } from '@module/helpers/tournament/
 import { ensureCostSetCovers, ensureCostSetUsable, ensureSelectableCostSet } from '@module/helpers/draft/costSetGuards';
 import { ensureTournamentPreset, seedSystemLobbyPreset } from '@module/helpers/lobby/systemPreset';
 import { ensureForfeitSecondsInRange, ensureNoActionAllowed } from '@module/helpers/lobby/disconnectHelpers';
+import { ensureAuctionAmounts } from '@module/helpers/lobby/lobbyConfigBounds';
 import { assignFinalPlacements, ensureCanComplete, restartTournamentFinalization, startTournamentFinalization } from '@module/helpers/tournament/tournamentFinalization';
 
 // Valid enum tag lists for runtime validation
@@ -219,6 +220,9 @@ export const create_tournament = spacetimedb.reducer(
         const lobbyPreset = args.lobbyPresetId === undefined
             ? seedSystemLobbyPreset(ctx)
             : ensureTournamentPreset(ctx, args.lobbyPresetId, user.id);
+        // S14.4d-fix (review D S6): the default branch checks the amounts too (an Admin-edited system preset stored
+        // before S14.4t may be an Auction one with budget or raise 0); the by-id branch checks them in ensureTournamentPreset.
+        ensureAuctionAmounts(lobbyPreset.draftMode.tag, lobbyPreset);
 
         // Backlog #2 (R2, D-D6): selectable and covering defaultGameMode × the preset's draft mode.
         ensureCostSetUsable(ctx, args.costSetId, args.defaultGameMode, lobbyPreset.draftMode.tag);

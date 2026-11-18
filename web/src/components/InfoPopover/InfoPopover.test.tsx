@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Dialog } from '@/components/Dialog/Dialog';
+import { focusQuietly } from '@/lib/quietFocus';
 import { CLOSE_DELAY_MS, EXIT_MS, FLASH_MS, InfoPopover, OPEN_DELAY_MS } from './InfoPopover';
 
 /*
@@ -211,6 +212,26 @@ describe('InfoPopover: keyboard', () => {
         expect(isOpen(trigger())).toBe(true);
         fireEvent.click(trigger());
         expect(isOpen(trigger())).toBe(false);
+    });
+
+    // T-S14.4d-fix (review D S1): focus moved by code is nobody's keyboard focus.
+    it('focus moved by code (focusQuietly) opens nothing; the next keyboard focus opens it as usual', () => {
+        render(<Basic />);
+        act(() => focusQuietly(trigger()));
+        expect(trigger()).toHaveFocus();
+        wait(OPEN_DELAY_MS * 3);
+        expect(isOpen(trigger())).toBe(false);
+        act(() => screen.getByRole('button', { name: 'After' }).focus());
+        act(() => trigger().focus());
+        wait(OPEN_DELAY_MS);
+        expect(isOpen(trigger())).toBe(true);
+    });
+
+    it('a quiet focus still opens on a click (Enter or a tap) afterwards', () => {
+        render(<Basic />);
+        act(() => focusQuietly(trigger()));
+        fireEvent.click(trigger());
+        expect(isOpen(trigger())).toBe(true);
     });
 });
 

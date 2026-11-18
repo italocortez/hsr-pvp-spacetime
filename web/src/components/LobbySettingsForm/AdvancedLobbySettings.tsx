@@ -17,12 +17,13 @@ import {
     type LobbySettings,
     type LobbySettingsErrors,
     lobbyNumberFieldText,
+    lobbyNumberLeaveText,
     lobbyPresetMatches,
     readLobbyNumber,
     settleLobbySettings,
 } from '@shared/lobby-rules/lobbySettings';
 import { unitOf } from '@shared/scoring/units';
-import { type ReactNode, useId } from 'react';
+import { type ReactNode, type Ref, useId } from 'react';
 import { SegmentedControl } from '@/components/SegmentedControl/SegmentedControl';
 import { NO_AUTOFILL } from '@/lib/noAutofill';
 import hidden from '@/styles/visuallyHidden.module.css';
@@ -55,6 +56,10 @@ import { useFieldErrors } from './useFieldErrors';
  *   lobbies only (A92(3)); Deferred is not offered (A91(2)).
  * - Errors: `useFieldErrors` over `LOBBY_ADVANCED_FIELDS`. The host says when this section moves focus
  *   (`focusRequest`): Create with an invalid field here and none in the main fields, or the dialog's Done.
+ * - S14.4d-fix: leaving a number field replaces its text with the text of the value that is sent ("$5" is "5", "1.50"
+ *   is "1.5"); a text that does not read stays beside its error. For the lobby room later: `presets` are optional,
+ *   `locks` makes single fields read-only with their reason, `readOnlyReason` the whole section (info buttons work in
+ *   both; `disabled` does not keep them).
  */
 
 export type AdvancedLobbySettingsProps = {
@@ -70,11 +75,30 @@ export type AdvancedLobbySettingsProps = {
     /** The number fields' texts as typed, kept by the host so they outlive this section. */
     drafts: LobbyNumberDrafts;
     onDraftsChange: (next: LobbyNumberDrafts) => void;
-    /** The preset list and the one picked last: the note at the top names it, or "Custom". */
-    presets: readonly LobbyPresetChoice[];
-    presetKey: string;
+    /**
+     * The preset list and the one picked last: the note at the top names it, or "Custom". Optional (a host without a
+     * preset select, as the lobby room's settings will be): without them the note is not shown.
+     */
+    presets?: readonly LobbyPresetChoice[];
+    presetKey?: string;
+    /**
+     * Per field, why it cannot change here (S14.4d-fix, for the lobby room: a setting a tournament fixes). A locked field
+     * is read-only and stays focusable, its reason shown under it as its description; its info button still works.
+     */
+    locks?: Partial<Record<LobbyAdvancedField, string>>;
+    /**
+     * The whole section is read-only (S14.4d-fix, for the lobby room: a member who is not the host): this reason shows
+     * once at the top and describes every field; the fields stay focusable and the info buttons work (unlike `disabled`).
+     */
+    readOnlyReason?: string;
+    /** The first field (Ban Restriction), for a host dialog's first focus. */
+    firstFieldRef?: Ref<HTMLSelectElement>;
+    /** A submit is in flight: the whole section is out of reach (`fieldset disabled`). */
     disabled?: boolean;
 };
+
+/** The three Auction amounts, one group. */
+const AUCTION_FIELDS = ['characterBudget', 'lightconeBudget', 'minimumBidRaise'] as const;
 
 const FIELD_LABEL: Record<LobbyAdvancedField, string> = {
     banRestriction: TEXT.banRestriction,
@@ -123,6 +147,9 @@ export function AdvancedLobbySettings({
     onDraftsChange,
     presets,
     presetKey,
+    locks,
+    readOnlyReason,
+    firstFieldRef,
     disabled = false,
 }: AdvancedLobbySettingsProps) {
     const id = useId();
@@ -149,53 +176,81 @@ export function AdvancedLobbySettings({
     const isAuction = value.draftMode === 'Auction';
     const isRanked = value.matchType === 'Ranked';
     const unit = TEXT.unitWord[unitOf(value.gameMode)];
-    const picked = presets.find((p) => p.key === presetKey);
+    const picked = presets?.find((p) => p.key === presetKey);
     const presetLabel =
         picked && lobbyPresetMatches(value, picked, rules) ? picked.label : FORM_TEXT.presetCustom;
+
+    const readOnlyId = fieldId('read-only');
+    /** Why a field cannot change here: the whole section's reason (shown once at the top), else the field's own. */
+    const lockOf = (key: LobbyAdvancedField): FieldLock | undefined => {
+        if (readOnlyReason !== undefined) return { reasonId: readOnlyId };
+        const reason = locks?.[key];
+        return reason === undefined ? undefined : { reasonId: fieldId(`${key}-locked`), reason };
+    };
 
     const number = (
         key: LobbyNumberFieldKey & LobbyAdvancedField,
         unitShown: string | null,
         unitSpoken: string,
-        locked?: { reasonId: string },
-    ) => (
-        <NumberField
-            id={fieldId(key)}
-            label={FIELD_LABEL[key]}
-            info={INFO[key]}
-            unit={unitShown}
-            unitSpoken={unitSpoken}
-            text={lobbyNumberFieldText(key, drafts[key], value[key])}
-            decimal={LOBBY_NUMBER_FIELD_KIND[key] !== 'whole'}
-            // A locked field that holds an error stays editable, so a preset's bad value can be fixed.
-            locked={locked && errors[key] === undefined ? locked : undefined}
-            onText={(text) => {
-                onDraftsChange({ ...drafts, [key]: text });
-                set(key, readLobbyNumber(key, text));
-            }}
-            onLeave={() => touch(key)}
-            extra={errorProps(key)}
-            error={errorLine(key)}
-        />
-    );
+        groupLock?: { reasonId: string },
+    ) => {
+        const text = lobbyNumberFieldText(key, drafts[key], value[key]);
+        const locked =
+            lockOf(key) ??
+            // A field the group locks that holds an error stays editable, so a preset's bad value can be fixed.
+            (groupLock && errors[key] === undefined ? groupLock : undefined);
+        return (
+            <NumberField
+                id={fieldId(key)}
+                label={FIELD_LABEL[key]}
+                info={INFO[key]}
+                unit={unitShown}
+                unitSpoken={unitSpoken}
+                text={text}
+                decimal={LOBBY_NUMBER_FIELD_KIND[key] !== 'whole'}
+                locked={locked}
+                onText={(next) => {
+                    onDraftsChange({ ...drafts, [key]: next });
+                    set(key, readLobbyNumber(key, next));
+                }}
+                onLeave={() => {
+                    touch(key);
+                    // S14.4d-fix (review D S4): leaving shows the text of the value that is sent ("1.50" is "1.5").
+                    if (locked) return;
+                    const shown = lobbyNumberLeaveText(key, text);
+                    if (shown !== text) onDraftsChange({ ...drafts, [key]: shown });
+                }}
+                extra={errorProps(key)}
+                error={errorLine(key)}
+            />
+        );
+    };
 
     const toggle = (
         key: BooleanKey & LobbyAdvancedField,
         options: { shown?: boolean; fixed?: string } = {},
-    ) => (
-        <ToggleField
-            label={FIELD_LABEL[key]}
-            info={INFO[key as keyof typeof INFO] as InfoText}
-            value={options.shown ?? value[key]}
-            fixed={options.fixed}
-            onChange={(on) => set(key, on)}
-        />
-    );
+    ) => {
+        const lock = lockOf(key);
+        return (
+            <ToggleField
+                label={FIELD_LABEL[key]}
+                info={INFO[key as keyof typeof INFO] as InfoText}
+                value={options.shown ?? value[key]}
+                // A lock wins; the whole section's reason is shown once at the top, not under each field.
+                fixed={lock ? (lock.reason ?? readOnlyReason) : options.fixed}
+                showReason={lock ? lock.reason !== undefined : true}
+                onChange={(on) => set(key, on)}
+            />
+        );
+    };
 
-    // Classic-only settings: Ranked fixes mirror picks Off; an Auction lobby does not use either.
+    // Classic-only settings: Ranked fixes mirror picks Off; an Auction lobby does not use either, and sends both Off
+    // (review D M4), so both show Off there.
     const mirrorReason = isRanked ? TEXT.rankedMirror : isAuction ? TEXT.classicLocked : undefined;
     const autoPickReason = isAuction ? TEXT.classicLocked : undefined;
     const auctionReasonId = fieldId('auction-locked');
+    // Review D M12: the group is dimmed only while none of its amounts holds an error (that one stays editable).
+    const auctionDimmed = !isAuction && AUCTION_FIELDS.every((k) => errors[k] === undefined);
 
     return (
         <fieldset
@@ -203,12 +258,19 @@ export function AdvancedLobbySettings({
             className={styles.advanced}
             disabled={disabled}
             data-advanced-settings=""
+            data-read-only={readOnlyReason !== undefined ? '' : undefined}
         >
-            <p className={styles.note}>{TEXT.presetNote(presetLabel)}</p>
+            {presets && <p className={styles.note}>{TEXT.presetNote(presetLabel)}</p>}
+            {readOnlyReason !== undefined && (
+                <p id={readOnlyId} className={form.hint} data-read-only-reason="">
+                    {readOnlyReason}
+                </p>
+            )}
 
             <Group title={TEXT.match}>
                 <div className={styles.grid}>
                     <SelectField
+                        selectRef={firstFieldRef}
                         id={fieldId('banRestriction')}
                         label={TEXT.banRestriction}
                         info={INFO.banRestriction}
@@ -217,6 +279,7 @@ export function AdvancedLobbySettings({
                             set('banRestriction', v as LobbySettings['banRestriction'])
                         }
                         options={BAN_RESTRICTION_OPTIONS.map((r) => [r, BAN_RESTRICTION_LABEL[r]])}
+                        locked={lockOf('banRestriction')}
                         extra={errorProps('banRestriction')}
                         error={errorLine('banRestriction')}
                     />
@@ -227,49 +290,69 @@ export function AdvancedLobbySettings({
                         value={value.lineupFormat}
                         onChange={(v) => set('lineupFormat', v as LobbySettings['lineupFormat'])}
                         options={LOBBY_LINEUP_FORMATS.map((f) => [f, LINEUP_FORMAT_LABEL[f]])}
+                        locked={lockOf('lineupFormat')}
                         extra={errorProps('lineupFormat')}
                         error={errorLine('lineupFormat')}
                     />
                 </div>
                 <div className={styles.grid}>
-                    {(['teamBlueAlias', 'teamRedAlias'] as const).map((key) => (
-                        <div key={key} className={form.field}>
-                            <LabelRow
-                                label={FIELD_LABEL[key]}
-                                info={INFO.teamAliases}
-                                htmlFor={fieldId(key)}
-                            />
-                            <input
-                                // Not "-name": nothing for an autofill heuristic to take for a person's name.
-                                id={fieldId(key)}
-                                className={form.input}
-                                type="text"
-                                value={value[key]}
-                                maxLength={LOBBY_TEAM_ALIAS_MAX_LENGTH}
-                                placeholder={key === 'teamBlueAlias' ? 'Blue' : 'Red'}
-                                {...NO_AUTOFILL}
-                                onChange={(e) => set(key, e.target.value)}
-                                onBlur={() => touch(key)}
-                                {...errorProps(key)}
-                            />
-                            {errorLine(key)}
-                        </div>
-                    ))}
+                    {(['teamBlueAlias', 'teamRedAlias'] as const).map((key) => {
+                        const lock = lockOf(key);
+                        const ownError = errorProps(key);
+                        const describedBy =
+                            [lock?.reasonId, ownError['aria-describedby']]
+                                .filter(Boolean)
+                                .join(' ') || undefined;
+                        return (
+                            <div key={key} className={form.field}>
+                                <LabelRow
+                                    label={FIELD_LABEL[key]}
+                                    info={INFO.teamAliases}
+                                    htmlFor={fieldId(key)}
+                                />
+                                <input
+                                    // Not "-name": nothing for an autofill heuristic to take for a person's name.
+                                    id={fieldId(key)}
+                                    className={form.input}
+                                    type="text"
+                                    value={value[key]}
+                                    maxLength={LOBBY_TEAM_ALIAS_MAX_LENGTH}
+                                    placeholder={key === 'teamBlueAlias' ? 'Blue' : 'Red'}
+                                    {...NO_AUTOFILL}
+                                    readOnly={lock !== undefined}
+                                    aria-disabled={lock ? true : undefined}
+                                    onChange={(e) => set(key, e.target.value)}
+                                    onBlur={() => touch(key)}
+                                    {...ownError}
+                                    aria-describedby={describedBy}
+                                />
+                                {lock?.reason && (
+                                    <p id={lock.reasonId} className={form.hint}>
+                                        {lock.reason}
+                                    </p>
+                                )}
+                                {errorLine(key)}
+                            </div>
+                        );
+                    })}
                 </div>
                 <p className={styles.subNote}>{TEXT.classicOnly}</p>
                 <div className={styles.grid}>
                     {toggle('allowMirrorPicks', {
-                        shown: isRanked ? false : value.allowMirrorPicks,
+                        shown: isRanked || isAuction ? false : value.allowMirrorPicks,
                         fixed: mirrorReason,
                     })}
-                    {toggle('autoRandomPick', { fixed: autoPickReason })}
+                    {toggle('autoRandomPick', {
+                        shown: isAuction ? false : value.autoRandomPick,
+                        fixed: autoPickReason,
+                    })}
                 </div>
             </Group>
 
             <Group
                 title={TEXT.auction}
                 note={TEXT.auctionOnly}
-                locked={!isAuction}
+                locked={auctionDimmed}
                 reason={isAuction ? undefined : { id: auctionReasonId, text: TEXT.auctionLocked }}
             >
                 <div className={styles.grid}>
@@ -365,6 +448,7 @@ export function AdvancedLobbySettings({
                                       ] as const,
                                   ]),
                         ]}
+                        locked={lockOf('disconnectPolicy')}
                         extra={errorProps('disconnectPolicy')}
                         error={errorLine('disconnectPolicy')}
                     />
@@ -378,6 +462,9 @@ export function AdvancedLobbySettings({
         </fieldset>
     );
 }
+
+/** Why a field cannot change: the element that says so, and its words when they are shown under the field. */
+type FieldLock = { reasonId: string; reason?: string };
 
 /** A mockup section: its title (`.advSection`), an optional note beside it, and its fields. */
 function Group({
@@ -433,8 +520,11 @@ function NumberField({
     unitSpoken: string;
     text: string;
     decimal: boolean;
-    /** Set: read-only, its reason (an element of the group) as its description. */
-    locked?: { reasonId: string };
+    /**
+     * Set: read-only (still focusable), the element `reasonId` as its description; with `reason` that line is shown
+     * under the field, without it the reason is an element elsewhere (the group's, or the read-only section's).
+     */
+    locked?: FieldLock;
     onText: (text: string) => void;
     onLeave: () => void;
     extra: ErrorProps;
@@ -470,6 +560,11 @@ function NumberField({
                     </span>
                 )}
             </div>
+            {locked?.reason && (
+                <p id={locked.reasonId} className={form.hint}>
+                    {locked.reason}
+                </p>
+            )}
             {error}
         </div>
     );
@@ -481,12 +576,15 @@ function ToggleField({
     info,
     value,
     fixed,
+    showReason = true,
     onChange,
 }: {
     label: string;
     info: InfoText;
     value: boolean;
     fixed?: string;
+    /** False: `fixed` is shown elsewhere (the read-only section's one line); the option still carries it. */
+    showReason?: boolean;
     onChange: (on: boolean) => void;
 }) {
     return (
@@ -511,7 +609,7 @@ function ToggleField({
                 ]}
             />
             {/* Visible words for touch and sighted keyboard users (the option's own reason is its description). */}
-            {fixed && (
+            {fixed && showReason && (
                 <p className={form.hint} aria-hidden="true">
                     {fixed}
                 </p>
