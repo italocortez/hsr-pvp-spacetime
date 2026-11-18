@@ -2386,3 +2386,18 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   5. This replaces A202 item 1, A203 and A226 item 9. A202 item 2 (our own screenshot export) stands.
 - **Why:** user, 2026-11-18, after seeing the before and after page: "Honestly I would prefer to have our own code here for team builder, we can later take a look at how chart.js does a few of its drawings through his source code if we need to replicate the feeling, but you can revert on the previous stackedbarchart component. For profile, lets do our own charts as well".
 - **Where implemented:** the revert commit of `1d971d5`. Item 3: not yet (S14.5d).
+
+### A228 — Profile backend review rulings; pairing colour in the cost chart
+
+- **Date:** 2026-11-18 · **Status:** decided; being built (S14.5s fix pass, S14.5t chart colours)
+- **Decision:**
+  1. Cost chart colours: the pairing segment takes the mockup's shade of the game mode's colour (the dark one), not gold. The Auction "Extra bid" segment gets a darker shade of the same colour. This replaces A201 item 9 (gold), which was an implementers' choice the user had not ruled on.
+  2. Discord sign-in follows the username rule: the handle is lowercased, and a reserved or taken result gets a short suffix (the orchestrator's option A).
+  3. All existing usernames are lowercased once; from then on every username is lowercase.
+  4. The server scripts that act on a user accept the user id or the Discord id and print the matched account before acting (option A).
+  5. The staff UID correction is refused for a game account locked by a tournament.
+  6. Outside a lobby a player card shows only the active game account's rating. The second, composite "global rating" number is dropped from the card; the lobby keeps its own composite rating.
+  7. A staff UID correction needs no log beyond what exists.
+  8. A user can change their username once per hour. This replaces the 3 per hour of A226 item 2 as built.
+- **Why:** user, 2026-11-18, on the review of S14.5s (`tmp/profile/review-s.md`): "for the chart, we use what the mockup has and extra bids get a darker shade. For your other rulings, #1, A, for #2 lower case all, for #3, A. For #4, A. For #5, we just keep the active account raiting for things outside lobby because that one uses its own composite raiting. For #6, we accept, dont need a log. Also, people can edit their username once per hour." Earlier, on the gold: "we already had shades for pairing, why do we need a 4th one?"
+- **Where implemented:** not yet.
