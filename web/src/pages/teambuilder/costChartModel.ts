@@ -1,15 +1,14 @@
 import { type ActivePair, type Slots, slotBid, type TeamCost } from '@shared/teambuilder';
-import type { ChartConfiguration, ScriptableContext } from 'chart.js';
-import { chartScale } from '@/components/Chart/chartScale';
-import type { ChartModel } from '@/components/Chart/types';
-import { categoryTickLines } from '@/components/Chart/wrapLabel';
+import type {
+    ChartBar,
+    ChartSeries,
+    ChartTipRow,
+} from '@/components/StackedBarChart/StackedBarChart';
 
 /*
- * The Cost Breakdown chart's data (S14.3b; on the shared Chart.js wrapper since S14.5c): one column per filled slot,
- * in slot order, stacked as the mockup's Chart.js chart (character at the bottom, then the light cone, then, in
- * Auction, the extra bid, then the pairing). Pure: the page passes the shared cost model's figures (`teamCost`,
- * hundredths). `costChartBars` computes the numbers; `costChartModel` turns them into the Chart.js configuration,
- * the tooltips, the legend and the data table, so every figure the chart shows comes from one place.
+ * The Cost Breakdown chart's data (S14.3b): one column per filled slot, in slot order, stacked as the mockup's
+ * Chart.js chart (character at the bottom, then the light cone, then, in Auction, the extra bid, then the pairing).
+ * Pure: the page passes the shared cost model's figures (`teamCost`, hundredths).
  *
  * - Classic: character = the cost row at the chosen eidolon; light cone = the row at the superimposition.
  * - Auction: character = the base (E0) plus the eidolon extra, extra bid = the slot's bid; their sum is the winning
@@ -25,41 +24,15 @@ import { categoryTickLines } from '@/components/Chart/wrapLabel';
  *   surcharge after its floor at 0, so the columns still add up to the team total.
  */
 
-export type CostSeriesKey = 'character' | 'lightcone' | 'bid' | 'pairing';
-
-/** A series: its label and its colour, a custom property set per game mode in `CostChart.module.css`. */
-export type CostSeries = { key: CostSeriesKey; label: string; color: string };
-
 export const COST_SERIES = {
-    character: { key: 'character', label: 'Character', color: '--chart-tone-1' },
-    lightcone: { key: 'lightcone', label: 'Light Cone', color: '--chart-tone-2' },
-    bid: { key: 'bid', label: 'Extra bid', color: '--chart-tone-3' },
-    pairing: { key: 'pairing', label: 'Pairing', color: '--chart-tone-4' },
-} as const satisfies Record<CostSeriesKey, CostSeries>;
-
-export type CostSegment = { series: CostSeriesKey; value: number };
-
-export type CostTipRow = { series?: CostSeriesKey; label: string; value: string };
-
-/** One column (hundredths). */
-export type CostBar = {
-    key: string;
-    /** Under the column (wrapped to two lines; the full name is in the tooltip and the table). */
-    name: string;
-    /** Bottom to top; never negative (a value of 0 draws nothing). */
-    segments: readonly CostSegment[];
-    total: number;
-    /** Above the column ("Σ 12.5", or "n/a"). */
-    totalText: string;
-    tip: readonly CostTipRow[];
-    /** The tooltip's last line ("Σ Total: 12.5"). */
-    tipTotal: string;
-    /** The column's row in the data table: name, total, then one cell per series of the draft mode. */
-    cells: readonly string[];
-};
+    character: { key: 'character', label: 'Character', tone: 1 },
+    lightcone: { key: 'lightcone', label: 'Light Cone', tone: 2 },
+    bid: { key: 'bid', label: 'Extra bid', tone: 3 },
+    pairing: { key: 'pairing', label: 'Pairing', tone: 4 },
+} as const satisfies Record<string, ChartSeries>;
 
 /** The legend's series; the chart shows an entry only when a column draws it (the pairing only with a pair). */
-export function costSeries(auction: boolean): CostSeries[] {
+export function costSeries(auction: boolean): ChartSeries[] {
     const s = COST_SERIES;
     return auction
         ? [s.character, s.lightcone, s.bid, s.pairing]
@@ -136,10 +109,10 @@ export type CostChartInput = {
 
 const NA = 'n/a';
 
-export function costChartBars({ slots, cost, auction, nameOf }: CostChartInput): CostBar[] {
+export function costChartBars({ slots, cost, auction, nameOf }: CostChartInput): ChartBar[] {
     const order = slots.flatMap((s) => (s ? [s.character] : []));
     const shares = pairingShares(order, cost.pairs, cost.surcharge);
-    const bars: CostBar[] = [];
+    const bars: ChartBar[] = [];
     slots.forEach((slot, index) => {
         const c = cost.slots[index];
         if (!slot || !c) return;
@@ -161,28 +134,22 @@ export function costChartBars({ slots, cost, auction, nameOf }: CostChartInput):
             value: `${amountFixed(p.share)} of ${amountFixed(p.modifier)}`,
         }));
 
-        const cells = [
-            name,
-            amountFixed(total),
-            `${characterText}${missingCharacter ? ', counted as 0' : ''}${
+        const said = [
+            `character ${characterText}${missingCharacter ? ', counted as 0' : ''}${
                 extraText ? ` (eidolon extra ${extraText})` : ''
             }`,
-            `${coneText}${c.lightcone === null && slot.lightcone !== null ? ', counted as 0' : ''}`,
-            ...(auction ? [amountFixed(bid)] : []),
-            pairRows.length
-                ? pairRows.map((r) => `with ${r.partner} ${r.value}`).join('; ')
-                : 'none',
+            `light cone ${coneText}${c.lightcone === null && slot.lightcone !== null ? ', counted as 0' : ''}`,
         ];
+        if (auction) said.push(`extra bid ${amountFixed(bid)}`);
+        for (const r of pairRows) said.push(`pairing with ${r.partner} ${r.value}`);
 
-        const tip: CostTipRow[] = [
+        const tip: ChartTipRow[] = [
             { series: 'character', label: 'Character', value: characterText },
             ...(extraText ? [{ label: 'of it eidolon extra', value: extraText }] : []),
             { series: 'lightcone', label: 'Light Cone', value: coneText },
-            ...(auction
-                ? [{ series: 'bid' as const, label: 'Extra bid', value: amountFixed(bid) }]
-                : []),
+            ...(auction ? [{ series: 'bid', label: 'Extra bid', value: amountFixed(bid) }] : []),
             ...pairRows.map((r) => ({
-                series: 'pairing' as const,
+                series: 'pairing',
                 label: `Pairing with ${r.partner}`,
                 value: r.value,
             })),
@@ -194,170 +161,18 @@ export function costChartBars({ slots, cost, auction, nameOf }: CostChartInput):
             segments: [
                 { series: 'character', value: Math.max(0, character) },
                 { series: 'lightcone', value: Math.max(0, cone) },
-                ...(auction ? [{ series: 'bid' as const, value: bid }] : []),
-                ...(pairingValue > 0 ? [{ series: 'pairing' as const, value: pairingValue }] : []),
+                ...(auction ? [{ series: 'bid', value: bid }] : []),
+                ...(pairingValue > 0 ? [{ series: 'pairing', value: pairingValue }] : []),
             ],
             total,
             // A character the set does not price, with nothing else on it, says so above its empty column.
             totalText: missingCharacter && total === 0 ? NA : `Σ ${amountFixed(total)}`,
+            description: `${name}: total ${amountFixed(total)}. ${capitalise(said.join(', '))}.`,
             tip,
             tipTotal: `Σ Total: ${amountFixed(total)}`,
-            cells,
         });
     });
     return bars;
 }
 
-/** The data table's column heads (the row header first). */
-export function costTableColumns(auction: boolean): string[] {
-    return [
-        'Character',
-        'Total',
-        'Character cost',
-        'Light cone',
-        ...(auction ? ['Extra bid'] : []),
-        'Pairing',
-    ];
-}
-
-/** The 2px gap between parts: a border in the card's colour under every part that has a drawn part below it. */
-export function gapBelow(
-    rows: readonly (readonly (number | null)[])[],
-    series: number,
-    index: number,
-) {
-    return rows.slice(0, series).some((r) => r[index] != null) ? 2 : 0;
-}
-
-const FONT = 'var(--font-primary)';
-
-export type CostChartModelInput = {
-    bars: readonly CostBar[];
-    auction: boolean;
-    /** The game mode's short name ("MoC"). */
-    mode: string;
-    /** Shown instead of columns ("No characters selected", "Loading costs"). */
-    empty: string;
-};
-
-/**
- * The chart for the shared wrapper (`components/Chart`): stacked bars in the series' colours, the "Σ" labels above
- * the columns, names under them on two lines at most, the value axis "Cost — <mode>" on round steps (at most four
- * faint grid lines, no tick labels), the tooltips, the legend of drawn series and the data table. Values are drawn
- * in units (hundredths / 100); 0 is `null`, so a part of 0 draws nothing.
- */
-export function costChartModel({
-    bars,
-    auction,
-    mode,
-    empty,
-}: CostChartModelInput): ChartModel<'bar'> {
-    const series = costSeries(auction);
-    const scale = chartScale(Math.max(0, ...bars.map((b) => b.total)), 4);
-    const rows = series.map((s) =>
-        bars.map((b) => {
-            const v = b.segments.find((g) => g.series === s.key)?.value ?? 0;
-            return v > 0 ? v / 100 : null;
-        }),
-    );
-    const drawn = series.filter((_, i) => rows[i]?.some((v) => v != null));
-    const hasBars = bars.length > 0;
-    const label = `Cost per character, ${mode}, ${auction ? 'Auction' : 'Classic'} draft`;
-
-    const config: ChartConfiguration<'bar', (number | null)[], string> = {
-        type: 'bar',
-        data: {
-            labels: bars.map((b) => b.name),
-            datasets: series.map((s, si) => ({
-                label: s.label,
-                data: rows[si] ?? [],
-                backgroundColor: `var(${s.color})`,
-                hoverBackgroundColor: `var(${s.color})`,
-                borderColor: 'var(--chart-surface)',
-                hoverBorderColor: 'var(--chart-surface)',
-                borderWidth: (ctx: ScriptableContext<'bar'>) => ({
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: gapBelow(rows, si, ctx.dataIndex),
-                }),
-                borderSkipped: false,
-                borderRadius: 0,
-                // A part above 0 stays visible: 2px of colour (plus the 2px gap above the part below).
-                minBarLength: si === 0 ? 2 : 4,
-                barPercentage: 1,
-                categoryPercentage: 0.72,
-                maxBarThickness: 70,
-            })),
-        },
-        options: {
-            layout: { padding: { top: 24 } },
-            animation: { duration: 500, easing: 'easeOutQuart' },
-            interaction: { mode: 'index', intersect: false, axis: 'x' },
-            scales: {
-                x: {
-                    stacked: true,
-                    grid: { display: false, drawTicks: false },
-                    border: { display: hasBars, color: 'var(--chart-axis)', width: 1 },
-                    ticks: {
-                        color: 'var(--chart-ink)',
-                        font: { family: FONT, size: 11, weight: 600 },
-                        maxRotation: 0,
-                        minRotation: 0,
-                        autoSkip: false,
-                        padding: 8,
-                        callback(value) {
-                            return categoryTickLines(this, value, 2);
-                        },
-                    },
-                },
-                y: {
-                    stacked: true,
-                    min: 0,
-                    max: scale.max / 100,
-                    grid: { display: hasBars, color: 'var(--chart-grid)', drawTicks: false },
-                    border: { display: false },
-                    ticks: { display: false, stepSize: scale.step / 100 },
-                    title: {
-                        display: true,
-                        text: `Cost — ${mode}`,
-                        color: 'var(--chart-muted)',
-                        font: { family: FONT, size: 11, weight: 600 },
-                        padding: { top: 0, bottom: 8 },
-                    },
-                },
-            },
-            plugins: {
-                stackLabels: {
-                    labels: bars.map((b) => b.totalText),
-                    color: 'var(--chart-accent)',
-                    font: { family: FONT, size: 13, weight: 700 },
-                    offset: 4,
-                },
-            },
-        },
-    };
-
-    return {
-        label,
-        description: `Stacked bars, one per character: ${series
-            .map((s) => s.label.toLowerCase())
-            .join(', ')}. Every value is in the table that follows.`,
-        config: config as unknown as ChartConfiguration<'bar'>,
-        table: {
-            columns: costTableColumns(auction),
-            rows: bars.map((b) => ({ key: b.key, cells: b.cells })),
-        },
-        tips: bars.map((b) => ({
-            title: b.name,
-            rows: b.tip.map((r) => ({
-                ...(r.series ? { color: COST_SERIES[r.series].color } : {}),
-                label: r.label,
-                value: r.value,
-            })),
-            footer: b.tipTotal,
-        })),
-        legend: drawn.map((s) => ({ key: s.key, label: s.label, color: s.color })),
-        ...(hasBars ? {} : { empty }),
-    };
-}
+const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

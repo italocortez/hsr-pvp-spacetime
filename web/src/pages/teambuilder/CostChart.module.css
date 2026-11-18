@@ -24,13 +24,11 @@
  */
 
 .wrap {
-    /* The canvas box (S14.5c): the old 220px plot (180px at --bp-sm) plus two lines of names under it. */
-    --chart-h: 260px;
-    --chart-legend-indent: 24px; /* past the rotated axis title, as the CSS chart's legend */
+    --chart-plot-h: 220px;
     --chart-tone-4: #e3cf55; /* local: Pairing, every mode, 10.63:1 */
 
     @media (--bp-sm) {
-        --chart-h: 220px;
+        --chart-plot-h: 180px;
     }
 
     &[data-mode="moc"] {
@@ -49,17 +47,5 @@
         --chart-tone-1: #f85c75; /* local: AA character, garnet (mockup #bc3d54), 5.41:1 */
         --chart-tone-2: #ffa7b8; /* local: AA light cone (mockup #e38495), 9.15:1 */
         --chart-tone-3: #b04558; /* local: AA extra bid (mockup #872637), 3.06:1 */
-    }
-}
-
-/* Forced colours (S14.5c): the canvas keeps the colours it is given, so the parts take four system colours, apart
-   without hue; the 2px gaps in the forced background separate them. The CSS chart's hatch for the pairing has no
-   canvas form here. */
-@media (forced-colors: active) {
-    .wrap[data-mode] {
-        --chart-tone-1: CanvasText;
-        --chart-tone-2: GrayText;
-        --chart-tone-3: Highlight;
-        --chart-tone-4: LinkText;
     }
 }

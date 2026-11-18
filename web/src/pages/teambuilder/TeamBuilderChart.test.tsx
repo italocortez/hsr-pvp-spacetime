@@ -80,14 +80,11 @@ const settled = (r: Awaited<ReturnType<typeof open>>, path: string) =>
 const card = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name},`) });
 const total = () => screen.getByText(/Total Cost/).closest('p') as HTMLElement;
 const status = () => document.querySelector('p[role="status"]:last-of-type') as HTMLElement;
-// S14.5c: the chart is a canvas (Chart.js); its values are read from its data table, one row per column: name,
-// total, character, light cone, (extra bid,) pairing.
-const chart = () => screen.getByRole('table', { name: /^Cost per character/ });
+const chart = () => screen.getByRole('list', { name: /^Cost per character/ });
 const columns = () =>
     within(chart())
-        .getAllByRole('row')
-        .slice(1)
-        .map((r) => [...r.querySelectorAll('th, td')].map((c) => c.textContent));
+        .getAllByRole('button')
+        .map((b) => b.getAttribute('aria-label'));
 const bid = (name: string) => screen.getByRole('textbox', { name: `Extra bid for ${name}` });
 const budget = (name: 'Character Budget' | 'Light Cone Budget') =>
     screen.getByRole('textbox', { name });
@@ -96,25 +93,22 @@ describe('the cost chart', () => {
     it('empty team: "No characters selected" and no columns', async () => {
         await open();
         expect(screen.getByText('No characters selected')).toBeInTheDocument();
-        expect(screen.queryByRole('table', { name: /^Cost per character/ })).toBeNull();
+        expect(screen.queryByRole('list', { name: /^Cost per character/ })).toBeNull();
     });
 
     it('one column per character with every value as text; a pair split evenly on both columns (A199)', async () => {
         const user = userEvent.setup();
         await open();
         await user.click(card('Acheron'));
-        expect(columns()).toEqual([['Acheron', '7.0', '7.0', 'none', 'none']]);
+        expect(columns()).toEqual(['Acheron: total 7.0. Character 7.0, light cone none.']);
         const legend = () => chart().parentElement?.querySelector('ul[aria-hidden="true"]');
         expect(legend()).toHaveTextContent(/^Character$/);
         await user.click(card('Pela'));
         expect(chart()).toHaveAccessibleName('Cost per character, AS, Classic draft');
-        expect(
-            screen.getByRole('img', { name: 'Cost per character, AS, Classic draft' }),
-        ).toHaveAccessibleDescription(/table/);
         // No column of its own: each column carries half of the pair, and the columns add up to the total.
         expect(columns()).toEqual([
-            ['Acheron', '7.75', '7.0', 'none', 'with Pela 0.75 of 1.5'],
-            ['Pela', '7.75', '7.0', 'none', 'with Acheron 0.75 of 1.5'],
+            'Acheron: total 7.75. Character 7.0, light cone none, pairing with Pela 0.75 of 1.5.',
+            'Pela: total 7.75. Character 7.0, light cone none, pairing with Acheron 0.75 of 1.5.',
         ]);
         expect(total()).toHaveTextContent('15.5');
         expect(legend()).toHaveTextContent(/^CharacterPairing$/);
@@ -124,18 +118,20 @@ describe('the cost chart', () => {
         const user = userEvent.setup();
         await open();
         await user.click(card('Huohuo'));
-        expect(columns()).toEqual([['Huohuo', '0.0', 'n/a, counted as 0', 'none', 'none']]);
+        expect(columns()).toEqual([
+            'Huohuo: total 0.0. Character n/a, counted as 0, light cone none.',
+        ]);
     });
 
     it('a light cone changes the column', async () => {
         const user = userEvent.setup();
         await open('/teambuilder?team=1.acheron-0-pastselfinmirror-1._._._.as-c-0-3000-1500');
-        expect(columns()).toEqual([['Acheron', '9.5', '7.0', '2.5', 'none']]);
+        expect(columns()).toEqual(['Acheron: total 9.5. Character 7.0, light cone 2.5.']);
         await user.selectOptions(
             screen.getByRole('combobox', { name: 'Superimposition for Acheron' }),
             '3',
         );
-        expect(columns()).toEqual([['Acheron', '10.5', '7.0', '3.5', 'none']]);
+        expect(columns()).toEqual(['Acheron: total 10.5. Character 7.0, light cone 3.5.']);
     });
 });
 
@@ -160,7 +156,9 @@ describe('the Auction extra bid', () => {
         await user.clear(bid('Acheron'));
         await user.type(bid('Acheron'), '2.5');
         expect(total()).toHaveTextContent('10.5');
-        expect(columns()).toEqual([['Acheron', '10.5', '8.0', 'none', '2.5', 'none']]);
+        expect(columns()).toEqual([
+            'Acheron: total 10.5. Character 8.0, light cone none, extra bid 2.5.',
+        ]);
         await user.clear(bid('Acheron'));
         // While the field is blank the last amount stays; leaving it snaps back to 0.
         expect(total()).toHaveTextContent('10.5');
@@ -390,7 +388,7 @@ describe('fix pass: the amount fields (S3, S4)', () => {
         expect(bid('Acheron')).toHaveAttribute('aria-invalid', 'true');
         expect(bid('Acheron')).toHaveAccessibleDescription('At most 99.99.');
         // The cap is stored at once: the column carries it.
-        expect(columns()[0]?.[4]).toBe('99.99');
+        expect(columns()[0]).toContain('extra bid 99.99.');
         await user.tab();
         expect(bid('Acheron')).toHaveValue('99.99');
         expect(bid('Acheron')).not.toHaveAttribute('aria-invalid');
@@ -514,19 +512,15 @@ describe('exact amounts on the page (S14.3e)', () => {
         expect(total()).toHaveTextContent('19.75');
         expect(sum([pill(1).total, pill(2).total, '0.25'])).toBe(1975);
         // The chart: the pair split 0.13 / 0.12 (the odd hundredth to the earlier slot); columns add up too.
-        // (S14.5c: the "Σ 12.38" labels are drawn on the canvas; the model test checks their text, this the totals.)
-        expect(columns()).toEqual([
-            ['Acheron', '12.38', '8.0', '3.0', '1.25', 'with Pela 0.13 of 0.25'],
-            [
-                'Pela',
-                '7.37',
-                '7.0 (eidolon extra 6.0)',
-                'none',
-                '0.25',
-                'with Acheron 0.12 of 0.25',
-            ],
-        ]);
-        expect(sum(columns().map((c) => c[1] ?? null))).toBe(1975);
+        const [a, b] = columns();
+        expect(a).toMatch(
+            /^Acheron: total 12\.38\. .*extra bid 1\.25, pairing with Pela 0\.13 of 0\.25\.$/,
+        );
+        expect(b).toMatch(
+            /^Pela: total 7\.37\. .*extra bid 0\.25, pairing with Acheron 0\.12 of 0\.25\.$/,
+        );
+        expect(chart()).toHaveTextContent('Σ 12.38');
+        expect(chart()).toHaveTextContent('Σ 7.37');
         // The panel: winning bids 8 + 1.25 + 1 + 0.25, eidolons 6; the light cones 3 and the pair 0.25 out of
         // 15 + 13.5 rolled over.
         const panel = screen.getByRole('region', { name: 'Auction budgets' });

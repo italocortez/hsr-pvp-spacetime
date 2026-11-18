@@ -1,23 +1,11 @@
 // T-S14.3b: the Cost Breakdown chart's data: columns per filled slot (segments, totals, labels, accessible text), the
 // Auction extra bid, "n/a" rows, the empty team. T-S14.3c-fix3 (A199 item 1): pairings stacked on each character's
-// column, each pair split evenly in hundredths, and the sum rules over the seed's real pairs. T-S14.5c: the accessible
-// sentences became the data table's rows (`cells`, same figures), and `costChartModel` (the Chart.js configuration,
-// tooltips, legend, table) is tested below.
+// column, each pair split evenly in hundredths, and the sum rules over the seed's real pairs.
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { type Slot, type Slots, type TeamCostSource, teamCost } from '@shared/teambuilder';
-import type { ScriptableContext } from 'chart.js';
 import { describe, expect, it } from 'vitest';
-import {
-    amountFixed,
-    COST_SERIES,
-    costChartBars,
-    costChartModel,
-    costSeries,
-    costTableColumns,
-    gapBelow,
-    pairingShares,
-} from './costChartModel';
+import { amountFixed, costChartBars, costSeries, pairingShares } from './costChartModel';
 
 const ROWS: Record<string, number[]> = {
     acheron: [7, 8, 9, 10, 11, 12, 13],
@@ -74,9 +62,8 @@ describe('costChartBars', () => {
         expect(b[0]?.total).toBe(1150);
         expect(b[0]?.totalText).toBe('Σ 11.5');
         expect(b[0]?.tipTotal).toBe('Σ Total: 11.5');
-        // The data table's rows (S14.5c; were the columns' accessible sentences): name, total, character, cone, pairing.
-        expect(b[0]?.cells).toEqual(['Acheron', '11.5', '9.0', '2.5', 'none']);
-        expect(b[1]?.cells).toEqual(['Pela', '1.0', '1.0', 'none', 'none']);
+        expect(b[0]?.description).toBe('Acheron: total 11.5. Character 9.0, light cone 2.5.');
+        expect(b[1]?.description).toBe('Pela: total 1.0. Character 1.0, light cone none.');
     });
 
     it('Auction: character (base + eidolon extra), light cone, extra bid on top; the total includes the bid', () => {
@@ -88,14 +75,9 @@ describe('costChartBars', () => {
             { series: 'bid', value: 250 },
         ]);
         expect(a?.total).toBe(1400);
-        expect(a?.cells).toEqual([
-            'Acheron',
-            '14.0',
-            '9.0 (eidolon extra 2.0)',
-            '2.5',
-            '2.5',
-            'none',
-        ]);
+        expect(a?.description).toBe(
+            'Acheron: total 14.0. Character 9.0 (eidolon extra 2.0), light cone 2.5, extra bid 2.5.',
+        );
         expect(a?.tip.map((r) => `${r.label} ${r.value}`)).toEqual([
             'Character 9.0',
             'of it eidolon extra 2.0',
@@ -117,9 +99,13 @@ describe('costChartBars', () => {
         );
         expect(g?.segments.every((s) => s.value === 0)).toBe(true);
         expect(g?.totalText).toBe('n/a');
-        expect(g?.cells).toEqual(['ghost', '0.0', 'n/a, counted as 0', 'none', '0.0', 'none']);
+        expect(g?.description).toBe(
+            'ghost: total 0.0. Character n/a, counted as 0, light cone none, extra bid 0.0.',
+        );
         // A cone without a row: n/a too, the character still counts.
-        expect(c?.cells).toEqual(['Clara', '2.0', '2.0', 'n/a, counted as 0', '0.0', 'none']);
+        expect(c?.description).toBe(
+            'Clara: total 2.0. Character 2.0, light cone n/a, counted as 0, extra bid 0.0.',
+        );
         expect(c?.totalText).toBe('Σ 2.0');
     });
 });
@@ -143,8 +129,12 @@ describe('pairings stacked on each column (A199 item 1)', () => {
             label: 'Pairing with Cerydra',
             value: '1.5 of 3.0',
         });
-        expect(b[0]?.cells).toEqual(['Anaxa', '9.0', '5.0', '2.5', 'with Cerydra 1.5 of 3.0']);
-        expect(b[1]?.cells).toEqual(['Cerydra', '5.5', '4.0', 'none', 'with Anaxa 1.5 of 3.0']);
+        expect(b[0]?.description).toBe(
+            'Anaxa: total 9.0. Character 5.0, light cone 2.5, pairing with Cerydra 1.5 of 3.0.',
+        );
+        expect(b[1]?.description).toBe(
+            'Cerydra: total 5.5. Character 4.0, light cone none, pairing with Anaxa 1.5 of 3.0.',
+        );
         expect(sum(b.map((x) => x.total))).toBe(costOf(team, false, src).total);
     });
 
@@ -160,7 +150,6 @@ describe('pairings stacked on each column (A199 item 1)', () => {
             { series: 'pairing', label: 'Pairing with Acheron', value: '0.75 of 1.5' },
             { series: 'pairing', label: 'Pairing with Clara', value: '0.25 of 0.5' },
         ]);
-        expect(b[1]?.cells.at(-1)).toBe('with Acheron 0.75 of 1.5; with Clara 0.25 of 0.5');
         expect(sum(b.map(pairingOf))).toBe(costOf(team, false, src).surcharge);
     });
 
@@ -182,13 +171,9 @@ describe('pairings stacked on each column (A199 item 1)', () => {
         expect(b.map(pairingOf)).toEqual([100, 100]);
         expect(b[0]?.total).toBe(100);
         expect(b[0]?.totalText).toBe('Σ 1.0');
-        expect(b[0]?.cells).toEqual([
-            'ghost',
-            '1.0',
-            'n/a, counted as 0',
-            'none',
-            'with Pela 1.0 of 2.0',
-        ]);
+        expect(b[0]?.description).toBe(
+            'ghost: total 1.0. Character n/a, counted as 0, light cone none, pairing with Pela 1.0 of 2.0.',
+        );
         expect(sum(b.map((x) => x.total))).toBe(costOf(team, false, src).total);
     });
 
@@ -336,128 +321,5 @@ describe('costSeries and amountFixed', () => {
         [-150, '−1.5'],
     ])('%i -> %j', (h, text) => {
         expect(amountFixed(h)).toBe(text);
-    });
-});
-
-describe('costChartModel: the Chart.js configuration, tooltips, legend and table (S14.5c)', () => {
-    const model = (slots: Slots, auction: boolean, src = source(), mode = 'MoC') =>
-        costChartModel({
-            bars: bars(slots, auction, src),
-            auction,
-            mode,
-            empty: 'No characters selected',
-        });
-    const pair = source([{ characterA: 'anaxa', characterB: 'cerydra', costModifier: 3 }]);
-    const team: Slots = [slot('anaxa', 0, 'mirror'), slot('cerydra', 0), null, null];
-    // biome-ignore lint/suspicious/noExplicitAny: the test reads the options tree as plain data
-    const opts = (m: ReturnType<typeof model>) => m.config.options as any;
-
-    it('stacked bars per character in units; 0 is null (draws nothing); the series colours as references', () => {
-        const m = model(team, false, pair);
-        const { data } = m.config;
-        expect(m.config.type).toBe('bar');
-        expect(data.labels).toEqual(['Anaxa', 'Cerydra']);
-        expect(data.datasets.map((d) => d.label)).toEqual(['Character', 'Light Cone', 'Pairing']);
-        expect(data.datasets.map((d) => d.data)).toEqual([
-            [5, 4],
-            [2.5, null],
-            [1.5, 1.5],
-        ]);
-        expect(data.datasets.map((d) => d.backgroundColor)).toEqual([
-            'var(--chart-tone-1)',
-            'var(--chart-tone-2)',
-            'var(--chart-tone-4)',
-        ]);
-        // Every drawn value adds up to the team total (hundredths).
-        const drawn = data.datasets.flatMap((d) => d.data as (number | null)[]);
-        expect(Math.round(sum(drawn.map((v) => (v ?? 0) * 100)))).toBe(
-            costOf(team, false, pair).total,
-        );
-        expect(opts(m).scales.x.stacked).toBe(true);
-        expect(opts(m).scales.y.stacked).toBe(true);
-    });
-
-    it('the "Σ" labels above the columns, the round-step axis and its title', () => {
-        const m = model(team, false, pair);
-        expect(opts(m).plugins.stackLabels.labels).toEqual(['Σ 9.0', 'Σ 5.5']);
-        expect(opts(m).plugins.stackLabels.color).toBe('var(--chart-accent)');
-        // Largest 9.0: steps of 2.5 up to 10, four grid lines, no tick labels.
-        expect(opts(m).scales.y.max).toBe(10);
-        expect(opts(m).scales.y.ticks).toEqual({ display: false, stepSize: 2.5 });
-        expect(opts(m).scales.y.title.text).toBe('Cost — MoC');
-        expect(m.label).toBe('Cost per character, MoC, Classic draft');
-    });
-
-    it('tooltips: the name, a row per part with its colour key, the total', () => {
-        const m = model(team, false, pair);
-        expect(m.tips?.[0]).toEqual({
-            title: 'Anaxa',
-            rows: [
-                { color: '--chart-tone-1', label: 'Character', value: '5.0' },
-                { color: '--chart-tone-2', label: 'Light Cone', value: '2.5' },
-                { color: '--chart-tone-4', label: 'Pairing with Cerydra', value: '1.5 of 3.0' },
-            ],
-            footer: 'Σ Total: 9.0',
-        });
-        // The eidolon extra row has no key (it is part of the character's bar).
-        const [a] = model([slot('acheron', 2, null, 250), null, null, null], true).tips ?? [];
-        expect(a?.rows[1]).toEqual({ label: 'of it eidolon extra', value: '2.0' });
-    });
-
-    it('the table: a row per column with every figure; the legend lists only drawn series', () => {
-        const m = model(team, false, pair);
-        expect(m.table).toEqual({
-            columns: ['Character', 'Total', 'Character cost', 'Light cone', 'Pairing'],
-            rows: [
-                {
-                    key: 'slot-anaxa',
-                    cells: ['Anaxa', '9.0', '5.0', '2.5', 'with Cerydra 1.5 of 3.0'],
-                },
-                {
-                    key: 'slot-cerydra',
-                    cells: ['Cerydra', '5.5', '4.0', 'none', 'with Anaxa 1.5 of 3.0'],
-                },
-            ],
-        });
-        expect(m.legend?.map((l) => l.key)).toEqual(['character', 'lightcone', 'pairing']);
-        const auction = model([slot('anaxa', 0, null, 100), slot('cerydra', 0), null, null], true);
-        expect(auction.legend).toEqual([
-            { key: 'character', label: 'Character', color: COST_SERIES.character.color },
-            { key: 'bid', label: 'Extra bid', color: COST_SERIES.bid.color },
-        ]);
-        expect(auction.table.columns).toEqual(costTableColumns(true));
-        expect(costTableColumns(true)).toContain('Extra bid');
-        expect(auction.label).toBe('Cost per character, MoC, Auction draft');
-    });
-
-    it('a 2px gap in the surface colour under a part with a drawn part below it, none at the base', () => {
-        const ghost = source([{ characterA: 'ghost', characterB: 'cerydra', costModifier: 2 }]);
-        const m = model([slot('ghost', 0), slot('cerydra', 0, 'mirror'), null, null], false, ghost);
-        const width = (series: number, index: number) => {
-            const fn = m.config.data.datasets[series]?.borderWidth as (
-                c: ScriptableContext<'bar'>,
-            ) => { bottom: number };
-            return fn({ dataIndex: index } as ScriptableContext<'bar'>).bottom;
-        };
-        // ghost: no character, no cone: its pairing sits on the axis. Cerydra: cone on character, pairing on cone.
-        expect([width(0, 0), width(1, 0), width(2, 0)]).toEqual([0, 0, 0]);
-        expect([width(0, 1), width(1, 1), width(2, 1)]).toEqual([0, 2, 2]);
-        expect(m.config.data.datasets[0]?.borderColor).toBe('var(--chart-surface)');
-        expect(gapBelow([[null], [1]], 1, 0)).toBe(0);
-        expect(gapBelow([[3], [1]], 1, 0)).toBe(2);
-    });
-
-    it('no column: the empty text, no rows, no grid and no axis line', () => {
-        const m = costChartModel({ bars: [], auction: false, mode: 'AS', empty: 'Loading costs' });
-        expect(m.empty).toBe('Loading costs');
-        expect(m.description).toBe(
-            'Stacked bars, one per character: character, light cone, pairing. Every value is in the table that follows.',
-        );
-        expect(m.table.rows).toEqual([]);
-        expect(m.legend).toEqual([]);
-        expect(opts(m).scales.y.grid.display).toBe(false);
-        expect(opts(m).scales.x.border.display).toBe(false);
-        expect(opts(m).scales.y.title.text).toBe('Cost — AS');
-        expect(model(team, false, pair).empty).toBeUndefined();
     });
 });
