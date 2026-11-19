@@ -71,8 +71,9 @@ describe('module test harness (smoke)', () => {
         expect(mapping).toBeDefined();
         const user = test.db.User.id.find(mapping!.userId);
         expect(user?.isGuest).toBe(true);
-        // S10h: "Guest_" + the last 8 hex characters (the first 8 are a fixed tag and a short checksum)
-        expect(user?.username).toBe(`Guest_${sender.toHexString().slice(-8)}`);
+        // S10h: "guest_" + the last 8 hex characters (the first 8 are a fixed tag and a short checksum); lowercase since
+        // the second S14.5s fix pass (A228, user ruling of 2026-11-18), "Guest_" before
+        expect(user?.username).toBe(`guest_${sender.toHexString().slice(-8)}`);
         expect(mapping!.lastSeenAt.microsSinceUnixEpoch).toBe(START.microsSinceUnixEpoch);
     });
 

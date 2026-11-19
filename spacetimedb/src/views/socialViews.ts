@@ -94,10 +94,11 @@ export const view_my_relationships = spacetimedb.view(
 //     A count of 0 never qualifies. Ties: the fewer shared matches first (the higher rate), then the lower user id.
 //     A candidate whose User row is gone (deleted) or pending deletion (deletedAt: an admin deletion or a ban) is
 //     skipped and the next one is taken. A suspended other player is shown, as on the leaderboard.
-//     Card: displayName, username (the handle), avatar, displayed title, the rating of the ACTIVE game account (A226
-//     item 5; A228 item 6: the only rating a card carries outside a lobby; unset when no account is active) and the
-//     number of game accounts. S14.5s fix pass (A228 item 6): the mode ratings and the composite `globalRating` are
-//     dropped, and so is `userId` (no client lookup is keyed by it; the row's key is `relation`).
+//     Card: userId (the other player's User.id, the join key to view_my_relationships.otherUserId), displayName,
+//     username (the handle), avatar, displayed title, the rating of the ACTIVE game account (A226 item 5; A228 item 6:
+//     the only rating a card carries outside a lobby; unset when no account is active) and the number of game
+//     accounts. S14.5s fix pass (A228 item 6): the mode ratings and the composite `globalRating` are dropped; the
+//     second fix pass keeps `userId` (review M3: the later card UI joins the card to the relationship rows by it).
 //     `matches` / `wins` / `losses` are the caller's side of the relation (together for BestAlly, against for Nemesis).
 //     The caller is resolved through callerUserId (a suspended or unmapped caller gets []).
 //     Read set: UserIdentity.identity + UserSuspension (callerUserId), Season.is_active, PlayerRelationship.by_user
@@ -108,6 +109,7 @@ export const PLAYER_CARD_MIN_MATCHES = 3;
 
 const PlayerCardRow = t.row('PlayerCardRow', {
     relation: t.string().primaryKey(), // 'BestAlly' | 'Nemesis'; one row each at most, so the client gets onUpdate
+    userId: t.u32(),
     displayName: t.string(),
     username: t.string(),
     avatarCharacterName: t.string(),
@@ -138,6 +140,7 @@ function playerCard(ctx: any, user: any) {
     const accounts = [...ctx.db.HsrAccount.user_id.filter(user.id)];
     const active = accounts.find((a: any) => a.isActive);
     return {
+        userId: user.id,
         displayName: user.displayName,
         username: user.username,
         avatarCharacterName: user.avatarCharacterName,

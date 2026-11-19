@@ -14,7 +14,12 @@ import { isSuspended, SUSPENDED_SIGN_IN_TEXT } from './suspension';
 // identity-hex reducer server_link_provider is removed. Moved out of reducers/identity/server.ts in M5a
 // unchanged. It runs in two steps so a caller can catch a refusal without leaving a half-written merge behind:
 //   planProviderLink   every check; throws a SenderError and writes nothing;
-//   applyProviderLink  every write; throws no SenderError of its own.
+//   applyProviderLink  every write; its one possible SenderError is NO_FREE_USERNAME_TEXT (providerUsername, A228
+//                      item 2), when the handle and all 9 `user_<digits>` fallback candidates are taken. Practically
+//                      unreachable: since the second S14.5s fix pass the `user_` prefix is reserved, so no player can
+//                      choose a fallback name; only another sign-in with the same last 8 Discord digits, or a name
+//                      from before the rule, can hold one. confirm_link does not catch it: the whole transaction rolls
+//                      back, so no half-written merge is left and the link request stays.
 
 /** A113(4) (S10m): the refusal of a sign-in to an existing account while the guest plays a live game. */
 export const FINISH_GAME_BEFORE_SIGN_IN_TEXT = 'Finish your current game before signing in to an existing account.';

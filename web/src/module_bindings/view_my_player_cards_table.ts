@@ -12,6 +12,7 @@ import {
 
 export default __t.row({
   relation: __t.string().primaryKey(),
+  userId: __t.u32().name("user_id"),
   displayName: __t.string().name("display_name"),
   username: __t.string(),
   avatarCharacterName: __t.string().name("avatar_character_name"),

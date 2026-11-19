@@ -16,7 +16,9 @@
  * script subscribes view_admin_users and view_admin_user_private as the delegate (the SYSTEM user, an Admin), finds
  * the one matching account, prints it (id, username, display name, role, Discord id, guest and pending-deletion
  * flags), then calls the reducer with `id:<n>`, so the reducer acts on the printed account even if the name changed
- * hands meanwhile. No match, or more than one, stops before any call. `show` prints and acts on nothing.
+ * hands between the script's read and its call. That protects an `id:` or `discord:` reference only: a username is
+ * resolved to whoever holds it now. Safe procedure: `show <user>` first, then the action with `id:<n>`.
+ * No match, or more than one, stops before any call. `show` prints and acts on nothing.
  * Roles: Admin, Moderator, TournamentHost, User. Add --dry-run to print the call without connecting.
  * The user must have logged in once.
  * suspend (suspension-s1, A214): any verified account except SYSTEM, an Admin included; the reason is optional
@@ -55,6 +57,7 @@ const USAGE = `usage:
   manage-user.ts --target test|prod suspended
   manage-user.ts --target test|prod lowercase-usernames
 <user> is a username, id:<n> (the user id) or discord:<id> (the Discord id).
+A username means whoever holds it now: run show <user> first, then act with id:<n> from what it printed.
 A reason with spaces must be quoted (at most ${REASON_MAX_LENGTH} characters); a reason that starts with "--" must be
 written as --reason=<text>.`;
 

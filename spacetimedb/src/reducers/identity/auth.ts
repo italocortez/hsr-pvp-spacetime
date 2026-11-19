@@ -36,8 +36,9 @@ import { ensureNotSuspended } from '@module/helpers/identity/suspension';
  *   first branch) is never counted or blocked.
  * - Identity audit #10: a mapping whose User row is gone (orphan) is repointed to the new user instead of inserting a
  *   second row with the same identity (which aborted the call on the primary key).
- * - S10h: the username is "Guest_" + the last 8 hex characters of the identity, made unique (uniqueUsername) so the
- *   insert never aborts on the unique User.username index.
+ * - S10h: the username is "guest_" + the last 8 hex characters of the identity ("Guest_" before the second S14.5s
+ *   fix pass, A228, user ruling of 2026-11-18), made unique (uniqueUsername) so the insert never aborts on the unique
+ *   User.username index. A guest is recognised by User.isGuest, not by its name.
  */
 export const login_as_guest = spacetimedb.reducer((ctx) => {
     // M5a3: the Linker identity of the auth function never becomes a user (no guest row, no presence).
@@ -63,7 +64,7 @@ export const login_as_guest = spacetimedb.reducer((ctx) => {
     // A95(2): guest creation breaker (throws while the switch is off)
     recordGuestCreation(ctx);
 
-    // A guest username from the identity hex: "Guest_" + its last 8 characters (the first ones are a fixed tag and a
+    // A guest username from the identity hex: "guest_" + its last 8 characters (the first ones are a fixed tag and a
     // short checksum, guestUsernameBase); on a collision with any existing username the first free "_2", "_3", ...
     // variant (uniqueUsername), so a guest login never aborts on the unique User.username index.
     const guestUsername = uniqueUsername(ctx, guestUsernameBase(ctx.sender.toHexString()), -1);

@@ -18,7 +18,8 @@ export const USERNAME_CHARACTERS = /^[a-z0-9_.]+$/;
 
 /**
  * Names nobody may take. `system` covers the SYSTEM user (whose name is upper case and is never renamed); `guest`
- * and the `guest_` prefix keep a lookalike of the guest names (`Guest_<hex8>`, login_as_guest) out of reach.
+ * and the `guest_` prefix keep the guest names (`guest_<hex8>`, login_as_guest; lowercase since the second S14.5s fix
+ * pass, A228 and the user's ruling of 2026-11-18; `Guest_<hex8>` before) out of a player's reach.
  */
 export const RESERVED_USERNAMES: readonly string[] = [
     'system',
@@ -43,11 +44,20 @@ export const RESERVED_USERNAMES: readonly string[] = [
 ];
 
 /**
+ * The prefix of the Discord sign-in fallback name `user_<last 8 digits of the Discord id>` (A228 item 2). S14.5s second
+ * fix pass (review M1): reserved for player choice, so nobody can squat a fallback name; only the sign-in derivation
+ * produces it (isSignInFallbackUsername).
+ */
+export const SIGN_IN_FALLBACK_PREFIX = 'user_';
+
+/**
  * Prefixes nobody may take. S14.5s fix pass (review M4): staff lookalikes (`admin1`, `admins`, `mod_x`, `staff.team`,
- * `support_bot`); `mod` and `staff` alone are exact entries above, so `modern` and `staffy` stay free.
+ * `support_bot`); `mod` and `staff` alone are exact entries above, so `modern` and `staffy` stay free. Second fix pass
+ * (review M1): `user_`, the sign-in fallback (`username` and `users` stay free).
  */
 export const RESERVED_USERNAME_PREFIXES: readonly string[] = [
     'guest_',
+    SIGN_IN_FALLBACK_PREFIX,
     'admin',
     'moderator',
     'mod_',
@@ -123,6 +133,15 @@ export function usernameBaseFromProvider(providerName: string): string | null {
         .slice(0, USERNAME_MAX_LENGTH);
     if (!/[a-z0-9]/.test(base)) return null;
     return usernameRuleError(base) === null ? base : null;
+}
+
+/**
+ * S14.5s second fix pass (review M1): whether `name` is a name the sign-in fallback produces: `user_`, 1 to 8 digits,
+ * and at most one suffix `_2` to `_9`. The module admits these candidates although the `user_` prefix is reserved;
+ * every one of them meets the rule's length and character checks.
+ */
+export function isSignInFallbackUsername(name: string): boolean {
+    return /^user_[0-9]{1,8}(_[2-9])?$/.test(name);
 }
 
 /** `base` with the suffix `_<n>`, the base shortened so the result stays within USERNAME_MAX_LENGTH. */

@@ -375,7 +375,8 @@ describe('S10h fix pass: a guest login never fails on the unique username', () =
     const usernameOf = (test: Harness, a: Actor) => test.db.User.id.find(test.db.UserIdentity.identity.find(a.identity)!.userId)!.username;
     const login = (test: Harness, a: Actor) => tx(test, a, (ctx) => M.login_as_guest(ctx, {}));
 
-    it('two guests whose identities share the first 8 hex characters both log in and get distinct usernames ("Guest_" + the last 8 hex characters)', () => {
+    // T-S14.5s second fix pass (A228, user ruling of 2026-11-18): the guest name is lowercase, "guest_" (was "Guest_").
+    it('two guests whose identities share the first 8 hex characters both log in and get distinct usernames ("guest_" + the last 8 hex characters)', () => {
         const test = newHarness();
         // Every identity starts with the same fixed tag, so the first 8 hex characters vary over only 4 characters:
         // a pair that shares them is found quickly.
@@ -398,7 +399,7 @@ describe('S10h fix pass: a guest login never fails on the unique username', () =
         login(test, b);
         const names = [usernameOf(test, a), usernameOf(test, b)];
         expect(names[0]).not.toBe(names[1]);
-        expect(names).toEqual([`Guest_${a.identity.toHexString().slice(-8)}`, `Guest_${b.identity.toHexString().slice(-8)}`]);
+        expect(names).toEqual([`guest_${a.identity.toHexString().slice(-8)}`, `guest_${b.identity.toHexString().slice(-8)}`]);
         for (const who of [a, b]) expect(test.db.User.id.find(test.db.UserIdentity.identity.find(who.identity)!.userId)!.isGuest).toBe(true);
     });
 
@@ -406,7 +407,7 @@ describe('S10h fix pass: a guest login never fails on the unique username', () =
         const test = newHarness();
         const holder = guest(test, 'holder');
         const late = asAuth(freshAuth(test, 'late-comer'));
-        const base = `Guest_${late.identity.toHexString().slice(-8)}`;
+        const base = `guest_${late.identity.toHexString().slice(-8)}`;
         // the base name and "_2" are taken by other users (patched straight in the datastore)
         test.db.User.id.update({ ...test.db.User.id.find(holder.userId)!, username: base });
         const other = guest(test, 'other');

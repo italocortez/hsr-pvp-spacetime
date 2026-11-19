@@ -325,7 +325,7 @@ export const admin_delete_row = spacetimedb.reducer(
                 // Identity audit #5: the presence row goes with its mapping (client_disconnected skips presence
                 // without one, so a live row would read the user as online forever).
                 if (ctx.db.UserPresence.identity.find(identity)) ctx.db.UserPresence.identity.delete(identity);
-                // A guest with no identity left can never log in again (Guest_<hex> is taken) and no GC sees it.
+                // A guest with no identity left can never log in again (guest_<hex> is taken) and no GC sees it.
                 const owner = ctx.db.User.id.find(row.userId);
                 if (owner?.isGuest && [...ctx.db.UserIdentity.user_id.filter(row.userId)].length === 0) {
                     // S10s fix pass (A124): sent by a server identity (the SYSTEM user) = a server deletion.

@@ -342,9 +342,10 @@ export const server_lift_suspension = spacetimedb.reducer({
 });
 
 /**
- * A228 item 3 (S14.5s fix pass, review S2): server-only, once: lowercases every username except SYSTEM's and the
- * guests' (lowercaseAllUsernames: id order, a collision gets the first free `_2` ... `_9`, a name with no free
- * candidate is left and logged). Idempotent: a second run writes nothing. Does not count on any username limit.
+ * A228 item 3 (S14.5s fix pass, review S2): server-only, once: lowercases every username except SYSTEM's, guests
+ * included since the second fix pass (user ruling of 2026-11-18) (lowercaseAllUsernames: an already lowercase name is
+ * never renamed; the others by createdDate, id as tie-break; a collision gets the first free `_2` ... `_9`, a name
+ * with no free candidate is left and logged). Idempotent: a second run writes nothing. Does not count on any username limit.
  * Called via: npm run stdb:manage-user -- --target <test|prod> lowercase-usernames. Audit actor: SYSTEM.
  */
 export const server_lowercase_usernames = spacetimedb.reducer((ctx) => {

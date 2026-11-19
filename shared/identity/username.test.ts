@@ -9,6 +9,7 @@ import {
 } from '@module/helpers/identity/usernames';
 import {
     isReservedUsername,
+    isSignInFallbackUsername,
     matchUserReference,
     normalizeUsername,
     parseUserReference,
@@ -49,6 +50,9 @@ describe("A226 item 2: usernameRuleError accepts Discord's form", () => {
         'staffy',
         'the.mod', // only prefixes are reserved, not a staff word inside a name
         'system2',
+        'username', // T-S14.5s second fix pass: only "user_" is reserved
+        'users',
+        'my_user_1',
     ])('accepts %j', (name) => {
         expect(usernameRuleError(name)).toBeNull();
     });
@@ -74,7 +78,7 @@ describe('A226 item 2: usernameRuleError refuses with one text per case, checked
         ['alice!', USERNAME_CHARACTERS_TEXT],
         ['élan', USERNAME_CHARACTERS_TEXT],
         ['al#1234', USERNAME_CHARACTERS_TEXT],
-        ['Guest_1a2b3c4d', USERNAME_CHARACTERS_TEXT], // the guest name form is upper case
+        ['Guest_1a2b3c4d', USERNAME_CHARACTERS_TEXT], // the old guest name form (guests are guest_<hex8> since the second S14.5s fix pass)
         ['SYSTEM', USERNAME_CHARACTERS_TEXT],
         ['a..b', USERNAME_DOUBLE_PERIOD_TEXT],
         ['..', USERNAME_DOUBLE_PERIOD_TEXT],
@@ -106,6 +110,11 @@ describe('A226 item 2: usernameRuleError refuses with one text per case, checked
         ['null', USERNAME_RESERVED_TEXT],
         ['undefined', USERNAME_RESERVED_TEXT],
         ['ipcbattlegrounds', USERNAME_RESERVED_TEXT],
+        // T-S14.5s second fix pass (review M1): the sign-in fallback prefix is reserved.
+        ['user_', USERNAME_RESERVED_TEXT],
+        ['user_12345678', USERNAME_RESERVED_TEXT],
+        ['user_12345678_2', USERNAME_RESERVED_TEXT],
+        ['user_bob', USERNAME_RESERVED_TEXT],
     ])('refuses %j', (name, text) => {
         expect(usernameRuleError(name)).toBe(text);
     });
@@ -186,6 +195,30 @@ describe('A228 item 2: usernameBaseFromProvider and withUsernameSuffix', () => {
             expect(usernameBaseFromProvider(raw)).toBeNull();
         },
     );
+
+    it('a user_ handle has no valid base (the fallback prefix is reserved)', () => {
+        expect(usernameBaseFromProvider('User_42')).toBeNull();
+    });
+
+    // T-S14.5s second fix pass (review M1): the module admits the fallback candidates by their shape.
+    it.each(['user_1', 'user_12345678', 'user_12345678_2', 'user_00000000_9'])(
+        '%j is a sign-in fallback name',
+        (name) => {
+            expect(isSignInFallbackUsername(name)).toBe(true);
+        },
+    );
+
+    it.each([
+        'user_',
+        'user_123456789',
+        'user_1234_1',
+        'user_1234_10',
+        'user_abc',
+        'User_1234',
+        'x_user_1',
+    ])('%j is not a sign-in fallback name', (name) => {
+        expect(isSignInFallbackUsername(name)).toBe(false);
+    });
 
     it('a suffix keeps the name within 32 characters', () => {
         expect(withUsernameSuffix('neo', 2)).toBe('neo_2');

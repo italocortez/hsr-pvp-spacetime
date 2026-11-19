@@ -3,8 +3,8 @@
 // whole transaction on the index, so every writer that derives a name picks a free one first.
 import { SenderError } from 'spacetimedb/server';
 import {
-    USERNAME_CHANGE_INTERVAL_MS, USERNAME_MAX_LENGTH, USERNAME_TOO_OFTEN_TEXT,
-    normalizeUsername, parseUserReference, usernameBaseFromProvider, usernameRuleError, withUsernameSuffix,
+    SIGN_IN_FALLBACK_PREFIX, USERNAME_CHANGE_INTERVAL_MS, USERNAME_MAX_LENGTH, USERNAME_TOO_OFTEN_TEXT,
+    isSignInFallbackUsername, normalizeUsername, parseUserReference, usernameBaseFromProvider, usernameRuleError, withUsernameSuffix,
 } from '@shared/identity';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 
@@ -82,6 +82,8 @@ export const NO_FREE_USERNAME_TEXT = 'No free username could be derived for this
  * result the rule still refuses (reserved, too short, no letter or digit) falls back to `user_<last 8 digits of the
  * provider id>`. A taken name gets a suffix (`_2` to `_9`, each candidate checked by the rule, so `guest_2` or `admin_2`
  * is never produced); when the provider base has no free candidate the fallback base is tried the same way.
+ * S14.5s second fix pass (review M1): the `user_` prefix is reserved for player choice (a handle such as `user_42`
+ * takes the fallback), so the fallback candidates are admitted by their own shape (isSignInFallbackUsername) instead.
  * Deterministic (no random draw), bounded (at most 18 index reads), index reads only. Throws NO_FREE_USERNAME_TEXT
  * when every candidate is taken.
  */
@@ -92,8 +94,8 @@ export function providerUsername(ctx: any, providerName: string, providerId: str
         const name = firstFreeUsername(ctx, fromProvider, selfUserId, ruleAccepts);
         if (name !== null) return name;
     }
-    const fallback = `user_${providerId.slice(-8)}`;
-    const name = firstFreeUsername(ctx, fallback, selfUserId, ruleAccepts);
+    const fallback = `${SIGN_IN_FALLBACK_PREFIX}${providerId.slice(-8)}`;
+    const name = firstFreeUsername(ctx, fallback, selfUserId, isSignInFallbackUsername);
     if (name === null) throw new SenderError(NO_FREE_USERNAME_TEXT);
     return name;
 }
@@ -126,18 +128,27 @@ export function findUserByReference(ctx: any, ref: string): any {
 }
 
 /**
- * A228 item 3 (review S2): lowercases every username once. Skips the SYSTEM user (found by its upper-case name
- * everywhere) and guests (`Guest_<hex8>`, not chosen by anyone; the reserved `guest_` prefix keeps a lowercase twin
- * out of reach). Users are taken in id order, so on a collision the older account keeps the plain lowercase name and
- * the other gets the first free `_2` ... `_9` (firstFreeUsername, no rule check: an old name may hold characters the
- * current rule refuses; only its case changes). A name with no free candidate is left as it is and counted. Writes
- * only rows whose name changes, so a second run writes nothing. Audit actor: SYSTEM (the caller passes it).
- * Full read of User: a one-off server-only operation (A37 exemption, as the admin views).
+ * A228 item 3 (review S2): lowercases every username once. Skips only the SYSTEM user (found by its upper-case name
+ * everywhere). Guests are lowercased too since the second S14.5s fix pass (A228, the user's ruling of 2026-11-18:
+ * guest names are `guest_<hex8>`; an old `Guest_<hex8>` becomes `guest_<hex8>`).
+ * Collision order (second fix pass, review S1): a name that is already lowercase is never renamed, whatever the age
+ * of its account. The names that need lowercasing are taken by account age, `createdDate` ascending with the user id
+ * only as a tie-break (ids are not ordered), so among mixed-case names that differ only by case the earliest account
+ * keeps the plain lowercase name, and every other one gets the first free `_2` ... `_9` (firstFreeUsername, no rule
+ * check: an old name may hold characters the current rule refuses; only its case changes). A name with no free
+ * candidate is left as it is and counted. Writes only rows whose name changes, so a second run writes nothing. Audit
+ * actor: SYSTEM (the caller passes it). Full read of User: a one-off server-only operation (A37 exemption, as the
+ * admin views).
  */
 export function lowercaseAllUsernames(ctx: any, actorId: number): { changed: number; suffixed: number; leftAsIs: string[] } {
     const users = [...ctx.db.User.iter()]
-        .filter((u: any) => !u.isGuest && u.username !== 'SYSTEM' && u.username !== u.username.toLowerCase())
-        .sort((a: any, b: any) => a.id - b.id);
+        .filter((u: any) => u.username !== 'SYSTEM' && u.username !== u.username.toLowerCase())
+        .sort((a: any, b: any) => {
+            const ta: bigint = a.createdDate.microsSinceUnixEpoch;
+            const tb: bigint = b.createdDate.microsSinceUnixEpoch;
+            if (ta !== tb) return ta < tb ? -1 : 1;
+            return a.id - b.id;
+        });
     let changed = 0;
     let suffixed = 0;
     const leftAsIs: string[] = [];
@@ -173,12 +184,14 @@ export function uniqueUsername(ctx: any, base: string, selfUserId: number): stri
 }
 
 /**
- * S10h (review of the test task): the base guest name, "Guest_" + the LAST 8 hex characters of the identity. A
+ * S10h (review of the test task): the base guest name, "guest_" + the LAST 8 hex characters of the identity
+ * (lowercase hex; "Guest_" before the second S14.5s fix pass, A228 and the user's ruling of 2026-11-18). Guests are
+ * recognised by `User.isGuest`, never by this name; the reserved `guest_` prefix keeps it out of a player's reach. A
  * SpacetimeDB identity is not uniformly random from its first character: its 32 bytes are a 2-byte fixed tag (hex
  * "c200"), a 4-byte checksum, then 26 bytes of the BLAKE3 hash of issuer|subject (Identity::from_claims), so the first
  * 8 hex characters carry only 16 varying bits. The trailing characters come from the hash and vary across identities.
  * Collisions remain possible (32 bits); login_as_guest resolves them through uniqueUsername.
  */
 export function guestUsernameBase(identityHex: string): string {
-    return `Guest_${identityHex.slice(-8)}`;
+    return `guest_${identityHex.slice(-8).toLowerCase()}`;
 }

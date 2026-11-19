@@ -2201,6 +2201,7 @@ export type PickPayload = __Infer<typeof PickPayload>;
 
 export const PlayerCardRow = __t.object("PlayerCardRow", {
   relation: __t.string(),
+  userId: __t.u32(),
   displayName: __t.string(),
   username: __t.string(),
   avatarCharacterName: __t.string(),

@@ -2408,3 +2408,15 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
 - **Decision:** the chart follows the mockup's rule (the orchestrator's option D). In Classic the pairing segment takes the dark shade of the game mode's colour. In Auction the Extra bid segment takes that dark shade, as in the mockup, and a pairing on the same bar (only with a cost set that prices pairs in Auction) takes the darker shade. This replaces A228 item 1 where it gave Extra bid the darker shade.
 - **Why:** user, 2026-11-18, after asking how the colours were done before ("how did we do the colors before we removed it? check the old commit") and seeing that the mockup has three shades whose dark one serves the pairing in Classic and the extra bid in Auction: "lets go with D then". The darker shade is below 3:1 against the card, so it is kept to the rare case.
 - **Where implemented:** `web/src/pages/teambuilder/CostChart.module.css` and `CostChart.tsx` (`data-draft`); numbers in `docs/frontend/pages.md`.
+
+### A230 — Profile backend, second review: guest names lowercase; confirmations
+
+- **Date:** 2026-11-18 · **Status:** decided and built (S14.5s second fix pass); not published
+- **Decision:**
+  1. Guest usernames are lowercase too: new guests are `guest_<hex8>`, and the one-time lowercase command covers existing guests. Only SYSTEM is skipped.
+  2. The player card carries no per-mode ratings (the builder's reading of A228 item 6), confirmed.
+  3. The wider reserved list and the staff lookalike prefixes are confirmed.
+  4. The card keeps the other player's user id, and finished matches from anonymous lobbies keep counting toward Best Ally and Nemesis: identities of a finished match are revealed to its participants (A37), and a running anonymous lobby sends hidden ids as 0. No change.
+  5. The orchestrator's choices in the second fix pass, for the user to overrule: in the lowercase command a name already in lowercase is never renamed, and among the names that need lowercasing the earliest created account keeps the plain name; `user_` is reserved for player-chosen names so the sign-in fallback name cannot be taken; an old guest's display name is not changed by the command.
+- **Why:** user, 2026-11-18: "guest cna have the lowercase g, doesnt need to be capital G. for #2 its fine, for #3, fine"; on the user id: "would the user id be there tho? think about anonimity of users on anonymus lobbies", then, after the explanation above with the option of leaving anonymous matches out of the cards: "keep it, A".
+- **Where implemented:** `spacetimedb/src/helpers/identity/usernames.ts`, `shared/identity/username.ts`, `spacetimedb/src/views/socialViews.ts`. Open: `test/live/auth-subscriptions.test.ts` still expects `Guest_` (a T-task before the next live run).

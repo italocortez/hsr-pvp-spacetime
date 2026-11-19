@@ -1,8 +1,9 @@
 // Identity: a verified user's own username change (rule, taken, guests, suspension, rate limit) and the Admin rename.
-// Decisions: A226 (item 2), A122(1), A214, A228 (items 2, 3, 4, 8)
+// Decisions: A226 (item 2), A122(1), A214, A228 (items 2, 3, 4, 8; guest names lowercase, user ruling of 2026-11-18)
 // Contracts: docs/auth/contract.md
 // From S14.5s (T-task of the step). In-memory datastore only; nothing reaches maincloud.
 import { describe, expect, it } from 'vitest';
+import { Timestamp } from 'spacetimedb';
 import {
     USERNAME_CHARACTERS_TEXT,
     USERNAME_DOUBLE_PERIOD_TEXT,
@@ -175,14 +176,15 @@ describe('A228 items 2, 3: usernames are lowercase', () => {
         expect(usernameOf(test, neo)).toBe('neo');
     });
 
+    // T-S14.5s second fix pass (A228, user ruling of 2026-11-18): guest names are lowercase `guest_<hex8>`.
     it('no new name can look like a guest name or the SYSTEM user: the guest_ prefix and "system" are reserved, upper case is refused', () => {
         const test = newHarness();
         const neo = verified(test, 'neo');
         const g = guest(test, 'g1');
         const guestName = usernameOf(test, g);
-        expect(guestName).toMatch(/^Guest_[0-9a-f]{8}$/);
-        expect(rejection(test, neo, rename(guestName))).toBe(USERNAME_CHARACTERS_TEXT);
-        expect(rejection(test, neo, rename(guestName.toLowerCase()))).toBe(USERNAME_RESERVED_TEXT);
+        expect(guestName).toMatch(/^guest_[0-9a-f]{8}$/);
+        expect(rejection(test, neo, rename(guestName))).toBe(USERNAME_RESERVED_TEXT);
+        expect(rejection(test, neo, rename(`G${guestName.slice(1)}`))).toBe(USERNAME_CHARACTERS_TEXT); // the old form
         expect(rejection(test, neo, rename('SYSTEM'))).toBe(USERNAME_CHARACTERS_TEXT);
         expect(rejection(test, neo, rename('system'))).toBe(USERNAME_RESERVED_TEXT);
     });
@@ -268,6 +270,31 @@ describe('A228 item 2: a Discord sign-in derives a name that follows the rule', 
         expect(usernameOf(test, signIn(test, 'full', 'Alpha'))).toBe(fallbackOf('full'));
     });
 
+    // T-S14.5s second fix pass (review M1): the `user_` prefix is reserved for player choice.
+    it('the fallback prefix user_ is reserved: no player can take a fallback name, the sign-in still produces it', () => {
+        const test = newHarness();
+        const neo = verified(test, 'neo');
+        const boss = admin(test, 'boss');
+        const squatted = fallbackOf('victim');
+        expect(rejection(test, neo, rename(squatted))).toBe(USERNAME_RESERVED_TEXT);
+        expect(rejection(test, neo, rename(`${squatted}_2`))).toBe(USERNAME_RESERVED_TEXT);
+        expect(rejection(test, boss, adminRename(neo, squatted))).toBe(USERNAME_RESERVED_TEXT);
+        tx(test, neo, rename('username')); // only the prefix with its underscore is reserved
+        expect(usernameOf(test, signIn(test, 'victim', 'Admin'))).toBe(squatted);
+        expect(usernameOf(test, signIn(test, 'u42', 'user_42'))).toBe(fallbackOf('u42')); // a user_ handle takes the fallback
+    });
+
+    it('a taken fallback name gets the first free _2 suffix', () => {
+        const test = newHarness();
+        const first = signIn(test, 'f1', 'Admin');
+        const fallback = usernameOf(test, first);
+        // Another account already holds the fallback of 'f2' (an old name from before the rule).
+        const holder = verified(test, 'holder');
+        setUsername(test, holder, fallbackOf('f2'));
+        expect(usernameOf(test, signIn(test, 'f2', 'Admin'))).toBe(`${fallbackOf('f2')}_2`);
+        expect(usernameOf(test, first)).toBe(fallback);
+    });
+
     it('update_username is refused for a non-Admin during maintenance mode', () => {
         const test = newHarness();
         const neo = verified(test, 'neo');
@@ -282,31 +309,65 @@ describe('A228 item 2: a Discord sign-in derives a name that follows the rule', 
 describe('A228 item 3: server_lowercase_usernames lowercases every name once', () => {
     const lower = (ctx: any) => M.server_lowercase_usernames(ctx, {});
 
-    it('mixed-case names are lowercased; a collision keeps the plain name for the older account and suffixes the other', () => {
+    // T-S14.5s second fix pass (review S1): the collision order is by account age (createdDate, the id only as a
+    // tie-break), and an already lowercase name is never renamed. The two cases are pinned separately.
+    /** Sets the account's createdDate `offsetMs` from now (ids are not ordered; age is the order). */
+    const setCreated = (test: Harness, who: Actor, offsetMs: number) => {
+        const row = test.db.User.id.find(who.userId)!;
+        const micros = test.clock.now().microsSinceUnixEpoch + BigInt(offsetMs) * 1000n;
+        test.db.User.id.update({ ...row, createdDate: new Timestamp(micros) });
+    };
+
+    it('among mixed-case names that differ only by case, the earliest account keeps the plain name, whatever the ids', () => {
         const test = newHarness();
-        const older = verified(test, 'older');
-        const newer = verified(test, 'newer');
-        const plain = verified(test, 'plain');
-        const keeper = verified(test, 'erinx');
-        setUsername(test, older, 'Mixed.Case');
-        setUsername(test, newer, 'MIXED.case');
-        setUsername(test, plain, 'ErinX'); // the lowercase twin is held by `keeper`
+        const lowId = verified(test, 'lowid');
+        const highId = verified(test, 'highid');
+        const third = verified(test, 'third');
+        expect(lowId.userId).toBeLessThan(highId.userId);
+        setUsername(test, lowId, 'Mixed.Case');
+        setUsername(test, highId, 'MIXED.case');
+        setUsername(test, third, 'MiXeD.cAsE');
+        setCreated(test, highId, -3_000); // the earliest account holds the higher id
+        setCreated(test, lowId, -2_000);
+        setCreated(test, third, -2_000); // same moment as lowId: the lower id breaks the tie
         tx(test, 'internal', lower);
-        expect(usernameOf(test, older)).toBe('mixed.case');
-        expect(usernameOf(test, newer)).toBe('mixed.case_2');
-        expect(usernameOf(test, plain)).toBe('erinx_2');
-        expect(usernameOf(test, keeper)).toBe('erinx');
-        expect(test.db.User.id.find(older.userId)!.lastModifiedById).toBe(0); // audit actor: SYSTEM
+        expect(usernameOf(test, highId)).toBe('mixed.case');
+        const [first, second] = lowId.userId < third.userId ? [lowId, third] : [third, lowId];
+        expect(usernameOf(test, first)).toBe('mixed.case_2');
+        expect(usernameOf(test, second)).toBe('mixed.case_3');
+        expect(test.db.User.id.find(highId.userId)!.lastModifiedById).toBe(0); // audit actor: SYSTEM
     });
 
-    it('SYSTEM and guest names are left as they are; an old name keeps its other characters; nothing counts on the limit', () => {
+    it('an already lowercase holder keeps its name even when the mixed-case account is older, and when it is newer', () => {
+        const test = newHarness();
+        const oldMixed = verified(test, 'oldmixed');
+        const newLower = verified(test, 'erinx');
+        setUsername(test, oldMixed, 'ErinX');
+        setCreated(test, oldMixed, -5_000);
+        const newMixed = verified(test, 'newmixed');
+        const oldLower = verified(test, 'neo.x');
+        setUsername(test, newMixed, 'Neo.X');
+        setCreated(test, oldLower, -5_000);
+        tx(test, 'internal', lower);
+        expect(usernameOf(test, newLower)).toBe('erinx'); // newer, already lowercase: kept
+        expect(usernameOf(test, oldMixed)).toBe('erinx_2'); // older, but its name needed lowercasing
+        expect(usernameOf(test, oldLower)).toBe('neo.x');
+        expect(usernameOf(test, newMixed)).toBe('neo.x_2');
+    });
+
+    // T-S14.5s second fix pass (A228, user ruling of 2026-11-18): guest names are lowercased too.
+    it('SYSTEM is left as it is; an old guest name Guest_<hex8> is lowercased; an old name keeps its other characters; nothing counts on the limit', () => {
         const test = newHarness();
         const g = guest(test, 'g1');
+        const freshName = usernameOf(test, g);
+        expect(freshName).toMatch(/^guest_[0-9a-f]{8}$/);
+        const oldGuestName = `G${freshName.slice(1)}`;
+        setUsername(test, g, oldGuestName); // a guest from before the ruling
         const legacy = verified(test, 'legacy');
         setUsername(test, legacy, 'Old Name!');
-        const guestName = usernameOf(test, g);
         tx(test, 'internal', lower);
-        expect(usernameOf(test, g)).toBe(guestName);
+        expect(usernameOf(test, g)).toBe(freshName);
+        expect(test.db.User.id.find(g.userId)!.isGuest).toBe(true);
         expect(test.db.User.username.find('SYSTEM')).toBeDefined();
         expect(usernameOf(test, legacy)).toBe('old name!');
         expect(rateRow(test, legacy)).toBeUndefined();

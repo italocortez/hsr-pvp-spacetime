@@ -2,8 +2,9 @@
 // Decisions: A226 (items 5, 6, 7), A102, A195, A228 (item 6)
 // Contracts: docs/player-stats/contract.md, docs/views/contract.md
 // From S14.5s (T-task of the step). In-memory datastore only; nothing reaches maincloud.
-// T-S14.5s fix pass (A228 item 6): the card carries the active account rating only; `mmrByMode`, `globalRating` and
-// `userId` are gone, so the cards are identified by the carded player's username (unique) instead of the user id.
+// T-S14.5s fix pass (A228 item 6): the card carries the active account rating only; `mmrByMode` and `globalRating`
+// are gone. Most cards are identified by the carded player's username (unique). T-S14.5s second fix pass (review M3):
+// `userId` is back on the row (the join key to view_my_relationships.otherUserId) and is pinned below.
 import { describe, expect, it } from 'vitest';
 import type { PlayerCardRow } from '@bindings/types';
 import { AUDIT, M, guest, newHarness, tx, type Actor, type Harness } from '../fixtures/harness';
@@ -125,15 +126,26 @@ describe('A226 item 6: thresholds, sums and ties', () => {
 });
 
 describe('A226 item 5, A228 item 6: what a card shows', () => {
-    it('the row carries exactly the card fields: no mode ratings, no composite rating, no user id', () => {
+    it('the row carries exactly the card fields: the user id, no mode ratings, no composite rating', () => {
         const test = newHarness();
         const me = verified(test, 'me');
         const p = verified(test, 'pp');
         rel(test, me, p, { ally: [3, 2] });
         expect(Object.keys(cardOf(test, me, 'BestAlly')!).sort()).toEqual([
             'accountCount', 'activeAccountRating', 'avatarCharacterName', 'displayName', 'displayedAchievementId',
-            'losses', 'matches', 'relation', 'username', 'wins',
+            'losses', 'matches', 'relation', 'userId', 'username', 'wins',
         ]);
+    });
+
+    it("the card's userId is the relationship row's otherUserId (the join key)", () => {
+        const test = newHarness();
+        const me = verified(test, 'me');
+        const p = verified(test, 'pp');
+        rel(test, me, p, { ally: [3, 2], opp: [3, 0] });
+        expect(cardOf(test, me, 'BestAlly')!.userId).toBe(p.userId);
+        expect(cardOf(test, me, 'Nemesis')!.userId).toBe(p.userId);
+        const relationships = view<{ otherUserId: number }>(test, 'view_my_relationships', me);
+        expect(new Set(relationships.map((r) => r.otherUserId))).toEqual(new Set([p.userId]));
     });
 
     it('names, title, the active account rating (the only rating, whatever the mode ratings) and the account count', () => {
@@ -150,7 +162,7 @@ describe('A226 item 5, A228 item 6: what a card shows', () => {
         test.db.HsrAccount.id.update({ ...test.db.HsrAccount.id.find(active)!, accountRating: 4321 });
         rel(test, me, p, { ally: [3, 2], season });
         expect(cardOf(test, me, 'BestAlly')).toEqual({
-            relation: 'BestAlly', displayName: 'Pat Shown', username: 'pat_handle',
+            relation: 'BestAlly', userId: p.userId, displayName: 'Pat Shown', username: 'pat_handle',
             avatarCharacterName: 'Kafka', displayedAchievementId: 7,
             activeAccountRating: 4321, accountCount: 2, matches: 3, wins: 2, losses: 1,
         });

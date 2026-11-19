@@ -186,7 +186,7 @@ interface TestHarness {
 ### Guest Harness Connection
 **Given:** Database is bootstrapped (ServerIdentity + SYSTEM user exist)
 **When:** `createTestHarness()` is called
-**Then:** Resolves with a `TestHarness` where `userId` > 0, User row has `isGuest=true`, `username=Guest_{hex8}`.
+**Then:** Resolves with a `TestHarness` where `userId` > 0, User row has `isGuest=true`, `username=Guest_{hex8}`. _Superseded in Phase S14.5s execution (user ruling of 2026-11-18, under DECISIONS.md A228): the guest username is `guest_{hex8}` (lowercase); the harness reads the user id from `view_my_identity`, not from the name._
 
 ### Verified Harness Connection
 **Given:** Database is bootstrapped, `STDB_SERVER_TOKEN` is in `.env.test.local`
