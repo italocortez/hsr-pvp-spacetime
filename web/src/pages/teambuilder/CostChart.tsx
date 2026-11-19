@@ -34,7 +34,7 @@ export function CostChart({
     );
     const filled = slots.some((s) => s !== null);
     return (
-        <div className={styles.wrap} data-mode={mode}>
+        <div className={styles.wrap} data-mode={mode} data-draft={auction ? 'auction' : 'classic'}>
             <StackedBarChart
                 label={`Cost per character, ${MODE_SHORT[mode]}, ${auction ? 'Auction' : 'Classic'} draft`}
                 axisTitle={`Cost — ${MODE_SHORT[mode]}`}

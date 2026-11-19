@@ -2401,3 +2401,10 @@ The product and architecture decisions of `hsr-pvp-spacetime`, one entry per dec
   8. A user can change their username once per hour. This replaces the 3 per hour of A226 item 2 as built.
 - **Why:** user, 2026-11-18, on the review of S14.5s (`tmp/profile/review-s.md`): "for the chart, we use what the mockup has and extra bids get a darker shade. For your other rulings, #1, A, for #2 lower case all, for #3, A. For #4, A. For #5, we just keep the active account raiting for things outside lobby because that one uses its own composite raiting. For #6, we accept, dont need a log. Also, people can edit their username once per hour." Earlier, on the gold: "we already had shades for pairing, why do we need a 4th one?"
 - **Where implemented:** not yet.
+
+### A229 — Cost chart: the mockup's three shades; the darker shade only for a pairing in Auction
+
+- **Date:** 2026-11-18 · **Status:** decided and built (S14.5t)
+- **Decision:** the chart follows the mockup's rule (the orchestrator's option D). In Classic the pairing segment takes the dark shade of the game mode's colour. In Auction the Extra bid segment takes that dark shade, as in the mockup, and a pairing on the same bar (only with a cost set that prices pairs in Auction) takes the darker shade. This replaces A228 item 1 where it gave Extra bid the darker shade.
+- **Why:** user, 2026-11-18, after asking how the colours were done before ("how did we do the colors before we removed it? check the old commit") and seeing that the mockup has three shades whose dark one serves the pairing in Classic and the extra bid in Auction: "lets go with D then". The darker shade is below 3:1 against the card, so it is kept to the rare case.
+- **Where implemented:** `web/src/pages/teambuilder/CostChart.module.css` and `CostChart.tsx` (`data-draft`); numbers in `docs/frontend/pages.md`.

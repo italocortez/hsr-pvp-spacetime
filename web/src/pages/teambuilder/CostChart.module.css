@@ -2,17 +2,22 @@
 
 /*
  * The cost chart's colours (design/mockups/teambuilder.html `COST_RAMP`: one hue family per game mode, three shades:
- * character (mid), lightcone (light) and pairing (deep)).
+ * character (mid), lightcone (light) and extra bid (deep)).
  *
- * S14.5t (A228 item 1, replaces the gold of A201 item 9): Pairing takes the mode's deep shade; the Auction Extra bid
- * takes a darker shade of the same hue (OKLCH lightness 0.10 below the pairing, same hue and chroma).
+ * S14.5t (A228, option D; replaces the gold of A201 item 9): the three tested shades cover everything people normally
+ * see. Per draft mode (`data-draft` on the wrapper):
+ * - Classic: Pairing (--chart-tone-4) takes the deep shade (Classic has no extra bid).
+ * - Auction: Extra bid (--chart-tone-3) takes the deep shade, as in the mockup; Pairing (rare in Auction: only a cost
+ *   set that prices pairs there) takes a darker shade of the same hue (OKLCH lightness 0.10 below, same hue and chroma).
+ * Each mode sets --chart-deep and --chart-darker; the draft mode maps them to tone 3 and tone 4. Legend swatches and
+ * tooltip keys read the same tones, so they follow.
  *
  * S14.3b fix pass (review S7): each mode keeps the mockup's hue (within 6 degrees of OKLCH hue) and moves lightness
  * and chroma by the least that makes every part at least 3:1 against the card (--bg-card #1a1d2a) and every pair of
  * parts at least 15 apart (OKLab delta E x100) for normal vision and 8 for protan and deutan vision. The deep shade
- * (now the pairing) sits at the 3:1 floor in MoC and AA, so a darker extra bid cannot reach 3:1 on this card: it
- * stays apart from its neighbours by the 2px card gap between parts and by its distance from them (at least 9.9 from
- * the pairing for normal vision, 8.6 for protan and deutan; at least 17.8 from the character and light cone below it for every vision type).
+ * sits at the 3:1 floor in MoC and AA, so the darker shade cannot reach 3:1 on this card: it stays apart from its
+ * neighbours by the 2px card gap between parts and by its distance from them (at least 9.9 from the deep shade for
+ * normal vision, 8.6 for protan and deutan; at least 17.8 from the character and light cone for every vision type).
  * Numbers per value in docs/frontend/pages.md; before and after: `tmp/pw/s14-5t/compare.html` (local).
  *
  * No token holds these (tokens.css adds only what a mockup's :root defines; these live in the mockup's script), so
@@ -21,29 +26,36 @@
 
 .wrap {
     --chart-plot-h: 220px;
+    --chart-tone-3: var(--chart-darker); /* Classic: no extra bid is drawn */
+    --chart-tone-4: var(--chart-deep);
 
     @media (--bp-sm) {
         --chart-plot-h: 180px;
     }
 
+    &[data-draft="auction"] {
+        --chart-tone-3: var(--chart-deep);
+        --chart-tone-4: var(--chart-darker);
+    }
+
     &[data-mode="moc"] {
         --chart-tone-1: #7784e2; /* local: MoC character (mockup #6e82e8), 4.93:1 */
         --chart-tone-2: #a3b7fe; /* local: MoC light cone (mockup #a6b6f5), 8.59:1 */
-        --chart-tone-3: #1d31d2; /* local: MoC extra bid, darker than the pairing, 1.93:1 */
-        --chart-tone-4: #3256f5; /* local: MoC pairing (mockup #3f49c4), 3.02:1 */
+        --chart-deep: #3256f5; /* local: MoC deep (mockup #3f49c4), 3.02:1 */
+        --chart-darker: #1d31d2; /* local: MoC darker, 1.93:1 */
     }
 
     &[data-mode="as"] {
         --chart-tone-1: #30bc9c; /* local: AS character, emerald (mockup #2cb89c), 7.02:1 */
         --chart-tone-2: #81e9d0; /* local: AS light cone (mockup #79ddc5), 11.57:1 */
-        --chart-tone-3: #076958; /* local: AS extra bid, darker than the pairing, 2.53:1 */
-        --chart-tone-4: #038a74; /* local: AS pairing (mockup #1b786c), 3.90:1 */
+        --chart-deep: #038a74; /* local: AS deep (mockup #1b786c), 3.90:1 */
+        --chart-darker: #076958; /* local: AS darker, 2.53:1 */
     }
 
     &[data-mode="aa"] {
         --chart-tone-1: #f85c75; /* local: AA character, garnet (mockup #bc3d54), 5.41:1 */
         --chart-tone-2: #ffa7b8; /* local: AA light cone (mockup #e38495), 9.15:1 */
-        --chart-tone-3: #8f253d; /* local: AA extra bid, darker than the pairing, 2.00:1 */
-        --chart-tone-4: #b04558; /* local: AA pairing (mockup #872637), 3.06:1 */
+        --chart-deep: #b04558; /* local: AA deep (mockup #872637), 3.06:1 */
+        --chart-darker: #8f253d; /* local: AA darker, 2.00:1 */
     }
 }

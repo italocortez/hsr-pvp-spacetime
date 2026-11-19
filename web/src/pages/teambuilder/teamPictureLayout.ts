@@ -63,7 +63,7 @@ export const COLORS = {
     border: 'rgba(255, 255, 255, 0.08)',
     error: '#d85a5a',
     signature: '#6fb7e8',
-    /** The chart's pairing segment (A201 item 9). */
+    /** The picture's pairing chips (A201 item 9); the cost chart no longer uses gold (A228). */
     pairing: '#e3cf55',
 } as const;
 
