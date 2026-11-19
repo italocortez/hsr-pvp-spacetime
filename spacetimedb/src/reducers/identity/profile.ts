@@ -111,8 +111,9 @@ export const update_display_name = spacetimedb.reducer({
  * S14.5s (A226 item 2): the new name follows the shared rule (checkNewUsername: Discord's form, 2 to 32 characters,
  * reserved names refused; the web's form runs the same function from @shared/identity). The caller's own current name
  * (trimmed) is a no-op that writes and counts nothing, so an existing name the rule would refuse is never re-checked.
- * "Taken" is one read of the unique User.username index (exact, case-sensitive). The old name is free at once. Last,
- * the change counts on the caller's username window (3 per hour, consumeUsernameChangeAllowance).
+ * "Taken" is one read of the unique User.username index (exact; every verified name is lowercase since A228 item 3, so
+ * it is a case-insensitive check). The old name is free at once. Last, the change must come at least one hour after the
+ * caller's previous one (A228 item 8, consumeUsernameChangeAllowance).
  */
 export const update_username = spacetimedb.reducer({
     newUsername: t.string(),

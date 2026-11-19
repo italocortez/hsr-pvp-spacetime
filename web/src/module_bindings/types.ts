@@ -2201,13 +2201,10 @@ export type PickPayload = __Infer<typeof PickPayload>;
 
 export const PlayerCardRow = __t.object("PlayerCardRow", {
   relation: __t.string(),
-  userId: __t.u32(),
   displayName: __t.string(),
   username: __t.string(),
   avatarCharacterName: __t.string(),
   displayedAchievementId: __t.option(__t.u32()),
-  mmrByMode: __t.array(__t.u32()),
-  globalRating: __t.option(__t.u32()),
   activeAccountRating: __t.option(__t.u32()),
   accountCount: __t.u32(),
   matches: __t.u32(),
@@ -3043,8 +3040,7 @@ export type UserSuspension = __Infer<typeof UserSuspension>;
 
 export const UserUsernameRate = __t.object("UserUsernameRate", {
   userId: __t.u32(),
-  windowStart: __t.timestamp(),
-  changeCount: __t.u32(),
+  lastChangeAt: __t.timestamp(),
   createdById: __t.u32(),
   createdDate: __t.timestamp(),
   lastModifiedById: __t.u32(),

@@ -21,6 +21,7 @@ import {
 } from '@module/helpers/identity/linkCode';
 import { DISCORD_LOGIN_METHOD } from '@module/helpers/lobby/banHelper';
 import { liftSuspension, suspendUser } from '@module/helpers/identity/suspensionActions';
+import { findUserByReference, lowercaseAllUsernames } from '@module/helpers/identity/usernames';
 
 /**
  * Guard: the caller is a trusted server identity (Owner or Delegate, §C.4). A Linker (M5a3) is refused with the same
@@ -240,7 +241,10 @@ export const linker_present_code = spacetimedb.reducer({
 
 /**
  * Server-only reducer: set a user's role.
- * Called via: npm run stdb:manage-user -- --target <test|prod> set-role <username> <role>
+ * Called via: npm run stdb:manage-user -- --target <test|prod> set-role <user> <role>
+ * A228 item 4 (S14.5s fix pass): `username` (name kept, so existing callers keep working) is a user reference: a
+ * username, `id:<n>` or `discord:<id>` (findUserByReference, the same for the four manage-user reducers). The script
+ * resolves the reference through view_admin_users first, prints the account and then passes `id:<n>`.
  */
 export const server_set_role = spacetimedb.reducer({
     username: t.string(),
@@ -258,11 +262,8 @@ export const server_set_role = spacetimedb.reducer({
         throw new SenderError(`Invalid role "${roleTag}". Must be one of: ${validRoles.join(', ')}`);
     }
 
-    // Use unique index instead of .iter()
-    const targetUser = ctx.db.User.username.find(username);
-    if (!targetUser) {
-        throw new SenderError(`User "${username}" not found`);
-    }
+    // A228 item 4: `username` is a user reference (a username, id:<n> or discord:<id>; findUserByReference).
+    const targetUser = findUserByReference(ctx, username);
     // S10e (identity audit #9): the server identities' admin rights come from the SYSTEM user's role.
     if (targetUser.username === 'SYSTEM') {
         throw new SenderError('The SYSTEM user cannot be changed.');
@@ -279,8 +280,8 @@ export const server_set_role = spacetimedb.reducer({
 });
 
 /**
- * Server-only reducer: delete a user by username.
- * Called via: npm run stdb:manage-user -- --target <test|prod> delete <username>
+ * Server-only reducer: delete a user by user reference (A228 item 4: username, id:<n> or discord:<id>).
+ * Called via: npm run stdb:manage-user -- --target <test|prod> delete <user>
  * Guest users with no history references are hard-deleted; others are soft-deleted.
  */
 export const server_delete_user = spacetimedb.reducer({
@@ -292,11 +293,8 @@ export const server_delete_user = spacetimedb.reducer({
         throw new SenderError('username is required');
     }
 
-    // Use unique index instead of .iter()
-    const targetUser = ctx.db.User.username.find(username);
-    if (!targetUser) {
-        throw new SenderError(`User "${username}" not found`);
-    }
+    // A228 item 4: `username` is a user reference (a username, id:<n> or discord:<id>; findUserByReference).
+    const targetUser = findUserByReference(ctx, username);
     // S10e (identity audit #9): deleting SYSTEM would remove every server identity's mapping.
     if (targetUser.username === 'SYSTEM') {
         throw new SenderError('The SYSTEM user cannot be deleted.');
@@ -308,7 +306,8 @@ export const server_delete_user = spacetimedb.reducer({
 
 /**
  * suspension-s1 (A195, A213(8), A214): server-only suspension by username, the server twin of admin_suspend_user.
- * Called via: npm run stdb:manage-user -- --target <test|prod> suspend <username> [--reason "<text>"]
+ * Called via: npm run stdb:manage-user -- --target <test|prod> suspend <user> [--reason "<text>"]
+ * A228 item 4: `username` is a user reference (username, id:<n> or discord:<id>).
  * Accepts any verified user except SYSTEM, an Admin included (user ruling 2026-11-17: the app cannot suspend an Admin,
  * the server can). Audit actor and suspendedById: SYSTEM (SYSTEM_USER_ID). Checks and side effects: suspendUser.
  */
@@ -320,16 +319,15 @@ export const server_suspend_user = spacetimedb.reducer({
     if (!username || username.length === 0) {
         throw new SenderError('username is required');
     }
-    const targetUser = ctx.db.User.username.find(username);
-    if (!targetUser) {
-        throw new SenderError(`User "${username}" not found`);
-    }
+    // A228 item 4: `username` is a user reference (a username, id:<n> or discord:<id>; findUserByReference).
+    const targetUser = findUserByReference(ctx, username);
     suspendUser(ctx, targetUser, reason, SYSTEM_USER_ID, { fromApp: false });
 });
 
 /**
- * suspension-s1: server-only lift by username, the server twin of admin_lift_suspension.
- * Called via: npm run stdb:manage-user -- --target <test|prod> unsuspend <username>
+ * suspension-s1: server-only lift by user reference (A228 item 4: username, id:<n> or discord:<id>), the server twin
+ * of admin_lift_suspension.
+ * Called via: npm run stdb:manage-user -- --target <test|prod> unsuspend <user>
  */
 export const server_lift_suspension = spacetimedb.reducer({
     username: t.string(),
@@ -338,11 +336,21 @@ export const server_lift_suspension = spacetimedb.reducer({
     if (!username || username.length === 0) {
         throw new SenderError('username is required');
     }
-    const targetUser = ctx.db.User.username.find(username);
-    if (!targetUser) {
-        throw new SenderError(`User "${username}" not found`);
-    }
+    // A228 item 4: `username` is a user reference (a username, id:<n> or discord:<id>; findUserByReference).
+    const targetUser = findUserByReference(ctx, username);
     liftSuspension(ctx, targetUser, SYSTEM_USER_ID);
+});
+
+/**
+ * A228 item 3 (S14.5s fix pass, review S2): server-only, once: lowercases every username except SYSTEM's and the
+ * guests' (lowercaseAllUsernames: id order, a collision gets the first free `_2` ... `_9`, a name with no free
+ * candidate is left and logged). Idempotent: a second run writes nothing. Does not count on any username limit.
+ * Called via: npm run stdb:manage-user -- --target <test|prod> lowercase-usernames. Audit actor: SYSTEM.
+ */
+export const server_lowercase_usernames = spacetimedb.reducer((ctx) => {
+    requireServer(ctx);
+    const { changed, suffixed, leftAsIs } = lowercaseAllUsernames(ctx, SYSTEM_USER_ID);
+    console.log(`[USERNAME] Lowercased ${changed} username(s), ${suffixed} with a suffix; ${leftAsIs.length} left as they are${leftAsIs.length > 0 ? ` (${leftAsIs.map((n) => JSON.stringify(n)).join(', ')})` : ''} (by a server identity)`);
 });
 
 /**

@@ -77,7 +77,12 @@ export const admin_update_hsr_account = spacetimedb.reducer(
 // region derived again) and the creation's duplicate handling: a UID another account holds is allowed and flagged,
 // and isDuplicateUid is recomputed for the holders of the old and of the new UID (recalcDuplicateUid). Refused while
 // the account is selected in a live lobby (ensureAccountRosterEditable, S10w / A142, as the Admin roster edits).
-// The same UID as now is a no-op. Audit columns carry the staff member; one log line.
+// The same UID as now is a no-op. Audit columns carry the staff member; one log line (A228 item 7: no other trail).
+// A228 item 5: refused while a tournament that is not Completed or Cancelled locks the account (D-25).
+
+/** A228 item 5: the refusal of a UID correction on an account locked by an unfinished tournament. */
+export const UID_TOURNAMENT_LOCKED_TEXT =
+    'Cannot change the UID of an account locked in an active tournament. Wait for the tournament to complete or be cancelled.';
 
 export const mod_update_hsr_account_uid = spacetimedb.reducer(
     { hsrAccountId: t.u32(), uid: t.string() },
@@ -90,7 +95,16 @@ export const mod_update_hsr_account_uid = spacetimedb.reducer(
         validateUid(uid);
         const region = deriveRegion(uid);
         if (uid === account.uid) return;
-        ensureAccountRosterEditable(ctx, hsrAccountId);
+        ensureAccountRosterEditable(ctx, hsrAccountId, 'its UID cannot be changed');
+        // A228 item 5 (S14.5s fix pass, review S4): refused while the account is locked by a tournament that is not
+        // Completed or Cancelled, the delete reducers' check (D-25), for every staff role.
+        for (const tpa of ctx.db.TournamentPlayerAccount.by_user.filter(account.userId)) {
+            if (tpa.hsrAccountId !== hsrAccountId) continue;
+            const tournament = ctx.db.Tournament.id.find(tpa.tournamentId);
+            if (tournament && tournament.stage.tag !== 'Completed' && tournament.stage.tag !== 'Cancelled') {
+                throw new SenderError(UID_TOURNAMENT_LOCKED_TEXT);
+            }
+        }
 
         const oldUid = account.uid;
         ctx.db.HsrAccount.id.update(updateWithAudit(ctx, account, { uid, region }, staff.id));

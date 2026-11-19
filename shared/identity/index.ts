@@ -2,3 +2,4 @@
 // tsconfig alias only one segment deep (`@shared/identity`), so consumers import this index.
 
 export * from './username';
+export * from './userReference';

@@ -2,7 +2,7 @@
 
 76 tables. Updated 2026-11-06 (S3 backend reset: 27 tables public → private per A37 / ACCESS-SECURITY-OPS Appendix A, 10 new, `group_phase_record` dropped per A23). Visibility: **21 public** (reference data, aggregates, `user`, `tournament`, `bracket_match`, `admin_alert`, the `lobby_cursor_event` event table); every other table is PRIVATE and read through views (S9). Paste into [mermaid.live](https://mermaid.live) to preview. **Since S11a: `user` is private and `user_private` is merged into it; 78 table files in `spacetimedb/src/tables/`, 20 of them public (the 76 / 21 above predate later additions).**
 
-Phase S14.5s execution (DECISIONS.md A226 item 2): new PRIVATE table `user_username_rate` (`userId` PK, `windowStart`, `changeCount`, audit columns), the fixed one-hour window of a verified user's own username changes (at most 3, `update_username` only); no view reads it; deleted with the user and cleared by `server_nuke_test_data`. Additive: no existing table changes shape (docs/auth/architecture.md "Phase S14.5s execution").
+Phase S14.5s execution (DECISIONS.md A226 item 2): new PRIVATE table `user_username_rate` (`userId` PK, `windowStart`, `changeCount`, audit columns), the fixed one-hour window of a verified user's own username changes (at most 3, `update_username` only); no view reads it; deleted with the user and cleared by `server_nuke_test_data`. Additive: no existing table changes shape (docs/auth/architecture.md "Phase S14.5s execution"). Fix pass (A228 item 8, before the first publish): the columns are `userId` PK, `lastChangeAt` and the audit columns (one change per hour).
 
 Phase S14.4p execution (user ruling 2026-11-17): new PUBLIC table `partner_server` (`id` autoInc PK, `name` 1-50, `inviteCode` unique (the bare Discord invite code), `description` 0-80, `position`), the landing page's partner servers, at most 12 rows, edited by `admin_*` / `server_*` partner reducers. **No audit columns** (user ruling, a deliberate exception). Kept by `server_nuke_test_data`. No relationship to other tables. Additive: no existing table changes shape (docs/admin/architecture.md "Phase S14.4p execution").
 
@@ -85,9 +85,8 @@ erDiagram
         u32 suspendedById FK "the Admin, or 0 (SYSTEM) for a server call"
     }
     user_username_rate {
-        u32 userId PK_FK "username change window (S14.5s)"
-        Timestamp windowStart
-        u32 changeCount "at most 3 per hour"
+        u32 userId PK_FK "username change limit (S14.5s)"
+        Timestamp lastChangeAt "one change per hour (A228 item 8)"
     }
     deleted_user {
         u32 id PK "archived displayName of a hard-deleted user (Phase 15.2 D-05)"

@@ -3,8 +3,8 @@
 // whole transaction on the index, so every writer that derives a name picks a free one first.
 import { SenderError } from 'spacetimedb/server';
 import {
-    USERNAME_CHANGE_WINDOW_MS, USERNAME_CHANGES_PER_WINDOW, USERNAME_MAX_LENGTH, USERNAME_TOO_OFTEN_TEXT,
-    normalizeUsername, usernameRuleError,
+    USERNAME_CHANGE_INTERVAL_MS, USERNAME_MAX_LENGTH, USERNAME_TOO_OFTEN_TEXT,
+    normalizeUsername, parseUserReference, usernameBaseFromProvider, usernameRuleError, withUsernameSuffix,
 } from '@shared/identity';
 import { insertWithAudit, updateWithAudit } from '@module/helpers/admin/auditHelpers';
 
@@ -36,25 +36,124 @@ export function checkNewUsername(raw: string): string {
 }
 
 /**
- * S14.5s (A226 item 2): counts one accepted username change of the user (update_username only), refusing it with
- * USERNAME_TOO_OFTEN_TEXT once the fixed window (USERNAME_CHANGE_WINDOW_MS, one hour) holds
- * USERNAME_CHANGES_PER_WINDOW (3) changes. One primary-key read and one write on the private UserUsernameRate row.
- * The caller runs it after every other check, so a change refused for another reason counts nothing.
+ * A228 item 8 (replaces S14.5s's 3 per hour): records one accepted username change of the user (update_username
+ * only), refusing it with USERNAME_TOO_OFTEN_TEXT while less than USERNAME_CHANGE_INTERVAL_MS (one hour) has passed
+ * since their last accepted change (`lastChangeAt`, from ctx.timestamp only). A clock that does not advance, or steps
+ * back, keeps the change refused. One primary-key read and one write on the private UserUsernameRate row. The caller
+ * runs it after every other check, so a change refused for another reason records nothing.
  */
 export function consumeUsernameChangeAllowance(ctx: any, userId: number): void {
     const now: bigint = ctx.timestamp.microsSinceUnixEpoch;
     const state = ctx.db.UserUsernameRate.userId.find(userId);
     if (!state) {
-        ctx.db.UserUsernameRate.insert(insertWithAudit(ctx, { userId, windowStart: ctx.timestamp, changeCount: 1 }, userId));
+        ctx.db.UserUsernameRate.insert(insertWithAudit(ctx, { userId, lastChangeAt: ctx.timestamp }, userId));
         return;
     }
-    const windowOpen = now - state.windowStart.microsSinceUnixEpoch < BigInt(USERNAME_CHANGE_WINDOW_MS) * 1000n;
-    if (!windowOpen) {
-        ctx.db.UserUsernameRate.userId.update(updateWithAudit(ctx, state, { windowStart: ctx.timestamp, changeCount: 1 }, userId));
-        return;
+    if (now - state.lastChangeAt.microsSinceUnixEpoch < BigInt(USERNAME_CHANGE_INTERVAL_MS) * 1000n) {
+        throw new SenderError(USERNAME_TOO_OFTEN_TEXT);
     }
-    if (state.changeCount >= USERNAME_CHANGES_PER_WINDOW) throw new SenderError(USERNAME_TOO_OFTEN_TEXT);
-    ctx.db.UserUsernameRate.userId.update(updateWithAudit(ctx, state, { changeCount: state.changeCount + 1 }, userId));
+    ctx.db.UserUsernameRate.userId.update(updateWithAudit(ctx, state, { lastChangeAt: ctx.timestamp }, userId));
+}
+
+/** A228 items 2 and 3: how many names one base may try (the base, then `_2` to `_9`). Index reads only. */
+export const USERNAME_SUFFIX_ATTEMPTS = 9;
+
+/**
+ * A228 items 2 and 3: `base` when it is free (or held by `selfUserId`), else the first free `base_2` ... `base_9`
+ * (USERNAME_SUFFIX_ATTEMPTS, the base shortened to keep 32 characters) that `accept` admits; null when none is.
+ * Index reads only (User.username).
+ */
+export function firstFreeUsername(ctx: any, base: string, selfUserId: number, accept: (name: string) => boolean): string | null {
+    for (let n = 1; n <= USERNAME_SUFFIX_ATTEMPTS; n++) {
+        const candidate = n === 1 ? base : withUsernameSuffix(base, n);
+        if (!accept(candidate)) continue;
+        const holder = ctx.db.User.username.find(candidate);
+        if (!holder || holder.id === selfUserId) return candidate;
+    }
+    return null;
+}
+
+/** A228 item 2: the refusal when no free name can be derived (practically unreachable: 18 index reads all taken). */
+export const NO_FREE_USERNAME_TEXT = 'No free username could be derived for this account. Please contact support.';
+
+/**
+ * A228 item 2 (review S1): the username of a Discord sign-in (a guest's first link, applyProviderLink). The provider
+ * name goes through the shared rule: usernameBaseFromProvider lowercases it and maps it to the rule's characters; a
+ * result the rule still refuses (reserved, too short, no letter or digit) falls back to `user_<last 8 digits of the
+ * provider id>`. A taken name gets a suffix (`_2` to `_9`, each candidate checked by the rule, so `guest_2` or `admin_2`
+ * is never produced); when the provider base has no free candidate the fallback base is tried the same way.
+ * Deterministic (no random draw), bounded (at most 18 index reads), index reads only. Throws NO_FREE_USERNAME_TEXT
+ * when every candidate is taken.
+ */
+export function providerUsername(ctx: any, providerName: string, providerId: string, selfUserId: number): string {
+    const ruleAccepts = (name: string) => usernameRuleError(name) === null;
+    const fromProvider = usernameBaseFromProvider(providerName);
+    if (fromProvider !== null) {
+        const name = firstFreeUsername(ctx, fromProvider, selfUserId, ruleAccepts);
+        if (name !== null) return name;
+    }
+    const fallback = `user_${providerId.slice(-8)}`;
+    const name = firstFreeUsername(ctx, fallback, selfUserId, ruleAccepts);
+    if (name === null) throw new SenderError(NO_FREE_USERNAME_TEXT);
+    return name;
+}
+
+/**
+ * A228 item 4 (review S3): the user a server_* reducer acts on, from a reference in the shared grammar
+ * (`@shared/identity` parseUserReference): `id:<n>` (User.id), `discord:<id>` (User.provider_id, Discord-linked
+ * rows only; more than one holder is refused), or an exact username (User.username). Index reads only. Throws a
+ * SenderError for a malformed reference and `User "<ref>" not found` when nothing matches (the text of before).
+ */
+export function findUserByReference(ctx: any, ref: string): any {
+    let parsed;
+    try {
+        parsed = parseUserReference(ref);
+    } catch (e) {
+        throw new SenderError((e as Error).message);
+    }
+    let user: any = null;
+    if (parsed.kind === 'id') {
+        user = ctx.db.User.id.find(parsed.userId);
+    } else if (parsed.kind === 'discord') {
+        const holders = [...ctx.db.User.provider_id.filter(parsed.discordId)].filter((u: any) => u.loginMethod === 'discord');
+        if (holders.length > 1) throw new SenderError(`More than one account holds Discord id ${parsed.discordId}; use id:<n>.`);
+        user = holders[0] ?? null;
+    } else {
+        user = ctx.db.User.username.find(parsed.username);
+    }
+    if (!user) throw new SenderError(`User "${ref}" not found`);
+    return user;
+}
+
+/**
+ * A228 item 3 (review S2): lowercases every username once. Skips the SYSTEM user (found by its upper-case name
+ * everywhere) and guests (`Guest_<hex8>`, not chosen by anyone; the reserved `guest_` prefix keeps a lowercase twin
+ * out of reach). Users are taken in id order, so on a collision the older account keeps the plain lowercase name and
+ * the other gets the first free `_2` ... `_9` (firstFreeUsername, no rule check: an old name may hold characters the
+ * current rule refuses; only its case changes). A name with no free candidate is left as it is and counted. Writes
+ * only rows whose name changes, so a second run writes nothing. Audit actor: SYSTEM (the caller passes it).
+ * Full read of User: a one-off server-only operation (A37 exemption, as the admin views).
+ */
+export function lowercaseAllUsernames(ctx: any, actorId: number): { changed: number; suffixed: number; leftAsIs: string[] } {
+    const users = [...ctx.db.User.iter()]
+        .filter((u: any) => !u.isGuest && u.username !== 'SYSTEM' && u.username !== u.username.toLowerCase())
+        .sort((a: any, b: any) => a.id - b.id);
+    let changed = 0;
+    let suffixed = 0;
+    const leftAsIs: string[] = [];
+    for (const u of users) {
+        const base = u.username.toLowerCase();
+        const name = firstFreeUsername(ctx, base, u.id, () => true);
+        if (name === null) {
+            leftAsIs.push(u.username);
+            continue;
+        }
+        const current = ctx.db.User.id.find(u.id);
+        ctx.db.User.id.update(updateWithAudit(ctx, current, { username: name }, actorId));
+        changed++;
+        if (name !== base) suffixed++;
+    }
+    return { changed, suffixed, leftAsIs };
 }
 
 /**

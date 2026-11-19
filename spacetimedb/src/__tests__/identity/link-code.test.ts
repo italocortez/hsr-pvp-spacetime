@@ -558,7 +558,8 @@ describe('confirm_link (M5a2)', () => {
         expect(userRow(test, g.userId)!.isGuest).toBe(true);
 
         confirm(test, g, TOKEN_A);
-        expect(userRow(test, g.userId)).toMatchObject({ isGuest: false, username: 'FreshName', displayName: 'FreshName',
+        // T-S14.5s fix pass (A228 item 2): the username is lowercased; the display name keeps the provider name.
+        expect(userRow(test, g.userId)).toMatchObject({ isGuest: false, username: 'freshname', displayName: 'FreshName',
             loginMethod: 'discord', providerId: '100000000000000020', providerUsername: 'FreshName' });
         expect(userRow(test, g.userId)!.linkedAt?.microsSinceUnixEpoch).toBe(now(test));
         expect(linkRows(test)).toHaveLength(0);

@@ -110,10 +110,11 @@ All mirror user variants with `ensureAdmin(ctx)` and `targetUserId` parameter (n
 1. `HsrAccount.id.find` (missing: "HSR account not found")
 2. `validateUid(uid)` and `deriveRegion(uid)`, as `create_hsr_account` ("UID must be exactly 9 digits", "Invalid UID: first digit must be 6, 7, 8, or 9")
 3. The same UID as now: no-op, nothing written
-4. `ensureAccountRosterEditable` (S10w, A142): refused while the account is selected in a lobby (`accountLobbyLocks`: a non-abandoned membership's `LobbyMemberAccount` row), with the Admin roster refusal naming the lobby's join code. A tournament account lock (`TournamentPlayerAccount`) is not checked
+4. `ensureAccountRosterEditable(ctx, id, 'its UID cannot be changed')` (S10w, A142): refused while the account is selected in a lobby (`accountLobbyLocks`: a non-abandoned membership's `LobbyMemberAccount` row), naming the lobby's join code; since the fix pass the text says "its UID cannot be changed" (the helper's optional `what`, default "its roster cannot be edited")
+4b. Fix pass (A228 item 5, D-25): refused for every staff role while a `TournamentPlayerAccount` row of the account (`by_user` of the owner, filtered on the account id) belongs to a tournament that is not Completed or Cancelled, the delete reducers' check: "Cannot change the UID of an account locked in an active tournament. Wait for the tournament to complete or be cancelled." (`UID_TOURNAMENT_LOCKED_TEXT`)
 5. Update `uid` and `region` (`updateWithAudit`, actor the staff member)
 6. Duplicate handling as on creation: a UID other accounts hold is allowed and flagged; `recalcDuplicateUid` runs for the old UID (its other holders may lose the flag) and for the new one
-7. Log line `[ROSTER] HSR account #<id> of user #<owner>: UID <old> changed to <new> by staff user #<staff>`
+7. Log line `[ROSTER] HSR account #<id> of user #<owner>: UID <old> changed to <new> by staff user #<staff>`; no other trail (A228 item 7)
 
 Behaviour: [contract](contract.md) "Staff UID Correction".
 
@@ -262,6 +263,7 @@ for their roster while the rows stay for the match (`docs/lobby/architecture.md`
 | Team builder loadouts in the roster folders (`UserLoadout`, docs/loadout); `ensureVerifiedUser` optional message; deletion cascade and wipe include `UserLoadout` | Phase S14.3s execution (DECISIONS.md A190) | 2026-11-17 |
 | Loadout versions: `rev`/`firstRev` on `UserLoadout`, `revFloor` on `UserLoadoutRate`, `baseRev` on both loadout reducers (docs/loadout) | Phase S14.3c-rev execution (DECISIONS.md A198) | 2026-11-17 |
 | `mod_update_hsr_account_uid` (Moderator+): creation's UID checks and duplicate handling, refused for an account selected in a lobby (A142 lock), audit and log line | Phase S14.5s execution (DECISIONS.md A226 item 4) | 2026-11-18 |
+| Fix pass: the UID correction is refused for an account locked by an unfinished tournament (D-25 loop); the lobby refusal names the UID; no log beyond the line | Phase S14.5s execution (DECISIONS.md A228 items 5, 7) | 2026-11-18 |
 
 ---
 

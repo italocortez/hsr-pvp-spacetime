@@ -1,7 +1,8 @@
 // S14.5s (A226 item 2): the rule for a NEW username, shared by the module (update_username, admin_update_user through
 // spacetimedb/src/helpers/identity/usernames.ts) and the web's profile form, so both run this very function.
-// Pure TypeScript: no `spacetimedb` or `react` import. Existing usernames are not rewritten: the rule applies only when
-// a name changes.
+// Pure TypeScript: no `spacetimedb` or `react` import. The rule applies when a name changes; A228 item 2: a Discord
+// sign-in derives its name through `usernameBaseFromProvider` (the module adds a suffix when needed); A228 item 3:
+// existing names are lowercased once (server_lowercase_usernames), so every verified name is lowercase.
 //
 // Discord's own form: lowercase letters a to z, digits, underscore and period; 2 to 32 characters; no two periods in a
 // row. Reserved names are refused. The input is trimmed first (the module's renames have always trimmed).
@@ -28,10 +29,36 @@ export const RESERVED_USERNAMES: readonly string[] = [
     'staff',
     'support',
     'guest',
+    // S14.5s fix pass (review M4): official-looking names, mention keywords and the site's own name
+    'official',
+    'discord',
+    'everyone',
+    'here',
+    'null',
+    'undefined',
+    'ipc',
+    'ipcbattlegrounds',
+    'ipc_battlegrounds',
+    'ipc.battlegrounds',
 ];
 
-/** Prefixes nobody may take. */
-export const RESERVED_USERNAME_PREFIXES: readonly string[] = ['guest_'];
+/**
+ * Prefixes nobody may take. S14.5s fix pass (review M4): staff lookalikes (`admin1`, `admins`, `mod_x`, `staff.team`,
+ * `support_bot`); `mod` and `staff` alone are exact entries above, so `modern` and `staffy` stay free.
+ */
+export const RESERVED_USERNAME_PREFIXES: readonly string[] = [
+    'guest_',
+    'admin',
+    'moderator',
+    'mod_',
+    'mod.',
+    'staff_',
+    'staff.',
+    'support_',
+    'support.',
+    'official_',
+    'official.',
+];
 
 export const USERNAME_EMPTY_TEXT = 'Username cannot be empty';
 export const USERNAME_TOO_LONG_TEXT = `Username must be ${USERNAME_MAX_LENGTH} characters or fewer`;
@@ -73,10 +100,33 @@ export function usernameTakenText(name: string): string {
     return `Username "${name}" is already taken.`;
 }
 
-/** S14.5s: the short-term limit on a player's own username changes: this many per window. */
-export const USERNAME_CHANGES_PER_WINDOW = 3;
+/**
+ * A228 item 8: a player may change their own username once per hour: a change is refused while less than this many
+ * milliseconds have passed since their last accepted change.
+ */
+export const USERNAME_CHANGE_INTERVAL_MS = 60 * 60 * 1000;
 
-/** S14.5s: the fixed window of that limit, in milliseconds (one hour). */
-export const USERNAME_CHANGE_WINDOW_MS = 60 * 60 * 1000;
+export const USERNAME_TOO_OFTEN_TEXT =
+    'You can change your username once per hour. Try again later.';
 
-export const USERNAME_TOO_OFTEN_TEXT = `You can change your username ${USERNAME_CHANGES_PER_WINDOW} times per hour. Try again later.`;
+/**
+ * A228 item 2: the username base a Discord sign-in derives from the provider name: lowercased, every character outside
+ * the rule's set replaced by an underscore, runs of periods collapsed to one, capped at USERNAME_MAX_LENGTH. Returns
+ * null when the result still fails the rule (too short, reserved, no letter or digit at all); the module then uses a
+ * fallback base. The caller adds a suffix when the base is taken.
+ */
+export function usernameBaseFromProvider(providerName: string): string | null {
+    const base = normalizeUsername(providerName)
+        .toLowerCase()
+        .replace(/[^a-z0-9_.]/g, '_')
+        .replace(/\.{2,}/g, '.')
+        .slice(0, USERNAME_MAX_LENGTH);
+    if (!/[a-z0-9]/.test(base)) return null;
+    return usernameRuleError(base) === null ? base : null;
+}
+
+/** `base` with the suffix `_<n>`, the base shortened so the result stays within USERNAME_MAX_LENGTH. */
+export function withUsernameSuffix(base: string, n: number): string {
+    const suffix = `_${n}`;
+    return base.slice(0, USERNAME_MAX_LENGTH - suffix.length) + suffix;
+}

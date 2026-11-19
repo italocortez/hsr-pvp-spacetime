@@ -1,5 +1,5 @@
 // Roster: a Moderator or Admin corrects the UID of a game account (mod_update_hsr_account_uid).
-// Decisions: A226 (item 4), A142
+// Decisions: A226 (item 4), A142, A228 (item 5)
 // Contracts: docs/roster/contract.md
 // From S14.5s (T-task of the step). In-memory datastore only; nothing reaches maincloud.
 import { describe, expect, it } from 'vitest';
@@ -8,11 +8,15 @@ import { admin, host, moderator, verified } from '../fixtures/identity';
 import { account, insertHsrAccount } from '../fixtures/roster';
 import { insertCharacter, selectAccount } from '../fixtures/draft-and-scoring';
 import { classic } from '../fixtures/lobby';
+import { openTournament, register } from '../fixtures/tournaments';
 
 const NOT_STAFF = 'Forbidden: Requires Moderator or Admin privileges.';
 const SUSPENDED_TEXT = 'Your account is suspended.';
+// T-S14.5s fix pass (review M6): the lobby refusal names the UID, not the roster.
 const LOCKED = (joinCode: string) =>
-    `This account is selected in active lobby ${joinCode}; its roster cannot be edited until the player's membership in that lobby ends or the lobby closes.`;
+    `This account is selected in active lobby ${joinCode}; its UID cannot be changed until the player's membership in that lobby ends or the lobby closes.`;
+const TOURNAMENT_LOCKED =
+    'Cannot change the UID of an account locked in an active tournament. Wait for the tournament to complete or be cancelled.';
 
 const editUid = (hsrAccountId: number, uid: string) => (ctx: any) => M.mod_update_hsr_account_uid(ctx, { hsrAccountId, uid });
 
@@ -57,7 +61,8 @@ describe('A226 item 4: staff correct a game account\'s UID', () => {
         const test = newHarness();
         const mod = moderator(test, 'mod');
         const { id } = playerWithAccount(test);
-        tx(test, 'internal', (ctx) => M.server_suspend_user(ctx, { username: 'mod', reason: '' }));
+        // T-S14.5s fix pass: 'mod' is reserved, so the sign-in gave the fixture another name; address it by id (A228 item 4).
+        tx(test, 'internal', (ctx) => M.server_suspend_user(ctx, { username: `id:${mod.userId}`, reason: '' }));
         expect(rejection(test, mod, editUid(id, '800000002'))).toBe(SUSPENDED_TEXT);
         expect(account(test, id)!.uid).toBe('700000001');
     });
@@ -113,4 +118,51 @@ describe('A226 item 4: staff correct a game account\'s UID', () => {
             expect(account(s.test, id)!.uid).toBe('800000001');
         });
     }
+});
+
+// T-S14.5s fix pass (A228 item 5, review S4 and test gaps 3, 4).
+describe('A228 item 5: a UID correction is refused for an account locked by an unfinished tournament', () => {
+    it('a registration lock refuses a Moderator and an Admin alike; after the tournament is Cancelled the change passes', () => {
+        const test = newHarness();
+        const mod = moderator(test, 'mod');
+        const boss = admin(test, 'boss');
+        const { who, id } = playerWithAccount(test);
+        const org = host(test, 'org');
+        const tournamentId = openTournament(test, org);
+        register(test, who, tournamentId);
+        expect([...test.db.TournamentPlayerAccount.by_tournament_and_user.filter([tournamentId, who.userId])].map((r) => r.hsrAccountId)).toEqual([id]);
+
+        expect(rejection(test, mod, editUid(id, '800000002'))).toBe(TOURNAMENT_LOCKED);
+        expect(rejection(test, boss, editUid(id, '800000002'))).toBe(TOURNAMENT_LOCKED);
+        expect(account(test, id)!.uid).toBe('700000001');
+
+        tx(test, org, (ctx) => M.cancel_tournament(ctx, { tournamentId }));
+        tx(test, mod, editUid(id, '800000002'));
+        expect(account(test, id)!.uid).toBe('800000002');
+    });
+
+    it('another account of the same player is not locked by that tournament', () => {
+        const test = newHarness();
+        const mod = moderator(test, 'mod');
+        const { who, id } = playerWithAccount(test);
+        tx(test, who, (ctx) => M.create_hsr_account(ctx, { uid: '600000001', displayLabel: '' }));
+        const second = [...test.db.HsrAccount.user_id.filter(who.userId)].find((a) => a.uid === '600000001')!.id;
+        const org = host(test, 'org');
+        register(test, who, openTournament(test, org), { hsrAccountIds: [id] });
+        expect(rejection(test, mod, editUid(id, '800000002'))).toBe(TOURNAMENT_LOCKED);
+        tx(test, mod, editUid(second, '600000009'));
+        expect(account(test, second)!.uid).toBe('600000009');
+    });
+
+    it('during maintenance mode a Moderator is refused; an Admin is not', () => {
+        const test = newHarness();
+        const mod = moderator(test, 'mod');
+        const boss = admin(test, 'boss');
+        const { id } = playerWithAccount(test);
+        tx(test, 'internal', (ctx) => M.server_set_maintenance(ctx, { on: true }));
+        expect(rejection(test, mod, editUid(id, '800000002'))).toMatch(/maintenance/i);
+        expect(account(test, id)!.uid).toBe('700000001');
+        tx(test, boss, editUid(id, '800000002'));
+        expect(account(test, id)!.uid).toBe('800000002');
+    });
 });

@@ -3,7 +3,7 @@ import type { Identity } from 'spacetimedb';
 import { updateWithAudit } from '@module/helpers/admin/auditHelpers';
 import { SYSTEM_USER_ID } from '@module/helpers/admin/auditColumns';
 import { performUserDeletion } from '@module/helpers/identity/userDeletionHelper';
-import { uniqueUsername, USERNAME_MAX_LENGTH } from '@module/helpers/identity/usernames';
+import { providerUsername, USERNAME_MAX_LENGTH } from '@module/helpers/identity/usernames';
 import { moveTournamentTiesToUser } from '@module/helpers/tournament/entryTransfer';
 import { rejectIfBanned, DISCORD_LOGIN_METHOD } from '@module/helpers/lobby/banHelper';
 import { LIVE_STAGES, slotIsCoach, slotIsSpectator } from '@module/helpers/lobby/lobbyHelpers';
@@ -195,7 +195,9 @@ export function applyProviderLink(ctx: any, plan: ProviderLinkPlan): void {
     const { userMapping, currentUser, loginMethod, providerId, name } = plan;
     const sameLink = currentUser.loginMethod === loginMethod && currentUser.providerId === providerId;
     ctx.db.User.id.update(updateWithAudit(ctx, currentUser, {
-        username: currentUser.isGuest ? uniqueUsername(ctx, name, currentUser.id) : currentUser.username,
+        // A228 item 2 (S14.5s fix pass): the name follows the shared username rule (lowercase, reserved names refused,
+        // a suffix or a fallback base when needed); the display name keeps the provider name as it comes.
+        username: currentUser.isGuest ? providerUsername(ctx, name, providerId, currentUser.id) : currentUser.username,
         displayName: currentUser.isGuest ? name : currentUser.displayName,
         isGuest: false,
         loginMethod,

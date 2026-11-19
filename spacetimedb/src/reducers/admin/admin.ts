@@ -11,6 +11,7 @@ import { performUserDeletion } from '@module/helpers/identity/userDeletionHelper
 import { ensureAdmin, isRoleAtLeast } from '@module/helpers/identity/ensurePermissions';
 import { handOverMatchEventsOfFormerStaff } from '@module/helpers/calendar/calendarCascade';
 import { checkDisplayName, checkNewUsername } from '@module/helpers/identity/usernames';
+import { usernameTakenText } from '@shared/identity';
 import { syncLeaderboardCard } from '@module/helpers/stats/leaderboardRebuild';
 import { syncSoloTeamNames } from '@module/helpers/tournament/tournamentHelpers';
 import { auditUpdate } from '@module/helpers/admin/auditColumns';
@@ -860,7 +861,7 @@ export const admin_update_user = spacetimedb.reducer(
         // Check username uniqueness if changed
         if (newUsername !== user.username) {
             const existing = ctx.db.User.username.find(newUsername);
-            if (existing) throw new SenderError(`Username "${newUsername}" is already taken`);
+            if (existing) throw new SenderError(usernameTakenText(newUsername)); // S14.5s fix pass (review M6): one text
         }
 
         ctx.db.User.id.update(

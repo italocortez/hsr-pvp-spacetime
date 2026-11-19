@@ -431,7 +431,7 @@ admin_upsert_archetype, admin_delete_archetype, admin_assign_character_archetype
 #### Account in Use
 **Given:** The account is selected in a lobby (any stage; an abandoned membership does not lock)
 **When:** Staff call `mod_update_hsr_account_uid`
-**Then:** "This account is selected in active lobby <join code>; its roster cannot be edited until the player's membership in that lobby ends or the lobby closes." Nothing changes. A tournament account lock does not block the correction.
+**Then:** "This account is selected in active lobby <join code>; its roster cannot be edited until the player's membership in that lobby ends or the lobby closes." Nothing changes. A tournament account lock does not block the correction. _Superseded in Phase S14.5s execution (DECISIONS.md A228 item 5): the text ends "its UID cannot be changed until the player's membership in that lobby ends or the lobby closes."; and an account locked by a tournament that is not Completed or Cancelled is refused for a Moderator and an Admin alike with "Cannot change the UID of an account locked in an active tournament. Wait for the tournament to complete or be cancelled." Nothing changes; another account of the same player is not affected._
 
 ## Edge Cases
 
@@ -483,6 +483,7 @@ admin_upsert_archetype, admin_delete_archetype, admin_assign_character_archetype
 | `displayLabel` is at most 32 characters in the user and admin account reducers. Deleting a user recomputes the duplicate-UID flag of the accounts that shared a UID with the deleted ones | Phase S10f execution (backend audit 2026-11-09, roster findings 5, 6) | 2026-11-09 |
 | Admin roster edits share the lobby lock of the owner's reducers (D-24): refused while the account is selected in an active lobby; an abandoned membership does not lock | Phase S10w execution (DECISIONS.md A142) | 2026-11-10 |
 | Staff UID Correction: Staff Correct a UID, Not Staff, Invalid or Unchanged UID, Duplicate UID after a Correction, Account in Use. User decision: A226 item 4 (the UID fixed for the owner; a Moderator or Admin can correct it). Execution choices: the name `mod_update_hsr_account_uid` (the `mod_` prefix of `mod_promote_to_host`), no server variant, the current UID as a no-op, the tournament account lock not checked, the old and new UID in the log line | Phase S14.5s execution (DECISIONS.md A226) | 2026-11-18 |
+| Fix pass. User decisions: A228 item 5 (a tournament-locked account is refused, as the delete reducers, D-25), item 7 (no staff action log). Execution choices: the refusal text, the lobby refusal naming the UID instead of the roster | Phase S14.5s execution (DECISIONS.md A228) | 2026-11-18 |
 
 ---
 

@@ -140,12 +140,12 @@ New per-caller view `view_my_player_cards` (`views/socialViews.ts`; no new table
 | Column | Meaning |
 |---|---|
 | `relation` (PK, string) | `BestAlly` or `Nemesis`; one row each at most, so the client gets `onUpdate` |
-| `userId`, `displayName`, `username`, `avatarCharacterName`, `displayedAchievementId?` | the carded player (the username is the handle; the title is the displayed achievement) |
-| `mmrByMode` | the active season's rating per mode, `[MemoryOfChaos, ApocalypticShadow, AnomalyArbitration]`, `EloConfig.initialRating` for a mode not played (as `mmrByModeOf`) |
-| `globalRating?` | "Global MMR": `MmrRating.globalCompositeRating` of the active season, which finalization stores on each of the season's rows (A102: the rounded average of the player's rated modes of that season, played modes only). Unset before the player's first rated match of the season. The web must not average `mmrByMode` itself (that array fills unplayed modes with the initial rating) |
-| `activeAccountRating?` | `accountRating` of the player's game account flagged `isActive` (A226 item 5: always shown on a card); unset when no account is active (none, or none flagged) |
+| `displayName`, `username`, `avatarCharacterName`, `displayedAchievementId?` | the carded player (the username is the handle; the title is the displayed achievement) |
+| `activeAccountRating?` | `accountRating` of the player's game account flagged `isActive` (A226 item 5: always shown on a card; A228 item 6: the card's only rating outside a lobby); unset when no account is active (none, or none flagged) |
 | `accountCount` | the number of the player's game accounts |
 | `matches`, `wins`, `losses` | the caller's side: together (BestAlly) or against (Nemesis), summed over the active season |
+
+Fix pass (A228 item 6, before the first publish): `mmrByMode` and the composite `globalRating` are dropped (the lobby keeps its own composite rating), and so is `userId` (no client lookup is keyed by it; the key is `relation`, avatar and title are looked up by character name and achievement id). The view no longer reads `MmrRating` or `EloConfigTable`.
 
 **Selection.** The caller's `PlayerRelationship` rows of the active season (`seasonId` 0 when none is active, as finalization writes) are summed per other player over game mode, draft mode, match type and team size. Best ally: the most `winsAsAlly` among players with `matchesAsAlly >= 3` (`PLAYER_CARD_MIN_MATCHES`); nemesis: the most losses against (`matchesAsOpponent - winsAsOpponent`) among players with `matchesAsOpponent >= 3`. A count of 0 never qualifies. Ties: fewer shared matches first (the higher rate), then the lower user id. A candidate with no `User` row (deleted) or with `deletedAt` set (pending deletion after an admin deletion or a ban) is skipped and the next one is taken; with no candidate left the row is absent. A suspended player is shown (no other view hides a suspended player from others). One player can be both rows. A guest partner shows with their guest name and 0 accounts.
 
@@ -171,6 +171,7 @@ New per-caller view `view_my_player_cards` (`views/socialViews.ts`; no new table
 | A Ranked concede in the confirm window counts the character stats (the complete draft is treated like Equipping) | Phase S10t execution (DECISIONS.md A129, review F2) | 2026-11-10 |
 | "Played" follows ownership (owners on the owning side; lone player when nobody owns it; nobody in a 2+ side) for picks, timer picks and sales | Phase S10k execution (DECISIONS.md A110) | 2026-11-10 |
 | `view_my_player_cards`: Best Ally and Nemesis cards from the caller's active-season relationships (3-match threshold, ties by fewer matches then lower id, deleted and pending-deletion players skipped), with the card's ratings, active account rating and account count | Phase S14.5s execution (DECISIONS.md A226 items 5, 6, 7) | 2026-11-18 |
+| Fix pass: the card drops `mmrByMode`, `globalRating` and `userId`; the active account rating is its only rating | Phase S14.5s execution (DECISIONS.md A228 item 6) | 2026-11-18 |
 
 ---
 

@@ -594,7 +594,7 @@ A suspended caller reads every per-caller view as a visitor with no account ([su
 
 | View | File | Scope | Row | Anonymity | Indexes |
 |---|---|---|---|---|---|
-| `view_my_player_cards` (new) | socialViews | per-sender (`callerUserId`: a suspended or unmapped caller gets `[]`) | `PlayerCardRow` (PK `relation`: `BestAlly` / `Nemesis`, two rows at most): userId, displayName, username, avatarCharacterName, displayedAchievementId?, mmrByMode, globalRating?, activeAccountRating?, accountCount, matches, wins, losses | the carded player identified (finished matches, A37); no audit ids; deleted and pending-deletion players skipped | `UserIdentity.identity`, `UserSuspension.userId`, `Season.is_active`, `PlayerRelationship.by_user`, `User.id`, `MmrRating.by_user_mode_season`, `EloConfigTable.id`, `HsrAccount.user_id` |
+| `view_my_player_cards` (new) | socialViews | per-sender (`callerUserId`: a suspended or unmapped caller gets `[]`) | `PlayerCardRow` (PK `relation`: `BestAlly` / `Nemesis`, two rows at most): displayName, username, avatarCharacterName, displayedAchievementId?, activeAccountRating?, accountCount, matches, wins, losses (fix pass, A228 item 6: userId, mmrByMode and globalRating dropped) | the carded player identified (finished matches, A37); no ids, no audit ids; deleted and pending-deletion players skipped | `UserIdentity.identity`, `UserSuspension.userId`, `Season.is_active`, `PlayerRelationship.by_user`, `User.id`, `HsrAccount.user_id` |
 
 Selection, the Global rating, the read set and what re-sends the rows: [../player-stats/architecture.md](../player-stats/architecture.md) "Phase S14.5s execution". Unlike `view_my_relationships`, a ranked match of a partner who is not carded sends nothing.
 
@@ -648,6 +648,7 @@ Selection, the Global rating, the read set and what re-sends the rows: [../playe
 | Every per-caller view answers a suspended caller as a visitor (`callerUserId` / `callerMapping`, the local copies and inline caller reads routed through them); new `view_my_suspension` | Phase suspension-s1 execution (DECISIONS.md A195, A213, A214) | 2026-11-17 |
 | Fix pass: new `view_admin_suspensions` (Admin only, the suspended accounts with reason and suspending account); a structural test pins the caller reads | Phase suspension-s1 execution (DECISIONS.md A214, A215) | 2026-11-17 |
 | New `view_my_player_cards` (`socialViews.ts`): the caller's Best Ally and Nemesis cards; `view_user_by_username` named as the username availability check (unchanged) | Phase S14.5s execution (DECISIONS.md A226) | 2026-11-18 |
+| Fix pass: `PlayerCardRow` loses `userId`, `mmrByMode` and `globalRating` before the first publish | Phase S14.5s execution (DECISIONS.md A228 item 6) | 2026-11-18 |
 ---
 
 *Last updated: 2026-11-17 (S14.3s)*

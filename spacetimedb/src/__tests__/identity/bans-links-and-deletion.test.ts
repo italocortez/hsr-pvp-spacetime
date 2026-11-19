@@ -208,11 +208,12 @@ describe('ban on reconnect (auth contract § clientConnected; D-08 point 2, D-10
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('provider linking through the sign-in (T-M5a3: was server_link_provider as the owner)', () => {
-    it('Case 1a: a guest is upgraded (isGuest false, username / displayName = providerName) and its User row gets the provider link with linkedAt (A77; scenario "Provider Linking (Discord)")', () => {
+    it('Case 1a: a guest is upgraded (isGuest false, username = providerName lowercased (A228 item 2), displayName = providerName) and its User row gets the provider link with linkedAt (A77; scenario "Provider Linking (Discord)")', () => {
         const test = newHarness();
         const g = guest(test, 'fresh');
         link(test, g, { providerId: discordId('pid-fresh'), providerName: 'FreshName' });
-        expect(userRow(test, g)).toMatchObject({ isGuest: false, username: 'FreshName', displayName: 'FreshName',
+        // T-S14.5s fix pass (A228 item 2): the username is lowercased; the display name keeps the provider name.
+        expect(userRow(test, g)).toMatchObject({ isGuest: false, username: 'freshname', displayName: 'FreshName',
             loginMethod: 'discord', providerId: discordId('pid-fresh'), providerUsername: 'FreshName' });
         expect(userRow(test, g)!.linkedAt?.microsSinceUnixEpoch).toBe(now(test));
     });

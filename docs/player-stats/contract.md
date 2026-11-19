@@ -157,7 +157,7 @@ All flat structured rows, zero JSON blobs (D-55). Self-contained for replay rend
 #### What a Card Shows
 **Given:** A carded player
 **When:** The row is built
-**Then:** User id, display name, username (the handle), avatar, displayed title; the three mode ratings of the active season (the initial rating for an unplayed mode); the Global rating of that season (the module's stored composite, unset before their first rated match of the season); the rating of their active game account (unset when none is active) and how many game accounts they have.
+**Then:** User id, display name, username (the handle), avatar, displayed title; the three mode ratings of the active season (the initial rating for an unplayed mode); the Global rating of that season (the module's stored composite, unset before their first rated match of the season); the rating of their active game account (unset when none is active) and how many game accounts they have. _Superseded in Phase S14.5s execution (DECISIONS.md A228 item 6): the card shows the display name, username, avatar, displayed title, the active game account's rating (its only rating; unset when none is active) and the account count. No user id, no mode ratings, no Global rating._
 
 #### Deleted, Pending Deletion and Suspended Players
 **Given:** The best candidate's account is deleted, or pending deletion after an admin deletion or a ban
@@ -211,7 +211,7 @@ All flat structured rows, zero JSON blobs (D-55). Self-contained for replay rend
 | view_my_player_stats | PlayerStat (private) | Per-user view |
 | view_my_character_stats | PlayerCharacterStat (private) | Per-user view |
 | view_my_relationships | PlayerRelationship (private) | Per-user view |
-| view_my_player_cards | PlayerRelationship, User, MmrRating, HsrAccount (private) | Per-user view, two rows at most (Phase S14.5s execution) |
+| view_my_player_cards | PlayerRelationship, User, HsrAccount (private) | Per-user view, two rows at most (Phase S14.5s execution; MmrRating no longer read since the fix pass, A228 item 6) |
 
 ## Phase History
 
@@ -256,6 +256,7 @@ All flat structured rows, zero JSON blobs (D-55). Self-contained for replay rend
 | A Classic timer auto-pick of a real character credits the played stat to every non-coach player of the acting team, with that side's win flag; the other team gets the faced stat and the global stat is written once. A manual Classic pick credits the picker; an Auction sale the winning team (A82) | Phase S10i execution (DECISIONS.md A106) | 2026-11-10 _Superseded in Phase S10k execution (DECISIONS.md A110)._ |
 | The played stat follows ownership for every way a team gets a character (manual Classic pick, Classic timer auto-pick, Auction sale): each non-coach player of the owning team who owns the character on any of their game accounts, selected for the match or not, gets it with that side's win flag; if no player of the team is recorded as owning it, a team of one player credits that player and a team of two or more credits nobody. The faced stat of the other team and the single global row are unchanged; `EMPTY` and `SKIP` write nothing; no row for the system user. Ownership is read when the match is finalized (for a tournament game, when the tournament's finalization runs) | Phase S10k execution (DECISIONS.md A110) | 2026-11-10 |
 | Best Ally and Nemesis Cards: Best Ally, Nemesis, Thresholds and Ties, What a Card Shows, Deleted, Pending Deletion and Suspended Players, Who Can Read It. User decisions: A226 items 5 to 7 (only cards of other people; the active account rating always shown; a small view with handle, rating and account count from 3 shared matches; the active season). Execution choices: sums over every mode, draft mode, match type and team size of the season; 0 wins or losses never qualify; ties by fewer shared matches then the lower user id; deleted and pending-deletion players skipped; suspended players shown; Global = the stored composite rating | Phase S14.5s execution (DECISIONS.md A226) | 2026-11-18 |
+| Fix pass. User decision: A228 item 6 (outside a lobby the card shows only the active game account's rating; the composite Global is dropped). Execution choices: the mode ratings and the user id are dropped too | Phase S14.5s execution (DECISIONS.md A228) | 2026-11-18 |
 
 ---
 

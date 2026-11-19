@@ -124,13 +124,14 @@ export function accountLobbyLocks(ctx: any, hsrAccountId: number): any[] {
  * who leaves during a match is away and the lock stays; it ends when the membership row goes (removal in Waiting, the
  * lobby closing) or is abandoned.
  */
-export function ensureAccountRosterEditable(ctx: any, hsrAccountId: number): void {
+export function ensureAccountRosterEditable(ctx: any, hsrAccountId: number, what = 'its roster cannot be edited'): void {
     const locks = accountLobbyLocks(ctx, hsrAccountId);
     if (locks.length === 0) return;
     const lobby = ctx.db.Lobby.id.find(locks[0].lobbyId);
     const label = lobby?.joinCode ? `lobby ${lobby.joinCode}` : `lobby #${locks[0].lobbyId}`;
+    // S14.5s fix pass (review M6): `what` names the refused edit (the staff UID correction passes its own words).
     throw new SenderError(
-        `This account is selected in active ${label}; its roster cannot be edited until the player's membership in that lobby ends or the lobby closes.`,
+        `This account is selected in active ${label}; ${what} until the player's membership in that lobby ends or the lobby closes.`,
     );
 }
 

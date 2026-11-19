@@ -191,7 +191,8 @@ describe('view_my_profile (S9b-V1, S3 hand-off, PAGE-MAP profile)', () => {
         setRole(test, pat.userId, 'Moderator');
         const [row] = view<MyProfileRow>(test, 'view_my_profile', pat);
         expect(row).toEqual({
-            id: pat.userId, username: 'Pat', displayName: 'Pat', avatarCharacterName: 'Kafka', displayedAchievementId: 4,
+            // T-S14.5s fix pass (A228 item 2): the username is the provider name lowercased
+            id: pat.userId, username: 'pat', displayName: 'Pat', avatarCharacterName: 'Kafka', displayedAchievementId: 4,
             hasDiscordLinked: true, isGuest: false, role: test.db.User.id.find(pat.userId)!.role, loginMethod: 'discord',
             providerId: discordId('pid-pat'), providerUsername: 'Pat',
         });
@@ -216,16 +217,18 @@ describe('view_user_by_username(username) (S9b-V2, S9b-C4, A44(1) D7)', () => {
         return { test, erin };
     }
 
+    // T-S14.5s fix pass (A228 item 2): the sign-in stores the provider name 'ErinX' as the username 'erinx' (the display
+    // name keeps 'ErinX'); the exact-match expectations follow the stored name.
     it('the exact username returns one row with the public columns only', () => {
         const { test, erin } = world();
-        const rows = shared<UserByUsernameRow>(test, 'view_user_by_username', { username: 'ErinX' });
-        expect(rows).toEqual([{ userId: erin.userId, username: 'ErinX', displayName: 'ErinX', avatarCharacterName: 'Kafka', displayedAchievementId: 3 }]);
+        const rows = shared<UserByUsernameRow>(test, 'view_user_by_username', { username: 'erinx' });
+        expect(rows).toEqual([{ userId: erin.userId, username: 'erinx', displayName: 'ErinX', avatarCharacterName: 'Kafka', displayedAchievementId: 3 }]);
         expect(keysOf(rows[0])).toEqual(sorted('byUsername'));
     });
 
     it('a different case, a prefix, a padded name or an unknown name returns [] (the unique index is case-sensitive)', () => {
         const { test } = world();
-        for (const username of ['erinx', 'ERINX', 'Erin', 'ErinX ', 'nobody', '']) {
+        for (const username of ['ErinX', 'ERINX', 'erin', 'erinx ', 'nobody', '']) {
             expect(shared(test, 'view_user_by_username', { username }), JSON.stringify(username)).toEqual([]);
         }
     });
@@ -235,8 +238,8 @@ describe('view_user_by_username(username) (S9b-V2, S9b-C4, A44(1) D7)', () => {
         const boss = verified(test, 'boss');
         setRole(test, boss.userId, 'Admin');
         tx(test, boss, (ctx) => M.admin_ban_user(ctx, { banTypeTag: 'DiscordId', providerId: discordId('pid-erin'), reason: 'abuse' }));
-        expect(test.db.User.username.find('ErinX')!.deletedAt).toBeDefined();
-        expect(shared(test, 'view_user_by_username', { username: 'ErinX' })).toEqual([]);
+        expect(test.db.User.username.find('erinx')!.deletedAt).toBeDefined();
+        expect(shared(test, 'view_user_by_username', { username: 'erinx' })).toEqual([]);
     });
 });
 

@@ -12,13 +12,10 @@ import {
 
 export default __t.row({
   relation: __t.string().primaryKey(),
-  userId: __t.u32().name("user_id"),
   displayName: __t.string().name("display_name"),
   username: __t.string(),
   avatarCharacterName: __t.string().name("avatar_character_name"),
   displayedAchievementId: __t.option(__t.u32()).name("displayed_achievement_id"),
-  mmrByMode: __t.array(__t.u32()).name("mmr_by_mode"),
-  globalRating: __t.option(__t.u32()).name("global_rating"),
   activeAccountRating: __t.option(__t.u32()).name("active_account_rating"),
   accountCount: __t.u32().name("account_count"),
   matches: __t.u32(),

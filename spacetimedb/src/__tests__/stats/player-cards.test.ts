@@ -1,14 +1,15 @@
 // Stats: the profile's Best Ally and Nemesis cards (view_my_player_cards).
-// Decisions: A226 (items 5, 6, 7), A102, A195
+// Decisions: A226 (items 5, 6, 7), A102, A195, A228 (item 6)
 // Contracts: docs/player-stats/contract.md, docs/views/contract.md
 // From S14.5s (T-task of the step). In-memory datastore only; nothing reaches maincloud.
+// T-S14.5s fix pass (A228 item 6): the card carries the active account rating only; `mmrByMode`, `globalRating` and
+// `userId` are gone, so the cards are identified by the carded player's username (unique) instead of the user id.
 import { describe, expect, it } from 'vitest';
 import type { PlayerCardRow } from '@bindings/types';
 import { AUDIT, M, guest, newHarness, tx, type Actor, type Harness } from '../fixtures/harness';
 import { verified } from '../fixtures/identity';
 import { insertHsrAccount, setActive } from '../fixtures/roster';
 import { profileGhost as ghost, view } from '../fixtures/views';
-import { seedElo } from '../fixtures/tournament-matches';
 
 const MODES = ['MemoryOfChaos', 'ApocalypticShadow', 'AnomalyArbitration'] as const;
 type Mode = (typeof MODES)[number];
@@ -41,7 +42,9 @@ function rating(test: Harness, who: Actor, mode: Mode, value: number, seasonId: 
 
 const cards = (test: Harness, who: Actor | ReturnType<typeof ghost>) => view<PlayerCardRow>(test, 'view_my_player_cards', who);
 const cardOf = (test: Harness, who: Actor, relation: 'BestAlly' | 'Nemesis') => cards(test, who).find((r) => r.relation === relation);
-const initialRating = (test: Harness) => test.db.EloConfigTable.id.find(1)?.initialRating ?? 0;
+/** The username of an actor: the card's identifying field since the fix pass. */
+const nameOf = (test: Harness, who: Actor) => test.db.User.id.find(who.userId)!.username;
+const lowerIdOf = (x: Actor, y: Actor) => (x.userId < y.userId ? x : y);
 
 describe('A226 item 6: thresholds, sums and ties', () => {
     it('no shared matches: no rows', () => {
@@ -60,8 +63,8 @@ describe('A226 item 6: thresholds, sums and ties', () => {
         expect(cards(test, me)).toEqual([]);
         rel(test, me, ally, { ally: [1, 0], mode: 'ApocalypticShadow' }); // summed over modes: 3 together, 2 wins
         rel(test, me, foe, { opp: [1, 1], teamSize: 2 }); // summed over team sizes: 3 against, 2 losses
-        expect(cardOf(test, me, 'BestAlly')).toMatchObject({ userId: ally.userId, matches: 3, wins: 2, losses: 1 });
-        expect(cardOf(test, me, 'Nemesis')).toMatchObject({ userId: foe.userId, matches: 3, wins: 1, losses: 2 });
+        expect(cardOf(test, me, 'BestAlly')).toMatchObject({ username: 'ally', matches: 3, wins: 2, losses: 1 });
+        expect(cardOf(test, me, 'Nemesis')).toMatchObject({ username: 'foe', matches: 3, wins: 1, losses: 2 });
     });
 
     it('a count of 0 never qualifies (no win together / no loss against)', () => {
@@ -78,71 +81,68 @@ describe('A226 item 6: thresholds, sums and ties', () => {
         const old = verified(test, 'old');
         const now = verified(test, 'now');
         rel(test, me, old, { ally: [9, 9], season: 0 });
-        expect(cardOf(test, me, 'BestAlly')!.userId).toBe(old.userId);
+        expect(cardOf(test, me, 'BestAlly')!.username).toBe('old');
         const season = activeSeason(test);
         rel(test, me, now, { ally: [3, 1], season });
-        expect(cardOf(test, me, 'BestAlly')).toMatchObject({ userId: now.userId, matches: 3, wins: 1 });
+        expect(cardOf(test, me, 'BestAlly')).toMatchObject({ username: 'now', matches: 3, wins: 1 });
     });
 
     it('best ally: the most wins; a tie goes to fewer matches, then the lower user id', () => {
         const test = newHarness();
         const me = verified(test, 'me');
-        const a = verified(test, 'a');
-        const b = verified(test, 'b');
-        const c = verified(test, 'c');
+        const a = verified(test, 'aa');
+        const b = verified(test, 'bb');
+        const c = verified(test, 'cc');
         rel(test, me, a, { ally: [10, 4] });
         rel(test, me, b, { ally: [6, 4] });
-        expect(cardOf(test, me, 'BestAlly')!.userId).toBe(b.userId);
+        expect(cardOf(test, me, 'BestAlly')!.username).toBe('bb');
         rel(test, me, c, { ally: [6, 4] });
-        expect(cardOf(test, me, 'BestAlly')!.userId).toBe(Math.min(b.userId, c.userId));
+        expect(cardOf(test, me, 'BestAlly')!.username).toBe(nameOf(test, lowerIdOf(b, c)));
         rel(test, me, a, { ally: [1, 1], mode: 'AnomalyArbitration' }); // a: 5 wins in 11
-        expect(cardOf(test, me, 'BestAlly')).toMatchObject({ userId: a.userId, matches: 11, wins: 5, losses: 6 });
+        expect(cardOf(test, me, 'BestAlly')).toMatchObject({ username: 'aa', matches: 11, wins: 5, losses: 6 });
     });
 
     it('nemesis: the most losses against; a tie goes to fewer matches, then the lower user id', () => {
         const test = newHarness();
         const me = verified(test, 'me');
-        const a = verified(test, 'a');
-        const b = verified(test, 'b');
-        const c = verified(test, 'c');
+        const a = verified(test, 'aa');
+        const b = verified(test, 'bb');
+        const c = verified(test, 'cc');
         rel(test, me, a, { opp: [8, 5] }); // 3 losses in 8
         rel(test, me, b, { opp: [4, 1] }); // 3 losses in 4
-        expect(cardOf(test, me, 'Nemesis')).toMatchObject({ userId: b.userId, matches: 4, wins: 1, losses: 3 });
+        expect(cardOf(test, me, 'Nemesis')).toMatchObject({ username: 'bb', matches: 4, wins: 1, losses: 3 });
         rel(test, me, c, { opp: [4, 1] });
-        expect(cardOf(test, me, 'Nemesis')!.userId).toBe(Math.min(b.userId, c.userId));
+        expect(cardOf(test, me, 'Nemesis')!.username).toBe(nameOf(test, lowerIdOf(b, c)));
     });
 
     it('one player can be both the best ally and the nemesis: two rows', () => {
         const test = newHarness();
         const me = verified(test, 'me');
-        const p = verified(test, 'p');
+        const p = verified(test, 'pp');
         rel(test, me, p, { ally: [3, 3], opp: [3, 0] });
-        expect(cards(test, me).map((r) => [r.relation, r.userId]).sort()).toEqual([['BestAlly', p.userId], ['Nemesis', p.userId]]);
+        expect(cards(test, me).map((r) => [r.relation, r.username]).sort()).toEqual([['BestAlly', 'pp'], ['Nemesis', 'pp']]);
     });
 });
 
-describe('A226 item 5: what a card shows', () => {
-    it('the row carries exactly the card fields', () => {
+describe('A226 item 5, A228 item 6: what a card shows', () => {
+    it('the row carries exactly the card fields: no mode ratings, no composite rating, no user id', () => {
         const test = newHarness();
         const me = verified(test, 'me');
-        const p = verified(test, 'p');
+        const p = verified(test, 'pp');
         rel(test, me, p, { ally: [3, 2] });
         expect(Object.keys(cardOf(test, me, 'BestAlly')!).sort()).toEqual([
             'accountCount', 'activeAccountRating', 'avatarCharacterName', 'displayName', 'displayedAchievementId',
-            'globalRating', 'losses', 'matches', 'mmrByMode', 'relation', 'userId', 'username', 'wins',
+            'losses', 'matches', 'relation', 'username', 'wins',
         ]);
     });
 
-    it('names, title, the three active-season mode ratings, the global rating, the active account rating and the account count', () => {
+    it('names, title, the active account rating (the only rating, whatever the mode ratings) and the account count', () => {
         const test = newHarness();
-        seedElo(test);
         const season = activeSeason(test);
         const me = verified(test, 'me');
         const p = verified(test, 'pat_handle');
         test.db.User.id.update({ ...test.db.User.id.find(p.userId)!, displayName: 'Pat Shown', avatarCharacterName: 'Kafka', displayedAchievementId: 7 });
-        rating(test, p, 'MemoryOfChaos', 1300, season, 1250);
-        rating(test, p, 'AnomalyArbitration', 1200, season, 1250);
-        rating(test, p, 'ApocalypticShadow', 1900, 0, 1900); // another season: not shown
+        rating(test, p, 'MemoryOfChaos', 1300, season, 1250); // review S5: a composite that disagrees is not sent
         const inactive = insertHsrAccount(test, p.userId, '700000001');
         setActive(test, inactive, false);
         test.db.HsrAccount.id.update({ ...test.db.HsrAccount.id.find(inactive)!, accountRating: 999 });
@@ -150,29 +150,24 @@ describe('A226 item 5: what a card shows', () => {
         test.db.HsrAccount.id.update({ ...test.db.HsrAccount.id.find(active)!, accountRating: 4321 });
         rel(test, me, p, { ally: [3, 2], season });
         expect(cardOf(test, me, 'BestAlly')).toEqual({
-            relation: 'BestAlly', userId: p.userId, displayName: 'Pat Shown', username: 'pat_handle',
+            relation: 'BestAlly', displayName: 'Pat Shown', username: 'pat_handle',
             avatarCharacterName: 'Kafka', displayedAchievementId: 7,
-            mmrByMode: [1300, initialRating(test), 1200], globalRating: 1250,
             activeAccountRating: 4321, accountCount: 2, matches: 3, wins: 2, losses: 1,
         });
     });
 
-    it('no rating this season: the initial rating per mode and no global rating; no game account: no rating and 0 accounts', () => {
+    it('no game account: no rating and 0 accounts', () => {
         const test = newHarness();
-        seedElo(test);
         const me = verified(test, 'me');
-        const p = verified(test, 'p');
+        const p = verified(test, 'pp');
         rel(test, me, p, { opp: [3, 0] });
-        expect(cardOf(test, me, 'Nemesis')).toMatchObject({
-            mmrByMode: [initialRating(test), initialRating(test), initialRating(test)],
-            globalRating: undefined, activeAccountRating: undefined, accountCount: 0,
-        });
+        expect(cardOf(test, me, 'Nemesis')).toMatchObject({ activeAccountRating: undefined, accountCount: 0 });
     });
 
     it('accounts but none active: no active account rating, the count still shows', () => {
         const test = newHarness();
         const me = verified(test, 'me');
-        const p = verified(test, 'p');
+        const p = verified(test, 'pp');
         setActive(test, insertHsrAccount(test, p.userId, '700000001'), false);
         rel(test, me, p, { opp: [3, 0] });
         expect(cardOf(test, me, 'Nemesis')).toMatchObject({ activeAccountRating: undefined, accountCount: 1 });
@@ -187,16 +182,16 @@ describe('A226 items 5, 6: deleted, pending deletion and suspended players; the 
         const next = verified(test, 'next');
         rel(test, me, gone, { ally: [5, 5] });
         rel(test, me, next, { ally: [3, 1] });
-        expect(cardOf(test, me, 'BestAlly')!.userId).toBe(gone.userId);
+        expect(cardOf(test, me, 'BestAlly')!.username).toBe('gone');
         tx(test, gone, (ctx) => M.delete_my_account(ctx, {}));
         expect(test.db.User.id.find(gone.userId)).toBeNull();
-        expect(cardOf(test, me, 'BestAlly')!.userId).toBe(next.userId);
+        expect(cardOf(test, me, 'BestAlly')!.username).toBe('next');
     });
 
     it('a player pending deletion (an admin deletion or a ban sets deletedAt) is skipped; with no other candidate there is no card', () => {
         const test = newHarness();
         const me = verified(test, 'me');
-        const p = verified(test, 'p');
+        const p = verified(test, 'pp');
         rel(test, me, p, { opp: [3, 0] });
         test.db.User.id.update({ ...test.db.User.id.find(p.userId)!, deletedAt: test.clock.now() });
         expect(cards(test, me)).toEqual([]);
@@ -205,16 +200,16 @@ describe('A226 items 5, 6: deleted, pending deletion and suspended players; the 
     it('a suspended player is still shown to others (as on the leaderboard)', () => {
         const test = newHarness();
         const me = verified(test, 'me');
-        const p = verified(test, 'p');
+        const p = verified(test, 'pp');
         rel(test, me, p, { ally: [3, 3] });
-        tx(test, 'internal', (ctx) => M.server_suspend_user(ctx, { username: 'p', reason: '' }));
-        expect(cardOf(test, me, 'BestAlly')!.userId).toBe(p.userId);
+        tx(test, 'internal', (ctx) => M.server_suspend_user(ctx, { username: 'pp', reason: '' }));
+        expect(cardOf(test, me, 'BestAlly')!.username).toBe('pp');
     });
 
     it('a suspended caller, an identity with no account and another user get nothing of the caller\'s', () => {
         const test = newHarness();
         const me = verified(test, 'me');
-        const p = verified(test, 'p');
+        const p = verified(test, 'pp');
         const other = verified(test, 'other');
         rel(test, me, p, { ally: [3, 3] });
         expect(cards(test, other)).toEqual([]);
@@ -228,25 +223,46 @@ describe('A226 items 5, 6: deleted, pending deletion and suspended players; the 
         const me = verified(test, 'me');
         const g = guest(test, 'g1');
         rel(test, me, g, { ally: [3, 1] });
-        expect(cardOf(test, me, 'BestAlly')).toMatchObject({ userId: g.userId, username: test.db.User.id.find(g.userId)!.username, accountCount: 0 });
+        expect(cardOf(test, me, 'BestAlly')).toMatchObject({ username: test.db.User.id.find(g.userId)!.username, accountCount: 0 });
+    });
+
+    // T-S14.5s fix pass: review test gap 7 (a guest caller; an ended season with no matches yet in the new one).
+    it('a guest caller with shared matches gets their cards like anyone', () => {
+        const test = newHarness();
+        const g = guest(test, 'g1');
+        const p = verified(test, 'pp');
+        rel(test, g, p, { ally: [3, 2] });
+        expect(cardOf(test, g, 'BestAlly')).toMatchObject({ username: 'pp', matches: 3, wins: 2 });
+    });
+
+    it('after a new season starts with no matches yet, the cards of the old season are gone', () => {
+        const test = newHarness();
+        const me = verified(test, 'me');
+        const p = verified(test, 'pp');
+        rel(test, me, p, { ally: [5, 5], season: 0 });
+        expect(cards(test, me)).toHaveLength(1);
+        activeSeason(test);
+        expect(cards(test, me)).toEqual([]);
     });
 });
 
 describe('A226 item 6: egress: the rows change only with the caller\'s relations or a carded player\'s shown values', () => {
-    it('a rating change of a player who is not carded leaves the rows equal (view_my_relationships would change)', () => {
+    it('a mode rating change changes no card; an active account rating change changes only the carded player\'s', () => {
         const test = newHarness();
         const season = activeSeason(test);
         const me = verified(test, 'me');
         const carded = verified(test, 'carded');
         const other = verified(test, 'other');
+        const cardedAccount = insertHsrAccount(test, carded.userId, '700000001');
+        const otherAccount = insertHsrAccount(test, other.userId, '700000002');
         rel(test, me, carded, { ally: [3, 3], season });
         rel(test, me, other, { ally: [3, 1], season });
         const before = cards(test, me);
-        const relBefore = view(test, 'view_my_relationships', me);
-        rating(test, other, 'MemoryOfChaos', 1555, season, 1555);
-        expect(cards(test, me)).toEqual(before);
-        expect(view(test, 'view_my_relationships', me)).not.toEqual(relBefore);
         rating(test, carded, 'MemoryOfChaos', 1444, season, 1444);
-        expect(cards(test, me)).not.toEqual(before);
+        expect(cards(test, me)).toEqual(before); // A228 item 6: the mode ratings are not on the card
+        test.db.HsrAccount.id.update({ ...test.db.HsrAccount.id.find(otherAccount)!, accountRating: 1555 });
+        expect(cards(test, me)).toEqual(before);
+        test.db.HsrAccount.id.update({ ...test.db.HsrAccount.id.find(cardedAccount)!, accountRating: 1666 });
+        expect(cardOf(test, me, 'BestAlly')!.activeAccountRating).toBe(1666);
     });
 });

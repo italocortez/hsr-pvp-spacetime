@@ -9,10 +9,11 @@ import {
 } from '@module/helpers/identity/usernames';
 import {
     isReservedUsername,
+    matchUserReference,
     normalizeUsername,
+    parseUserReference,
     RESERVED_USERNAMES,
-    USERNAME_CHANGE_WINDOW_MS,
-    USERNAME_CHANGES_PER_WINDOW,
+    USERNAME_CHANGE_INTERVAL_MS,
     USERNAME_CHARACTERS_TEXT,
     USERNAME_DOUBLE_PERIOD_TEXT,
     USERNAME_EMPTY_TEXT,
@@ -22,8 +23,12 @@ import {
     USERNAME_TOO_LONG_TEXT,
     USERNAME_TOO_OFTEN_TEXT,
     USERNAME_TOO_SHORT_TEXT,
+    userIdReference,
+    usernameBaseFromProvider,
     usernameRuleError,
     usernameTakenText,
+    userReferenceError,
+    withUsernameSuffix,
 } from '@shared/identity';
 import { describe, expect, it } from 'vitest';
 
@@ -40,7 +45,9 @@ describe("A226 item 2: usernameRuleError accepts Discord's form", () => {
         'x'.repeat(32),
         'guestbook', // starts with "guest" but not "guest_"
         'my_guest_name',
-        'admins',
+        'modern', // starts with "mod" but not "mod_" or "mod."
+        'staffy',
+        'the.mod', // only prefixes are reserved, not a staff word inside a name
         'system2',
     ])('accepts %j', (name) => {
         expect(usernameRuleError(name)).toBeNull();
@@ -83,6 +90,22 @@ describe('A226 item 2: usernameRuleError refuses with one text per case, checked
         ['guest_', USERNAME_RESERVED_TEXT],
         ['guest_1a2b3c4d', USERNAME_RESERVED_TEXT],
         ['guest_anything', USERNAME_RESERVED_TEXT],
+        // T-S14.5s fix pass (review M4): more reserved names and the staff lookalike prefixes; 'admins' was accepted
+        // before and is now refused by the `admin` prefix.
+        ['admins', USERNAME_RESERVED_TEXT],
+        ['admin1', USERNAME_RESERVED_TEXT],
+        ['admin_', USERNAME_RESERVED_TEXT],
+        ['moderators', USERNAME_RESERVED_TEXT],
+        ['mod_x', USERNAME_RESERVED_TEXT],
+        ['staff.team', USERNAME_RESERVED_TEXT],
+        ['support_bot', USERNAME_RESERVED_TEXT],
+        ['official', USERNAME_RESERVED_TEXT],
+        ['discord', USERNAME_RESERVED_TEXT],
+        ['everyone', USERNAME_RESERVED_TEXT],
+        ['here', USERNAME_RESERVED_TEXT],
+        ['null', USERNAME_RESERVED_TEXT],
+        ['undefined', USERNAME_RESERVED_TEXT],
+        ['ipcbattlegrounds', USERNAME_RESERVED_TEXT],
     ])('refuses %j', (name, text) => {
         expect(usernameRuleError(name)).toBe(text);
     });
@@ -115,9 +138,10 @@ describe('A226 item 2: usernameRuleError refuses with one text per case, checked
         expect(USERNAME_DOUBLE_PERIOD_TEXT).toBe('Username cannot contain two periods in a row');
         expect(USERNAME_RESERVED_TEXT).toBe('That username is reserved');
         expect(usernameTakenText('alice')).toBe('Username "alice" is already taken.');
-        expect([USERNAME_CHANGES_PER_WINDOW, USERNAME_CHANGE_WINDOW_MS]).toEqual([3, 3_600_000]);
+        // T-S14.5s fix pass (A228 item 8): once per hour replaces 3 per hour.
+        expect(USERNAME_CHANGE_INTERVAL_MS).toBe(3_600_000);
         expect(USERNAME_TOO_OFTEN_TEXT).toBe(
-            'You can change your username 3 times per hour. Try again later.',
+            'You can change your username once per hour. Try again later.',
         );
     });
 });
@@ -138,5 +162,76 @@ describe('A226 item 2: the module runs the same function', () => {
 
     it("the module's USERNAME_MAX_LENGTH is the shared one", () => {
         expect(MODULE_USERNAME_MAX_LENGTH).toBe(USERNAME_MAX_LENGTH);
+    });
+});
+
+// T-S14.5s fix pass (A228 item 2): the base a Discord sign-in derives.
+describe('A228 item 2: usernameBaseFromProvider and withUsernameSuffix', () => {
+    it.each([
+        ['alice', 'alice'],
+        ['Alice', 'alice'],
+        ['  ErinX  ', 'erinx'],
+        ['Mr Smith-Jones', 'mr_smith_jones'],
+        ['a...b', 'a.b'],
+        ['A'.repeat(40), 'a'.repeat(32)],
+        ['name#1234', 'name_1234'],
+    ])('%j becomes %j', (raw, base) => {
+        expect(usernameBaseFromProvider(raw)).toBe(base);
+        expect(usernameRuleError(base)).toBeNull();
+    });
+
+    it.each(['', 'x', 'Admin', 'SUPPORT', 'guest_1a2b3c4d', '___', '...', '日本語'])(
+        '%j has no valid base (null: the module uses its fallback)',
+        (raw) => {
+            expect(usernameBaseFromProvider(raw)).toBeNull();
+        },
+    );
+
+    it('a suffix keeps the name within 32 characters', () => {
+        expect(withUsernameSuffix('neo', 2)).toBe('neo_2');
+        expect(withUsernameSuffix('x'.repeat(32), 9)).toBe(`${'x'.repeat(30)}_9`);
+    });
+});
+
+// T-S14.5s fix pass (A228 item 4): the user reference of the server scripts.
+describe('A228 item 4: user references (username, id:<n>, discord:<id>)', () => {
+    const accounts = [
+        { id: 1, username: 'alice', discordId: '100000000000000001' },
+        { id: 2, username: 'bob' },
+        { id: 3, username: 'id:9' }, // an old name with a colon is shadowed by the prefixed form
+    ];
+
+    it('parses the three forms', () => {
+        expect(parseUserReference('id:42')).toEqual({ kind: 'id', userId: 42 });
+        expect(parseUserReference('discord:100000000000000001')).toEqual({
+            kind: 'discord',
+            discordId: '100000000000000001',
+        });
+        expect(parseUserReference('alice')).toEqual({ kind: 'username', username: 'alice' });
+        expect(userIdReference(7)).toBe('id:7');
+    });
+
+    const BAD_REFERENCES = [
+        '',
+        'id:',
+        'id:x',
+        'id:-1',
+        'id:4294967296',
+        'discord:',
+        'discord:123',
+        'discord:1000000000000000000000',
+    ];
+    it.each(BAD_REFERENCES)('refuses %j', (ref) => {
+        expect(userReferenceError(ref)).not.toBeNull();
+        expect(() => parseUserReference(ref)).toThrow();
+    });
+
+    it('matches by id, Discord id or exact username', () => {
+        expect(matchUserReference(accounts, 'id:2').map((a) => a.id)).toEqual([2]);
+        const byDiscord = matchUserReference(accounts, 'discord:100000000000000001');
+        expect(byDiscord.map((a) => a.id)).toEqual([1]);
+        expect(matchUserReference(accounts, 'bob').map((a) => a.id)).toEqual([2]);
+        expect(matchUserReference(accounts, 'Bob')).toEqual([]);
+        expect(matchUserReference(accounts, 'id:9')).toEqual([]);
     });
 });

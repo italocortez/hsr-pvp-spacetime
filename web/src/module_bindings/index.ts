@@ -173,6 +173,7 @@ import SendChatMessageReducer from "./send_chat_message_reducer";
 import ServerAddPartnerServerReducer from "./server_add_partner_server_reducer";
 import ServerDeleteUserReducer from "./server_delete_user_reducer";
 import ServerLiftSuspensionReducer from "./server_lift_suspension_reducer";
+import ServerLowercaseUsernamesReducer from "./server_lowercase_usernames_reducer";
 import ServerNukeTestDataReducer from "./server_nuke_test_data_reducer";
 import ServerRefreshSystemPresetReducer from "./server_refresh_system_preset_reducer";
 import ServerRegisterDelegateReducer from "./server_register_delegate_reducer";
@@ -1325,6 +1326,7 @@ const reducersSchema = __reducers(
   __reducerSchema("server_add_partner_server", ServerAddPartnerServerReducer),
   __reducerSchema("server_delete_user", ServerDeleteUserReducer),
   __reducerSchema("server_lift_suspension", ServerLiftSuspensionReducer),
+  __reducerSchema("server_lowercase_usernames", ServerLowercaseUsernamesReducer),
   __reducerSchema("server_nuke_test_data", ServerNukeTestDataReducer),
   __reducerSchema("server_refresh_system_preset", ServerRefreshSystemPresetReducer),
   __reducerSchema("server_register_delegate", ServerRegisterDelegateReducer),

@@ -14,7 +14,7 @@ import { GameMode, DraftMode, MatchType } from '@module/types/enums';
 import { slotIsSpectator, slotSameTeam } from '@module/helpers/lobby/lobbyHelpers';
 import { resolveUserLabel } from '@module/helpers/identity/userLabel';
 import {
-    callerMemberships, callerUserId, hideUserId, MMR_GAME_MODES, mmrByModeOf, ratingVisible,
+    callerMemberships, callerUserId, hideUserId, mmrByModeOf, ratingVisible,
 } from '@module/helpers/identity/viewAnonymity';
 
 // ---------------------------------------------------------------------------
@@ -94,29 +94,24 @@ export const view_my_relationships = spacetimedb.view(
 //     A count of 0 never qualifies. Ties: the fewer shared matches first (the higher rate), then the lower user id.
 //     A candidate whose User row is gone (deleted) or pending deletion (deletedAt: an admin deletion or a ban) is
 //     skipped and the next one is taken. A suspended other player is shown, as on the leaderboard.
-//     Card: displayName, username (the handle), avatar, displayed title, the three mode ratings of the active season
-//     (`[MemoryOfChaos, ApocalypticShadow, AnomalyArbitration]`, EloConfig.initialRating for an unplayed mode, as
-//     mmrByModeOf), `globalRating` = MmrRating.globalCompositeRating of the active season (A102: the rounded average of
-//     the player's rated modes of that season; unset before their first rated match of the season), the rating of the
-//     ACTIVE game account (A226 item 5: always shown; unset when no account is active) and the number of game accounts.
+//     Card: displayName, username (the handle), avatar, displayed title, the rating of the ACTIVE game account (A226
+//     item 5; A228 item 6: the only rating a card carries outside a lobby; unset when no account is active) and the
+//     number of game accounts. S14.5s fix pass (A228 item 6): the mode ratings and the composite `globalRating` are
+//     dropped, and so is `userId` (no client lookup is keyed by it; the row's key is `relation`).
 //     `matches` / `wins` / `losses` are the caller's side of the relation (together for BestAlly, against for Nemesis).
 //     The caller is resolved through callerUserId (a suspended or unmapped caller gets []).
 //     Read set: UserIdentity.identity + UserSuspension (callerUserId), Season.is_active, PlayerRelationship.by_user
-//     (the caller's rows only), then for each carded player only: User.id, MmrRating.by_user_mode_season (3 reads),
-//     EloConfigTable.id (only for an unplayed mode), HsrAccount.user_id. No scan.
+//     (the caller's rows only), then for each carded player only: User.id, HsrAccount.user_id. No scan.
 // ---------------------------------------------------------------------------
 /** S14.5s (A226 item 6): the fewest shared matches for a Best Ally or Nemesis card. */
 export const PLAYER_CARD_MIN_MATCHES = 3;
 
 const PlayerCardRow = t.row('PlayerCardRow', {
     relation: t.string().primaryKey(), // 'BestAlly' | 'Nemesis'; one row each at most, so the client gets onUpdate
-    userId: t.u32(),
     displayName: t.string(),
     username: t.string(),
     avatarCharacterName: t.string(),
     displayedAchievementId: t.u32().optional(),
-    mmrByMode: t.array(t.u32()),
-    globalRating: t.u32().optional(),
     activeAccountRating: t.u32().optional(),
     accountCount: t.u32(),
     matches: t.u32(),
@@ -139,28 +134,14 @@ function rankCandidates(
 }
 
 /** The card fields of a live user (index reads only). */
-function playerCard(ctx: any, user: any, seasonId: number) {
-    let globalRating: number | undefined;
-    let initialRating: number | undefined;
-    const mmrByMode = MMR_GAME_MODES.map((mode) => {
-        const row = [...ctx.db.MmrRating.by_user_mode_season.filter([user.id, { tag: mode } as any, seasonId])][0];
-        if (row) {
-            if (globalRating === undefined) globalRating = row.globalCompositeRating;
-            return row.rating;
-        }
-        if (initialRating === undefined) initialRating = ctx.db.EloConfigTable.id.find(1)?.initialRating ?? 0;
-        return initialRating as number;
-    });
+function playerCard(ctx: any, user: any) {
     const accounts = [...ctx.db.HsrAccount.user_id.filter(user.id)];
     const active = accounts.find((a: any) => a.isActive);
     return {
-        userId: user.id,
         displayName: user.displayName,
         username: user.username,
         avatarCharacterName: user.avatarCharacterName,
         displayedAchievementId: user.displayedAchievementId,
-        mmrByMode,
-        globalRating,
         activeAccountRating: active ? active.accountRating : undefined,
         accountCount: accounts.length,
     };
@@ -208,7 +189,7 @@ export const view_my_player_cards = spacetimedb.view(
                 const p = totals.get(otherId)!;
                 const matches = rel.matchesOf(p);
                 const wins = rel.winsOf(p);
-                rows.push({ relation: rel.relation, ...playerCard(ctx, user, seasonId), matches, wins, losses: matches - wins });
+                rows.push({ relation: rel.relation, ...playerCard(ctx, user), matches, wins, losses: matches - wins });
                 break;
             }
         }
